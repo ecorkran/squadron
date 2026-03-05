@@ -2,13 +2,24 @@
 docType: devlog
 project: orchestration
 dateCreated: 20260218
-dateUpdated: 20260301
+dateUpdated: 20260305
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
+
+---
+
+## 20260305
+
+### Slice 115: Project Rename — squadron — Task Breakdown Complete
+
+- Created `user/tasks/115-tasks.project-rename-squadron.md` (14 tasks, 161 lines)
+- Tasks cover: directory rename, pyproject.toml update, import updates (61 src + 66 test files), config path migration logic, daemon paths, logger names, user-facing strings, documentation, validation, and atomic commit
+- Only new logic: config migration (`~/.config/orchestration/` → `~/.config/squadron/` with `MIGRATED.txt`)
+- Slice design status updated to `tasks_complete`
 
 ---
 
