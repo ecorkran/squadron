@@ -70,11 +70,11 @@ status: in_progress
   - [x] Success: file exists; content references `sq auth status`
   - [x] Commit: `feat: add Claude Code slash command files`
 
-- [ ] **T10: Update `pyproject.toml` for command file bundling**
-  - [ ] Add `force-include` entry under `[tool.hatch.build.targets.wheel]` to include `commands/` in the wheel as `squadron/commands/`
-  - [ ] Verify `importlib.resources` can locate the bundled files: create a small script or test that calls `files("squadron") / "commands"` and confirms the path exists
-  - [ ] Success: `uv build` succeeds; bundled commands are present in the wheel
-  - [ ] Commit: `chore: bundle command files in package wheel`
+- [x] **T10: Update `pyproject.toml` for command file bundling**
+  - [x] Add `force-include` entry under `[tool.hatch.build.targets.wheel]` to include `commands/` in the wheel as `squadron/commands/`
+  - [x] Verify `importlib.resources` can locate the bundled files: create a small script or test that calls `files("squadron") / "commands"` and confirms the path exists
+  - [x] Success: `uv build` succeeds; bundled commands are present in the wheel
+  - [x] Commit: `chore: bundle command files in package wheel`
 
 - [ ] **T11: Implement `install-commands` CLI command**
   - [ ] Create `src/squadron/cli/commands/install.py`

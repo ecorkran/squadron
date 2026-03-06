@@ -39,6 +39,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/squadron"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"commands" = "squadron/commands"
+
 [tool.ruff]
 line-length = 88
 
