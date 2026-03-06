@@ -2,7 +2,7 @@
 docType: devlog
 project: orchestration
 dateCreated: 20260218
-dateUpdated: 20260305
+dateUpdated: 20260306
 ---
 
 # Development Log
@@ -12,7 +12,27 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260306
+
+### Slice 116: Claude Code Commands — Implementation Complete
+
+All 15 tasks complete. Eight command files in `commands/sq/` (`spawn.md`, `task.md`, `list.md`, `shutdown.md`, `review-arch.md`, `review-tasks.md`, `review-code.md`, `auth-status.md`). `pyproject.toml` updated with `force-include` for wheel bundling. `install.py` with `install_commands`/`uninstall_commands` wired into Typer app. 11 tests (8 install/uninstall + 3 source verification). 446 total tests pass, pyright clean, ruff clean.
+
+---
+
 ## 20260305
+
+### Slice 116: Claude Code Commands — sq Wrappers — Design Complete
+
+Slice design created at `project-documents/user/slices/116-slice.sq-slash-command.md`.
+
+Scope: Eight Claude Code slash command files (`/sq:spawn`, `/sq:task`, `/sq:list`, `/sq:shutdown`, `/sq:review-arch`, `/sq:review-tasks`, `/sq:review-code`, `/sq:auth-status`) in `commands/sq/`. Install/uninstall CLI commands (`sq install-commands`, `sq uninstall-commands`). Command files bundled in package wheel via `pyproject.toml`. Commands are thin prompts that instruct Claude to execute the corresponding `sq` CLI command via Bash.
+
+### Slice 116: Claude Code Commands — Task Breakdown Complete
+
+Task file created at `project-documents/user/tasks/116-tasks.sq-slash-command.md` (15 tasks). T1 directory setup, T2-T9 command file authoring (one per command), T10 package bundling, T11-T12 install/uninstall CLI, T13-T14 tests, T15 validation.
+
+---
 
 ### Slice 115: Project Rename — orchestration → squadron — Complete
 

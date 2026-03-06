@@ -9,7 +9,7 @@ projectState: >
   CLI entry point is `sq`. This slice (116) is the active work item.
 dateCreated: 20260305
 dateUpdated: 20260306
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -117,10 +117,10 @@ status: in_progress
     - Each file contains the expected `sq` subcommand string
   - [x] Success: test passes; catches accidental file deletion or corruption
 
-- [ ] **T15: Full validation pass**
-  - [ ] Run `pytest tests/cli/test_install_commands.py` — all tests pass
-  - [ ] Run `pyright src/squadron/cli/commands/install.py` — zero errors
-  - [ ] Run `ruff check` and `ruff format --check` on new files — clean
-  - [ ] Run full project test suite to confirm nothing is broken
-  - [ ] Success: all checks pass
-  - [ ] Commit: `chore: slice 116 validation pass`
+- [x] **T15: Full validation pass**
+  - [x] Run `pytest tests/cli/test_install_commands.py` — all tests pass
+  - [x] Run `pyright src/squadron/cli/commands/install.py` — zero errors
+  - [x] Run `ruff check` and `ruff format --check` on new files — clean
+  - [x] Run full project test suite to confirm nothing is broken
+  - [x] Success: all checks pass
+  - [x] Commit: `chore: slice 116 validation pass`

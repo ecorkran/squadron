@@ -79,6 +79,4 @@ def uninstall_commands(
 
     files_removed = list(sq_dir.glob("*.md"))
     shutil.rmtree(sq_dir)
-    rprint(
-        f"[green]Removed {sq_dir} ({len(files_removed)} file(s)).[/green]"
-    )
+    rprint(f"[green]Removed {sq_dir} ({len(files_removed)} file(s)).[/green]")
