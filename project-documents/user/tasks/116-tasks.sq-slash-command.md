@@ -76,46 +76,46 @@ status: in_progress
   - [x] Success: `uv build` succeeds; bundled commands are present in the wheel
   - [x] Commit: `chore: bundle command files in package wheel`
 
-- [ ] **T11: Implement `install-commands` CLI command**
-  - [ ] Create `src/squadron/cli/commands/install.py`
-  - [ ] Implement `install_commands(target: str)`:
+- [x] **T11: Implement `install-commands` CLI command**
+  - [x] Create `src/squadron/cli/commands/install.py`
+  - [x] Implement `install_commands(target: str)`:
     - Resolve `~` in target path
     - Locate bundled commands via `importlib.resources`
     - Create target directory and `sq/` subdirectory if needed
     - Copy each `.md` file from bundled `commands/sq/` to `{target}/sq/`
     - Overwrite existing files
     - Report what was installed
-  - [ ] Wire `install-commands` into the main Typer app in `cli/app.py`
-  - [ ] Type-check; ruff passes
-  - [ ] Success: `sq install-commands` copies all 8 files to `~/.claude/commands/sq/`
+  - [x] Wire `install-commands` into the main Typer app in `cli/app.py`
+  - [x] Type-check; ruff passes
+  - [x] Success: `sq install-commands` copies all 8 files to `~/.claude/commands/sq/`
 
-- [ ] **T12: Implement `uninstall-commands` CLI command**
-  - [ ] Add `uninstall_commands(target: str)` to `install.py`:
+- [x] **T12: Implement `uninstall-commands` CLI command**
+  - [x] Add `uninstall_commands(target: str)` to `install.py`:
     - Remove `{target}/sq/` directory and contents
     - Do not touch other files in the target directory
     - Report what was removed or that nothing was found
-  - [ ] Wire `uninstall-commands` into the main Typer app in `cli/app.py`
-  - [ ] Type-check; ruff passes
-  - [ ] Success: `sq uninstall-commands` removes only the `sq/` subdirectory
+  - [x] Wire `uninstall-commands` into the main Typer app in `cli/app.py`
+  - [x] Type-check; ruff passes
+  - [x] Success: `sq uninstall-commands` removes only the `sq/` subdirectory
 
-- [ ] **T13: Test install and uninstall commands**
-  - [ ] Create `tests/cli/test_install_commands.py`
-  - [ ] Test install: files copied to target directory, correct file count (8 files)
-  - [ ] Test install creates directories if they don't exist
-  - [ ] Test install overwrites existing files
-  - [ ] Test uninstall: `sq/` directory removed, other files in target untouched
-  - [ ] Test uninstall when nothing is installed: graceful report, no error
-  - [ ] Test `--target` flag overrides default path
-  - [ ] Use `tmp_path` fixture for all file operations
-  - [ ] Success: `pytest tests/cli/test_install_commands.py` passes
-  - [ ] Commit: `feat: add install-commands and uninstall-commands CLI`
+- [x] **T13: Test install and uninstall commands**
+  - [x] Create `tests/cli/test_install_commands.py`
+  - [x] Test install: files copied to target directory, correct file count (8 files)
+  - [x] Test install creates directories if they don't exist
+  - [x] Test install overwrites existing files
+  - [x] Test uninstall: `sq/` directory removed, other files in target untouched
+  - [x] Test uninstall when nothing is installed: graceful report, no error
+  - [x] Test `--target` flag overrides default path
+  - [x] Use `tmp_path` fixture for all file operations
+  - [x] Success: `pytest tests/cli/test_install_commands.py` passes
+  - [x] Commit: `feat: add install-commands and uninstall-commands CLI`
 
-- [ ] **T14: Source file verification test**
-  - [ ] Add a test (can be in `test_install_commands.py` or a new file) that verifies:
+- [x] **T14: Source file verification test**
+  - [x] Add a test (can be in `test_install_commands.py` or a new file) that verifies:
     - All 8 expected command files exist in `commands/sq/`
     - Each file is non-empty
     - Each file contains the expected `sq` subcommand string
-  - [ ] Success: test passes; catches accidental file deletion or corruption
+  - [x] Success: test passes; catches accidental file deletion or corruption
 
 - [ ] **T15: Full validation pass**
   - [ ] Run `pytest tests/cli/test_install_commands.py` — all tests pass

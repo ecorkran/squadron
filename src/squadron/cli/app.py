@@ -7,6 +7,7 @@ import typer
 from squadron.cli.commands.auth import auth_app
 from squadron.cli.commands.config import config_app
 from squadron.cli.commands.history import history
+from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import list_agents
 from squadron.cli.commands.message import message
 from squadron.cli.commands.models import models
@@ -33,3 +34,5 @@ app.command("shutdown")(shutdown)
 app.add_typer(review_app, name="review")
 app.add_typer(config_app, name="config")
 app.add_typer(auth_app, name="auth")
+app.command("install-commands")(install_commands)
+app.command("uninstall-commands")(uninstall_commands)
