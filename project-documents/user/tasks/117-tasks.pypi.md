@@ -6,7 +6,7 @@ dependencies: [sq-slash-command]
 projectState: Slice 116 complete. CLI entry points `sq`/`squadron` working. Wheel bundles command files via force-include. pyproject.toml has name, version (0.1.0), description, readme, requires-python, dependencies, scripts, build-system. Missing classifiers, license field, project-urls. No CI workflow. No --version flag.
 dateCreated: 20260307
 dateUpdated: 20260307
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -113,21 +113,21 @@ status: in_progress
 
 ### T12: Validation pass
 
-- [ ] Full project validation
-  - [ ] `uv run ruff check` — clean
-  - [ ] `uv run ruff format --check` — clean
-  - [ ] `uv run pyright` — zero errors
-  - [ ] `uv run pytest` — all tests pass
-  - [ ] `sq --version` outputs correct version
-  - [ ] `hatch build` produces a valid wheel with correct metadata
-  - [ ] `.github/workflows/ci.yml` exists with both `test` and `publish` jobs
-  - [ ] README contains global install instructions
+- [x] Full project validation
+  - [x] `uv run ruff check` — clean
+  - [x] `uv run ruff format --check` — clean
+  - [x] `uv run pyright` — zero errors
+  - [x] `uv run pytest` — all tests pass
+  - [x] `sq --version` outputs correct version
+  - [x] `hatch build` produces a valid wheel with correct metadata
+  - [x] `.github/workflows/ci.yml` exists with both `test` and `publish` jobs
+  - [x] README contains global install instructions
 
 ### T13: Commit — validation pass
 
-- [ ] Commit any fixes from T12
-  - [ ] Message: `chore: slice 117 validation pass`
-  - [ ] Skip commit if no changes needed
+- [x] Commit any fixes from T12
+  - [x] Message: `chore: slice 117 validation pass`
+  - [x] Skip commit if no changes needed
 
 ---
 
