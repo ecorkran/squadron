@@ -25,28 +25,37 @@ Three built-in templates cover the most common review patterns:
 
 The template system is extensible — each template is a YAML file, and adding new review types means writing a new YAML definition and optionally a prompt builder function. See [docs/TEMPLATES.md](docs/TEMPLATES.md) for details.
 
+## Install
+
+### Global install (recommended)
+
+```bash
+# Using pipx (recommended)
+pipx install squadron
+
+# Or using uv
+uv tool install squadron
+```
+
+After install, `sq` is available on PATH:
+
+```bash
+sq --version
+sq install-commands   # Install Claude Code slash commands
+sq review code --diff main -v
+```
+
+### Development install
+
+```bash
+git clone https://github.com/manta/squadron.git
+cd squadron
+uv sync --dev
+```
+
 ## Quickstart
 
-### 1. Install
-
-Squadron requires Python 3.11+ and the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-sdk), which needs Node.js 18+.
-
-```bash
-git clone https://github.com/ecorkran/orchestration.git
-cd orchestration
-uv sync
-```
-
-<details>
-<summary>Using pip instead of uv</summary>
-
-```bash
-pip install -e "."
-```
-
-</details>
-
-### 2. Configure credentials
+### 1. Configure credentials
 
 Squadron uses the Claude Agent SDK, which supports two authentication methods:
 
@@ -61,7 +70,7 @@ claude --version
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-### 3. Run your first review
+### 2. Run your first review
 
 Review your uncommitted changes against main:
 
