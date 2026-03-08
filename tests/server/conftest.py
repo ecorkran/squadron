@@ -15,7 +15,7 @@ from squadron.core.models import (
     MessageType,
 )
 from squadron.providers import registry as reg_module
-from squadron.providers.base import Agent, AgentProvider
+from squadron.providers.base import Agent
 from squadron.server.app import create_app
 from squadron.server.engine import SquadronEngine
 

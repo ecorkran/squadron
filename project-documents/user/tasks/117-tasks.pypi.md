@@ -6,7 +6,7 @@ dependencies: [sq-slash-command]
 projectState: Slice 116 complete. CLI entry points `sq`/`squadron` working. Wheel bundles command files via force-include. pyproject.toml has name, version (0.1.0), description, readme, requires-python, dependencies, scripts, build-system. Missing classifiers, license field, project-urls. No CI workflow. No --version flag.
 dateCreated: 20260307
 dateUpdated: 20260307
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -26,90 +26,90 @@ status: not_started
 
 ### T1: Add `--version` flag to CLI
 
-- [ ] Add a `version_callback` function and `@app.callback()` to `src/squadron/cli/app.py`
-  - [ ] Use `importlib.metadata.version("squadron")` for the version string
-  - [ ] Output format: `squadron X.Y.Z`
-  - [ ] `--version` is an eager option (fires before any subcommand)
-  - [ ] Refer to slice design "Version Output" section for implementation pattern
-  - [ ] `sq --version` prints version and exits with code 0
-  - [ ] `sq squadron --version` also works (both entry points)
+- [x] Add a `version_callback` function and `@app.callback()` to `src/squadron/cli/app.py`
+  - [x] Use `importlib.metadata.version("squadron")` for the version string
+  - [x] Output format: `squadron X.Y.Z`
+  - [x] `--version` is an eager option (fires before any subcommand)
+  - [x] Refer to slice design "Version Output" section for implementation pattern
+  - [x] `sq --version` prints version and exits with code 0
+  - [x] `sq squadron --version` also works (both entry points)
 
 ### T2: Test `--version` flag
 
-- [ ] Add test(s) in `tests/cli/test_version.py`
-  - [ ] Test `sq --version` via `CliRunner` — assert output contains `squadron` and a version string
-  - [ ] Test that version matches `importlib.metadata.version("squadron")`
-  - [ ] Test exit code is 0
-  - [ ] `pytest` passes, `pyright` clean, `ruff` clean
+- [x] Add test(s) in `tests/cli/test_version.py`
+  - [x] Test `sq --version` via `CliRunner` — assert output contains `squadron` and a version string
+  - [x] Test that version matches `importlib.metadata.version("squadron")`
+  - [x] Test exit code is 0
+  - [x] `pytest` passes, `pyright` clean, `ruff` clean
 
 ### T3: Commit — version flag
 
-- [ ] Commit T1-T2 work
-  - [ ] Message: `feat: add --version flag to CLI`
+- [x] Commit T1-T2 work
+  - [x] Message: `feat: add --version flag to CLI`
 
 ### T4: Add `pyproject.toml` metadata
 
-- [ ] Update `pyproject.toml` `[project]` section
-  - [ ] Add `license = {file = "LICENSE"}`
-  - [ ] Add `classifiers` list per slice design (Development Status :: 3 - Alpha, Environment :: Console, Intended Audience :: Developers, License :: OSI Approved :: MIT License, Programming Language :: Python :: 3, Programming Language :: Python :: 3.12, Programming Language :: Python :: 3.13, Topic :: Software Development :: Quality Assurance, Topic :: Software Development :: Testing, Typing :: Typed)
-  - [ ] Add `[project.urls]` section with Homepage, Repository, Issues pointing to the GitHub repo
-  - [ ] Verify existing fields are correct (name, version, description, readme, requires-python)
-  - [ ] Run `uv sync` to confirm pyproject.toml parses correctly
+- [x] Update `pyproject.toml` `[project]` section
+  - [x] Add `license = {file = "LICENSE"}`
+  - [x] Add `classifiers` list per slice design (Development Status :: 3 - Alpha, Environment :: Console, Intended Audience :: Developers, License :: OSI Approved :: MIT License, Programming Language :: Python :: 3, Programming Language :: Python :: 3.12, Programming Language :: Python :: 3.13, Topic :: Software Development :: Quality Assurance, Topic :: Software Development :: Testing, Typing :: Typed)
+  - [x] Add `[project.urls]` section with Homepage, Repository, Issues pointing to the GitHub repo
+  - [x] Verify existing fields are correct (name, version, description, readme, requires-python)
+  - [x] Run `uv sync` to confirm pyproject.toml parses correctly
 
 ### T5: Verify wheel metadata
 
-- [ ] Build wheel and verify metadata includes new fields
-  - [ ] Run `hatch build` (or `uv run hatch build`)
-  - [ ] Inspect the built wheel (zipfile or `unzip -l`) — confirm `METADATA` file contains classifiers, license, project-urls
-  - [ ] Confirm `commands/` directory is still included in the wheel (force-include from slice 116)
-  - [ ] Clean up dist/ after verification
+- [x] Build wheel and verify metadata includes new fields
+  - [x] Run `hatch build` (or `uv run hatch build`)
+  - [x] Inspect the built wheel (zipfile or `unzip -l`) — confirm `METADATA` file contains classifiers, license, project-urls
+  - [x] Confirm `commands/` directory is still included in the wheel (force-include from slice 116)
+  - [x] Clean up dist/ after verification
 
 ### T6: Commit — metadata polish
 
-- [ ] Commit T4-T5 work
-  - [ ] Message: `package: add classifiers, license, and project-urls to pyproject.toml`
+- [x] Commit T4-T5 work
+  - [x] Message: `package: add classifiers, license, and project-urls to pyproject.toml`
 
 ### T7: Create GitHub Actions CI workflow — test job
 
-- [ ] Create `.github/workflows/ci.yml` with the `test` job
-  - [ ] Trigger on push to `main` and pull requests to `main`, and on `v*` tags
-  - [ ] Python version matrix: 3.12, 3.13
-  - [ ] Use `actions/checkout@v4`
-  - [ ] Use `astral-sh/setup-uv@v4`
-  - [ ] Steps: `uv python install`, `uv sync --dev`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright`, `uv run pytest`
-  - [ ] Refer to slice design "GitHub Actions Workflow" section for the full YAML structure
+- [x] Create `.github/workflows/ci.yml` with the `test` job
+  - [x] Trigger on push to `main` and pull requests to `main`, and on `v*` tags
+  - [x] Python version matrix: 3.12, 3.13
+  - [x] Use `actions/checkout@v4`
+  - [x] Use `astral-sh/setup-uv@v4`
+  - [x] Steps: `uv python install`, `uv sync --dev`, `uv run ruff check`, `uv run ruff format --check`, `uv run pyright`, `uv run pytest`
+  - [x] Refer to slice design "GitHub Actions Workflow" section for the full YAML structure
 
 ### T8: Create GitHub Actions CI workflow — publish job
 
-- [ ] Add the `publish` job to `.github/workflows/ci.yml`
-  - [ ] Runs only on `v*` tags: `if: startsWith(github.ref, 'refs/tags/v')`
-  - [ ] Depends on `test` job: `needs: test`
-  - [ ] Set `permissions: id-token: write` for OIDC trusted publisher support
-  - [ ] Steps: checkout, setup-uv, install Python, sync, `hatch build`
-  - [ ] Upload to TestPyPI first with `skip-existing: true`
-  - [ ] Upload to PyPI
-  - [ ] Uses `pypa/gh-action-pypi-publish@release/v1`
-  - [ ] Refer to slice design "GitHub Actions Workflow" section for the full YAML
+- [x] Add the `publish` job to `.github/workflows/ci.yml`
+  - [x] Runs only on `v*` tags: `if: startsWith(github.ref, 'refs/tags/v')`
+  - [x] Depends on `test` job: `needs: test`
+  - [x] Set `permissions: id-token: write` for OIDC trusted publisher support
+  - [x] Steps: checkout, setup-uv, install Python, sync, `hatch build`
+  - [x] Upload to TestPyPI first with `skip-existing: true`
+  - [x] Upload to PyPI
+  - [x] Uses `pypa/gh-action-pypi-publish@release/v1`
+  - [x] Refer to slice design "GitHub Actions Workflow" section for the full YAML
 
 ### T9: Commit — CI workflow
 
-- [ ] Commit T7-T8 work
-  - [ ] Message: `chore: add GitHub Actions CI workflow`
+- [x] Commit T7-T8 work
+  - [x] Message: `chore: add GitHub Actions CI workflow`
 
 ### T10: Update README with install instructions
 
-- [ ] Update `README.md` with global install section
-  - [ ] Add an "Install" section before the existing "Quickstart" section
-  - [ ] Include "Global install (recommended)" with `pipx install squadron` and `uv tool install squadron`
-  - [ ] Include post-install examples: `sq --version`, `sq install-commands`, `sq review code --diff main -v`
-  - [ ] Add "Development install" subsection with clone + `uv sync --dev`
-  - [ ] Rework existing Quickstart to avoid duplicating install steps (reference the Install section or remove redundant install info)
-  - [ ] Refer to slice design "README Install Section" for content
+- [x] Update `README.md` with global install section
+  - [x] Add an "Install" section before the existing "Quickstart" section
+  - [x] Include "Global install (recommended)" with `pipx install squadron` and `uv tool install squadron`
+  - [x] Include post-install examples: `sq --version`, `sq install-commands`, `sq review code --diff main -v`
+  - [x] Add "Development install" subsection with clone + `uv sync --dev`
+  - [x] Rework existing Quickstart to avoid duplicating install steps (reference the Install section or remove redundant install info)
+  - [x] Refer to slice design "README Install Section" for content
 
 ### T11: Commit — README updates
 
-- [ ] Commit T10 work
-  - [ ] Message: `docs: add global install instructions to README`
+- [x] Commit T10 work
+  - [x] Message: `docs: add global install instructions to README`
 
 ### T12: Validation pass
 
