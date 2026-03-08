@@ -3,7 +3,20 @@ name = "squadron"
 version = "0.1.0"
 description = "Multi-agent squadron framework"
 readme = "README.md"
+license = {file = "LICENSE"}
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
@@ -23,6 +36,11 @@ dependencies = [
 [project.scripts]
 sq = "squadron.cli.app:app"
 squadron = "squadron.cli.app:app"
+
+[project.urls]
+Homepage = "https://github.com/manta/squadron"
+Repository = "https://github.com/manta/squadron"
+Issues = "https://github.com/manta/squadron/issues"
 
 [project.optional-dependencies]
 dev = [
