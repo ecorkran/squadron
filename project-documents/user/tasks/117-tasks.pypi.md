@@ -135,7 +135,7 @@ status: complete
 
 These are not AI-automatable tasks. They are documented here for the PM's reference.
 
-- [ ] **PyPI account setup**: Create account at pypi.org, configure trusted publisher for the GitHub repo (or generate API token and add as `PYPI_API_TOKEN` secret)
-- [ ] **TestPyPI account setup**: Create account at test.pypi.org, configure similarly
+- [x] **PyPI account setup**: Create account at pypi.org, configure trusted publisher for the GitHub repo (or generate API token and add as `PYPI_API_TOKEN` secret)
+- [x] **TestPyPI account setup**: Create account at test.pypi.org, configure similarly
 - [ ] **First publish**: Bump version if needed, tag `v0.1.0`, push tag, verify CI publishes successfully
 - [ ] **Smoke test**: `pipx install squadron` from PyPI, verify `sq --version`, `sq --help`, `sq install-commands --target /tmp/test`

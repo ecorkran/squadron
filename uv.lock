@@ -2258,7 +2258,7 @@ wheels = [
 ]
 
 [[package]]
-name = "squadron"
+name = "squadron-ai"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
