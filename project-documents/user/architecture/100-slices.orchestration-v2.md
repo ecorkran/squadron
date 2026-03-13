@@ -4,6 +4,7 @@ parent: 100-arch.orchestration-v2.md
 project: squadron
 dateCreated: 20260217
 dateUpdated: 20260311
+status: in-progress
 ---
 
 # Slice Plan: Orchestration (Python Reboot)

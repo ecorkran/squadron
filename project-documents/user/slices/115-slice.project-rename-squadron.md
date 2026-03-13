@@ -5,7 +5,7 @@ project: squadron
 parent: user/architecture/100-slices.orchestration-v2.md
 dependencies: [auth-strategy-credential-management]
 interfaces: [claude-code-commands-thin, mcp-server, conversation-persistence]
-status: completed
+status: complete
 dateCreated: 20260305
 dateUpdated: 20260305
 ---
