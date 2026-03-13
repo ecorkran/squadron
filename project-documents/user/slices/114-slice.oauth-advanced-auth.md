@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: auth-strategy-credential-management
-project: orchestration
+project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [openai-provider-core, provider-variants]
 interfaces: [codex-agent-integration]

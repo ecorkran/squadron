@@ -1,7 +1,7 @@
 ---
 docType: architecture
 layer: project
-project: orchestration
+project: squadron
 archIndex: 140
 component: automated-dev-pipeline
 dateCreated: 20260221

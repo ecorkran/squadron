@@ -1,6 +1,6 @@
 ---
 slice: local-daemon
-project: orchestration
+project: squadron
 lld: project-documents/user/slices/112-slice.local-daemon.md
 dependencies: [foundation, agent-registry, cli-foundation, openai-provider-core]
 projectState: M1 complete and published. OpenAI-compatible provider (slice 111) complete. 342 tests passing. Agent persistence gap identified (GitHub issue #4) — agents don't survive between CLI invocations.

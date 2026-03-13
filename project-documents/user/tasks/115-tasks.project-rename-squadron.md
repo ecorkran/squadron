@@ -1,7 +1,7 @@
 ---
 docType: tasks
 slice: project-rename-squadron
-project: orchestration
+project: squadron
 lld: user/slices/115-slice.project-rename-squadron.md
 dependencies: [auth-strategy-credential-management]
 projectState: All slices through 114 complete. 61 .py files in src/orchestration/, 66 in tests/. Package builds and 435 tests pass.

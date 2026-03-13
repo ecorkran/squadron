@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: sdk-agent-provider
-project: orchestration
+project: squadron
 parent: 100-slices.orchestration-v2.md
 dependencies: [foundation]
 interfaces: [agent-registry, cli-foundation, review-workflow-templates]

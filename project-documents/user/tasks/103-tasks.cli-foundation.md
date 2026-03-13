@@ -1,7 +1,7 @@
 ---
 docType: task-breakdown
 slice: cli-foundation
-project: orchestration
+project: squadron
 lld: user/slices/103-slice.cli-foundation.md
 dependencies: [foundation, sdk-agent-provider, agent-registry]
 projectState: Foundation complete with migration applied. SDK Agent Provider (slice 2) complete — SDKAgentProvider and SDKAgent implemented, auto-registered as "sdk". Agent Registry (slice 3) complete — AgentRegistry with spawn/get/list_agents/shutdown_agent/shutdown_all, get_registry() singleton, AgentInfo and ShutdownReport models, registry error types. The stub file cli/__init__.py exists. The cli/commands/ directory does not yet exist.

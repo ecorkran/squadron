@@ -1,7 +1,7 @@
 ---
 docType: slice-plan
 parent: 100-arch.orchestration-v2.md
-project: orchestration
+project: squadron
 dateCreated: 20260217
 dateUpdated: 20260311
 ---

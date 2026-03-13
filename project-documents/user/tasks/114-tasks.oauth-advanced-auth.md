@@ -1,6 +1,6 @@
 ---
 slice: auth-strategy-credential-management
-project: orchestration
+project: squadron
 lld: project-documents/user/slices/114-slice.oauth-advanced-auth.md
 dependencies: [openai-provider-core, provider-variants]
 projectState: Slices 111-113 complete. OpenAICompatibleProvider has inline credential resolution (api_key → profile env var → OPENAI_API_KEY → localhost placeholder → error). ProviderProfile dataclass in profiles.py with TOML loading. CLI has spawn, config, review, models commands. 377+ tests passing.

@@ -1,7 +1,7 @@
 ---
 docType: architecture
 layer: project
-project: orchestration
+project: squadron
 archIndex: 050
 component: hld-orchestration
 dateCreated: 20260218

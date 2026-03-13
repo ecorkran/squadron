@@ -1,6 +1,6 @@
 ---
 slice: provider-variants
-project: orchestration
+project: squadron
 lld: project-documents/user/slices/113-slice.provider-variants.md
 dependencies: [openai-provider-core, local-daemon]
 projectState: Slices 111 (OpenAI-Compatible Provider Core) and 112 (Local Server & CLI Client) complete. Daemon architecture operational. CLI commands are thin HTTP clients to daemon. Provider auto-loader in engine. 377 tests passing.

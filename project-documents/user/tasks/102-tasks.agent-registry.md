@@ -1,7 +1,7 @@
 ---
 docType: task-breakdown
 slice: agent-registry
-project: orchestration
+project: squadron
 lld: user/slices/102-slice.agent-registry.md
 dependencies: [foundation, sdk-agent-provider]
 projectState: Foundation complete with migration applied. SDK Agent Provider (slice 2) complete — SDKAgentProvider and SDKAgent implemented, auto-registered as "sdk", translation module working, all tests passing. The stub file core/agent_registry.py exists with a placeholder docstring. AgentConfig, AgentState, Message models in core/models.py. Agent/AgentProvider Protocols in providers/base.py. Provider registry in providers/registry.py. ProviderError hierarchy in providers/errors.py.

@@ -1,6 +1,6 @@
 ---
 slice: m1-polish-and-publish
-project: orchestration
+project: squadron
 lld: user/slices/106-slice.m1-polish-and-publish.md
 dependencies: [foundation, sdk-agent-provider, cli-foundation, review-workflow-templates]
 projectState: >

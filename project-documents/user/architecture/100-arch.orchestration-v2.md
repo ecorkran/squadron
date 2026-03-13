@@ -1,7 +1,7 @@
 ---
 docType: architecture
 layer: project
-project: orchestration
+project: squadron
 archIndex: 100
 component: orchestration
 dateCreated: 20251019

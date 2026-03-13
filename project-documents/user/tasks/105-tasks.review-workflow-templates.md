@@ -1,7 +1,7 @@
 ---
 docType: task-breakdown
 slice: review-workflow-templates
-project: orchestration
+project: squadron
 lld: user/slices/105-slice.review-workflow-templates.md
 dependencies: [foundation, sdk-agent-provider, cli-foundation]
 projectState: >

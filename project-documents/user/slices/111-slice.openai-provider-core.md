@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: openai-provider-core
-project: orchestration
+project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [foundation]
 interfaces: [provider-variants-registry, oauth-advanced-auth, anthropic-api-provider]

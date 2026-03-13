@@ -1,7 +1,7 @@
 ---
 docType: task-breakdown
 slice: sdk-agent-provider
-project: orchestration
+project: squadron
 lld: user/slices/101-slice.sdk-agent-provider.md
 dependencies: [foundation]
 projectState: Foundation slice complete with migration applied. Agent/AgentProvider Protocols, AgentConfig model, Message model, AgentState enum, provider registry, ProviderError hierarchy, Settings, and logging are all in place. Provider subdirectory stubs exist at src/orchestration/providers/sdk/.

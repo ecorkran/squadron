@@ -1,7 +1,7 @@
 ---
 docType: task-breakdown
 slice: foundation
-project: orchestration
+project: squadron
 lld: user/slices/100-slice.foundation.md
 dependencies: []
 projectState: New Python project, no code exists yet. This is the first slice to be implemented.

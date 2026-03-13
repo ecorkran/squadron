@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: foundation
-project: orchestration
+project: squadron
 parent: 100-slices.orchestration-v2.md
 dependencies: []
 interfaces: [sdk-agent-provider, anthropic-api-provider, agent-registry, message-bus, cli-foundation]

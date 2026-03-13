@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: cli-foundation
-project: orchestration
+project: squadron
 parent: 100-slices.orchestration-v2.md
 dependencies: [foundation, sdk-agent-provider, agent-registry]
 interfaces: [sdk-client-warm-pool, review-workflow-templates, human-in-the-loop, end-to-end-testing]

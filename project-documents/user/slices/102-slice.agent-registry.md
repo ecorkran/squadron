@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: agent-registry
-project: orchestration
+project: squadron
 parent: 100-slices.orchestration-v2.md
 dependencies: [sdk-agent-provider]
 interfaces: [cli-foundation, message-bus, mcp-server, rest-websocket-api, subprocess-agent-support]

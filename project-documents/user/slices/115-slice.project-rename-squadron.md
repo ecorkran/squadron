@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: project-rename-squadron
-project: orchestration
+project: squadron
 parent: user/architecture/100-slices.orchestration-v2.md
 dependencies: [auth-strategy-credential-management]
 interfaces: [claude-code-commands-thin, mcp-server, conversation-persistence]

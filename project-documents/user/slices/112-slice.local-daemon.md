@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: local-daemon
-project: orchestration
+project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [foundation, agent-registry, cli-foundation, openai-provider-core]
 interfaces: [message-bus-core, mcp-server, rest-websocket-api]

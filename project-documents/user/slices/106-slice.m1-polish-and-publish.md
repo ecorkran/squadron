@@ -1,7 +1,7 @@
 ---
 docType: slice-design
 slice: m1-polish-and-publish
-project: orchestration
+project: squadron
 parent: 100-slices.orchestration-v2.md
 dependencies: [foundation, sdk-agent-provider, cli-foundation, review-workflow-templates]
 interfaces: []
