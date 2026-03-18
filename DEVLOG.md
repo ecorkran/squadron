@@ -1,6 +1,6 @@
 ---
 docType: devlog
-project: orchestration
+project: squadron
 dateCreated: 20260218
 dateUpdated: 20260307
 ---
@@ -9,6 +9,16 @@ dateUpdated: 20260307
 
 A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
+
+---
+
+## 20260317
+
+### Slice 118: Claude Code Commands — Composed Workflows — Design Complete
+
+Slice design created at `project-documents/user/slices/118-slice.claude-code-commands-composed-workflows.md`.
+
+Scope: Three composed workflow commands in `commands/workflow/` namespace — `/workflow:next-step` (project state assessment via cf status + cf next), `/workflow:design-review` (auto-assembled context + sq review arch), `/workflow:ensemble-review` (multi-provider review with synthesis). Commands are markdown files with multi-step prompts. Minor code change: update `uninstall_commands` to handle all command subdirectories. Dependencies: slice 116 (sq wrappers, complete), context-forge CLI (external).
 
 ---
 
