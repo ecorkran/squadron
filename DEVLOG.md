@@ -18,7 +18,7 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 Slice design created at `project-documents/user/slices/118-slice.claude-code-commands-composed-workflows.md`.
 
-Scope: Three composed workflow commands in `commands/workflow/` namespace — `/workflow:next-step` (project state assessment via cf status + cf next), `/workflow:design-review` (auto-assembled context + sq review arch), `/workflow:ensemble-review` (multi-provider review with synthesis). Commands are markdown files with multi-step prompts. Minor code change: update `uninstall_commands` to handle all command subdirectories. Dependencies: slice 116 (sq wrappers, complete), context-forge CLI (external).
+Scope: Single `/sq:run-slice` command that automates the full slice lifecycle — phase 4 (design) → phase 5 (task breakdown + review) → compact → phase 6 (implementation + code review). Chains `cf set/build` with `sq review tasks/code` and `/compact`. Review gates: PASS proceeds, FAIL stops for human input. Smart resume (skip completed phases) documented as future enhancement. Lives in existing `sq/` namespace — no new directories or Python code.
 
 ---
 
