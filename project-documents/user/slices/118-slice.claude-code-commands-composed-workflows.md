@@ -98,6 +98,41 @@ The `/compact` between phases 5 and 6 is critical. By the time task breakdown an
 
 The `$ARGUMENTS` value is the slice identifier — a number, name, or partial match. The command uses `cf get` output to resolve the slice plan, then searches the slice plan file for a matching entry. This mirrors how the operator would manually find a slice.
 
+### Review File Persistence
+
+Review output is saved to `project-documents/user/reviews/` with index-matched naming:
+
+```
+project-documents/user/reviews/
+  {nnn}-review.tasks.{slice-name}.md   # task review (phase 5 gate)
+  {nnn}-review.code.{slice-name}.md    # code review (phase 6 gate)
+```
+
+This pairs reviews with their subject:
+```
+179-slice.some-feature.md          # slice design
+179-tasks.some-feature.md          # task breakdown
+179-review.tasks.some-feature.md   # task review (phase 5 gate)
+179-review.code.some-feature.md    # code review (phase 6 gate)
+```
+
+Each review file gets YAML frontmatter:
+```yaml
+---
+docType: review
+reviewType: tasks | code
+slice: {slice-name}
+project: squadron
+verdict: PASS | CONCERNS | FAIL
+dateCreated: YYYYMMDD
+dateUpdated: YYYYMMDD
+---
+```
+
+On re-review (e.g., after fixing findings), the file is overwritten. Git handles version history if prior review state is needed.
+
+Review files are committed alongside the work they gate — the task review is committed with the task breakdown, the code review is committed after implementation.
+
 ### Enhancement: Smart Resume (Future)
 
 When invoked on a slice where work has already started:
@@ -158,10 +193,26 @@ When the task breakdown is complete, review it:
 
 `sq review tasks project-documents/user/tasks/{nnn}-tasks.{slice-name}.md --against project-documents/user/slices/{nnn}-slice.{slice-name}.md -v`
 
+Save the review output to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md`. Include YAML frontmatter:
+
+```yaml
+---
+docType: review
+reviewType: tasks
+slice: {slice-name}
+project: squadron
+verdict: {PASS|CONCERNS|FAIL}
+dateCreated: YYYYMMDD
+dateUpdated: YYYYMMDD
+---
+```
+
+Then the full review output as the body.
+
 ### Review gate:
-- **PASS**: Proceed to step 3.
-- **CONCERNS (minor)**: Note the concerns but proceed. Minor concerns can be addressed during implementation.
-- **CONCERNS (significant) or FAIL**: Attempt to fix the findings and re-run the review once. If it still fails, stop and present the findings to the user for guidance.
+- **PASS**: Commit the review file, proceed to step 3.
+- **CONCERNS (minor)**: Commit the review file, note the concerns but proceed. Minor concerns can be addressed during implementation.
+- **CONCERNS (significant) or FAIL**: Attempt to fix the findings and re-run the review once (overwrite the review file). If it still fails, commit the review file and stop — present the findings to the user for guidance.
 
 <!-- TODO: Smarter review loop — track iteration count, categorize finding severity, signal human when stuck rather than retrying blindly -->
 
@@ -184,10 +235,26 @@ When implementation is complete, review the code:
 
 `sq review code --diff main -v`
 
+Save the review output to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md`. Include YAML frontmatter:
+
+```yaml
+---
+docType: review
+reviewType: code
+slice: {slice-name}
+project: squadron
+verdict: {PASS|CONCERNS|FAIL}
+dateCreated: YYYYMMDD
+dateUpdated: YYYYMMDD
+---
+```
+
+Then the full review output as the body.
+
 ### Review gate:
-- **PASS**: Report completion to the user.
-- **CONCERNS (minor)**: Note the concerns, report completion with caveats.
-- **CONCERNS (significant) or FAIL**: Attempt to fix the findings and re-run the review once. If it still fails, stop and present the findings to the user for guidance.
+- **PASS**: Commit the review file, report completion to the user.
+- **CONCERNS (minor)**: Commit the review file, note the concerns, report completion with caveats.
+- **CONCERNS (significant) or FAIL**: Attempt to fix the findings and re-run the review once (overwrite the review file). If it still fails, commit the review file and stop — present the findings to the user for guidance.
 
 <!-- TODO: Smarter review loop — detect which findings are auto-fixable vs. need human input, track fix attempts, avoid infinite loops -->
 
@@ -196,6 +263,7 @@ When implementation is complete, review the code:
 When all steps are done, provide a brief summary:
 - Slice design file path
 - Task file path
+- Review file paths
 - Commits made during implementation
 - Review verdicts (task review and code review)
 - Any unresolved concerns or deferred items
@@ -242,7 +310,11 @@ No changes to `install.py` — the new file is in the existing `sq/` directory.
 - `/sq:run-slice 118` drives through design → tasks → review → compact → implement → review
 - Command validates slice exists in the slice plan before starting
 - Task review runs after phase 5 with a review gate (stop on FAIL)
+- Task review output saved to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md` with frontmatter
 - Code review runs after phase 6 with a review gate (stop on FAIL)
+- Code review output saved to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md` with frontmatter
+- Review files are committed at each gate
+- Re-reviews overwrite the review file (git handles history)
 - `/compact` is invoked between phases 5 and 6 with appropriate keep instructions
 - Command handles missing `cf` explicitly (no silent failures)
 

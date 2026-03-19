@@ -31,10 +31,16 @@ status: not_started
   - [ ] Includes Step 0 (Validate): `cf get` to confirm slice plan is set, read slice plan, verify slice exists
   - [ ] Includes Step 1 (Phase 4): `cf set phase 4`, `cf set slice`, `cf build` → design work
   - [ ] Includes Step 2 (Phase 5): `cf set phase 5`, `cf build` → task breakdown, then `sq review tasks` with review gate
+  - [ ] Task review output saved to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md`
+  - [ ] Review file includes YAML frontmatter: `docType: review`, `reviewType: tasks`, `slice`, `project`, `verdict`, `dateCreated`, `dateUpdated`
   - [ ] Includes Step 3 (Compact): `/compact` with keep instructions for slice summaries
   - [ ] Includes Step 4 (Phase 6): `cf set phase 6`, `cf build` → implementation, then `sq review code --diff main` with review gate
-  - [ ] Includes Completion section: summary of paths, commits, review verdicts
-  - [ ] Review gate logic: PASS → proceed, minor CONCERNS → proceed with note, significant CONCERNS/FAIL → fix + re-review once, then stop for human if still failing
+  - [ ] Code review output saved to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md`
+  - [ ] Review file includes same YAML frontmatter pattern with `reviewType: code`
+  - [ ] Re-reviews overwrite the review file (git handles version history)
+  - [ ] Review files committed at each gate (with the work they gate)
+  - [ ] Includes Completion section: summary of paths (including review file paths), commits, review verdicts
+  - [ ] Review gate logic: PASS → commit review + proceed, minor CONCERNS → commit review + proceed with note, significant CONCERNS/FAIL → fix + re-review once (overwrite file), then commit review + stop for human if still failing
   - [ ] TODO comments for future enhancement: smarter review loop, human signaling
   - [ ] `$ARGUMENTS` used for slice identifier input
   - [ ] Handles missing arguments (asks user which slice)
