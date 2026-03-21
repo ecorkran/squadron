@@ -32,10 +32,11 @@ Today, executing a slice requires the operator to manually invoke 10+ commands i
 - Update existing review commands (`review-tasks.md`, `review-code.md`, `review-arch.md`) to support:
   - Bare slice number input (e.g., `/sq:review-tasks 191`) with path resolution via `cf get`
   - Review file persistence to `project-documents/user/reviews/`
+- CLI number shorthand: `sq review tasks 221`, `sq review arch 221`, `sq review code 221` resolve paths via `cf slice list --json` / `cf task list --json` — same UX as the slash commands but on the CLI directly
 
 ### Excluded
 
-- New Python code — these are markdown command file changes only
+- Automated resolution of review findings (TODOs in design for future iteration)
 - Automated resolution of review findings (TODOs in design for future iteration)
 - Smart resume from mid-pipeline (documented as enhancement)
 - Additional composed commands — deferred until real usage validates need
@@ -453,8 +454,19 @@ No changes to `install.py` — file count stays at 9 (the new file is in the exi
 
 3. **Manual verification** (effort: 1/5) — Run `/sq:run-slice` on a real slice to verify the full pipeline works end-to-end. This is the most important validation step — the command's value depends entirely on whether Claude follows the multi-step instructions reliably.
 
+### CLI Number Shorthand (effort: 2/5)
+
+Add bare number resolution to the Python CLI so `sq review tasks 221` works the same as the slash command shorthand.
+
+**Implementation:**
+- Add `_resolve_slice_number(num: str) -> dict` helper in `review.py` that shells out to `cf slice list --json` and `cf task list --json`, finds the matching index, returns `designFile`, task file path, and slice name.
+- In `review_arch` and `review_tasks`: detect `input_file.isdigit()`, call resolver, fill in `input_file` and `against` from the result.
+- In `review_code`: add optional positional arg for slice number, resolve slice name for review context.
+- Fail explicitly if `cf` is not available or slice number not found.
+
 ### Testing Strategy
 
 - **Source verification:** `commands/sq/run-slice.md` exists and is non-empty
 - **Install test:** Expected file count increases from 8 to 9
-- **No automated integration test:** The command's behavior depends on Claude Code runtime + context-forge state. Manual verification during implementation is the primary validation.
+- **CLI number shorthand:** Unit tests for resolver + number detection (mocked `cf` output)
+- **No automated integration test for slash commands:** The command's behavior depends on Claude Code runtime + context-forge state. Manual verification during implementation is the primary validation.

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from pathlib import Path
+from typing import TypedDict
 
 import typer
 from rich import print as rprint
@@ -162,6 +164,93 @@ def _resolve_rules_content(rules_path: str | None) -> str | None:
     return path.read_text()
 
 
+class SliceInfo(TypedDict):
+    """Resolved slice metadata from Context-Forge."""
+
+    index: int
+    name: str
+    slice_name: str
+    design_file: str | None
+    task_files: list[str]
+    arch_file: str
+
+
+def _run_cf(args: list[str]) -> str:
+    """Run a cf CLI command and return stdout. Exit on failure."""
+    try:
+        result = subprocess.run(
+            ["cf", *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError:
+        rprint(
+            "[red]Error: 'cf' (Context-Forge CLI) is not installed"
+            " or not on PATH.[/red]"
+        )
+        raise typer.Exit(code=1)
+    except subprocess.CalledProcessError as exc:
+        rprint(f"[red]Error running 'cf {' '.join(args)}': {exc.stderr.strip()}[/red]")
+        raise typer.Exit(code=1) from exc
+    return result.stdout
+
+
+def _resolve_slice_number(num: str) -> SliceInfo:
+    """Resolve a bare slice number to file paths via Context-Forge.
+
+    Shells out to ``cf slice list --json``, ``cf tasks list --json``,
+    and ``cf get --json`` to resolve design file, task files, and
+    architecture document for the given slice index.
+    """
+    index = int(num)
+
+    # --- slice list ---
+    slice_data = json.loads(_run_cf(["slice", "list", "--json"]))
+    match = next(
+        (e for e in slice_data.get("entries", []) if e.get("index") == index),
+        None,
+    )
+    if match is None:
+        rprint(
+            f"[red]Error: No slice with index {index} in the current slice plan.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    design_file: str | None = match.get("designFile")
+    # derive kebab-case slice name from design file path or entry name
+    if design_file:
+        stem = Path(design_file).stem  # e.g. "118-slice.composed-workflows"
+        slice_name = stem.split(".", 1)[1] if "." in stem else stem
+    else:
+        slice_name = match["name"].lower().replace(" ", "-")
+
+    # --- tasks list ---
+    tasks_data = json.loads(_run_cf(["tasks", "list", "--json"]))
+    task_match = next(
+        (e for e in tasks_data if e.get("index") == index),
+        None,
+    )
+    task_files: list[str] = []
+    if task_match and task_match.get("files"):
+        task_files = task_match["files"]
+
+    # --- architecture doc ---
+    project_data = json.loads(_run_cf(["get", "--json"]))
+    arch_raw = project_data.get("fileArch", "")
+    # fileArch is a name like "100-arch.orchestration-v2", resolve to path
+    arch_file = f"project-documents/user/architecture/{arch_raw}.md" if arch_raw else ""
+
+    return SliceInfo(
+        index=index,
+        name=match["name"],
+        slice_name=slice_name,
+        design_file=design_file,
+        task_files=task_files,
+        arch_file=arch_file,
+    )
+
+
 def _resolve_model(
     flag: str | None, template: ReviewTemplate | None = None
 ) -> str | None:
@@ -246,9 +335,9 @@ async def _execute_review(
 
 @review_app.command("arch")
 def review_arch(
-    input_file: str = typer.Argument(help="Document to review"),
-    against: str = typer.Option(
-        ..., "--against", help="Architecture document to review against"
+    input_file: str = typer.Argument(help="Document to review (or slice number)"),
+    against: str | None = typer.Option(
+        None, "--against", help="Architecture document to review against"
     ),
     cwd: str | None = typer.Option(
         None, "--cwd", help="Working directory (default: config or .)"
@@ -267,6 +356,18 @@ def review_arch(
     ),
 ) -> None:
     """Run an architectural review."""
+    if input_file.isdigit():
+        info = _resolve_slice_number(input_file)
+        if not info["design_file"]:
+            rprint(f"[red]Error: No design file for slice {info['index']}.[/red]")
+            raise typer.Exit(code=1)
+        input_file = info["design_file"]
+        against = info["arch_file"]
+
+    if not against:
+        rprint("[red]Error: --against is required when not using a slice number.[/red]")
+        raise typer.Exit(code=1)
+
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
     inputs = {"input": input_file, "against": against, "cwd": resolved_cwd}
@@ -277,9 +378,11 @@ def review_arch(
 
 @review_app.command("tasks")
 def review_tasks(
-    input_file: str = typer.Argument(help="Task breakdown file to review"),
-    against: str = typer.Option(
-        ..., "--against", help="Parent slice design to review against"
+    input_file: str = typer.Argument(
+        help="Task breakdown file to review (or slice number)"
+    ),
+    against: str | None = typer.Option(
+        None, "--against", help="Parent slice design to review against"
     ),
     cwd: str | None = typer.Option(
         None, "--cwd", help="Working directory (default: config or .)"
@@ -298,6 +401,21 @@ def review_tasks(
     ),
 ) -> None:
     """Run a task plan review."""
+    if input_file.isdigit():
+        info = _resolve_slice_number(input_file)
+        if not info["task_files"]:
+            rprint(f"[red]Error: No task file for slice {info['index']}.[/red]")
+            raise typer.Exit(code=1)
+        if not info["design_file"]:
+            rprint(f"[red]Error: No design file for slice {info['index']}.[/red]")
+            raise typer.Exit(code=1)
+        input_file = f"project-documents/user/tasks/{info['task_files'][0]}"
+        against = info["design_file"]
+
+    if not against:
+        rprint("[red]Error: --against is required when not using a slice number.[/red]")
+        raise typer.Exit(code=1)
+
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
     inputs = {"input": input_file, "against": against, "cwd": resolved_cwd}
@@ -308,6 +426,9 @@ def review_tasks(
 
 @review_app.command("code")
 def review_code(
+    slice_number: str | None = typer.Argument(
+        None, help="Optional slice number for context (e.g. 118)"
+    ),
     cwd: str | None = typer.Option(
         None, "--cwd", help="Project directory (default: config or .)"
     ),
@@ -332,6 +453,11 @@ def review_code(
     ),
 ) -> None:
     """Run a code review."""
+    if slice_number is not None and slice_number.isdigit():
+        _resolve_slice_number(slice_number)  # validates slice exists
+        if not diff:
+            diff = "main"
+
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
 

@@ -126,6 +126,58 @@ status: in_progress
   - [x] `unzip -l dist/*.whl | grep run-slice` — confirm `squadron/commands/sq/run-slice.md` appears
   - [x] Clean up `dist/`
 
+### T10: Add `_resolve_slice_number` helper to `review.py`
+
+- [ ] Add helper function `_resolve_slice_number(num: str) -> dict` in `src/squadron/cli/commands/review.py`
+  - [ ] Shells out to `cf slice list --json` via `subprocess.run`, captures stdout
+  - [ ] Parses JSON, finds entry where `index` matches `int(num)`
+  - [ ] Returns dict with keys: `index`, `name`, `slice_name` (kebab-case from designFile path), `design_file`, `task_file` (from `cf task list --json`)
+  - [ ] Raises `typer.Exit(code=1)` with clear error if: `cf` not found, slice number not found, `designFile` is null (where needed)
+  - [ ] Also shells out to `cf task list --json` to get task file path
+
+### T11: Wire number shorthand into review commands
+
+- [ ] Update `review_arch` command
+  - [ ] Detect `input_file.isdigit()` — if true, call `_resolve_slice_number`
+  - [ ] Set `input_file` to resolved `design_file`, `against` to architecture doc (from `cf get` or config)
+  - [ ] Architecture doc resolution: shell out to `cf get --json` or parse `cf get` output for Architecture field
+  - [ ] Existing path-based invocations unchanged
+- [ ] Update `review_tasks` command
+  - [ ] Detect `input_file.isdigit()` — if true, call `_resolve_slice_number`
+  - [ ] Set `input_file` to resolved task file, `against` to resolved design file
+  - [ ] Fail explicitly if task file is null/missing
+  - [ ] Existing path-based invocations unchanged
+- [ ] Update `review_code` command
+  - [ ] Add optional positional argument for slice number (default `None`)
+  - [ ] If positional arg is provided and is a digit, call `_resolve_slice_number` for context (slice name for output/logging)
+  - [ ] Default to `--diff main` when invoked with a number
+  - [ ] Existing flag-based invocations unchanged
+
+### T12: Tests for CLI number shorthand
+
+- [ ] Add tests in `tests/cli/test_review_resolve.py`
+  - [ ] Test `_resolve_slice_number` with mocked subprocess output (valid slice)
+  - [ ] Test `_resolve_slice_number` with no matching index (exits with error)
+  - [ ] Test `_resolve_slice_number` with null designFile (exits with error)
+  - [ ] Test `_resolve_slice_number` when `cf` is not installed (exits with error)
+  - [ ] Test `review_tasks` with digit input routes through resolver (mock resolver, verify inputs dict)
+  - [ ] Test `review_arch` with digit input routes through resolver
+  - [ ] `uv run pytest tests/cli/test_review_resolve.py` — all tests pass
+
+### T13: Commit — CLI number shorthand
+
+- [ ] Commit T10-T12 work
+  - [ ] Message: `feat: add bare number shorthand to sq review CLI commands`
+  - [ ] Stage `src/squadron/cli/commands/review.py` and `tests/cli/test_review_resolve.py`
+
+### T14: Validation pass — full suite after CLI changes
+
+- [ ] Full project validation
+  - [ ] `uv run ruff check` — clean
+  - [ ] `uv run ruff format --check` — clean
+  - [ ] `uv run pyright` — zero errors
+  - [ ] `uv run pytest` — all tests pass
+
 ---
 
 ## Post-Implementation (Manual — Project Manager)
