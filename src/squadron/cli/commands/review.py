@@ -73,7 +73,6 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
 
     Level 0: verdict badge + finding headings with severity
     Level 1: above + full finding descriptions
-    Level 2: above + raw output (tool usage details)
     """
     console = Console()
     color = _VERDICT_COLORS.get(result.verdict, "dim")
@@ -89,10 +88,6 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
 
     if not result.findings:
         console.print("  No specific findings.", style="dim")
-        if verbosity >= 2 and result.raw_output:
-            console.print()
-            console.rule("Raw Output", style="dim")
-            console.print(result.raw_output)
         return
 
     for finding in result.findings:
@@ -106,11 +101,6 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
                 console.print(f"    {line}")
         if verbosity >= 1 and finding.file_ref:
             console.print(f"    -> {finding.file_ref}", style="cyan")
-
-    if verbosity >= 2 and result.raw_output:
-        console.print()
-        console.rule("Raw Output", style="dim")
-        console.print(result.raw_output)
 
 
 def _display_json(result: ReviewResult) -> None:
@@ -172,11 +162,6 @@ def _format_review_markdown(
     else:
         lines.append("No specific findings.")
         lines.append("")
-
-    if result.raw_output:
-        lines.append("## Raw Output")
-        lines.append("")
-        lines.append(result.raw_output)
 
     return "\n".join(lines)
 

@@ -118,11 +118,11 @@ class TestVerbosity1:
 
 
 class TestVerbosity2:
-    """Verbosity 2: everything including raw output."""
+    """Verbosity 2: same as level 1 (raw output not displayed)."""
 
-    def test_shows_raw_output(self, sample_result: ReviewResult) -> None:
+    def test_no_raw_output(self, sample_result: ReviewResult) -> None:
         output = _capture_terminal(sample_result, 2)
-        assert "Full raw text here" in output
+        assert "Full raw text here" not in output
 
     def test_shows_descriptions(self, sample_result: ReviewResult) -> None:
         output = _capture_terminal(sample_result, 2)
