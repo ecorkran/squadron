@@ -318,6 +318,47 @@ def _resolve_slice_number(num: str) -> SliceInfo:
     )
 
 
+def _infer_profile_from_model(  # pyright: ignore[reportUnusedFunction]
+    model: str,
+) -> str | None:
+    """Infer provider profile from a model name.
+
+    Returns None if no inference can be made.
+    """
+    lower = model.lower()
+    # Claude models → SDK
+    if lower in ("opus", "sonnet", "haiku") or lower.startswith("claude-"):
+        return "sdk"
+    # OpenAI models
+    if lower.startswith("gpt-") or lower.startswith("o1-") or lower.startswith("o3-"):
+        return "openai"
+    # Slash in name → OpenRouter (e.g. anthropic/claude-3.5-sonnet)
+    if "/" in model:
+        return "openrouter"
+    return None
+
+
+def _resolve_profile(  # pyright: ignore[reportUnusedFunction]
+    flag: str | None,
+    template: ReviewTemplate | None = None,
+    model: str | None = None,
+) -> str:
+    """Resolve profile: CLI flag → model inference → template → config → sdk."""
+    if flag is not None:
+        return flag
+    # Try model-to-profile inference
+    if model is not None:
+        inferred = _infer_profile_from_model(model)
+        if inferred is not None:
+            return inferred
+    if template is not None and template.profile is not None:
+        return template.profile
+    config_val = get_config("default_review_profile")
+    if isinstance(config_val, str):
+        return config_val
+    return "sdk"
+
+
 def _resolve_model(
     flag: str | None, template: ReviewTemplate | None = None
 ) -> str | None:

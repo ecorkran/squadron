@@ -106,6 +106,35 @@ class TestLoadTemplate:
         assert t.prompt_builder is None
         assert t.model is None  # no model in YAML → None
 
+    def test_profile_field_parsed_from_yaml(self, tmp_path: Path) -> None:
+        yaml_with_profile = VALID_YAML.replace(
+            "permission_mode: bypassPermissions",
+            "permission_mode: bypassPermissions\nprofile: openrouter",
+        )
+        path = _write_yaml(tmp_path, yaml_with_profile)
+        t = load_template(path)
+        assert t.profile == "openrouter"
+
+    def test_profile_field_defaults_to_none(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML)
+        t = load_template(path)
+        assert t.profile is None
+
+    def test_review_template_has_profile_attribute(self) -> None:
+        t = ReviewTemplate(
+            name="t",
+            description="d",
+            system_prompt="s",
+            allowed_tools=[],
+            permission_mode="bypassPermissions",
+            setting_sources=None,
+            required_inputs=[],
+            optional_inputs=[],
+            prompt_template="hello",
+            profile="sdk",
+        )
+        assert t.profile == "sdk"
+
     def test_model_field_parsed_from_yaml(self, tmp_path: Path) -> None:
         yaml_with_model = VALID_YAML.replace(
             "permission_mode: bypassPermissions",

@@ -34,6 +34,14 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default=None,
         description="Default rules file path for code reviews",
     ),
+    "default_review_profile": ConfigKey(
+        name="default_review_profile",
+        type_=str,
+        default=None,
+        description=(
+            "Default provider profile for review commands (e.g. openrouter, sdk)"
+        ),
+    ),
     "default_model": ConfigKey(
         name="default_model",
         type_=str,
