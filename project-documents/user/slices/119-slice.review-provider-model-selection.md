@@ -107,7 +107,20 @@ The SDK path provides tools (Read, Glob, Grep, Bash) via Claude Code's tool infr
 - **SDK reviews** (default): full tool access, can read files, search code
 - **Non-SDK reviews**: prompt-only, no tool access. The review prompt already includes file paths; the model reviews based on what's in the prompt. For arch and task reviews this is usually sufficient since the prompt includes the full document content. For code reviews, the diff content is included in the prompt.
 
-This is a known limitation, documented in the slice design. Future work could add function-calling tool support to the non-SDK path, but that's substantial scope (tool serialization, execution, multi-turn loop) and belongs in a separate slice.
+This is workable because the existing `prompt_builder` functions (e.g., `code_review_prompt`) already inject file content into the prompt text — diffs, file contents, rules are all materialized before the API call. Non-SDK providers review based on this injected content. SDK providers can additionally use tools to explore further, but the prompt is self-contained either way.
+
+Future work could add function-calling tool support to the non-SDK path (tool schema serialization, execution loop, multi-turn), but that's substantial scope and belongs in a separate slice.
+
+### Relationship to ADP (140-arch)
+
+The Automated Development Pipeline (140-arch) is a larger orchestration system — pipeline executor, phase runner, checkpoint manager, multi-slice loops. Slice 119 is a **prerequisite** for it, not a replacement:
+
+- **119** solves: "route a single review through any provider" — plumbing
+- **140** solves: "orchestrate a full design→tasks→implement pipeline with checkpoints" — orchestration
+
+The user templates in 119 are `ReviewTemplate` YAML files (review-specific). The ADP's `Pipeline Definition` is a different schema entirely (multi-phase, agent selection, checkpoint triggers, compaction). They don't conflict — the ADP's `review:` sections would *consume* the review templates that 119 makes provider-configurable.
+
+`/sq:run-slice` (slice 118) is a prompt-based precursor to the ADP. The ADP would eventually replace it with a declarative, data-driven pipeline. But run-slice works now and the ADP is a much bigger lift.
 
 ### User-Customizable Templates
 
