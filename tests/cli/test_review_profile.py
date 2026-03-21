@@ -148,7 +148,7 @@ class TestCLIProfileFlag:
 
         # Mock template loading + getting
         monkeypatch.setattr(
-            "squadron.cli.commands.review.load_builtin_templates",
+            "squadron.cli.commands.review.load_all_templates",
             lambda: None,
         )
         monkeypatch.setattr(
@@ -198,7 +198,7 @@ class TestCLIProfileFlag:
         )
 
         monkeypatch.setattr(
-            "squadron.cli.commands.review.load_builtin_templates",
+            "squadron.cli.commands.review.load_all_templates",
             lambda: None,
         )
         monkeypatch.setattr(
@@ -246,7 +246,7 @@ class TestCLIProfileFlag:
         )
 
         monkeypatch.setattr(
-            "squadron.cli.commands.review.load_builtin_templates",
+            "squadron.cli.commands.review.load_all_templates",
             lambda: None,
         )
         monkeypatch.setattr(

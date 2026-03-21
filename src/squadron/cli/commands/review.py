@@ -21,7 +21,7 @@ from squadron.review.templates import (
     ReviewTemplate,
     get_template,
     list_templates,
-    load_builtin_templates,
+    load_all_templates,
 )
 
 review_app = typer.Typer(
@@ -387,7 +387,7 @@ def _run_review_command(
 
     Returns the ReviewResult so callers can save it.
     """
-    load_builtin_templates()
+    load_all_templates()
     template = get_template(template_name)
     if template is None:
         available = [t.name for t in list_templates()]
@@ -688,7 +688,7 @@ def review_code(
 @review_app.command("list")
 def review_list() -> None:
     """List available review templates."""
-    load_builtin_templates()
+    load_all_templates()
     templates = list_templates()
     if not templates:
         rprint("[dim]No templates available.[/dim]")

@@ -170,11 +170,32 @@ def clear_registry() -> None:
     _TEMPLATES.clear()
 
 
-def load_builtin_templates() -> None:
-    """Load all YAML templates from the builtin templates directory."""
+_USER_TEMPLATES_DIR = Path.home() / ".config" / "squadron" / "templates"
+
+
+def load_all_templates(
+    user_dir: Path | None = None,
+) -> None:
+    """Load built-in and user templates.
+
+    Built-in templates are loaded first, then user templates from
+    ~/.config/squadron/templates/. User templates with the same name
+    override built-in ones.
+    """
+    # Built-in templates
     builtin_dir = Path(__file__).parent / "builtin"
-    if not builtin_dir.is_dir():
-        return
-    for yaml_file in sorted(builtin_dir.glob("*.yaml")):
-        template = load_template(yaml_file)
-        register_template(template)
+    if builtin_dir.is_dir():
+        for yaml_file in sorted(builtin_dir.glob("*.yaml")):
+            template = load_template(yaml_file)
+            register_template(template)
+
+    # User templates (override built-in by name)
+    user_templates_dir = user_dir or _USER_TEMPLATES_DIR
+    if user_templates_dir.is_dir():
+        for yaml_file in sorted(user_templates_dir.glob("*.yaml")):
+            template = load_template(yaml_file)
+            register_template(template)
+
+
+# Backward-compatible alias
+load_builtin_templates = load_all_templates
