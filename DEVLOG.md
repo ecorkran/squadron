@@ -14,6 +14,10 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260321
 
+### Slice 119: Review Provider & Model Selection — Task Breakdown Complete
+
+Task file created at `project-documents/user/tasks/119-tasks.review-provider-model-selection.md` (20 tasks: T1-T20). Key task groups: template profile field (T1-T2), config key + profile resolution (T3-T7), review client with provider routing (T9-T10), CLI `--profile` flag (T12-T13), user template loading (T15-T16), slash command updates (T18), validation (T19-T20). Post-impl: live tests with OpenRouter, OpenAI, user templates, config defaults.
+
 ### Slice 119: Review Provider & Model Selection — Design Complete
 
 - Slice design created at `project-documents/user/slices/119-slice.review-provider-model-selection.md`
