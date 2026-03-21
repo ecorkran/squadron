@@ -6,7 +6,7 @@ parent: 100-slices.orchestration-v2.md
 dependencies: [sq-slash-command, context-forge-workflow-navigation]
 interfaces: []
 dateCreated: 20260317
-dateUpdated: 20260317
+dateUpdated: 20260320
 status: not_started
 ---
 
@@ -26,16 +26,19 @@ Today, executing a slice requires the operator to manually invoke 10+ commands i
 
 ### Included
 
-- One command file: `commands/sq/run-slice.md` → `/sq:run-slice`
+- One new command file: `commands/sq/run-slice.md` → `/sq:run-slice`
 - The command prompt encodes the full phase 4→5→6 pipeline with review gates
 - Uses existing commands: `cf set`, `cf build`, `sq review tasks`, `sq review code`, `/compact`
+- Update existing review commands (`review-tasks.md`, `review-code.md`, `review-arch.md`) to support:
+  - Bare slice number input (e.g., `/sq:review-tasks 191`) with path resolution via `cf get`
+  - Review file persistence to `project-documents/user/reviews/`
 
 ### Excluded
 
-- New Python code — this is a markdown command file only
+- New Python code — these are markdown command file changes only
 - Automated resolution of review findings (TODOs in design for future iteration)
 - Smart resume from mid-pipeline (documented as enhancement)
-- Additional composed commands (ensemble-review, next-step, design-review from prior design) — deferred until real usage validates need
+- Additional composed commands — deferred until real usage validates need
 
 ## Dependencies
 
@@ -94,9 +97,27 @@ This is a simple heuristic. The TODOs in the command acknowledge that smarter lo
 
 The `/compact` between phases 5 and 6 is critical. By the time task breakdown and review are complete, the context window is heavily loaded. Compacting with explicit keep instructions preserves the essential design/task summaries while freeing space for implementation.
 
-### Slice Identification
+### Path Resolution via Context-Forge
 
-The `$ARGUMENTS` value is the slice identifier — a number, name, or partial match. The command uses `cf get` output to resolve the slice plan, then searches the slice plan file for a matching entry. This mirrors how the operator would manually find a slice.
+All commands that accept a slice number use `cf slice list --json` and `cf task list --json` for file resolution. This delegates path knowledge to CF rather than hardcoding glob patterns.
+
+The resolution flow for a bare number (e.g., `191`):
+1. Run `cf slice list --json` → find entry where `index == 191` → get `designFile`
+2. Run `cf task list --json` → find entry where `index == 191` → get tasks file path
+3. Extract slice name from the design file path (e.g., `worktree-aware-file-operations`)
+4. Derive review output path: `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md`
+
+For project-level context (architecture doc, project path): use `cf get`.
+
+This approach:
+- **CF owns naming conventions** — commands don't hardcode file patterns
+- **Worktree-aware** — CF resolves paths for the current worktree automatically
+- **Does not mutate CF state** — no `cf set slice` during resolution
+- **Fails explicitly** if no matching entry is found (e.g., null `designFile`)
+- **Future-proof** — when CF gains `--all`, cross-worktree lookups come free
+- **JSON format** — structured lookup, no string parsing of table output
+
+For `run-slice`, the `$ARGUMENTS` value is the slice identifier — a number or name. The command uses `cf slice list --json` to verify the slice exists and resolve paths before starting the pipeline.
 
 ### Review File Persistence
 
@@ -104,6 +125,7 @@ Review output is saved to `project-documents/user/reviews/` with index-matched n
 
 ```
 project-documents/user/reviews/
+  {nnn}-review.arch.{slice-name}.md    # arch review (slice design check)
   {nnn}-review.tasks.{slice-name}.md   # task review (phase 5 gate)
   {nnn}-review.code.{slice-name}.md    # code review (phase 6 gate)
 ```
@@ -112,6 +134,7 @@ This pairs reviews with their subject:
 ```
 179-slice.some-feature.md          # slice design
 179-tasks.some-feature.md          # task breakdown
+179-review.arch.some-feature.md    # arch review (slice design check)
 179-review.tasks.some-feature.md   # task review (phase 5 gate)
 179-review.code.some-feature.md    # code review (phase 6 gate)
 ```
@@ -141,9 +164,47 @@ When invoked on a slice where work has already started:
 
 This is deferred to a future iteration — for now the command starts from phase 4.
 
-## Command File Specification
+### Enhancement: JSON Review Output (Future)
 
-### `/sq:run-slice`
+Save review results as JSON alongside (or instead of) markdown, using `sq review --output json`. Enables piping into pipelines, aggregating findings across slices, or feeding a dashboard.
+
+## Command File Specifications
+
+### Updated: `/sq:review-tasks`
+
+**File:** `commands/sq/review-tasks.md`
+
+**New invocation:** `/sq:review-tasks 191` (bare number — resolves paths via `cf get`)
+
+**Existing invocation still works:** `/sq:review-tasks path/to/tasks.md --against path/to/slice.md`
+
+The updated command detects whether `$ARGUMENTS` starts with a number. If so, it resolves file paths, runs the review, and saves output to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md` with review frontmatter. If full paths are provided, it behaves as before but still saves the review file.
+
+### Updated: `/sq:review-code`
+
+**File:** `commands/sq/review-code.md`
+
+**New invocation:** `/sq:review-code 191` (bare number — resolves slice, reviews code diff against main)
+
+**Existing invocation still works:** `/sq:review-code --diff main --files "src/**/*.py"`
+
+When given a bare number, the command resolves the slice context and runs `sq review code --diff main`. Review output is saved to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md`.
+
+### Updated: `/sq:review-arch`
+
+**File:** `commands/sq/review-arch.md`
+
+**New invocation:** `/sq:review-arch 191` (bare number — resolves slice design, reviews holistically)
+
+**Existing invocation still works:** `/sq:review-arch path/to/doc.md --against path/to/arch.md`
+
+When given a bare number, the command performs a holistic architectural review of the slice design — checking it against both:
+1. **Architecture document** (from `cf get` Architecture field) — does the design align with the system architecture?
+2. **Slice plan entry** (from `cf slice list --json`, matching index) — does the design deliver what the plan says this slice should do?
+
+This is one review answering one question: "does this slice design effectively cover what it's supposed to?" Review output is saved to `project-documents/user/reviews/{nnn}-review.arch.{slice-name}.md`.
+
+### New: `/sq:run-slice`
 
 **File:** `commands/sq/run-slice.md`
 
@@ -258,6 +319,13 @@ Then the full review output as the body.
 
 <!-- TODO: Smarter review loop — detect which findings are auto-fixable vs. need human input, track fix attempts, avoid infinite loops -->
 
+## Step 5: DEVLOG Entry
+
+Write a session state summary to the project's root `DEVLOG.md`. Use `cf prompt get session-state-summary` to retrieve the summary template. The entry should briefly capture:
+- Which slice was processed
+- Review verdicts
+- Any unresolved concerns or deferred items
+
 ## Completion
 
 When all steps are done, provide a brief summary:
@@ -278,14 +346,14 @@ commands/
     ├── task.md             # Existing
     ├── list.md             # Existing
     ├── shutdown.md         # Existing
-    ├── review-arch.md      # Existing
-    ├── review-tasks.md     # Existing
-    ├── review-code.md      # Existing
+    ├── review-arch.md      # Updated — number shorthand + review persistence
+    ├── review-tasks.md     # Updated — number shorthand + review persistence
+    ├── review-code.md      # Updated — number shorthand + review persistence
     ├── auth-status.md      # Existing
     └── run-slice.md        # New (this slice)
 ```
 
-No changes to `install.py` — the new file is in the existing `sq/` directory.
+No changes to `install.py` — file count stays at 9 (the new file is in the existing `sq/` directory, and the updated files don't change count).
 
 ## Integration Points
 
@@ -306,17 +374,28 @@ No changes to `install.py` — the new file is in the existing `sq/` directory.
 
 ### Functional Requirements
 
+**run-slice command:**
 - `commands/sq/run-slice.md` exists with the complete pipeline prompt
 - `/sq:run-slice 118` drives through design → tasks → review → compact → implement → review
 - Command validates slice exists in the slice plan before starting
 - Task review runs after phase 5 with a review gate (stop on FAIL)
-- Task review output saved to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md` with frontmatter
 - Code review runs after phase 6 with a review gate (stop on FAIL)
-- Code review output saved to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md` with frontmatter
-- Review files are committed at each gate
-- Re-reviews overwrite the review file (git handles history)
 - `/compact` is invoked between phases 5 and 6 with appropriate keep instructions
+- DEVLOG entry written at pipeline completion (using `cf prompt get session-state-summary` template)
 - Command handles missing `cf` explicitly (no silent failures)
+
+**Review command updates (review-tasks, review-code, review-arch):**
+- All three accept a bare slice number (e.g., `/sq:review-tasks 191`)
+- Number input triggers path resolution via `cf slice list --json` / `cf task list --json` — no need to type full paths
+- `review-arch` performs holistic check: slice design vs. architecture doc + slice plan entry
+- Works in worktrees (CF provides correct base path)
+- Existing full-path invocations continue to work unchanged
+
+**Review file persistence (all review commands + run-slice):**
+- Review output saved to `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md`
+- Each review file includes YAML frontmatter (`docType`, `reviewType`, `verdict`, dates)
+- Re-reviews overwrite the review file (git handles history)
+- Review files are committed at each gate
 
 ### Technical Requirements
 
