@@ -63,7 +63,6 @@ class ReviewResult:
                 }
                 for f in self.findings
             ],
-            "raw_output": self.raw_output,
             "template_name": self.template_name,
             "input_files": self.input_files,
             "timestamp": self.timestamp.isoformat(),

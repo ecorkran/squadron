@@ -145,7 +145,7 @@ class TestReviewResult:
         d = result_with_mixed_findings.to_dict()
         assert d["verdict"] == "CONCERNS"
         assert d["template_name"] == "code"
-        assert d["raw_output"] == "raw text here"
+        assert "raw_output" not in d
         assert len(d["findings"]) == 4
         assert d["findings"][0]["severity"] == "FAIL"
         assert d["findings"][0]["title"] == "Critical bug"
