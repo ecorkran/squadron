@@ -123,3 +123,157 @@ class TestInferProfileFromModel:
 
     def test_unknown_model_returns_none(self) -> None:
         assert _infer_profile_from_model("llama3") is None
+
+
+class TestCLIProfileFlag:
+    """Test --profile flag wiring through CLI commands."""
+
+    def test_run_review_command_passes_profile_to_execute(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verify _run_review_command passes profile through."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="arch",
+            input_files={"input": "f.md"},
+            model="opus",
+        )
+
+        # Mock template loading + getting
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.load_builtin_templates",
+            lambda: None,
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(profile="sdk"),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config",
+            lambda k: None,
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "arch",
+                {"input": "f.md", "against": "a.md", "cwd": "."},
+                "terminal",
+                None,
+                0,
+                model_flag="opus",
+                profile_flag="openrouter",
+            )
+
+        # Verify profile was passed through
+        call_args = mock_exec.call_args
+        assert call_args[1].get("profile") or call_args[0][4] == "openrouter"
+
+    def test_run_review_command_defaults_to_sdk(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Without --profile, profile defaults to sdk."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="arch",
+            input_files={"input": "f.md"},
+            model=None,
+        )
+
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.load_builtin_templates",
+            lambda: None,
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config",
+            lambda k: None,
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "arch",
+                {"input": "f.md", "against": "a.md", "cwd": "."},
+                "terminal",
+                None,
+                0,
+            )
+
+        # Default profile should be "sdk"
+        call_args = mock_exec.call_args
+        assert call_args[0][4] == "sdk"
+
+    def test_profile_and_model_passed_together(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--profile and --model should both be forwarded."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="arch",
+            input_files={"input": "f.md"},
+            model="gpt-4o",
+        )
+
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.load_builtin_templates",
+            lambda: None,
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config",
+            lambda k: None,
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "arch",
+                {"input": "f.md", "against": "a.md", "cwd": "."},
+                "terminal",
+                None,
+                0,
+                model_flag="gpt-4o",
+                profile_flag="openai",
+            )
+
+        # Both model and profile passed
+        call_args = mock_exec.call_args
+        assert call_args[0][3] == "gpt-4o"  # model
+        assert call_args[0][4] == "openai"  # profile

@@ -49,7 +49,7 @@ def mock_review_result() -> ReviewResult:
 def patch_run_review(mock_review_result: ReviewResult):  # type: ignore[no-untyped-def]
     """Patch run_review to return mock result without SDK calls."""
     with patch(
-        "squadron.cli.commands.review.run_review",
+        "squadron.cli.commands.review.run_review_with_profile",
         new_callable=AsyncMock,
         return_value=mock_review_result,
     ) as mock:

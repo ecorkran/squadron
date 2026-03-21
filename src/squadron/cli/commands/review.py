@@ -16,7 +16,7 @@ from rich.text import Text
 
 from squadron.config.manager import get_config
 from squadron.review.models import ReviewResult, Severity, Verdict
-from squadron.review.runner import run_review
+from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import (
     ReviewTemplate,
     get_template,
@@ -318,7 +318,7 @@ def _resolve_slice_number(num: str) -> SliceInfo:
     )
 
 
-def _infer_profile_from_model(  # pyright: ignore[reportUnusedFunction]
+def _infer_profile_from_model(
     model: str,
 ) -> str | None:
     """Infer provider profile from a model name.
@@ -338,7 +338,7 @@ def _infer_profile_from_model(  # pyright: ignore[reportUnusedFunction]
     return None
 
 
-def _resolve_profile(  # pyright: ignore[reportUnusedFunction]
+def _resolve_profile(
     flag: str | None,
     template: ReviewTemplate | None = None,
     model: str | None = None,
@@ -381,6 +381,7 @@ def _run_review_command(
     verbosity: int = 0,
     rules_content: str | None = None,
     model_flag: str | None = None,
+    profile_flag: str | None = None,
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
@@ -406,10 +407,17 @@ def _run_review_command(
             raise typer.Exit(code=1)
 
     resolved_model = _resolve_model(model_flag, template)
+    resolved_profile = _resolve_profile(profile_flag, template, resolved_model)
 
     try:
         result = asyncio.run(
-            _execute_review(template, inputs, rules_content, resolved_model)
+            _execute_review(
+                template,
+                inputs,
+                rules_content,
+                resolved_model,
+                resolved_profile,
+            )
         )
     except Exception as exc:
         err_str = str(exc).lower()
@@ -436,9 +444,16 @@ async def _execute_review(
     inputs: dict[str, str],
     rules_content: str | None = None,
     model: str | None = None,
+    profile: str = "sdk",
 ) -> ReviewResult:
     """Execute the review asynchronously."""
-    return await run_review(template, inputs, rules_content=rules_content, model=model)
+    return await run_review_with_profile(
+        template,
+        inputs,
+        profile=profile,
+        rules_content=rules_content,
+        model=model,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -457,6 +472,11 @@ def review_arch(
     ),
     model: str | None = typer.Option(
         None, "--model", help="Model override (e.g. opus, sonnet)"
+    ),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
     verbose: int = typer.Option(
         0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
@@ -491,9 +511,19 @@ def review_arch(
 
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
-    inputs = {"input": input_file, "against": against, "cwd": resolved_cwd}
+    inputs = {
+        "input": input_file,
+        "against": against,
+        "cwd": resolved_cwd,
+    }
     result = _run_review_command(
-        "arch", inputs, output, output_path, verbosity, model_flag=model
+        "arch",
+        inputs,
+        output,
+        output_path,
+        verbosity,
+        model_flag=model,
+        profile_flag=profile,
     )
 
     if slice_info and not no_save:
@@ -514,6 +544,11 @@ def review_tasks(
     ),
     model: str | None = typer.Option(
         None, "--model", help="Model override (e.g. opus, sonnet)"
+    ),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
     verbose: int = typer.Option(
         0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
@@ -551,9 +586,19 @@ def review_tasks(
 
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
-    inputs = {"input": input_file, "against": against, "cwd": resolved_cwd}
+    inputs = {
+        "input": input_file,
+        "against": against,
+        "cwd": resolved_cwd,
+    }
     result = _run_review_command(
-        "tasks", inputs, output, output_path, verbosity, model_flag=model
+        "tasks",
+        inputs,
+        output,
+        output_path,
+        verbosity,
+        model_flag=model,
+        profile_flag=profile,
     )
 
     if slice_info and not no_save:
@@ -578,6 +623,11 @@ def review_code(
     ),
     model: str | None = typer.Option(
         None, "--model", help="Model override (e.g. opus, sonnet)"
+    ),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
     verbose: int = typer.Option(
         0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
@@ -627,6 +677,7 @@ def review_code(
         verbosity,
         rules_content,
         model_flag=model,
+        profile_flag=profile,
     )
 
     if slice_info and not no_save:

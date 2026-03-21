@@ -32,7 +32,7 @@ def mock_run_review() -> AsyncMock:
         model="opus",
     )
     with patch(
-        "squadron.cli.commands.review.run_review",
+        "squadron.cli.commands.review.run_review_with_profile",
         new_callable=AsyncMock,
         return_value=result,
     ) as mock:

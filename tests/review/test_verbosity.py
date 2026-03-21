@@ -135,7 +135,7 @@ class TestVerboseFlag:
     @pytest.fixture
     def mock_review(self, sample_result: ReviewResult):
         with patch(
-            "squadron.cli.commands.review.run_review",
+            "squadron.cli.commands.review.run_review_with_profile",
             new_callable=AsyncMock,
             return_value=sample_result,
         ) as mock:
@@ -174,7 +174,7 @@ class TestConfigDefaultVerbosity:
     @pytest.fixture
     def mock_review(self, sample_result: ReviewResult):
         with patch(
-            "squadron.cli.commands.review.run_review",
+            "squadron.cli.commands.review.run_review_with_profile",
             new_callable=AsyncMock,
             return_value=sample_result,
         ) as mock:

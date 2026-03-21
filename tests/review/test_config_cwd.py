@@ -30,7 +30,7 @@ def pass_result() -> ReviewResult:
 @pytest.fixture
 def mock_run_review(pass_result: ReviewResult):
     with patch(
-        "squadron.cli.commands.review.run_review",
+        "squadron.cli.commands.review.run_review_with_profile",
         new_callable=AsyncMock,
         return_value=pass_result,
     ) as mock:
