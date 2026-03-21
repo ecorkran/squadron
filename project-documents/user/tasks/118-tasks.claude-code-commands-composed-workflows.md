@@ -180,50 +180,50 @@ status: in_progress
 
 ### T15: Add `_save_review_file` helper and wire auto-save into review commands
 
-- [ ] Add `_save_review_file(result, review_type, slice_info, as_json)` helper in `review.py`
-  - [ ] Writes markdown file to `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md`
-  - [ ] Markdown file includes YAML frontmatter: `docType: review`, `reviewType`, `slice`, `project`, `verdict`, `dateCreated`, `dateUpdated`
-  - [ ] Body contains the formatted review output (findings with descriptions)
-  - [ ] When `as_json=True`, writes `.json` file instead using `result.to_dict()`
-  - [ ] Overwrites existing file on re-review
-  - [ ] Creates `project-documents/user/reviews/` directory if it doesn't exist
-- [ ] Add `--no-save` flag to `review_arch`, `review_tasks`, `review_code`
-  - [ ] Default: save review file when invoked with a slice number
-  - [ ] `--no-save`: suppress file save
-  - [ ] `--json` flag: save as JSON instead of markdown
-- [ ] Wire auto-save: after `_run_review_command` returns, if slice number was provided and `--no-save` not set, call `_save_review_file`
-- [ ] Thread `slice_info` through so save helper has access to index, slice_name, review type
-- [ ] Print confirmation message: `Saved review to {path}`
+- [x] Add `_save_review_file(result, review_type, slice_info, as_json)` helper in `review.py`
+  - [x] Writes markdown file to `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md`
+  - [x] Markdown file includes YAML frontmatter: `docType: review`, `reviewType`, `slice`, `project`, `verdict`, `dateCreated`, `dateUpdated`
+  - [x] Body contains the formatted review output (findings with descriptions)
+  - [x] When `as_json=True`, writes `.json` file instead using `result.to_dict()`
+  - [x] Overwrites existing file on re-review
+  - [x] Creates `project-documents/user/reviews/` directory if it doesn't exist
+- [x] Add `--no-save` flag to `review_arch`, `review_tasks`, `review_code`
+  - [x] Default: save review file when invoked with a slice number
+  - [x] `--no-save`: suppress file save
+  - [x] `--json` flag: save as JSON instead of markdown
+- [x] Wire auto-save: after `_run_review_command` returns, if slice number was provided and `--no-save` not set, call `_save_review_file`
+- [x] Thread `slice_info` through so save helper has access to index, slice_name, review type
+- [x] Print confirmation message: `Saved review to {path}`
 
 ### T16: Tests for review file auto-save
 
-- [ ] Add tests in `tests/cli/test_review_save.py`
-  - [ ] Test `_save_review_file` writes markdown with correct frontmatter
-  - [ ] Test `_save_review_file` writes JSON when `as_json=True`
-  - [ ] Test `_save_review_file` overwrites existing file
-  - [ ] Test `_save_review_file` creates reviews directory if missing
-  - [ ] Test `--no-save` flag prevents file creation
-  - [ ] `uv run pytest tests/cli/test_review_save.py` — all tests pass
+- [x] Add tests in `tests/cli/test_review_save.py`
+  - [x] Test `_save_review_file` writes markdown with correct frontmatter
+  - [x] Test `_save_review_file` writes JSON when `as_json=True`
+  - [x] Test `_save_review_file` overwrites existing file
+  - [x] Test `_save_review_file` creates reviews directory if missing
+  - [x] Test `--no-save` flag prevents file creation
+  - [x] `uv run pytest tests/cli/test_review_save.py` — all tests pass
 
 ### T17: Update slash commands for parity
 
-- [ ] Update `commands/sq/review-tasks.md`, `review-code.md`, `review-arch.md`
-  - [ ] Remove explicit "save the review output" instructions (CLI now does this automatically)
-  - [ ] Note that review file is auto-saved by the CLI
-  - [ ] Document `--no-save` and `--json` flags
+- [x] Update `commands/sq/review-tasks.md`, `review-code.md`, `review-arch.md`
+  - [x] Remove explicit "save the review output" instructions (CLI now does this automatically)
+  - [x] Note that review file is auto-saved by the CLI
+  - [x] Document `--no-save` and `--json` flags
 
 ### T18: Commit — review file auto-save
 
-- [ ] Commit T15-T17 work
-  - [ ] Message: `feat: auto-save review files when using slice number shorthand`
+- [x] Commit T15-T17 work
+  - [x] Message: `feat: auto-save review files when using slice number shorthand`
 
 ### T19: Validation pass
 
-- [ ] Full project validation
-  - [ ] `uv run ruff check` — clean
-  - [ ] `uv run ruff format --check` — clean
-  - [ ] `uv run pyright` — zero errors
-  - [ ] `uv run pytest` — all tests pass
+- [x] Full project validation
+  - [x] `uv run ruff check` — clean
+  - [x] `uv run ruff format --check` — clean
+  - [x] `uv run pyright` — zero errors
+  - [x] `uv run pytest` — all tests pass
 
 ---
 

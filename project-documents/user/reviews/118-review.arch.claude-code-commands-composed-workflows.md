@@ -15,135 +15,61 @@ dateUpdated: 20260321
 
 ## Findings
 
-### [PASS] Layer boundaries respected
+### [CONCERN] Significant scope divergence from slice plan entry
 
-The slice operates entirely in the Interface Layer (CLI + Claude Code commands). It does not touch the Core Engine, Agent Provider Layer, or any protocol definitions. The `run-slice.md` command file delegates all orchestration work to existing CLI commands (`sq review tasks`, `sq review code`) and external tooling (`cf`). No new Python business logic leaks into the command layer.
+The slice plan (100-slices.orchestration-v2.md, line 65) describes slice 118 as delivering:
+- A **`commands/workflow/`** namespace (not `commands/sq/`)
+- **`/workflow:next-step`** — runs `cf status + cf next`, interprets project state
+- **`/workflow:design-review`** — runs `cf build` then `sq review arch`
+- **`/workflow:ensemble-review`** — runs the same review across multiple providers and synthesizes results
+
+The actual slice design delivers:
+- Commands in the **`commands/sq/`** namespace (staying in existing namespace)
+- **`/sq:run-slice`** — a full phase 4→5→6 lifecycle automation command
+- **Updates to existing review commands** with number shorthand and review file persistence
+- **CLI number shorthand** for `sq review` commands
+
+None of the three originally planned commands (`next-step`, `design-review`, `ensemble-review`) appear in the design. The design acknowledges the namespace decision explicitly (section "Namespace: `/sq:run-slice`") and gives reasonable justification ("one command doesn't justify a new namespace"), but the slice plan entry should be updated to reflect the actual scope — especially since the slice plan shows `[x]` (complete) for this item.
+
+The `ensemble-review` command from the plan (which maps conceptually to slice 130 — Ensemble Review & Cross-Model Analysis) being dropped is particularly notable. The plan said this was "a lightweight ensemble pattern that works before the message bus exists" — a deliberate pre-M2 capability. The design's "Excluded" section doesn't mention it, so the rationale for dropping it is undocumented.
+
+### [CONCERN] Review file persistence scope pull-forward
+
+Slice 105 (Review Workflow Templates) explicitly lists "Review Result Persistence" as a Tracked Enhancement:
+
+> *"Save ReviewResult to a conventional location (e.g., reviews/ directory) after each review. Enables tracking review history..."*
+
+The 118 design now implements this enhancement — review files saved to `project-documents/user/reviews/` with YAML frontmatter, overwrite semantics, and commit-at-gate behavior. This is reasonable and well-designed, but it's scope that was explicitly deferred from 105 and is now absorbed into 118 without noting that it fulfills that tracked enhancement. The design should acknowledge this provenance so the tracked enhancement in 105 can be marked as addressed.
+
+Additionally, the review file format in 118 (YAML frontmatter + markdown body) diverges slightly from what 105's `ReviewResult.to_dict()` would produce (JSON). The `--json` flag on the CLI (line 175) addresses this for programmatic consumers, but there's a subtle format gap: the slash commands produce YAML-frontmatter markdown files, while `ReviewResult.to_dict()` produces JSON. The parity principle ("CLI, slash commands, and MCP must produce identical artifacts" — per both the design and the project memory) should clarify which format is canonical and ensure both paths produce the same output.
+
+### [PASS] Correct architectural layer placement
+
+The design operates entirely within the Interface Layer (CLI commands + Claude Code markdown command files). It does not modify the Core Engine, Agent Provider Layer, or any architectural boundaries. The `run-slice` command orchestrates existing CLI tools (`sq`, `cf`) via Claude Code's reasoning — this is appropriate for the Interface Layer's role as defined in the architecture.
 
 ### [PASS] Dependency directions are correct
 
-The slice correctly depends downward:
-- **Slice 116 (sq Wrappers)**: provides the `commands/sq/` directory, install mechanism, and wheel bundling — all consumed, not modified.
-- **Slice 105 (Review Workflow Templates)**: provides `sq review tasks`, `sq review code`, `sq review arch` — invoked by the composed workflow.
-- **Context-Forge CLI**: external dependency consumed via shell commands.
+- Depends on slice 116 (sq Wrappers) for `commands/sq/` infrastructure → correct, 116 is complete
+- Depends on slice 105 (Review Workflow Templates) for `sq review` commands → correct, 105 is complete
+- Depends on Context-Forge CLI (external) → documented in architecture as a future integration point (line 265: "Context Forge (future) — Context assembly for agent instructions")
+- No reverse dependencies or circular references
 
-No upward or circular dependencies exist.
+### [PASS] Integration points are well-defined and minimal
 
-### [PASS] Integration points match consuming/providing slices
+The design correctly identifies what it provides (automation pattern for future composed commands) and what it consumes (sq wrappers, review workflow templates, context-forge). The `run-slice` command composes existing capabilities rather than introducing new abstractions, which is appropriate for a composed workflow command.
 
-The slice correctly identifies what it consumes from slices 105 and 116. The review commands it invokes (`sq review tasks`, `sq review code`, `sq review arch`) exist and are documented in slice 105. The `commands/sq/` install mechanism from slice 116 requires no changes — the new file is picked up automatically.
+### [PASS] CLI/slash command parity principle
 
-### [CONCERN] Significant scope divergence from slice plan entry
+The design explicitly addresses the parity principle from project memory (`feedback_interface_parity.md`). The CLI number shorthand (`sq review tasks 221`) mirrors the slash command shorthand (`/sq:review-tasks 221`), and both produce the same review file artifacts. The `_resolve_slice_number()` helper is shared logic. This is well-considered.
 
-The slice plan entry (item 15, slice 118) describes three composed workflow commands in a `workflow/` namespace:
-- `/workflow:next-step` — interprets project state and recommends next action
-- `/workflow:design-review` — assembles context then runs arch review
-- `/workflow:ensemble-review` — runs reviews across multiple providers and synthesizes results
+### [PASS] No hidden dependencies on unbuilt components
 
-The actual slice design delivers something substantially different:
-- One new command (`/sq:run-slice`) in the `sq/` namespace (not `workflow/`)
-- Updates to three existing review commands for number shorthand and review persistence
-- CLI number shorthand for `sq review` commands
-- Review file persistence with YAML frontmatter
+The command relies only on completed slices (105, 116, 117) and the external Context-Forge CLI. It does not depend on the message bus (M2), daemon (already complete), or any future slice. The `run-slice` pipeline is self-contained within existing capabilities.
 
-The rationale for the namespace decision is documented and sound (one command doesn't justify a new namespace). The pivot from three theoretical commands to one validated-by-use command is explicitly acknowledged ("deferred until real usage validates need"). However, the `/workflow:ensemble-review` concept (cross-provider review synthesis) is architecturally interesting and maps to slice 130 (Ensemble Review) — its deferral is reasonable but should be noted in the slice plan.
+### [CONCERN] Duplicate line in Excluded section
 
-**Impact**: The slice plan entry should be updated to reflect reality. Anyone reading the plan would expect `workflow/` namespace commands that don't exist.
+Line 39 and line 40 are identical: "Automated resolution of review findings (TODOs in design for future iteration)". Minor copy-paste error.
 
-### [CONCERN] CLI Python changes are under-specified for a "markdown command file" slice
+### [PASS] Appropriate use of Claude Code reasoning
 
-The slice declares "No Python changes expected" in technical requirements and "This is a markdown command file" under external packages. However, the Implementation Notes section describes meaningful Python work:
-- `_resolve_slice_number()` helper in `review.py`
-- Number detection and path resolution in `review_arch`, `review_tasks`, `review_code`
-- Optional positional arg addition to `review_code`
-- Review file auto-save with `--json` and `--no-save` flags
-- Unit tests for resolver and number detection
-
-This is legitimate scope for the slice's goals (CLI/slash-command parity, review persistence), but it contradicts the "no Python changes" assertion. The technical requirements section should be reconciled with the implementation notes.
-
-### [PASS] Parity principle aligns with project memory
-
-The slice explicitly states: "CLI (`sq review tasks 118`), slash commands (`/sq:review-tasks 118`), and eventually MCP should produce identical artifacts." This directly aligns with the project memory note (`feedback_interface_parity.md`): "CLI, slash commands, and MCP must produce identical results and artifacts." The design delivers on this principle by ensuring both CLI and slash commands save the same review files with identical frontmatter.
-
-### [PASS] Context-Forge integration is appropriately bounded
-
-The design delegates path resolution to CF (`cf slice list --json`, `cf task list --json`, `cf get`) rather than hardcoding file patterns. This respects CF's ownership of naming conventions and avoids hidden dependencies on directory structure. The design explicitly notes it "does not mutate CF state" during resolution — only `run-slice` uses `cf set` to advance phases, which is the intended CF workflow.
-
-### [PASS] Review gate design is pragmatic and non-over-engineered
-
-The review gate logic (PASS → proceed, CONCERNS → assess severity, FAIL → stop) is a simple heuristic with explicit TODOs acknowledging that smarter loop/signal logic is future work. This avoids over-engineering while being honest about limitations. The single-retry-then-stop pattern prevents infinite loops — a common antipattern in automated review pipelines.
-
-### [PASS] Future work is properly deferred
-
-Smart resume, automated finding resolution, and additional composed commands are all explicitly listed as excluded/deferred. The slice plan's slice 129 (Review Findings Pipeline) is the correct home for automated finding triage. The design doesn't attempt to pull that forward.
-
-### [CONCERN] Review file persistence introduces a cross-cutting convention without architecture-level documentation
-
-The `project-documents/user/reviews/` directory structure and YAML frontmatter schema (`docType: review`, `reviewType`, `verdict`, etc.) are new conventions that will be consumed by future slices (129 — Findings Pipeline, 130 — Ensemble Review). These conventions are well-designed but exist only in this slice document. If this becomes a stable interface, it should be documented at the architecture or slice-plan level so downstream slices can depend on it explicitly rather than reverse-engineering from slice 118's design.
-
-## Raw Output
-
-Let me check the referenced parent slice plan and dependencies.Now I have all the context needed. Let me also check the parity memory note since it's referenced in the project memory.That's just a test review file. I have all the information needed. Here is my architectural review:
-
----
-
-## Summary
-**CONCERNS**
-
-Slice 118 is largely well-aligned with the architecture and slice plan. It stays within its defined scope (CLI interface layer, markdown command files), respects dependency directions, and correctly builds on the completed slice 116 infrastructure. However, there are a few areas where the design diverges from what the slice plan describes, and one area where scope has grown beyond the plan entry in a way that warrants acknowledgment.
-
-## Findings
-
-### [PASS] Layer boundaries respected
-The slice operates entirely in the Interface Layer (CLI + Claude Code commands). It does not touch the Core Engine, Agent Provider Layer, or any protocol definitions. The `run-slice.md` command file delegates all orchestration work to existing CLI commands (`sq review tasks`, `sq review code`) and external tooling (`cf`). No new Python business logic leaks into the command layer.
-
-### [PASS] Dependency directions are correct
-The slice correctly depends downward:
-- **Slice 116 (sq Wrappers)**: provides the `commands/sq/` directory, install mechanism, and wheel bundling — all consumed, not modified.
-- **Slice 105 (Review Workflow Templates)**: provides `sq review tasks`, `sq review code`, `sq review arch` — invoked by the composed workflow.
-- **Context-Forge CLI**: external dependency consumed via shell commands.
-
-No upward or circular dependencies exist.
-
-### [PASS] Integration points match consuming/providing slices
-The slice correctly identifies what it consumes from slices 105 and 116. The review commands it invokes (`sq review tasks`, `sq review code`, `sq review arch`) exist and are documented in slice 105. The `commands/sq/` install mechanism from slice 116 requires no changes — the new file is picked up automatically.
-
-### [CONCERN] Significant scope divergence from slice plan entry
-The slice plan entry (item 15, slice 118) describes three composed workflow commands in a `workflow/` namespace:
-- `/workflow:next-step` — interprets project state and recommends next action
-- `/workflow:design-review` — assembles context then runs arch review
-- `/workflow:ensemble-review` — runs reviews across multiple providers and synthesizes results
-
-The actual slice design delivers something substantially different:
-- One new command (`/sq:run-slice`) in the `sq/` namespace (not `workflow/`)
-- Updates to three existing review commands for number shorthand and review persistence
-- CLI number shorthand for `sq review` commands
-- Review file persistence with YAML frontmatter
-
-The rationale for the namespace decision is documented and sound (one command doesn't justify a new namespace). The pivot from three theoretical commands to one validated-by-use command is explicitly acknowledged ("deferred until real usage validates need"). However, the `/workflow:ensemble-review` concept (cross-provider review synthesis) is architecturally interesting and maps to slice 130 (Ensemble Review) — its deferral is reasonable but should be noted in the slice plan.
-
-**Impact**: The slice plan entry should be updated to reflect reality. Anyone reading the plan would expect `workflow/` namespace commands that don't exist.
-
-### [CONCERN] CLI Python changes are under-specified for a "markdown command file" slice
-The slice declares "No Python changes expected" in technical requirements and "This is a markdown command file" under external packages. However, the Implementation Notes section describes meaningful Python work:
-- `_resolve_slice_number()` helper in `review.py`
-- Number detection and path resolution in `review_arch`, `review_tasks`, `review_code`
-- Optional positional arg addition to `review_code`
-- Review file auto-save with `--json` and `--no-save` flags
-- Unit tests for resolver and number detection
-
-This is legitimate scope for the slice's goals (CLI/slash-command parity, review persistence), but it contradicts the "no Python changes" assertion. The technical requirements section should be reconciled with the implementation notes.
-
-### [PASS] Parity principle aligns with project memory
-The slice explicitly states: "CLI (`sq review tasks 118`), slash commands (`/sq:review-tasks 118`), and eventually MCP should produce identical artifacts." This directly aligns with the project memory note (`feedback_interface_parity.md`): "CLI, slash commands, and MCP must produce identical results and artifacts." The design delivers on this principle by ensuring both CLI and slash commands save the same review files with identical frontmatter.
-
-### [PASS] Context-Forge integration is appropriately bounded
-The design delegates path resolution to CF (`cf slice list --json`, `cf task list --json`, `cf get`) rather than hardcoding file patterns. This respects CF's ownership of naming conventions and avoids hidden dependencies on directory structure. The design explicitly notes it "does not mutate CF state" during resolution — only `run-slice` uses `cf set` to advance phases, which is the intended CF workflow.
-
-### [PASS] Review gate design is pragmatic and non-over-engineered
-The review gate logic (PASS → proceed, CONCERNS → assess severity, FAIL → stop) is a simple heuristic with explicit TODOs acknowledging that smarter loop/signal logic is future work. This avoids over-engineering while being honest about limitations. The single-retry-then-stop pattern prevents infinite loops — a common antipattern in automated review pipelines.
-
-### [PASS] Future work is properly deferred
-Smart resume, automated finding resolution, and additional composed commands are all explicitly listed as excluded/deferred. The slice plan's slice 129 (Review Findings Pipeline) is the correct home for automated finding triage. The design doesn't attempt to pull that forward.
-
-### [CONCERN] Review file persistence introduces a cross-cutting convention without architecture-level documentation
-The `project-documents/user/reviews/` directory structure and YAML frontmatter schema (`docType: review`, `reviewType`, `verdict`, etc.) are new conventions that will be consumed by future slices (129 — Findings Pipeline, 130 — Ensemble Review). These conventions are well-designed but exist only in this slice document. If this becomes a stable interface, it should be documented at the architecture or slice-plan level so downstream slices can depend on it explicitly rather than reverse-engineering from slice 118's design.
+The design correctly leverages Claude Code's reasoning capability for review gate decisions (PASS → proceed, CONCERNS → assess severity, FAIL → stop) rather than building complex decision logic in code. This is appropriate for a markdown command file — the "logic" is in the prompt, not in Python code. The TODOs acknowledging that smarter loop/signal logic is future work show healthy scope awareness.
