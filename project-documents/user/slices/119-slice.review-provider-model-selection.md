@@ -40,8 +40,8 @@ This slice decouples the review execution layer from the SDK, allowing reviews t
 ### Excluded
 
 - Anthropic API provider implementation (slice 122 — exists in plan, partial code exists)
-- Ensemble review orchestration (slice 130 — consumes this slice's output)
-- MCP-exposed review execution (slice 127)
+- Ensemble review orchestration (slice 130 — consumes this slice's output). Note: slice 130 will need to decide whether to wrap `run_review_with_profile()` in a temporary agent for message bus fan-out, or call it directly as a function outside the agent topology. Both approaches are valid; the direct function call is simpler for sequential fan-out, while agent wrapping integrates with the message bus for parallel execution post-M2.
+- MCP-exposed review execution (slice 127). Note: when slice 127 ships, it **must** support the `profile` parameter to maintain CLI/slash-command/MCP parity per the interface parity principle.
 - Tool use support for non-SDK providers during reviews (most reviews use Read/Glob/Grep via SDK; non-SDK providers would run without tools — document as a known limitation)
 
 ## Dependencies
@@ -75,6 +75,7 @@ The current `run_review()` in `runner.py` is tightly coupled to `ClaudeSDKClient
 This approach:
 - **Preserves the SDK path exactly** — no regression risk for the primary use case
 - **Reuses existing infrastructure** — profiles, auth, OpenAI client, parser
+- **Intentionally bypasses Agent Protocol** — reviews are one-shot request/response, not agent lifecycle. Creating an agent, registering it, handling messages, and shutting it down for a single API call is unnecessary overhead. The non-SDK path calls `AsyncOpenAI` directly, same as the provider internals do. This is a pragmatic trade-off documented here. If Ensemble Review (slice 130) needs message bus integration for parallel fan-out, it can wrap `run_review_with_profile()` in a lightweight agent adapter at that point
 - **Avoids the Agent Protocol overhead** — reviews don't need agent lifecycle, registry, message bus; they're one-shot request/response
 
 ### Profile Resolution Chain
