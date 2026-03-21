@@ -12,6 +12,25 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260320
+
+### Slice 118: Claude Code Commands — Composed Workflows — In Progress
+
+- Implementation complete (T1-T9 checked off). Remaining items are PM manual tests.
+- Commits:
+  - `a2058c9` feat: add /sq:run-slice command, update review commands with number shorthand
+  - `f31cd44` test: update install tests for 9 command files
+- What works: all 448 tests pass, ruff/pyright clean, wheel bundles `run-slice.md`, install produces 9 commands
+- Scope expanded from original design:
+  - Updated `review-tasks.md`, `review-code.md`, `review-arch.md` with bare number shorthand (e.g., `/sq:review-tasks 191`)
+  - Path resolution via `cf slice list --json` / `cf task list --json` — worktree-aware, CF owns conventions
+  - `review-arch` performs holistic check: slice design vs. architecture doc + slice plan entry
+  - Review file persistence to `project-documents/user/reviews/` with YAML frontmatter
+  - DEVLOG entry step added to `run-slice` pipeline (Step 5)
+- Pending: PM live tests (`/sq:run-slice` on real slice, `/sq:review-tasks {nnn}` shorthand), prompt iteration
+
+---
+
 ## 20260317
 
 ### Slice 118: Claude Code Commands — Composed Workflows — Task Breakdown Complete

@@ -7,7 +7,7 @@ dependencies: [sq-slash-command, context-forge-workflow-navigation]
 interfaces: []
 dateCreated: 20260317
 dateUpdated: 20260320
-status: not_started
+status: in-progress
 ---
 
 # Slice Design: Claude Code Commands — Composed Workflows
@@ -409,26 +409,38 @@ No changes to `install.py` — file count stays at 9 (the new file is in the exi
 1. **Verify command file exists:**
    ```bash
    ls commands/sq/run-slice.md
+   # Verified: file exists
    ```
 
 2. **Install and verify:**
    ```bash
-   sq install-commands
-   # Expected: Installed 9 command(s) to ~/.claude/commands
-   ls ~/.claude/commands/sq/run-slice.md
+   sq install-commands --target /tmp/test-commands
+   # Verified: Installed 9 command(s) to /tmp/test-commands
+   ls /tmp/test-commands/sq/run-slice.md
+   # Verified: file present
+   rm -rf /tmp/test-commands
    ```
 
 3. **Test in Claude Code (dry run):**
    ```
-   /sq:run-slice 118
+   /sq:run-slice {nnn}
    ```
    Expected: Claude validates the slice exists, sets phase 4, runs `cf build`, begins the design pipeline. Each phase transition is visible. Review gates produce pass/fail verdicts. Context is compacted between phases 5 and 6.
+   Caveat: This is a manual PM test — behavior depends on Claude Code runtime + context-forge state.
 
 4. **Verify wheel bundling:**
    ```bash
    uv build
    unzip -l dist/*.whl | grep run-slice
-   # Expected: squadron/commands/sq/run-slice.md
+   # Verified: squadron/commands/sq/run-slice.md appears in wheel
+   ```
+
+5. **Full validation:**
+   ```bash
+   uv run ruff check          # Verified: All checks passed
+   uv run ruff format --check # Verified: 130 files already formatted
+   uv run pyright             # Verified: 0 errors, 0 warnings
+   uv run pytest              # Verified: 448 passed
    ```
 
 ## Implementation Notes
