@@ -14,6 +14,19 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260321
 
+### Slice 119: Review Provider & Model Selection — Implementation Complete
+
+- All 20 implementation tasks (T1-T20) complete. 491 tests pass.
+- New `review_client.py` with `run_review_with_profile()` — SDK delegation or OpenAI-compatible API path
+- `--profile` flag on all `sq review` commands (arch, tasks, code)
+- `_resolve_profile()`: CLI flag → model inference → template → config → sdk fallback
+- `_infer_profile_from_model()`: opus→sdk, gpt-4o→openai, slash→openrouter
+- `load_all_templates()` loads from built-in + `~/.config/squadron/templates/` (user override by name)
+- `default_review_profile` config key added
+- Slash commands updated with `--profile` documentation
+- Slice 120 (Model Alias Registry) added to slice plan as next priority
+- Post-impl live tests remain for PM
+
 ### Slice 119: Review Provider & Model Selection — Task Breakdown Complete
 
 Task file created at `project-documents/user/tasks/119-tasks.review-provider-model-selection.md` (20 tasks: T1-T20). Key task groups: template profile field (T1-T2), config key + profile resolution (T3-T7), review client with provider routing (T9-T10), CLI `--profile` flag (T12-T13), user template loading (T15-T16), slash command updates (T18), validation (T19-T20). Post-impl: live tests with OpenRouter, OpenAI, user templates, config defaults.
