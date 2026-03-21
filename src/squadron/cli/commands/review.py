@@ -129,6 +129,88 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Review file persistence
+# ---------------------------------------------------------------------------
+
+
+def _format_review_markdown(
+    result: ReviewResult,
+    review_type: str,
+    slice_info: SliceInfo,
+) -> str:
+    """Format a ReviewResult as markdown with YAML frontmatter."""
+    today = result.timestamp.strftime("%Y%m%d")
+    lines = [
+        "---",
+        "docType: review",
+        f"reviewType: {review_type}",
+        f"slice: {slice_info['slice_name']}",
+        "project: squadron",
+        f"verdict: {result.verdict.value}",
+        f"dateCreated: {today}",
+        f"dateUpdated: {today}",
+        "---",
+        "",
+        f"# Review: {review_type} — slice {slice_info['index']}",
+        "",
+        f"**Verdict:** {result.verdict.value}",
+        f"**Model:** {result.model or 'default'}",
+        "",
+    ]
+
+    if result.findings:
+        lines.append("## Findings")
+        lines.append("")
+        for finding in result.findings:
+            lines.append(f"### [{finding.severity.value}] {finding.title}")
+            if finding.description:
+                lines.append("")
+                lines.append(finding.description)
+            if finding.file_ref:
+                lines.append(f"\n-> {finding.file_ref}")
+            lines.append("")
+    else:
+        lines.append("No specific findings.")
+        lines.append("")
+
+    if result.raw_output:
+        lines.append("## Raw Output")
+        lines.append("")
+        lines.append(result.raw_output)
+
+    return "\n".join(lines)
+
+
+_REVIEWS_DIR = Path("project-documents/user/reviews")
+
+
+def _save_review_file(
+    result: ReviewResult,
+    review_type: str,
+    slice_info: SliceInfo,
+    as_json: bool = False,
+    reviews_dir: Path | None = None,
+) -> Path:
+    """Save review output to the reviews directory.
+
+    Returns the path of the saved file.
+    """
+    target = reviews_dir or _REVIEWS_DIR
+    target.mkdir(parents=True, exist_ok=True)
+
+    base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
+
+    if as_json:
+        path = target / f"{base}.json"
+        path.write_text(json.dumps(result.to_dict(), indent=2))
+    else:
+        path = target / f"{base}.md"
+        path.write_text(_format_review_markdown(result, review_type, slice_info))
+
+    return path
+
+
+# ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
@@ -273,8 +355,11 @@ def _run_review_command(
     verbosity: int = 0,
     rules_content: str | None = None,
     model_flag: str | None = None,
-) -> None:
-    """Common logic for running a review and displaying results."""
+) -> ReviewResult:
+    """Common logic for running a review and displaying results.
+
+    Returns the ReviewResult so callers can save it.
+    """
     load_builtin_templates()
     template = get_template(template_name)
     if template is None:
@@ -317,6 +402,8 @@ def _run_review_command(
     if result.verdict == Verdict.FAIL:
         raise typer.Exit(code=2)
 
+    return result
+
 
 async def _execute_review(
     template: ReviewTemplate,
@@ -354,26 +441,38 @@ def review_arch(
     output_path: str | None = typer.Option(
         None, "--output-path", help="File path for --output file"
     ),
+    use_json: bool = typer.Option(
+        False, "--json", help="Output and save as JSON instead of markdown"
+    ),
+    no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
 ) -> None:
     """Run an architectural review."""
+    slice_info: SliceInfo | None = None
     if input_file.isdigit():
-        info = _resolve_slice_number(input_file)
-        if not info["design_file"]:
-            rprint(f"[red]Error: No design file for slice {info['index']}.[/red]")
+        slice_info = _resolve_slice_number(input_file)
+        if not slice_info["design_file"]:
+            rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
             raise typer.Exit(code=1)
-        input_file = info["design_file"]
-        against = info["arch_file"]
+        input_file = slice_info["design_file"]
+        against = slice_info["arch_file"]
 
     if not against:
         rprint("[red]Error: --against is required when not using a slice number.[/red]")
         raise typer.Exit(code=1)
 
+    if use_json:
+        output = "json"
+
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
     inputs = {"input": input_file, "against": against, "cwd": resolved_cwd}
-    _run_review_command(
+    result = _run_review_command(
         "arch", inputs, output, output_path, verbosity, model_flag=model
     )
+
+    if slice_info and not no_save:
+        path = _save_review_file(result, "arch", slice_info, as_json=use_json)
+        rprint(f"[green]Saved review to {path}[/green]")
 
 
 @review_app.command("tasks")
@@ -399,29 +498,41 @@ def review_tasks(
     output_path: str | None = typer.Option(
         None, "--output-path", help="File path for --output file"
     ),
+    use_json: bool = typer.Option(
+        False, "--json", help="Output and save as JSON instead of markdown"
+    ),
+    no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
 ) -> None:
     """Run a task plan review."""
+    slice_info: SliceInfo | None = None
     if input_file.isdigit():
-        info = _resolve_slice_number(input_file)
-        if not info["task_files"]:
-            rprint(f"[red]Error: No task file for slice {info['index']}.[/red]")
+        slice_info = _resolve_slice_number(input_file)
+        if not slice_info["task_files"]:
+            rprint(f"[red]Error: No task file for slice {slice_info['index']}.[/red]")
             raise typer.Exit(code=1)
-        if not info["design_file"]:
-            rprint(f"[red]Error: No design file for slice {info['index']}.[/red]")
+        if not slice_info["design_file"]:
+            rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
             raise typer.Exit(code=1)
-        input_file = f"project-documents/user/tasks/{info['task_files'][0]}"
-        against = info["design_file"]
+        input_file = f"project-documents/user/tasks/{slice_info['task_files'][0]}"
+        against = slice_info["design_file"]
 
     if not against:
         rprint("[red]Error: --against is required when not using a slice number.[/red]")
         raise typer.Exit(code=1)
 
+    if use_json:
+        output = "json"
+
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
     inputs = {"input": input_file, "against": against, "cwd": resolved_cwd}
-    _run_review_command(
+    result = _run_review_command(
         "tasks", inputs, output, output_path, verbosity, model_flag=model
     )
+
+    if slice_info and not no_save:
+        path = _save_review_file(result, "tasks", slice_info, as_json=use_json)
+        rprint(f"[green]Saved review to {path}[/green]")
 
 
 @review_app.command("code")
@@ -451,12 +562,20 @@ def review_code(
     output_path: str | None = typer.Option(
         None, "--output-path", help="File path for --output file"
     ),
+    use_json: bool = typer.Option(
+        False, "--json", help="Output and save as JSON instead of markdown"
+    ),
+    no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
 ) -> None:
     """Run a code review."""
+    slice_info: SliceInfo | None = None
     if slice_number is not None and slice_number.isdigit():
-        _resolve_slice_number(slice_number)  # validates slice exists
+        slice_info = _resolve_slice_number(slice_number)
         if not diff:
             diff = "main"
+
+    if use_json:
+        output = "json"
 
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
@@ -474,9 +593,19 @@ def review_code(
         inputs["files"] = files
     if diff:
         inputs["diff"] = diff
-    _run_review_command(
-        "code", inputs, output, output_path, verbosity, rules_content, model_flag=model
+    result = _run_review_command(
+        "code",
+        inputs,
+        output,
+        output_path,
+        verbosity,
+        rules_content,
+        model_flag=model,
     )
+
+    if slice_info and not no_save:
+        path = _save_review_file(result, "code", slice_info, as_json=use_json)
+        rprint(f"[green]Saved review to {path}[/green]")
 
 
 @review_app.command("list")

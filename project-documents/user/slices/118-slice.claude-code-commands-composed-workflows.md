@@ -165,9 +165,18 @@ When invoked on a slice where work has already started:
 
 This is deferred to a future iteration — for now the command starts from phase 4.
 
-### Enhancement: JSON Review Output (Future)
+### Review File Auto-Save
 
-Save review results as JSON alongside (or instead of) markdown, using `sq review --output json`. Enables piping into pipelines, aggregating findings across slices, or feeding a dashboard.
+When a review command is invoked with a slice number, the CLI should automatically save the review file to `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md` with YAML frontmatter. This gives CLI/slash-command parity — both produce the same artifacts.
+
+**Behavior:**
+- Default: save review file (markdown with YAML frontmatter)
+- `--json`: save as JSON instead (same name, `.json` extension), using `ReviewResult.to_dict()` serialization
+- `--no-save`: suppress file save, terminal output only
+- Re-running overwrites the existing file (git handles history)
+- Terminal output is always shown regardless of save behavior
+
+**Parity principle:** CLI (`sq review tasks 118`), slash commands (`/sq:review-tasks 118`), and eventually MCP should produce identical artifacts. If it works one way in the CLI, it should work the same way everywhere.
 
 ## Command File Specifications
 

@@ -128,49 +128,96 @@ status: in_progress
 
 ### T10: Add `_resolve_slice_number` helper to `review.py`
 
-- [ ] Add helper function `_resolve_slice_number(num: str) -> dict` in `src/squadron/cli/commands/review.py`
-  - [ ] Shells out to `cf slice list --json` via `subprocess.run`, captures stdout
-  - [ ] Parses JSON, finds entry where `index` matches `int(num)`
-  - [ ] Returns dict with keys: `index`, `name`, `slice_name` (kebab-case from designFile path), `design_file`, `task_file` (from `cf task list --json`)
-  - [ ] Raises `typer.Exit(code=1)` with clear error if: `cf` not found, slice number not found, `designFile` is null (where needed)
-  - [ ] Also shells out to `cf task list --json` to get task file path
+- [x] Add helper function `_resolve_slice_number(num: str) -> dict` in `src/squadron/cli/commands/review.py`
+  - [x] Shells out to `cf slice list --json` via `subprocess.run`, captures stdout
+  - [x] Parses JSON, finds entry where `index` matches `int(num)`
+  - [x] Returns dict with keys: `index`, `name`, `slice_name` (kebab-case from designFile path), `design_file`, `task_file` (from `cf task list --json`)
+  - [x] Raises `typer.Exit(code=1)` with clear error if: `cf` not found, slice number not found, `designFile` is null (where needed)
+  - [x] Also shells out to `cf task list --json` to get task file path
 
 ### T11: Wire number shorthand into review commands
 
-- [ ] Update `review_arch` command
-  - [ ] Detect `input_file.isdigit()` — if true, call `_resolve_slice_number`
-  - [ ] Set `input_file` to resolved `design_file`, `against` to architecture doc (from `cf get` or config)
-  - [ ] Architecture doc resolution: shell out to `cf get --json` or parse `cf get` output for Architecture field
-  - [ ] Existing path-based invocations unchanged
-- [ ] Update `review_tasks` command
-  - [ ] Detect `input_file.isdigit()` — if true, call `_resolve_slice_number`
-  - [ ] Set `input_file` to resolved task file, `against` to resolved design file
-  - [ ] Fail explicitly if task file is null/missing
-  - [ ] Existing path-based invocations unchanged
-- [ ] Update `review_code` command
-  - [ ] Add optional positional argument for slice number (default `None`)
-  - [ ] If positional arg is provided and is a digit, call `_resolve_slice_number` for context (slice name for output/logging)
-  - [ ] Default to `--diff main` when invoked with a number
-  - [ ] Existing flag-based invocations unchanged
+- [x] Update `review_arch` command
+  - [x] Detect `input_file.isdigit()` — if true, call `_resolve_slice_number`
+  - [x] Set `input_file` to resolved `design_file`, `against` to architecture doc (from `cf get` or config)
+  - [x] Architecture doc resolution: shell out to `cf get --json` or parse `cf get` output for Architecture field
+  - [x] Existing path-based invocations unchanged
+- [x] Update `review_tasks` command
+  - [x] Detect `input_file.isdigit()` — if true, call `_resolve_slice_number`
+  - [x] Set `input_file` to resolved task file, `against` to resolved design file
+  - [x] Fail explicitly if task file is null/missing
+  - [x] Existing path-based invocations unchanged
+- [x] Update `review_code` command
+  - [x] Add optional positional argument for slice number (default `None`)
+  - [x] If positional arg is provided and is a digit, call `_resolve_slice_number` for context (slice name for output/logging)
+  - [x] Default to `--diff main` when invoked with a number
+  - [x] Existing flag-based invocations unchanged
 
 ### T12: Tests for CLI number shorthand
 
-- [ ] Add tests in `tests/cli/test_review_resolve.py`
-  - [ ] Test `_resolve_slice_number` with mocked subprocess output (valid slice)
-  - [ ] Test `_resolve_slice_number` with no matching index (exits with error)
-  - [ ] Test `_resolve_slice_number` with null designFile (exits with error)
-  - [ ] Test `_resolve_slice_number` when `cf` is not installed (exits with error)
-  - [ ] Test `review_tasks` with digit input routes through resolver (mock resolver, verify inputs dict)
-  - [ ] Test `review_arch` with digit input routes through resolver
-  - [ ] `uv run pytest tests/cli/test_review_resolve.py` — all tests pass
+- [x] Add tests in `tests/cli/test_review_resolve.py`
+  - [x] Test `_resolve_slice_number` with mocked subprocess output (valid slice)
+  - [x] Test `_resolve_slice_number` with no matching index (exits with error)
+  - [x] Test `_resolve_slice_number` with null designFile (exits with error)
+  - [x] Test `_resolve_slice_number` when `cf` is not installed (exits with error)
+  - [x] Test `review_tasks` with digit input routes through resolver (mock resolver, verify inputs dict)
+  - [x] Test `review_arch` with digit input routes through resolver
+  - [x] `uv run pytest tests/cli/test_review_resolve.py` — all tests pass
 
 ### T13: Commit — CLI number shorthand
 
-- [ ] Commit T10-T12 work
-  - [ ] Message: `feat: add bare number shorthand to sq review CLI commands`
-  - [ ] Stage `src/squadron/cli/commands/review.py` and `tests/cli/test_review_resolve.py`
+- [x] Commit T10-T12 work
+  - [x] Message: `feat: add bare number shorthand to sq review CLI commands`
+  - [x] Stage `src/squadron/cli/commands/review.py` and `tests/cli/test_review_resolve.py`
 
 ### T14: Validation pass — full suite after CLI changes
+
+- [x] Full project validation
+  - [x] `uv run ruff check` — clean
+  - [x] `uv run ruff format --check` — clean
+  - [x] `uv run pyright` — zero errors
+  - [x] `uv run pytest` — all tests pass
+
+### T15: Add `_save_review_file` helper and wire auto-save into review commands
+
+- [ ] Add `_save_review_file(result, review_type, slice_info, as_json)` helper in `review.py`
+  - [ ] Writes markdown file to `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md`
+  - [ ] Markdown file includes YAML frontmatter: `docType: review`, `reviewType`, `slice`, `project`, `verdict`, `dateCreated`, `dateUpdated`
+  - [ ] Body contains the formatted review output (findings with descriptions)
+  - [ ] When `as_json=True`, writes `.json` file instead using `result.to_dict()`
+  - [ ] Overwrites existing file on re-review
+  - [ ] Creates `project-documents/user/reviews/` directory if it doesn't exist
+- [ ] Add `--no-save` flag to `review_arch`, `review_tasks`, `review_code`
+  - [ ] Default: save review file when invoked with a slice number
+  - [ ] `--no-save`: suppress file save
+  - [ ] `--json` flag: save as JSON instead of markdown
+- [ ] Wire auto-save: after `_run_review_command` returns, if slice number was provided and `--no-save` not set, call `_save_review_file`
+- [ ] Thread `slice_info` through so save helper has access to index, slice_name, review type
+- [ ] Print confirmation message: `Saved review to {path}`
+
+### T16: Tests for review file auto-save
+
+- [ ] Add tests in `tests/cli/test_review_save.py`
+  - [ ] Test `_save_review_file` writes markdown with correct frontmatter
+  - [ ] Test `_save_review_file` writes JSON when `as_json=True`
+  - [ ] Test `_save_review_file` overwrites existing file
+  - [ ] Test `_save_review_file` creates reviews directory if missing
+  - [ ] Test `--no-save` flag prevents file creation
+  - [ ] `uv run pytest tests/cli/test_review_save.py` — all tests pass
+
+### T17: Update slash commands for parity
+
+- [ ] Update `commands/sq/review-tasks.md`, `review-code.md`, `review-arch.md`
+  - [ ] Remove explicit "save the review output" instructions (CLI now does this automatically)
+  - [ ] Note that review file is auto-saved by the CLI
+  - [ ] Document `--no-save` and `--json` flags
+
+### T18: Commit — review file auto-save
+
+- [ ] Commit T15-T17 work
+  - [ ] Message: `feat: auto-save review files when using slice number shorthand`
+
+### T19: Validation pass
 
 - [ ] Full project validation
   - [ ] `uv run ruff check` — clean

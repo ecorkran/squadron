@@ -8,29 +8,19 @@ If `$ARGUMENTS` starts with a number (e.g., `191`, `118`), treat it as a **slice
 
 When `$ARGUMENTS` is a bare number:
 
-1. Run `cf slice list --json` and find the entry where `index` matches the number. If no match, report the error and stop — do not guess or fall back.
-2. Extract the slice name from the `designFile` path (the part after `nnn-slice.` and before `.md`). If `designFile` is null, use the entry `name` field in kebab-case instead.
-3. Run the review against main:
+`sq review code {number} -v`
 
-`sq review code --diff main -v`
+The CLI automatically:
+- Resolves the slice context via `cf slice list --json`
+- Defaults to `--diff main` when invoked with a number
+- Saves the review to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md` with YAML frontmatter
 
-4. Save the full review output to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md` with this YAML frontmatter:
+Additional flags:
+- `--json`: output and save as JSON instead of markdown
+- `--no-save`: suppress the review file save
+- `-v`/`-vv`: verbosity level
 
-```yaml
----
-docType: review
-reviewType: code
-slice: {slice-name}
-project: squadron
-verdict: {PASS|CONCERNS|FAIL}
-dateCreated: YYYYMMDD
-dateUpdated: YYYYMMDD
----
-```
-
-If this file already exists (re-review), overwrite it. Git handles version history.
-
-5. Show the review results. If the verdict is FAIL or CONCERNS, highlight the key findings.
+Show the review results. If the verdict is FAIL or CONCERNS, highlight the key findings.
 
 ### Full flag invocation
 
@@ -45,6 +35,7 @@ Optional flags:
 - `--rules PATH`: path to additional rules file
 - `--model MODEL`: model override
 - `-v`/`-vv`: verbosity level
+- `--json`, `--no-save`
 
 Example: `sq review code --diff main` or `sq review code --files "src/**/*.py"`
 
