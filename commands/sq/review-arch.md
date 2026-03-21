@@ -35,7 +35,9 @@ Required arguments:
 - Positional: path to the document to review
 - `--against PATH`: architecture or context document to review against
 
-Optional: `--cwd DIR`, `--model MODEL`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
+Optional: `--cwd DIR`, `--model MODEL`, `--profile PROFILE`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
+
+The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is inferred from `--model` or defaults to `sdk`.
 
 Example: `sq review arch slices/105-slice.md --against architecture/100-arch.md`
 

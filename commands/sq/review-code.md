@@ -34,6 +34,7 @@ Optional flags:
 - `--diff REF`: git ref to diff against (reviews changed files)
 - `--rules PATH`: path to additional rules file
 - `--model MODEL`: model override
+- `--profile PROFILE`: provider profile (e.g., `openrouter`, `openai`, `local`, `sdk`). Inferred from `--model` when omitted, defaults to `sdk`.
 - `-v`/`-vv`: verbosity level
 - `--json`, `--no-save`
 

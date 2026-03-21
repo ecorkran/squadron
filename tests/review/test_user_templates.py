@@ -13,7 +13,6 @@ from squadron.review.templates import (
     load_all_templates,
 )
 
-
 USER_TEMPLATE_YAML = """\
 name: arch
 description: "Custom architectural review"

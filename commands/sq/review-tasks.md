@@ -32,7 +32,9 @@ Required arguments:
 - Positional: path to the task breakdown file
 - `--against PATH`: parent slice design to review against
 
-Optional: `--cwd DIR`, `--model MODEL`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
+Optional: `--cwd DIR`, `--model MODEL`, `--profile PROFILE`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
+
+The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is inferred from `--model` or defaults to `sdk`.
 
 Example: `sq review tasks tasks/105-tasks.md --against slices/105-slice.md`
 
