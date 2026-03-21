@@ -7,7 +7,7 @@ dependencies: [sq-slash-command, context-forge-workflow-navigation]
 interfaces: []
 dateCreated: 20260317
 dateUpdated: 20260320
-status: in-progress
+status: complete
 ---
 
 # Slice Design: Claude Code Commands — Composed Workflows

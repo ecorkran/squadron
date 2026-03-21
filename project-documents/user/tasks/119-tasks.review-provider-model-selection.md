@@ -6,6 +6,7 @@ dependencies: [review-workflow-templates, provider-variants-registry, auth-strat
 projectState: Slices 100-118 complete. Review commands work via SDK only. Provider infrastructure (profiles, auth, OpenAI-compatible) exists from slices 111-114. Review auto-save and number shorthand from slice 118. No user-customizable templates yet.
 dateCreated: 20260321
 dateUpdated: 20260321
+reviewUpdated: 20260321
 status: not_started
 ---
 
@@ -54,7 +55,8 @@ status: not_started
 
 - [ ] Add `_resolve_profile()` function in `src/squadron/cli/commands/review.py`
   - [ ] Resolution chain: CLI flag → template `profile` → config `default_review_profile` → `"sdk"`
-  - [ ] Signature: `_resolve_profile(flag: str | None, template: ReviewTemplate | None = None) -> str`
+  - [ ] Signature: `_resolve_profile(flag: str | None, template: ReviewTemplate | None = None, model: str | None = None) -> str`
+  - [ ] Accept `model` parameter but do not use it yet (inference added in T6)
   - [ ] Uses `get_config("default_review_profile")` for config lookup
   - [ ] Returns `"sdk"` as final fallback
 - [ ] `pyright` and `ruff check` pass
@@ -120,6 +122,7 @@ status: not_started
   - [ ] Test non-SDK path returns valid `ReviewResult` (mock API response with summary/findings format)
   - [ ] Test unknown profile raises error
   - [ ] Test missing API key raises error (mock env to not have key)
+  - [ ] Test non-SDK `ReviewResult` has all fields needed for auto-save and `--json` output (verify `summary`, `findings`, `verdict`, `model` are populated — ensures SC9 parity)
   - [ ] `uv run pytest tests/review/test_review_client.py` — all tests pass
 
 ### T11: Commit — review client
@@ -132,8 +135,8 @@ status: not_started
 - [ ] Update `review_arch` in `review.py`
   - [ ] Add `--profile` option: `typer.Option(None, "--profile", help="Provider profile (e.g. openrouter, openai, local, sdk)")`
   - [ ] Call `_resolve_profile(profile_flag, template, model)` to get resolved profile
-  - [ ] Replace `_run_review_command()` call with `run_review_with_profile()` (or wire profile through `_run_review_command`)
-  - [ ] Pass resolved profile to the review execution
+  - [ ] Wire `profile` through `_run_review_command()` — add `profile: str` parameter and have it call `run_review_with_profile()` internally (preserves auto-save, JSON output, error handling in one place)
+  - [ ] Pass resolved profile from each command handler into `_run_review_command()`
 - [ ] Update `review_tasks` — same pattern
 - [ ] Update `review_code` — same pattern
 - [ ] Existing behavior unchanged when `--profile` not specified (SDK fallback)
@@ -163,6 +166,7 @@ status: not_started
   - [ ] Handle missing user directory gracefully (no error if dir doesn't exist)
   - [ ] User template directory path: `Path.home() / ".config" / "squadron" / "templates"`
 - [ ] Update all call sites that reference `load_builtin_templates` (should work via alias)
+  - [ ] Explicitly update `review list` command to use `load_all_templates()` so it displays both built-in and user templates
 
 ### T16: Tests for user template loading
 

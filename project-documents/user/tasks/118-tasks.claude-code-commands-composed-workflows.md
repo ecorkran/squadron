@@ -6,7 +6,7 @@ dependencies: [sq-slash-command]
 projectState: Slice 116 complete. Eight sq/ command files working. Install/uninstall mechanism in place. Wheel bundles commands via force-include. Context-Forge CLI available (cf get, cf set, cf build). No composed workflow commands exist yet.
 dateCreated: 20260317
 dateUpdated: 20260320
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -231,6 +231,6 @@ status: in_progress
 
 These are not AI-automatable tasks. They are documented here for the PM's reference.
 
-- [ ] **Live test**: Run `/sq:run-slice` on a real upcoming slice to verify the full pipeline (design → tasks → review → compact → implement → review) works end-to-end in Claude Code
-- [ ] **Live test**: Run `/sq:review-tasks 191` (or similar) to verify number shorthand resolves paths correctly and saves review file
-- [ ] **Iterate on prompt**: Adjust `run-slice.md` prompt based on real-world behavior — especially review gate sensitivity and compact keep instructions
+- [x] **Live test**: Run `/sq:review-tasks 191` (or similar) to verify number shorthand resolves paths correctly and saves review file
+- [x] **Iterate on prompt**: Adjust `run-slice.md` prompt based on real-world behavior — especially review gate sensitivity and compact keep instructions
+- **Deferred**: `/sq:run-slice` live test deferred until "pickup" enhancement is added (ability to resume at current phase rather than always starting from phase 4). Will test with a fresh slice at that point.
