@@ -17,6 +17,7 @@ EXPECTED_FILES = {
     "review-arch.md",
     "review-code.md",
     "review-tasks.md",
+    "run-slice.md",
     "shutdown.md",
     "spawn.md",
     "task.md",
@@ -24,7 +25,7 @@ EXPECTED_FILES = {
 
 
 def test_install_copies_files(tmp_path: Path) -> None:
-    """Install copies all 8 command files to the target directory."""
+    """Install copies all 9 command files to the target directory."""
     result = runner.invoke(app, ["install-commands", "--target", str(tmp_path)])
     assert result.exit_code == 0
 
@@ -40,7 +41,7 @@ def test_install_creates_directories(tmp_path: Path) -> None:
     result = runner.invoke(app, ["install-commands", "--target", str(deep_target)])
     assert result.exit_code == 0
     assert (deep_target / "sq").is_dir()
-    assert len(list((deep_target / "sq").glob("*.md"))) == 8
+    assert len(list((deep_target / "sq").glob("*.md"))) == 9
 
 
 def test_install_overwrites_existing(tmp_path: Path) -> None:
@@ -97,7 +98,7 @@ def test_target_flag_overrides_default(tmp_path: Path) -> None:
     result = runner.invoke(app, ["install-commands", "--target", str(custom)])
     assert result.exit_code == 0
     assert (custom / "sq").is_dir()
-    assert len(list((custom / "sq").glob("*.md"))) == 8
+    assert len(list((custom / "sq").glob("*.md"))) == 9
 
 
 def test_get_commands_source_returns_valid_dir() -> None:
@@ -105,7 +106,7 @@ def test_get_commands_source_returns_valid_dir() -> None:
     source = _get_commands_source()
     assert source.is_dir()
     assert (source / "sq").is_dir()
-    assert len(list((source / "sq").glob("*.md"))) == 8
+    assert len(list((source / "sq").glob("*.md"))) == 9
 
 
 # ---------------------------------------------------------------------------
@@ -121,11 +122,12 @@ EXPECTED_COMMANDS = {
     "review-tasks.md": "sq review tasks",
     "review-code.md": "sq review code",
     "auth-status.md": "sq auth status",
+    "run-slice.md": "cf get",
 }
 
 
 def test_all_command_files_exist_in_source() -> None:
-    """All 8 expected command files exist in commands/sq/."""
+    """All 9 expected command files exist in commands/sq/."""
     source = _get_commands_source()
     sq_dir = source / "sq"
     for filename in EXPECTED_COMMANDS:
