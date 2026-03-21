@@ -12,6 +12,18 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260321
+
+### Slice 119: Review Provider & Model Selection — Design Complete
+
+- Slice design created at `project-documents/user/slices/119-slice.review-provider-model-selection.md`
+- Scope: decouple review execution from hardcoded Claude SDK. Add `--profile` flag, `profile` field in templates, user-customizable templates from `~/.config/squadron/templates/`, config default `default_review_profile`, model-to-profile inference
+- Key decision: SDK path preserved exactly (delegation), non-SDK path uses `AsyncOpenAI` directly via existing profile/auth infrastructure
+- Known limitation: non-SDK reviews have no tool access (prompt-only)
+- Slice plan updated: new slice 119 inserted, old 119 (Conversation Persistence) re-indexed to 134
+
+---
+
 ## 20260320
 
 ### Slice 118: Claude Code Commands — Composed Workflows — In Progress
