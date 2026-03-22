@@ -5,7 +5,7 @@ project: squadron
 archIndex: 100
 component: orchestration
 dateCreated: 20251019
-dateUpdated: 20260219
+dateUpdated: 20260322
 status: in_progress
 ---
 
@@ -200,15 +200,7 @@ User defines workflow (parallel, sequential, custom) → ADK orchestrates agent 
 
 ## Communication Topologies
 
-This is the project differentiator. The Message Bus supports configurable routing strategies:
-
-**Broadcast (default)** — All agents see all messages. Simple, good for small groups.
-
-**Filtered** — Agents see messages addressed to them, messages to all, and their own messages. Can be extended with rules (e.g. agents see all human messages regardless of addressing).
-
-**Hierarchical** — Orchestrator agent sees everything, worker agents see only their assigned scope. Traditional boss/worker pattern, available as one option among many.
-
-**Custom** — User-defined routing functions. Enables experimentation with novel coordination patterns.
+Communication topologies (broadcast, filtered, hierarchical, custom) are covered in detail in `160-arch.multi-agent-communication.md`.
 
 ---
 

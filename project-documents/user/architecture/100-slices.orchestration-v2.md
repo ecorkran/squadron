@@ -14,13 +14,9 @@ status: in-progress
 
 ## Milestone Targets
 
-These milestones define the priority ordering. Slices are sequenced to reach each milestone as early as possible.
-
 **M1 — SDK agent task execution:** Spawn a Claude Agent SDK agent, give it a task, get structured output via CLI. Uses Max subscription — no API cost.
 
-**M2 — Multi-agent communication:** Two agents (SDK and/or API) communicate through the message bus. Proves the unified Agent Protocol works across provider types.
-
-**M3 — Human + agents:** Human participates alongside multiple agents in a shared conversation with configurable topologies.
+Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-communication.md`.
 
 ---
 
@@ -40,7 +36,7 @@ These milestones define the priority ordering. Slices are sequenced to reach eac
 
 4. [x] **(103) CLI Foundation & SDK Agent Tasks** — Typer app with commands: `spawn` (create agent with --type, --provider, --cwd), `list` (show agents with type and state), `task` (send a one-shot task to a named agent, display streaming output), `shutdown` (stop agent). Wire the full path: CLI → Agent Registry → SDK Agent Provider → claude-agent-sdk → response displayed. Dependencies: [Agent Registry]. Risk: Low. Effort: 2/5
 
-**M1 is complete at slice 103 (CLI Foundation).** The M1 value proposition — spawn an SDK agent, give it a task, see structured output from the terminal — is fully delivered. Review Workflow Templates (slice 105, pulled forward below) is the immediate next priority.
+**M1 is complete at slice 103 (CLI Foundation).** The M1 value proposition — spawn an SDK agent, give it a task, see structured output from the terminal — is fully delivered.
 
 ### Post-M1
 
@@ -56,71 +52,35 @@ These milestones define the priority ordering. Slices are sequenced to reach eac
 
 11. [x] **(114) Auth Strategy & Credential Management** — Auth strategy abstraction (`AuthStrategy` protocol) that decouples credential resolution from provider logic. API key implementation as the concrete strategy (env var lookup, profile-specified env var, localhost placeholder — formalizing the pattern already in `OpenAICompatibleProvider`). `orchestration auth login <provider>` CLI flow for validating and storing API keys. `orchestration auth status` to show configured credentials per provider. Auth strategy selection per profile (`auth_type` field on `ProviderProfile`). Extension points documented for future token-refresh strategies (OAuth, service account rotation). Dependencies: [OpenAI-Compatible Provider Core, Provider Variants & Registry]. Risk: Low (API key auth is well-understood; scope reduced from original OAuth ambition after research showed OpenAI API lacks general OAuth). Effort: 2/5
 
-12. [x] **(115) Project Rename: orchestration → squadron** — Rename the project, package, CLI entry point, and all internal references from orchestration to squadron. CLI command becomes sq (short alias) with squadron as the long form. Package directory: src/orchestration/ → src/squadron/. pyproject.toml: name, entry point (sq = "squadron.cli.app:app"), package references. Config paths: ~/.config/orchestration/ → ~/.config/squadron/ with one-time migration of existing config/provider profiles. Daemon socket path and PID file updated. All imports, logging namespaces, and test references updated. README and documentation updated. Migration note: existing providers.toml and auth credentials are copied to the new config directory on first run; old directory left in place with a deprecation notice file. The rename should happen before Claude Code commands (slice 116) ship so that command files reference the correct binary from day one. Dependencies: [Auth Strategy & Credential Management]. Risk: Low (mechanical refactor, no logic changes). Effort: 1/5
+12. [x] **(115) Project Rename: orchestration → squadron** — Rename the project, package, CLI entry point, and all internal references from orchestration to squadron. CLI command becomes sq (short alias) with squadron as the long form. Package directory: src/orchestration/ → src/squadron/. pyproject.toml: name, entry point (sq = "squadron.cli.app:app"), package references. Config paths: ~/.config/orchestration/ → ~/.config/squadron/ with one-time migration of existing config/provider profiles. Daemon socket path and PID file updated. All imports, logging namespaces, and test references updated. README and documentation updated. Dependencies: [Auth Strategy & Credential Management]. Risk: Low (mechanical refactor, no logic changes). Effort: 1/5
 
-13. [x] **(116) Claude Code Commands — sq Wrappers** — Markdown command files for ~/.claude/commands/ that expose squadron CLI capabilities as Claude Code slash commands. Commands: /sq:spawn, /sq:task, /sq:list, /sq:shutdown, /sq:review-arch, /sq:review-tasks, /sq:review-code, /sq:auth-status. Commands shell out to the globally-installed `sq` CLI using ! prefix execution, passing $ARGUMENTS or positional $1/$2 parameters. `sq` is already CWD-aware, so commands work correctly in any project directory. YAML frontmatter with description fields for Claude Code auto-discovery. Includes an install mechanism: `sq install-commands [--target ~/.claude/commands/]` that copies the command markdown files from the package's bundled commands/ directory into place. Uninstall via `sq uninstall-commands`. Command files maintained in the squadron repo under commands/ as the source of truth. Dependencies: [Project Rename]. Risk: Low. Effort: 1/5
+13. [x] **(116) Claude Code Commands — sq Wrappers** — Markdown command files for ~/.claude/commands/ that expose squadron CLI capabilities as Claude Code slash commands. Commands: /sq:spawn, /sq:task, /sq:list, /sq:shutdown, /sq:review-slice, /sq:review-tasks, /sq:review-code, /sq:auth-status. Commands shell out to the globally-installed `sq` CLI. Includes `sq install-commands` and `sq uninstall-commands`. Dependencies: [Project Rename]. Risk: Low. Effort: 1/5
 
-14. [x] **(117) PyPI Publishing & Global Install** — Publish squadron to PyPI so users can install globally via `pipx install squadron` or `uv tool install squadron`, making `sq` available on PATH without venv activation. Scope: version strategy (CalVer or SemVer decision), PyPI account and token setup, `pyproject.toml` metadata polish (classifiers, license, project-urls, long_description from README), `sq --version` output, GitHub Actions publish workflow (test on push, publish on tag), README install instructions for pipx/uv tool. The wheel already bundles command files via `force-include` (slice 116 — sq Wrappers), so `sq install-commands` works from a global install. Optional: TestPyPI dry-run step in CI. Dependencies: [Claude Code Commands — sq Wrappers]. Risk: Low (standard Python packaging). Effort: 1-2/5
+14. [x] **(117) PyPI Publishing & Global Install** — Publish squadron to PyPI so users can install globally via `pipx install squadron` or `uv tool install squadron`, making `sq` available on PATH without venv activation. GitHub Actions publish workflow (test on push, publish on tag). Dependencies: [Claude Code Commands — sq Wrappers]. Risk: Low. Effort: 1-2/5
 
-15. [x] **(118) Claude Code Commands — Composed Workflows** — `/sq:run-slice` command automating the full slice lifecycle (design → tasks → review → compact → implement → review). Review command updates: bare number shorthand (`sq review arch 118`), path resolution via Context-Forge, review file auto-save to `project-documents/user/reviews/` with YAML frontmatter. CLI/slash-command parity: `--json`, `--no-save` flags. Higher-level Claude Code commands in ~/.claude/commands/workflow/ that chain squadron and context-forge together, leveraging Claude Code's reasoning to interpret results and suggest next actions. /workflow:next-step runs cf status + cf next, interprets the project state, and recommends whether to run a review, start implementation, or advance to the next phase. /workflow:design-review runs cf build to assemble context then sq review arch against the appropriate architecture doc. /workflow:ensemble-review runs the same review across multiple providers (using sq task with different --provider flags) and asks Claude Code to synthesize the results — a lightweight ensemble pattern that works before the message bus exists. Commands are designed to be opinionated but overridable via $ARGUMENTS. Depends on daily use of this slice to validate which compositions are actually useful vs. theoretical. Dependencies: [Claude Code Commands — sq Wrappers, context-forge workflow navigation]. Risk: Low (commands are markdown files, easy to iterate). Effort: 2/5
+15. [x] **(118) Claude Code Commands — Composed Workflows** — `/sq:run-slice` command automating the full slice lifecycle. Review command updates: bare number shorthand (`sq review slice 118`), path resolution via Context-Forge, review file auto-save. CLI/slash-command parity. Dependencies: [Claude Code Commands — sq Wrappers, context-forge workflow navigation]. Risk: Low. Effort: 2/5
 
-16. [x] **(119) Review Provider & Model Selection** — Enable review commands to use any configured provider/model, not just the hardcoded Claude SDK. Add `--profile` flag to `sq review arch|tasks|code` (reuses existing provider infrastructure from slices 111-114). Wire `run_review()` to route through the specified provider instead of hardcoded `ClaudeSDKClient`. User-customizable review templates loaded from `~/.config/squadron/templates/` alongside built-in templates. Template `profile` field alongside existing `model` field. Model-to-profile inference where possible (e.g., `gpt-4o` → openai, `claude-opus-4-6` → sdk). Config-level default: `default_review_profile`. CLI/slash-command/MCP parity applies. Enables running reviews via Anthropic API (avoiding Claude-in-Claude nesting), OpenRouter, local models, or any registered provider. Prerequisite for Ensemble Review (131). Dependencies: [Review Workflow Templates (105), Provider Variants & Registry (113), Auth Strategy (114), Composed Workflows (118)]. Risk: Low. Effort: 3/5
+16. [x] **(119) Review Provider & Model Selection** — Enable review commands to use any configured provider/model, not just the hardcoded Claude SDK. Add `--profile` flag to `sq review slice|tasks|code`. User-customizable review templates. Model-to-profile inference. Dependencies: [Review Workflow Templates (105), Provider Variants & Registry (113), Auth Strategy (114), Composed Workflows (118)]. Risk: Low. Effort: 3/5
 
-17. [x] **(120) Model Alias Registry** — Data-driven model shorthand resolution. Ships a default `models.toml` mapping short names (e.g., `opus`, `sonnet`, `gpt4o`, `kimi25`) to `(profile, full_model_id)` tuples. User-editable at `~/.config/squadron/models.toml`. Replaces hardcoded pattern-matching in `_infer_profile_from_model()` with file-based lookup. Resolution: `--model opus` → lookup alias → resolves both profile and full model ID, eliminating the need for `--profile` in most cases. Built-in defaults cover Claude, GPT, and common OpenRouter models. Users add entries for preferred models. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 2/5
+17. [x] **(120) Model Alias Registry** — Data-driven model shorthand resolution. Ships a default `models.toml` mapping short names (e.g., `opus`, `sonnet`, `gpt54-nano`, `kimi25`) to `(profile, full_model_id)` tuples. User-editable at `~/.config/squadron/models.toml`. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 2/5
 
-18. [ ] **(136) Model Alias Metadata** — Extend the ModelAlias structure with optional metadata fields: `private` (bool — whether the provider trains on prompts), `cost_tier` (free/cheap/moderate/expensive), `notes` (free-text). Update `models.toml` format to support inline table or full table syntax for aliases with metadata. `sq model list` displays metadata columns. Built-in aliases ship with curated metadata for all 12 defaults. Enables informed model selection without leaving the CLI — "which models are private?", "what's cheapest for a quick review?". No provider API calls — all metadata is manually curated in the alias definition. Dependencies: [Model Alias Registry (120)]. Risk: Low. Effort: 1/5
+18. [ ] **(136) Model Alias Metadata** — Extend the ModelAlias structure with optional metadata fields: `private` (bool — whether the provider trains on prompts), `cost_tier` (free/cheap/moderate/expensive), `notes` (free-text). Update `models.toml` format to support inline table or full table syntax for aliases with metadata. `sq models` displays metadata columns. Built-in aliases ship with curated metadata for all defaults. Dependencies: [Model Alias Registry (120)]. Risk: Low. Effort: 1/5
 
-19. [ ] **(137) Review Context Enrichment** — Automatically enrich review prompts with applicable rules and context. Code reviews auto-detect language from the diff/files under review and inject matching rules from the project's `rules/` directory (e.g. Python files → `rules/python.md`). Supports multiple language detection in a single review. Config key `rules_dir` points to the rules directory (default: `project-documents/ai-project-guide/project-guides/rules/`). The `--rules` CLI flag continues to work as an explicit override/addition. Slice and task reviews can optionally pull review criteria from Context Forge's process guide prompts when available. No new templates — enrichment happens as pre-processing in `_run_review_command()` before the existing rules injection path. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 1/5
+19. [ ] **(137) Review Context Enrichment** — Automatically enrich review prompts with applicable rules and context. Code reviews auto-detect language from the diff/files under review and inject matching rules from the project's `rules/` directory (e.g. Python files → `rules/python.md`). Supports multiple language detection in a single review. Config key `rules_dir` points to the rules directory. The `--rules` CLI flag continues to work as an explicit override/addition. Slice and task reviews can optionally pull review criteria from Context Forge's process guide prompts when available. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 1/5
 
-20. [ ] **(135) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns — orchestration history gpt works after the agent is gone and after the daemon is recycled. Schema captures orchestration-level messages (sender, content, message_type, timestamp, metadata) with per-agent conversation grouping and session boundaries. CLI additions: orchestration history --list (show all conversations), orchestration history --export <agent> --format json|markdown (export for analysis or context injection), orchestration history --search "query" (full-text search across conversations). Retention policies: configurable per-session or per-project, with orchestration history --prune --older-than 30d for cleanup. The store becomes the backing data for multiple downstream consumers: the findings ledger (Review Findings Pipeline) references review conversations by ID, ensemble reviews (Ensemble Review & Cross-Model Analysis) compare outputs across conversation records, the ADP pipeline uses conversation history as the decision record at phase transitions, and multi-agent session replay (post-M2) reads from the same store. Design constraint: the ConversationStore protocol should be defined in the engine module so that the in-memory implementation from the Local Daemon (112) and the SQLite implementation are interchangeable — the engine never knows which backend is active. Dependencies: [Local Server & CLI Client]. Risk: Low (SQLite is well-understood; the schema is straightforward). Effort: 2/5
+20. [ ] **(130) Review Findings Pipeline** — Automated triage and tracking for review output. When a review produces findings, classify each by complexity (auto-fix, guided fix, design decision, skip/acknowledged) and route accordingly. Auto-fixable findings applied directly with commit. Guided fixes get context annotation before handoff. Design decisions surfaced to human PM. Findings ledger for pattern detection and audit trail. Dependencies: [Review Workflow Templates (105), M1 Polish (106)]. Risk: Medium (classification heuristics need tuning). Effort: 3/5
 
+21. [ ] **(132) Codex Agent Integration** — New agent type (`CodexAgentProvider`) that spawns OpenAI Codex as an orchestrated agent using ChatGPT subscription auth (OAuth 2.0 with PKCE). Browser-based login flow with token caching and automatic refresh. Codex agents run against the user's ChatGPT Plus/Pro/Teams subscription — no API credits consumed. Dependencies: [Auth Strategy & Credential Management (114), Agent Registry (102)]. Risk: Medium (Codex API surface is evolving). Effort: 3/5
 
-### → Milestone 2: Multi-Agent Communication
-
-
-21. [ ] **(121) Supervisor Component** — Core supervision and health monitoring. Supervisor watches asyncio task state, detects failures (crashed tasks, unhandled exceptions) and response timeouts (agent stuck in processing beyond configurable threshold). one_for_one restart strategy: restart only the failed agent with clean state. New agent states (restarting, failed) added to registry state machine. CLI list command reflects supervisor-managed states. Dependencies: [Agent Registry, Message Bus Core]. Risk: Low. Effort: 2/5
-
-22. [ ] **(122) Message Bus Core** — Async pub/sub message system. Agents and other participants (human, system) publish and subscribe. Broadcast routing (all subscribers see all messages) as the default topology. Message history (in-memory) with per-agent filtering view. Message schema: sender, recipients, content, timestamp, message_type, metadata. Dependencies: [Agent Registry]. Risk: Low. Effort: 2/5
-
-23. [ ] **(123) Anthropic API Provider** — Implement AnthropicAPIProvider satisfying the AgentProvider Protocol. AnthropicAPIAgent wraps the anthropic SDK's AsyncAnthropic client for conversational message exchange. Supports both api_key and auth_token authentication. Manages conversation history internally. Converts between orchestration Messages and Anthropic message format. Provider auto-registers as "anthropic" in the provider registry. This is the first API provider and validates the Protocol for future providers (OpenAI, Gemini, etc.). Dependencies: [Foundation]. Risk: Low. Effort: 3/5
-
-24. [ ] **(124) Multi-Agent Message Routing** — Connect agents to the message bus. When an agent publishes a message, the bus routes it to other agents based on the active topology. Each receiving agent's `handle_message` is called, and its response messages are published back to the bus. Conversation turn management to prevent infinite loops (max turns, cooldown, explicit stop). CLI `observe` command to watch a multi-agent conversation in real time. **Completes M2.** Dependencies: [Message Bus Core, Anthropic API Provider OR SDK Agent Provider (at least one)]. Risk: Medium (turn management and loop prevention need careful design). Effort: 3/5
-
-### → Milestone 3: Human + Agents
-
-25. [ ] **(125) Human-in-the-Loop Participation** — Human becomes a first-class participant on the message bus (not just a CLI command issuer). In multi-agent mode, human messages are broadcast to all agents alongside agent-to-agent messages. CLI interactive mode: human sees all agent messages and can interject at any point. Agents see human messages in their conversation context. Turn-taking options: free-form (anyone can speak), moderated (human approves each round), or prompted (agents wait for human input between rounds). Also retrofits streaming output to the CLI task command (deferred from slice 103 — see 103-slice.cli-foundation.md Tracked Enhancements). Completes M3. Dependencies: [Multi-Agent Message Routing]. Risk: Low. Effort: 2/5
-
-### Post-Milestone Feature Work
-
-26. [ ] **(126) Communication Topologies** — Topology manager as first-class component. Implement filtered topology (agents see addressed messages + broadcasts only), hierarchical topology (orchestrator sees all, workers see assigned scope), and custom topology (user-provided routing function). CLI commands to select and configure topology per session. Topology affects message bus routing, not agent logic — agents remain unaware of topology details. Dependencies: [Human-in-the-Loop]. Risk: Medium. Effort: 3/5
-
-27. [ ] **(127) ADK Integration** — Bridge between ADK workflow patterns (ParallelAgent, SequentialAgent, Loop) and core engine message bus. ADK manages execution order; each agent step routes through the message bus. Define ADK-compatible agent wrappers that use the AgentProvider abstraction. CLI commands for running ADK workflows (`workflow run`, `workflow list`). Dependencies: [Multi-Agent Message Routing]. Risk: Medium (ADK API surface and integration patterns need exploration). Effort: 3/5
-
-28. [ ] **(128) MCP Server** — Expose orchestration as MCP tools via Python MCP SDK. Tools: create_agent, list_agents, send_task, send_message, get_conversation, shutdown_agent, set_topology. Stdio transport for Claude Code / Cursor integration. MCP server reads from same core engine as CLI — no duplication of logic. Dependencies: [Message Bus Core, Agent Registry]. Risk: Low. Effort: 2/5
-
-29. [ ] **(129) REST + WebSocket API** — FastAPI server. REST endpoints for agent lifecycle (create, list, delete) and conversation management (send message, get history). WebSocket endpoint for real-time message streaming (subscribe to message bus events). Automatic OpenAPI docs. CORS configuration for future frontend consumption. Dependencies: [Message Bus Core, Agent Registry]. Risk: Low. Effort: 2/5
-
-30. [ ] **(130) Review Findings Pipeline** — Automated triage and tracking for review output. When a review produces findings, classify each by complexity (auto-fix, guided fix, design decision, skip/acknowledged) and route accordingly. Auto-fixable findings (style violations, missing error handling, fixture consolidation) are applied directly with commit. Guided fixes get context annotation before handoff to an agent. Design decisions are surfaced to human PM for disposition. All findings and their dispositions are recorded in a structured log (findings ledger) that persists across reviews — enables pattern detection ("this category of issue keeps recurring, add it to the template rules") and serves as an audit trail for what was addressed vs. intentionally deferred. Commit strategy: batch commit for auto-fixes, individual commits for guided fixes with finding reference in commit message. Dependencies: [Review Workflow Templates, M1 Polish]. Risk: Medium (classification heuristics need tuning). Effort: 3/5
-
-31. [ ] **(131) Ensemble Review & Cross-Model Analysis** — Run the same review across multiple models (e.g., Haiku, Sonnet, Opus) and synthesize results. Fan out identical review tasks to N agents with different --model settings, collect structured ReviewResult outputs, then route to an evaluator model that compares findings across reviewers. Key analysis dimensions: agreement frequency (findings that appear across multiple reviewers are high-confidence signal), novel detection (findings unique to one reviewer — especially interesting when a smaller model catches something a larger one missed), and noise filtering (findings from weaker models that the evaluator determines are false positives). The evaluator produces a consensus ReviewResult with provenance metadata indicating which models flagged each finding. Pre-M2: can run sequentially with current review system using different --model flags per run and manual comparison. Post-M2: parallel fan-out via message bus. Builds on the findings pipeline (findings ledger provides the structured comparison substrate). Prior art in the embedding-cluster repo explored clustering similar observations across multiple sources — that technique applies directly to grouping findings by semantic similarity across reviewers. Dependencies: [Review Workflow Templates, Findings Pipeline, model selection support]. Requires M2 for parallel execution but experimentally viable with sequential runs immediately. Risk: Medium (evaluator prompt engineering, cost/value calibration). Effort: 3/5
-
-32. [ ] **(132) Codex Agent Integration** — New agent type (`CodexAgentProvider`) that spawns OpenAI Codex as an orchestrated agent using ChatGPT subscription auth (OAuth 2.0 with PKCE). Browser-based login flow (`orchestration codex login`) with token caching at `~/.config/orchestration/codex-auth.json` and automatic refresh. Codex agents run against the user's ChatGPT Plus/Pro/Teams subscription — no API credits consumed. The `AuthStrategy` protocol from Auth Strategy & Credential Management (114) provides the token-refresh integration point. Research spike at slice start to validate Codex CLI/API surface for programmatic task execution and confirm Teams account compatibility. Dependencies: [Auth Strategy & Credential Management, Agent Registry]. Risk: Medium (Codex API surface is evolving; Teams account OAuth support needs validation). Effort: 3/5
-
----
-
-## Integration Work
-
-33. [ ] **(133) Subprocess Agent Support** — Extend agent registry to spawn agents as OS processes (`asyncio.create_subprocess_exec`). Stdout/stderr streaming piped back through message bus. PID tracking in agent registry. Graceful and forced termination. Orphan cleanup on restart (PID file strategy). Primary use case: spawning non-SDK CLI tools as agent participants. Dependencies: [Agent Registry, Message Bus Core]. Risk: Medium. Effort: 2/5
-
-34. [ ] **(134) End-to-End Testing & Documentation** — Integration tests for core flows (SDK agent task, API agent chat, multi-agent conversation, human-in-the-loop, topology switching, review workflows). CLI help text and usage examples. README with quickstart (install, configure credentials, spawn first agent). Deployment documentation (local dev, MCP config, server mode). Dependencies: [all prior slices]. Risk: Low. Effort: 2/5
+22. [ ] **(135) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns. CLI additions: history --list, --export, --search. Retention policies with --prune. Dependencies: [Local Daemon (112)]. Risk: Low. Effort: 2/5
 
 ---
 
 ## Future Work
 
-6. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands (slice list, tasks list, context build, etc.) as tools available to non-SDK agents. Enables model-agnostic agents to resolve project structure, read slice designs, and build context prompts. Also enables CF commands in automated pipelines. Likely moves to the automated pipeline initiative once that is scoped. The existing `_run_cf()` subprocess pattern in review.py is the starting point. Dependencies: [MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
+1. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands as tools available to non-SDK agents. Likely moves to the automated pipeline initiative. Dependencies: [160-series MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
 
-5. [DEFERRED] **(104) SDK Client Warm Pool** — Deferred during design. SDK research revealed that `ClaudeSDKClient` does not maintain persistent connectable processes — each `query()` spawns a fresh subprocess with options baked in at creation. The original pool concept (pre-initialized clients handed out on demand) is not viable. To be revisited as a **session cache with agent profile management** once review workflows (slice 105) establish usage patterns. See `104-slice.sdk-client-warm-pool.md` for full rationale and future design direction. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
+2. [DEFERRED] **(104) SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
 
 ---
 
@@ -134,7 +94,7 @@ M1 — SDK Agent Task Execution:
   101. SDK Agent Provider                             ✅ complete
   102. Agent Registry & Lifecycle                     ✅ complete
   103. CLI Foundation & SDK Agent Tasks               ✅ complete (M1 complete)
-  104. SDK Client Warm Pool                           ⏸ DEFERRED (SDK architecture incompatible)
+  104. SDK Client Warm Pool                           ⏸ DEFERRED
 
 Post-M1:
   105. Review Workflow Templates                      ✅ complete
@@ -151,64 +111,38 @@ Post-M1:
   120. Model Alias Registry                            ✅ complete
   136. Model Alias Metadata                             (next)
   137. Review Context Enrichment                        (after 136, high usability impact)
-  135. Conversation Persistence & Management           (after 112)
-
-M2 — Multi-Agent Communication:
-  121. Supervisor Component                            (after 102, Message Bus)
-  122. Message Bus Core                                (can start after 102)
-  123. Anthropic API Provider                           (can start after 100, parallel with 101-104)
-  124. Multi-Agent Message Routing                      (after Message Bus + at least one provider)
-
-M3 — Human + Agents:
-  125. Human-in-the-Loop Participation                 (after Multi-Agent Message Routing)
-
-Post-Milestone (order flexible):
-  126. Communication Topologies                        (after Human-in-the-Loop)
-  127. ADK Integration                                 (after Multi-Agent Message Routing)
-  128. MCP Server                                      (after Message Bus + 102)
-  129. REST + WebSocket API                             (after Message Bus + 102)
   130. Review Findings Pipeline                         (after 105, 106)
-  131. Ensemble Review & Cross-Model Analysis           (after Findings Pipeline)
   132. Codex Agent Integration                          (after 114)
-
-Integration:
-  133. Subprocess Agent Support                         (after 102, Message Bus)
-  134. End-to-End Testing & Documentation               (after all prior slices)
+  135. Conversation Persistence & Management           (after 112)
 ```
 
 ### Parallelization Notes
 
 - **Slice 136 (Model Alias Metadata) is the immediate next priority.** Small extension of 120.
-- **Anthropic API Provider (123) and Message Bus Core (122) are parallel tracks.** Both depend only on Foundation/Registry (complete). An agent working on one doesn't block the other.
-- **MCP Server and REST + WebSocket API are independent of each other** and can be done in any order after their dependencies are met.
-- **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management. See `104-slice.sdk-client-warm-pool.md`.
+- **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management.
+- Multi-agent slices (M2, M3) are now tracked in `160-slices.multi-agent-communication.md`.
 
 ---
 
 ## Tracked Enhancements
 
-These are high-value capabilities identified during slice design that are intentionally deferred from their parent slices to keep scope bounded. They should be addressed as dedicated slices or folded into existing slices during post-M1 planning.
-
 ### SDK Agent Enhancements (parent: slice 101 — SDK Agent Provider)
 
-- **Hook system integration**: The SDK's `PreToolUse` / `PostToolUse` hooks enable programmatic control over agent behavior — deny dangerous commands, enforce read-only mode, log tool usage, inject review constraints. Natural complement to review workflow templates (slice 105). Candidate: fold into slice 105 or create a dedicated slice if hook patterns are reusable beyond reviews.
+- **Hook system integration**: The SDK's `PreToolUse` / `PostToolUse` hooks enable programmatic control over agent behavior. Natural complement to review workflow templates (slice 105).
 
-- **Custom MCP tool definitions**: The SDK's `@tool` decorator and `create_sdk_mcp_server` allow defining Python functions as tools available to SDK agents, running in-process (no subprocess). Enables orchestration-aware tools: "query the message bus," "check agent state," "submit review verdict." Bridges SDK agent autonomy with orchestration system state. Candidate: dedicated slice post-M2, when agents need awareness of each other.
+- **Custom MCP tool definitions**: The SDK's `@tool` decorator and `create_sdk_mcp_server` allow defining Python functions as tools available to SDK agents. Enables orchestration-aware tools. Candidate: dedicated slice post-M2.
 
-- **Subagent spawning**: The SDK natively supports subagent definitions via `ClaudeAgentOptions.agents`. An SDK agent can spawn its own subagents for parallel work with isolated context. Complementary to (not competing with) the orchestration framework's multi-agent coordination. Candidate: explore post-M2, after the message bus and multi-agent patterns are established. Lower priority than hooks and custom tools.
+- **Subagent spawning**: The SDK natively supports subagent definitions via `ClaudeAgentOptions.agents`. Candidate: explore post-M2.
 
 ### Model Registry Enhancements (parent: slice 120 — Model Alias Registry)
 
-- **Provider API metadata hydration**: Pull pricing, context length, and capability metadata from provider APIs (OpenRouter `/api/v1/models`, OpenAI, Anthropic, Google) to auto-populate alias metadata rather than manual curation. Each provider has its own API shape, so this is 4+ integrations. Candidate: dedicated slice after 136 (Metadata) establishes the metadata schema that API data would populate.
+- **Provider API metadata hydration**: Pull pricing, context length, and capability metadata from provider APIs (OpenRouter `/api/v1/models`, OpenAI, Anthropic, Google) to auto-populate alias metadata. Candidate: dedicated slice after 136 (Metadata).
 
 ---
 
 ## Notes
 
-- **Numbering**: Slices use the 100 band (100-135) since this is the project's primary initiative. If this creates index pressure with future initiatives, slices can be re-indexed.
-- **Frontend deferred**: The HLD identifies a future React UI. This is explicitly out of scope for this slice plan. When it arrives, it connects to the REST + WebSocket API and warrants its own architecture document and slice plan.
-- **SDK initialization cost**: Each `query()` call spawns a fresh subprocess with 2-12s+ overhead (up to 20-30s on some platforms). SDK research (2026-02-20) confirmed that `ClaudeSDKClient` options are baked in at creation — no reconfiguration after `connect()`. Slice 104 (SDK Client Warm Pool) is deferred pending redesign as a session cache. See `104-slice.sdk-client-warm-pool.md` for full research findings and future design direction.
-- **ADK exploration**: ADK Integration depends on the current ADK Python SDK API surface. A brief spike at the start of that slice may be warranted to validate assumptions from the HLD.
-- **Multi-provider validation**: Slices 111-114 are complete. The OpenAI-compatible provider (111) validated that the AgentProvider Protocol generalizes beyond Anthropic. Expanded scope covers OpenAI, OpenRouter, Gemini (via compatible endpoint), local models, and auth strategy abstraction. OAuth for Team accounts deferred to Codex Agent Integration after research showed OpenAI API uses key-based auth only — OAuth applies specifically to Codex subscription access.
-- **Slices 100-119 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI. Composed workflows shipped in 0.1.1. Review provider/model selection (119) adds `--profile` flag, user templates, and model-to-profile inference.
-- **Old orchestration artifacts**: The orch-128, 129, 132, 140 documents in project knowledge describe work from the Node.js/Electron era. They are reference material for design rationale only — no code or architecture carries forward into these slices.
+- **Slices 100-120 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI as v0.2.2.
+- **Multi-agent work** (M2, M3) has been moved to `160-arch.multi-agent-communication.md` and `160-slices.multi-agent-communication.md`.
+- **SDK initialization cost**: Each `query()` call spawns a fresh subprocess with 2-12s+ overhead. Slice 104 deferred pending redesign.
+- **Multi-provider validation**: Slices 111-114 complete. The AgentProvider Protocol generalizes beyond Anthropic.
