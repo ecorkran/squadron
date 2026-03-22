@@ -37,7 +37,9 @@ Required arguments:
 
 Optional: `--cwd DIR`, `--model MODEL`, `--profile PROFILE`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
 
-The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is inferred from `--model` or defaults to `sdk`.
+The `--model` flag accepts aliases (e.g., `opus`, `sonnet`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq model list` to see available aliases. Users can add custom aliases in `~/.config/squadron/models.toml`.
+
+The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is resolved from the model alias or defaults to `sdk`.
 
 Example: `sq review slice slices/105-slice.md --against architecture/100-arch.md`
 

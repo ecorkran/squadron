@@ -125,8 +125,7 @@ def _truncate(content: str, label: str) -> str:
         return content
     _logger.warning("Truncated %s (%d bytes)", label, len(content))
     return (
-        content[:_MAX_FILE_SIZE]
-        + f"\n\n[truncated at {_MAX_FILE_SIZE // 1000}KB"
+        content[:_MAX_FILE_SIZE] + f"\n\n[truncated at {_MAX_FILE_SIZE // 1000}KB"
         " — file too large for API review]"
     )
 

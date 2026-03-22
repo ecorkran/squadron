@@ -56,8 +56,8 @@ def patch_run_review(mock_review_result: ReviewResult):  # type: ignore[no-untyp
         yield mock
 
 
-class TestReviewArch:
-    """Test review arch command."""
+class TestReviewSlice:
+    """Test review slice command."""
 
     def test_with_required_args(
         self,
@@ -65,13 +65,13 @@ class TestReviewArch:
         patch_run_review: AsyncMock,
     ) -> None:
         result = cli_runner.invoke(
-            app, ["review", "arch", "slice.md", "--against", "arch.md"]
+            app, ["review", "slice", "slice.md", "--against", "arch.md"]
         )
         assert result.exit_code == 0
         assert "CONCERNS" in result.output
 
     def test_missing_against_arg(self, cli_runner: CliRunner) -> None:
-        result = cli_runner.invoke(app, ["review", "arch", "slice.md"])
+        result = cli_runner.invoke(app, ["review", "slice", "slice.md"])
         assert result.exit_code != 0
 
 
@@ -156,7 +156,7 @@ class TestReviewList:
     def test_lists_all_templates(self, cli_runner: CliRunner) -> None:
         result = cli_runner.invoke(app, ["review", "list"])
         assert result.exit_code == 0
-        assert "arch" in result.output
+        assert "slice" in result.output
         assert "tasks" in result.output
         assert "code" in result.output
 
@@ -171,7 +171,7 @@ class TestOutputModes:
     ) -> None:
         result = cli_runner.invoke(
             app,
-            ["review", "arch", "a.md", "--against", "b.md", "--output", "json"],
+            ["review", "slice", "a.md", "--against", "b.md", "--output", "json"],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -227,5 +227,7 @@ class TestErrorCases:
             template_name="arch",
             input_files={"input": "a.md", "against": "b.md"},
         )
-        result = cli_runner.invoke(app, ["review", "arch", "a.md", "--against", "b.md"])
+        result = cli_runner.invoke(
+            app, ["review", "slice", "a.md", "--against", "b.md"]
+        )
         assert result.exit_code == 2

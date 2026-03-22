@@ -392,9 +392,7 @@ def _run_review_command(
         alias_model, alias_profile = resolve_model_alias(model_flag)
 
     resolved_model = _resolve_model(alias_model or model_flag, template)
-    resolved_profile = _resolve_profile(
-        profile_flag or alias_profile, template
-    )
+    resolved_profile = _resolve_profile(profile_flag or alias_profile, template)
 
     try:
         result = asyncio.run(

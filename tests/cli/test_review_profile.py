@@ -265,9 +265,7 @@ class TestAliasWiring:
             "squadron.cli.commands.review.get_template",
             lambda name: _make_template(),
         )
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config", lambda k: None
-        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
 
         with patch(
             "squadron.cli.commands.review._execute_review",
@@ -312,9 +310,7 @@ class TestAliasWiring:
             "squadron.cli.commands.review.get_template",
             lambda name: _make_template(),
         )
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config", lambda k: None
-        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
 
         with patch(
             "squadron.cli.commands.review._execute_review",
@@ -359,9 +355,7 @@ class TestAliasWiring:
             "squadron.cli.commands.review.get_template",
             lambda name: _make_template(),
         )
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config", lambda k: None
-        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
 
         with patch(
             "squadron.cli.commands.review._execute_review",

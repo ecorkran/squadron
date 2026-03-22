@@ -12,7 +12,6 @@ from squadron.models.aliases import (
     resolve_model_alias,
 )
 
-
 # ---------------------------------------------------------------------------
 # resolve_model_alias — built-in aliases
 # ---------------------------------------------------------------------------

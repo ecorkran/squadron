@@ -29,8 +29,7 @@ def test_model_list_shows_user_tag(tmp_path: Path) -> None:
     """User alias shows (user) tag in output."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        '[aliases]\nkimi25 = { profile = "openrouter",'
-        ' model = "moonshotai/kimi-k2" }\n'
+        '[aliases]\nkimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }\n'
     )
 
     with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):

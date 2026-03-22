@@ -13,7 +13,6 @@ from squadron.review.review_client import (
     _inject_file_contents,
 )
 
-
 # ---------------------------------------------------------------------------
 # Basic injection
 # ---------------------------------------------------------------------------
@@ -146,7 +145,7 @@ def test_diff_input_triggers_git_diff() -> None:
     with patch("squadron.review.review_client.subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "diff --git a/foo.py\n+new line"
-        result = _inject_file_contents(prompt, inputs)
+        _inject_file_contents(prompt, inputs)
 
     mock_run.assert_called_once()
     args = mock_run.call_args
@@ -267,8 +266,7 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
     mock_response = AsyncMock()
     mock_response.choices = [AsyncMock()]
     mock_response.choices[0].message.content = (
-        "## Summary\nPASS\n\n## Findings\n\n"
-        "### [PASS] Coverage\nAll tasks covered."
+        "## Summary\nPASS\n\n## Findings\n\n### [PASS] Coverage\nAll tasks covered."
     )
 
     captured_messages: list[object] = []
