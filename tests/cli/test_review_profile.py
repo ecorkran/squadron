@@ -1,14 +1,10 @@
-"""Tests for _resolve_profile() and _infer_profile_from_model()."""
+"""Tests for _resolve_profile() resolution chain."""
 
 from __future__ import annotations
 
 import pytest
 
-# Import the private helpers under test
-from squadron.cli.commands.review import (
-    _infer_profile_from_model,
-    _resolve_profile,
-)
+from squadron.cli.commands.review import _resolve_profile
 from squadron.review.templates import ReviewTemplate
 
 
@@ -73,56 +69,18 @@ class TestResolveProfile:
         result = _resolve_profile(None)
         assert result == "sdk"
 
-    def test_model_inference_used_when_no_flag(
+    def test_no_model_inference_in_resolve_profile(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """_resolve_profile no longer infers from model — alias resolution
+        handles this upstream in _run_review_command()."""
         monkeypatch.setattr(
             "squadron.cli.commands.review.get_config",
             lambda k: None,
         )
-        result = _resolve_profile(None, model="gpt-4o")
-        assert result == "openai"
-
-    def test_flag_overrides_model_inference(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config",
-            lambda k: None,
-        )
-        result = _resolve_profile("local", model="gpt-4o")
-        assert result == "local"
-
-
-class TestInferProfileFromModel:
-    """Test _infer_profile_from_model() pattern matching."""
-
-    def test_opus_infers_sdk(self) -> None:
-        assert _infer_profile_from_model("opus") == "sdk"
-
-    def test_claude_prefix_infers_sdk(self) -> None:
-        assert _infer_profile_from_model("claude-opus-4-6") == "sdk"
-
-    def test_sonnet_infers_sdk(self) -> None:
-        assert _infer_profile_from_model("sonnet") == "sdk"
-
-    def test_haiku_infers_sdk(self) -> None:
-        assert _infer_profile_from_model("haiku") == "sdk"
-
-    def test_gpt_prefix_infers_openai(self) -> None:
-        assert _infer_profile_from_model("gpt-4o") == "openai"
-
-    def test_o3_prefix_infers_openai(self) -> None:
-        assert _infer_profile_from_model("o3-mini") == "openai"
-
-    def test_o1_prefix_infers_openai(self) -> None:
-        assert _infer_profile_from_model("o1-preview") == "openai"
-
-    def test_slash_infers_openrouter(self) -> None:
-        assert _infer_profile_from_model("anthropic/claude-3.5-sonnet") == "openrouter"
-
-    def test_unknown_model_returns_none(self) -> None:
-        assert _infer_profile_from_model("llama3") is None
+        # Without flag or template, falls through to sdk default
+        result = _resolve_profile(None)
+        assert result == "sdk"
 
 
 class TestCLIProfileFlag:
@@ -277,3 +235,149 @@ class TestCLIProfileFlag:
         call_args = mock_exec.call_args
         assert call_args[0][3] == "gpt-4o"  # model
         assert call_args[0][4] == "openai"  # profile
+
+
+class TestAliasWiring:
+    """Test alias resolution wiring in _run_review_command()."""
+
+    def test_alias_resolves_model_and_profile(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """model_flag='gpt4o' resolves to model='gpt-4o', profile='openai'."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "f.md"},
+            model="gpt-4o",
+        )
+
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.load_all_templates", lambda: None
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config", lambda k: None
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "slice",
+                {"input": "f.md", "against": "a.md", "cwd": "."},
+                "terminal",
+                None,
+                0,
+                model_flag="gpt4o",
+            )
+
+        call_args = mock_exec.call_args
+        assert call_args[0][3] == "gpt-4o"  # resolved model
+        assert call_args[0][4] == "openai"  # resolved profile
+
+    def test_unknown_model_passes_through(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Unknown model passes through unchanged, profile falls to sdk."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "f.md"},
+            model="llama-3-70b",
+        )
+
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.load_all_templates", lambda: None
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config", lambda k: None
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "slice",
+                {"input": "f.md", "against": "a.md", "cwd": "."},
+                "terminal",
+                None,
+                0,
+                model_flag="llama-3-70b",
+            )
+
+        call_args = mock_exec.call_args
+        assert call_args[0][3] == "llama-3-70b"  # unchanged
+        assert call_args[0][4] == "sdk"  # default fallback
+
+    def test_explicit_profile_overrides_alias(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit --profile flag overrides alias-inferred profile."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "f.md"},
+            model="gpt-4o",
+        )
+
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.load_all_templates", lambda: None
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config", lambda k: None
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "slice",
+                {"input": "f.md", "against": "a.md", "cwd": "."},
+                "terminal",
+                None,
+                0,
+                model_flag="gpt4o",
+                profile_flag="local",
+            )
+
+        call_args = mock_exec.call_args
+        assert call_args[0][3] == "gpt-4o"  # alias-resolved model
+        assert call_args[0][4] == "local"  # explicit flag wins
