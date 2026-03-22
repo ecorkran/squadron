@@ -5,7 +5,7 @@ Repeatable, template-driven code reviews powered by Claude — from the terminal
 Point `sq` at a diff, an architecture doc, or a task plan and get back a structured verdict with specific findings. No more freeform "hey Claude, review this" — each review runs against a purpose-built prompt template that tells the agent exactly what to evaluate and how to report what it finds.
 
 ```bash
-sq review code --diff main -v
+sq review slice 120 -v
 ```
 ![Review output from current squadron branch](assets/review-image.png)
 
@@ -17,11 +17,11 @@ Squadron makes reviews **repeatable**. A review template defines the system prom
 
 Three built-in templates cover the most common review patterns:
 
-| Template | What it reviews | Example |
-|----------|----------------|---------|
-| `code` | Source code (optionally scoped to a diff or glob) | `review code --diff main` |
-| `arch` | A design doc against an architecture reference | `review arch design.md --against hld.md` |
-| `tasks` | A task breakdown against its parent slice design | `review tasks tasks.md --against slice.md` |
+| Template | What it reviews |
+|----------|----------------|
+| `slice` | A design document against an architecture reference |
+| `tasks` | A task breakdown against its parent slice design |
+| `code` | Source code, optionally scoped to a diff or glob |
 
 The template system is extensible — each template is a YAML file, and adding new review types means writing a new YAML definition and optionally a prompt builder function. See [docs/TEMPLATES.md](docs/TEMPLATES.md) for details.
 
@@ -42,7 +42,6 @@ After install, `sq` is available on PATH:
 ```bash
 sq --version
 sq install-commands   # Install Claude Code slash commands
-sq review code --diff main -v
 ```
 
 ### Development install
@@ -70,19 +69,85 @@ claude --version
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-### 2. Run your first review
+### 2. Review a design before writing code
 
-Review your uncommitted changes against main:
+Everyone reviews code. Almost nobody reviews the spec before writing the code. Start there:
 
 ```bash
+# Does this slice design align with the architecture?
+sq review slice 120 -v
+```
+
+The CLI resolves file paths automatically when you pass a slice number (requires [Context Forge](https://github.com/context-forge/context-forge)). Or pass paths directly:
+
+```bash
+sq review slice design.md --against architecture.md -v
+```
+
+You should see Rich-formatted output with a verdict and findings within about 30 seconds.
+
+### 3. Review the task breakdown, then the code
+
+```bash
+# Does this task plan cover everything in the design?
+sq review tasks 118 -v
+
+# Review code changes
 sq review code --diff main -v
 ```
 
-That's it. You should see Rich-formatted output with a verdict and findings within about 30 seconds.
+## Using different models
+
+Use `--model` with a built-in alias to run reviews through any supported provider:
+
+```bash
+# Claude (default — uses SDK)
+sq review slice 120 -v
+
+# OpenAI
+sq review code --diff main --model gpt54-nano -v
+
+# Google Gemini
+sq review slice 120 --model flash3 -v
+
+# OpenRouter
+sq review tasks 118 --model kimi25 -v
+```
+
+Non-SDK models automatically get file contents and diffs injected into the prompt, so they can review actual code without tool access.
+
+Run `sq model list` to see all available aliases:
+
+```
+$ sq model list
+┌────────────┬────────────┬────────────────────────────────────────┬────────┐
+│ Alias      │ Profile    │ Model ID                               │ Source │
+├────────────┼────────────┼────────────────────────────────────────┼────────┤
+│ codex      │ openai     │ gpt-5.3-codex                          │        │
+│ flash3     │ gemini     │ gemini-3-flash-preview                 │        │
+│ gemini     │ gemini     │ gemini-3.1-pro-preview-customtools     │        │
+│ glm5       │ openrouter │ z-ai/glm-5                             │        │
+│ gpt54      │ openai     │ gpt-5.4                                │        │
+│ gpt54-mini │ openai     │ gpt-5.4-mini                           │        │
+│ gpt54-nano │ openai     │ gpt-5.4-nano                           │        │
+│ haiku      │ sdk        │ claude-haiku-4-5-20251001              │        │
+│ kimi25     │ openrouter │ moonshotai/kimi-k2.5                   │        │
+│ minimax    │ openrouter │ minimax/minimax-m2.7                   │        │
+│ opus       │ sdk        │ claude-opus-4-6                        │        │
+│ sonnet     │ sdk        │ claude-sonnet-4-6                      │        │
+└────────────┴────────────┴────────────────────────────────────────┴────────┘
+```
+
+Add your own aliases in `~/.config/squadron/models.toml`:
+
+```toml
+[aliases]
+deepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }
+```
 
 ## Reviews in depth
 
-### Scoping what gets reviewed
+### Scoping code reviews
 
 Code reviews can be scoped by diff, file pattern, or both:
 
@@ -131,18 +196,6 @@ sq review code --diff main --output json
 
 # JSON to file
 sq review code --diff main --output file --output-path result.json
-```
-
-### Architectural and task reviews
-
-These compare a document against a reference:
-
-```bash
-# Does this slice design align with the architecture?
-sq review arch slice-design.md --against architecture.md -v
-
-# Does this task breakdown cover everything in the slice?
-sq review tasks task-plan.md --against slice-design.md -v
 ```
 
 ## Configuration

@@ -265,7 +265,9 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
 
     mock_response = AsyncMock()
     mock_response.choices = [AsyncMock()]
-    mock_response.choices[0].message.content = (
+    mock_response.choices[
+        0
+    ].message.content = (
         "## Summary\nPASS\n\n## Findings\n\n### [PASS] Coverage\nAll tasks covered."
     )
 
