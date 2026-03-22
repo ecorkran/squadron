@@ -14,6 +14,14 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260321
 
+### Slice 120: Model Alias Registry — Design Complete
+
+- Slice design at `project-documents/user/slices/120-slice.model-alias-registry.md`
+- Two problems addressed: (1) hardcoded model inference replaced by data-driven alias registry in `models.toml`, (2) non-SDK reviews fail because prompts contain file paths but models can't read files — content injection adds file contents to prompt for non-SDK path
+- Ships built-in aliases (opus, sonnet, gpt4o, etc.) + user `~/.config/squadron/models.toml`
+- Content injection: auto-reads files from `inputs` dict, appends to prompt; handles git diff for code reviews; 100KB/file, 500KB total limits
+- New `sq model list` command
+
 ### Slice 119: Review Provider & Model Selection — Implementation Complete
 
 - All 20 implementation tasks (T1-T20) complete. 491 tests pass.

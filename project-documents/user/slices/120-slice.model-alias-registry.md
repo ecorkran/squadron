@@ -1,0 +1,347 @@
+---
+docType: slice-design
+slice: model-alias-registry
+project: squadron
+parent: 100-slices.orchestration-v2.md
+dependencies: [review-provider-model-selection]
+interfaces: []
+dateCreated: 20260321
+dateUpdated: 20260321
+status: not_started
+---
+
+# Slice Design: Model Alias Registry & Content Injection for Non-SDK Reviews
+
+## Overview
+
+This slice addresses two related usability problems with multi-provider reviews:
+
+1. **Model aliases are hardcoded.** `_infer_profile_from_model()` uses pattern-matching (`opus` → sdk, `gpt-*` → openai). Users can't add custom shorthands (e.g., `kimi25` for a specific Kimi model on OpenRouter). The inference is brittle and not user-extensible.
+
+2. **Non-SDK reviews can't read files.** The prompt templates say "Read both documents" and provide file paths, but non-SDK providers have no tool access. The model receives paths it can't open and returns "I can't read those files." File contents must be injected into the prompt for non-SDK paths.
+
+Both problems share a root cause: the non-SDK review path was designed for routing but not for actual usability. This slice makes non-SDK reviews actually work.
+
+## Value
+
+- **`sq review tasks 118 --model kimi25`** — one flag, no `--profile`, no full model ID
+- **Non-SDK reviews produce real results** — file contents injected into the prompt, model reviews actual content
+- **User-extensible** — add `kimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }` to `~/.config/squadron/models.toml`
+- **Prerequisite for Ensemble Review (131)** — multi-model fan-out requires models to be easy to specify and non-SDK reviews to actually work
+
+## Technical Scope
+
+### Included
+
+- Model alias registry: built-in defaults + user `models.toml`
+- `resolve_model_alias()` function replacing `_infer_profile_from_model()`
+- Content injection for non-SDK review prompts (arch, tasks, code)
+- `sq model list` CLI command to show available aliases
+- Update slash commands to document model aliases
+
+### Excluded
+
+- Anthropic API provider (slice 123 — separate provider implementation)
+- `latest` alias semantics (e.g., `opus` always points to newest Opus version) — future enhancement, not enough value vs. complexity right now
+- Tool use for non-SDK providers (function calling, multi-turn) — separate scope
+
+## Dependencies
+
+### Prerequisites
+
+- **Review Provider & Model Selection (119)** — complete. Provides `--profile`, `_infer_profile_from_model()`, `run_review_with_profile()`, user templates.
+
+### External Packages
+
+- `tomllib` (stdlib) — for parsing `models.toml`
+
+## Technical Decisions
+
+### Model Alias Registry
+
+#### File Format
+
+```toml
+# ~/.config/squadron/models.toml
+
+[aliases]
+opus = { profile = "sdk", model = "claude-opus-4-6" }
+sonnet = { profile = "sdk", model = "claude-sonnet-4-6" }
+haiku = { profile = "sdk", model = "claude-haiku-4-5-20251001" }
+gpt4o = { profile = "openai", model = "gpt-4o" }
+o3 = { profile = "openai", model = "o3-mini" }
+kimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }
+deepseek = { profile = "openrouter", model = "deepseek/deepseek-chat-v3-0324" }
+```
+
+Each alias maps to:
+- `profile`: which provider profile to use (from `profiles.py` / `providers.toml`)
+- `model`: the full model ID to send to the API
+
+#### Built-in Defaults
+
+Ship a `BUILT_IN_ALIASES` dict in `src/squadron/models/aliases.py` covering:
+- Claude family: `opus`, `sonnet`, `haiku` (with current model IDs)
+- OpenAI family: `gpt4o`, `o3`, `o1`
+- Common shorthand: `gpt-4o` → itself (passthrough for explicit model IDs that happen to match)
+
+User `models.toml` entries override built-in aliases by name.
+
+#### Resolution Function
+
+```python
+def resolve_model_alias(
+    name: str,
+) -> tuple[str, str | None]:
+    """Resolve a model alias to (full_model_id, profile_or_none).
+
+    If the name matches a known alias, returns the alias's
+    (model, profile). If not, returns (name, None) — treating
+    the input as a literal model ID with no profile inference.
+    """
+```
+
+This replaces `_infer_profile_from_model()` in `review.py`. The resolution chain becomes:
+
+```
+--model opus
+  → resolve_model_alias("opus")
+  → ("claude-opus-4-6", "sdk")
+  → _resolve_profile uses "sdk", _resolve_model uses "claude-opus-4-6"
+```
+
+When no alias matches, the raw model string passes through unchanged (backward compatible).
+
+#### Module Location
+
+`src/squadron/models/aliases.py` — new module. The `models/` package is a natural home since this is model-level infrastructure, not review-specific. Both review commands and future `sq spawn --model` can use it.
+
+### Content Injection for Non-SDK Reviews
+
+#### The Problem
+
+Current prompt templates (arch, tasks) contain file paths:
+
+```
+**Task file:** {input}
+**Slice design:** {against}
+
+Read both documents, then cross-reference...
+```
+
+The SDK path works because the SDK agent has Read/Glob/Grep tools. Non-SDK providers receive these paths but can't read local files.
+
+#### The Solution
+
+In `_run_non_sdk_review()` (in `review_client.py`), after building the prompt from the template, inject file contents into the prompt before sending to the API. The injection happens at the review client level, not in the template — templates remain provider-agnostic.
+
+```python
+# In _run_non_sdk_review(), after building the prompt:
+prompt = template.build_prompt(inputs)
+prompt = _inject_file_contents(prompt, inputs)
+```
+
+The `_inject_file_contents()` function:
+1. Scans `inputs` for values that look like file paths (exist on disk)
+2. For each file that exists, reads the content
+3. Appends a `## File Contents` section to the prompt with each file's content in fenced blocks
+4. If a file doesn't exist or is too large (>100KB), notes it as unavailable
+
+This approach:
+- **Doesn't modify templates** — they remain the same for SDK and non-SDK paths
+- **Is automatic** — any input that points to a readable file gets injected
+- **Is safe** — only reads files in the inputs dict, doesn't traverse directories
+- **Handles code reviews** — the `diff` input becomes `git diff` output injected into the prompt
+
+#### Code Review Special Case
+
+For code reviews with `--diff`, the prompt says "Run `git diff {ref}`". Non-SDK models can't run commands. The content injection should:
+1. Detect `diff` in inputs
+2. Run `git diff {ref}` locally
+3. Inject the diff output into the prompt
+
+For code reviews with `--files`, run the glob locally and inject matching file contents (up to reasonable size limits).
+
+#### Size Limits
+
+- Per-file limit: 100KB (most source files are well under this)
+- Total injection limit: 500KB (enough for several large files or a substantial diff)
+- When limits are hit, truncate with a clear message: `[truncated at 100KB — file too large for API review]`
+- Log a warning when truncation occurs
+
+### Integration Points
+
+#### `_resolve_model()` Changes
+
+Currently `_resolve_model()` returns the raw flag string. After alias resolution:
+
+```python
+def _resolve_model(
+    flag: str | None, template: ReviewTemplate | None = None
+) -> str | None:
+    if flag is not None:
+        resolved, _ = resolve_model_alias(flag)
+        return resolved
+    # ... rest unchanged
+```
+
+#### `_resolve_profile()` Changes
+
+Currently `_resolve_profile()` calls `_infer_profile_from_model()`. Replace with alias lookup:
+
+```python
+def _resolve_profile(flag, template=None, model=None) -> str:
+    if flag is not None:
+        return flag
+    if model is not None:
+        _, alias_profile = resolve_model_alias(model)
+        if alias_profile is not None:
+            return alias_profile
+    # ... rest unchanged (template, config, "sdk" fallback)
+```
+
+The hardcoded `_infer_profile_from_model()` is removed entirely — its logic is subsumed by the alias registry defaults.
+
+#### `sq model list` Command
+
+New CLI command showing available model aliases:
+
+```
+$ sq model list
+  opus        sdk         claude-opus-4-6
+  sonnet      sdk         claude-sonnet-4-6
+  haiku       sdk         claude-haiku-4-5-20251001
+  gpt4o       openai      gpt-4o
+  o3          openai      o3-mini
+  kimi25      openrouter  moonshotai/kimi-k2    (user)
+```
+
+The `(user)` tag indicates overrides from `models.toml`.
+
+## Data Flow
+
+### Model Alias Resolution
+
+```
+CLI: sq review tasks 118 --model kimi25
+  → _resolve_model("kimi25") → resolve_model_alias("kimi25") → ("moonshotai/kimi-k2", "openrouter")
+  → _resolve_profile(None, template, "kimi25") → resolve_model_alias("kimi25") → profile="openrouter"
+  → _run_review_command(model="moonshotai/kimi-k2", profile="openrouter")
+```
+
+### Content Injection (Non-SDK)
+
+```
+_run_non_sdk_review(template, inputs, profile="openrouter", model="moonshotai/kimi-k2")
+  → prompt = template.build_prompt(inputs)  # "Review the following... **Task file:** path/to/tasks.md ..."
+  → prompt = _inject_file_contents(prompt, inputs)  # appends actual file contents
+  → API call with enriched prompt
+  → parse_review_output() → ReviewResult
+```
+
+### Content Injection (SDK — unchanged)
+
+```
+run_review(template, inputs, ...)
+  → SDK agent receives prompt with file paths
+  → Agent uses Read tool to access files
+  → Streams response
+```
+
+## Success Criteria
+
+### Functional Requirements
+
+- `sq review tasks 118 --model kimi25` resolves alias, routes through OpenRouter, injects file contents, returns real review
+- `sq review arch 118 --model gpt4o` resolves to `gpt-4o` on OpenAI, injects design + arch doc content
+- `sq review code 118 --model gpt4o` injects git diff output into prompt
+- `sq review tasks 118 --model opus` continues to work via SDK (no content injection needed)
+- `sq model list` shows built-in + user aliases with profile and model ID
+- User can add `kimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }` to `~/.config/squadron/models.toml`
+- User alias overrides built-in by name
+- Missing `models.toml` doesn't error (graceful handling)
+- `_infer_profile_from_model()` is removed — alias registry handles all inference
+- Existing SDK path works identically (regression)
+
+### Technical Requirements
+
+- `src/squadron/models/aliases.py` provides `resolve_model_alias()`, `get_all_aliases()`, built-in defaults
+- Content injection in `review_client.py` for non-SDK path only
+- Size limits enforced (100KB per file, 500KB total)
+- `sq model list` command in CLI
+- All existing tests pass
+- New tests for alias resolution, content injection, CLI command
+- `pyright`, `ruff check`, `ruff format` pass
+
+## Verification Walkthrough
+
+1. **Alias resolution with OpenRouter:**
+   ```bash
+   # Add a custom alias
+   mkdir -p ~/.config/squadron
+   cat >> ~/.config/squadron/models.toml << 'EOF'
+   [aliases]
+   kimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }
+   EOF
+
+   sq review tasks 118 --model kimi25 -v
+   # Expected: routes through OpenRouter, model shows as moonshotai/kimi-k2,
+   # file contents injected, real review findings returned
+   ```
+
+2. **Built-in alias resolution:**
+   ```bash
+   sq review arch 118 --model gpt4o -v
+   # Expected: resolves to gpt-4o on openai profile, injects design+arch content
+   ```
+
+3. **SDK path unchanged:**
+   ```bash
+   sq review arch 118 -v
+   # Expected: uses SDK as before (opus default), no content injection
+   ```
+
+4. **Code review with diff injection:**
+   ```bash
+   sq review code 118 --model gpt4o --diff main -v
+   # Expected: runs git diff main, injects diff output, GPT-4o reviews the diff
+   ```
+
+5. **Model list:**
+   ```bash
+   sq model list
+   # Expected: shows opus, sonnet, haiku, gpt4o, o3, kimi25 (user) etc.
+   ```
+
+6. **Content injection produces real review:**
+   ```bash
+   sq review tasks 118 --model gpt4o -v
+   # Expected: NOT "I can't read those files" — real findings about task quality
+   ```
+
+## Implementation Notes
+
+### Suggested Implementation Order
+
+1. **Create `models/aliases.py`** with `BUILT_IN_ALIASES`, `resolve_model_alias()`, user TOML loading (effort: 1/5)
+2. **Wire alias resolution into `_resolve_model()` and `_resolve_profile()`**, remove `_infer_profile_from_model()` (effort: 1/5)
+3. **Add `_inject_file_contents()` to `review_client.py`** for non-SDK path (effort: 2/5)
+4. **Handle code review special case** — diff/files injection (effort: 1/5)
+5. **Add `sq model list` CLI command** (effort: 0.5/5)
+6. **Update slash commands** (effort: 0.5/5)
+7. **Tests** (effort: 1.5/5)
+
+### Known Limitations
+
+- **Content injection adds token cost.** Injecting file contents means larger prompts and higher API costs. The size limits (100KB/file, 500KB total) keep this bounded, but users should be aware that non-SDK reviews with large files will use more tokens than SDK reviews where the agent reads selectively.
+- **No tool use for non-SDK providers.** Even with content injection, non-SDK models can't explore the codebase beyond what's injected. SDK reviews remain superior for deep code exploration. Content injection makes non-SDK reviews *workable*, not *equivalent*.
+- **Code review quality depends on diff size.** Large diffs may be truncated, reducing review quality. For large changes, SDK reviews are preferred.
+
+### Testing Strategy
+
+- **Alias resolution:** unit tests for `resolve_model_alias()` — built-in, user override, unknown alias passthrough
+- **Content injection:** unit tests with tmp_path files, verify contents appear in enriched prompt
+- **Size limits:** test truncation behavior at limits
+- **Code review injection:** mock `subprocess.run` for `git diff`, verify diff output in prompt
+- **CLI `model list`:** CliRunner test, verify output format
+- **Regression:** existing tests unchanged — SDK path doesn't use content injection
