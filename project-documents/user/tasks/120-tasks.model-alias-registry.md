@@ -232,11 +232,11 @@ status: complete
 
 ## Post-Implementation (Manual — Project Manager)
 
-These are not AI-automatable tasks. They are documented here for the PM's reference.
+These are not AI-automatable tasks. They are documented here for the PM's reference.  Note: actual tests run may differ slightly but cover the same workflow.
 
-- [ ] **Live test**: Run `sq review tasks 118 --model gpt4o -v` to verify content injection produces real findings (not "I can't read files")
-- [ ] **Live test**: Add custom alias to `~/.config/squadron/models.toml`, verify `sq review tasks 118 --model kimi25 -v` works
-- [ ] **Live test**: Run `sq review arch 118 -v` to verify deprecation notice and backward compat
-- [ ] **Live test**: Run `sq review code 118 --model gpt4o --diff main -v` to verify diff injection
-- [ ] **Live test**: Run `sq model list` to verify output
-- [ ] **Iterate**: Adjust built-in aliases based on real-world model naming
+- [x] **Live test**: Run `sq review tasks 118 --model gpt4o -v` to verify content injection produces real findings (not "I can't read files")
+- [x] **Live test**: Add custom alias to `~/.config/squadron/models.toml`, verify `sq review tasks 118 --model kimi25 -v` works
+- [x] **Live test**: Run `sq review arch 118 -v` to verify deprecation notice and backward compat
+- [x] **Live test**: Run `sq review code 118 --model gpt4o --diff main -v` to verify diff injection
+- [x] **Live test**: Run `sq model list` to verify output
+- [x] **Iterate**: Adjust built-in aliases based on real-world model naming
