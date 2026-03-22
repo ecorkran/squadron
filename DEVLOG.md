@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260307
+dateUpdated: 20260321
 ---
 
 # Development Log
@@ -13,6 +13,17 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 ---
 
 ## 20260321
+
+### Slice 120: Model Alias Registry — Implementation Complete
+
+- All 22 tasks (T1-T22) complete. 514 tests pass, pyright/ruff clean.
+- `review arch` renamed to `review slice` with backward-compat hidden alias + deprecation notice
+- `src/squadron/models/aliases.py`: `resolve_model_alias()` with built-in defaults (opus, sonnet, haiku, gpt4o, o3, o1) and user `~/.config/squadron/models.toml` override
+- `_infer_profile_from_model()` removed — alias registry handles all model→profile inference
+- `_inject_file_contents()` in `review_client.py`: reads file contents and appends to prompt for non-SDK reviews; handles git diff and glob patterns for code reviews; size limits (100KB/file, 500KB total)
+- `sq model list` command showing built-in + user aliases in a rich table
+- 5 commits on branch `120-model-alias-registry`
+- Post-impl live tests remain for PM (alias resolution, content injection, diff injection)
 
 ### Slice 120: Model Alias Registry — Task Breakdown Complete
 
