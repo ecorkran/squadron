@@ -1,20 +1,20 @@
-Run an architectural review using squadron.
+Run a slice design review using squadron.
 
 ## Input handling
 
-If `$ARGUMENTS` starts with a number (e.g., `191`, `118`), treat it as a **slice number shorthand** and perform a holistic review. Otherwise, pass `$ARGUMENTS` directly to `sq review arch` as before.
+If `$ARGUMENTS` starts with a number (e.g., `191`, `118`), treat it as a **slice number shorthand** and perform a holistic review. Otherwise, pass `$ARGUMENTS` directly to `sq review slice` as before.
 
 ### Slice number shorthand (holistic review)
 
 When `$ARGUMENTS` is a bare number:
 
-`sq review arch {number} -v`
+`sq review slice {number} -v`
 
 The CLI automatically:
 - Resolves the slice design file via `cf slice list --json`
 - Resolves the architecture document via `cf get --json`
 - Runs a holistic review: slice design vs. architecture doc + slice plan entry
-- Saves the review to `project-documents/user/reviews/{nnn}-review.arch.{slice-name}.md` with YAML frontmatter
+- Saves the review to `project-documents/user/reviews/{nnn}-review.slice.{slice-name}.md` with YAML frontmatter
 
 This is a **holistic review** answering: "does this slice design effectively cover what it's supposed to?" It checks against both the architecture document and the slice plan entry.
 
@@ -29,7 +29,7 @@ Show the review results. If the verdict is FAIL or CONCERNS, highlight the key f
 
 When `$ARGUMENTS` contains paths (not a bare number), run:
 
-`sq review arch $ARGUMENTS`
+`sq review slice $ARGUMENTS`
 
 Required arguments:
 - Positional: path to the document to review
@@ -39,6 +39,6 @@ Optional: `--cwd DIR`, `--model MODEL`, `--profile PROFILE`, `-v`/`-vv` for verb
 
 The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is inferred from `--model` or defaults to `sdk`.
 
-Example: `sq review arch slices/105-slice.md --against architecture/100-arch.md`
+Example: `sq review slice slices/105-slice.md --against architecture/100-arch.md`
 
 Show the review results. If the verdict is FAIL or CONCERNS, highlight the key findings.

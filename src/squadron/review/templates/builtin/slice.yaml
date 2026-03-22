@@ -1,5 +1,5 @@
-name: arch
-description: "Architectural review — evaluate document against architecture/HLD"
+name: slice
+description: "Slice design review — evaluate document against architecture/HLD"
 
 system_prompt: |
   You are an architectural reviewer. Your task is to evaluate whether a design

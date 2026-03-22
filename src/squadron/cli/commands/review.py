@@ -461,7 +461,77 @@ async def _execute_review(
 # ---------------------------------------------------------------------------
 
 
-@review_app.command("arch")
+@review_app.command("slice")
+def review_slice(
+    input_file: str = typer.Argument(help="Document to review (or slice number)"),
+    against: str | None = typer.Option(
+        None, "--against", help="Architecture document to review against"
+    ),
+    cwd: str | None = typer.Option(
+        None, "--cwd", help="Working directory (default: config or .)"
+    ),
+    model: str | None = typer.Option(
+        None, "--model", help="Model override (e.g. opus, sonnet)"
+    ),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Provider profile (e.g. openrouter, openai, local, sdk)",
+    ),
+    verbose: int = typer.Option(
+        0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
+    ),
+    output: str = typer.Option(
+        "terminal", "--output", help="Output format: terminal, json, file"
+    ),
+    output_path: str | None = typer.Option(
+        None, "--output-path", help="File path for --output file"
+    ),
+    use_json: bool = typer.Option(
+        False, "--json", help="Output and save as JSON instead of markdown"
+    ),
+    no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
+) -> None:
+    """Run a slice design review."""
+    slice_info: SliceInfo | None = None
+    if input_file.isdigit():
+        slice_info = _resolve_slice_number(input_file)
+        if not slice_info["design_file"]:
+            rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
+            raise typer.Exit(code=1)
+        input_file = slice_info["design_file"]
+        against = slice_info["arch_file"]
+
+    if not against:
+        rprint("[red]Error: --against is required when not using a slice number.[/red]")
+        raise typer.Exit(code=1)
+
+    if use_json:
+        output = "json"
+
+    verbosity = _resolve_verbosity(verbose)
+    resolved_cwd = _resolve_cwd(cwd)
+    inputs = {
+        "input": input_file,
+        "against": against,
+        "cwd": resolved_cwd,
+    }
+    result = _run_review_command(
+        "slice",
+        inputs,
+        output,
+        output_path,
+        verbosity,
+        model_flag=model,
+        profile_flag=profile,
+    )
+
+    if slice_info and not no_save:
+        path = _save_review_file(result, "slice", slice_info, as_json=use_json)
+        rprint(f"[green]Saved review to {path}[/green]")
+
+
+@review_app.command("arch", hidden=True)
 def review_arch(
     input_file: str = typer.Argument(help="Document to review (or slice number)"),
     against: str | None = typer.Option(
@@ -492,43 +562,23 @@ def review_arch(
     ),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
 ) -> None:
-    """Run an architectural review."""
-    slice_info: SliceInfo | None = None
-    if input_file.isdigit():
-        slice_info = _resolve_slice_number(input_file)
-        if not slice_info["design_file"]:
-            rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
-            raise typer.Exit(code=1)
-        input_file = slice_info["design_file"]
-        against = slice_info["arch_file"]
-
-    if not against:
-        rprint("[red]Error: --against is required when not using a slice number.[/red]")
-        raise typer.Exit(code=1)
-
-    if use_json:
-        output = "json"
-
-    verbosity = _resolve_verbosity(verbose)
-    resolved_cwd = _resolve_cwd(cwd)
-    inputs = {
-        "input": input_file,
-        "against": against,
-        "cwd": resolved_cwd,
-    }
-    result = _run_review_command(
-        "arch",
-        inputs,
-        output,
-        output_path,
-        verbosity,
-        model_flag=model,
-        profile_flag=profile,
+    """Run a slice design review (deprecated: use 'review slice')."""
+    rprint(
+        "[yellow]Warning: 'review arch' is deprecated,"
+        " use 'review slice' instead[/yellow]"
     )
-
-    if slice_info and not no_save:
-        path = _save_review_file(result, "arch", slice_info, as_json=use_json)
-        rprint(f"[green]Saved review to {path}[/green]")
+    review_slice(
+        input_file=input_file,
+        against=against,
+        cwd=cwd,
+        model=model,
+        profile=profile,
+        verbose=verbose,
+        output=output,
+        output_path=output_path,
+        use_json=use_json,
+        no_save=no_save,
+    )
 
 
 @review_app.command("tasks")

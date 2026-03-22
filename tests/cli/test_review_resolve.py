@@ -154,20 +154,40 @@ def test_review_tasks_digit_routes_through_resolver(
 
 @patch("squadron.cli.commands.review.subprocess.run", side_effect=_mock_run)
 @patch("squadron.cli.commands.review._run_review_command")
-def test_review_arch_digit_routes_through_resolver(
+def test_review_slice_digit_routes_through_resolver(
     mock_review: object,
     mock_run: object,
 ) -> None:
-    """review_arch with a digit input resolves paths via CF."""
+    """review_slice with a digit input resolves paths via CF."""
     from typer.testing import CliRunner
 
     from squadron.cli.app import app
 
     runner = CliRunner()
-    runner.invoke(app, ["review", "arch", "118"])
+    runner.invoke(app, ["review", "slice", "118"])
     assert mock_review.called  # type: ignore[union-attr]
     call_args = mock_review.call_args  # type: ignore[union-attr]
-    assert call_args[0][0] == "arch"
+    assert call_args[0][0] == "slice"
     inputs = call_args[0][1]
     assert "118-slice.composed-workflows.md" in inputs["input"]
     assert "100-arch.orchestration-v2.md" in inputs["against"]
+
+
+@patch("squadron.cli.commands.review.subprocess.run", side_effect=_mock_run)
+@patch("squadron.cli.commands.review._run_review_command")
+def test_review_arch_alias_delegates_to_slice(
+    mock_review: object,
+    mock_run: object,
+) -> None:
+    """review arch hidden alias delegates to review_slice and prints deprecation."""
+    from typer.testing import CliRunner
+
+    from squadron.cli.app import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["review", "arch", "118"])
+    assert "deprecated" in result.output.lower()
+    assert mock_review.called  # type: ignore[union-attr]
+    call_args = mock_review.call_args  # type: ignore[union-attr]
+    # Alias delegates to review_slice, which passes "slice" template name
+    assert call_args[0][0] == "slice"
