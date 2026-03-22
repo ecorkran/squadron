@@ -1,6 +1,6 @@
 ---
 docType: slice-design
-parent: 100-slices.orchestration-v2.md
+parent: 160-slices.orchestration-v2.md
 project: squadron
 status: not-started
 dateCreated: 20260218
