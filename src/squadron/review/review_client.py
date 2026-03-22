@@ -7,6 +7,7 @@ any configured provider profile using the OpenAI-compatible API.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from openai import AsyncOpenAI
 
@@ -63,8 +64,9 @@ async def _run_non_sdk_review(
     provider_profile = get_profile(profile)
     api_key = await _resolve_api_key(provider_profile)
 
-    # Build prompts
+    # Build prompts and inject file contents for non-SDK path
     prompt = template.build_prompt(inputs)
+    prompt = _inject_file_contents(prompt, inputs)
     system_prompt = template.system_prompt
     if rules_content:
         system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
@@ -108,6 +110,63 @@ async def _run_non_sdk_review(
         input_files=inputs,
         model=resolved_model,
     )
+
+
+_MAX_FILE_SIZE = 100_000  # 100KB per file
+_MAX_TOTAL_INJECTION = 500_000  # 500KB total
+_SKIP_KEYS = {"cwd"}
+
+
+def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
+    """Inject file contents into the prompt for non-SDK reviews.
+
+    Iterates input values, checks if each is a real file path via
+    Path.is_file(), and appends file contents as fenced code blocks.
+    Skips keys in _SKIP_KEYS (e.g. cwd) and non-file values.
+    """
+    injections: list[str] = []
+    total_size = 0
+
+    for key, value in inputs.items():
+        if key in _SKIP_KEYS:
+            continue
+
+        path = Path(value)
+        if not path.is_file():
+            continue
+
+        try:
+            content = path.read_text()
+        except OSError as exc:
+            _logger.warning("Failed to read %s: %s", path, exc)
+            continue
+
+        file_size = len(content)
+        if file_size > _MAX_FILE_SIZE:
+            content = content[:_MAX_FILE_SIZE]
+            content += (
+                f"\n\n[truncated at {_MAX_FILE_SIZE // 1000}KB"
+                " — file too large for API review]"
+            )
+            _logger.warning("Truncated %s (%d bytes)", path, file_size)
+            file_size = len(content)
+
+        if total_size + file_size > _MAX_TOTAL_INJECTION:
+            _logger.warning(
+                "Total injection limit reached (%dKB), skipping %s",
+                _MAX_TOTAL_INJECTION // 1000,
+                path,
+            )
+            break
+
+        total_size += file_size
+        injections.append(f"### {key}: {path.name}\n\n```\n{content}\n```")
+
+    if not injections:
+        return prompt
+
+    file_section = "\n\n## File Contents\n\n" + "\n\n".join(injections)
+    return prompt + file_section
 
 
 async def _resolve_api_key(profile: ProviderProfile) -> str:
