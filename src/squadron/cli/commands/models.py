@@ -1,4 +1,4 @@
-"""models command — list available models from an OpenAI-compatible endpoint."""
+"""models command — model aliases and endpoint queries."""
 
 from __future__ import annotations
 
@@ -7,27 +7,67 @@ import asyncio
 import httpx
 import typer
 from rich import print as rprint
+from rich.console import Console
+from rich.table import Table
 
+from squadron.models.aliases import BUILT_IN_ALIASES, get_all_aliases
 from squadron.providers.profiles import get_profile
 
+models_app = typer.Typer(
+    name="models",
+    help="View model aliases or query provider endpoints.",
+    invoke_without_command=True,
+)
 
-def models(
+
+def _show_aliases() -> None:
+    """Display the alias table."""
+    all_aliases = get_all_aliases()
+    if not all_aliases:
+        typer.echo("No model aliases configured.")
+        return
+
+    console = Console()
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Alias", style="cyan")
+    table.add_column("Profile")
+    table.add_column("Model ID")
+    table.add_column("Source", style="dim")
+
+    for name, alias in sorted(all_aliases.items()):
+        source = "(user)" if name not in BUILT_IN_ALIASES else ""
+        if name in BUILT_IN_ALIASES and alias != BUILT_IN_ALIASES[name]:
+            source = "(user override)"
+        table.add_row(name, alias["profile"], alias["model"], source)
+
+    console.print(table)
+
+
+@models_app.callback(invoke_without_command=True)
+def models_default(
+    ctx: typer.Context,
     profile: str | None = typer.Option(
         None,
         "--profile",
-        help="Provider profile to resolve base URL from (e.g. openrouter, local)",
+        help="Query models from a provider endpoint (e.g. openrouter, local)",
     ),
     base_url: str | None = typer.Option(
         None,
         "--base-url",
-        help="Base URL of an OpenAI-compatible endpoint",
+        help="Query models from an OpenAI-compatible base URL",
     ),
 ) -> None:
-    """List models available from an OpenAI-compatible endpoint."""
-    if profile is None and base_url is None:
-        rprint("[red]Error: provide --profile or --base-url[/red]")
-        raise typer.Exit(code=1)
+    """Show model aliases, or query a provider endpoint with --profile/--base-url."""
+    # If a subcommand was invoked, let it handle things
+    if ctx.invoked_subcommand is not None:
+        return
 
+    # No flags → show aliases
+    if profile is None and base_url is None:
+        _show_aliases()
+        return
+
+    # Flags → query endpoint
     resolved_url = base_url
     if resolved_url is None:
         try:
@@ -35,13 +75,19 @@ def models(
             resolved_url = p.base_url
         except KeyError as exc:
             rprint(f"[red]Error: {exc}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from exc
 
     if resolved_url is None:
         rprint("[red]Error: profile has no base_url configured[/red]")
         raise typer.Exit(code=1)
 
     asyncio.run(_fetch_models(resolved_url))
+
+
+@models_app.command("list")
+def models_list() -> None:
+    """List available model aliases."""
+    _show_aliases()
 
 
 async def _fetch_models(base_url: str) -> None:
@@ -56,7 +102,7 @@ async def _fetch_models(base_url: str) -> None:
         raise typer.Exit(code=1)
     except Exception as exc:
         rprint(f"[red]Error: {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     model_list = data.get("data", [])
     if not model_list:

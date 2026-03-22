@@ -116,10 +116,10 @@ sq review tasks 118 --model kimi25 -v
 
 Non-SDK models automatically get file contents and diffs injected into the prompt, so they can review actual code without tool access.
 
-Run `sq model list` to see all available aliases:
+Run `sq models` to see all available aliases:
 
 ```
-$ sq model list
+$ sq models
 ┌────────────┬────────────┬────────────────────────────────────────┬────────┐
 │ Alias      │ Profile    │ Model ID                               │ Source │
 ├────────────┼────────────┼────────────────────────────────────────┼────────┤

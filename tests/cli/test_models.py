@@ -71,7 +71,9 @@ class TestModelsCommand:
         assert result.exit_code == 1
         assert "connect" in result.output.lower() or "error" in result.output.lower()
 
-    def test_models_requires_profile_or_base_url(self, cli_runner: CliRunner) -> None:
+    def test_models_bare_shows_aliases(self, cli_runner: CliRunner) -> None:
+        """sq models with no flags shows alias table."""
         result = _invoke(cli_runner)
-        assert result.exit_code != 0
-        assert "error" in result.output.lower() or "profile" in result.output.lower()
+        assert result.exit_code == 0
+        assert "Alias" in result.output
+        assert "opus" in result.output
