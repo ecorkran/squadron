@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TypedDict
 
 import typer
+from openai import RateLimitError
 from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
@@ -404,15 +405,14 @@ def _run_review_command(
                 resolved_profile,
             )
         )
+    except RateLimitError as exc:
+        rprint(
+            "[red]Error: Rate limited by the API. "
+            "Please wait a moment and try again.[/red]"
+        )
+        raise typer.Exit(code=1) from exc
     except Exception as exc:
-        err_str = str(exc).lower()
-        if "rate_limit" in err_str:
-            rprint(
-                "[red]Error: Rate limited by the API. "
-                "Please wait a moment and try again.[/red]"
-            )
-        else:
-            rprint(f"[red]Error: Review failed — {exc}[/red]")
+        rprint(f"[red]Error: Review failed — {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
     display_result(result, output, output_path, verbosity)

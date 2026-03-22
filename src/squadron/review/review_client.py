@@ -9,6 +9,7 @@ from __future__ import annotations
 import glob as glob_mod
 import logging
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -217,7 +218,7 @@ def _run_git_diff(ref: str, cwd: str) -> str | None:
 def _inject_glob_files(
     pattern: str,
     cwd: str,
-    add_fn: object,
+    add_fn: Callable[[str, str], bool],
 ) -> None:
     """Resolve a glob pattern and inject matching file contents."""
     cwd_path = Path(cwd)
@@ -233,8 +234,7 @@ def _inject_glob_files(
             _logger.warning("Failed to read %s: %s", full_path, exc)
             continue
 
-        # add_fn returns False when total limit reached
-        if not add_fn(f"file: {match}", content):  # type: ignore[operator]
+        if not add_fn(f"file: {match}", content):
             break
 
 

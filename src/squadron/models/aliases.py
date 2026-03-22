@@ -47,8 +47,13 @@ def load_user_aliases() -> dict[str, ModelAlias]:
 
     try:
         data = tomllib.loads(path.read_text())
-    except (tomllib.TOMLDecodeError, OSError) as exc:
-        _logger.warning("Failed to parse %s: %s", path, exc)
+    except tomllib.TOMLDecodeError as exc:
+        raise ValueError(
+            f"Invalid TOML in {path}: {exc}. "
+            "Fix the file or remove it to use built-in defaults."
+        ) from exc
+    except OSError as exc:
+        _logger.warning("Failed to read %s: %s", path, exc)
         return {}
 
     aliases_section = cast(dict[str, Any], data.get("aliases", {}))

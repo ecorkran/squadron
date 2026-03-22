@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from squadron.models.aliases import (
     BUILT_IN_ALIASES,
     get_all_aliases,
@@ -102,14 +104,16 @@ def test_missing_models_toml_returns_empty() -> None:
         assert aliases == {}
 
 
-def test_malformed_toml_returns_empty(tmp_path: Path) -> None:
-    """Malformed TOML file returns empty dict with warning."""
+def test_malformed_toml_raises_error(tmp_path: Path) -> None:
+    """Malformed TOML file raises ValueError with helpful message."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text("this is not valid toml [[[")
 
-    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
-        aliases = load_user_aliases()
-        assert aliases == {}
+    with (
+        patch("squadron.models.aliases.models_toml_path", return_value=toml_file),
+        pytest.raises(ValueError, match="Invalid TOML"),
+    ):
+        load_user_aliases()
 
 
 def test_toml_without_aliases_section(tmp_path: Path) -> None:
