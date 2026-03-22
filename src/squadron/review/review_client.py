@@ -6,7 +6,9 @@ any configured provider profile using the OpenAI-compatible API.
 
 from __future__ import annotations
 
+import glob as glob_mod
 import logging
+import subprocess
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -114,7 +116,19 @@ async def _run_non_sdk_review(
 
 _MAX_FILE_SIZE = 100_000  # 100KB per file
 _MAX_TOTAL_INJECTION = 500_000  # 500KB total
-_SKIP_KEYS = {"cwd"}
+_SKIP_KEYS = {"cwd", "diff", "files"}
+
+
+def _truncate(content: str, label: str) -> str:
+    """Truncate content exceeding _MAX_FILE_SIZE with a message."""
+    if len(content) <= _MAX_FILE_SIZE:
+        return content
+    _logger.warning("Truncated %s (%d bytes)", label, len(content))
+    return (
+        content[:_MAX_FILE_SIZE]
+        + f"\n\n[truncated at {_MAX_FILE_SIZE // 1000}KB"
+        " — file too large for API review]"
+    )
 
 
 def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
@@ -122,11 +136,29 @@ def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
 
     Iterates input values, checks if each is a real file path via
     Path.is_file(), and appends file contents as fenced code blocks.
-    Skips keys in _SKIP_KEYS (e.g. cwd) and non-file values.
+    Skips keys in _SKIP_KEYS (e.g. cwd, diff, files) and non-file values.
+    Also handles special 'diff' and 'files' inputs for code reviews.
     """
     injections: list[str] = []
     total_size = 0
 
+    def _add_injection(label: str, content: str) -> bool:
+        """Add content to injections, respecting total limit. Returns False if full."""
+        nonlocal total_size
+        content = _truncate(content, label)
+        file_size = len(content)
+        if total_size + file_size > _MAX_TOTAL_INJECTION:
+            _logger.warning(
+                "Total injection limit reached (%dKB), skipping %s",
+                _MAX_TOTAL_INJECTION // 1000,
+                label,
+            )
+            return False
+        total_size += file_size
+        injections.append(f"### {label}\n\n```\n{content}\n```")
+        return True
+
+    # Inject file contents for regular input keys
     for key, value in inputs.items():
         if key in _SKIP_KEYS:
             continue
@@ -141,32 +173,70 @@ def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
             _logger.warning("Failed to read %s: %s", path, exc)
             continue
 
-        file_size = len(content)
-        if file_size > _MAX_FILE_SIZE:
-            content = content[:_MAX_FILE_SIZE]
-            content += (
-                f"\n\n[truncated at {_MAX_FILE_SIZE // 1000}KB"
-                " — file too large for API review]"
-            )
-            _logger.warning("Truncated %s (%d bytes)", path, file_size)
-            file_size = len(content)
-
-        if total_size + file_size > _MAX_TOTAL_INJECTION:
-            _logger.warning(
-                "Total injection limit reached (%dKB), skipping %s",
-                _MAX_TOTAL_INJECTION // 1000,
-                path,
-            )
+        if not _add_injection(f"{key}: {path.name}", content):
             break
 
-        total_size += file_size
-        injections.append(f"### {key}: {path.name}\n\n```\n{content}\n```")
+    # Handle diff input — run git diff locally
+    diff_ref = inputs.get("diff")
+    if diff_ref is not None:
+        diff_content = _run_git_diff(diff_ref, inputs.get("cwd", "."))
+        if diff_content:
+            _add_injection("Git Diff", diff_content)
+
+    # Handle files glob input — resolve and inject matching files
+    files_glob = inputs.get("files")
+    if files_glob is not None:
+        cwd = inputs.get("cwd", ".")
+        _inject_glob_files(files_glob, cwd, _add_injection)
 
     if not injections:
         return prompt
 
     file_section = "\n\n## File Contents\n\n" + "\n\n".join(injections)
     return prompt + file_section
+
+
+def _run_git_diff(ref: str, cwd: str) -> str | None:
+    """Run git diff against a ref and return the output."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", ref],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode != 0:
+            _logger.warning("git diff failed: %s", result.stderr.strip())
+            return None
+        return result.stdout if result.stdout.strip() else None
+    except (FileNotFoundError, OSError) as exc:
+        _logger.warning("Failed to run git diff: %s", exc)
+        return None
+
+
+def _inject_glob_files(
+    pattern: str,
+    cwd: str,
+    add_fn: object,
+) -> None:
+    """Resolve a glob pattern and inject matching file contents."""
+    cwd_path = Path(cwd)
+    matches = sorted(glob_mod.glob(pattern, root_dir=cwd_path))
+
+    for match in matches:
+        full_path = cwd_path / match
+        if not full_path.is_file():
+            continue
+        try:
+            content = full_path.read_text()
+        except OSError as exc:
+            _logger.warning("Failed to read %s: %s", full_path, exc)
+            continue
+
+        # add_fn returns False when total limit reached
+        if not add_fn(f"file: {match}", content):  # type: ignore[operator]
+            break
 
 
 async def _resolve_api_key(profile: ProviderProfile) -> str:
