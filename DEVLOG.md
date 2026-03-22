@@ -14,6 +14,10 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260321
 
+### Slice 120: Model Alias Registry — Task Breakdown Complete
+
+Task file at `project-documents/user/tasks/120-tasks.model-alias-registry.md` (22 tasks: T1-T22). Three workstreams: rename review arch→slice (T1-T5), model alias registry with wiring (T6-T10), content injection for non-SDK reviews including code review diff/files (T11-T16), plus model list CLI (T17-T19) and slash command updates (T20-T22). Post-impl: live tests with OpenRouter, alias customization, diff injection.
+
 ### Slice 120: Model Alias Registry — Design Complete
 
 - Slice design at `project-documents/user/slices/120-slice.model-alias-registry.md`
