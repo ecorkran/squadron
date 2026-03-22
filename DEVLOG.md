@@ -12,6 +12,19 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260322
+
+### Slice 121: Model Alias Metadata — Design Complete
+
+- Created `project-documents/user/slices/121-slice.model-alias-metadata.md`
+- Extends `ModelAlias` TypedDict with optional `private` (bool), `cost_tier` (str), `notes` (str) fields
+- `total=False` on TypedDict for backward-compatible optional fields
+- `cost_tier` values: free, cheap, moderate, expensive, subscription (new — for Max sub models)
+- `sq models` gains Private, Cost, Notes columns with compact mode (columns hidden when no metadata present)
+- TOML parsing supports both inline table and full `[aliases.name]` section syntax (already works via tomllib)
+- Curated metadata for all 12 built-in aliases
+- Also in this session: slice plan refactored (100-series trimmed, 160-series created for multi-agent), reindexing (161-172, 121-125), test fixes, template clarification
+
 ## 20260321
 
 ### Slice 120: Model Alias Registry — Implementation Complete
