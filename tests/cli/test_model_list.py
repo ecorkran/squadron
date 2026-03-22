@@ -22,20 +22,20 @@ def test_model_list_contains_builtins() -> None:
     assert result.exit_code == 0
     assert "opus" in result.output
     assert "sonnet" in result.output
-    assert "gpt4o" in result.output
+    assert "gpt54-nano" in result.output
 
 
 def test_model_list_shows_user_tag(tmp_path: Path) -> None:
     """User alias shows (user) tag in output."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        '[aliases]\nkimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }\n'
+        '[aliases]\ndeepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }\n'
     )
 
     with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
         result = runner.invoke(app, ["model", "list"])
     assert result.exit_code == 0
-    assert "kimi25" in result.output
+    assert "deepseek" in result.output
     assert "(user)" in result.output
 
 

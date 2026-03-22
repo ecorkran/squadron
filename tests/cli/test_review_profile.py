@@ -200,7 +200,7 @@ class TestCLIProfileFlag:
             raw_output="raw",
             template_name="arch",
             input_files={"input": "f.md"},
-            model="gpt-4o",
+            model="gpt-5.4-nano",
         )
 
         monkeypatch.setattr(
@@ -243,7 +243,7 @@ class TestAliasWiring:
     def test_alias_resolves_model_and_profile(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """model_flag='gpt4o' resolves to model='gpt-4o', profile='openai'."""
+        """model_flag='gpt54-nano' resolves to model='gpt-5.4-nano', profile='openai'."""
         from unittest.mock import AsyncMock, patch
 
         from squadron.cli.commands.review import _run_review_command
@@ -255,7 +255,7 @@ class TestAliasWiring:
             raw_output="raw",
             template_name="slice",
             input_files={"input": "f.md"},
-            model="gpt-4o",
+            model="gpt-5.4-nano",
         )
 
         monkeypatch.setattr(
@@ -278,11 +278,11 @@ class TestAliasWiring:
                 "terminal",
                 None,
                 0,
-                model_flag="gpt4o",
+                model_flag="gpt54-nano",
             )
 
         call_args = mock_exec.call_args
-        assert call_args[0][3] == "gpt-4o"  # resolved model
+        assert call_args[0][3] == "gpt-5.4-nano"  # resolved model
         assert call_args[0][4] == "openai"  # resolved profile
 
     def test_unknown_model_passes_through(
@@ -345,7 +345,7 @@ class TestAliasWiring:
             raw_output="raw",
             template_name="slice",
             input_files={"input": "f.md"},
-            model="gpt-4o",
+            model="gpt-5.4-nano",
         )
 
         monkeypatch.setattr(
@@ -368,10 +368,10 @@ class TestAliasWiring:
                 "terminal",
                 None,
                 0,
-                model_flag="gpt4o",
+                model_flag="gpt54-nano",
                 profile_flag="local",
             )
 
         call_args = mock_exec.call_args
-        assert call_args[0][3] == "gpt-4o"  # alias-resolved model
+        assert call_args[0][3] == "gpt-5.4-nano"  # alias-resolved model
         assert call_args[0][4] == "local"  # explicit flag wins

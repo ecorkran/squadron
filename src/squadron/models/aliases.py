@@ -22,12 +22,23 @@ class ModelAlias(TypedDict):
 
 
 BUILT_IN_ALIASES: dict[str, ModelAlias] = {
+    # Claude family
     "opus": {"profile": "sdk", "model": "claude-opus-4-6"},
     "sonnet": {"profile": "sdk", "model": "claude-sonnet-4-6"},
     "haiku": {"profile": "sdk", "model": "claude-haiku-4-5-20251001"},
-    "gpt4o": {"profile": "openai", "model": "gpt-4o"},
-    "o3": {"profile": "openai", "model": "o3-mini"},
-    "o1": {"profile": "openai", "model": "o1-preview"},
+    # OpenAI GPT-5.4 family
+    "gpt54": {"profile": "openai", "model": "gpt-5.4"},
+    "gpt54-mini": {"profile": "openai", "model": "gpt-5.4-mini"},
+    "gpt54-nano": {"profile": "openai", "model": "gpt-5.4-nano"},
+    # OpenAI specialized
+    "codex": {"profile": "openai", "model": "gpt-5.3-codex"},
+    # Google Gemini
+    "gemini": {"profile": "gemini", "model": "gemini-3.1-pro-preview-customtools"},
+    "flash3": {"profile": "gemini", "model": "gemini-3-flash-preview"},
+    # OpenRouter — cost-effective, no retention/training
+    "kimi25": {"profile": "openrouter", "model": "moonshotai/kimi-k2.5"},
+    "minimax": {"profile": "openrouter", "model": "minimax/minimax-m2.7"},
+    "glm5": {"profile": "openrouter", "model": "z-ai/glm-5"},
 }
 
 

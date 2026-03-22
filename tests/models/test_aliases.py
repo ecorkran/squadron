@@ -26,10 +26,10 @@ def test_resolve_opus() -> None:
     assert profile == "sdk"
 
 
-def test_resolve_gpt4o() -> None:
-    """gpt4o resolves to gpt-4o on openai profile."""
-    model, profile = resolve_model_alias("gpt4o")
-    assert model == "gpt-4o"
+def test_resolve_gpt54_nano() -> None:
+    """gpt54-nano resolves to gpt-5.4-nano on openai profile."""
+    model, profile = resolve_model_alias("gpt54-nano")
+    assert model == "gpt-5.4-nano"
     assert profile == "openai"
 
 
@@ -47,10 +47,10 @@ def test_resolve_sonnet() -> None:
     assert profile == "sdk"
 
 
-def test_resolve_o3() -> None:
-    """o3 resolves to o3-mini on openai profile."""
-    model, profile = resolve_model_alias("o3")
-    assert model == "o3-mini"
+def test_resolve_codex() -> None:
+    """codex resolves to gpt-5.3-codex on openai profile."""
+    model, profile = resolve_model_alias("codex")
+    assert model == "gpt-5.3-codex"
     assert profile == "openai"
 
 
@@ -140,7 +140,7 @@ def test_get_all_aliases_includes_builtins(tmp_path: Path) -> None:
         aliases = get_all_aliases()
         assert "opus" in aliases
         assert "sonnet" in aliases
-        assert "gpt4o" in aliases
+        assert "gpt54-nano" in aliases
         assert len(aliases) >= len(BUILT_IN_ALIASES)
 
 
