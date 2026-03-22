@@ -165,13 +165,15 @@ status: not_started
     - [ ] Inject each file's content (same limits)
 - [ ] `pyright` and `ruff check` pass
 
-### T15: Tests for code review content injection
+### T15: Tests for code review content injection + integration test
 
 - [ ] Add tests in `tests/review/test_content_injection.py`
   - [ ] Test diff input triggers `git diff` subprocess (mock `subprocess.run`, verify called with correct args)
   - [ ] Test diff output appears in enriched prompt
   - [ ] Test large diff is truncated
   - [ ] Test files glob input resolves and injects matching file contents (use tmp_path)
+- [ ] Add integration test in `tests/review/test_content_injection.py`
+  - [ ] Test full non-SDK review path: alias resolution → content injection → enriched prompt reaches API (mock `AsyncOpenAI`, create tmp_path input files, call `run_review_with_profile()` with a non-SDK profile, verify the prompt sent to the API contains file contents, not just paths)
   - [ ] `uv run pytest tests/review/test_content_injection.py` — all tests pass
 
 ### T16: Commit — code review content injection
