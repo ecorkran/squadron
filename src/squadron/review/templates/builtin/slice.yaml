@@ -13,6 +13,10 @@ system_prompt: |
   - Integration points match what consuming/providing slices expect
   - Common antipatterns: over-engineering, under-specification, hidden dependencies
 
+  Important context:
+  - The `parent` field in slice frontmatter refers to the slice plan document,
+    not the architecture document. Do not flag this as an error.
+
   Report your findings using severity levels:
 
   ## Summary
