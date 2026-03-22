@@ -68,7 +68,9 @@ These milestones define the priority ordering. Slices are sequenced to reach eac
 
 17. [x] **(120) Model Alias Registry** — Data-driven model shorthand resolution. Ships a default `models.toml` mapping short names (e.g., `opus`, `sonnet`, `gpt4o`, `kimi25`) to `(profile, full_model_id)` tuples. User-editable at `~/.config/squadron/models.toml`. Replaces hardcoded pattern-matching in `_infer_profile_from_model()` with file-based lookup. Resolution: `--model opus` → lookup alias → resolves both profile and full model ID, eliminating the need for `--profile` in most cases. Built-in defaults cover Claude, GPT, and common OpenRouter models. Users add entries for preferred models. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 2/5
 
-18. [ ] **(135) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns — orchestration history gpt works after the agent is gone and after the daemon is recycled. Schema captures orchestration-level messages (sender, content, message_type, timestamp, metadata) with per-agent conversation grouping and session boundaries. CLI additions: orchestration history --list (show all conversations), orchestration history --export <agent> --format json|markdown (export for analysis or context injection), orchestration history --search "query" (full-text search across conversations). Retention policies: configurable per-session or per-project, with orchestration history --prune --older-than 30d for cleanup. The store becomes the backing data for multiple downstream consumers: the findings ledger (Review Findings Pipeline) references review conversations by ID, ensemble reviews (Ensemble Review & Cross-Model Analysis) compare outputs across conversation records, the ADP pipeline uses conversation history as the decision record at phase transitions, and multi-agent session replay (post-M2) reads from the same store. Design constraint: the ConversationStore protocol should be defined in the engine module so that the in-memory implementation from the Local Daemon (112) and the SQLite implementation are interchangeable — the engine never knows which backend is active. Dependencies: [Local Server & CLI Client]. Risk: Low (SQLite is well-understood; the schema is straightforward). Effort: 2/5
+18. [ ] **(136) Model Alias Metadata** — Extend the ModelAlias structure with optional metadata fields: `private` (bool — whether the provider trains on prompts), `cost_tier` (free/cheap/moderate/expensive), `notes` (free-text). Update `models.toml` format to support inline table or full table syntax for aliases with metadata. `sq model list` displays metadata columns. Built-in aliases ship with curated metadata for all 12 defaults. Enables informed model selection without leaving the CLI — "which models are private?", "what's cheapest for a quick review?". No provider API calls — all metadata is manually curated in the alias definition. Dependencies: [Model Alias Registry (120)]. Risk: Low. Effort: 1/5
+
+19. [ ] **(135) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns — orchestration history gpt works after the agent is gone and after the daemon is recycled. Schema captures orchestration-level messages (sender, content, message_type, timestamp, metadata) with per-agent conversation grouping and session boundaries. CLI additions: orchestration history --list (show all conversations), orchestration history --export <agent> --format json|markdown (export for analysis or context injection), orchestration history --search "query" (full-text search across conversations). Retention policies: configurable per-session or per-project, with orchestration history --prune --older-than 30d for cleanup. The store becomes the backing data for multiple downstream consumers: the findings ledger (Review Findings Pipeline) references review conversations by ID, ensemble reviews (Ensemble Review & Cross-Model Analysis) compare outputs across conversation records, the ADP pipeline uses conversation history as the decision record at phase transitions, and multi-agent session replay (post-M2) reads from the same store. Design constraint: the ConversationStore protocol should be defined in the engine module so that the in-memory implementation from the Local Daemon (112) and the SQLite implementation are interchangeable — the engine never knows which backend is active. Dependencies: [Local Server & CLI Client]. Risk: Low (SQLite is well-understood; the schema is straightforward). Effort: 2/5
 
 
 ### → Milestone 2: Multi-Agent Communication
@@ -142,7 +144,8 @@ Post-M1:
   117. PyPI Publishing & Global Install               ✅ complete
   118. Composed Workflows                             ✅ complete
   119. Review Provider & Model Selection              ✅ complete
-  120. Model Alias Registry                            (next)
+  120. Model Alias Registry                            ✅ complete
+  136. Model Alias Metadata                             (next)
   135. Conversation Persistence & Management           (after 112)
 
 M2 — Multi-Agent Communication:
@@ -170,7 +173,7 @@ Integration:
 
 ### Parallelization Notes
 
-- **Slice 120 (Model Alias Registry) is the immediate next priority.**
+- **Slice 136 (Model Alias Metadata) is the immediate next priority.** Small extension of 120.
 - **Anthropic API Provider (123) and Message Bus Core (122) are parallel tracks.** Both depend only on Foundation/Registry (complete). An agent working on one doesn't block the other.
 - **MCP Server and REST + WebSocket API are independent of each other** and can be done in any order after their dependencies are met.
 - **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management. See `104-slice.sdk-client-warm-pool.md`.
@@ -188,6 +191,10 @@ These are high-value capabilities identified during slice design that are intent
 - **Custom MCP tool definitions**: The SDK's `@tool` decorator and `create_sdk_mcp_server` allow defining Python functions as tools available to SDK agents, running in-process (no subprocess). Enables orchestration-aware tools: "query the message bus," "check agent state," "submit review verdict." Bridges SDK agent autonomy with orchestration system state. Candidate: dedicated slice post-M2, when agents need awareness of each other.
 
 - **Subagent spawning**: The SDK natively supports subagent definitions via `ClaudeAgentOptions.agents`. An SDK agent can spawn its own subagents for parallel work with isolated context. Complementary to (not competing with) the orchestration framework's multi-agent coordination. Candidate: explore post-M2, after the message bus and multi-agent patterns are established. Lower priority than hooks and custom tools.
+
+### Model Registry Enhancements (parent: slice 120 — Model Alias Registry)
+
+- **Provider API metadata hydration**: Pull pricing, context length, and capability metadata from provider APIs (OpenRouter `/api/v1/models`, OpenAI, Anthropic, Google) to auto-populate alias metadata rather than manual curation. Each provider has its own API shape, so this is 4+ integrations. Candidate: dedicated slice after 136 (Metadata) establishes the metadata schema that API data would populate.
 
 ---
 
