@@ -96,7 +96,8 @@ class TestModelCLIFlag:
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
-        assert call_kwargs["model"] == "sonnet"
+        # Alias "sonnet" resolves to full model ID
+        assert call_kwargs["model"] == "claude-sonnet-4-6"
 
     def test_tasks_model_flag(
         self,
@@ -109,7 +110,7 @@ class TestModelCLIFlag:
             raw_output="## Summary\nPASS\n",
             template_name="tasks",
             input_files={"input": "t.md", "against": "s.md"},
-            model="opus",
+            model="claude-opus-4-6",
         )
         result = cli_runner.invoke(
             app,
@@ -117,7 +118,8 @@ class TestModelCLIFlag:
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
-        assert call_kwargs["model"] == "opus"
+        # Alias "opus" resolves to full model ID
+        assert call_kwargs["model"] == "claude-opus-4-6"
 
     def test_code_model_flag(
         self,
@@ -130,7 +132,7 @@ class TestModelCLIFlag:
             raw_output="## Summary\nPASS\n",
             template_name="code",
             input_files={"cwd": "."},
-            model="haiku",
+            model="claude-haiku-4-5-20251001",
         )
         result = cli_runner.invoke(
             app,
@@ -138,4 +140,5 @@ class TestModelCLIFlag:
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
-        assert call_kwargs["model"] == "haiku"
+        # Alias "haiku" resolves to full model ID
+        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"

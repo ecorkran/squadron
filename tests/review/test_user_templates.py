@@ -90,8 +90,8 @@ class TestUserTemplateAddNew:
         templates = list_templates()
         names = {t.name for t in templates}
         assert "security" in names
-        # Built-in 'arch' should also be present
-        assert "arch" in names
+        # Built-in 'slice' should also be present (renamed from arch)
+        assert "slice" in names
 
 
 class TestMissingUserDirectory:
@@ -118,6 +118,6 @@ class TestReviewListShowsBoth:
 
         templates = list_templates()
         names = {t.name for t in templates}
-        # 'security' is user-defined, 'arch'/'tasks'/'code' are built-in
+        # 'security' is user-defined, 'slice'/'tasks'/'code' are built-in
         assert "security" in names
-        assert "arch" in names
+        assert "slice" in names

@@ -33,8 +33,10 @@ Optional flags:
 - `--files PATTERN`: glob pattern to scope the review
 - `--diff REF`: git ref to diff against (reviews changed files)
 - `--rules PATH`: path to additional rules file
-- `--model MODEL`: model override
-- `--profile PROFILE`: provider profile (e.g., `openrouter`, `openai`, `local`, `sdk`). Inferred from `--model` when omitted, defaults to `sdk`.
+- `--model MODEL`: model override — accepts aliases (e.g., `opus`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq model list` for available aliases.
+- `--profile PROFILE`: provider profile (e.g., `openrouter`, `openai`, `local`, `sdk`). Resolved from model alias when omitted, defaults to `sdk`.
+
+For non-SDK providers, file contents and git diffs are automatically injected into the prompt so models can review actual content.
 - `-v`/`-vv`: verbosity level
 - `--json`, `--no-save`
 

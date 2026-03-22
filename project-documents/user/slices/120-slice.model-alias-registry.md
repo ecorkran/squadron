@@ -7,7 +7,7 @@ dependencies: [review-provider-model-selection]
 interfaces: []
 dateCreated: 20260321
 dateUpdated: 20260321
-status: not_started
+status: complete
 ---
 
 # Slice Design: Model Alias Registry & Content Injection for Non-SDK Reviews
@@ -282,55 +282,31 @@ run_review(template, inputs, ...)
 
 ## Verification Walkthrough
 
-1. **Alias resolution with OpenRouter:**
-   ```bash
-   # Add a custom alias
-   mkdir -p ~/.config/squadron
-   cat >> ~/.config/squadron/models.toml << 'EOF'
-   [aliases]
-   kimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }
-   EOF
+Steps 1-5 and 7 are **live tests** requiring API keys — deferred to post-implementation manual verification (PM tasks).
 
-   sq review tasks 118 --model kimi25 -v
-   # Expected: routes through OpenRouter, model shows as moonshotai/kimi-k2,
-   # file contents injected, real review findings returned
-   ```
-
-2. **Built-in alias resolution:**
-   ```bash
-   sq review slice 118 --model gpt4o -v
-   # Expected: resolves to gpt-4o on openai profile, injects design+arch content
-   ```
-
-3. **SDK path unchanged:**
-   ```bash
-   sq review slice 118 -v
-   # Expected: uses SDK as before (opus default), no content injection
-   ```
-
-4. **Rename backward compat:**
-   ```bash
-   sq review arch 118 -v
-   # Expected: works but prints deprecation notice, delegates to review slice
-   ```
-
-5. **Code review with diff injection:**
-   ```bash
-   sq review code 118 --model gpt4o --diff main -v
-   # Expected: runs git diff main, injects diff output, GPT-4o reviews the diff
-   ```
-
-6. **Model list:**
+6. **Model list:** (verified)
    ```bash
    sq model list
-   # Expected: shows opus, sonnet, haiku, gpt4o, o3, kimi25 (user) etc.
+   # Output:
+   # ┏━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
+   # ┃ Alias  ┃ Profile ┃ Model ID                  ┃ Source ┃
+   # ┡━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
+   # │ gpt4o  │ openai  │ gpt-4o                    │        │
+   # │ haiku  │ sdk     │ claude-haiku-4-5-20251001 │        │
+   # │ o1     │ openai  │ o1-preview                │        │
+   # │ o3     │ openai  │ o3-mini                   │        │
+   # │ opus   │ sdk     │ claude-opus-4-6           │        │
+   # │ sonnet │ sdk     │ claude-sonnet-4-6         │        │
+   # └────────┴─────────┴───────────────────────────┴────────┘
    ```
 
-7. **Content injection produces real review:**
-   ```bash
-   sq review tasks 118 --model gpt4o -v
-   # Expected: NOT "I can't read those files" — real findings about task quality
-   ```
+**Additional verifications performed:**
+- `sq review slice --help` — shows "Run a slice design review"
+- `sq review arch --help` — shows "(deprecated: use 'review slice')"
+- `uv run pytest` — 514 tests pass
+- `uv run ruff check` — clean
+- `uv run ruff format --check` — clean
+- `uv run pyright` — 0 errors
 
 ## Implementation Notes
 

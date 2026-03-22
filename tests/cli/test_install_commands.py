@@ -14,7 +14,7 @@ runner = CliRunner()
 EXPECTED_FILES = {
     "auth-status.md",
     "list.md",
-    "review-arch.md",
+    "review-slice.md",
     "review-code.md",
     "review-tasks.md",
     "run-slice.md",
@@ -118,7 +118,7 @@ EXPECTED_COMMANDS = {
     "task.md": "sq task",
     "list.md": "sq list",
     "shutdown.md": "sq shutdown",
-    "review-arch.md": "sq review arch",
+    "review-slice.md": "sq review slice",
     "review-tasks.md": "sq review tasks",
     "review-code.md": "sq review code",
     "auth-status.md": "sq auth status",

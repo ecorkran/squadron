@@ -48,7 +48,7 @@ Run `cf slice list --json` and `cf task list --json` to resolve the current file
 
 `sq review tasks {task-file-path} --against {design-file-path} -v`
 
-Note: Add `--profile PROFILE` to route reviews through a non-SDK provider if desired (e.g., `--profile openrouter --model anthropic/claude-3.5-sonnet`).
+Note: Add `--model ALIAS` to use a different model (e.g., `--model gpt4o`). Model aliases automatically set the correct provider profile. Run `sq model list` to see available aliases. You can also specify `--profile PROFILE` explicitly (e.g., `--profile openrouter --model anthropic/claude-3.5-sonnet`).
 
 Save the review output to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md`. Include YAML frontmatter:
 
