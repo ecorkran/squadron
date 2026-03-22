@@ -213,4 +213,4 @@ These are not AI-automatable tasks. They are documented here for the PM's refere
 - [ ] **Live test**: Run `sq review arch 118 --model gpt-4o -v` to verify model-to-profile inference
 - [ ] **Live test**: Create a user template in `~/.config/squadron/templates/` and verify it overrides built-in
 - [ ] **Live test**: Run `sq config set default_review_profile openrouter` then `sq review arch 118 -v` to verify config default
-- [ ] **Iterate**: Adjust inference patterns if needed based on real-world model names
+
