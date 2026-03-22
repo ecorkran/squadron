@@ -161,16 +161,18 @@ prompt = _inject_file_contents(prompt, inputs)
 ```
 
 The `_inject_file_contents()` function:
-1. Scans `inputs` for values that look like file paths (exist on disk)
-2. For each file that exists, reads the content
-3. Appends a `## File Contents` section to the prompt with each file's content in fenced blocks
-4. If a file doesn't exist or is too large (>100KB), notes it as unavailable
+1. Iterates `inputs` dict values, skipping known non-path keys (`cwd`)
+2. For each value, checks `Path(value).is_file()` — no regex, no heuristic, just filesystem existence
+3. For each existing file, reads the content and appends to a `## File Contents` section with fenced blocks keyed by input name
+4. If a file is too large (>100KB), notes it as truncated
+
+The detection is deterministic: `is_file()` returns `True` for real file paths and `False` for everything else (directories, globs, bare strings like `"."`, model names). The `inputs` dict is tightly controlled — it only contains values set by the CLI command handlers, not arbitrary user input.
 
 This approach:
 - **Doesn't modify templates** — they remain the same for SDK and non-SDK paths
-- **Is automatic** — any input that points to a readable file gets injected
-- **Is safe** — only reads files in the inputs dict, doesn't traverse directories
-- **Handles code reviews** — the `diff` input becomes `git diff` output injected into the prompt
+- **Is deterministic** — `is_file()` check, not pattern matching or heuristics
+- **Is safe** — only reads files already in the inputs dict, doesn't traverse directories
+- **Handles code reviews** — the `diff` input is a git ref (not a file), handled as a special case
 
 #### Code Review Special Case
 
