@@ -129,11 +129,13 @@ def test_resolve_slice_cf_not_installed(mock_run: object) -> None:
 # ---------------------------------------------------------------------------
 
 
+@patch("squadron.cli.commands.review._save_review_file")
 @patch("squadron.cli.commands.review.subprocess.run", side_effect=_mock_run)
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_tasks_digit_routes_through_resolver(
     mock_review: object,
     mock_run: object,
+    mock_save: object,
 ) -> None:
     """review_tasks with a digit input resolves paths via CF."""
     from typer.testing import CliRunner
@@ -152,11 +154,13 @@ def test_review_tasks_digit_routes_through_resolver(
     assert "118-slice.composed-workflows.md" in inputs["against"]
 
 
+@patch("squadron.cli.commands.review._save_review_file")
 @patch("squadron.cli.commands.review.subprocess.run", side_effect=_mock_run)
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_slice_digit_routes_through_resolver(
     mock_review: object,
     mock_run: object,
+    mock_save: object,
 ) -> None:
     """review_slice with a digit input resolves paths via CF."""
     from typer.testing import CliRunner
@@ -173,11 +177,13 @@ def test_review_slice_digit_routes_through_resolver(
     assert "100-arch.orchestration-v2.md" in inputs["against"]
 
 
+@patch("squadron.cli.commands.review._save_review_file")
 @patch("squadron.cli.commands.review.subprocess.run", side_effect=_mock_run)
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_arch_alias_delegates_to_slice(
     mock_review: object,
     mock_run: object,
+    mock_save: object,
 ) -> None:
     """review arch hidden alias delegates to review_slice and prints deprecation."""
     from typer.testing import CliRunner
