@@ -29,7 +29,7 @@ Four major subsystems, layered from core outward:
 
 ### 1. Core Engine
 
-The orchestration logic itself. Agent registry (lifecycle management), message bus (pub/sub with configurable routing and per-agent filtering), and communication topology definitions. Pure Python with no framework dependencies. The portable, testable heart of the system.
+The core logic. Agent registry (lifecycle management), message bus (pub/sub with configurable routing and per-agent filtering), and communication topology definitions. Pure Python with no framework dependencies. The portable, testable heart of the system.
 
 The core engine includes a supervision layer responsible for detecting agent failures and applying configurable recovery strategies. This is a separate concern from agent communication and topology — agents do not supervise each other. An orthogonal Supervisor component monitors agent health and manages restarts independently of conversation flow.
 
@@ -80,7 +80,7 @@ class Agent(Protocol):
     async def shutdown(self) -> None: ...
 ```
 
-For an SDK agent, `handle_message` translates the incoming message into a `query()` or `client.query()` call, streams back the SDK's response messages as orchestration `Message` objects. For an API agent, `handle_message` appends the message to conversation history, calls the LLM API, and yields the response.
+For an SDK agent, `handle_message` translates the incoming message into a `query()` or `client.query()` call, streams back the SDK's response messages as squadron `Message` objects. For an API agent, `handle_message` appends the message to conversation history, calls the LLM API, and yields the response.
 
 #### Agent Provider Protocol
 
@@ -101,7 +101,7 @@ The provider registry maps provider type names to `AgentProvider` instances. `ge
 Three exposure modes, all consuming the core engine:
 
 - **CLI** (primary development interface) — typer-based commands for spawning agents, sending messages, observing conversations, running workflows. Fastest path to experimentation.
-- **MCP Server** — Exposes orchestration as MCP tools so Claude Code, Cursor, and other MCP clients can create agents, send messages, and query state programmatically.
+- **MCP Server** — Exposes squadron as MCP tools so Claude Code, Cursor, and other MCP clients can create agents, send messages, and query state programmatically.
 - **REST + WebSocket API** — FastAPI server for any external client. REST for lifecycle operations, WebSocket for real-time message streaming. Enables future web UI or integration with other systems.
 
 ### 4. Frontend (deferred)
@@ -164,7 +164,7 @@ A simple React UI may be added later, connecting to the FastAPI backend via HTTP
 
 **Typer** — CLI framework. Click-based but with type hints, auto-generated help, clean API. Gets a usable CLI with minimal code.
 
-**MCP SDK** (`mcp` Python package) — For exposing orchestration as MCP tools. Stdio transport for Claude Code integration.
+**MCP SDK** (`mcp` Python package) — For exposing squadron as MCP tools. Stdio transport for Claude Code integration.
 
 **asyncio** — Core concurrency model. Message bus, agent execution, WebSocket streaming all async. Agent SDK and ADK are async-native.
 
@@ -186,11 +186,11 @@ Human or agent sends message → Message Bus receives → applies routing topolo
 
 ### SDK Agent Task Flow
 
-Orchestration sends task message → SDK agent translates to query() call → Claude Agent SDK executes autonomously (reads files, runs commands, etc.) → SDK streams response messages → SDK agent converts to orchestration Messages → messages flow through Message Bus
+Squadron sends task message → SDK agent translates to query() call → Claude Agent SDK executes autonomously (reads files, runs commands, etc.) → SDK streams response messages → SDK agent converts to squadron Messages → messages flow through Message Bus
 
 ### API Agent Conversation Flow
 
-Orchestration sends message → API agent appends to conversation history → API agent calls LLM API (Messages API, Chat Completions, etc.) → response streamed back → API agent converts to orchestration Message → message flows through Message Bus
+Squadron sends message → API agent appends to conversation history → API agent calls LLM API (Messages API, Chat Completions, etc.) → response streamed back → API agent converts to squadron Message → message flows through Message Bus
 
 ### ADK Workflow Flow
 
@@ -215,7 +215,7 @@ Any new provider must:
 2. Produce agents that implement `Agent` Protocol (handle messages, report state)
 3. Register with the provider registry at import time
 4. Handle its own credential resolution (API keys, tokens, env vars)
-5. Map its native response format to orchestration `Message` objects
+5. Map its native response format to squadron `Message` objects
 
 ### Planned Providers (in priority order)
 
@@ -240,7 +240,7 @@ Each provider manages its own authentication:
 | OpenRouter | API key | `OPENROUTER_API_KEY` |
 | Local | None or API key | Provider-specific |
 
-The orchestration framework does not attempt to unify authentication. Each provider's credential resolution is self-contained. The `AgentConfig` model includes a generic `credentials: dict[str, Any]` field that providers interpret as they see fit.
+Squadron does not attempt to unify authentication. Each provider's credential resolution is self-contained. The `AgentConfig` model includes a generic `credentials: dict[str, Any]` field that providers interpret as they see fit.
 
 ---
 
@@ -252,19 +252,19 @@ The orchestration framework does not attempt to unify authentication. Each provi
 
 **ADK** — Workflow orchestration. The core engine provides the communication layer; ADK provides the execution patterns. They compose rather than compete.
 
-**MCP Protocol** — External tool exposure. The orchestration system appears as a set of MCP tools to any MCP-compatible client.
+**MCP Protocol** — External tool exposure. Squadron appears as a set of MCP tools to any MCP-compatible client.
 
-**Context Forge** (future) — Context assembly for agent instructions. When Context Forge MCP server is running, orchestration agents could use it to build their own context. Shared service model.
+**Context Forge** (future) — Context assembly for agent instructions. When Context Forge MCP server is running, squadron agents could use it to build their own context. Shared service model.
 
 ---
 
 ## Infrastructure and Deployment
 
-**Local development** — `python -m orchestration` or CLI commands. No build step, no bundling.
+**Local development** — `sq` CLI commands. No build step, no bundling.
 
 **MCP mode** — Configured in Claude Code MCP settings. Runs as stdio process.
 
-**Server mode** — `uvicorn orchestration.server:app`. Deployable to Railway, Render, Fly.io, any container host.
+**Server mode** — `uvicorn squadron.server:app`. Deployable to Railway, Render, Fly.io, any container host.
 
 **No Electron, no desktop packaging.** If a desktop presence is wanted later, a system tray utility or simple launcher can start the server.
 
@@ -273,11 +273,11 @@ The orchestration framework does not attempt to unify authentication. Each provi
 ## Project Structure
 
 ```
-orchestration/
+squadron/
 ├── pyproject.toml
 ├── README.md
 ├── src/
-│   └── orchestration/
+│   └── squadron/
 │       ├── __init__.py
 │       ├── core/                  # Core Engine
 │       │   ├── agent_registry.py
@@ -295,10 +295,16 @@ orchestration/
 │       │   └── anthropic/        # Anthropic API Provider
 │       │       ├── provider.py
 │       │       └── agent.py
+│       ├── models/                # Model Alias Registry
+│       │   ├── __init__.py
+│       │   └── aliases.py
+│       ├── review/                # Review System
+│       │   ├── review_client.py
+│       │   └── templates/
 │       ├── adk/                   # ADK Integration
 │       │   ├── workflows.py
 │       │   └── bridge.py
-│       ├── cli/                   # CLI Interface
+│       ├── cli/                   # CLI Interface (sq)
 │       │   ├── app.py            # typer app
 │       │   └── commands/
 │       ├── server/                # FastAPI Interface
@@ -307,13 +313,14 @@ orchestration/
 │       │   └── websocket.py
 │       ├── mcp/                   # MCP Server Interface
 │       │   └── server.py
-│       └── config.py
+│       └── config/
 ├── tests/
 │   ├── core/
 │   ├── providers/
 │   │   ├── sdk/
 │   │   └── anthropic/
 │   ├── cli/
+│   ├── review/
 │   └── server/
 └── docs/
 ```
@@ -345,10 +352,10 @@ The Claude Agent SDK has specific characteristics that influence agent design:
 
 The SDK agent implementation should support both modes, selected by the agent configuration.
 
-**Subagents**: The SDK natively supports subagent definitions via `ClaudeAgentOptions.agents`. An SDK agent can spawn its own subagents for parallel work with isolated context. This is complementary to (not competing with) the orchestration framework's own multi-agent coordination.
+**Subagents**: The SDK natively supports subagent definitions via `ClaudeAgentOptions.agents`. An SDK agent can spawn its own subagents for parallel work with isolated context. This is complementary to (not competing with) squadron's own multi-agent coordination.
 
-**Project context**: `setting_sources=["project"]` loads CLAUDE.md files from the working directory. This is how project-specific review rules, coding standards, and conventions are provided to SDK agents. The orchestration framework can set `cwd` per agent to point at different project directories.
+**Project context**: `setting_sources=["project"]` loads CLAUDE.md files from the working directory. This is how project-specific review rules, coding standards, and conventions are provided to SDK agents. Squadron can set `cwd` per agent to point at different project directories.
 
 **Hooks**: The SDK's hook system (PreToolUse, PostToolUse) provides programmatic control over agent behavior. Review workflows can use hooks to enforce constraints (e.g., block destructive commands during read-only review).
 
-**Custom MCP tools**: SDK agents can be given custom tools via in-process MCP servers. The orchestration framework could expose its own capabilities (message bus queries, agent listing, etc.) as MCP tools available to SDK agents, enabling agents to be aware of and interact with the orchestration system.
+**Custom MCP tools**: SDK agents can be given custom tools via in-process MCP servers. Squadron could expose its own capabilities (message bus queries, agent listing, etc.) as MCP tools available to SDK agents, enabling agents to be aware of and interact with the system.

@@ -59,7 +59,7 @@ Topology affects message bus routing, not agent logic — agents remain unaware 
 
 Three new exposure modes consuming the core engine:
 
-**MCP Server** — Exposes orchestration as MCP tools via Python MCP SDK. Tools: create_agent, list_agents, send_task, send_message, get_conversation, shutdown_agent, set_topology. Stdio transport for Claude Code / Cursor integration.
+**MCP Server** — Exposes squadron as MCP tools via Python MCP SDK. Tools: create_agent, list_agents, send_task, send_message, get_conversation, shutdown_agent, set_topology. Stdio transport for Claude Code / Cursor integration.
 
 **REST + WebSocket API** — FastAPI server. REST endpoints for agent lifecycle and conversation management. WebSocket endpoint for real-time message streaming. Automatic OpenAPI docs. CORS configuration for future frontend consumption.
 
@@ -115,7 +115,7 @@ Human or agent sends message → Message Bus receives → applies routing topolo
 
 ### API Agent Conversation Flow
 
-Orchestration sends message → API agent appends to conversation history → API agent calls LLM API (Messages API, Chat Completions, etc.) → response streamed back → API agent converts to orchestration Message → message flows through Message Bus
+Squadron sends message → API agent appends to conversation history → API agent calls LLM API (Messages API, Chat Completions, etc.) → response streamed back → API agent converts to squadron Message → message flows through Message Bus
 
 ### ADK Workflow Flow
 
@@ -148,7 +148,7 @@ Any new provider must:
 2. Produce agents that implement `Agent` Protocol (handle messages, report state)
 3. Register with the provider registry at import time
 4. Handle its own credential resolution (API keys, tokens, env vars)
-5. Map its native response format to orchestration `Message` objects
+5. Map its native response format to squadron `Message` objects
 
 ### Providers for Multi-Agent
 
@@ -179,5 +179,5 @@ The Anthropic API Provider (123) is the first API provider built specifically fo
 ## Notes
 
 - The 100-series agent registry, provider infrastructure, and daemon are prerequisites. All 160-series slices depend on at least some 100-series work being complete.
-- Ensemble Review (131) is included here because its full value requires M2 parallel fan-out, though it can be experimentally run sequentially using the 100-series review system.
-- Subprocess Agent Support (133) extends the agent registry to spawn OS processes, piping through the message bus.
+- Ensemble Review (170) is included here because its full value requires M2 parallel fan-out, though it can be experimentally run sequentially using the 100-series review system.
+- Subprocess Agent Support (171) extends the agent registry to spawn OS processes, piping through the message bus.
