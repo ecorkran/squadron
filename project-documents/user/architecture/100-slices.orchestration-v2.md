@@ -80,7 +80,7 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 1. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands as tools available to non-SDK agents. Likely moves to the automated pipeline initiative. Dependencies: [160-series MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
 
-2. [DEFERRED] **(104) SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
+2. [DEFERRED] **SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
 
 ---
 
