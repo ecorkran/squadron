@@ -35,9 +35,10 @@ Both problems share a root cause: the non-SDK review path was designed for routi
 
 - Model alias registry: built-in defaults + user `models.toml`
 - `resolve_model_alias()` function replacing `_infer_profile_from_model()`
-- Content injection for non-SDK review prompts (arch, tasks, code)
+- Content injection for non-SDK review prompts (slice, tasks, code)
 - `sq model list` CLI command to show available aliases
-- Update slash commands to document model aliases
+- Rename `review arch` → `review slice` (CLI command, slash command, template name)
+- Update slash commands to document model aliases and rename
 
 ### Excluded
 
@@ -116,6 +117,24 @@ When no alias matches, the raw model string passes through unchanged (backward c
 
 `src/squadron/models/aliases.py` — new module. The `models/` package is a natural home since this is model-level infrastructure, not review-specific. Both review commands and future `sq spawn --model` can use it.
 
+### Rename `review arch` → `review slice`
+
+The current `sq review arch` name implies reviewing an architecture document, but it actually reviews a **slice design** against the architecture. The command name should match the review target:
+
+- `sq review slice` — reviews slice design (against architecture/plan)
+- `sq review tasks` — reviews task breakdown (against slice design)
+- `sq review code` — reviews code (against standards/rules)
+
+Changes required:
+- CLI: rename `review_arch` function to `review_slice`, command name `"arch"` → `"slice"`
+- Template: rename `arch.yaml` → `slice.yaml`, update `name: arch` → `name: slice`
+- Slash command: rename `commands/sq/review-arch.md` → `commands/sq/review-slice.md`
+- Backward compatibility: add a hidden `review arch` alias that delegates to `review slice` with a deprecation notice, so existing scripts/habits don't break immediately
+- Update `_save_review_file()` callers: review type changes from `"arch"` to `"slice"`
+- Existing review files with `reviewType: arch` remain valid — the parser doesn't check review type
+- Update install test expected file count/names
+- Update `run-slice.md` references
+
 ### Content Injection for Non-SDK Reviews
 
 #### The Problem
@@ -171,36 +190,18 @@ For code reviews with `--files`, run the glob locally and inject matching file c
 
 ### Integration Points
 
-#### `_resolve_model()` Changes
+#### Single-Resolution in `_run_review_command()`
 
-Currently `_resolve_model()` returns the raw flag string. After alias resolution:
-
-```python
-def _resolve_model(
-    flag: str | None, template: ReviewTemplate | None = None
-) -> str | None:
-    if flag is not None:
-        resolved, _ = resolve_model_alias(flag)
-        return resolved
-    # ... rest unchanged
-```
-
-#### `_resolve_profile()` Changes
-
-Currently `_resolve_profile()` calls `_infer_profile_from_model()`. Replace with alias lookup:
+Per arch review feedback: resolve the alias **once** at the top of `_run_review_command()` and thread the result through, rather than calling `resolve_model_alias()` separately in `_resolve_model()` and `_resolve_profile()`.
 
 ```python
-def _resolve_profile(flag, template=None, model=None) -> str:
-    if flag is not None:
-        return flag
-    if model is not None:
-        _, alias_profile = resolve_model_alias(model)
-        if alias_profile is not None:
-            return alias_profile
-    # ... rest unchanged (template, config, "sdk" fallback)
+# In _run_review_command(), before calling _resolve_model/_resolve_profile:
+alias_model, alias_profile = resolve_model_alias(model_flag) if model_flag else (None, None)
+resolved_model = _resolve_model(alias_model or model_flag, template)
+resolved_profile = _resolve_profile(profile_flag or alias_profile, template, resolved_model)
 ```
 
-The hardcoded `_infer_profile_from_model()` is removed entirely — its logic is subsumed by the alias registry defaults.
+This means `_resolve_model()` and `_resolve_profile()` remain unchanged — they don't need to know about aliases. The alias resolution is a pre-processing step that expands shorthands before the existing resolution chain runs. `_infer_profile_from_model()` is removed entirely — the alias registry defaults subsume its logic.
 
 #### `sq model list` Command
 
@@ -224,9 +225,11 @@ The `(user)` tag indicates overrides from `models.toml`.
 
 ```
 CLI: sq review tasks 118 --model kimi25
-  → _resolve_model("kimi25") → resolve_model_alias("kimi25") → ("moonshotai/kimi-k2", "openrouter")
-  → _resolve_profile(None, template, "kimi25") → resolve_model_alias("kimi25") → profile="openrouter"
-  → _run_review_command(model="moonshotai/kimi-k2", profile="openrouter")
+  → _run_review_command(model_flag="kimi25")
+    → resolve_model_alias("kimi25") → ("moonshotai/kimi-k2", "openrouter")  [once]
+    → _resolve_model("moonshotai/kimi-k2", template) → "moonshotai/kimi-k2"
+    → _resolve_profile("openrouter", template, "moonshotai/kimi-k2") → "openrouter"
+    → _execute_review(model="moonshotai/kimi-k2", profile="openrouter")
 ```
 
 ### Content Injection (Non-SDK)
@@ -253,7 +256,7 @@ run_review(template, inputs, ...)
 ### Functional Requirements
 
 - `sq review tasks 118 --model kimi25` resolves alias, routes through OpenRouter, injects file contents, returns real review
-- `sq review arch 118 --model gpt4o` resolves to `gpt-4o` on OpenAI, injects design + arch doc content
+- `sq review slice 118 --model gpt4o` resolves to `gpt-4o` on OpenAI, injects design + arch doc content
 - `sq review code 118 --model gpt4o` injects git diff output into prompt
 - `sq review tasks 118 --model opus` continues to work via SDK (no content injection needed)
 - `sq model list` shows built-in + user aliases with profile and model ID
@@ -261,6 +264,8 @@ run_review(template, inputs, ...)
 - User alias overrides built-in by name
 - Missing `models.toml` doesn't error (graceful handling)
 - `_infer_profile_from_model()` is removed — alias registry handles all inference
+- `sq review slice` works, `sq review arch` is a deprecated alias
+- `/sq:review-slice` slash command replaces `/sq:review-arch`
 - Existing SDK path works identically (regression)
 
 ### Technical Requirements
@@ -291,29 +296,35 @@ run_review(template, inputs, ...)
 
 2. **Built-in alias resolution:**
    ```bash
-   sq review arch 118 --model gpt4o -v
+   sq review slice 118 --model gpt4o -v
    # Expected: resolves to gpt-4o on openai profile, injects design+arch content
    ```
 
 3. **SDK path unchanged:**
    ```bash
-   sq review arch 118 -v
+   sq review slice 118 -v
    # Expected: uses SDK as before (opus default), no content injection
    ```
 
-4. **Code review with diff injection:**
+4. **Rename backward compat:**
+   ```bash
+   sq review arch 118 -v
+   # Expected: works but prints deprecation notice, delegates to review slice
+   ```
+
+5. **Code review with diff injection:**
    ```bash
    sq review code 118 --model gpt4o --diff main -v
    # Expected: runs git diff main, injects diff output, GPT-4o reviews the diff
    ```
 
-5. **Model list:**
+6. **Model list:**
    ```bash
    sq model list
    # Expected: shows opus, sonnet, haiku, gpt4o, o3, kimi25 (user) etc.
    ```
 
-6. **Content injection produces real review:**
+7. **Content injection produces real review:**
    ```bash
    sq review tasks 118 --model gpt4o -v
    # Expected: NOT "I can't read those files" — real findings about task quality
@@ -323,13 +334,14 @@ run_review(template, inputs, ...)
 
 ### Suggested Implementation Order
 
-1. **Create `models/aliases.py`** with `BUILT_IN_ALIASES`, `resolve_model_alias()`, user TOML loading (effort: 1/5)
-2. **Wire alias resolution into `_resolve_model()` and `_resolve_profile()`**, remove `_infer_profile_from_model()` (effort: 1/5)
-3. **Add `_inject_file_contents()` to `review_client.py`** for non-SDK path (effort: 2/5)
-4. **Handle code review special case** — diff/files injection (effort: 1/5)
-5. **Add `sq model list` CLI command** (effort: 0.5/5)
-6. **Update slash commands** (effort: 0.5/5)
-7. **Tests** (effort: 1.5/5)
+1. **Rename `review arch` → `review slice`** — CLI, template, slash command, backward-compat alias (effort: 1/5)
+2. **Create `models/aliases.py`** with `BUILT_IN_ALIASES`, `resolve_model_alias()`, user TOML loading (effort: 1/5)
+3. **Wire alias resolution into `_run_review_command()`**, remove `_infer_profile_from_model()` (effort: 1/5)
+4. **Add `_inject_file_contents()` to `review_client.py`** for non-SDK path (effort: 2/5)
+5. **Handle code review special case** — diff/files injection (effort: 1/5)
+6. **Add `sq model list` CLI command** (effort: 0.5/5)
+7. **Update slash commands** (effort: 0.5/5)
+8. **Tests** (effort: 1.5/5)
 
 ### Known Limitations
 
