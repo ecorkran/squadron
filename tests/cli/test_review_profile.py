@@ -243,7 +243,7 @@ class TestAliasWiring:
     def test_alias_resolves_model_and_profile(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """model_flag='gpt54-nano' resolves to model='gpt-5.4-nano', profile='openai'."""
+        """gpt54-nano alias resolves to gpt-5.4-nano on openai."""
         from unittest.mock import AsyncMock, patch
 
         from squadron.cli.commands.review import _run_review_command

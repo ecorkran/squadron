@@ -29,7 +29,8 @@ def test_model_list_shows_user_tag(tmp_path: Path) -> None:
     """User alias shows (user) tag in output."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        '[aliases]\ndeepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }\n'
+        "[aliases]\n"
+        'deepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }\n'
     )
 
     with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
