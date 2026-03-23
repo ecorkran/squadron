@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
@@ -144,7 +143,7 @@ def test_user_alias_with_metadata(tmp_path: Path) -> None:
     """Full table syntax with private, cost_tier, notes loads all fields."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        '[aliases.mymodel]\n'
+        "[aliases.mymodel]\n"
         'profile = "openrouter"\n'
         'model = "test/test-model"\n'
         "private = true\n"
@@ -168,7 +167,7 @@ def test_user_alias_with_pricing_full_table(tmp_path: Path) -> None:
     """[aliases.name.pricing] sub-table loads all four pricing fields."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        '[aliases.mymodel]\n'
+        "[aliases.mymodel]\n"
         'profile = "openai"\n'
         'model = "test-model"\n'
         "\n"
@@ -237,8 +236,7 @@ def test_user_alias_without_metadata(tmp_path: Path) -> None:
     """Minimal { profile, model } alias has no metadata keys."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        "[aliases]\n"
-        'simple = { profile = "openai", model = "test-model" }\n'
+        '[aliases]\nsimple = { profile = "openai", model = "test-model" }\n'
     )
     with patch(
         "squadron.models.aliases.models_toml_path",
@@ -322,9 +320,7 @@ def test_estimate_cost_unknown_alias() -> None:
         "squadron.models.aliases.models_toml_path",
         return_value=Path("/nonexistent/models.toml"),
     ):
-        result = estimate_cost(
-            "nonexistent", input_tokens=1000, output_tokens=500
-        )
+        result = estimate_cost("nonexistent", input_tokens=1000, output_tokens=500)
     assert result is None
 
 

@@ -70,8 +70,8 @@ def _show_aliases(*, verbose: bool = False) -> None:
 def _verbose_columns(alias: ModelAlias) -> list[str]:
     """Return the five verbose-mode column values for an alias."""
     private_val = alias.get("private")
-    private_str = "yes" if private_val is True else (
-        "no" if private_val is False else ""
+    private_str = (
+        "yes" if private_val is True else ("no" if private_val is False else "")
     )
 
     cost_tier = alias.get("cost_tier", "")

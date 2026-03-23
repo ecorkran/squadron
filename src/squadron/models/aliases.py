@@ -199,9 +199,7 @@ def _extract_metadata(
 
     pricing_val = table.get("pricing")
     if isinstance(pricing_val, dict):
-        pricing = _extract_pricing(
-            cast(dict[str, Any], pricing_val), name, path
-        )
+        pricing = _extract_pricing(cast(dict[str, Any], pricing_val), name, path)
         if pricing:
             alias["pricing"] = pricing
 
@@ -221,8 +219,7 @@ def _extract_pricing(
             pricing[field] = float(val)  # type: ignore[literal-required]
         else:
             _logger.warning(
-                "Skipping pricing field '%s' for alias '%s' in %s "
-                "— expected a number",
+                "Skipping pricing field '%s' for alias '%s' in %s — expected a number",
                 field,
                 name,
                 path,
@@ -264,9 +261,7 @@ def load_user_aliases() -> dict[str, ModelAlias]:
         profile_val = table.get("profile")
         model_val = table.get("model")
         if isinstance(profile_val, str) and isinstance(model_val, str):
-            alias: ModelAlias = ModelAlias(
-                profile=profile_val, model=model_val
-            )
+            alias: ModelAlias = ModelAlias(profile=profile_val, model=model_val)
             _extract_metadata(alias, table, name, path)
             result[name] = alias
         else:
