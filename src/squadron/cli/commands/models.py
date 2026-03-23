@@ -10,8 +10,17 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
-from squadron.models.aliases import BUILT_IN_ALIASES, get_all_aliases
+from squadron.models.aliases import BUILT_IN_ALIASES, ModelAlias, get_all_aliases
 from squadron.providers.profiles import get_profile
+
+# cost_tier display mapping
+_COST_TIER_LABELS: dict[str, str] = {
+    "free": "free",
+    "cheap": "$",
+    "moderate": "$$",
+    "expensive": "$$$",
+    "subscription": "sub",
+}
 
 models_app = typer.Typer(
     name="models",
@@ -20,7 +29,7 @@ models_app = typer.Typer(
 )
 
 
-def _show_aliases() -> None:
+def _show_aliases(*, verbose: bool = False) -> None:
     """Display the alias table."""
     all_aliases = get_all_aliases()
     if not all_aliases:
@@ -32,15 +41,55 @@ def _show_aliases() -> None:
     table.add_column("Alias", style="cyan")
     table.add_column("Profile")
     table.add_column("Model ID")
+
+    if verbose:
+        table.add_column("Private", style="dim")
+        table.add_column("Cost")
+        table.add_column("In $/1M")
+        table.add_column("Out $/1M")
+        table.add_column("Notes", style="dim")
+
     table.add_column("Source", style="dim")
 
     for name, alias in sorted(all_aliases.items()):
         source = "(user)" if name not in BUILT_IN_ALIASES else ""
         if name in BUILT_IN_ALIASES and alias != BUILT_IN_ALIASES[name]:
             source = "(user override)"
-        table.add_row(name, alias["profile"], alias["model"], source)
+
+        row: list[str] = [name, alias["profile"], alias["model"]]
+
+        if verbose:
+            row.extend(_verbose_columns(alias))
+
+        row.append(source)
+        table.add_row(*row)
 
     console.print(table)
+
+
+def _verbose_columns(alias: ModelAlias) -> list[str]:
+    """Return the five verbose-mode column values for an alias."""
+    private_val = alias.get("private")
+    private_str = "yes" if private_val is True else (
+        "no" if private_val is False else ""
+    )
+
+    cost_tier = alias.get("cost_tier", "")
+    cost_str = _COST_TIER_LABELS.get(cost_tier, "")
+
+    pricing = alias.get("pricing")
+    if pricing is not None:
+        in_price = pricing.get("input")
+        out_price = pricing.get("output")
+        in_str = f"${in_price:.2f}" if in_price is not None else ""
+        out_str = f"${out_price:.2f}" if out_price is not None else ""
+    else:
+        in_str = ""
+        out_str = ""
+
+    notes = alias.get("notes", "")[:30]
+
+    return [private_str, cost_str, in_str, out_str, notes]
 
 
 @models_app.callback(invoke_without_command=True)
@@ -56,6 +105,12 @@ def models_default(
         "--base-url",
         help="Query models from an OpenAI-compatible base URL",
     ),
+    verbose: bool = typer.Option(
+        False,
+        "-v",
+        "--verbose",
+        help="Show metadata columns (Private, Cost, Pricing, Notes)",
+    ),
 ) -> None:
     """Show model aliases, or query a provider endpoint with --profile/--base-url."""
     # If a subcommand was invoked, let it handle things
@@ -64,7 +119,7 @@ def models_default(
 
     # No flags → show aliases
     if profile is None and base_url is None:
-        _show_aliases()
+        _show_aliases(verbose=verbose)
         return
 
     # Flags → query endpoint
@@ -85,9 +140,16 @@ def models_default(
 
 
 @models_app.command("list")
-def models_list() -> None:
+def models_list(
+    verbose: bool = typer.Option(
+        False,
+        "-v",
+        "--verbose",
+        help="Show metadata columns (Private, Cost, Pricing, Notes)",
+    ),
+) -> None:
     """List available model aliases."""
-    _show_aliases()
+    _show_aliases(verbose=verbose)
 
 
 async def _fetch_models(base_url: str) -> None:

@@ -348,3 +348,68 @@ def test_estimate_cost_free_model() -> None:
             "gemini", input_tokens=1_000_000, output_tokens=1_000_000
         )
     assert result == 0.0
+
+
+# --- T10: Verbose display and compact default tests ---
+
+_NO_USER_TOML = patch(
+    "squadron.models.aliases.models_toml_path",
+    return_value=Path("/nonexistent/models.toml"),
+)
+
+
+def test_models_default_compact() -> None:
+    """sq models (no flags) does NOT show metadata column headers."""
+    with _NO_USER_TOML:
+        result = runner.invoke(app, ["models"])
+    assert result.exit_code == 0
+    # Compact mode should not contain pricing or metadata indicators
+    assert "$2.50" not in result.output
+    assert "yes" not in result.output
+    assert "sub" not in result.output
+
+
+def test_models_verbose_shows_metadata_columns() -> None:
+    """sq models -v shows metadata column headers (may be truncated by Rich)."""
+    with _NO_USER_TOML:
+        result = runner.invoke(app, ["models", "-v"])
+    assert result.exit_code == 0
+    # Rich may truncate headers; check for partial matches
+    assert "Priva" in result.output
+    assert "Cost" in result.output
+    assert "$/1M" in result.output
+    assert "Note" in result.output
+
+
+def test_models_verbose_shows_pricing_values() -> None:
+    """sq models -v shows formatted pricing like $2.50."""
+    with _NO_USER_TOML:
+        result = runner.invoke(app, ["models", "-v"])
+    assert result.exit_code == 0
+    assert "$2.50" in result.output
+    assert "$5.00" in result.output
+
+
+def test_models_verbose_shows_subscription_cost_tier() -> None:
+    """sq models -v shows 'sub' for SDK aliases."""
+    with _NO_USER_TOML:
+        result = runner.invoke(app, ["models", "-v"])
+    assert result.exit_code == 0
+    assert "sub" in result.output
+
+
+def test_models_verbose_private_yes() -> None:
+    """sq models -v shows 'yes' for built-in aliases (all private=True)."""
+    with _NO_USER_TOML:
+        result = runner.invoke(app, ["models", "-v"])
+    assert result.exit_code == 0
+    assert "yes" in result.output
+
+
+def test_models_list_verbose() -> None:
+    """sq models list -v shows metadata columns (parity with bare)."""
+    with _NO_USER_TOML:
+        result = runner.invoke(app, ["models", "list", "-v"])
+    assert result.exit_code == 0
+    assert "Priva" in result.output
+    assert "Cost" in result.output
