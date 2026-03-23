@@ -205,11 +205,11 @@ $ sq models
 - `notes`: Displayed as-is, truncated to ~30 chars if needed
 - Cache pricing (cache_read, cache_write) not shown in table — available for `estimate_cost()` and future detailed views like `sq models --detail kimi25`
 
-### Compact Mode
+### Verbose Mode
 
-When no aliases have metadata (e.g., user has only basic aliases and no built-ins would show metadata), the metadata columns are hidden automatically. This keeps the display clean for users who don't care about metadata.
+`sq models` shows the compact 4-column table (Alias, Profile, Model ID, Source) by default. `sq models -v` / `sq models --verbose` shows the full table with all metadata columns (Private, Cost, In $/1M, Out $/1M, Notes, Source).
 
-Implementation: check if any alias in the merged set has at least one metadata field set. If none do, render the table without metadata columns. This applies to the entire table, not per-row.
+This is simpler than auto-detecting metadata presence — it's just a flag. Users picking an alias name get a clean table; users comparing models or checking privacy use `-v`. Consistent with `sq review -v` which already uses verbose for detailed output.
 
 ## Data Flow
 
@@ -232,9 +232,11 @@ load_user_aliases()
 ```
 sq models
   → get_all_aliases()  (merges built-in + user)
-  → check if any alias has metadata fields
-  → if yes: render full table (Alias, Profile, Model ID, Private, Cost, In $/1M, Out $/1M, Notes, Source)
-  → if no: render compact table (Alias, Profile, Model ID, Source)
+  → render compact table (Alias, Profile, Model ID, Source)
+
+sq models -v
+  → get_all_aliases()  (merges built-in + user)
+  → render full table (Alias, Profile, Model ID, Private, Cost, In $/1M, Out $/1M, Notes, Source)
 ```
 
 ### Cost Estimation
@@ -284,10 +286,17 @@ estimate_cost("kimi25", input_tokens=15000, output_tokens=3000)
 
 ### Verification Walkthrough
 
-1. **Built-in metadata display:**
+1. **Default compact display:**
    ```bash
    sq models
-   # Expect: table with Private, Cost, In $/1M, Out $/1M, Notes columns
+   # Expect: compact 4-column table (Alias, Profile, Model ID, Source)
+   # No metadata columns shown
+   ```
+
+1b. **Verbose metadata display:**
+   ```bash
+   sq models -v
+   # Expect: full table with Private, Cost, In $/1M, Out $/1M, Notes columns
    # SDK models show "sub" cost, blank pricing; API models show $ amounts
    ```
 

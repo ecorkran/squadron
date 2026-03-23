@@ -111,31 +111,33 @@ status: not_started
 - [ ] All tests pass: `uv run pytest tests/cli/test_model_list.py -v` (or new test file)
 - [ ] Commit: `feat: add estimate_cost() utility for per-token cost estimation`
 
-### T9: Update `_show_aliases()` with metadata columns
+### T9: Add `--verbose` flag and update `_show_aliases()` with metadata columns
 
-- [ ] In `src/squadron/cli/commands/models.py`, update `_show_aliases()`:
-  - [ ] Add helper to check if any alias has metadata: check for `private`, `cost_tier`, `notes`, or `pricing` keys in any alias
-  - [ ] If metadata present, add columns to the Rich table:
+- [ ] In `src/squadron/cli/commands/models.py`, update `_show_aliases()` to accept a `verbose: bool` parameter
+  - [ ] Default table (compact): 4 columns — Alias, Profile, Model ID, Source (unchanged from current)
+  - [ ] When `verbose=True`, add metadata columns to the Rich table:
     - [ ] `Private` (style: dim) — display `"yes"` / `"no"` / `""` based on `alias.get("private")`
     - [ ] `Cost` — map `cost_tier` to display label: `free`→`"free"`, `cheap`→`"$"`, `moderate`→`"$$"`, `expensive`→`"$$$"`, `subscription`→`"sub"`, absent→`""`
     - [ ] `In $/1M` — format `pricing["input"]` as `$X.XX` if present, blank if absent
     - [ ] `Out $/1M` — format `pricing["output"]` as `$X.XX` if present, blank if absent
     - [ ] `Notes` (style: dim) — display `alias.get("notes", "")`, truncate to 30 chars
-  - [ ] If no metadata present in any alias, render the existing 4-column table (compact mode)
-  - [ ] Move `Source` column to remain last in either mode
-- [ ] Import `ModelPricing` if needed for type hints
+  - [ ] `Source` column remains last in both modes
+- [ ] Add `-v` / `--verbose` flag to `models_default()` callback
+  - [ ] Pass `verbose` through to `_show_aliases(verbose=verbose)`
+- [ ] Update `models_list()` subcommand to also accept `-v` / `--verbose` and pass through
 - [ ] `uv run pyright` and `uv run ruff check` pass
 
-### T10: Tests for metadata display
+### T10: Tests for verbose display and compact default
 
 - [ ] In `tests/cli/test_model_list.py`, add/update tests:
-  - [ ] `test_models_shows_metadata_columns`: run `sq models` (built-ins have metadata), verify output contains `Private`, `Cost`, `In $/1M`, `Out $/1M`, `Notes` column headers
-  - [ ] `test_models_shows_pricing_values`: verify output contains formatted pricing like `$2.50` or `$5.00` for a known alias
-  - [ ] `test_models_shows_subscription_cost_tier`: verify `sub` appears in output (for SDK aliases)
-  - [ ] `test_models_compact_mode_no_metadata`: patch `BUILT_IN_ALIASES` to have no metadata, patch user aliases to have none; verify output does NOT contain `Private` or `Cost` headers
-  - [ ] `test_models_private_yes_no`: verify `yes` appears for built-in aliases (all are private=True)
+  - [ ] `test_models_default_compact`: run `sq models` (no flags), verify output does NOT contain `Private`, `Cost`, `In $/1M` column headers
+  - [ ] `test_models_verbose_shows_metadata_columns`: run `sq models -v`, verify output contains `Private`, `Cost`, `In $/1M`, `Out $/1M`, `Notes` column headers
+  - [ ] `test_models_verbose_shows_pricing_values`: run `sq models -v`, verify output contains formatted pricing like `$2.50` or `$5.00` for a known alias
+  - [ ] `test_models_verbose_shows_subscription_cost_tier`: run `sq models -v`, verify `sub` appears in output (for SDK aliases)
+  - [ ] `test_models_verbose_private_yes`: run `sq models -v`, verify `yes` appears for built-in aliases (all are private=True)
+  - [ ] `test_models_list_verbose`: run `sq models list -v`, verify metadata columns appear (parity with bare command)
 - [ ] All tests pass: `uv run pytest tests/cli/test_model_list.py -v`
-- [ ] Commit: `feat: display metadata and pricing columns in sq models`
+- [ ] Commit: `feat: add -v flag to sq models for metadata and pricing display`
 
 ### T11: Full validation pass
 
