@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260321
+dateUpdated: 20260323
 ---
 
 # Development Log
@@ -11,6 +11,19 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260323
+
+### Slice 121: Model Alias Metadata — Implementation Complete
+
+- All 12 tasks (T1-T12) complete. 537 tests pass, pyright/ruff/format clean.
+- `ModelPricing` TypedDict (input, output, cache_read, cache_write — USD per 1M tokens)
+- `ModelAlias` extended with `private`, `cost_tier`, `notes`, `pricing` — all optional via inheritance pattern (`_ModelAliasRequired` base + `total=False`)
+- All 12 `BUILT_IN_ALIASES` populated with curated metadata and pricing
+- `load_user_aliases()` extracts metadata and pricing from TOML (inline and sub-table formats)
+- `estimate_cost()` utility: alias name + token counts → USD float or None
+- `sq models` compact by default; `sq models -v` shows Private, Cost, In $/1M, Out $/1M, Notes columns
+- 21 new tests across T4 (3), T6 (6), T8 (6), T10 (6)
 
 ## 20260322
 
