@@ -178,6 +178,58 @@ def models_toml_path() -> Path:
     return Path.home() / ".config" / "squadron" / "models.toml"
 
 
+def _extract_metadata(
+    alias: ModelAlias,
+    table: dict[str, Any],
+    name: str,
+    path: Path,
+) -> None:
+    """Extract optional metadata and pricing fields from a TOML alias table."""
+    private_val = table.get("private")
+    if isinstance(private_val, bool):
+        alias["private"] = private_val
+
+    cost_tier_val = table.get("cost_tier")
+    if isinstance(cost_tier_val, str):
+        alias["cost_tier"] = cost_tier_val
+
+    notes_val = table.get("notes")
+    if isinstance(notes_val, str):
+        alias["notes"] = notes_val
+
+    pricing_val = table.get("pricing")
+    if isinstance(pricing_val, dict):
+        pricing = _extract_pricing(
+            cast(dict[str, Any], pricing_val), name, path
+        )
+        if pricing:
+            alias["pricing"] = pricing
+
+
+def _extract_pricing(
+    raw: dict[str, Any],
+    name: str,
+    path: Path,
+) -> ModelPricing | None:
+    """Build a ModelPricing dict from raw TOML pricing values."""
+    pricing = ModelPricing()
+    for field in ("input", "output", "cache_read", "cache_write"):
+        val = raw.get(field)
+        if val is None:
+            continue
+        if isinstance(val, (int, float)):
+            pricing[field] = float(val)  # type: ignore[literal-required]
+        else:
+            _logger.warning(
+                "Skipping pricing field '%s' for alias '%s' in %s "
+                "— expected a number",
+                field,
+                name,
+                path,
+            )
+    return pricing if pricing else None
+
+
 def load_user_aliases() -> dict[str, ModelAlias]:
     """Load user-defined aliases from models.toml.
 
@@ -212,7 +264,11 @@ def load_user_aliases() -> dict[str, ModelAlias]:
         profile_val = table.get("profile")
         model_val = table.get("model")
         if isinstance(profile_val, str) and isinstance(model_val, str):
-            result[name] = ModelAlias(profile=profile_val, model=model_val)
+            alias: ModelAlias = ModelAlias(
+                profile=profile_val, model=model_val
+            )
+            _extract_metadata(alias, table, name, path)
+            result[name] = alias
         else:
             _logger.warning(
                 "Skipping alias '%s' in %s — "

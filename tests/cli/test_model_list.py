@@ -8,7 +8,7 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.models.aliases import BUILT_IN_ALIASES
+from squadron.models.aliases import BUILT_IN_ALIASES, load_user_aliases
 
 runner = CliRunner()
 
@@ -129,3 +129,138 @@ def test_builtin_api_aliases_have_pricing() -> None:
         pricing = alias["pricing"]
         assert "input" in pricing, f"{name} pricing missing 'input'"
         assert "output" in pricing, f"{name} pricing missing 'output'"
+
+
+# --- T6: TOML metadata and pricing parsing tests ---
+
+
+def test_user_alias_with_metadata(tmp_path: Path) -> None:
+    """Full table syntax with private, cost_tier, notes loads all fields."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        '[aliases.mymodel]\n'
+        'profile = "openrouter"\n'
+        'model = "test/test-model"\n'
+        "private = true\n"
+        'cost_tier = "cheap"\n'
+        'notes = "Test model"\n'
+    )
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=toml_file,
+    ):
+        aliases = load_user_aliases()
+    alias = aliases["mymodel"]
+    assert alias["profile"] == "openrouter"
+    assert alias["model"] == "test/test-model"
+    assert alias["private"] is True
+    assert alias["cost_tier"] == "cheap"
+    assert alias["notes"] == "Test model"
+
+
+def test_user_alias_with_pricing_full_table(tmp_path: Path) -> None:
+    """[aliases.name.pricing] sub-table loads all four pricing fields."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        '[aliases.mymodel]\n'
+        'profile = "openai"\n'
+        'model = "test-model"\n'
+        "\n"
+        "[aliases.mymodel.pricing]\n"
+        "input = 5.0\n"
+        "output = 25.0\n"
+        "cache_read = 0.5\n"
+        "cache_write = 6.25\n"
+    )
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=toml_file,
+    ):
+        aliases = load_user_aliases()
+    pricing = aliases["mymodel"]["pricing"]
+    assert pricing["input"] == 5.0
+    assert pricing["output"] == 25.0
+    assert pricing["cache_read"] == 0.5
+    assert pricing["cache_write"] == 6.25
+
+
+def test_user_alias_with_pricing_inline(tmp_path: Path) -> None:
+    """Inline pricing = { input, output } loads correctly."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        "[aliases]\n"
+        'mymodel = { profile = "openai",'
+        ' model = "test-model",'
+        " pricing = { input = 1.0, output = 2.0 } }\n"
+    )
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=toml_file,
+    ):
+        aliases = load_user_aliases()
+    pricing = aliases["mymodel"]["pricing"]
+    assert pricing["input"] == 1.0
+    assert pricing["output"] == 2.0
+
+
+def test_user_alias_with_partial_pricing(tmp_path: Path) -> None:
+    """Pricing with only input/output — cache fields absent, not defaulted."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        "[aliases.mymodel]\n"
+        'profile = "openai"\n'
+        'model = "test-model"\n'
+        "\n"
+        "[aliases.mymodel.pricing]\n"
+        "input = 3.0\n"
+        "output = 15.0\n"
+    )
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=toml_file,
+    ):
+        aliases = load_user_aliases()
+    pricing = aliases["mymodel"]["pricing"]
+    assert pricing["input"] == 3.0
+    assert pricing["output"] == 15.0
+    assert "cache_read" not in pricing
+    assert "cache_write" not in pricing
+
+
+def test_user_alias_without_metadata(tmp_path: Path) -> None:
+    """Minimal { profile, model } alias has no metadata keys."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        "[aliases]\n"
+        'simple = { profile = "openai", model = "test-model" }\n'
+    )
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=toml_file,
+    ):
+        aliases = load_user_aliases()
+    alias = aliases["simple"]
+    assert alias["profile"] == "openai"
+    assert alias["model"] == "test-model"
+    assert "private" not in alias
+    assert "cost_tier" not in alias
+    assert "notes" not in alias
+    assert "pricing" not in alias
+
+
+def test_existing_toml_backward_compat(tmp_path: Path) -> None:
+    """Old-format models.toml with no metadata returns only profile/model."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        "[aliases]\n"
+        'old = { profile = "sdk", model = "claude-opus-4-6" }\n'
+        'also_old = { profile = "openai", model = "gpt-5.4" }\n'
+    )
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=toml_file,
+    ):
+        aliases = load_user_aliases()
+    for name in ("old", "also_old"):
+        alias = aliases[name]
+        assert set(alias.keys()) == {"profile", "model"}
