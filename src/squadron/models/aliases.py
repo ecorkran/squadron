@@ -114,7 +114,7 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
         "cost_tier": "expensive",
         "notes": "Code-specialized",
         "pricing": {
-            "input": 1.75, 
+            "input": 1.75,
             "output": 14.00,
             "cache_read": 0.0175,
             "cache_write": 1.75,
@@ -147,7 +147,7 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
             "cache_write": 0.50,
         },
     },
-        "flash3-lite": {
+    "flash3-lite": {
         "profile": "gemini",
         "model": "gemini-3-flash-lite-preview",
         "private": True,
@@ -180,10 +180,10 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
         "private": True,
         "cost_tier": "cheap",
         "pricing": {
-            "input": 0.30, 
+            "input": 0.30,
             "output": 1.25,
             "cache_read": 0.06,
-            "cache_write": 0.30,            
+            "cache_write": 0.30,
         },
     },
     "glm5": {
@@ -192,10 +192,10 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
         "private": True,
         "cost_tier": "cheap",
         "pricing": {
-            "input": 0.72, 
+            "input": 0.72,
             "output": 2.30,
             "cache_read": 0.72,
-            "cache_write": 2.30,             
+            "cache_write": 2.30,
         },
     },
     "glm5-turbo": {
@@ -205,24 +205,24 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
         "cost_tier": "moderate",
         "notes": "on sale",
         "pricing": {
-            "input": 0.96, 
+            "input": 0.96,
             "output": 3.20,
             "cache_read": 0.192,
-            "cache_write": 3.20,             
+            "cache_write": 3.20,
         },
-    },    
+    },
     "mimo-omni": {
         "profile": "openrouter",
         "model": "xiaomi/mimo-v2-omni",
         "private": True,
         "cost_tier": "cheap",
         "pricing": {
-            "input": 0.40, 
+            "input": 0.40,
             "output": 2.00,
             "cache_read": 0.08,
-            "cache_write": 2.00,             
+            "cache_write": 2.00,
         },
-    }, 
+    },
     "grok-fast": {
         "profile": "openrouter",
         "model": "x-ai/grok-4.1-fast",
@@ -230,12 +230,12 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
         "cost_tier": "cheap",
         "notes": "2M context",
         "pricing": {
-            "input": 0.20, 
+            "input": 0.20,
             "output": 0.50,
             "cache_read": 0.05,
-            "cache_write": 0.20,             
+            "cache_write": 0.20,
         },
-    },     
+    },
 }
 
 
