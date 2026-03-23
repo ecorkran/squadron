@@ -14,16 +14,21 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260322
 
+### Slice 121: Model Alias Metadata — Task Breakdown Complete
+
+Task file at `project-documents/user/tasks/121-tasks.model-alias-metadata.md` (12 tasks: T1-T12). Three workstreams: type extensions with built-in metadata (T1-T4), TOML parsing and cost estimation (T5-T8), display updates and validation (T9-T12). Test-with pattern: each implementation task followed immediately by its test task.
+
 ### Slice 121: Model Alias Metadata — Design Complete
 
 - Created `project-documents/user/slices/121-slice.model-alias-metadata.md`
-- Extends `ModelAlias` TypedDict with optional `private` (bool), `cost_tier` (str), `notes` (str) fields
+- Extends `ModelAlias` TypedDict with optional `private` (bool), `cost_tier` (str), `notes` (str), `pricing` (ModelPricing) fields
+- `ModelPricing` TypedDict: `input`, `output`, `cache_read`, `cache_write` (USD per 1M tokens)
 - `total=False` on TypedDict for backward-compatible optional fields
 - `cost_tier` values: free, cheap, moderate, expensive, subscription (new — for Max sub models)
-- `sq models` gains Private, Cost, Notes columns with compact mode (columns hidden when no metadata present)
-- TOML parsing supports both inline table and full `[aliases.name]` section syntax (already works via tomllib)
-- Curated metadata for all 12 built-in aliases
-- Also in this session: slice plan refactored (100-series trimmed, 160-series created for multi-agent), reindexing (161-172, 121-125), test fixes, template clarification
+- `estimate_cost()` utility: pure function, alias name + token counts → USD or None
+- `sq models` gains Private, Cost, In $/1M, Out $/1M, Notes columns with compact mode
+- Curated metadata and pricing for all 12 built-in aliases
+- Also in this session: slice plan refactored (100-series trimmed, 160-series created for multi-agent), reindexing (161-172, 121-125), test fixes, template clarification, architecture docs updated to squadron naming
 
 ## 20260321
 
