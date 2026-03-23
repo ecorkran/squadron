@@ -301,3 +301,41 @@ def resolve_model_alias(name: str) -> tuple[str, str | None]:
     if alias is not None:
         return alias["model"], alias["profile"]
     return name, None
+
+
+def estimate_cost(
+    alias_name: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached_tokens: int = 0,
+) -> float | None:
+    """Estimate USD cost for a model given token counts.
+
+    Returns None if the alias has no pricing data or insufficient
+    pricing fields for the calculation.
+    """
+    aliases = get_all_aliases()
+    alias = aliases.get(alias_name)
+    if alias is None:
+        return None
+
+    pricing = alias.get("pricing")
+    if pricing is None:
+        return None
+
+    input_price = pricing.get("input")
+    output_price = pricing.get("output")
+    if input_price is None or output_price is None:
+        return None
+
+    total = (
+        input_tokens / 1_000_000 * input_price
+        + output_tokens / 1_000_000 * output_price
+    )
+
+    if cached_tokens > 0:
+        cache_read_price = pricing.get("cache_read")
+        if cache_read_price is not None:
+            total += cached_tokens / 1_000_000 * cache_read_price
+
+    return total

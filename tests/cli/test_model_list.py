@@ -5,10 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.models.aliases import BUILT_IN_ALIASES, load_user_aliases
+from squadron.models.aliases import (
+    BUILT_IN_ALIASES,
+    estimate_cost,
+    load_user_aliases,
+)
 
 runner = CliRunner()
 
@@ -264,3 +270,81 @@ def test_existing_toml_backward_compat(tmp_path: Path) -> None:
     for name in ("old", "also_old"):
         alias = aliases[name]
         assert set(alias.keys()) == {"profile", "model"}
+
+
+# --- T8: estimate_cost() tests ---
+
+
+def test_estimate_cost_full_pricing() -> None:
+    """Known alias with pricing returns correct USD result."""
+    # kimi25: input=$5.00/1M, output=$25.00/1M
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=Path("/nonexistent/models.toml"),
+    ):
+        result = estimate_cost("kimi25", input_tokens=1000, output_tokens=500)
+    assert result is not None
+    # 1000/1M * 5.0 + 500/1M * 25.0 = 0.005 + 0.0125 = 0.0175
+    assert result == pytest.approx(0.0175)
+
+
+def test_estimate_cost_with_cache() -> None:
+    """Cache cost is included when cached_tokens > 0 and cache_read present."""
+    # kimi25: cache_read=$0.50/1M
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=Path("/nonexistent/models.toml"),
+    ):
+        result = estimate_cost(
+            "kimi25",
+            input_tokens=1000,
+            output_tokens=500,
+            cached_tokens=2000,
+        )
+    assert result is not None
+    # 0.0175 (base) + 2000/1M * 0.50 = 0.0175 + 0.001 = 0.0185
+    assert result == pytest.approx(0.0185)
+
+
+def test_estimate_cost_no_pricing() -> None:
+    """Subscription model (opus) with no pricing returns None."""
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=Path("/nonexistent/models.toml"),
+    ):
+        result = estimate_cost("opus", input_tokens=1000, output_tokens=500)
+    assert result is None
+
+
+def test_estimate_cost_unknown_alias() -> None:
+    """Unknown alias returns None."""
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=Path("/nonexistent/models.toml"),
+    ):
+        result = estimate_cost(
+            "nonexistent", input_tokens=1000, output_tokens=500
+        )
+    assert result is None
+
+
+def test_estimate_cost_zero_tokens() -> None:
+    """Zero tokens with pricing returns 0.0, not None."""
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=Path("/nonexistent/models.toml"),
+    ):
+        result = estimate_cost("kimi25", input_tokens=0, output_tokens=0)
+    assert result == 0.0
+
+
+def test_estimate_cost_free_model() -> None:
+    """Free model (gemini) with all-zero pricing returns 0.0."""
+    with patch(
+        "squadron.models.aliases.models_toml_path",
+        return_value=Path("/nonexistent/models.toml"),
+    ):
+        result = estimate_cost(
+            "gemini", input_tokens=1_000_000, output_tokens=1_000_000
+        )
+    assert result == 0.0
