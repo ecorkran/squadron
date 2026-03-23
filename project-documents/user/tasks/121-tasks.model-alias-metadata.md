@@ -6,7 +6,7 @@ dependencies: [model-alias-registry]
 projectState: Slices 100-120 complete. ModelAlias TypedDict with profile/model fields in src/squadron/models/aliases.py. BUILT_IN_ALIASES dict with 12 entries. load_user_aliases() parses models.toml. sq models shows 4-column table (Alias, Profile, Model ID, Source). resolve_model_alias() returns (model, profile) tuple.
 dateCreated: 20260322
 dateUpdated: 20260322
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary

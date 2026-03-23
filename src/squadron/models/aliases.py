@@ -14,31 +14,162 @@ from typing import Any, TypedDict, cast
 _logger = logging.getLogger(__name__)
 
 
-class ModelAlias(TypedDict):
-    """A model alias mapping a short name to a profile and full model ID."""
+class ModelPricing(TypedDict, total=False):
+    """Per-token pricing for a model, all values in USD per 1M tokens."""
+
+    input: float
+    output: float
+    cache_read: float
+    cache_write: float
+
+
+class _ModelAliasRequired(TypedDict):
+    """Required fields for a model alias."""
 
     profile: str
     model: str
 
 
+class ModelAlias(_ModelAliasRequired, total=False):
+    """A model alias mapping a short name to a profile and full model ID.
+
+    ``profile`` and ``model`` are always required.  The remaining fields
+    are optional metadata added by slice 121.
+    """
+
+    private: bool
+    cost_tier: str
+    notes: str
+    pricing: ModelPricing
+
+
 BUILT_IN_ALIASES: dict[str, ModelAlias] = {
-    # Claude family
-    "opus": {"profile": "sdk", "model": "claude-opus-4-6"},
-    "sonnet": {"profile": "sdk", "model": "claude-sonnet-4-6"},
-    "haiku": {"profile": "sdk", "model": "claude-haiku-4-5-20251001"},
+    # Claude family — Max subscription, no per-token pricing
+    "opus": {
+        "profile": "sdk",
+        "model": "claude-opus-4-6",
+        "private": True,
+        "cost_tier": "subscription",
+        "notes": "Max sub",
+    },
+    "sonnet": {
+        "profile": "sdk",
+        "model": "claude-sonnet-4-6",
+        "private": True,
+        "cost_tier": "subscription",
+        "notes": "Max sub",
+    },
+    "haiku": {
+        "profile": "sdk",
+        "model": "claude-haiku-4-5-20251001",
+        "private": True,
+        "cost_tier": "subscription",
+        "notes": "Max sub",
+    },
     # OpenAI GPT-5.4 family
-    "gpt54": {"profile": "openai", "model": "gpt-5.4"},
-    "gpt54-mini": {"profile": "openai", "model": "gpt-5.4-mini"},
-    "gpt54-nano": {"profile": "openai", "model": "gpt-5.4-nano"},
+    "gpt54": {
+        "profile": "openai",
+        "model": "gpt-5.4",
+        "private": True,
+        "cost_tier": "expensive",
+        "notes": "Frontier",
+        "pricing": {
+            "input": 2.50,
+            "output": 10.00,
+            "cache_read": 0.63,
+            "cache_write": 2.50,
+        },
+    },
+    "gpt54-mini": {
+        "profile": "openai",
+        "model": "gpt-5.4-mini",
+        "private": True,
+        "cost_tier": "moderate",
+        "notes": "Balanced",
+        "pricing": {
+            "input": 0.40,
+            "output": 1.60,
+            "cache_read": 0.10,
+            "cache_write": 0.40,
+        },
+    },
+    "gpt54-nano": {
+        "profile": "openai",
+        "model": "gpt-5.4-nano",
+        "private": True,
+        "cost_tier": "cheap",
+        "notes": "Lightweight",
+        "pricing": {
+            "input": 0.10,
+            "output": 0.40,
+            "cache_read": 0.03,
+            "cache_write": 0.10,
+        },
+    },
     # OpenAI specialized
-    "codex": {"profile": "openai", "model": "gpt-5.3-codex"},
-    # Google Gemini
-    "gemini": {"profile": "gemini", "model": "gemini-3.1-pro-preview-customtools"},
-    "flash3": {"profile": "gemini", "model": "gemini-3-flash-preview"},
+    "codex": {
+        "profile": "openai",
+        "model": "gpt-5.3-codex",
+        "private": True,
+        "cost_tier": "expensive",
+        "notes": "Code-specialized",
+        "pricing": {"input": 2.50, "output": 10.00},
+    },
+    # Google Gemini — free tier
+    "gemini": {
+        "profile": "gemini",
+        "model": "gemini-3.1-pro-preview-customtools",
+        "private": True,
+        "cost_tier": "free",
+        "notes": "Free tier",
+        "pricing": {
+            "input": 0.00,
+            "output": 0.00,
+            "cache_read": 0.00,
+            "cache_write": 0.00,
+        },
+    },
+    "flash3": {
+        "profile": "gemini",
+        "model": "gemini-3-flash-preview",
+        "private": True,
+        "cost_tier": "free",
+        "notes": "Fast, free",
+        "pricing": {
+            "input": 0.00,
+            "output": 0.00,
+            "cache_read": 0.00,
+            "cache_write": 0.00,
+        },
+    },
     # OpenRouter — cost-effective, no retention/training
-    "kimi25": {"profile": "openrouter", "model": "moonshotai/kimi-k2.5"},
-    "minimax": {"profile": "openrouter", "model": "minimax/minimax-m2.7"},
-    "glm5": {"profile": "openrouter", "model": "z-ai/glm-5"},
+    "kimi25": {
+        "profile": "openrouter",
+        "model": "moonshotai/kimi-k2.5",
+        "private": True,
+        "cost_tier": "cheap",
+        "notes": "1M context",
+        "pricing": {
+            "input": 5.00,
+            "output": 25.00,
+            "cache_read": 0.50,
+            "cache_write": 6.25,
+        },
+    },
+    "minimax": {
+        "profile": "openrouter",
+        "model": "minimax/minimax-m2.7",
+        "private": True,
+        "cost_tier": "cheap",
+        "pricing": {"input": 1.10, "output": 4.40},
+    },
+    "glm5": {
+        "profile": "openrouter",
+        "model": "z-ai/glm-5",
+        "private": True,
+        "cost_tier": "cheap",
+        "pricing": {"input": 0.50, "output": 2.00},
+    },
 }
 
 
