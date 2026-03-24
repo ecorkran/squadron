@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260323
+dateUpdated: 20260324
 ---
 
 # Development Log
@@ -11,6 +11,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260324
+
+### Slice 122: Review Context Enrichment — Design Complete
+
+- Created `project-documents/user/slices/122-slice.review-context-enrichment.md`
+- Two-pronged scope: (1) fix verdict/findings inconsistency (issue #5) via prompt hardening + parser post-processing guard, (2) auto-detect and inject language-specific rules for code reviews
+- Language detection from diff file paths or glob matches, matched against rules files' `paths` frontmatter globs
+- Rules directory resolution: `--rules-dir` flag > config `rules_dir` > `{cwd}/rules/` > `{cwd}/.claude/rules/`
+- Slice/task reviews inject `rules/general.md` if present
+- `--no-rules` flag to suppress all rule injection
+- Legacy P0-P3 priorities extracted as optional copyable rules file, not baked into templates
 
 ## 20260323
 
