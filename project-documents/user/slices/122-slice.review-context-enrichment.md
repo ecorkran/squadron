@@ -49,12 +49,18 @@ CRITICAL: Your verdict and findings MUST be consistent.
 
 This goes in each template's `system_prompt`, not in a shared injected block — templates are self-contained by design.
 
-**Layer 2: Post-processing guard in parser.** In `parsers.py`, after extracting verdict and findings:
-- If verdict is `CONCERNS` and no findings have `Severity.CONCERN` or `Severity.FAIL`, downgrade verdict to `PASS`
-- If verdict is `FAIL` and no findings have `Severity.FAIL`, downgrade to `CONCERNS` (if concerns exist) or `PASS`
-- Log a warning when downgrading so the issue is visible in debug output
+**Layer 2: Fallback parsing in `parsers.py`.** If the structured `_FINDING_RE` regex extracts zero findings but the verdict is CONCERNS or FAIL, the model *did* produce concerns — we just couldn't parse them. Rather than silently dropping them or downgrading the verdict:
 
-This is a safety net, not the primary fix. The prompt hardening should eliminate most occurrences.
+- Attempt more lenient parsing: look for bullet-point findings, numbered lists, or paragraph blocks after `## Findings` / `## Summary` that describe issues
+- If lenient parsing also finds nothing, synthesize a single finding from the raw text between `## Summary` and the end (or next `##` heading), with severity matching the verdict and title "Unparsed review findings"
+- This ensures the user always sees *something* when the model flags concerns — the raw content is surfaced rather than hidden
+
+**Layer 3: Broader regex coverage.** Expand `_FINDING_RE` to also match common model variations:
+- `### CONCERN: Title` (colon separator instead of brackets)
+- `**[CONCERN]** Title` (bold brackets without heading)
+- `- [CONCERN] Title` (bullet-point findings)
+
+This is defense-in-depth. The prompt hardening should get most models to comply, but cheaper models will still drift.
 
 ### 2. Auto-Detection of Language Rules for Code Reviews
 
@@ -171,8 +177,8 @@ User runs: sq review slice 122
 4. `--no-rules` suppresses all rule injection
 5. `rules_dir` config key overrides default rules directory
 6. Slice and task reviews inject `rules/general.md` if present
-7. A review returning CONCERNS with zero findings is auto-corrected to PASS (with warning)
-8. A review returning FAIL with no FAIL-severity findings is downgraded appropriately
+7. A review returning CONCERNS with non-standard finding format still surfaces findings (via lenient parsing or raw fallback)
+8. The findings regex handles common format variations (colon separators, bold brackets, bullet points)
 9. All three built-in templates include output format enforcement instructions
 10. `uv run pytest` — all tests pass; `uv run pyright` — 0 errors
 
@@ -180,12 +186,12 @@ User runs: sq review slice 122
 
 ### Verification Walkthrough
 
-1. **Verdict consistency guard:**
+1. **Findings recovery from non-standard output:**
    ```bash
-   # Run review with a model known to produce empty-findings CONCERNS
+   # Run review with a model known to produce non-standard finding format
    sq review tasks 208 --model minimax -vv
-   # Expect: if model returns CONCERNS with no findings, verdict auto-corrected to PASS
-   # Warning visible in debug output: "Downgraded verdict from CONCERNS to PASS (no findings)"
+   # Expect: if model returns CONCERNS, findings are surfaced — either via
+   # lenient parsing or raw fallback. No more "CONCERNS / No specific findings."
    ```
 
 2. **Auto-detect Python rules for code review:**
@@ -244,6 +250,6 @@ Rules injection shares the existing `rules_content` parameter. No size limit is 
 ### Testing Strategy
 
 - **Unit tests for `rules.py`:** Test language detection from diff output, from file globs, rules directory resolution, rules matching against frontmatter paths
-- **Unit tests for parser guard:** Test verdict downgrade scenarios (CONCERNS+no findings, FAIL+no fail findings, CONCERNS+has findings — no downgrade)
+- **Unit tests for parser fallback:** Test lenient parsing (colon separators, bullets, bold brackets), raw fallback when structured parsing fails, standard format still works
 - **Integration tests:** Mock reviews verifying rules content reaches the system prompt
 - **Existing test regression:** All current review tests must pass unchanged
