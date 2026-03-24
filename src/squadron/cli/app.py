@@ -5,6 +5,9 @@ from __future__ import annotations
 import importlib.metadata
 
 import typer
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from squadron.cli.commands.auth import auth_app
 from squadron.cli.commands.config import config_app

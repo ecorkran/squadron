@@ -14,6 +14,10 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260323
 
+### .env support for API keys
+
+Added `python-dotenv` dependency. `load_dotenv()` runs at CLI startup (`cli/app.py`), so API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, etc.) can be set in a `.env` file instead of exported in the shell. `.env` already gitignored.
+
 ### Slice 121: Model Alias Metadata — Implementation Complete
 
 - All 12 tasks (T1-T12) complete. 537 tests pass, pyright/ruff/format clean.
