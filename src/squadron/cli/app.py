@@ -7,8 +7,6 @@ import importlib.metadata
 import typer
 from dotenv import load_dotenv
 
-load_dotenv()
-
 from squadron.cli.commands.auth import auth_app
 from squadron.cli.commands.config import config_app
 from squadron.cli.commands.history import history
@@ -21,6 +19,8 @@ from squadron.cli.commands.serve import serve
 from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.spawn import spawn
 from squadron.cli.commands.task import task
+
+load_dotenv()
 
 app = typer.Typer(
     name="squadron",
