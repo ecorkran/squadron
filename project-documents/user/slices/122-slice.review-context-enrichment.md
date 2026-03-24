@@ -62,6 +62,31 @@ This goes in each template's `system_prompt`, not in a shared injected block —
 
 This is defense-in-depth. The prompt hardening should get most models to comply, but cheaper models will still drift.
 
+**Layer 4: Diagnostic logging for verdict/findings mismatches.** When a review produces a non-PASS verdict but zero findings are parsed (even after lenient parsing and fallback), log the full context to `~/.config/squadron/logs/review-debug.jsonl` for post-hoc analysis. Also log when the fallback path is triggered (findings recovered but not via standard parsing).
+
+Each log entry is a single JSON line:
+```json
+{
+  "ts": "2026-03-24T05:30:00Z",
+  "template": "tasks",
+  "model": "minimax/minimax-m2.7",
+  "verdict": "CONCERNS",
+  "findings_parsed": 0,
+  "fallback_used": true,
+  "input_file": "208-tasks.compound-workflow-commands.md",
+  "command": "sq review tasks 208 --model minimax -vv",
+  "raw_output": "## Summary\n**CONCERNS**\n..."
+}
+```
+
+Logging rules:
+- Only log on mismatch (verdict is CONCERNS or FAIL but structured parsing found zero findings) or when fallback parsing is triggered
+- Append-only JSONL — one line per event, no rotation needed at current scale
+- Directory created on first write (`~/.config/squadron/logs/`)
+- Not logged: normal reviews where structured parsing succeeds
+
+This gives us real model outputs to analyze when tuning the parser or prompt, without noise from successful reviews.
+
 ### 2. Auto-Detection of Language Rules for Code Reviews
 
 **Mechanism:** Before executing a code review, detect which languages/frameworks are present in the files under review, then auto-inject matching rules from the project's `rules/` directory.
@@ -142,7 +167,7 @@ User runs: sq review slice 122
 ## Component Interactions
 
 **Modified files:**
-- `src/squadron/review/parsers.py` — verdict consistency guard
+- `src/squadron/review/parsers.py` — lenient parsing, raw fallback, diagnostic logging
 - `src/squadron/review/templates/builtin/slice.yaml` — prompt hardening
 - `src/squadron/review/templates/builtin/tasks.yaml` — prompt hardening
 - `src/squadron/review/templates/builtin/code.yaml` — prompt hardening
@@ -180,7 +205,8 @@ User runs: sq review slice 122
 7. A review returning CONCERNS with non-standard finding format still surfaces findings (via lenient parsing or raw fallback)
 8. The findings regex handles common format variations (colon separators, bold brackets, bullet points)
 9. All three built-in templates include output format enforcement instructions
-10. `uv run pytest` — all tests pass; `uv run pyright` — 0 errors
+10. Verdict/findings mismatches and fallback parsing events are logged to `~/.config/squadron/logs/review-debug.jsonl`
+11. `uv run pytest` — all tests pass; `uv run pyright` — 0 errors
 
 ---
 
@@ -227,7 +253,14 @@ User runs: sq review slice 122
    # Expect: general.md content included in review context
    ```
 
-7. **Tests:**
+7. **Diagnostic log on mismatch:**
+   ```bash
+   # After a review that triggers fallback parsing
+   cat ~/.config/squadron/logs/review-debug.jsonl | jq .
+   # Expect: JSON entry with template, model, verdict, raw_output, fallback_used
+   ```
+
+8. **Tests:**
    ```bash
    uv run pytest tests/review/ -v
    uv run pytest tests/cli/test_cli_review.py -v
