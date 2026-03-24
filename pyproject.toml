@@ -17,6 +17,7 @@ classifiers = [
     "Topic :: Software Development :: Testing",
     "Typing :: Typed",
 ]
+
 dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
@@ -39,9 +40,9 @@ sq = "squadron.cli.app:app"
 squadron = "squadron.cli.app:app"
 
 [project.urls]
-Homepage = "https://github.com/manta/squadron"
-Repository = "https://github.com/manta/squadron"
-Issues = "https://github.com/manta/squadron/issues"
+Repository = "https://github.com/ecorkran/squadron"
+Documentation = "https://github.com/ecorkran/squadron/blob/main/README.md"
+Issues = "https://github.com/ecorkran/squadron/issues"
 
 [project.optional-dependencies]
 dev = [
