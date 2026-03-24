@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+from pathlib import Path
 
 import typer
 from dotenv import load_dotenv
@@ -20,7 +21,7 @@ from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.spawn import spawn
 from squadron.cli.commands.task import task
 
-load_dotenv()
+load_dotenv(dotenv_path=Path.cwd() / ".env")
 
 app = typer.Typer(
     name="squadron",
