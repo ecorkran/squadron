@@ -43,7 +43,7 @@ Additional PM direction: Fix issue #5 (CONCERNS verdict with empty findings). Ex
 ```
 CRITICAL: Your verdict and findings MUST be consistent.
 - If your verdict is CONCERNS or FAIL, you MUST include at least one finding with that severity.
-- If you have no findings of CONCERN or FAIL severity, your verdict MUST be PASS.
+- If you have no findings of CONCERN or FAIL severity, your verdict MUST be PASS, and you must still include findings.
 - Every finding MUST use the exact format: ### [SEVERITY] Title
 ```
 
@@ -94,7 +94,7 @@ This gives us real model outputs to analyze when tuning the parser or prompt, wi
 **Detection strategy:**
 - If `diff` input: extract file paths from the diff (lines starting with `+++ b/` or `--- a/`)
 - If `files` glob: resolve the glob to file paths
-- If neither: skip auto-detection (the SDK agent will survey the project itself)
+- If neither: lightweight scan of `cwd` (e.g., `glob("*")` + `glob("src/**/*")` with shallow depth) to detect languages present in the project. This matters for non-SDK agents that can't browse the filesystem themselves — without it, a `sq review code --profile openrouter --model kimi25` with no `--diff` or `--files` would get zero context enrichment
 - Collect file extensions from the resolved paths
 - Match extensions against rules files' `paths` frontmatter globs (already present in rules — e.g., `python.md` has `paths: ["**/*.py", "**/pyproject.toml"]`)
 
@@ -108,12 +108,20 @@ This gives us real model outputs to analyze when tuning the parser or prompt, wi
 
 **Interaction with `--rules`:** The existing `--rules` flag specifies a single explicit rules file. When both `--rules` and auto-detected rules are present, concatenate them (explicit first, auto-detected after). The `--rules` flag is an addition, not an override of auto-detection. Add `--no-rules` flag to suppress all rule injection (both explicit and auto).
 
-### 3. Rules for Slice and Task Reviews
+### 3. Template-Specific and General Rules
 
-Slice and task reviews do not have file-extension-based language detection. Instead:
-- Check if a `rules/general.md` or `rules/review.md` exists in the resolved rules directory
-- If found, inject as `rules_content`
-- This is opt-in by convention: if the project has general review rules, they apply; if not, nothing changes
+All review types (slice, tasks, code) support convention-based rule injection from the resolved rules directory. The lookup uses the template name:
+
+- `rules/review.md` — injected for **all** review types (general review criteria)
+- `rules/review-slice.md` — injected only for slice reviews
+- `rules/review-tasks.md` — injected only for task reviews
+- `rules/review-code.md` — injected only for code reviews (in addition to auto-detected language rules)
+
+The pattern is `rules/review-{template_name}.md` — so it's automatic for any template name, including user-defined templates. A user who wants custom slice review criteria puts them in `{rules_dir}/review-slice.md` and they apply to every `sq review slice` run.
+
+Both files are optional. When both `review.md` and `review-{template}.md` exist, both are injected (general first, then template-specific).
+
+The rules directory resolution is the same chain used for code review language rules: `--rules-dir` > config `rules_dir` > `{cwd}/rules/` > `{cwd}/.claude/rules/`. This means users of Claude Code's rules convention get automatic rule injection with no configuration.
 
 ### 4. Priority-Based Review Criteria from Code Review Crawler
 
