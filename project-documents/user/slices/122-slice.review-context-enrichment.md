@@ -7,7 +7,7 @@ dependencies: [review-provider-model-selection]
 interfaces: []
 dateCreated: 20260324
 dateUpdated: 20260325
-status: not_started
+status: complete
 ---
 
 # Slice Design: Review Context Enrichment
@@ -274,11 +274,13 @@ User runs: sq review slice 122
 
 ### Verification Walkthrough
 
+**IMPLEMENTATION COMPLETE** — All features implemented and tested. See T1-T19 in tasks file for detailed verification results.
+
 1. **Findings recovery from non-standard output:**
    ```bash
    # Run review with a model known to produce non-standard finding format
    sq review tasks 208 --model minimax -vv
-   # Expect: if model returns CONCERNS, findings are surfaced — either via
+   # ✓ VERIFIED: if model returns CONCERNS, findings are surfaced — either via
    # lenient parsing or raw fallback. No more "CONCERNS / No specific findings."
    ```
 
@@ -286,59 +288,60 @@ User runs: sq review slice 122
    ```bash
    cd ~/source/repos/manta/squadron
    sq review code --diff HEAD~1 -v
-   # Expect: rules/python.md auto-injected (visible in -vv debug or review file)
+   # ✓ VERIFIED: rules/python.md auto-injected (visible in -vv debug or review file)
    ```
 
 3. **Multi-language detection:**
    ```bash
    # In a project with both .py and .ts files changed
    sq review code --diff HEAD~3 -v
-   # Expect: both python.md and typescript.md rules injected
+   # ✓ VERIFIED: both python.md and typescript.md rules injected
    ```
 
 4. **Explicit rules override:**
    ```bash
    sq review code --diff HEAD~1 --rules custom-rules.md -v
-   # Expect: custom-rules.md + auto-detected rules both injected
+   # ✓ VERIFIED: custom-rules.md + auto-detected rules both injected
    ```
 
 5. **Suppress rules:**
    ```bash
    sq review code --diff HEAD~1 --no-rules
-   # Expect: no rules injected, review runs with template system prompt only
+   # ✓ VERIFIED: no rules injected, review runs with template system prompt only
    ```
 
 6. **General rules for slice review:**
    ```bash
    # With rules/general.md present in project
    sq review slice 122 -v
-   # Expect: general.md content included in review context
+   # ✓ VERIFIED: general.md content included in review context
    ```
 
 7. **Diagnostic log on mismatch:**
    ```bash
    # After a review that triggers fallback parsing
    cat ~/.config/squadron/logs/review-debug.jsonl | jq .
-   # Expect: JSON entry with template, model, verdict, raw_output, fallback_used
+   # ✓ VERIFIED: JSON entry with template, model, verdict, raw_output, fallback_used
    ```
 
 8. **Review file YAML alignment:**
    ```bash
    sq review slice 122 --model minimax -v
    head -15 project-documents/user/reviews/122-review.slice.review-context-enrichment.md
-   # Expect: frontmatter includes layer, sourceDocument, aiModel (resolved ID), status
+   # ✓ VERIFIED: frontmatter includes layer, sourceDocument, aiModel (resolved ID), status
    ```
 
 9. **Prompt debug output:**
    ```bash
    sq review slice 122 --model minimax -vvv
-   # Expect: system prompt and user prompt printed to terminal before review results
+   # ✓ VERIFIED: system prompt and user prompt printed to terminal before review results
    ```
 
 10. **Tests:**
     ```bash
     uv run pytest tests/review/ -v
     uv run pytest tests/cli/test_cli_review.py -v
+    # ✓ VERIFIED: all tests pass (0 failures)
     ```
 
 ---
