@@ -141,16 +141,22 @@ def _format_review_markdown(
     result: ReviewResult,
     review_type: str,
     slice_info: SliceInfo,
+    input_file: str | None = None,
 ) -> str:
     """Format a ReviewResult as markdown with YAML frontmatter."""
     today = result.timestamp.strftime("%Y%m%d")
+    source_doc = input_file or slice_info.get("design_file") or ""
     lines = [
         "---",
         "docType: review",
+        "layer: project",
         f"reviewType: {review_type}",
         f"slice: {slice_info['slice_name']}",
         "project: squadron",
         f"verdict: {result.verdict.value}",
+        f"sourceDocument: {source_doc}",
+        f"aiModel: {result.model or 'unknown'}",
+        "status: complete",
         f"dateCreated: {today}",
         f"dateUpdated: {today}",
         "---",
@@ -189,6 +195,7 @@ def _save_review_file(
     slice_info: SliceInfo,
     as_json: bool = False,
     reviews_dir: Path | None = None,
+    input_file: str | None = None,
 ) -> Path:
     """Save review output to the reviews directory.
 
@@ -204,7 +211,9 @@ def _save_review_file(
         path.write_text(json.dumps(result.to_dict(), indent=2))
     else:
         path = target / f"{base}.md"
-        path.write_text(_format_review_markdown(result, review_type, slice_info))
+        path.write_text(
+            _format_review_markdown(result, review_type, slice_info, input_file)
+        )
 
     return path
 
@@ -545,7 +554,9 @@ def review_slice(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(result, "slice", slice_info, as_json=use_json)
+        path = _save_review_file(
+            result, "slice", slice_info, as_json=use_json, input_file=input_file
+        )
         rprint(f"[green]Saved review to {path}[/green]")
 
 
@@ -676,7 +687,9 @@ def review_tasks(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(result, "tasks", slice_info, as_json=use_json)
+        path = _save_review_file(
+            result, "tasks", slice_info, as_json=use_json, input_file=input_file
+        )
         rprint(f"[green]Saved review to {path}[/green]")
 
 
@@ -787,7 +800,9 @@ def review_code(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(result, "code", slice_info, as_json=use_json)
+        path = _save_review_file(
+            result, "code", slice_info, as_json=use_json
+        )
         rprint(f"[green]Saved review to {path}[/green]")
 
 

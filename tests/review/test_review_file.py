@@ -1,0 +1,71 @@
+"""Tests for _format_review_markdown YAML frontmatter alignment (T14/T15)."""
+
+from __future__ import annotations
+
+from squadron.cli.commands.review import SliceInfo, _format_review_markdown
+from squadron.review.models import ReviewResult, Verdict
+
+
+def _make_result(model: str | None = "claude-opus-4-5") -> ReviewResult:
+    return ReviewResult(
+        verdict=Verdict.PASS,
+        findings=[],
+        raw_output="## Summary\nPASS\n",
+        template_name="slice",
+        input_files={"input": "design.md"},
+        model=model,
+    )
+
+
+def _make_slice_info() -> SliceInfo:
+    return SliceInfo(
+        index=122,
+        name="review-context-enrichment",
+        slice_name="review-context-enrichment",
+        design_file="project-documents/user/slices/122-slice.md",
+        task_files=["122-tasks.review-context-enrichment.md"],
+        arch_file="project-documents/user/architecture/100-arch.md",
+    )
+
+
+class TestFormatReviewMarkdown:
+    """Test YAML frontmatter fields in _format_review_markdown."""
+
+    def test_has_layer_field(self) -> None:
+        output = _format_review_markdown(_make_result(), "slice", _make_slice_info())
+        assert "layer: project" in output
+
+    def test_has_source_document(self) -> None:
+        output = _format_review_markdown(
+            _make_result(),
+            "slice",
+            _make_slice_info(),
+            input_file="project-documents/user/slices/122-slice.md",
+        )
+        assert "sourceDocument:" in output
+        assert "122-slice.md" in output
+
+    def test_has_ai_model(self) -> None:
+        output = _format_review_markdown(
+            _make_result(model="claude-opus-4-5"),
+            "slice",
+            _make_slice_info(),
+        )
+        assert "aiModel: claude-opus-4-5" in output
+
+    def test_has_status(self) -> None:
+        output = _format_review_markdown(_make_result(), "slice", _make_slice_info())
+        assert "status: complete" in output
+
+    def test_model_unknown_when_none(self) -> None:
+        output = _format_review_markdown(
+            _make_result(model=None), "slice", _make_slice_info()
+        )
+        assert "aiModel: unknown" in output
+
+    def test_source_document_falls_back_to_design_file(self) -> None:
+        """When input_file not provided, uses slice_info design_file."""
+        output = _format_review_markdown(
+            _make_result(), "slice", _make_slice_info(), input_file=None
+        )
+        assert "sourceDocument:" in output
