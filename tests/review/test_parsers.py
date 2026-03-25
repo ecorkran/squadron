@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from squadron.review.models import Severity, Verdict
-from squadron.review.parsers import _DEBUG_LOG_PATH, parse_review_output
+from squadron.review.parsers import parse_review_output
 
 WELL_FORMED_PASS = """\
 ## Summary
@@ -264,7 +264,9 @@ class TestFallbackParsing:
 
     def test_fallback_synthesizes_finding(self) -> None:
         """CONCERNS verdict + no parseable findings → single synthesized finding."""
-        text = "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
+        text = (
+            "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
+        )
         result = parse_review_output(text, "slice", {})
         assert result.verdict == Verdict.CONCERNS
         assert len(result.findings) == 1
@@ -287,9 +289,7 @@ class TestFallbackParsing:
 
     def test_fallback_used_flag_false_on_clean_parse(self) -> None:
         """result.fallback_used is False when standard parsing succeeds."""
-        text = (
-            "## Summary\nCONCERNS\n\n### [CONCERN] Missing tests\nNo tests.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Missing tests\nNo tests.\n"
         result = parse_review_output(text, "slice", {})
         assert result.fallback_used is False
 
@@ -319,13 +319,12 @@ class TestDiagnosticLogging:
     ) -> None:
         """CONCERNS + empty findings → log file written."""
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr(
-            "squadron.review.parsers._DEBUG_LOG_PATH", log_file
-        )
+        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
         text = "## Summary\nCONCERNS\n\nSome unstructured content.\n"
         parse_review_output(text, "slice", {}, model="minimax")
         assert log_file.exists()
         import json
+
         entries = [json.loads(line) for line in log_file.read_text().splitlines()]
         assert len(entries) >= 1
         assert entries[0]["verdict"] == "CONCERNS"
@@ -337,9 +336,7 @@ class TestDiagnosticLogging:
     ) -> None:
         """PASS with findings → no log write."""
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr(
-            "squadron.review.parsers._DEBUG_LOG_PATH", log_file
-        )
+        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
         text = "## Summary\nPASS\n\n### [PASS] Clean code\nLooks good.\n"
         parse_review_output(text, "code", {})
         assert not log_file.exists()

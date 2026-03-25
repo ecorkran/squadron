@@ -52,7 +52,7 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         name="rules_dir",
         type_=str,
         default=None,
-        description="Default rules directory for auto-detected language rules injection",
+        description="Default rules directory for auto-detected language rules",
     ),
 }
 

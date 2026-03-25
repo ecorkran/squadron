@@ -767,6 +767,7 @@ def review_code(
             file_paths = _extract_diff_paths(diff, resolved_cwd) if diff else []
             if not file_paths and files:
                 import glob as _glob
+
                 file_paths = _glob.glob(files, root_dir=resolved_cwd)
             if file_paths:
                 extensions = detect_languages_from_paths(file_paths)
@@ -800,9 +801,7 @@ def review_code(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(
-            result, "code", slice_info, as_json=use_json
-        )
+        path = _save_review_file(result, "code", slice_info, as_json=use_json)
         rprint(f"[green]Saved review to {path}[/green]")
 
 

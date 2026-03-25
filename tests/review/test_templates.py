@@ -284,6 +284,7 @@ class TestBuiltinTemplateHardening:
     @pytest.fixture(autouse=True)
     def _load(self) -> None:
         from squadron.review.templates import load_all_templates
+
         load_all_templates()
 
     def _get(self, name: str) -> ReviewTemplate:

@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from squadron.review.rules import (
     detect_languages_from_paths,
     get_template_rules,
@@ -15,7 +13,6 @@ from squadron.review.rules import (
     match_rules_files,
     resolve_rules_dir,
 )
-
 
 # ---------------------------------------------------------------------------
 # resolve_rules_dir
