@@ -10,6 +10,10 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.integrations.context_forge import (
+    ContextForgeError,
+    ContextForgeNotAvailable,
+)
 from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
@@ -231,3 +235,34 @@ class TestErrorCases:
             app, ["review", "slice", "a.md", "--against", "b.md"]
         )
         assert result.exit_code == 2
+
+
+class TestContextForgeErrors:
+    """Test error handling when CF is unavailable or fails."""
+
+    def test_review_slice_cf_not_available(self, cli_runner: CliRunner) -> None:
+        with patch("squadron.cli.commands.review.ContextForgeClient") as mock_cls:
+            mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable(
+                "cf not found"
+            )
+            result = cli_runner.invoke(app, ["review", "slice", "122"])
+            assert result.exit_code == 1
+            assert "not installed" in result.output
+
+    def test_review_slice_cf_error(self, cli_runner: CliRunner) -> None:
+        with patch("squadron.cli.commands.review.ContextForgeClient") as mock_cls:
+            mock_cls.return_value.list_slices.side_effect = ContextForgeError(
+                "connection refused"
+            )
+            result = cli_runner.invoke(app, ["review", "slice", "122"])
+            assert result.exit_code == 1
+            assert "connection refused" in result.output
+
+    def test_review_tasks_cf_not_available(self, cli_runner: CliRunner) -> None:
+        with patch("squadron.cli.commands.review.ContextForgeClient") as mock_cls:
+            mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable(
+                "cf not found"
+            )
+            result = cli_runner.invoke(app, ["review", "tasks", "122"])
+            assert result.exit_code == 1
+            assert "not installed" in result.output

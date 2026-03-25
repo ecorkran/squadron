@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import subprocess
 from pathlib import Path
 from typing import TypedDict
 
@@ -16,6 +15,11 @@ from rich.panel import Panel
 from rich.text import Text
 
 from squadron.config.manager import get_config
+from squadron.integrations.context_forge import (
+    ContextForgeClient,
+    ContextForgeError,
+    ContextForgeNotAvailable,
+)
 from squadron.models.aliases import resolve_model_alias
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.review_client import run_review_with_profile
@@ -244,75 +248,57 @@ class SliceInfo(TypedDict):
     arch_file: str
 
 
-def _run_cf(args: list[str]) -> str:
-    """Run a cf CLI command and return stdout. Exit on failure."""
+def _resolve_slice_number(num: str) -> SliceInfo:
+    """Resolve a bare slice number to file paths via Context-Forge.
+
+    Uses ``ContextForgeClient`` to call ``cf list slices --json``,
+    ``cf list tasks --json``, and ``cf get --json``.
+    """
+    index = int(num)
+
     try:
-        result = subprocess.run(
-            ["cf", *args],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except FileNotFoundError:
+        client = ContextForgeClient()
+
+        # --- slice list ---
+        slices = client.list_slices()
+        match = next((s for s in slices if s.index == index), None)
+        if match is None:
+            rprint(
+                f"[red]Error: No slice with index {index}"
+                " in the current slice plan.[/red]"
+            )
+            raise typer.Exit(code=1)
+
+        design_file = match.design_file
+        # derive kebab-case slice name from design file path or entry name
+        if design_file:
+            stem = Path(design_file).stem
+            slice_name = stem.split(".", 1)[1] if "." in stem else stem
+        else:
+            slice_name = match.name.lower().replace(" ", "-")
+
+        # --- tasks list ---
+        tasks = client.list_tasks()
+        task_match = next((t for t in tasks if t.index == index), None)
+        task_files = task_match.files if task_match else []
+
+        # --- architecture doc ---
+        project = client.get_project()
+        arch_file = project.arch_file
+
+    except ContextForgeNotAvailable:
         rprint(
             "[red]Error: 'cf' (Context-Forge CLI) is not installed"
             " or not on PATH.[/red]"
         )
         raise typer.Exit(code=1)
-    except subprocess.CalledProcessError as exc:
-        rprint(f"[red]Error running 'cf {' '.join(args)}': {exc.stderr.strip()}[/red]")
+    except ContextForgeError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
-    return result.stdout
-
-
-def _resolve_slice_number(num: str) -> SliceInfo:
-    """Resolve a bare slice number to file paths via Context-Forge.
-
-    Shells out to ``cf slice list --json``, ``cf tasks list --json``,
-    and ``cf get --json`` to resolve design file, task files, and
-    architecture document for the given slice index.
-    """
-    index = int(num)
-
-    # --- slice list ---
-    slice_data = json.loads(_run_cf(["slice", "list", "--json"]))
-    match = next(
-        (e for e in slice_data.get("entries", []) if e.get("index") == index),
-        None,
-    )
-    if match is None:
-        rprint(
-            f"[red]Error: No slice with index {index} in the current slice plan.[/red]"
-        )
-        raise typer.Exit(code=1)
-
-    design_file: str | None = match.get("designFile")
-    # derive kebab-case slice name from design file path or entry name
-    if design_file:
-        stem = Path(design_file).stem  # e.g. "118-slice.composed-workflows"
-        slice_name = stem.split(".", 1)[1] if "." in stem else stem
-    else:
-        slice_name = match["name"].lower().replace(" ", "-")
-
-    # --- tasks list ---
-    tasks_data = json.loads(_run_cf(["tasks", "list", "--json"]))
-    task_match = next(
-        (e for e in tasks_data if e.get("index") == index),
-        None,
-    )
-    task_files: list[str] = []
-    if task_match and task_match.get("files"):
-        task_files = task_match["files"]
-
-    # --- architecture doc ---
-    project_data = json.loads(_run_cf(["get", "--json"]))
-    arch_raw = project_data.get("fileArch", "")
-    # fileArch is a name like "100-arch.orchestration-v2", resolve to path
-    arch_file = f"project-documents/user/architecture/{arch_raw}.md" if arch_raw else ""
 
     return SliceInfo(
         index=index,
-        name=match["name"],
+        name=match.name,
         slice_name=slice_name,
         design_file=design_file,
         task_files=task_files,
