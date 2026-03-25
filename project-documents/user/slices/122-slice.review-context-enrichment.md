@@ -6,7 +6,7 @@ parent: 100-slices.orchestration-v2.md
 dependencies: [review-provider-model-selection]
 interfaces: []
 dateCreated: 20260324
-dateUpdated: 20260324
+dateUpdated: 20260325
 status: not_started
 ---
 
@@ -134,7 +134,59 @@ The legacy `prompt.code-review-crawler.md` defines a useful priority framework (
 
 **Approach:** Create a new built-in rules file at `src/squadron/review/rules/priorities.md` that extracts the P0-P3 framework in a format suitable for injection. This file is NOT auto-injected — it's available for users to reference with `--rules` or copy into their project's `rules/` directory. The code review template's system prompt will reference the severity-based reporting format but won't mandate P0-P3 categories.
 
-### 5. No Changes to Template Structure
+### 5. Review File YAML Alignment
+
+Align `_format_review_markdown()` output with the canonical review schema defined in `file-naming-conventions.md`. Current output is missing fields and uses non-standard names.
+
+**Changes to `_format_review_markdown()` in `review.py`:**
+
+Current frontmatter:
+```yaml
+docType: review
+reviewType: slice
+slice: {slice_name}
+project: squadron
+verdict: PASS
+dateCreated: YYYYMMDD
+dateUpdated: YYYYMMDD
+```
+
+Updated frontmatter (aligned with guide):
+```yaml
+docType: review
+layer: project
+project: squadron
+reviewType: slice
+sourceDocument: {input_file path}
+aiModel: {resolved_model_id}
+verdict: {verdict}
+slice: {slice_name}
+dateCreated: YYYYMMDD
+dateUpdated: YYYYMMDD
+status: complete
+```
+
+Key changes:
+- Add `layer: project` (all squadron reviews are project-layer)
+- Add `sourceDocument` — the file that was reviewed (e.g., the slice design path)
+- Add `aiModel` with the **resolved model ID** (e.g., `minimax/minimax-m2.7`), not the alias. This requires threading the resolved model through to the save path. `ReviewResult.model` already stores the resolved ID, so no upstream changes needed.
+- Add `status: complete` (reviews are always complete when saved)
+- Keep `slice` and `verdict` as squadron-specific extensions (not in the guide schema but useful for our tooling)
+
+### 6. Prompt Debug Output
+
+Add a `-vvv` / `--debug` verbosity level that logs the fully assembled prompt before sending it to the model. This lets users verify that rules are being injected correctly and see exactly what the model receives.
+
+**At verbosity >= 3:**
+- Print the system prompt (including injected rules) to stderr or a debug panel
+- Print the user prompt content
+- Label each section clearly (`[DEBUG] System Prompt:`, `[DEBUG] User Prompt:`, `[DEBUG] Injected Rules:`)
+
+**Implementation:** The debug output happens in `_run_review_command()` before calling `_execute_review()`. The assembled prompt information is available at that point via the template and rules_content. For the full prompt (after template variable substitution), we need the rendered prompt — this can be extracted from the template's `render()` path or logged inside `review_client.py` when verbosity is passed through.
+
+The simplest approach: pass `verbosity` to `run_review_with_profile()` and have it log the assembled prompt at level 3+ before sending to the API. This keeps the debug output close to the actual API call, ensuring what's logged is what's sent.
+
+### 7. No Changes to Template Structure
 
 Templates remain self-contained YAML files. Rules injection flows through the existing `rules_content` parameter. No new template fields or loader changes.
 
@@ -179,14 +231,14 @@ User runs: sq review slice 122
 - `src/squadron/review/templates/builtin/slice.yaml` — prompt hardening
 - `src/squadron/review/templates/builtin/tasks.yaml` — prompt hardening
 - `src/squadron/review/templates/builtin/code.yaml` — prompt hardening
-- `src/squadron/cli/commands/review.py` — auto-detection logic, `--rules-dir`, `--no-rules` flags
+- `src/squadron/cli/commands/review.py` — auto-detection logic, `--rules-dir`, `--no-rules` flags, review file YAML alignment
+- `src/squadron/review/review_client.py` — pass-through verbosity for prompt debug output
 
 **New files:**
 - `src/squadron/review/rules.py` — rule detection and matching logic (language detection, rules dir resolution, rules file matching)
 - `src/squadron/review/rules/priorities.md` — optional P0-P3 priority criteria (user-copyable)
 
 **Unchanged:**
-- `src/squadron/review/review_client.py` — already accepts `rules_content`, no changes
 - `src/squadron/review/runner.py` — already accepts `rules_content`, no changes
 - `src/squadron/review/templates/__init__.py` — no structural changes
 
@@ -198,7 +250,7 @@ User runs: sq review slice 122
 - Context Forge process guide prompt injection (deferred — the rule-based approach covers the immediate need)
 - Auto-detection based on file content analysis (shebang lines, etc.) — extension-based is sufficient
 - P0-P3 priority enforcement in the parser (priorities are guidance, not structure)
-- Changes to the saved review file format
+- Changes to review file naming convention (only frontmatter alignment)
 
 ---
 
@@ -214,7 +266,9 @@ User runs: sq review slice 122
 8. The findings regex handles common format variations (colon separators, bold brackets, bullet points)
 9. All three built-in templates include output format enforcement instructions
 10. Verdict/findings mismatches and fallback parsing events are logged to `~/.config/squadron/logs/review-debug.jsonl`
-11. `uv run pytest` — all tests pass; `uv run pyright` — 0 errors
+11. Saved review files include `layer`, `sourceDocument`, `aiModel` (resolved ID), and `status` in YAML frontmatter
+12. `-vvv` on any review command prints the assembled system prompt and user prompt before sending
+13. `uv run pytest` — all tests pass; `uv run pyright` — 0 errors
 
 ---
 
@@ -268,11 +322,24 @@ User runs: sq review slice 122
    # Expect: JSON entry with template, model, verdict, raw_output, fallback_used
    ```
 
-8. **Tests:**
+8. **Review file YAML alignment:**
    ```bash
-   uv run pytest tests/review/ -v
-   uv run pytest tests/cli/test_cli_review.py -v
+   sq review slice 122 --model minimax -v
+   head -15 project-documents/user/reviews/122-review.slice.review-context-enrichment.md
+   # Expect: frontmatter includes layer, sourceDocument, aiModel (resolved ID), status
    ```
+
+9. **Prompt debug output:**
+   ```bash
+   sq review slice 122 --model minimax -vvv
+   # Expect: system prompt and user prompt printed to terminal before review results
+   ```
+
+10. **Tests:**
+    ```bash
+    uv run pytest tests/review/ -v
+    uv run pytest tests/cli/test_cli_review.py -v
+    ```
 
 ---
 
