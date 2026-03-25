@@ -12,6 +12,16 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260325
+
+### Slice 122: Review Context Enrichment — Task Breakdown Complete (Phase 5)
+
+- 19 tasks across: parser hardening (lenient parsing + fallback + debug log), template prompt hardening, `rules.py` auto-detection module, review CLI wiring (`--rules-dir`, `--no-rules`), review file YAML alignment, prompt debug output (`-vvv`)
+- Slice design updated: added Section 5 (YAML alignment), Section 6 (prompt debug), prompt hardening renames to Section 7
+- v0.2.6 tagged and published (slice 126 complete — `ContextForgeClient`)
+
+---
+
 ## 20260324
 
 ### Slice 126: Context Forge Integration Layer — Implementation Complete
