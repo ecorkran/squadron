@@ -74,7 +74,7 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 22. [ ] **(125) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns. CLI additions: history --list, --export, --search. Retention policies with --prune. Dependencies: [Local Daemon (112)]. Risk: Low. Effort: 2/5
 
-23. [ ] **(126) Context Forge Integration Layer** — Centralize all Context Forge CLI interactions behind a `ContextForgeClient` abstraction in `src/squadron/integrations/context_forge.py`. Replace scattered `subprocess.run(["cf", ...])` calls with typed methods. Update to CF's current command surface (`cf list slices --json`, etc.). Design for multiple transport backends: subprocess CLI (current, fallback), MCP client (preferred when CF MCP server is available). Optionally surface key CF commands as `sq` subcommands (`sq guides`, `sq list slices`) delegating to CF — no logic duplication. Dependencies: [CLI Foundation (103)]. Risk: Low. Effort: 2/5
+23. [x] **(126) Context Forge Integration Layer** — Centralize all Context Forge CLI interactions behind a `ContextForgeClient` abstraction in `src/squadron/integrations/context_forge.py`. Replace scattered `subprocess.run(["cf", ...])` calls with typed methods. Update to CF's current command surface (`cf list slices --json`, etc.). Design for multiple transport backends: subprocess CLI (current, fallback), MCP client (preferred when CF MCP server is available). Optionally surface key CF commands as `sq` subcommands (`sq guides`, `sq list slices`) delegating to CF — no logic duplication. Dependencies: [CLI Foundation (103)]. Risk: Low. Effort: 2/5
 
 ---
 
@@ -112,7 +112,7 @@ Post-M1:
   119. Review Provider & Model Selection              ✅ complete
   120. Model Alias Registry                            ✅ complete
   121. Model Alias Metadata                           ✅ complete
-  126. Context Forge Integration Layer                   (next — CF commands breaking)
+  126. Context Forge Integration Layer                   ✅ complete
   122. Review Context Enrichment                        (after 126, high usability impact)
   123. Review Findings Pipeline                         (after 105, 106)
   124. Codex Agent Integration                          (after 114)
@@ -121,7 +121,7 @@ Post-M1:
 
 ### Parallelization Notes
 
-- **Slice 126 (Context Forge Integration Layer) is the immediate next priority.** CF command surface has changed and is breaking squadron's CF integration. Centralizing behind an abstraction prevents future breakage.
+- **Slice 126 (Context Forge Integration Layer) is complete.** CF calls centralized behind `ContextForgeClient` in `src/squadron/integrations/context_forge.py`.
 - **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management.
 - Multi-agent slices (M2, M3) are now tracked in `160-slices.multi-agent-communication.md`.
 
@@ -145,7 +145,7 @@ Post-M1:
 
 ## Notes
 
-- **Slices 100-121 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI as v0.2.5.
+- **Slices 100-121 and 126 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI as v0.2.5.
 - **Multi-agent work** (M2, M3) has been moved to `160-arch.multi-agent-communication.md` and `160-slices.multi-agent-communication.md`.
 - **SDK initialization cost**: Each `query()` call spawns a fresh subprocess with 2-12s+ overhead. Slice 104 deferred pending redesign.
 - **Multi-provider validation**: Slices 111-114 complete. The AgentProvider Protocol generalizes beyond Anthropic.

@@ -14,6 +14,15 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260324
 
+### Slice 126: Context Forge Integration Layer — Implementation Complete
+
+- `ContextForgeClient` implemented in `src/squadron/integrations/context_forge.py` with typed methods: `list_slices()`, `list_tasks()`, `get_project()`, `is_available()`
+- `review.py` migrated: `_run_cf()` removed, `_resolve_slice_number()` uses `ContextForgeClient`
+- Custom exceptions (`ContextForgeNotAvailable`, `ContextForgeError`) replace inline `typer.Exit`
+- 16 unit tests for client, 3 new CLI error path tests, 7 existing resolve tests updated
+- Markdown command files updated to CF's new command surface (`cf list slices`, `cf list tasks`)
+- All 556 tests pass, pyright 0 errors, ruff clean
+
 ### Slice 126: Context Forge Integration Layer — Task Breakdown Complete
 
 Task file at `project-documents/user/tasks/126-tasks.context-forge-integration-layer.md` (14 tasks: T1-T14). Three workstreams: client implementation with typed dataclasses (T1-T9), review.py migration (T10-T11), markdown command file updates and validation (T12-T14). Test-with pattern throughout.

@@ -7,7 +7,7 @@ dependencies: [cli-foundation]
 interfaces: []
 dateCreated: 20260324
 dateUpdated: 20260324
-status: not_started
+status: complete
 ---
 
 # Slice Design: Context Forge Integration Layer
@@ -189,44 +189,22 @@ ContextForgeClient internally:
 
 ### Verification Walkthrough
 
-1. **Slice resolution via client:**
-   ```bash
-   sq review slice 122 --model minimax -v
-   # Expect: resolves slice 122 design file, architecture doc via ContextForgeClient
-   # Review executes successfully
-   ```
+1. **Slice resolution via client:** `sq review slice 122 --model minimax -v`
+   - Verified: resolves via ContextForgeClient (requires cf on PATH and project configured)
 
-2. **Task resolution via client:**
-   ```bash
-   sq review tasks 121 --model minimax -v
-   # Expect: resolves task files and parent design via ContextForgeClient
-   ```
+2. **Task resolution via client:** `sq review tasks 121 --model minimax -v`
+   - Verified: resolves task files and parent design via ContextForgeClient
 
-3. **CF not installed:**
-   ```bash
-   # With cf not on PATH
-   sq review slice 122
-   # Expect: clear error message about CF not being available, not a stack trace
-   ```
+3. **CF not installed:** tested via unit test `test_review_slice_cf_not_available`
+   - Verified: clear error message, exit code 1
 
-4. **Run-slice command:**
-   ```bash
-   # In Claude Code
-   /sq:run-slice 126
-   # Expect: uses updated CF commands (cf list slices, not cf slice list)
-   ```
+4. **Run-slice command:** markdown updated to `cf list slices --json` / `cf list tasks --json`
 
 5. **No direct CF calls in review.py:**
-   ```bash
-   grep -n "subprocess.*cf\|\"cf\"" src/squadron/cli/commands/review.py
-   # Expect: no matches
-   ```
+   - `grep -n "subprocess.*cf\|\"cf\"" src/squadron/cli/commands/review.py` — no matches
+   - `subprocess` import removed from review.py
 
-6. **Tests:**
-   ```bash
-   uv run pytest tests/ -v
-   uv run pyright
-   ```
+6. **Tests:** `uv run pytest` — 556 passed; `uv run pyright` — 0 errors; `ruff check` — clean
 
 ---
 
