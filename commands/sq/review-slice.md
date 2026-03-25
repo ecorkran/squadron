@@ -11,7 +11,7 @@ When `$ARGUMENTS` is a bare number:
 `sq review slice {number} -v`
 
 The CLI automatically:
-- Resolves the slice design file via `cf slice list --json`
+- Resolves the slice design file via `cf list slices --json`
 - Resolves the architecture document via `cf get --json`
 - Runs a holistic review: slice design vs. architecture doc + slice plan entry
 - Saves the review to `project-documents/user/reviews/{nnn}-review.slice.{slice-name}.md` with YAML frontmatter

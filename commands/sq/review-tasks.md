@@ -11,7 +11,7 @@ When `$ARGUMENTS` is a bare number:
 `sq review tasks {number} -v`
 
 The CLI automatically:
-- Resolves the task file and slice design via `cf slice list --json` / `cf task list --json`
+- Resolves the task file and slice design via `cf list slices --json` / `cf list tasks --json`
 - Runs the review
 - Saves the review to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md` with YAML frontmatter
 

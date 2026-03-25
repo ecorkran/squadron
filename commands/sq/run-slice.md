@@ -12,7 +12,7 @@ Run `cf get` to confirm:
 
 If `cf get` fails or is not available, report that Context-Forge is required and stop.
 
-Run `cf slice list --json` and find the entry matching `$ARGUMENTS` (by index number or by name). Extract:
+Run `cf list slices --json` and find the entry matching `$ARGUMENTS` (by index number or by name). Extract:
 - The slice `index` (referred to as `{nnn}` below)
 - The slice `name`
 - The `designFile` path (may be null if not yet created)
@@ -44,7 +44,7 @@ Follow the instructions from `cf build` output to create the task breakdown. Cre
 
 When the task breakdown is complete, review it.
 
-Run `cf slice list --json` and `cf task list --json` to resolve the current file paths for this slice (they may have been created in step 1/2). Then run:
+Run `cf list slices --json` and `cf list tasks --json` to resolve the current file paths for this slice (they may have been created in step 1/2). Then run:
 
 `sq review tasks {task-file-path} --against {design-file-path} -v`
 

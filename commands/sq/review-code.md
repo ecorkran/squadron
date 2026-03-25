@@ -11,7 +11,7 @@ When `$ARGUMENTS` is a bare number:
 `sq review code {number} -v`
 
 The CLI automatically:
-- Resolves the slice context via `cf slice list --json`
+- Resolves the slice context via `cf list slices --json`
 - Defaults to `--diff main` when invoked with a number
 - Saves the review to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md` with YAML frontmatter
 
