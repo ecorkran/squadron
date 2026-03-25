@@ -23,6 +23,14 @@ from squadron.integrations.context_forge import (
 from squadron.models.aliases import resolve_model_alias
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.review_client import run_review_with_profile
+from squadron.review.rules import (
+    detect_languages_from_paths,
+    get_template_rules,
+    load_rules_content,
+    load_rules_frontmatter,
+    match_rules_files,
+    resolve_rules_dir,
+)
 from squadron.review.templates import (
     ReviewTemplate,
     get_template,
@@ -237,6 +245,25 @@ def _resolve_rules_content(rules_path: str | None) -> str | None:
     return path.read_text()
 
 
+def _extract_diff_paths(diff_ref: str, cwd: str) -> list[str]:
+    """Run git diff and extract +++ b/ file paths."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", diff_ref],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode == 0:
+            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except (FileNotFoundError, OSError):
+        pass
+    return []
+
+
 class SliceInfo(TypedDict):
     """Resolved slice metadata from Context-Forge."""
 
@@ -348,6 +375,7 @@ def _run_review_command(
     rules_content: str | None = None,
     model_flag: str | None = None,
     profile_flag: str | None = None,
+    rules_dir: Path | None = None,
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
@@ -372,6 +400,16 @@ def _run_review_command(
             )
             raise typer.Exit(code=1)
 
+    # Prepend template-specific rules (review.md / review-{template}.md)
+    if rules_dir is not None:
+        template_rules = get_template_rules(template_name, rules_dir)
+        if template_rules:
+            rules_content = (
+                template_rules
+                if rules_content is None
+                else f"{template_rules}\n\n---\n\n{rules_content}"
+            )
+
     # Resolve model from flag → config → template, then resolve alias
     raw_model = _resolve_model(model_flag, template)
     alias_model: str | None = None
@@ -390,6 +428,7 @@ def _run_review_command(
                 rules_content,
                 resolved_model,
                 resolved_profile,
+                verbosity=verbosity,
             )
         )
     except RateLimitError as exc:
@@ -417,6 +456,7 @@ async def _execute_review(
     rules_content: str | None = None,
     model: str | None = None,
     profile: str = "sdk",
+    verbosity: int = 0,
 ) -> ReviewResult:
     """Execute the review asynchronously."""
     return await run_review_with_profile(
@@ -425,6 +465,7 @@ async def _execute_review(
         profile=profile,
         rules_content=rules_content,
         model=model,
+        verbosity=verbosity,
     )
 
 
@@ -463,6 +504,9 @@ def review_slice(
         False, "--json", help="Output and save as JSON instead of markdown"
     ),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
+    rules_dir_flag: str | None = typer.Option(
+        None, "--rules-dir", help="Rules directory override"
+    ),
 ) -> None:
     """Run a slice design review."""
     slice_info: SliceInfo | None = None
@@ -483,6 +527,7 @@ def review_slice(
 
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
+    resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
     inputs = {
         "input": input_file,
         "against": against,
@@ -496,6 +541,7 @@ def review_slice(
         verbosity,
         model_flag=model,
         profile_flag=profile,
+        rules_dir=resolved_rules_dir,
     )
 
     if slice_info and not no_save:
@@ -550,6 +596,7 @@ def review_arch(
         output_path=output_path,
         use_json=use_json,
         no_save=no_save,
+        rules_dir_flag=None,
     )
 
 
@@ -585,6 +632,9 @@ def review_tasks(
         False, "--json", help="Output and save as JSON instead of markdown"
     ),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
+    rules_dir_flag: str | None = typer.Option(
+        None, "--rules-dir", help="Rules directory override"
+    ),
 ) -> None:
     """Run a task plan review."""
     slice_info: SliceInfo | None = None
@@ -608,6 +658,7 @@ def review_tasks(
 
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
+    resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
     inputs = {
         "input": input_file,
         "against": against,
@@ -621,6 +672,7 @@ def review_tasks(
         verbosity,
         model_flag=model,
         profile_flag=profile,
+        rules_dir=resolved_rules_dir,
     )
 
     if slice_info and not no_save:
@@ -642,6 +694,12 @@ def review_code(
     diff: str | None = typer.Option(None, "--diff", help="Git ref to diff against"),
     rules: str | None = typer.Option(
         None, "--rules", help="Path to additional rules file"
+    ),
+    rules_dir_flag: str | None = typer.Option(
+        None, "--rules-dir", help="Rules directory override"
+    ),
+    no_rules: bool = typer.Option(
+        False, "--no-rules", help="Suppress all rule injection"
     ),
     model: str | None = typer.Option(
         None, "--model", help="Model override (e.g. opus, sonnet)"
@@ -678,13 +736,38 @@ def review_code(
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
 
-    # Resolve rules: CLI flag > config default
-    rules_path = rules
-    if not rules_path:
-        config_rules = get_config("default_rules")
-        if isinstance(config_rules, str):
-            rules_path = config_rules
-    rules_content = _resolve_rules_content(rules_path)
+    rules_content: str | None = None
+    resolved_rules_dir: Path | None = None
+
+    if not no_rules:
+        # Resolve explicit rules file: CLI flag > config default
+        rules_path = rules
+        if not rules_path:
+            config_rules = get_config("default_rules")
+            if isinstance(config_rules, str):
+                rules_path = config_rules
+        rules_content = _resolve_rules_content(rules_path)
+
+        # Auto-detect language rules from diff or files input
+        resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
+        if resolved_rules_dir is not None:
+            file_paths = _extract_diff_paths(diff, resolved_cwd) if diff else []
+            if not file_paths and files:
+                import glob as _glob
+                file_paths = _glob.glob(files, root_dir=resolved_cwd)
+            if file_paths:
+                extensions = detect_languages_from_paths(file_paths)
+                frontmatter = load_rules_frontmatter(resolved_rules_dir)
+                auto_files = match_rules_files(
+                    extensions, resolved_rules_dir, frontmatter
+                )
+                auto_content = load_rules_content(auto_files)
+                if auto_content:
+                    rules_content = (
+                        auto_content
+                        if rules_content is None
+                        else f"{rules_content}\n\n---\n\n{auto_content}"
+                    )
 
     inputs: dict[str, str] = {"cwd": resolved_cwd}
     if files:
@@ -700,6 +783,7 @@ def review_code(
         rules_content,
         model_flag=model,
         profile_flag=profile,
+        rules_dir=resolved_rules_dir,
     )
 
     if slice_info and not no_save:

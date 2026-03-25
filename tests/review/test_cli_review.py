@@ -237,6 +237,106 @@ class TestErrorCases:
         assert result.exit_code == 2
 
 
+class TestRulesWiring:
+    """T13: Tests for language rules auto-detection and template rules wiring."""
+
+    def test_review_code_no_rules_flag_suppresses_injection(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """--no-rules suppresses all rule injection."""
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "python.md").write_text("Python rules content.")
+
+        with patch("squadron.cli.commands.review.get_config", return_value=None):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "review",
+                    "code",
+                    "--no-rules",
+                    "--rules-dir",
+                    str(rules_dir),
+                    "--diff",
+                    "main",
+                ],
+            )
+        assert result.exit_code == 0
+        call_kwargs = patch_run_review.call_args.kwargs
+        assert call_kwargs["rules_content"] is None
+
+    def test_review_slice_template_rules_injected(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """rules/review-slice.md present → injected into slice review."""
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "review-slice.md").write_text("Slice-specific review guidance.")
+
+        result = cli_runner.invoke(
+            app,
+            [
+                "review",
+                "slice",
+                "slice.md",
+                "--against",
+                "arch.md",
+                "--rules-dir",
+                str(rules_dir),
+            ],
+        )
+        assert result.exit_code == 0
+        call_kwargs = patch_run_review.call_args.kwargs
+        assert call_kwargs["rules_content"] is not None
+        assert "Slice-specific review guidance." in call_kwargs["rules_content"]
+
+    def test_review_code_explicit_and_auto_combined(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """--rules custom.md + auto-detected rules both present in rules_content."""
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "python.md").write_text(
+            "---\npaths: [**/*.py]\n---\nPython auto rules."
+        )
+        explicit_rules = tmp_path / "custom.md"
+        explicit_rules.write_text("Explicit custom rules.")
+
+        # Patch git diff to return a .py file
+        with patch(
+            "squadron.cli.commands.review._extract_diff_paths",
+            return_value=["src/foo.py"],
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "review",
+                    "code",
+                    "--rules",
+                    str(explicit_rules),
+                    "--rules-dir",
+                    str(rules_dir),
+                    "--diff",
+                    "main",
+                ],
+            )
+        assert result.exit_code == 0
+        call_kwargs = patch_run_review.call_args.kwargs
+        rc = call_kwargs["rules_content"]
+        assert rc is not None
+        assert "Explicit custom rules." in rc
+        assert "Python auto rules." in rc
+
+
 class TestContextForgeErrors:
     """Test error handling when CF is unavailable or fails."""
 
