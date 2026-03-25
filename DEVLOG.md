@@ -14,6 +14,10 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260324
 
+### Slice 126: Context Forge Integration Layer — Task Breakdown Complete
+
+Task file at `project-documents/user/tasks/126-tasks.context-forge-integration-layer.md` (14 tasks: T1-T14). Three workstreams: client implementation with typed dataclasses (T1-T9), review.py migration (T10-T11), markdown command file updates and validation (T12-T14). Test-with pattern throughout.
+
 ### Slice 126: Context Forge Integration Layer — Design Complete
 
 - Created `project-documents/user/slices/126-slice.context-forge-integration-layer.md`
