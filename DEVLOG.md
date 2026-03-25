@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260324
+dateUpdated: 20260325
 ---
 
 # Development Log
@@ -13,6 +13,14 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 ---
 
 ## 20260325
+
+### Slice 122: Review Context Enrichment — Implementation Complete (Phase 6)
+
+- Expanded `_FINDING_RE` to 5 formats; lenient fallback + synthesized finding when verdict/findings mismatch; `fallback_used` flag on `ReviewResult`; debug log at `~/.config/squadron/logs/review-debug.jsonl`
+- CRITICAL consistency block added to all three builtin templates; `rules.py` module: `resolve_rules_dir()`, language detection, glob matching, template rules injection
+- `review code` auto-detects language rules from diff paths; `--rules-dir`/`--no-rules` flags on review commands; template rules prepended from `rules/review.md` + `rules/review-{template}.md`
+- Review file YAML aligned: `layer`, `sourceDocument`, `aiModel` (resolved ID), `status: complete`; `-vvv` debug output shows system/user prompt + injected rules
+- 609 tests pass; 4 semantic commits on branch `122-slice.review-context-enrichment`
 
 ### Slice 122: Review Context Enrichment — Task Breakdown Complete (Phase 5)
 
