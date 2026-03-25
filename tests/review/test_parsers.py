@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from squadron.review.models import Severity, Verdict
-from squadron.review.parsers import parse_review_output
+from squadron.review.parsers import _DEBUG_LOG_PATH, parse_review_output
 
 WELL_FORMED_PASS = """\
 ## Summary
@@ -203,3 +205,141 @@ class TestUnknownFallback:
         assert result.template_name == "arch"
         assert result.input_files == {"input": "a.md", "against": "b.md"}
         assert result.raw_output == WELL_FORMED_PASS
+
+
+# ---------------------------------------------------------------------------
+# T2: Expanded _FINDING_RE format variants
+# ---------------------------------------------------------------------------
+
+
+class TestExpandedFindingFormats:
+    """Test the five finding format variants supported by _FINDING_RE."""
+
+    def test_finding_colon_separator(self) -> None:
+        """### CONCERN: My title parses to CONCERN finding."""
+        text = "## Summary\nCONCERNS\n\n### CONCERN: My title\nSome detail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.CONCERN
+        assert result.findings[0].title == "My title"
+
+    def test_finding_bold_brackets(self) -> None:
+        """**[FAIL]** My title parses to FAIL finding."""
+        text = "## Summary\nFAIL\n\n**[FAIL]** My title\nSome detail.\n"
+        result = parse_review_output(text, "code", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.FAIL
+        assert result.findings[0].title == "My title"
+
+    def test_finding_bullet_point(self) -> None:
+        """- [CONCERN] My title parses to CONCERN finding."""
+        text = "## Summary\nCONCERNS\n\n- [CONCERN] My title\nSome detail.\n"
+        result = parse_review_output(text, "tasks", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.CONCERN
+        assert result.findings[0].title == "My title"
+
+    def test_finding_standard_brackets(self) -> None:
+        """### [CONCERN] Title — existing format still parses correctly."""
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Standard brackets\nDetail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.CONCERN
+
+    def test_finding_standard_no_brackets(self) -> None:
+        """### CONCERN Title — existing no-brackets format still parses correctly."""
+        text = "## Summary\nCONCERNS\n\n### CONCERN No brackets\nDetail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.CONCERN
+
+
+# ---------------------------------------------------------------------------
+# T4: Fallback parsing
+# ---------------------------------------------------------------------------
+
+
+class TestFallbackParsing:
+    """Test fallback parsing for verdict/findings mismatches."""
+
+    def test_fallback_synthesizes_finding(self) -> None:
+        """CONCERNS verdict + no parseable findings → single synthesized finding."""
+        text = "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.CONCERNS
+        assert len(result.findings) == 1
+        assert result.findings[0].title == "Unparsed review findings"
+        assert result.findings[0].severity == Severity.CONCERN
+
+    def test_fallback_not_triggered_on_pass(self) -> None:
+        """PASS with no findings → no fallback, findings list stays empty."""
+        text = "## Summary\nPASS\n\nLooks good overall.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.PASS
+        assert result.findings == []
+        assert result.fallback_used is False
+
+    def test_fallback_used_flag_true_when_triggered(self) -> None:
+        """result.fallback_used is True when fallback triggered."""
+        text = "## Summary\nFAIL\n\nCritical issues found.\n"
+        result = parse_review_output(text, "code", {})
+        assert result.fallback_used is True
+
+    def test_fallback_used_flag_false_on_clean_parse(self) -> None:
+        """result.fallback_used is False when standard parsing succeeds."""
+        text = (
+            "## Summary\nCONCERNS\n\n### [CONCERN] Missing tests\nNo tests.\n"
+        )
+        result = parse_review_output(text, "slice", {})
+        assert result.fallback_used is False
+
+    def test_lenient_finds_paragraph_findings(self) -> None:
+        """CONCERNS verdict with findings in paragraph format → lenient path."""
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "CONCERN: Input validation is missing\n"
+            "The handler does not validate user input.\n"
+        )
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.CONCERNS
+        assert len(result.findings) >= 1
+        assert result.fallback_used is True
+
+
+# ---------------------------------------------------------------------------
+# T6: Diagnostic logging
+# ---------------------------------------------------------------------------
+
+
+class TestDiagnosticLogging:
+    """Test debug log written on verdict/findings mismatches."""
+
+    def test_debug_log_written_on_mismatch(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """CONCERNS + empty findings → log file written."""
+        log_file = tmp_path / "review-debug.jsonl"
+        monkeypatch.setattr(
+            "squadron.review.parsers._DEBUG_LOG_PATH", log_file
+        )
+        text = "## Summary\nCONCERNS\n\nSome unstructured content.\n"
+        parse_review_output(text, "slice", {}, model="minimax")
+        assert log_file.exists()
+        import json
+        entries = [json.loads(line) for line in log_file.read_text().splitlines()]
+        assert len(entries) >= 1
+        assert entries[0]["verdict"] == "CONCERNS"
+        assert entries[0]["template"] == "slice"
+        assert entries[0]["model"] == "minimax"
+
+    def test_debug_log_not_written_on_clean_pass(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """PASS with findings → no log write."""
+        log_file = tmp_path / "review-debug.jsonl"
+        monkeypatch.setattr(
+            "squadron.review.parsers._DEBUG_LOG_PATH", log_file
+        )
+        text = "## Summary\nPASS\n\n### [PASS] Clean code\nLooks good.\n"
+        parse_review_output(text, "code", {})
+        assert not log_file.exists()
