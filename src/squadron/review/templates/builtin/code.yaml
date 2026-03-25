@@ -13,6 +13,11 @@ system_prompt: |
   - Security concerns
   - Naming, structure, and documentation quality
 
+  CRITICAL: Your verdict and findings MUST be consistent.
+  - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
+  - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
+  - Every finding MUST use the exact format: ### [SEVERITY] Title
+
   Report your findings using severity levels:
 
   ## Summary
