@@ -372,13 +372,14 @@ def _run_review_command(
             )
             raise typer.Exit(code=1)
 
-    # Resolve alias once as pre-processing, then thread through
+    # Resolve model from flag → config → template, then resolve alias
+    raw_model = _resolve_model(model_flag, template)
     alias_model: str | None = None
     alias_profile: str | None = None
-    if model_flag is not None:
-        alias_model, alias_profile = resolve_model_alias(model_flag)
+    if raw_model is not None:
+        alias_model, alias_profile = resolve_model_alias(raw_model)
 
-    resolved_model = _resolve_model(alias_model or model_flag, template)
+    resolved_model = alias_model or raw_model
     resolved_profile = _resolve_profile(profile_flag or alias_profile, template)
 
     try:

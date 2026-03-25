@@ -142,3 +142,24 @@ class TestModelCLIFlag:
         call_kwargs = mock_run_review.call_args.kwargs
         # Alias "haiku" resolves to full model ID
         assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
+
+    def test_config_default_model_resolves_alias(
+        self,
+        cli_runner: CliRunner,
+        mock_run_review: AsyncMock,
+    ) -> None:
+        """Config default_model must go through alias resolution (bug fix)."""
+        with patch(
+            "squadron.cli.commands.review.get_config",
+            side_effect=lambda key: "minimax" if key == "default_model" else None,
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["review", "slice", "a.md", "--against", "b.md"],
+            )
+        assert result.exit_code == 0
+        call_kwargs = mock_run_review.call_args.kwargs
+        # "minimax" alias should resolve to full model ID, not bare "minimax"
+        assert call_kwargs["model"] == "minimax/minimax-m2.7"
+        # Profile should be inferred from alias
+        assert call_kwargs["profile"] == "openrouter"
