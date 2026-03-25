@@ -14,6 +14,16 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260324
 
+### Slice 126: Context Forge Integration Layer — Design Complete
+
+- Created `project-documents/user/slices/126-slice.context-forge-integration-layer.md`
+- `ContextForgeClient` class in `src/squadron/integrations/context_forge.py` — typed methods replacing scattered `subprocess.run(["cf", ...])` calls
+- Typed return dataclasses: `SliceEntry`, `TaskEntry`, `ProjectInfo`
+- Custom exceptions (`ContextForgeNotAvailable`, `ContextForgeError`) separated from CLI layer
+- Adapts to CF's new command surface (`cf list slices --json` replacing `cf slice list --json`)
+- Markdown command files updated to reference new CF command names
+- Scope limited to abstraction and migration — MCP transport, command aliasing deferred
+
 ### Slice 122: Review Context Enrichment — Design Complete
 
 - Created `project-documents/user/slices/122-slice.review-context-enrichment.md`
