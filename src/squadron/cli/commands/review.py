@@ -766,9 +766,7 @@ def review_code(
         slice_info = _resolve_slice_number(slice_number)
         if not diff:
             resolved_cwd_for_diff = _resolve_cwd(cwd)
-            diff = resolve_slice_diff_range(
-                int(slice_number), resolved_cwd_for_diff
-            )
+            diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
 
     if use_json:
         output = "json"

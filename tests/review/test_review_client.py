@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from squadron.review.models import ReviewResult, Verdict
-from squadron.review.review_client import run_review_with_profile
+from squadron.review.review_client import _write_prompt_log, run_review_with_profile
 from squadron.review.templates import ReviewTemplate
 
 
@@ -419,11 +421,6 @@ class TestNonSDKPath:
 # T8: Tests for _write_prompt_log()
 # ---------------------------------------------------------------------------
 
-import re
-from pathlib import Path
-
-from squadron.review.review_client import _write_prompt_log
-
 
 class TestWritePromptLog:
     """Tests for _write_prompt_log()."""
@@ -457,9 +454,9 @@ class TestWritePromptLog:
             template_name="slice",
             log_dir=tmp_path,
         )
-        assert re.match(
-            r"review-prompt-\d{8}-\d{6}\.md", path.name
-        ), f"Unexpected filename: {path.name}"
+        assert re.match(r"review-prompt-\d{8}-\d{6}\.md", path.name), (
+            f"Unexpected filename: {path.name}"
+        )
 
     def test_contains_metadata(self, tmp_path: Path) -> None:
         path = _write_prompt_log(

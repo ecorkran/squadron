@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
 from squadron.review.git_utils import (
@@ -9,6 +10,8 @@ from squadron.review.git_utils import (
     _find_slice_branch,
     resolve_slice_diff_range,
 )
+
+_GIT_UTILS_SUBPROCESS = "squadron.review.git_utils.subprocess.run"
 
 
 class TestFindSliceBranch:
@@ -19,7 +22,7 @@ class TestFindSliceBranch:
         mock_result.returncode = 0
         mock_result.stdout = "  122-slice.review-context-enrichment\n"
 
-        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
+        with patch(_GIT_UTILS_SUBPROCESS, return_value=mock_result):
             result = _find_slice_branch(122, ".")
         assert result == "122-slice.review-context-enrichment"
 
@@ -28,13 +31,13 @@ class TestFindSliceBranch:
         mock_result.returncode = 0
         mock_result.stdout = ""
 
-        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
+        with patch(_GIT_UTILS_SUBPROCESS, return_value=mock_result):
             result = _find_slice_branch(999, ".")
         assert result is None
 
     def test_find_branch_subprocess_error(self) -> None:
         with patch(
-            "squadron.review.git_utils.subprocess.run",
+            _GIT_UTILS_SUBPROCESS,
             side_effect=FileNotFoundError("git not found"),
         ):
             result = _find_slice_branch(122, ".")
@@ -49,7 +52,7 @@ class TestFindMergeCommit:
         mock_result.returncode = 0
         mock_result.stdout = "abc1234 Merge branch '122-slice.foo'\n"
 
-        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
+        with patch(_GIT_UTILS_SUBPROCESS, return_value=mock_result):
             result = _find_merge_commit(122, ".")
         assert result == "abc1234"
 
@@ -58,13 +61,13 @@ class TestFindMergeCommit:
         mock_result.returncode = 0
         mock_result.stdout = ""
 
-        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
+        with patch(_GIT_UTILS_SUBPROCESS, return_value=mock_result):
             result = _find_merge_commit(999, ".")
         assert result is None
 
     def test_find_merge_commit_subprocess_error(self) -> None:
         with patch(
-            "squadron.review.git_utils.subprocess.run",
+            _GIT_UTILS_SUBPROCESS,
             side_effect=OSError("git error"),
         ):
             result = _find_merge_commit(122, ".")
@@ -110,8 +113,6 @@ class TestResolveSliceDiffRange:
         ):
             result = resolve_slice_diff_range(999, ".")
         assert result == "main"
-        import sys
-        from io import StringIO
 
         # Re-run to capture stderr
         with (

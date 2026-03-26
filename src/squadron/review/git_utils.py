@@ -38,8 +38,13 @@ def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
     try:
         result = subprocess.run(
             [
-                "git", "log", "--merges", "--oneline",
-                f"--grep={slice_number}-slice", "main", "-1",
+                "git",
+                "log",
+                "--merges",
+                "--oneline",
+                f"--grep={slice_number}-slice",
+                "main",
+                "-1",
             ],
             capture_output=True,
             text=True,
