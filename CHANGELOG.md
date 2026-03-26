@@ -26,8 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Review file YAML alignment: added `layer: project`, `sourceDocument`, `aiModel` (resolved model ID), `status: complete` fields
 - `-vvv` debug output: at verbosity >= 3, prints `[DEBUG] System Prompt:`, `[DEBUG] User Prompt:`, and `[DEBUG] Injected Rules:` to stderr before API call
 
+- `src/squadron/review/git_utils.py` — `_find_slice_branch()`, `_find_merge_commit()`, `resolve_slice_diff_range()` for scoped slice diff resolution (slice 127)
+- Prompt log persistence: `-vvv` writes full prompt to `~/.config/squadron/logs/review-prompt-{timestamp}.md` and prints path to stderr (slice 127)
+- `system_prompt`, `user_prompt`, `rules_content_used` optional fields on `ReviewResult` — populated at verbosity >= 2 (slice 127)
+- Debug appendix `## Debug: Prompt & Response` in saved review markdown when prompt fields present (slice 127)
+
 ### Changed
 - `run_review_with_profile()` accepts `verbosity: int = 0` and threads it through to `_run_non_sdk_review()`
+- `sq review code 122` now auto-scopes diff to slice 122's branch commits via merge-base or merge-commit detection, instead of diffing against all of main (slice 127)
 
 ## [0.2.6] - 20260325
 
