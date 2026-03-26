@@ -59,6 +59,23 @@ def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
         return None
 
 
+def _resolve_rev(ref: str, cwd: str) -> str | None:
+    """Resolve a git ref to its full SHA. Returns None on failure."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", ref],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (FileNotFoundError, OSError):
+        pass
+    return None
+
+
 def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
     """Resolve the git diff range for a slice's commits.
 
@@ -82,10 +99,15 @@ def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
             )
             if mb_result.returncode == 0 and mb_result.stdout.strip():
                 merge_base = mb_result.stdout.strip()
-                return f"{merge_base}...{branch}"
+                # Check if branch tip equals merge-base — if so,
+                # branch is fully merged and three-dot diff will be
+                # empty. Fall through to merge commit path instead.
+                branch_tip = _resolve_rev(branch, cwd)
+                if branch_tip is None or merge_base != branch_tip:
+                    return f"{merge_base}...{branch}"
         except (FileNotFoundError, OSError):
             pass
-        # merge-base failed but branch exists — fall through to merge commit check
+        # merge-base failed or branch is merged — fall through
 
     merge_commit = _find_merge_commit(slice_number, cwd)
     if merge_commit is not None:

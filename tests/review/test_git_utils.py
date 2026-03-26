@@ -77,7 +77,8 @@ class TestFindMergeCommit:
 class TestResolveSliceDiffRange:
     """Tests for resolve_slice_diff_range()."""
 
-    def test_resolve_branch_exists(self) -> None:
+    def test_resolve_branch_exists_unmerged(self) -> None:
+        """Branch exists and tip differs from merge-base → three-dot."""
         mb_result = MagicMock()
         mb_result.returncode = 0
         mb_result.stdout = "deadbeef\n"
@@ -88,12 +89,43 @@ class TestResolveSliceDiffRange:
                 return_value="122-slice.foo",
             ),
             patch(
-                "squadron.review.git_utils.subprocess.run",
+                _GIT_UTILS_SUBPROCESS,
                 return_value=mb_result,
+            ),
+            patch(
+                "squadron.review.git_utils._resolve_rev",
+                return_value="cafebabe",
             ),
         ):
             result = resolve_slice_diff_range(122, ".")
         assert result == "deadbeef...122-slice.foo"
+
+    def test_resolve_branch_exists_already_merged(self) -> None:
+        """Branch exists but tip == merge-base → fall through to merge commit."""
+        mb_result = MagicMock()
+        mb_result.returncode = 0
+        mb_result.stdout = "deadbeef\n"
+
+        with (
+            patch(
+                "squadron.review.git_utils._find_slice_branch",
+                return_value="122-slice.foo",
+            ),
+            patch(
+                _GIT_UTILS_SUBPROCESS,
+                return_value=mb_result,
+            ),
+            patch(
+                "squadron.review.git_utils._resolve_rev",
+                return_value="deadbeef",
+            ),
+            patch(
+                "squadron.review.git_utils._find_merge_commit",
+                return_value="merge123",
+            ),
+        ):
+            result = resolve_slice_diff_range(122, ".")
+        assert result == "merge123^1..merge123^2"
 
     def test_resolve_merged(self) -> None:
         with (
