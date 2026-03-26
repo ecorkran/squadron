@@ -184,6 +184,29 @@ def _format_review_markdown(
         lines.append("No specific findings.")
         lines.append("")
 
+    # Debug appendix — included when prompt capture fields are populated
+    if result.system_prompt is not None:
+        lines.append("---")
+        lines.append("")
+        lines.append("## Debug: Prompt & Response")
+        lines.append("")
+        lines.append("### System Prompt")
+        lines.append("")
+        lines.append(result.system_prompt)
+        lines.append("")
+        lines.append("### User Prompt")
+        lines.append("")
+        lines.append(result.user_prompt or "")
+        lines.append("")
+        lines.append("### Rules Injected")
+        lines.append("")
+        lines.append(result.rules_content_used or "None")
+        lines.append("")
+        lines.append("### Raw Response")
+        lines.append("")
+        lines.append(result.raw_output)
+        lines.append("")
+
     return "\n".join(lines)
 
 
