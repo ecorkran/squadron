@@ -178,6 +178,10 @@ status: not_started
   - [ ] Confirm review system has no `if profile == "codex"` branching
 - [ ] **Verify provider registration doesn't break existing providers**
   - [ ] Confirm `get_provider("openai")` and `get_provider("sdk")` still work
+- [ ] **Verify CLI end-to-end routing with Codex provider**
+  - [ ] Confirm `sq spawn --provider codex` + `sq task` routes through `CodexAgent.handle_message()` (mocked Codex client)
+  - [ ] Confirm error message when `codex-app-server` not installed is user-actionable (mentions `pip install codex-app-server`)
+  - [ ] Confirm error message when no credentials available is user-actionable (mentions running `codex` CLI)
 - [ ] Success: all checks green; no regressions
 
 ---
