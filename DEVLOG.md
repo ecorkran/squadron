@@ -14,6 +14,17 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260325
 
+### Initiative Plan & 900-Band Maintenance Initiative
+- Created `001-initiative-plan.squadron.md` retroactively documenting all initiatives (100, 140, 160, 200, 900)
+- Created `900-arch.maintenance-and-refactoring.md` and `900-slices.maintenance-and-refactoring.md` as cross-cutting maintenance home
+
+### Slice 124: Codex Agent Integration — Slice Design Complete (Phase 4)
+- Codex integration via MCP server path (`codex mcp-server`), not TypeScript SDK
+- `CodexProvider`/`CodexAgent` implementing existing Protocols via MCP stdio client
+- `CodexAuthStrategy` checks `~/.codex/auth.json` or `OPENAI_API_KEY`
+- Review system gets third path: `_run_codex_review()` alongside SDK and non-SDK paths
+- Lazy subprocess start, read-only sandbox for reviews
+
 ### Slice 127: Scoped Code Review & Prompt Logging — Implementation Complete (Phase 6)
 
 - `git_utils.py`: `_find_slice_branch()`, `_find_merge_commit()`, `resolve_slice_diff_range()` — three-tier resolution (branch → merge commit → fallback to main)
