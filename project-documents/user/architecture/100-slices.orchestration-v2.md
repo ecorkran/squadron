@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 100-arch.orchestration-v2.md
 project: squadron
 dateCreated: 20260217
-dateUpdated: 20260324
+dateUpdated: 20260325
 status: in-progress
 ---
 
@@ -68,7 +68,9 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 19. [x] **(122) Review Context Enrichment** — Automatically enrich review prompts with applicable rules and context. Code reviews auto-detect language from the diff/files under review and inject matching rules from the project's `rules/` directory (e.g. Python files → `rules/python.md`). Supports multiple language detection in a single review. Config key `rules_dir` points to the rules directory. The `--rules` CLI flag continues to work as an explicit override/addition. Slice and task reviews can optionally pull review criteria from Context Forge's process guide prompts when available. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 1/5
 
-20. [ ] **(123) Review Findings Pipeline** — Automated triage and tracking for review output. When a review produces findings, classify each by complexity (auto-fix, guided fix, design decision, skip/acknowledged) and route accordingly. Auto-fixable findings applied directly with commit. Guided fixes get context annotation before handoff. Design decisions surfaced to human PM. Findings ledger for pattern detection and audit trail. Dependencies: [Review Workflow Templates (105), M1 Polish (106)]. Risk: Medium (classification heuristics need tuning). Effort: 3/5
+20. [ ] **(127) Scoped Code Review & Prompt Logging** — Enable `sq review code 122` to automatically scope the diff to the commits introduced by slice 122's branch, rather than diffing against main. Resolve commit range from branch name (`122-slice.*`) or merge base. Add prompt log persistence: `-vvv` output written to `~/.config/squadron/logs/review-prompt-{timestamp}.md` alongside stderr. Optionally include full prompt/response in the saved review file at `-vv+`. Dependencies: [Review Context Enrichment (122)]. Risk: Low. Effort: 2/5
+
+21. [ ] **(123) Review Findings Pipeline** — Automated triage and tracking for review output. When a review produces findings, classify each by complexity (auto-fix, guided fix, design decision, skip/acknowledged) and route accordingly. Auto-fixable findings applied directly with commit. Guided fixes get context annotation before handoff. Design decisions surfaced to human PM. Findings ledger for pattern detection and audit trail. Dependencies: [Review Workflow Templates (105), M1 Polish (106)]. Risk: Medium (classification heuristics need tuning). Effort: 3/5
 
 21. [ ] **(124) Codex Agent Integration** — New agent type (`CodexAgentProvider`) that spawns OpenAI Codex as an orchestrated agent using ChatGPT subscription auth (OAuth 2.0 with PKCE). Browser-based login flow with token caching and automatic refresh. Codex agents run against the user's ChatGPT Plus/Pro/Teams subscription — no API credits consumed. Dependencies: [Auth Strategy & Credential Management (114), Agent Registry (102)]. Risk: Medium (Codex API surface is evolving). Effort: 3/5
 
@@ -113,7 +115,8 @@ Post-M1:
   120. Model Alias Registry                            ✅ complete
   121. Model Alias Metadata                           ✅ complete
   126. Context Forge Integration Layer                   ✅ complete
-  122. Review Context Enrichment                        (after 126, high usability impact)
+  122. Review Context Enrichment                        ✅ complete
+  127. Scoped Code Review & Prompt Logging              (after 122)
   123. Review Findings Pipeline                         (after 105, 106)
   124. Codex Agent Integration                          (after 114)
   125. Conversation Persistence & Management           (after 112)
