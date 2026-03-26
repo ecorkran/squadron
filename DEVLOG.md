@@ -14,6 +14,11 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260325
 
+### Slice 127: Scoped Code Review & Prompt Logging — Task Breakdown Complete (Phase 5)
+
+- 16 tasks: git_utils.py (branch/merge resolution + tests), ReviewResult prompt fields + tests, prompt log writer + tests, scoped diff wiring + tests, debug appendix + tests, validation pass, documentation
+- Test-with pattern throughout; 6 commit checkpoints
+
 ### Slice 127: Scoped Code Review & Prompt Logging — Slice Design Complete (Phase 4)
 
 - Scoped diff resolution: `sq review code 122` auto-resolves to slice branch's commits via merge-base or merge-commit detection, falls back to `--diff main`
