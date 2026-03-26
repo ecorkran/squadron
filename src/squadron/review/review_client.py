@@ -93,6 +93,15 @@ async def _run_non_sdk_review(
         print(f"[DEBUG] User Prompt:\n{prompt}", file=sys.stderr)
         if rules_content:
             print(f"[DEBUG] Injected Rules:\n{rules_content}", file=sys.stderr)
+        log_path = _write_prompt_log(
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+            rules_content=rules_content,
+            model=resolved_model,
+            profile=profile,
+            template_name=template.name,
+        )
+        print(f"[DEBUG] Prompt log: {log_path}", file=sys.stderr)
 
     # Create client and call API
     client_kwargs: dict[str, object] = {"api_key": api_key}
@@ -120,12 +129,20 @@ async def _run_non_sdk_review(
 
     raw_output = response.choices[0].message.content or ""
 
-    return parse_review_output(
+    result = parse_review_output(
         raw_output=raw_output,
         template_name=template.name,
         input_files=inputs,
         model=resolved_model,
     )
+
+    # Populate prompt capture fields at verbosity >= 2
+    if verbosity >= 2:
+        result.system_prompt = system_prompt
+        result.user_prompt = prompt
+        result.rules_content_used = rules_content
+
+    return result
 
 
 _MAX_FILE_SIZE = 100_000  # 100KB per file
