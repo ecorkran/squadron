@@ -50,6 +50,10 @@ class ReviewResult:
     timestamp: datetime = field(default_factory=datetime.now)
     model: str | None = None
     fallback_used: bool = False
+    # Prompt capture fields — populated at verbosity >= 2, excluded from to_dict()
+    system_prompt: str | None = None
+    user_prompt: str | None = None
+    rules_content_used: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Serialize for JSON output."""
