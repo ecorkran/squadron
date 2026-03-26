@@ -340,3 +340,57 @@ class TestDiagnosticLogging:
         text = "## Summary\nPASS\n\n### [PASS] Clean code\nLooks good.\n"
         parse_review_output(text, "code", {})
         assert not log_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# T6: ReviewResult prompt capture fields
+# ---------------------------------------------------------------------------
+
+from squadron.review.models import ReviewResult  # noqa: E402
+
+
+class TestReviewResultPromptFields:
+    """Tests for prompt capture fields on ReviewResult."""
+
+    def test_prompt_fields_default_none(self) -> None:
+        result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="ok",
+            template_name="test",
+            input_files={},
+        )
+        assert result.system_prompt is None
+        assert result.user_prompt is None
+        assert result.rules_content_used is None
+
+    def test_prompt_fields_populated(self) -> None:
+        result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="ok",
+            template_name="test",
+            input_files={},
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content_used="rules",
+        )
+        assert result.system_prompt == "sys"
+        assert result.user_prompt == "usr"
+        assert result.rules_content_used == "rules"
+
+    def test_to_dict_excludes_prompt_fields(self) -> None:
+        result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="ok",
+            template_name="test",
+            input_files={},
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content_used="rules",
+        )
+        d = result.to_dict()
+        assert "system_prompt" not in d
+        assert "user_prompt" not in d
+        assert "rules_content_used" not in d

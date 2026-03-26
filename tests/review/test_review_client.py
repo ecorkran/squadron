@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from squadron.review.models import ReviewResult, Verdict
-from squadron.review.review_client import run_review_with_profile
+from squadron.review.review_client import _write_prompt_log, run_review_with_profile
 from squadron.review.templates import ReviewTemplate
 
 
@@ -413,3 +415,261 @@ class TestNonSDKPath:
                     profile="openai",
                     model=None,
                 )
+
+
+# ---------------------------------------------------------------------------
+# T8: Tests for _write_prompt_log()
+# ---------------------------------------------------------------------------
+
+
+class TestWritePromptLog:
+    """Tests for _write_prompt_log()."""
+
+    def test_creates_file(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="You are a reviewer.",
+            user_prompt="Review this code.",
+            rules_content="Check for SQL injection.",
+            model="gpt-4o",
+            profile="openai",
+            template_name="code",
+            log_dir=tmp_path,
+        )
+        assert path.exists()
+        content = path.read_text()
+        assert "## System Prompt" in content
+        assert "You are a reviewer." in content
+        assert "## User Prompt" in content
+        assert "Review this code." in content
+        assert "## Injected Rules" in content
+        assert "SQL injection" in content
+
+    def test_filename_format(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="opus",
+            profile="sdk",
+            template_name="slice",
+            log_dir=tmp_path,
+        )
+        assert re.match(r"review-prompt-\d{8}-\d{6}\.md", path.name), (
+            f"Unexpected filename: {path.name}"
+        )
+
+    def test_contains_metadata(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="gpt-4o",
+            profile="openrouter",
+            template_name="tasks",
+            log_dir=tmp_path,
+        )
+        content = path.read_text()
+        assert "template: tasks" in content
+        assert "model: gpt-4o" in content
+        assert "profile: openrouter" in content
+        assert "timestamp:" in content
+
+    def test_no_rules(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="opus",
+            profile="sdk",
+            template_name="code",
+            log_dir=tmp_path,
+        )
+        content = path.read_text()
+        assert "## Injected Rules" in content
+        assert "\nNone\n" in content
+
+
+# ---------------------------------------------------------------------------
+# T10: Tests for prompt capture and logging wiring
+# ---------------------------------------------------------------------------
+
+
+class TestPromptCaptureWiring:
+    """Tests for prompt capture at various verbosity levels."""
+
+    @pytest.mark.asyncio
+    async def test_verbosity_2_populates_prompt_fields(self) -> None:
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            result = await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=2,
+            )
+
+        assert result.system_prompt is not None
+        assert result.user_prompt is not None
+
+    @pytest.mark.asyncio
+    async def test_verbosity_1_no_prompt_fields(self) -> None:
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            result = await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=1,
+            )
+
+        assert result.system_prompt is None
+
+    @pytest.mark.asyncio
+    async def test_verbosity_3_writes_prompt_log(self) -> None:
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+            patch(
+                "squadron.review.review_client._write_prompt_log",
+                return_value=Path("/tmp/test-log.md"),
+            ) as mock_write_log,
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
+            )
+
+        mock_write_log.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_verbosity_3_prints_log_path(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+            patch(
+                "squadron.review.review_client._write_prompt_log",
+                return_value=Path("/tmp/test-log.md"),
+            ),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
+            )
+
+        captured = capsys.readouterr()
+        assert "Prompt log:" in captured.err
+        assert "test-log.md" in captured.err

@@ -21,6 +21,7 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.models.aliases import resolve_model_alias
+from squadron.review.git_utils import resolve_slice_diff_range
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
@@ -181,6 +182,29 @@ def _format_review_markdown(
             lines.append("")
     else:
         lines.append("No specific findings.")
+        lines.append("")
+
+    # Debug appendix — included when prompt capture fields are populated
+    if result.system_prompt is not None:
+        lines.append("---")
+        lines.append("")
+        lines.append("## Debug: Prompt & Response")
+        lines.append("")
+        lines.append("### System Prompt")
+        lines.append("")
+        lines.append(result.system_prompt)
+        lines.append("")
+        lines.append("### User Prompt")
+        lines.append("")
+        lines.append(result.user_prompt or "")
+        lines.append("")
+        lines.append("### Rules Injected")
+        lines.append("")
+        lines.append(result.rules_content_used or "None")
+        lines.append("")
+        lines.append("### Raw Response")
+        lines.append("")
+        lines.append(result.raw_output)
         lines.append("")
 
     return "\n".join(lines)
@@ -741,7 +765,8 @@ def review_code(
     if slice_number is not None and slice_number.isdigit():
         slice_info = _resolve_slice_number(slice_number)
         if not diff:
-            diff = "main"
+            resolved_cwd_for_diff = _resolve_cwd(cwd)
+            diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
 
     if use_json:
         output = "json"

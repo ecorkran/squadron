@@ -10,6 +10,7 @@ import glob as glob_mod
 import logging
 import subprocess
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -92,6 +93,15 @@ async def _run_non_sdk_review(
         print(f"[DEBUG] User Prompt:\n{prompt}", file=sys.stderr)
         if rules_content:
             print(f"[DEBUG] Injected Rules:\n{rules_content}", file=sys.stderr)
+        log_path = _write_prompt_log(
+            system_prompt=system_prompt,
+            user_prompt=prompt,
+            rules_content=rules_content,
+            model=resolved_model,
+            profile=profile,
+            template_name=template.name,
+        )
+        print(f"[DEBUG] Prompt log: {log_path}", file=sys.stderr)
 
     # Create client and call API
     client_kwargs: dict[str, object] = {"api_key": api_key}
@@ -119,12 +129,20 @@ async def _run_non_sdk_review(
 
     raw_output = response.choices[0].message.content or ""
 
-    return parse_review_output(
+    result = parse_review_output(
         raw_output=raw_output,
         template_name=template.name,
         input_files=inputs,
         model=resolved_model,
     )
+
+    # Populate prompt capture fields at verbosity >= 2
+    if verbosity >= 2:
+        result.system_prompt = system_prompt
+        result.user_prompt = prompt
+        result.rules_content_used = rules_content
+
+    return result
 
 
 _MAX_FILE_SIZE = 100_000  # 100KB per file
@@ -268,3 +286,47 @@ async def _resolve_api_key(profile: ProviderProfile) -> str:
         )
     creds = await strategy.get_credentials()
     return creds["api_key"]
+
+
+_PROMPT_LOG_DIR = Path.home() / ".config" / "squadron" / "logs"
+
+
+def _write_prompt_log(
+    system_prompt: str,
+    user_prompt: str,
+    rules_content: str | None,
+    model: str,
+    profile: str,
+    template_name: str,
+    *,
+    log_dir: Path | None = None,
+) -> Path:
+    """Write the full prompt payload to a timestamped markdown file.
+
+    Returns the path of the written file.
+    """
+    target_dir = log_dir or _PROMPT_LOG_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now(tz=UTC)
+    ts_file = now.strftime("%Y%m%d-%H%M%S")
+    ts_iso = now.isoformat()
+
+    filename = f"review-prompt-{ts_file}.md"
+    path = target_dir / filename
+
+    rules_section = rules_content if rules_content else "None"
+    content = (
+        f"---\n"
+        f"template: {template_name}\n"
+        f"model: {model}\n"
+        f"profile: {profile}\n"
+        f"timestamp: {ts_iso}\n"
+        f"---\n\n"
+        f"# Review Prompt Log\n\n"
+        f"## System Prompt\n\n{system_prompt}\n\n"
+        f"## User Prompt\n\n{user_prompt}\n\n"
+        f"## Injected Rules\n\n{rules_section}\n"
+    )
+    path.write_text(content)
+    return path

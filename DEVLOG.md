@@ -14,6 +14,14 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260325
 
+### Slice 127: Scoped Code Review & Prompt Logging — Implementation Complete (Phase 6)
+
+- `git_utils.py`: `_find_slice_branch()`, `_find_merge_commit()`, `resolve_slice_diff_range()` — three-tier resolution (branch → merge commit → fallback to main)
+- Prompt log: `_write_prompt_log()` writes `review-prompt-{ts}.md` at `-vvv`; prompt fields on `ReviewResult` populated at `-vv`
+- `review_code()` uses `resolve_slice_diff_range()` instead of `diff = "main"` when slice number provided; `--diff` flag overrides
+- Debug appendix `## Debug: Prompt & Response` appended to saved review markdown when prompt fields present
+- 637 tests pass; 6 semantic commits on branch `127-slice.scoped-code-review-prompt-logging`
+
 ### Slice 127: Scoped Code Review & Prompt Logging — Task Breakdown Complete (Phase 5)
 
 - 16 tasks: git_utils.py (branch/merge resolution + tests), ReviewResult prompt fields + tests, prompt log writer + tests, scoped diff wiring + tests, debug appendix + tests, validation pass, documentation

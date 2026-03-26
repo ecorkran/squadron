@@ -7,7 +7,7 @@ dependencies: [review-context-enrichment]
 interfaces: []
 dateCreated: 20260325
 dateUpdated: 20260325
-status: not_started
+status: complete
 ---
 
 # Slice Design: Scoped Code Review & Prompt Logging
@@ -243,51 +243,53 @@ In `_execute_review()` / `_run_review_command()`:
 
 ### Verification Walkthrough
 
-**1. Scoped diff — branch exists:**
+All items verified via unit tests (637 passing). Manual verification requires API credentials.
+
+**1. Scoped diff — branch exists:** VERIFIED via tests
+- `test_resolve_branch_exists` — `_find_slice_branch` returns branch, `merge-base` computed, returns `{hash}...{branch}`
+- `test_slice_number_calls_resolve_diff` — CLI invokes `resolve_slice_diff_range(122, ...)` when slice number provided
 ```bash
-# Slice 122 branch still exists locally
 sq review code 122 -vvv --no-save
-# Expected: -vvv output shows git diff range like '<hash>...122-slice.review-context-enrichment'
-# Expected: diff content is limited to slice 122's changes, not all of main
+# Scoped diff: resolve_slice_diff_range(122) → '{merge_base}...122-slice.review-context-enrichment'
 ```
 
-**2. Scoped diff — branch merged:**
+**2. Scoped diff — branch merged:** VERIFIED via tests
+- `test_resolve_merged` — returns `{hash}^1..{hash}^2` when merge commit found
 ```bash
-# If branch is deleted after merge, should find merge commit
 git branch -d 122-slice.review-context-enrichment
 sq review code 122 -vvv --no-save
-# Expected: finds merge commit, diffs only the merged changes
-# Expected: warning if neither branch nor merge found
+# Falls through to merge commit detection
 ```
 
-**3. Explicit --diff override:**
+**3. Explicit --diff override:** VERIFIED via tests
+- `test_explicit_diff_overrides_resolution` — `--diff HEAD~3` bypasses resolution, passes `HEAD~3` directly
 ```bash
 sq review code 122 --diff HEAD~3 --no-save
-# Expected: uses HEAD~3 as the diff ref, ignoring auto-resolution
 ```
 
-**4. Prompt log persistence:**
+**4. Prompt log persistence:** VERIFIED via tests
+- `test_write_prompt_log_creates_file` — file written to `log_dir/review-prompt-{ts}.md`
+- `test_verbosity_3_writes_prompt_log` — `_write_prompt_log` called at verbosity >= 3
+- `test_verbosity_3_prints_log_path` — stderr contains `Prompt log: {path}`
 ```bash
 sq review code 122 -vvv --no-save
-# Expected: stderr includes line like "Prompt log: ~/.config/squadron/logs/review-prompt-20260325-143022.md"
-ls ~/.config/squadron/logs/review-prompt-*.md
-# Expected: at least one prompt log file exists
-cat ~/.config/squadron/logs/review-prompt-*.md | head -20
-# Expected: markdown with system prompt, user prompt, rules sections
+# stderr: [DEBUG] Prompt log: ~/.config/squadron/logs/review-prompt-YYYYMMDD-HHmmss.md
 ```
 
-**5. Debug appendix in saved review:**
+**5. Debug appendix in saved review:** VERIFIED via tests
+- `test_appendix_present_when_prompt_fields_set` — `## Debug: Prompt & Response` present when `system_prompt` populated
+- `test_verbosity_2_populates_prompt_fields` — result has prompt fields at verbosity >= 2
 ```bash
 sq review code 122 -vv
-# Expected: saved review file contains "## Debug: Prompt & Response" appendix
-cat project-documents/user/reviews/122-review.code.*.md | grep -c "Debug: Prompt"
-# Expected: 1
+# Saved review contains ## Debug: Prompt & Response appendix
 ```
 
-**6. No debug appendix at -v:**
+**6. No debug appendix at -v:** VERIFIED via tests
+- `test_appendix_absent_when_prompt_fields_none` — appendix absent when fields are `None`
+- `test_verbosity_1_no_prompt_fields` — `system_prompt` stays `None` at verbosity 1
 ```bash
 sq review code 122 -v
-# Expected: saved review file does NOT contain "## Debug: Prompt & Response"
+# Saved review does NOT contain debug appendix
 ```
 
 ---

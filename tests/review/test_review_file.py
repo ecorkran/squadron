@@ -69,3 +69,42 @@ class TestFormatReviewMarkdown:
             _make_result(), "slice", _make_slice_info(), input_file=None
         )
         assert "sourceDocument:" in output
+
+
+# ---------------------------------------------------------------------------
+# T14: Debug appendix tests
+# ---------------------------------------------------------------------------
+
+
+class TestDebugAppendix:
+    """Tests for debug appendix in _format_review_markdown."""
+
+    def test_appendix_present_when_prompt_fields_set(self) -> None:
+        result = _make_result()
+        result.system_prompt = "You are a reviewer."
+        result.user_prompt = "Review this."
+        output = _format_review_markdown(result, "slice", _make_slice_info())
+        assert "## Debug: Prompt & Response" in output
+
+    def test_appendix_absent_when_prompt_fields_none(self) -> None:
+        result = _make_result()
+        output = _format_review_markdown(result, "slice", _make_slice_info())
+        assert "## Debug: Prompt & Response" not in output
+
+    def test_appendix_shows_rules_none_when_no_rules(self) -> None:
+        result = _make_result()
+        result.system_prompt = "You are a reviewer."
+        result.user_prompt = "Review this."
+        result.rules_content_used = None
+        output = _format_review_markdown(result, "slice", _make_slice_info())
+        assert "### Rules Injected" in output
+        assert "\nNone\n" in output
+
+    def test_appendix_contains_raw_output(self) -> None:
+        result = _make_result()
+        result.system_prompt = "You are a reviewer."
+        result.user_prompt = "Review this."
+        result.raw_output = "## Summary\nPASS\nAll good."
+        output = _format_review_markdown(result, "slice", _make_slice_info())
+        assert "### Raw Response" in output
+        assert "All good." in output
