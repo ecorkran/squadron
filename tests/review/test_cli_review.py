@@ -395,9 +395,7 @@ class TestScopedDiff:
                 return_value="abc123...122-slice.foo",
             ) as mock_resolve,
         ):
-            result = cli_runner.invoke(
-                app, ["review", "code", "122", "--no-save"]
-            )
+            result = cli_runner.invoke(app, ["review", "code", "122", "--no-save"])
         assert result.exit_code == 0
         mock_resolve.assert_called_once()
         assert mock_resolve.call_args[0][0] == 122
