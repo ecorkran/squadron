@@ -366,3 +366,64 @@ class TestContextForgeErrors:
             result = cli_runner.invoke(app, ["review", "tasks", "122"])
             assert result.exit_code == 1
             assert "not installed" in result.output
+
+
+class TestScopedDiff:
+    """T12: Tests for scoped diff resolution in review_code()."""
+
+    def test_slice_number_calls_resolve_diff(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+    ) -> None:
+        """review code 122 → resolve_slice_diff_range called."""
+        with patch(
+            "squadron.cli.commands.review.resolve_slice_diff_range",
+            return_value="abc123...122-slice.foo",
+        ) as mock_resolve:
+            result = cli_runner.invoke(app, ["review", "code", "122", "--no-save"])
+        assert result.exit_code == 0
+        mock_resolve.assert_called_once()
+        assert mock_resolve.call_args[0][0] == 122
+
+    def test_explicit_diff_overrides_resolution(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+    ) -> None:
+        """review code 122 --diff HEAD~3 → explicit diff used, no resolution."""
+        with patch(
+            "squadron.cli.commands.review.resolve_slice_diff_range",
+        ) as mock_resolve:
+            result = cli_runner.invoke(
+                app, ["review", "code", "122", "--diff", "HEAD~3", "--no-save"]
+            )
+        assert result.exit_code == 0
+        mock_resolve.assert_not_called()
+        # Verify the diff passed to review is HEAD~3
+        call_kwargs = patch_run_review.call_args
+        inputs = call_kwargs[0][1] if call_kwargs[0] else call_kwargs[1].get("inputs")
+        if inputs is None:
+            # Positional args: template, inputs, ...
+            inputs = call_kwargs[0][1]
+        assert inputs.get("diff") == "HEAD~3"
+
+    def test_no_slice_number_no_resolution(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+    ) -> None:
+        """review code (no slice number) → resolve not called."""
+        patch_run_review.return_value = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="## Summary\nPASS\n",
+            template_name="code",
+            input_files={"cwd": "."},
+        )
+        with patch(
+            "squadron.cli.commands.review.resolve_slice_diff_range",
+        ) as mock_resolve:
+            result = cli_runner.invoke(app, ["review", "code"])
+        assert result.exit_code == 0
+        mock_resolve.assert_not_called()
