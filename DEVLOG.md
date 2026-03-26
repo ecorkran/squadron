@@ -18,6 +18,11 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 - Created `001-initiative-plan.squadron.md` retroactively documenting all initiatives (100, 140, 160, 200, 900)
 - Created `900-arch.maintenance-and-refactoring.md` and `900-slices.maintenance-and-refactoring.md` as cross-cutting maintenance home
 
+### Slice 124: Codex Agent Integration — Task Breakdown Complete (Phase 5)
+- 12 tasks: transport evaluation, CodexAuthStrategy + tests, CodexAgent + tests, CodexProvider + tests, registration/profile + tests, model aliases, validation, documentation
+- Test-with pattern throughout; 7 commit checkpoints
+- Key design: Codex models already work for reviews via `openai` profile (Chat Completions API) — no review system changes; agentic provider is for spawn/task workflows only
+
 ### Slice 124: Codex Agent Integration — Slice Design Complete (Phase 4)
 - Codex integration via MCP server path (`codex mcp-server`), not TypeScript SDK
 - `CodexProvider`/`CodexAgent` implementing existing Protocols via MCP stdio client
