@@ -14,6 +14,12 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260325
 
+### Slice 127: Scoped Code Review & Prompt Logging — Slice Design Complete (Phase 4)
+
+- Scoped diff resolution: `sq review code 122` auto-resolves to slice branch's commits via merge-base or merge-commit detection, falls back to `--diff main`
+- Prompt log persistence: `-vvv` writes full prompt to `~/.config/squadron/logs/review-prompt-{ts}.md`; `-vv` embeds debug appendix in saved review file
+- New `git_utils.py` module; optional fields on `ReviewResult` for prompt/response capture
+
 ### Slice 122: Review Context Enrichment — Implementation Complete (Phase 6)
 
 - Expanded `_FINDING_RE` to 5 formats; lenient fallback + synthesized finding when verdict/findings mismatch; `fallback_used` flag on `ReviewResult`; debug log at `~/.config/squadron/logs/review-debug.jsonl`
