@@ -10,6 +10,25 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Expanded `_FINDING_RE` in `parsers.py` to match five finding formats: `### [SEV]`, `### SEV`, `### SEV:`, `**[SEV]**`, and `- [SEV]` (slice 122)
+- Lenient fallback parsing: when verdict is CONCERNS/FAIL but no structured findings parsed, attempt paragraph extraction then synthesize a finding from summary text
+- `fallback_used: bool` field on `ReviewResult` (default `False`) — set when fallback parsing triggered
+- Diagnostic debug log at `~/.config/squadron/logs/review-debug.jsonl` — written on verdict/findings mismatches
+- `CRITICAL` consistency block in all three builtin review templates (slice, tasks, code)
+- `src/squadron/review/rules.py` — `resolve_rules_dir()`, `load_rules_frontmatter()`, `detect_languages_from_paths()`, `match_rules_files()`, `load_rules_content()`, `get_template_rules()`
+- Auto-detection of language rules in `review code` from diff/files paths, matched against rules dir frontmatter
+- Template-specific rule injection: `rules/review.md` and `rules/review-{template}.md` prepended to system prompt
+- `--rules-dir` option on all three review commands; `--no-rules` flag on `review code`
+- `rules_dir` config key for default rules directory
+- Review file YAML alignment: added `layer: project`, `sourceDocument`, `aiModel` (resolved model ID), `status: complete` fields
+- `-vvv` debug output: at verbosity >= 3, prints `[DEBUG] System Prompt:`, `[DEBUG] User Prompt:`, and `[DEBUG] Injected Rules:` to stderr before API call
+
+### Changed
+- `run_review_with_profile()` accepts `verbosity: int = 0` and threads it through to `_run_non_sdk_review()`
+
 ## [0.2.6] - 20260325
 
 ### Added

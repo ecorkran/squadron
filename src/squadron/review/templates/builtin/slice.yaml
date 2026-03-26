@@ -17,6 +17,11 @@ system_prompt: |
   - The `parent` field in slice frontmatter refers to the slice plan document,
     not the architecture document. Do not flag this as an error.
 
+  CRITICAL: Your verdict and findings MUST be consistent.
+  - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
+  - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
+  - Every finding MUST use the exact format: ### [SEVERITY] Title
+
   Report your findings using severity levels:
 
   ## Summary

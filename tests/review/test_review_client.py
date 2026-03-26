@@ -247,6 +247,144 @@ class TestNonSDKPath:
                 )
 
     @pytest.mark.asyncio
+    async def test_debug_output_at_verbosity_3(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """verbosity=3 → system prompt printed to stderr."""
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
+            )
+
+        captured = capsys.readouterr()
+        assert "[DEBUG] System Prompt:" in captured.err
+        assert "[DEBUG] User Prompt:" in captured.err
+
+    @pytest.mark.asyncio
+    async def test_no_debug_output_at_verbosity_2(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """verbosity=2 → nothing extra printed."""
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=2,
+            )
+
+        captured = capsys.readouterr()
+        assert "[DEBUG]" not in captured.err
+
+    @pytest.mark.asyncio
+    async def test_debug_rules_shown_when_present(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """rules_content non-empty + verbosity=3 → rules section printed."""
+        template = _make_template(model="test-model")
+        inputs = {"input": "file.md"}
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = _SAMPLE_REVIEW_OUTPUT
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with (
+            patch("squadron.review.review_client.get_profile") as mock_get_profile,
+            patch(
+                "squadron.review.review_client.AsyncOpenAI",
+                return_value=mock_client,
+            ),
+            patch(
+                "squadron.review.review_client._resolve_api_key",
+                new_callable=AsyncMock,
+                return_value="test-key",
+            ),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            )
+            await run_review_with_profile(
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
+                rules_content="Always check for SQL injection.",
+            )
+
+        captured = capsys.readouterr()
+        assert "[DEBUG] Injected Rules:" in captured.err
+        assert "SQL injection" in captured.err
+
+    @pytest.mark.asyncio
     async def test_no_model_raises_error(self) -> None:
         """Non-SDK path requires an explicit model."""
         template = _make_template(model=None)

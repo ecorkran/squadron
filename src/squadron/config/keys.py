@@ -48,6 +48,12 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default=None,
         description="Default model for review and spawn commands (e.g. opus, sonnet)",
     ),
+    "rules_dir": ConfigKey(
+        name="rules_dir",
+        type_=str,
+        default=None,
+        description="Default rules directory for auto-detected language rules",
+    ),
 }
 
 

@@ -49,6 +49,7 @@ class ReviewResult:
     input_files: dict[str, str]
     timestamp: datetime = field(default_factory=datetime.now)
     model: str | None = None
+    fallback_used: bool = False
 
     def to_dict(self) -> dict[str, object]:
         """Serialize for JSON output."""

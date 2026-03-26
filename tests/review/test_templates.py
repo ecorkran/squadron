@@ -271,3 +271,35 @@ class TestInputDef:
     def test_without_default(self) -> None:
         i = InputDef(name="input", description="File to review")
         assert i.default is None
+
+
+# ---------------------------------------------------------------------------
+# T8: Prompt hardening present in all three builtin templates
+# ---------------------------------------------------------------------------
+
+
+class TestBuiltinTemplateHardening:
+    """Test that all three builtin templates have the CRITICAL consistency block."""
+
+    @pytest.fixture(autouse=True)
+    def _load(self) -> None:
+        from squadron.review.templates import load_all_templates
+
+        load_all_templates()
+
+    def _get(self, name: str) -> ReviewTemplate:
+        t = get_template(name)
+        assert t is not None, f"Template '{name}' not found"
+        return t
+
+    def test_slice_template_has_consistency_instruction(self) -> None:
+        t = self._get("slice")
+        assert "CRITICAL" in t.system_prompt
+
+    def test_tasks_template_has_consistency_instruction(self) -> None:
+        t = self._get("tasks")
+        assert "CRITICAL" in t.system_prompt
+
+    def test_code_template_has_consistency_instruction(self) -> None:
+        t = self._get("code")
+        assert "CRITICAL" in t.system_prompt

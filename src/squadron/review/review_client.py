@@ -31,6 +31,7 @@ async def run_review_with_profile(
     profile: str,
     rules_content: str | None = None,
     model: str | None = None,
+    verbosity: int = 0,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
@@ -52,6 +53,7 @@ async def run_review_with_profile(
         profile=profile,
         rules_content=rules_content,
         model=model,
+        verbosity=verbosity,
     )
 
 
@@ -62,8 +64,11 @@ async def _run_non_sdk_review(
     profile: str,
     rules_content: str | None = None,
     model: str | None = None,
+    verbosity: int = 0,
 ) -> ReviewResult:
     """Execute a review via the OpenAI-compatible API path."""
+    import sys
+
     provider_profile = get_profile(profile)
     api_key = await _resolve_api_key(provider_profile)
 
@@ -80,6 +85,13 @@ async def _run_non_sdk_review(
             f"No model specified for non-SDK profile '{profile}'. "
             "Use --model or set model in the template."
         )
+
+    # Debug output at -vvv (verbosity >= 3)
+    if verbosity >= 3:
+        print(f"[DEBUG] System Prompt:\n{system_prompt}", file=sys.stderr)
+        print(f"[DEBUG] User Prompt:\n{prompt}", file=sys.stderr)
+        if rules_content:
+            print(f"[DEBUG] Injected Rules:\n{rules_content}", file=sys.stderr)
 
     # Create client and call API
     client_kwargs: dict[str, object] = {"api_key": api_key}

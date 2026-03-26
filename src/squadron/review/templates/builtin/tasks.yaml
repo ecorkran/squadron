@@ -16,6 +16,11 @@ system_prompt: |
   - Check that test tasks immediately follow their implementation tasks (test-with pattern)
   - Verify commit checkpoints are distributed throughout, not batched at end
 
+  CRITICAL: Your verdict and findings MUST be consistent.
+  - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
+  - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
+  - Every finding MUST use the exact format: ### [SEVERITY] Title
+
   Report your findings using severity levels:
 
   ## Summary
