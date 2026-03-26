@@ -413,3 +413,80 @@ class TestNonSDKPath:
                     profile="openai",
                     model=None,
                 )
+
+
+# ---------------------------------------------------------------------------
+# T8: Tests for _write_prompt_log()
+# ---------------------------------------------------------------------------
+
+import re
+from pathlib import Path
+
+from squadron.review.review_client import _write_prompt_log
+
+
+class TestWritePromptLog:
+    """Tests for _write_prompt_log()."""
+
+    def test_creates_file(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="You are a reviewer.",
+            user_prompt="Review this code.",
+            rules_content="Check for SQL injection.",
+            model="gpt-4o",
+            profile="openai",
+            template_name="code",
+            log_dir=tmp_path,
+        )
+        assert path.exists()
+        content = path.read_text()
+        assert "## System Prompt" in content
+        assert "You are a reviewer." in content
+        assert "## User Prompt" in content
+        assert "Review this code." in content
+        assert "## Injected Rules" in content
+        assert "SQL injection" in content
+
+    def test_filename_format(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="opus",
+            profile="sdk",
+            template_name="slice",
+            log_dir=tmp_path,
+        )
+        assert re.match(
+            r"review-prompt-\d{8}-\d{6}\.md", path.name
+        ), f"Unexpected filename: {path.name}"
+
+    def test_contains_metadata(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="gpt-4o",
+            profile="openrouter",
+            template_name="tasks",
+            log_dir=tmp_path,
+        )
+        content = path.read_text()
+        assert "template: tasks" in content
+        assert "model: gpt-4o" in content
+        assert "profile: openrouter" in content
+        assert "timestamp:" in content
+
+    def test_no_rules(self, tmp_path: Path) -> None:
+        path = _write_prompt_log(
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="opus",
+            profile="sdk",
+            template_name="code",
+            log_dir=tmp_path,
+        )
+        content = path.read_text()
+        assert "## Injected Rules" in content
+        assert "\nNone\n" in content

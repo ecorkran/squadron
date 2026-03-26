@@ -10,6 +10,7 @@ import glob as glob_mod
 import logging
 import subprocess
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from openai import AsyncOpenAI
@@ -268,3 +269,47 @@ async def _resolve_api_key(profile: ProviderProfile) -> str:
         )
     creds = await strategy.get_credentials()
     return creds["api_key"]
+
+
+_PROMPT_LOG_DIR = Path.home() / ".config" / "squadron" / "logs"
+
+
+def _write_prompt_log(
+    system_prompt: str,
+    user_prompt: str,
+    rules_content: str | None,
+    model: str,
+    profile: str,
+    template_name: str,
+    *,
+    log_dir: Path | None = None,
+) -> Path:
+    """Write the full prompt payload to a timestamped markdown file.
+
+    Returns the path of the written file.
+    """
+    target_dir = log_dir or _PROMPT_LOG_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    now = datetime.now(tz=UTC)
+    ts_file = now.strftime("%Y%m%d-%H%M%S")
+    ts_iso = now.isoformat()
+
+    filename = f"review-prompt-{ts_file}.md"
+    path = target_dir / filename
+
+    rules_section = rules_content if rules_content else "None"
+    content = (
+        f"---\n"
+        f"template: {template_name}\n"
+        f"model: {model}\n"
+        f"profile: {profile}\n"
+        f"timestamp: {ts_iso}\n"
+        f"---\n\n"
+        f"# Review Prompt Log\n\n"
+        f"## System Prompt\n\n{system_prompt}\n\n"
+        f"## User Prompt\n\n{user_prompt}\n\n"
+        f"## Injected Rules\n\n{rules_section}\n"
+    )
+    path.write_text(content)
+    return path
