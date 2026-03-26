@@ -377,11 +377,27 @@ class TestScopedDiff:
         patch_run_review: AsyncMock,
     ) -> None:
         """review code 122 → resolve_slice_diff_range called."""
-        with patch(
-            "squadron.cli.commands.review.resolve_slice_diff_range",
-            return_value="abc123...122-slice.foo",
-        ) as mock_resolve:
-            result = cli_runner.invoke(app, ["review", "code", "122", "--no-save"])
+        mock_slice_info = {
+            "index": 122,
+            "name": "test",
+            "slice_name": "test",
+            "design_file": "slice.md",
+            "task_files": [],
+            "arch_file": "arch.md",
+        }
+        with (
+            patch(
+                "squadron.cli.commands.review._resolve_slice_number",
+                return_value=mock_slice_info,
+            ),
+            patch(
+                "squadron.cli.commands.review.resolve_slice_diff_range",
+                return_value="abc123...122-slice.foo",
+            ) as mock_resolve,
+        ):
+            result = cli_runner.invoke(
+                app, ["review", "code", "122", "--no-save"]
+            )
         assert result.exit_code == 0
         mock_resolve.assert_called_once()
         assert mock_resolve.call_args[0][0] == 122
@@ -392,9 +408,23 @@ class TestScopedDiff:
         patch_run_review: AsyncMock,
     ) -> None:
         """review code 122 --diff HEAD~3 → explicit diff used, no resolution."""
-        with patch(
-            "squadron.cli.commands.review.resolve_slice_diff_range",
-        ) as mock_resolve:
+        mock_slice_info = {
+            "index": 122,
+            "name": "test",
+            "slice_name": "test",
+            "design_file": "slice.md",
+            "task_files": [],
+            "arch_file": "arch.md",
+        }
+        with (
+            patch(
+                "squadron.cli.commands.review._resolve_slice_number",
+                return_value=mock_slice_info,
+            ),
+            patch(
+                "squadron.cli.commands.review.resolve_slice_diff_range",
+            ) as mock_resolve,
+        ):
             result = cli_runner.invoke(
                 app, ["review", "code", "122", "--diff", "HEAD~3", "--no-save"]
             )
@@ -404,7 +434,6 @@ class TestScopedDiff:
         call_kwargs = patch_run_review.call_args
         inputs = call_kwargs[0][1] if call_kwargs[0] else call_kwargs[1].get("inputs")
         if inputs is None:
-            # Positional args: template, inputs, ...
             inputs = call_kwargs[0][1]
         assert inputs.get("diff") == "HEAD~3"
 
