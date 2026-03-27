@@ -60,7 +60,7 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 15. [x] **(118) Claude Code Commands — Composed Workflows** — `/sq:run-slice` command automating the full slice lifecycle. Review command updates: bare number shorthand (`sq review slice 118`), path resolution via Context-Forge, review file auto-save. CLI/slash-command parity. Dependencies: [Claude Code Commands — sq Wrappers, context-forge workflow navigation]. Risk: Low. Effort: 2/5
 
-16. [x] **(119) Review Provider & Model Selection** — Enable review commands to use any configured provider/model, not just the hardcoded Claude SDK. Add `--profile` flag to `sq review slice|tasks|code`. User-customizable review templates. Model-to-profile inference. Dependencies: [Review Workflow Templates (105), Provider Variants & Registry (113), Auth Strategy (114), Composed Workflows (118)]. Risk: Low. Effort: 3/5
+16. [ ] **(119) Review Provider & Model Selection** — Enable review commands to use any configured provider/model, not just the hardcoded Claude SDK. Add `--profile` flag to `sq review slice|tasks|code`. User-customizable review templates. Model-to-profile inference. Dependencies: [Review Workflow Templates (105), Provider Variants & Registry (113), Auth Strategy (114), Composed Workflows (118)]. Risk: Low. Effort: 3/5
 
 17. [x] **(120) Model Alias Registry** — Data-driven model shorthand resolution. Ships a default `models.toml` mapping short names (e.g., `opus`, `sonnet`, `gpt54-nano`, `kimi25`) to `(profile, full_model_id)` tuples. User-editable at `~/.config/squadron/models.toml`. Dependencies: [Review Provider & Model Selection (119)]. Risk: Low. Effort: 2/5
 

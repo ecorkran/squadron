@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ProviderCapabilities` dataclass on `AgentProvider` Protocol — `can_read_files`, `supports_system_prompt`, `supports_streaming` (slice 128)
 - `ProviderType`, `ProfileName`, `AuthType` enums in `providers/base.py` — all identifier strings defined in one place (slice 128)
 - `OAuthFileStrategy` in `providers/codex/auth.py` — subscription-first credential resolution from `~/.codex/auth.json` or `OPENAI_API_KEY` fallback (slice 128)
-- `CodexProvider` and `CodexAgent` in `providers/codex/` — agentic provider via Codex MCP server transport (slice 128)
+- **[Experimental]** `CodexProvider` and `CodexAgent` in `providers/codex/` — agentic provider via Codex Python SDK (slice 128). Requires separate install of the official OpenAI Codex SDK from GitHub and `codex` CLI via npm. See README for setup.
 - `openai-oauth` built-in profile with OAuth auth type for subscription-auth agent tasks (slice 128)
 - `codex-agent` and `codex-spark` model aliases (slice 128)
 - `from_config` classmethod, `active_source`, `setup_hint` on all auth strategies (slice 128)
