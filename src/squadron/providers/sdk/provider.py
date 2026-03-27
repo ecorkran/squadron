@@ -55,6 +55,10 @@ class ClaudeSDKProvider:
             else _DEFAULT_PERMISSION_MODE
         )
 
+        hooks = config.credentials.get("hooks")
+        if hooks is not None:
+            kwargs["hooks"] = hooks
+
         options = ClaudeAgentOptions(**kwargs)  # type: ignore[arg-type]
         mode = config.credentials.get("mode", "query")
 

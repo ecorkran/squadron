@@ -188,13 +188,13 @@ status: in_progress
 
 ### T11: Migrate SDK review path from runner.py into ClaudeSDKAgent
 
-- [ ] **Absorb `runner.py` rate-limit retry logic into `ClaudeSDKAgent.handle_message()`**
-  - [ ] The `ClaudeSDKClient` lifecycle (query + receive_response + rate-limit retry loop) from `runner.py` becomes the internal implementation of `ClaudeSDKAgent.handle_message()` in "query" mode
-  - [ ] Preserve `MAX_PARSE_RETRIES` and the `rate_limit_event` handling
-  - [ ] `handle_message()` must yield `Message` objects with the extracted text content
-- [ ] **Ensure `ClaudeSDKProvider.create_agent()` accepts review-relevant config**
-  - [ ] `AgentConfig.credentials.get("hooks")` → passed to `ClaudeAgentOptions` if present
-  - [ ] `allowed_tools`, `permission_mode`, `setting_sources` already on `AgentConfig` and consumed
+- [x] **Absorb `runner.py` rate-limit retry logic into `ClaudeSDKAgent.handle_message()`**
+  - [x] The `ClaudeSDKClient` lifecycle (query + receive_response + rate-limit retry loop) from `runner.py` becomes the internal implementation of `ClaudeSDKAgent.handle_message()` in "query" mode
+  - [x] Preserve `MAX_PARSE_RETRIES` and the `rate_limit_event` handling
+  - [x] `handle_message()` must yield `Message` objects with the extracted text content
+- [x] **Ensure `ClaudeSDKProvider.create_agent()` accepts review-relevant config**
+  - [x] `AgentConfig.credentials.get("hooks")` → passed to `ClaudeAgentOptions` if present
+  - [x] `allowed_tools`, `permission_mode`, `setting_sources` already on `AgentConfig` and consumed
 - [ ] **Delete `src/squadron/review/runner.py`**
 - [ ] **Remove `run_review` import from `review_client.py`**
 - [ ] Success: SDK agent handles the full review lifecycle internally; `runner.py` is gone

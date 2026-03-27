@@ -27,6 +27,9 @@ from squadron.providers.errors import (
 from squadron.providers.sdk.translation import translate_sdk_message
 
 
+_MAX_RATE_LIMIT_RETRIES = 10
+
+
 class ClaudeSDKAgent:
     """An autonomous agent backed by claude-agent-sdk."""
 
@@ -91,16 +94,42 @@ class ClaudeSDKAgent:
             raise ProviderError(str(exc)) from exc
 
     async def _handle_client_mode(self, message: Message) -> AsyncIterator[Message]:
-        """Multi-turn execution via ``ClaudeSDKClient``."""
+        """Multi-turn execution via ``ClaudeSDKClient``.
+
+        Includes rate-limit retry logic: when the CLI emits a
+        ``rate_limit_event`` the SDK raises ``ClaudeSDKError``.
+        We restart ``receive_response()`` on the same session
+        (the underlying channel remains intact) up to
+        ``_MAX_RATE_LIMIT_RETRIES`` times.
+        """
         self._state = AgentState.processing
         try:
             if self._client is None:
                 self._client = ClaudeSDKClient(options=self._options)
                 await self._client.connect()
             await self._client.query(prompt=message.content)
-            async for sdk_msg in self._client.receive_response():
-                for translated in translate_sdk_message(sdk_msg, sender=self._name):
-                    yield translated
+            retries = 0
+            while True:
+                try:
+                    async for sdk_msg in self._client.receive_response():
+                        for translated in translate_sdk_message(
+                            sdk_msg, sender=self._name
+                        ):
+                            yield translated
+                    break  # normal completion
+                except ClaudeSDKError as exc:
+                    if (
+                        "rate_limit_event" in str(exc)
+                        and retries < _MAX_RATE_LIMIT_RETRIES
+                    ):
+                        retries += 1
+                        self._log.debug(
+                            "Rate limit event %d/%d (CLI handles backoff)",
+                            retries,
+                            _MAX_RATE_LIMIT_RETRIES,
+                        )
+                        continue
+                    raise
             self._state = AgentState.idle
         except CLINotFoundError as exc:
             self._state = AgentState.failed
