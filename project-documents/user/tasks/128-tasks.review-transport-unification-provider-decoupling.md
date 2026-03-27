@@ -145,42 +145,42 @@ status: in_progress
 
 ### T9: Codex provider implementation
 
-- [ ] **Create `src/squadron/providers/codex/agent.py` with `CodexAgent`**
-  - [ ] Implement `Agent` Protocol: `name`, `agent_type`, `state`, `handle_message()`, `shutdown()`
-  - [ ] `agent_type` returns `"codex"`
-  - [ ] Lazy MCP client initialization on first `handle_message()` call
-  - [ ] First message: start Codex session via `codex` MCP tool
-  - [ ] Subsequent messages: continue session via `codex-reply` with stored thread ID
-  - [ ] Convert Codex response to squadron `Message` objects
-  - [ ] `shutdown()`: clean up MCP client and subprocess
-  - [ ] Handle missing `codex` CLI with actionable error message
-- [ ] **Create `src/squadron/providers/codex/provider.py` with `CodexProvider`**
-  - [ ] Implement `AgentProvider` Protocol: `provider_type`, `capabilities`, `create_agent()`, `validate_credentials()`
-  - [ ] `capabilities`: `can_read_files=True, supports_system_prompt=False, supports_streaming=False`
-  - [ ] `create_agent()`: validate credentials via `OAuthFileStrategy`, return `CodexAgent`
-  - [ ] `validate_credentials()`: check `codex` CLI on PATH + credentials exist
-- [ ] **Create `src/squadron/providers/codex/__init__.py`**
-  - [ ] Auto-register: `register_provider("codex", CodexProvider())`
-- [ ] Success: `get_provider("codex")` returns `CodexProvider`; `CodexAgent` satisfies `Agent` Protocol
+- [x] **Create `src/squadron/providers/codex/agent.py` with `CodexAgent`**
+  - [x] Implement `Agent` Protocol: `name`, `agent_type`, `state`, `handle_message()`, `shutdown()`
+  - [x] `agent_type` returns `"codex"`
+  - [x] Lazy MCP client initialization on first `handle_message()` call
+  - [x] First message: start Codex session via `codex` MCP tool
+  - [x] Subsequent messages: continue session via `codex-reply` with stored thread ID
+  - [x] Convert Codex response to squadron `Message` objects
+  - [x] `shutdown()`: clean up MCP client and subprocess
+  - [x] Handle missing `codex` CLI with actionable error message
+- [x] **Create `src/squadron/providers/codex/provider.py` with `CodexProvider`**
+  - [x] Implement `AgentProvider` Protocol: `provider_type`, `capabilities`, `create_agent()`, `validate_credentials()`
+  - [x] `capabilities`: `can_read_files=True, supports_system_prompt=False, supports_streaming=False`
+  - [x] `create_agent()`: validate credentials via `OAuthFileStrategy`, return `CodexAgent`
+  - [x] `validate_credentials()`: check `codex` CLI on PATH + credentials exist
+- [x] **Create `src/squadron/providers/codex/__init__.py`**
+  - [x] Auto-register: `register_provider("codex", CodexProvider())`
+- [x] Success: `get_provider("codex")` returns `CodexProvider`; `CodexAgent` satisfies `Agent` Protocol
 
 ### T10: Codex provider tests
 
-- [ ] **Create `tests/providers/codex/test_agent.py`**
-  - [ ] Test: agent starts idle, transitions processing → idle during handle_message
-  - [ ] Test: first message initializes MCP client lazily (mock)
-  - [ ] Test: subsequent messages reuse thread (mock)
-  - [ ] Test: shutdown sets terminated, cleans up
-  - [ ] Test: handle_message yields Message with correct fields
-  - [ ] Test: missing codex CLI raises ProviderError with install instructions
-- [ ] **Create `tests/providers/codex/test_provider.py`**
-  - [ ] Test: `provider_type` returns `"codex"`
-  - [ ] Test: `capabilities.can_read_files` is `True`
-  - [ ] Test: `create_agent()` returns CodexAgent when credentials valid
-  - [ ] Test: `create_agent()` raises ProviderAuthError when no credentials
-- [ ] **Create `tests/providers/codex/test_registration.py`**
-  - [ ] Test: importing `squadron.providers.codex` registers `"codex"` in registry
-  - [ ] Test: `get_provider("codex")` returns CodexProvider instance
-- [ ] Success: all codex tests pass
+- [x] **Create `tests/providers/codex/test_agent.py`**
+  - [x] Test: agent starts idle, transitions processing → idle during handle_message
+  - [x] Test: first message initializes MCP client lazily (mock)
+  - [x] Test: subsequent messages reuse thread (mock)
+  - [x] Test: shutdown sets terminated, cleans up
+  - [x] Test: handle_message yields Message with correct fields
+  - [x] Test: missing codex CLI raises ProviderError with install instructions
+- [x] **Create `tests/providers/codex/test_provider.py`**
+  - [x] Test: `provider_type` returns `"codex"`
+  - [x] Test: `capabilities.can_read_files` is `True`
+  - [x] Test: `create_agent()` returns CodexAgent when credentials valid
+  - [x] Test: `create_agent()` raises ProviderAuthError when no credentials
+- [x] **Create `tests/providers/codex/test_registration.py`**
+  - [x] Test: importing `squadron.providers.codex` registers `"codex"` in registry
+  - [x] Test: `get_provider("codex")` returns CodexProvider instance
+- [x] Success: all codex tests pass
 
 **Commit**: `feat: add CodexProvider with MCP transport and OAuthFileStrategy`
 

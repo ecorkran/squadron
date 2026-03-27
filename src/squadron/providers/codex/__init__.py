@@ -1,1 +1,13 @@
-"""Codex Agent Provider — placeholder, wired in T9."""
+"""Codex Agent Provider — agentic tasks via Codex MCP server."""
+
+from __future__ import annotations
+
+from squadron.providers.codex.agent import CodexAgent
+from squadron.providers.codex.provider import CodexProvider
+from squadron.providers.registry import register_provider
+
+# Auto-register on import.
+_provider = CodexProvider()
+register_provider("codex", _provider)
+
+__all__ = ["CodexProvider", "CodexAgent"]
