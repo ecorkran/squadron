@@ -50,36 +50,36 @@ status: in_progress
 
 ### T3: Auth strategy `from_config` factory and registry-driven dispatch
 
-- [ ] **Add `from_config` classmethod to `ApiKeyStrategy`**
-  - [ ] Signature: `from_config(cls, config: AgentConfig, profile: ProviderProfile | None) -> ApiKeyStrategy`
-  - [ ] Extracts `explicit_key`, `env_var`, `fallback_env_var`, `base_url` from config and profile (same logic currently in `resolve_auth_strategy`)
-- [ ] **Add `active_source` property and `setup_hint` property to `ApiKeyStrategy`**
-  - [ ] `active_source`: returns the env var name or "explicit" or "localhost" depending on which source resolved
-  - [ ] `setup_hint`: returns actionable instruction (e.g., "Set OPENAI_API_KEY environment variable")
-- [ ] **Refactor `resolve_auth_strategy()` to use registry only**
-  - [ ] Remove the `if auth_type == "api_key"` and `if auth_type == "codex"` branches
-  - [ ] Use: `strategy_cls = AUTH_STRATEGIES[auth_type]; return strategy_cls.from_config(config, profile)`
-  - [ ] Raise `ProviderAuthError` for unknown auth_type (unchanged)
-- [ ] **Add `resolve_auth_strategy_for_profile()` convenience function**
-  - [ ] Takes `ProviderProfile` only (no `AgentConfig` needed for status checks)
-  - [ ] Constructs minimal config, delegates to `resolve_auth_strategy()`
-- [ ] Success: `resolve_auth_strategy()` has no if/elif on auth_type; all tests pass
+- [x] **Add `from_config` classmethod to `ApiKeyStrategy`**
+  - [x] Signature: `from_config(cls, config: AgentConfig, profile: ProviderProfile | None) -> ApiKeyStrategy`
+  - [x] Extracts `explicit_key`, `env_var`, `fallback_env_var`, `base_url` from config and profile (same logic currently in `resolve_auth_strategy`)
+- [x] **Add `active_source` property and `setup_hint` property to `ApiKeyStrategy`**
+  - [x] `active_source`: returns the env var name or "explicit" or "localhost" depending on which source resolved
+  - [x] `setup_hint`: returns actionable instruction (e.g., "Set OPENAI_API_KEY environment variable")
+- [x] **Refactor `resolve_auth_strategy()` to use registry only**
+  - [x] Remove the `if auth_type == "api_key"` and `if auth_type == "codex"` branches
+  - [x] Use: `strategy_cls = AUTH_STRATEGIES[auth_type]; return strategy_cls.from_config(config, profile)`
+  - [x] Raise `ProviderAuthError` for unknown auth_type (unchanged)
+- [x] **Add `resolve_auth_strategy_for_profile()` convenience function**
+  - [x] Takes `ProviderProfile` only (no `AgentConfig` needed for status checks)
+  - [x] Constructs minimal config, delegates to `resolve_auth_strategy()`
+- [x] Success: `resolve_auth_strategy()` has no if/elif on auth_type; all tests pass
 
 ### T4: Auth strategy refactor tests
 
-- [ ] **Update existing auth resolution tests in `tests/providers/test_auth_resolution.py`**
-  - [ ] Tests should still pass — `resolve_auth_strategy` returns same results
-- [ ] **Add tests for `from_config` classmethods**
-  - [ ] Test: `ApiKeyStrategy.from_config()` with profile containing `api_key_env`
-  - [ ] Test: `ApiKeyStrategy.from_config()` with explicit key in config
-  - [ ] Test: `ApiKeyStrategy.from_config()` with localhost base_url
-- [ ] **Add tests for `active_source` and `setup_hint`**
-  - [ ] Test: `active_source` returns env var name when key found via env var
-  - [ ] Test: `setup_hint` returns actionable message
-- [ ] **Test `resolve_auth_strategy_for_profile()`**
-  - [ ] Test: returns valid strategy for `openai` profile
-  - [ ] Test: returns valid strategy for `sdk` profile
-- [ ] Success: all auth tests pass; no string dispatch in `resolve_auth_strategy`
+- [x] **Update existing auth resolution tests in `tests/providers/test_auth_resolution.py`**
+  - [x] Tests should still pass — `resolve_auth_strategy` returns same results
+- [x] **Add tests for `from_config` classmethods**
+  - [x] Test: `ApiKeyStrategy.from_config()` with profile containing `api_key_env`
+  - [x] Test: `ApiKeyStrategy.from_config()` with explicit key in config
+  - [x] Test: `ApiKeyStrategy.from_config()` with localhost base_url
+- [x] **Add tests for `active_source` and `setup_hint`**
+  - [x] Test: `active_source` returns env var name when key found via env var
+  - [x] Test: `setup_hint` returns actionable message
+- [x] **Test `resolve_auth_strategy_for_profile()`**
+  - [x] Test: returns valid strategy for `openai` profile
+  - [x] Test: returns valid strategy for `sdk` profile
+- [x] Success: all auth tests pass; no string dispatch in `resolve_auth_strategy`
 
 **Commit**: `refactor: registry-driven auth strategy dispatch with from_config factory`
 
