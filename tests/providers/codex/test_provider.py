@@ -39,8 +39,8 @@ class TestCapabilities:
     def test_can_read_files(self, provider: CodexProvider) -> None:
         assert provider.capabilities.can_read_files is True
 
-    def test_no_system_prompt(self, provider: CodexProvider) -> None:
-        assert provider.capabilities.supports_system_prompt is False
+    def test_supports_system_prompt(self, provider: CodexProvider) -> None:
+        assert provider.capabilities.supports_system_prompt is True
 
     def test_no_streaming(self, provider: CodexProvider) -> None:
         assert provider.capabilities.supports_streaming is False

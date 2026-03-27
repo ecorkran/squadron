@@ -23,7 +23,7 @@ class CodexProvider:
     def capabilities(self) -> ProviderCapabilities:
         return ProviderCapabilities(
             can_read_files=True,
-            supports_system_prompt=False,
+            supports_system_prompt=True,
             supports_streaming=False,
         )
 

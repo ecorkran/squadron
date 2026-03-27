@@ -120,11 +120,18 @@ class CodexAgent:
             self._codex = await AsyncCodex(config=config).__aenter__()
             sandbox = self._config.credentials.get("sandbox", _DEFAULT_SANDBOX)
             cwd = self._config.cwd or os.getcwd()
+
+            thread_kwargs: dict[str, object] = {
+                "model": self._config.model,
+                "sandbox": sandbox,
+                "cwd": cwd,
+                "approval_policy": "never",
+            }
+            if self._config.instructions:
+                thread_kwargs["base_instructions"] = self._config.instructions
+
             self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
-                model=self._config.model,
-                sandbox=sandbox,
-                cwd=cwd,
-                approval_policy="never",
+                **thread_kwargs,
             )
             _log.debug(
                 "Codex SDK session started: model=%s, bin=%s",
