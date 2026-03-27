@@ -238,8 +238,9 @@ status: not_started
   - [ ] Existing tests should pass against the new unified path (may need fixture updates)
   - [ ] Test: SDK profile routes through provider registry and ClaudeSDKAgent
   - [ ] Test: OpenAI profile routes through provider registry and OpenAICompatibleAgent
+  - [ ] Test: Codex profile routes through provider registry and CodexAgent (mocked MCP client)
   - [ ] Test: file injection happens when `can_read_files=False`
-  - [ ] Test: file injection skipped when `can_read_files=True`
+  - [ ] Test: file injection skipped when `can_read_files=True` (SDK and Codex profiles)
   - [ ] Test: prompt logging preserved at verbosity >= 3
   - [ ] Test: prompt capture fields populated at verbosity >= 2
 - [ ] **Update `tests/review/test_content_injection.py`** if it references old functions
