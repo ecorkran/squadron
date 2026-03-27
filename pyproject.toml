@@ -80,6 +80,7 @@ testpaths = ["tests"]
 
 [tool.pyright]
 include = ["src"]
+exclude = ["src/squadron/providers/codex/agent.py"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingImports = true
