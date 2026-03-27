@@ -168,6 +168,24 @@ class TestHandleMessage:
         with pytest.raises(ProviderError, match="Codex tool error"):
             asyncio.run(run())
 
+    def test_missing_model_raises(self) -> None:
+        config = AgentConfig(
+            name="no-model",
+            agent_type="codex",
+            provider="codex",
+            model=None,
+        )
+        agent = CodexAgent(name="no-model", config=config)
+        mock_session = AsyncMock()
+        agent._session = mock_session
+
+        async def run() -> None:
+            async for _ in agent.handle_message(_make_message()):
+                pass
+
+        with pytest.raises(ProviderError, match="model is required"):
+            asyncio.run(run())
+
 
 class TestShutdown:
     def test_sets_terminated(self, agent: CodexAgent) -> None:

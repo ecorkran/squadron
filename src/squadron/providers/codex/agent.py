@@ -114,7 +114,12 @@ class CodexAgent:
     async def _codex_start(self, prompt: str) -> Message:
         """Start a new Codex session via the ``codex`` MCP tool."""
         assert self._session is not None  # noqa: S101
-        model = self._config.model or "gpt-5.3-codex"
+        if self._config.model is None:
+            raise ProviderError(
+                "model is required for Codex agents. "
+                "Specify --model or use a model alias (e.g. codex-agent)."
+            )
+        model = self._config.model
         sandbox = self._config.credentials.get("sandbox", _DEFAULT_SANDBOX)
         cwd = self._config.cwd or os.getcwd()
 
