@@ -15,44 +15,25 @@ _log = get_logger("squadron.providers.codex.agent")
 
 _DEFAULT_SANDBOX = "read-only"
 
-_SDK_INSTALL_HINT = (
-    "Install the Codex Python SDK: "
-    "pip install 'codex-app-server-sdk @ "
-    "git+https://github.com/openai/codex.git#subdirectory=sdk/python'"
+# The Codex Python SDK is installed from the openai/codex GitHub repo.
+# It requires the Codex CLI binary on PATH (installed via npm).
+_SDK_INSTALL_URL = (
+    "https://github.com/openai/codex/tree/main/sdk/python"
 )
-
-_BINARY_INSTALL_HINT = (
-    "Codex binary not found. Either:\n"
-    "  1. Install the published SDK with bundled binary: "
-    "pip install codex-app-server-sdk\n"
-    "  2. Or install the Codex CLI separately: "
-    "npm i -g @openai/codex"
-)
+_CLI_INSTALL_CMD = "npm i -g @openai/codex"
 
 
 def _resolve_codex_binary() -> str | None:
-    """Find the Codex binary — SDK bundled or system-installed.
-
-    Resolution order:
-    1. SDK's bundled binary (codex-cli-bin wheel, if installed)
-    2. ``codex`` on PATH (npm global install)
-    """
-    # Try SDK bundled binary first
-    try:
-        from codex_app_server._bootstrap import pinned_binary_path
-
-        bundled = pinned_binary_path()
-        if bundled and os.path.isfile(bundled):
-            return str(bundled)
-    except (ImportError, Exception):
-        pass
-
-    # Fall back to system PATH
+    """Find the Codex CLI binary on PATH (installed via npm)."""
     return shutil.which("codex")
 
 
 class CodexAgent:
     """Agentic provider backed by the Codex Python SDK.
+
+    Requires:
+    - ``codex-app-server-sdk`` Python package (from openai/codex GitHub repo)
+    - ``codex`` CLI binary on PATH (``npm i -g @openai/codex``)
 
     The SDK client is started lazily on first ``handle_message()`` call.
     Subsequent messages continue the same thread.
@@ -62,8 +43,8 @@ class CodexAgent:
         self._name = name
         self._config = config
         self._state = AgentState.idle
-        self._codex: object | None = None  # AsyncCodex instance
-        self._thread: object | None = None  # AsyncThread instance
+        self._codex: object | None = None
+        self._thread: object | None = None
 
     @property
     def name(self) -> str:
@@ -101,7 +82,7 @@ class CodexAgent:
             try:
                 await self._codex.__aexit__(None, None, None)  # type: ignore[union-attr]
             except Exception:
-                pass  # Best-effort cleanup
+                pass
         self._codex = None
         self._thread = None
         self._state = AgentState.terminated
@@ -113,7 +94,12 @@ class CodexAgent:
             from codex_app_server.client import AppServerConfig
         except ImportError as exc:
             raise ProviderError(
-                f"Codex Python SDK not installed. {_SDK_INSTALL_HINT}"
+                "Codex Python SDK (codex_app_server) not installed. "
+                "Install the official OpenAI SDK from GitHub:\n"
+                "  pip install 'codex-app-server-sdk @ "
+                "git+https://github.com/openai/codex.git"
+                "#subdirectory=sdk/python'\n"
+                "Note: do NOT install the similarly-named PyPI package."
             ) from exc
 
         if self._config.model is None:
@@ -122,11 +108,13 @@ class CodexAgent:
                 "Specify --model or use a model alias (e.g. codex-agent)."
             )
 
-        # Lazy initialization
         if self._codex is None:
             codex_bin = _resolve_codex_binary()
             if codex_bin is None:
-                raise ProviderError(_BINARY_INSTALL_HINT)
+                raise ProviderError(
+                    "Codex CLI not found on PATH. "
+                    f"Install with: {_CLI_INSTALL_CMD}"
+                )
 
             config = AppServerConfig(codex_bin=codex_bin)
             self._codex = await AsyncCodex(config=config).__aenter__()
@@ -139,14 +127,10 @@ class CodexAgent:
                 approval_policy="never",
             )
             _log.debug(
-                "Codex SDK session started: model=%s, sandbox=%s, bin=%s",
+                "Codex SDK session started: model=%s, bin=%s",
                 self._config.model,
-                sandbox,
                 codex_bin,
             )
 
         result = await self._thread.run(prompt)  # type: ignore[union-attr]
-        response = result.final_response
-        if response is None:
-            return ""
-        return response
+        return result.final_response or ""

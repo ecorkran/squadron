@@ -188,7 +188,7 @@ class TestHandleMessage:
                     async for _ in agent.handle_message(_make_message()):
                         pass
 
-                with pytest.raises(ProviderError, match="SDK not installed"):
+                with pytest.raises(ProviderError, match="not installed"):
                     asyncio.run(run())
 
 
