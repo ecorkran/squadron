@@ -120,6 +120,20 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
             "cache_write": 1.75,
         },
     },
+    "codex-agent": {
+        "profile": "openai-oauth",
+        "model": "gpt-5.3-codex",
+        "private": True,
+        "cost_tier": "subscription",
+        "notes": "Agentic: sandbox, subscription auth",
+    },
+    "codex-spark": {
+        "profile": "openai",
+        "model": "gpt-5.3-codex-spark",
+        "private": True,
+        "cost_tier": "subscription",
+        "notes": "Near-instant, Pro only",
+    },
     # Google Gemini — free tier
     "gemini": {
         "profile": "gemini",

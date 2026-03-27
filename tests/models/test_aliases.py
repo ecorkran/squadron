@@ -48,9 +48,23 @@ def test_resolve_sonnet() -> None:
 
 
 def test_resolve_codex() -> None:
-    """codex resolves to gpt-5.3-codex on openai profile."""
+    """codex resolves to gpt-5.3-codex on openai profile (unchanged)."""
     model, profile = resolve_model_alias("codex")
     assert model == "gpt-5.3-codex"
+    assert profile == "openai"
+
+
+def test_resolve_codex_agent() -> None:
+    """codex-agent resolves to gpt-5.3-codex on openai-oauth profile."""
+    model, profile = resolve_model_alias("codex-agent")
+    assert model == "gpt-5.3-codex"
+    assert profile == "openai-oauth"
+
+
+def test_resolve_codex_spark() -> None:
+    """codex-spark resolves to gpt-5.3-codex-spark on openai profile."""
+    model, profile = resolve_model_alias("codex-spark")
+    assert model == "gpt-5.3-codex-spark"
     assert profile == "openai"
 
 

@@ -275,16 +275,16 @@ status: in_progress
 
 ### T17: Model aliases for Codex
 
-- [ ] **Add `codex-agent` alias to `BUILT_IN_ALIASES` in `src/squadron/models/aliases.py`**
-  - [ ] `"codex-agent"`: `profile: "codex"`, `model: "gpt-5.3-codex"`, `notes: "Agentic: sandbox, subscription auth"`
-- [ ] **Add `codex-spark` alias**
-  - [ ] `"codex-spark"`: `profile: "openai"`, `model: "gpt-5.3-codex-spark"`, `notes: "Near-instant, Pro only"`
-- [ ] **Existing `codex` alias stays unchanged** (`profile: "openai"`)
-- [ ] **Add alias tests**
-  - [ ] Test: `codex` resolves to `profile="openai"` (unchanged)
-  - [ ] Test: `codex-agent` resolves to `profile="codex"`
-  - [ ] Test: `codex-spark` resolves correctly
-- [ ] Success: all alias tests pass; existing aliases unchanged
+- [x] **Add `codex-agent` alias to `BUILT_IN_ALIASES` in `src/squadron/models/aliases.py`**
+  - [x] `"codex-agent"`: `profile: "codex"`, `model: "gpt-5.3-codex"`, `notes: "Agentic: sandbox, subscription auth"`
+- [x] **Add `codex-spark` alias**
+  - [x] `"codex-spark"`: `profile: "openai"`, `model: "gpt-5.3-codex-spark"`, `notes: "Near-instant, Pro only"`
+- [x] **Existing `codex` alias stays unchanged** (`profile: "openai"`)
+- [x] **Add alias tests**
+  - [x] Test: `codex` resolves to `profile="openai"` (unchanged)
+  - [x] Test: `codex-agent` resolves to `profile="codex"`
+  - [x] Test: `codex-spark` resolves correctly
+- [x] Success: all alias tests pass; existing aliases unchanged
 
 **Commit**: `feat: add codex-agent and codex-spark model aliases`
 
