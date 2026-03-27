@@ -1,4 +1,4 @@
-"""Tests for SDKAgent — query mode and client mode."""
+"""Tests for ClaudeSDKAgent — query mode and client mode."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from squadron.providers.errors import (
     ProviderAuthError,
     ProviderError,
 )
-from squadron.providers.sdk.agent import SDKAgent
+from squadron.providers.sdk.agent import ClaudeSDKAgent
 
 # Patch target for the SDK query function.
 _QUERY = "squadron.providers.sdk.agent.sdk_query"
@@ -40,13 +40,13 @@ def options() -> ClaudeAgentOptions:
 
 
 @pytest.fixture
-def query_agent(options: ClaudeAgentOptions) -> SDKAgent:
-    return SDKAgent(name="query-bot", options=options, mode="query")
+def query_agent(options: ClaudeAgentOptions) -> ClaudeSDKAgent:
+    return ClaudeSDKAgent(name="query-bot", options=options, mode="query")
 
 
 @pytest.fixture
-def client_agent(options: ClaudeAgentOptions) -> SDKAgent:
-    return SDKAgent(name="client-bot", options=options, mode="client")
+def client_agent(options: ClaudeAgentOptions) -> ClaudeSDKAgent:
+    return ClaudeSDKAgent(name="client-bot", options=options, mode="client")
 
 
 @pytest.fixture
@@ -75,13 +75,13 @@ async def _collect(ait: AsyncIterator[Message]) -> list[Message]:
 
 
 class TestProperties:
-    def test_name(self, query_agent: SDKAgent) -> None:
+    def test_name(self, query_agent: ClaudeSDKAgent) -> None:
         assert query_agent.name == "query-bot"
 
-    def test_agent_type(self, query_agent: SDKAgent) -> None:
+    def test_agent_type(self, query_agent: ClaudeSDKAgent) -> None:
         assert query_agent.agent_type == "sdk"
 
-    def test_initial_state(self, query_agent: SDKAgent) -> None:
+    def test_initial_state(self, query_agent: ClaudeSDKAgent) -> None:
         assert query_agent.state == AgentState.idle
 
 
@@ -93,7 +93,7 @@ class TestProperties:
 class TestQueryModeHappyPath:
     @pytest.mark.asyncio
     async def test_calls_query_with_prompt(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         async def mock_query(  # type: ignore[override]
             *, prompt: str, options: object = None
@@ -108,7 +108,7 @@ class TestQueryModeHappyPath:
     @pytest.mark.asyncio
     async def test_calls_query_with_options(
         self,
-        query_agent: SDKAgent,
+        query_agent: ClaudeSDKAgent,
         input_message: Message,
         options: ClaudeAgentOptions,
     ) -> None:
@@ -128,7 +128,7 @@ class TestQueryModeHappyPath:
 
     @pytest.mark.asyncio
     async def test_yields_translated_messages(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         async def mock_query(  # type: ignore[override]
             *, prompt: str, options: object = None
@@ -144,7 +144,7 @@ class TestQueryModeHappyPath:
 
     @pytest.mark.asyncio
     async def test_state_idle_after_success(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         async def mock_query(  # type: ignore[override]
             *, prompt: str, options: object = None
@@ -157,7 +157,7 @@ class TestQueryModeHappyPath:
 
     @pytest.mark.asyncio
     async def test_state_processing_during_execution(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         observed_state: AgentState | None = None
 
@@ -193,7 +193,7 @@ def _make_error_gen(exc: Exception):
 class TestQueryModeErrors:
     @pytest.mark.asyncio
     async def test_cli_not_found_raises_auth_error(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         gen = _make_error_gen(CLINotFoundError("not found"))
         with patch(_QUERY, side_effect=gen):
@@ -203,7 +203,7 @@ class TestQueryModeErrors:
 
     @pytest.mark.asyncio
     async def test_process_error_raises_api_error(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         gen = _make_error_gen(ProcessError("exit failure", exit_code=1))
         with patch(_QUERY, side_effect=gen):
@@ -214,7 +214,7 @@ class TestQueryModeErrors:
 
     @pytest.mark.asyncio
     async def test_cli_connection_error(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         gen = _make_error_gen(CLIConnectionError("connection failed"))
         with patch(_QUERY, side_effect=gen):
@@ -224,7 +224,7 @@ class TestQueryModeErrors:
 
     @pytest.mark.asyncio
     async def test_json_decode_error(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         gen = _make_error_gen(CLIJSONDecodeError("bad json", ValueError("oops")))
         with patch(_QUERY, side_effect=gen):
@@ -234,7 +234,7 @@ class TestQueryModeErrors:
 
     @pytest.mark.asyncio
     async def test_base_sdk_error(
-        self, query_agent: SDKAgent, input_message: Message
+        self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         gen = _make_error_gen(ClaudeSDKError("unknown"))
         with patch(_QUERY, side_effect=gen):
@@ -250,12 +250,12 @@ class TestQueryModeErrors:
 
 class TestShutdown:
     @pytest.mark.asyncio
-    async def test_shutdown_sets_terminated(self, query_agent: SDKAgent) -> None:
+    async def test_shutdown_sets_terminated(self, query_agent: ClaudeSDKAgent) -> None:
         await query_agent.shutdown()
         assert query_agent.state == AgentState.terminated
 
     @pytest.mark.asyncio
-    async def test_shutdown_no_client_safe(self, query_agent: SDKAgent) -> None:
+    async def test_shutdown_no_client_safe(self, query_agent: ClaudeSDKAgent) -> None:
         await query_agent.shutdown()
 
 
@@ -267,7 +267,7 @@ class TestShutdown:
 class TestClientModeHappyPath:
     @pytest.mark.asyncio
     async def test_first_message_creates_and_connects(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
 
@@ -285,7 +285,7 @@ class TestClientModeHappyPath:
 
     @pytest.mark.asyncio
     async def test_second_message_reuses_client(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
 
@@ -314,7 +314,7 @@ class TestClientModeHappyPath:
 
     @pytest.mark.asyncio
     async def test_yields_translated_messages(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
 
@@ -330,7 +330,7 @@ class TestClientModeHappyPath:
 
     @pytest.mark.asyncio
     async def test_state_idle_after_success(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
 
@@ -352,7 +352,7 @@ class TestClientModeHappyPath:
 class TestClientModeErrors:
     @pytest.mark.asyncio
     async def test_connect_error_maps_correctly(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
         mock_client.connect.side_effect = CLINotFoundError()
@@ -364,7 +364,7 @@ class TestClientModeErrors:
 
     @pytest.mark.asyncio
     async def test_receive_error_maps_correctly(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
 
@@ -388,7 +388,7 @@ class TestClientModeErrors:
 class TestClientShutdown:
     @pytest.mark.asyncio
     async def test_shutdown_disconnects_client(
-        self, client_agent: SDKAgent, input_message: Message
+        self, client_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
         mock_client = AsyncMock()
 
@@ -406,7 +406,7 @@ class TestClientShutdown:
 
     @pytest.mark.asyncio
     async def test_shutdown_without_client_is_safe(
-        self, client_agent: SDKAgent
+        self, client_agent: ClaudeSDKAgent
     ) -> None:
         await client_agent.shutdown()
         assert client_agent.state == AgentState.terminated

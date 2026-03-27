@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from squadron.providers.base import AuthType
 from squadron.providers.errors import ProviderAuthError
 
 if TYPE_CHECKING:
@@ -34,6 +35,25 @@ class AuthStrategy(Protocol):
         """Return True if credentials are currently available and usable."""
         ...
 
+    @property
+    def active_source(self) -> str | None:
+        """Return the credential source that would be used, or None."""
+        ...
+
+    @property
+    def setup_hint(self) -> str:
+        """Return actionable instructions for setting up credentials."""
+        ...
+
+    @classmethod
+    def from_config(
+        cls,
+        config: AgentConfig,
+        profile: ProviderProfile | None = None,
+    ) -> AuthStrategy:
+        """Construct a strategy instance from config and optional profile."""
+        ...
+
 
 class ApiKeyStrategy:
     """Resolve an API key from explicit value, env var chain, or localhost bypass."""
@@ -50,6 +70,27 @@ class ApiKeyStrategy:
         self._env_var = env_var
         self._fallback_env_var = fallback_env_var
         self._base_url = base_url
+
+    @classmethod
+    def from_config(
+        cls,
+        config: AgentConfig,
+        profile: ProviderProfile | None = None,
+    ) -> ApiKeyStrategy:
+        """Build from AgentConfig and optional profile."""
+        env_var: str | None
+        if profile is not None:
+            env_var = profile.api_key_env
+        else:
+            raw = config.credentials.get("api_key_env")
+            env_var = str(raw) if raw is not None else None
+
+        return cls(
+            explicit_key=config.api_key,
+            env_var=env_var,
+            fallback_env_var="OPENAI_API_KEY",
+            base_url=config.base_url,
+        )
 
     def _is_localhost(self) -> bool:
         url = self._base_url or ""
@@ -70,6 +111,25 @@ class ApiKeyStrategy:
             return "not-needed"
         return None
 
+    @property
+    def active_source(self) -> str | None:
+        """Return which credential source would be used."""
+        if self._explicit_key:
+            return "explicit"
+        if self._env_var and os.environ.get(self._env_var):
+            return self._env_var
+        if os.environ.get(self._fallback_env_var):
+            return self._fallback_env_var
+        if self._is_localhost():
+            return "localhost"
+        return None
+
+    @property
+    def setup_hint(self) -> str:
+        """Return actionable setup instructions."""
+        env = self._env_var or self._fallback_env_var
+        return f"Set {env} environment variable"
+
     async def get_credentials(self) -> dict[str, str]:
         """Return {"api_key": "<resolved_key>"}.
 
@@ -82,10 +142,7 @@ class ApiKeyStrategy:
         """
         key = self._resolve()
         if key is None:
-            raise ProviderAuthError(
-                "No API key found. Set config.api_key, the profile"
-                " api_key_env var, or OPENAI_API_KEY."
-            )
+            raise ProviderAuthError(f"No API key found. {self.setup_hint}.")
         return {"api_key": key}
 
     async def refresh_if_needed(self) -> None:
@@ -97,10 +154,54 @@ class ApiKeyStrategy:
 
 
 # Registry mapping auth_type strings to strategy classes.
+# Each class must implement from_config(config, profile) classmethod.
 AUTH_STRATEGIES: dict[str, type] = {
-    "api_key": ApiKeyStrategy,
-    # Future: "oauth": OAuthStrategy (slice 116)
+    AuthType.API_KEY: ApiKeyStrategy,
+    # AuthType.SESSION added below
+    # AuthType.OAUTH added below (lazy import to avoid circular dependency)
 }
+
+
+def _register_oauth_strategy() -> None:
+    """Register OAuthFileStrategy lazily to avoid circular import."""
+    from squadron.providers.codex.auth import OAuthFileStrategy
+
+    AUTH_STRATEGIES[AuthType.OAUTH] = OAuthFileStrategy
+
+
+_register_oauth_strategy()
+
+
+class _SessionStrategy:
+    """No-op auth strategy for SDK sessions (no credentials needed)."""
+
+    @classmethod
+    def from_config(
+        cls,
+        config: AgentConfig,
+        profile: ProviderProfile | None = None,
+    ) -> _SessionStrategy:
+        return cls()
+
+    async def get_credentials(self) -> dict[str, str]:
+        return {}
+
+    async def refresh_if_needed(self) -> None:
+        pass
+
+    def is_valid(self) -> bool:
+        return True
+
+    @property
+    def active_source(self) -> str | None:
+        return "(session)"
+
+    @property
+    def setup_hint(self) -> str:
+        return "No setup needed — uses active Claude Code session"
+
+
+AUTH_STRATEGIES[AuthType.SESSION] = _SessionStrategy
 
 
 def resolve_auth_strategy(
@@ -110,9 +211,10 @@ def resolve_auth_strategy(
     """Build an AuthStrategy from config and optional profile.
 
     Reads auth_type from profile (defaults to "api_key" if no profile).
-    Raises ProviderAuthError for unknown auth_type values.
+    Dispatches to the strategy's ``from_config`` classmethod — no
+    if/elif chains on auth_type values.
     """
-    auth_type: str = profile.auth_type if profile is not None else "api_key"
+    auth_type: str = profile.auth_type if profile is not None else AuthType.API_KEY
 
     strategy_cls = AUTH_STRATEGIES.get(auth_type)
     if strategy_cls is None:
@@ -121,20 +223,19 @@ def resolve_auth_strategy(
             f"Unknown auth_type {auth_type!r}. Available: {available}"
         )
 
-    if auth_type == "api_key":
-        env_var: str | None
-        if profile is not None:
-            env_var = profile.api_key_env
-        else:
-            raw = config.credentials.get("api_key_env")
-            env_var = str(raw) if raw is not None else None
+    return strategy_cls.from_config(config, profile)
 
-        return ApiKeyStrategy(
-            explicit_key=config.api_key,
-            env_var=env_var,
-            fallback_env_var="OPENAI_API_KEY",
-            base_url=config.base_url,
-        )
 
-    # Unreachable until additional auth types are added to the registry.
-    raise ProviderAuthError(f"Auth type {auth_type!r} not yet implemented")
+def resolve_auth_strategy_for_profile(profile: ProviderProfile) -> AuthStrategy:
+    """Convenience: resolve auth strategy from profile alone (no AgentConfig).
+
+    Used by CLI auth status where no agent config exists.
+    """
+    from squadron.core.models import AgentConfig
+
+    minimal_config = AgentConfig(
+        name="_auth_check",
+        agent_type="api",
+        provider=profile.provider,
+    )
+    return resolve_auth_strategy(minimal_config, profile)

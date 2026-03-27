@@ -8,7 +8,7 @@ import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Message
 from squadron.providers import registry as reg_module
-from squadron.providers.base import Agent, AgentProvider
+from squadron.providers.base import Agent, AgentProvider, ProviderCapabilities
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -32,6 +32,10 @@ class _MockAgentProvider:
     @property
     def provider_type(self) -> str:
         return "mock"
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities()
 
     async def create_agent(self, config: AgentConfig) -> _MockAgent:
         return _MockAgent(config.name, config.agent_type)

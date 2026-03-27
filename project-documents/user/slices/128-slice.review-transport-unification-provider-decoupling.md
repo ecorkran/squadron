@@ -5,9 +5,9 @@ project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [review-provider-model-selection, auth-strategy-credential-management]
 interfaces: []
-status: not_started
+status: complete
 dateCreated: 20260326
-dateUpdated: 20260326
+dateUpdated: 20260327
 ---
 
 # Slice Design: Review Transport Unification & Provider Decoupling

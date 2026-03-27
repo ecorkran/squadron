@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
-
 import typer
 from rich import print as rprint
 from rich.table import Table
 
+from squadron.providers.auth import resolve_auth_strategy_for_profile
 from squadron.providers.profiles import get_all_profiles, get_profile
 
 auth_app = typer.Typer(
@@ -15,13 +14,6 @@ auth_app = typer.Typer(
     help="Credential management.",
     no_args_is_help=True,
 )
-
-
-def _mask_key(value: str) -> str:
-    """Return a masked version of an API key: first 3 + last 4 chars."""
-    if len(value) <= 7:
-        return "***"
-    return f"{value[:3]}...{value[-4:]}"
 
 
 @auth_app.command("login")
@@ -35,18 +27,13 @@ def auth_login(
         rprint(f"[red]Error:[/red] {exc}")
         raise typer.Exit(1) from exc
 
-    if profile.api_key_env is None:
-        rprint(
-            f"[green]✓[/green] No authentication required for {profile_name} profile"
-        )
-        return
-
-    value = os.environ.get(profile.api_key_env)
-    if value:
-        rprint(f"[green]✓[/green] {profile.api_key_env} is set ({_mask_key(value)})")
+    strategy = resolve_auth_strategy_for_profile(profile)
+    if strategy.is_valid():
+        source = strategy.active_source or "(valid)"
+        rprint(f"[green]✓[/green] {profile_name}: authenticated ({source})")
     else:
-        rprint(f"[red]✗[/red] {profile.api_key_env} is not set")
-        rprint(f"  Set it with: export {profile.api_key_env}=your-key-here")
+        rprint(f"[red]✗[/red] {profile_name}: not authenticated")
+        rprint(f"  {strategy.setup_hint}")
 
 
 @auth_app.command("status")
@@ -61,16 +48,13 @@ def auth_status() -> None:
     table.add_column("Source")
 
     for name, profile in sorted(profiles.items()):
-        if profile.api_key_env is None:
-            status = "[green]✓ valid[/green]"
-            source = "(no auth needed)"
+        strategy = resolve_auth_strategy_for_profile(profile)
+        if strategy.is_valid():
+            status = "[green]✓ authenticated[/green]"
+            source = strategy.active_source or ""
         else:
-            value = os.environ.get(profile.api_key_env)
-            if value:
-                status = "[green]✓ valid[/green]"
-            else:
-                status = "[red]✗ missing[/red]"
-            source = profile.api_key_env
+            status = "[red]✗ not authenticated[/red]"
+            source = strategy.setup_hint
 
         table.add_row(name, profile.auth_type, status, source)
 

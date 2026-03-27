@@ -1,6 +1,6 @@
 [project]
 name = "squadron-ai"
-version = "0.2.7"
+version = "0.2.8"
 description = "Multi-agent squadron framework"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -45,6 +45,9 @@ Documentation = "https://github.com/ecorkran/squadron/blob/main/README.md"
 Issues = "https://github.com/ecorkran/squadron/issues"
 
 [project.optional-dependencies]
+codex = [
+    "codex-app-server-sdk @ git+https://github.com/openai/codex.git#subdirectory=sdk/python",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
@@ -55,6 +58,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/squadron"]

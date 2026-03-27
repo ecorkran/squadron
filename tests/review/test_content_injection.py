@@ -220,8 +220,14 @@ def test_files_glob_resolves_and_injects(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
-    """Full path: alias resolution → content injection → enriched prompt
-    reaches the API with file contents, not just paths."""
+    """Full path: content injection → enriched prompt reaches the agent
+    with file contents, not just paths."""
+    from collections.abc import AsyncIterator
+    from unittest.mock import MagicMock
+
+    from squadron.core.models import AgentState, Message, MessageType
+    from squadron.providers.base import ProviderCapabilities
+    from squadron.providers.profiles import ProviderProfile
     from squadron.review.review_client import run_review_with_profile
     from squadron.review.templates import InputDef, ReviewTemplate
 
@@ -256,43 +262,42 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
         "cwd": str(tmp_path),
     }
 
-    # Mock the provider profile, API key, and OpenAI client
-    mock_profile = AsyncMock()
-    mock_profile.name = "openai"
-    mock_profile.base_url = None
-    mock_profile.default_headers = None
-    mock_profile.api_key_env = "OPENAI_API_KEY"
-
-    mock_response = AsyncMock()
-    mock_response.choices = [AsyncMock()]
-    mock_response.choices[
-        0
-    ].message.content = (
+    # Capture the prompt sent to the agent
+    captured_prompts: list[str] = []
+    review_output = (
         "## Summary\nPASS\n\n## Findings\n\n### [PASS] Coverage\nAll tasks covered."
     )
 
-    captured_messages: list[object] = []
+    mock_agent = MagicMock()
+    mock_agent.state = AgentState.idle
+    mock_agent.shutdown = AsyncMock()
 
-    async def capture_create(**kwargs: object) -> object:
-        captured_messages.append(kwargs.get("messages"))
-        return mock_response
+    async def capture_handle(message: Message) -> AsyncIterator[Message]:
+        captured_prompts.append(message.content)
+        yield Message(
+            sender="mock",
+            recipients=[],
+            content=review_output,
+            message_type=MessageType.chat,
+        )
 
-    mock_client = AsyncMock()
-    mock_client.chat.completions.create = capture_create
+    mock_agent.handle_message = capture_handle
+
+    mock_provider = MagicMock()
+    mock_provider.capabilities = ProviderCapabilities(can_read_files=False)
+    mock_provider.create_agent = AsyncMock(return_value=mock_agent)
 
     with (
         patch(
             "squadron.review.review_client.get_profile",
-            return_value=mock_profile,
+            return_value=ProviderProfile(
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
+            ),
         ),
-        patch(
-            "squadron.review.review_client._resolve_api_key",
-            return_value="fake-key",
-        ),
-        patch(
-            "squadron.review.review_client.AsyncOpenAI",
-            return_value=mock_client,
-        ),
+        patch("squadron.review.review_client.get_provider", return_value=mock_provider),
+        patch("squadron.review.review_client._ensure_provider_loaded"),
     ):
         result = await run_review_with_profile(
             template,
@@ -302,11 +307,8 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
         )
 
     # Verify file contents were injected into the prompt
-    assert len(captured_messages) == 1
-    messages = captured_messages[0]
-    user_prompt = messages[1]["content"]  # type: ignore[index]
-
-    # The prompt should contain actual file contents, not just paths
+    assert len(captured_prompts) == 1
+    user_prompt = captured_prompts[0]
     assert "Implement feature X" in user_prompt
     assert "Feature X overview" in user_prompt
     assert "## File Contents" in user_prompt

@@ -6,6 +6,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from squadron.providers.base import AuthType, ProfileName, ProviderType
+
 
 @dataclass(frozen=True)
 class ProviderProfile:
@@ -17,20 +19,20 @@ class ProviderProfile:
     api_key_env: str | None = None
     default_headers: dict[str, str] | None = None
     description: str = ""
-    auth_type: str = "api_key"
+    auth_type: str = AuthType.API_KEY
 
 
 BUILT_IN_PROFILES: dict[str, ProviderProfile] = {
-    "openai": ProviderProfile(
-        name="openai",
-        provider="openai",
+    ProfileName.OPENAI: ProviderProfile(
+        name=ProfileName.OPENAI,
+        provider=ProviderType.OPENAI,
         base_url=None,
         api_key_env="OPENAI_API_KEY",
         description="OpenAI direct API",
     ),
-    "openrouter": ProviderProfile(
-        name="openrouter",
-        provider="openai",
+    ProfileName.OPENROUTER: ProviderProfile(
+        name=ProfileName.OPENROUTER,
+        provider=ProviderType.OPENAI,
         base_url="https://openrouter.ai/api/v1",
         api_key_env="OPENROUTER_API_KEY",
         default_headers={
@@ -39,26 +41,33 @@ BUILT_IN_PROFILES: dict[str, ProviderProfile] = {
         },
         description="OpenRouter multi-model gateway",
     ),
-    "local": ProviderProfile(
-        name="local",
-        provider="openai",
+    ProfileName.LOCAL: ProviderProfile(
+        name=ProfileName.LOCAL,
+        provider=ProviderType.OPENAI,
         base_url="http://localhost:11434/v1",
         api_key_env=None,
         description="Local model server (Ollama, vLLM, LM Studio)",
     ),
-    "gemini": ProviderProfile(
-        name="gemini",
-        provider="openai",
+    ProfileName.GEMINI: ProviderProfile(
+        name=ProfileName.GEMINI,
+        provider=ProviderType.OPENAI,
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         api_key_env="GEMINI_API_KEY",
         description="Google Gemini via OpenAI-compatible endpoint",
     ),
-    "sdk": ProviderProfile(
-        name="sdk",
-        provider="sdk",
+    ProfileName.SDK: ProviderProfile(
+        name=ProfileName.SDK,
+        provider=ProviderType.SDK,
         api_key_env=None,
         description="Claude Code SDK (uses active Claude Code session credentials)",
-        auth_type="session",
+        auth_type=AuthType.SESSION,
+    ),
+    ProfileName.OPENAI_OAUTH: ProviderProfile(
+        name=ProfileName.OPENAI_OAUTH,
+        provider=ProviderType.OPENAI_OAUTH,
+        api_key_env=None,
+        description="OpenAI Codex agent (MCP) — agentic tasks via subscription auth",
+        auth_type=AuthType.OAUTH,
     ),
 }
 

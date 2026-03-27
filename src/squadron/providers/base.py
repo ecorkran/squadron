@@ -3,9 +3,55 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from squadron.core.models import AgentConfig, AgentState, Message
+
+
+class ProviderType(StrEnum):
+    """Registered provider type identifiers."""
+
+    OPENAI = "openai"
+    SDK = "sdk"
+    OPENAI_OAUTH = "openai-oauth"
+
+
+class ProfileName(StrEnum):
+    """Built-in profile identifiers."""
+
+    OPENAI = "openai"
+    OPENROUTER = "openrouter"
+    LOCAL = "local"
+    GEMINI = "gemini"
+    SDK = "sdk"
+    OPENAI_OAUTH = "openai-oauth"
+
+
+class AuthType(StrEnum):
+    """Authentication strategy identifiers."""
+
+    API_KEY = "api_key"
+    SESSION = "session"
+    OAUTH = "oauth"
+
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Declared capabilities of a provider.
+
+    Callers adapt based on capabilities, not provider identity.
+    """
+
+    can_read_files: bool = False
+    """Agent can read project files directly (e.g. SDK, Codex sandbox)."""
+
+    supports_system_prompt: bool = True
+    """Agent accepts a system prompt via config."""
+
+    supports_streaming: bool = False
+    """Agent yields incremental response chunks."""
 
 
 @runtime_checkable
@@ -19,7 +65,7 @@ class Agent(Protocol):
 
     @property
     def agent_type(self) -> str:
-        """Execution model: "sdk" or "api"."""
+        """Execution model identifier."""
         ...
 
     @property
@@ -42,7 +88,12 @@ class AgentProvider(Protocol):
 
     @property
     def provider_type(self) -> str:
-        """Provider identifier: "sdk", "anthropic", "openai", etc."""
+        """Provider identifier."""
+        ...
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Declared capabilities of this provider."""
         ...
 
     async def create_agent(self, config: AgentConfig) -> Agent:

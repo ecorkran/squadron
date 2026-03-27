@@ -26,9 +26,9 @@ def _import_sdk_package() -> None:
     from squadron.providers.registry import register_provider
 
     # Re-register since the fixture clears the registry before each test.
-    from squadron.providers.sdk.provider import SDKAgentProvider
+    from squadron.providers.sdk.provider import ClaudeSDKProvider
 
-    register_provider("sdk", SDKAgentProvider())
+    register_provider("sdk", ClaudeSDKProvider())
 
 
 class TestAutoRegistration:
@@ -39,9 +39,9 @@ class TestAutoRegistration:
     def test_get_provider_returns_sdk_provider(self) -> None:
         _import_sdk_package()
         provider = get_provider("sdk")
-        from squadron.providers.sdk.provider import SDKAgentProvider
+        from squadron.providers.sdk.provider import ClaudeSDKProvider
 
-        assert isinstance(provider, SDKAgentProvider)
+        assert isinstance(provider, ClaudeSDKProvider)
 
     def test_provider_type_is_sdk(self) -> None:
         _import_sdk_package()
@@ -51,11 +51,11 @@ class TestAutoRegistration:
     async def test_full_flow_create_agent(self) -> None:
         _import_sdk_package()
         from squadron.core.models import AgentConfig
-        from squadron.providers.sdk.agent import SDKAgent
+        from squadron.providers.sdk.agent import ClaudeSDKAgent
 
         provider = get_provider("sdk")
         config = AgentConfig(name="integration-test", agent_type="sdk", provider="sdk")
         agent = await provider.create_agent(config)
-        assert isinstance(agent, SDKAgent)
+        assert isinstance(agent, ClaudeSDKAgent)
         assert agent.name == "integration-test"
         assert agent.agent_type == "sdk"
