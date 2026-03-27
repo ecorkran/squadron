@@ -1,5 +1,7 @@
 # Project Guidelines for Claude
 
+[//]: # (context-forge:managed)
+
 ## Core Principles
 
 - Always resist adding complexity. Ensure it is truly necessary.
@@ -13,16 +15,35 @@
 ## Code Structure
 
 - Keep source files to ~300 lines, functions to ~50 lines 
-  (excluding whitespace).
+  (excluding whitespace) where practical.
 - Avoid hard-coded constants and duplicated values.
+- Avoid "magic strings" where possible, prefer enums.
+- Never use user-accessible labels as logical structure.  They are fragile.
+- Program to interfaces (contracts).  Maintain clear separation between components.
+- Do not duplicate logic.  Respect DRY (don't repeat yourself).
 - Provide meaningful but concise comments in relevant places.
+
+## Source Control and Builds
 - Keep commits semantic; build after all changes.
 - Git add and commit from project root at least once per task.
 - Confirm your current working directory before file/shell commands.
 
+# Parsing & Pattern Matching
+
+- Prefer lenient parsing over strict matching. A regex that silently
+  fails on valid input (e.g. requiring exact whitespace counts or
+  line-ending positions) is a bug. Parse the semantic content, not
+  the formatting.
+- When parsing structured text (YAML, key-value pairs, etc.), handle
+  common format variations (compact vs multi-line, varying indent
+  levels, trailing whitespace) rather than requiring one exact layout.
+- If a parser returns empty/default on bad input, add at least one
+  test using real-world input (e.g. the actual file it will parse)
+  to catch silent failures.
+  
 ## Project Navigation
 
-- Follow `guide.ai-project.000-process` and its links for workflow.
+- Follow `guide.ai-project.process` and its links for workflow.
 - Follow `file-naming-conventions` for all document naming and metadata.
 - Project guides: `project-documents/ai-project-guide/project-guides/`
 - Tool guides: `project-documents/ai-project-guide/tool-guides/`
@@ -62,6 +83,7 @@ Types:
 - `style` — Formatting, whitespace, linting (no logic change)
 - `guides` - Update or addition to project guides (system/project level)
 - `docs` — Update or addition to user/ guides or documentation (slices, readme, etc)
+- `review` — Code review, design review, or audit documentation
 - `package` - Updates related to packaging, npm, package.json, PyPi, etc
 - `chore` — Build config, dependencies, tooling, CI
 

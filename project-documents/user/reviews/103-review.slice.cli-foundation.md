@@ -1,104 +1,73 @@
 ---
 docType: review
+layer: project
 reviewType: slice
 slice: cli-foundation
 project: squadron
-verdict: PASS
-dateCreated: 20260323
-dateUpdated: 20260323
+verdict: CONCERNS
+sourceDocument: project-documents/user/slices/103-slice.cli-foundation.md
+aiModel: minimax/minimax-m2.7
+status: complete
+dateCreated: 20260327
+dateUpdated: 20260327
 ---
 
 # Review: slice — slice 103
 
-**Verdict:** PASS
+**Verdict:** CONCERNS
 **Model:** minimax/minimax-m2.7
 
 ## Findings
 
-### [PASS] Architectural Goal Alignment
+### [CONCERN] Package namespace mismatch with architecture document
 
-The slice correctly implements the CLI as the "primary development and experimentation interface" as stated in the architecture. The four commands (spawn, list, task, shutdown) provide the fastest path to experimentation. Typer is used as the architecture specifies, and the `orchestration` entry point is correctly named. The slice delivers the stated M1 value: a developer can spawn an SDK agent, give it a task, and see structured output from the terminal.
+**Description**: The slice specifies the CLI package at `src/orchestration/cli/` with entry point `orchestration`, while the architecture document shows it at `src/squadron/cli/` with CLI named `sq`. The slice frontmatter shows `project: squadron`, which matches the architecture, but the package path uses `orchestration` instead of `squadron`.
 
-### [PASS] Layer Responsibility
+Specific reference from slice:
+> Package Structure: `src/orchestration/cli/` and `pyproject.toml` script entry: `orchestration = "orchestration.cli.app:app"`
 
-The CLI correctly operates as a thin interface layer. The documented component interaction confirms proper layering:
+Architecture document shows:
+> Project structure: `src/squadron/cli/` and infrastructure section references: `sq` CLI commands
 
-```
-CLI → AgentRegistry → AgentProvider Protocol → SDKAgentProvider → Claude
-```
+The slice notes it is "completing Milestone 1" with `orchestration` as the command name, but the architecture document explicitly states `sq` CLI commands. This could indicate either:
+1. The slice is using a different namespace convention than the architecture prescribes
+2. The project name or CLI command name was reconsidered between architecture and slice planning
 
-The CLI does not import SDK provider internals directly — it goes through the registry. This respects the architecture's key invariant: "the core engine never depends on provider internals."
+This inconsistency should be resolved for consistency with the architecture unless the parent slice plan document explicitly overrides this.
 
-### [PASS] Dependency Direction
+### [PASS] CLI layer responsibility and design aligns with architecture
 
-Declared dependencies are correct:
-- **Foundation**: For `AgentConfig`, `AgentState`, `Message`, error types (`ProviderError`, `ProviderAuthError`)
-- **SDK Agent Provider**: Assumes `"sdk"` provider is registered in the provider registry
-- **Agent Registry (slice 102)**: Primary runtime dependency for `get_registry()`, `spawn()`, `get()`, `list_agents()`, `shutdown_agent()`, `shutdown_all()`
+The slice correctly implements the CLI as a thin interface layer above the core engine. The design matches the architecture's intent: CLI commands delegate to the Agent Registry, which manages agent lifecycle through providers. The four commands (spawn, list, task, shutdown) are appropriate for M1.
 
-No backward dependencies or hidden dependencies detected. The `asyncio.run()` bridge pattern for synchronous Typer → async registry calls is appropriate for a CLI tool that doesn't need a persistent event loop.
+### [PASS] Dependency direction is correct and architecturally sound
 
-### [PASS] Scope Boundaries
+The CLI correctly depends on:
+- **Agent Registry** (slice 102): Primary runtime dependency for all agent operations
+- **Foundation** (slice 100): Shared models (AgentConfig, AgentState, Message, etc.)
+- **SDK Agent Provider**: Accessed through the registry/provider registry pattern, not imported directly
 
-The Excluded section correctly identifies features deferred to future slices:
-- `chat` command → slice 6+ (requires message bus)
-- `observe` command → slice 8 (multi-agent routing)
-- `pool` command → slice 5 (warm pool management)
-- `review` command → slice 15 (templates)
-- `workflow` commands → slice 12 (ADK integration)
-- Streaming output for `task` → slice 9 (human-in-the-loop)
-- Configuration file support → deferred as enhancement
+This respects the architectural invariant: "the core engine never depends on provider internals."
 
-This alignment prevents scope creep. Each deferred feature has a clear future slice assignment.
+### [PASS] Async bridge pattern follows standard Typer conventions
 
-### [PASS] Integration Points
+The slice documents the `asyncio.run()` bridge pattern for synchronous Typer handlers calling async registry methods. This is the standard, well-understood approach and appropriate for a CLI tool that doesn't need a persistent event loop.
 
-The "Provides to Other Slices" section correctly documents:
-- **Slice 5 (Warm Pool)**: `spawn` command unchanged — pool optimization is transparent behind registry
-- **Slice 15 (Review)**: `review` command composes `spawn` + `task` with templates
-- **Slice 9 (HITL)**: `chat` command requires message bus (slice 6)
-- **Slice 8 (Multi-Agent)**: `observe` command for watching conversations
-- **Slice 17 (E2E)**: CLI commands are primary test surface
+### [PASS] Exclusions appropriately scoped to current slice
 
-These integration points are correctly scoped to what each consuming slice expects from the CLI.
+The slice correctly defers:
+- `chat` command (requires message bus - slice 6+)
+- `observe` command (requires multi-agent routing - slice 8)
+- `pool` command (SDK client warm pool - slice 5)
+- `review` command (workflow templates - slice 15)
+- `workflow` commands (ADK integration - slice 12)
+- Streaming output (requires message bus patterns - slice 9)
 
-### [PASS] Project Structure Alignment
+These align with the stated M1 milestone: "a developer can spawn an SDK agent, give it a task, and see structured output."
 
-The package structure matches the architecture's specified layout:
+### [PASS] Error handling maps correctly to architectural error types
 
-Architecture specifies:
-```
-src/orchestration/cli/                   # CLI Interface
-│   ├── app.py            # typer app
-│   └── commands/
-```
+The error translation table correctly maps CLI user messages to architectural error types:
+- `AgentNotFoundError` / `AgentAlreadyExistsError` (from registry - slice 102)
+- `ProviderError` / `ProviderAuthError` (from foundation/provider layer)
 
-Slice implements:
-```
-src/orchestration/cli/
-├── __init__.py
-├── app.py               # Typer app definition
-└── commands/
-    ├── __init__.py
-    ├── spawn.py
-    ├── list.py
-    ├── task.py
-    └── shutdown.py
-```
-
-This is consistent with the architecture's prescribed structure.
-
-### [CONCERN] Typer Entry Point Name
-
-The architecture's project structure shows `sq` as the CLI command (via `squadron/` root and `sq` references in infrastructure section), while the slice uses `orchestration` as the entry point name. The architecture states:
-
-> **Local development** — `sq` CLI commands. No build step, no bundling.
-
-However, the architecture also shows the app at `src/orchestration/cli/` with entry point `app.py`, and the architecture is for `squadron/orchestration`. The `orchestration` entry point name may be intentional to differentiate from future commands. This is a minor concern — clarification would help ensure consistency with user expectations, but it doesn't constitute an architectural violation.
-
-### [PASS] Technical Decisions
-
-- **Error handling**: User-friendly messages for known exceptions without stack traces aligns with developer-experience goals
-- **Output formatting**: Rich tables for `list`, styled output for `task`, appropriate coloring by state
-- **Testing strategy**: CliRunner with mocked registry at unit level, integration smoke test without SDK — this is the correct testing pyramid for an interface layer
-- **Async pattern**: `asyncio.run()` per command is appropriate; alternative (`anyio.from_thread.run`) would be unnecessary complexity
+This maintains the architectural principle of translating low-level errors to user-friendly messages at the interface layer.
