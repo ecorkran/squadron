@@ -124,6 +124,7 @@ $ sq models
 │ Alias      │ Profile    │ Model ID                               │ Source │
 ├────────────┼────────────┼────────────────────────────────────────┼────────┤
 │ codex      │ openai     │ gpt-5.3-codex                          │        │
+│ codex-agent│ openai-oauth│ gpt-5.3-codex                         │        │
 │ flash3     │ gemini     │ gemini-3-flash-preview                 │        │
 │ gemini     │ gemini     │ gemini-3.1-pro-preview-customtools     │        │
 │ glm5       │ openrouter │ z-ai/glm-5                             │        │
@@ -144,6 +145,37 @@ Add your own aliases in `~/.config/squadron/models.toml`:
 [aliases]
 deepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }
 ```
+
+### Using Codex (experimental)
+
+The `codex-agent` alias enables **OpenAI Codex** agentic mode for reviews and agent tasks. Codex provides sandbox file access, command execution, and subscription-based authentication:
+
+```bash
+sq review slice 120 --model codex-agent -v
+```
+
+**Setup**: Codex support requires two additional components:
+
+1. **Codex CLI** (via npm):
+   ```bash
+   npm i -g @openai/codex
+   ```
+
+2. **Codex Python SDK** (from GitHub):
+   ```bash
+   pip install 'codex-app-server-sdk @ git+https://github.com/openai/codex.git#subdirectory=sdk/python'
+   ```
+
+3. **Authenticate** via OpenAI API key:
+   ```bash
+   # Option A: Set environment variable
+   export OPENAI_API_KEY="sk-..."
+
+   # Option B: Use Codex CLI (saves to ~/.codex/auth.json)
+   codex auth login
+   ```
+
+Codex is experimental and requires active OpenAI subscriptions. The standard `codex` alias (without `-agent` suffix) uses OpenAI's Chat Completions API and doesn't require this setup.
 
 ## Reviews in depth
 
