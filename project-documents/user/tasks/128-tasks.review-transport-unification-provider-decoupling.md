@@ -7,7 +7,7 @@ dependencies: [review-provider-model-selection, auth-strategy-credential-managem
 projectState: "M1 shipped (v0.2.7). Review system has two bespoke transport paths (SDK via runner.py, non-SDK via AsyncOpenAI in review_client.py). Neither uses Agent/AgentProvider Protocols. String dispatch on profile names and auth types. Slice 124 (Codex) rewound — provider code not on main."
 dateCreated: 20260327
 dateUpdated: 20260327
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -292,39 +292,39 @@ status: in_progress
 
 ### T18: Full validation pass
 
-- [ ] **Run full test suite**
-  - [ ] `pytest tests/ -v` — all tests pass
-  - [ ] `ruff check src/ tests/` — no lint errors
-  - [ ] `ruff format --check src/ tests/` — no formatting issues
-  - [ ] `pyright src/` — no type errors (or only pre-existing ones)
-- [ ] **Verify no review system regression**
-  - [ ] Confirm `codex` model alias still has `profile: "openai"` (not `"codex"`)
-  - [ ] Confirm no `if profile == "sdk"` or `if auth_type ==` in `review_client.py` or `auth.py`
-  - [ ] Confirm no `AsyncOpenAI` import in `review_client.py`
-  - [ ] Confirm `runner.py` is deleted
-- [ ] **Verify provider registration**
-  - [ ] `get_provider("openai")`, `get_provider("sdk")`, `get_provider("codex")` all work
-  - [ ] Each provider exposes `capabilities` property
-- [ ] **Verify CLI end-to-end**
-  - [ ] `sq auth status` shows codex row with correct source
-  - [ ] Error message when codex CLI not installed is user-actionable
-  - [ ] Error message when no credentials is user-actionable
-- [ ] Success: all checks green; no regressions
+- [x] **Run full test suite**
+  - [x] `pytest tests/ -v` — all tests pass
+  - [x] `ruff check src/ tests/` — no lint errors
+  - [x] `ruff format --check src/ tests/` — no formatting issues
+  - [x] `pyright src/` — no type errors (or only pre-existing ones)
+- [x] **Verify no review system regression**
+  - [x] Confirm `codex` model alias still has `profile: "openai"` (not `"codex"`)
+  - [x] Confirm no `if profile == "sdk"` or `if auth_type ==` in `review_client.py` or `auth.py`
+  - [x] Confirm no `AsyncOpenAI` import in `review_client.py`
+  - [x] Confirm `runner.py` is deleted
+- [x] **Verify provider registration**
+  - [x] `get_provider("openai")`, `get_provider("sdk")`, `get_provider("codex")` all work
+  - [x] Each provider exposes `capabilities` property
+- [x] **Verify CLI end-to-end**
+  - [x] `sq auth status` shows codex row with correct source
+  - [x] Error message when codex CLI not installed is user-actionable
+  - [x] Error message when no credentials is user-actionable
+- [x] Success: all checks green; no regressions
 
 ---
 
 ### T19: Documentation and slice completion
 
-- [ ] **Update CHANGELOG.md**
-  - [ ] Add entries for: provider capabilities, auth strategy refactor, SDK rename, Codex provider, review transport unification
-- [ ] **Update DEVLOG.md**
-  - [ ] Add Phase 6 implementation entry for slice 128
-- [ ] **Update slice design status**
-  - [ ] Set status to `complete` in `128-slice.review-transport-unification-provider-decoupling.md`
-  - [ ] Update `dateUpdated`
-- [ ] **Update slice plan**
-  - [ ] Check off slice 128 in `100-slices.orchestration-v2.md`
-- [ ] **Update Verification Walkthrough** with actual commands and results
-- [ ] Success: all documentation updated; slice marked complete
+- [x] **Update CHANGELOG.md**
+  - [x] Add entries for: provider capabilities, auth strategy refactor, SDK rename, Codex provider, review transport unification
+- [x] **Update DEVLOG.md**
+  - [x] Add Phase 6 implementation entry for slice 128
+- [x] **Update slice design status**
+  - [x] Set status to `complete` in `128-slice.review-transport-unification-provider-decoupling.md`
+  - [x] Update `dateUpdated`
+- [x] **Update slice plan**
+  - [x] Check off slice 128 in `100-slices.orchestration-v2.md`
+- [x] **Update Verification Walkthrough** with actual commands and results
+- [x] Success: all documentation updated; slice marked complete
 
 **Commit**: `docs: complete slice 128 review transport unification`

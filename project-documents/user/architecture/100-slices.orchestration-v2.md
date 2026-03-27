@@ -74,7 +74,7 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 21. [ ] **(124) Codex Agent Integration** — ⏪ Superseded by slice 128 (Review Transport Unification). Original implementation rewound — built agentic provider but failed to address review system coupling and subscription auth routing. Codex provider integration will be completed as part of 128. Dependencies: [128]. Effort: included in 128
 
-22. [ ] **(128) Review Transport Unification & Provider Decoupling** — Decouple the review system from direct `AsyncOpenAI` usage and `if profile == "sdk"` string dispatch. Reviews use `Agent.handle_message()` via the provider registry like everything else. Extract provider capability declarations (`can_read_files`) so the review pipeline can adapt (e.g., inject file contents for API providers, skip for SDK/agentic providers). Rename `SDKAgent` → `ClaudeSDKAgent`. Auth type `"codex"` → `"oauth"`. Clean up all string-dispatch anti-patterns in auth resolution and CLI auth status. Enables Codex subscription-auth reviews and future Anthropic API provider without review system changes. Dependencies: [Review Provider & Model Selection (119), Auth Strategy (114)]. Risk: Medium (review system refactor touches many callers). Effort: 4/5
+22. [x] **(128) Review Transport Unification & Provider Decoupling** — Decouple the review system from direct `AsyncOpenAI` usage and `if profile == "sdk"` string dispatch. Reviews use `Agent.handle_message()` via the provider registry like everything else. Extract provider capability declarations (`can_read_files`) so the review pipeline can adapt (e.g., inject file contents for API providers, skip for SDK/agentic providers). Rename `SDKAgent` → `ClaudeSDKAgent`. Auth type `"codex"` → `"oauth"`. Clean up all string-dispatch anti-patterns in auth resolution and CLI auth status. Enables Codex subscription-auth reviews and future Anthropic API provider without review system changes. Dependencies: [Review Provider & Model Selection (119), Auth Strategy (114)]. Risk: Medium (review system refactor touches many callers). Effort: 4/5
 
 23. [ ] **(125) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns. CLI additions: history --list, --export, --search. Retention policies with --prune. Dependencies: [Local Daemon (112)]. Risk: Low. Effort: 2/5
 
@@ -121,7 +121,7 @@ Post-M1:
   127. Scoped Code Review & Prompt Logging              ✅ complete
   123. Review Findings Pipeline                         (after 105, 106)
   124. Codex Agent Integration                          ⏪ superseded by 128
-  128. Review Transport Unification & Provider Decoupling  (next)
+  128. Review Transport Unification & Provider Decoupling  ✅ complete
   125. Conversation Persistence & Management           (after 112)
 ```
 

@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `ProviderCapabilities` dataclass on `AgentProvider` Protocol — `can_read_files`, `supports_system_prompt`, `supports_streaming` (slice 128)
+- `ProviderType`, `ProfileName`, `AuthType` enums in `providers/base.py` — all identifier strings defined in one place (slice 128)
+- `OAuthFileStrategy` in `providers/codex/auth.py` — subscription-first credential resolution from `~/.codex/auth.json` or `OPENAI_API_KEY` fallback (slice 128)
+- `CodexProvider` and `CodexAgent` in `providers/codex/` — agentic provider via Codex MCP server transport (slice 128)
+- `openai-oauth` built-in profile with OAuth auth type for subscription-auth agent tasks (slice 128)
+- `codex-agent` and `codex-spark` model aliases (slice 128)
+- `from_config` classmethod, `active_source`, `setup_hint` on all auth strategies (slice 128)
+- `resolve_auth_strategy_for_profile()` convenience function for CLI auth status (slice 128)
+
+### Changed
+- Review system unified: all reviews route through `Agent.handle_message()` via provider registry — no more direct `AsyncOpenAI` or `ClaudeSDKClient` usage in `review_client.py` (slice 128)
+- `SDKAgent` renamed to `ClaudeSDKAgent`, `SDKAgentProvider` renamed to `ClaudeSDKProvider` (slice 128)
+- `resolve_auth_strategy()` now uses registry-driven dispatch via `from_config` — no if/elif chains on auth type strings (slice 128)
+- `sq auth status` and `sq auth login` delegate to auth strategies — no string dispatch on profile names or auth types (slice 128)
+- File injection in reviews now conditional on `provider.capabilities.can_read_files` instead of profile identity (slice 128)
+
+### Removed
+- `src/squadron/review/runner.py` — SDK review logic absorbed into `ClaudeSDKAgent.handle_message()` (slice 128)
+- `_run_non_sdk_review()` and `_resolve_api_key()` from `review_client.py` (slice 128)
+
+### Added
 - Expanded `_FINDING_RE` in `parsers.py` to match five finding formats: `### [SEV]`, `### SEV`, `### SEV:`, `**[SEV]**`, and `- [SEV]` (slice 122)
 - Lenient fallback parsing: when verdict is CONCERNS/FAIL but no structured findings parsed, attempt paragraph extraction then synthesize a finding from summary text
 - `fallback_used: bool` field on `ReviewResult` (default `False`) — set when fallback parsing triggered

@@ -12,6 +12,18 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260327
+
+### Slice 128: Review Transport Unification — Implementation Complete (Phase 6)
+- Reviews unified through `Agent.handle_message()` via provider registry — one code path for all profiles
+- `runner.py` deleted (net -700 lines), `AsyncOpenAI` removed from review module
+- `ProviderCapabilities` on all providers; file injection conditional on `can_read_files`
+- `ProviderType`, `ProfileName`, `AuthType` enums — all identifiers defined once
+- `OAuthFileStrategy` + `CodexProvider`/`CodexAgent` via MCP transport
+- Profile renamed `codex` → `openai-oauth`; auth type `codex` → `oauth`
+- `SDKAgent` → `ClaudeSDKAgent`; auth dispatch via `from_config` factory
+- 687 tests pass; ruff/pyright clean
+
 ## 20260326
 
 ### Slice 124: Codex Agent Integration — Rewound
