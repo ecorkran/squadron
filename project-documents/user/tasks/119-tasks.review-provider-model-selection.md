@@ -7,7 +7,7 @@ projectState: Slices 100-118 complete. Review commands work via SDK only. Provid
 dateCreated: 20260321
 dateUpdated: 20260321
 reviewUpdated: 20260321
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -209,8 +209,8 @@ status: in_progress
 
 These are not AI-automatable tasks. They are documented here for the PM's reference.
 
-- [ ] **Live test**: Run `sq review arch 118 --profile openrouter --model moonshotai/kimi-k2.5 -vv` to verify OpenRouter routing
-- [ ] **Live test**: Run `sq review arch 118 --model gpt-4o -v` to verify model-to-profile inference
-- [ ] **Live test**: Create a user template in `~/.config/squadron/templates/` and verify it overrides built-in
-- [ ] **Live test**: Run `sq config set default_review_profile openrouter` then `sq review arch 118 -v` to verify config default
+- [x] **Live test**: Run `sq review arch 118 --profile openrouter --model moonshotai/kimi-k2.5 -vv` to verify OpenRouter routing
+- [x] **Live test**: Run `sq review arch 118 --model gpt-4o -v` to verify model-to-profile inference
+- [x] **Live test**: Create a user template in `~/.config/squadron/templates/` and verify it overrides built-in
+- [x] **Live test**: Run `sq config set default_review_profile openrouter` then `sq review arch 118 -v` to verify config default
 

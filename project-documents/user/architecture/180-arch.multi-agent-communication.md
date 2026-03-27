@@ -2,10 +2,10 @@
 docType: architecture
 layer: project
 project: squadron
-archIndex: 160
+archIndex: 180
 component: multi-agent-communication
 dateCreated: 20260322
-dateUpdated: 20260322
+dateUpdated: 20260327
 status: not_started
 ---
 

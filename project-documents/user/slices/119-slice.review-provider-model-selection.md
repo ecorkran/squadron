@@ -7,7 +7,7 @@ dependencies: [review-workflow-templates, provider-variants-registry, auth-strat
 interfaces: []
 dateCreated: 20260321
 dateUpdated: 20260321
-status: in-progress
+status: complete
 ---
 
 # Slice Design: Review Provider & Model Selection
