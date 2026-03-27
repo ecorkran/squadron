@@ -253,21 +253,21 @@ status: in_progress
 
 ### T15: CLI auth status cleanup
 
-- [ ] **Refactor `auth_status()` in `src/squadron/cli/commands/auth.py`**
-  - [ ] Remove `from squadron.providers.codex.auth import CodexAuthStrategy` (if present)
-  - [ ] For each profile: call `resolve_auth_strategy_for_profile(profile)`
-  - [ ] Use `strategy.is_valid()` for status, `strategy.active_source` for source column
-  - [ ] No branching on `auth_type` or `api_key_env` — strategy handles it
-- [ ] **Update `auth_login()` if it has string dispatch**
-- [ ] Success: `sq auth status` shows correct output; no string dispatch in auth CLI
+- [x] **Refactor `auth_status()` in `src/squadron/cli/commands/auth.py`**
+  - [x] Remove `from squadron.providers.codex.auth import CodexAuthStrategy` (if present)
+  - [x] For each profile: call `resolve_auth_strategy_for_profile(profile)`
+  - [x] Use `strategy.is_valid()` for status, `strategy.active_source` for source column
+  - [x] No branching on `auth_type` or `api_key_env` — strategy handles it
+- [x] **Update `auth_login()` if it has string dispatch**
+- [x] Success: `sq auth status` shows correct output; no string dispatch in auth CLI
 
 ### T16: CLI auth status tests
 
-- [ ] **Update `tests/cli/test_auth.py`**
-  - [ ] Test: `sq auth status` includes rows for all built-in profiles including codex
-  - [ ] Test: codex profile shows correct auth source
-  - [ ] Test: profiles with no auth needed show correct status
-- [ ] Success: all CLI auth tests pass
+- [x] **Update `tests/cli/test_auth.py`**
+  - [x] Test: `sq auth status` includes rows for all built-in profiles including codex
+  - [x] Test: codex profile shows correct auth source
+  - [x] Test: profiles with no auth needed show correct status
+- [x] Success: all CLI auth tests pass
 
 **Commit**: `refactor: eliminate string dispatch from CLI auth status`
 

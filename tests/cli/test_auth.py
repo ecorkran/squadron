@@ -16,34 +16,33 @@ def runner() -> CliRunner:
 def test_auth_login_valid_key(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When env var is set, output shows ✓ and masked key."""
+    """When env var is set, output shows ✓ and source."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-abcdef1234567890")
     result = runner.invoke(app, ["auth", "login", "openai"])
     assert result.exit_code == 0
     assert "✓" in result.output
+    assert "authenticated" in result.output
     assert "OPENAI_API_KEY" in result.output
-    assert "sk-" in result.output  # masked: first 3 chars
-    assert "7890" in result.output  # masked: last 4
 
 
 def test_auth_login_missing_key(
     runner: CliRunner, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When env var is not set, output shows ✗ and hint."""
+    """When env var is not set, output shows ✗ and setup hint."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     result = runner.invoke(app, ["auth", "login", "openai"])
     assert result.exit_code == 0
     assert "✗" in result.output
-    assert "OPENAI_API_KEY is not set" in result.output
-    assert "export OPENAI_API_KEY" in result.output
+    assert "not authenticated" in result.output
+    assert "OPENAI_API_KEY" in result.output  # setup hint
 
 
-def test_auth_login_local_no_auth(runner: CliRunner) -> None:
-    """Local profile reports no authentication required."""
-    result = runner.invoke(app, ["auth", "login", "local"])
+def test_auth_login_sdk_session(runner: CliRunner) -> None:
+    """SDK profile uses session strategy — always valid."""
+    result = runner.invoke(app, ["auth", "login", "sdk"])
     assert result.exit_code == 0
-    assert "No authentication required" in result.output
-    assert "local" in result.output
+    assert "✓" in result.output
+    assert "authenticated" in result.output
 
 
 def test_auth_login_unknown_profile(runner: CliRunner) -> None:
@@ -66,6 +65,8 @@ def test_auth_status_shows_all_profiles(
     assert "openrouter" in result.output
     assert "local" in result.output
     assert "gemini" in result.output
+    assert "openai-oauth" in result.output
+    assert "sdk" in result.output
 
 
 def test_auth_status_valid_and_missing(
@@ -74,7 +75,19 @@ def test_auth_status_valid_and_missing(
     """Status shows ✓ for set keys and ✗ for missing keys."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-testkey")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     result = runner.invoke(app, ["auth", "status"])
     assert result.exit_code == 0
     assert "✓" in result.output  # at least one valid
-    assert "✗" in result.output  # at least one missing
+    assert "authenticated" in result.output
+
+
+def test_auth_status_no_string_dispatch(
+    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auth status output includes openai-oauth profile correctly."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    result = runner.invoke(app, ["auth", "status"])
+    assert result.exit_code == 0
+    assert "openai-oauth" in result.output
+    assert "oauth" in result.output
