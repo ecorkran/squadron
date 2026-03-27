@@ -3,9 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from squadron.core.models import AgentConfig, AgentState, Message
+
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Declared capabilities of a provider.
+
+    Callers adapt based on capabilities, not provider identity.
+    """
+
+    can_read_files: bool = False
+    """Agent can read project files directly (e.g. SDK, Codex sandbox)."""
+
+    supports_system_prompt: bool = True
+    """Agent accepts a system prompt via config."""
+
+    supports_streaming: bool = False
+    """Agent yields incremental response chunks."""
 
 
 @runtime_checkable
@@ -19,7 +37,7 @@ class Agent(Protocol):
 
     @property
     def agent_type(self) -> str:
-        """Execution model: "sdk" or "api"."""
+        """Execution model identifier."""
         ...
 
     @property
@@ -42,7 +60,12 @@ class AgentProvider(Protocol):
 
     @property
     def provider_type(self) -> str:
-        """Provider identifier: "sdk", "anthropic", "openai", etc."""
+        """Provider identifier."""
+        ...
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        """Declared capabilities of this provider."""
         ...
 
     async def create_agent(self, config: AgentConfig) -> Agent:

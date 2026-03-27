@@ -8,6 +8,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
+from squadron.providers.base import ProviderCapabilities
 
 if TYPE_CHECKING:
     from squadron.providers.sdk.agent import SDKAgent
@@ -24,6 +25,14 @@ class SDKAgentProvider:
     @property
     def provider_type(self) -> str:
         return "sdk"
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            can_read_files=True,
+            supports_system_prompt=True,
+            supports_streaming=True,
+        )
 
     async def create_agent(self, config: AgentConfig) -> SDKAgent:
         """Build ``ClaudeAgentOptions`` from *config* and return an ``SDKAgent``."""

@@ -7,7 +7,7 @@ dependencies: [review-provider-model-selection, auth-strategy-credential-managem
 projectState: "M1 shipped (v0.2.7). Review system has two bespoke transport paths (SDK via runner.py, non-SDK via AsyncOpenAI in review_client.py). Neither uses Agent/AgentProvider Protocols. String dispatch on profile names and auth types. Slice 124 (Codex) rewound — provider code not on main."
 dateCreated: 20260327
 dateUpdated: 20260327
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -25,24 +25,24 @@ status: not_started
 
 ### T1: ProviderCapabilities dataclass and AgentProvider Protocol update
 
-- [ ] **Add `ProviderCapabilities` to `src/squadron/providers/base.py`**
-  - [ ] Create frozen dataclass: `can_read_files: bool = False`, `supports_system_prompt: bool = True`, `supports_streaming: bool = False`
-  - [ ] Add `capabilities` property to `AgentProvider` Protocol
-  - [ ] Update `__all__` exports
-- [ ] **Add `capabilities` to `OpenAICompatibleProvider`**
-  - [ ] Return `ProviderCapabilities(can_read_files=False, supports_system_prompt=True, supports_streaming=True)`
-- [ ] **Add `capabilities` to `SDKAgentProvider` (pre-rename)**
-  - [ ] Return `ProviderCapabilities(can_read_files=True, supports_system_prompt=True, supports_streaming=True)`
-- [ ] Success: all providers expose `capabilities`; existing tests pass
+- [x] **Add `ProviderCapabilities` to `src/squadron/providers/base.py`**
+  - [x] Create frozen dataclass: `can_read_files: bool = False`, `supports_system_prompt: bool = True`, `supports_streaming: bool = False`
+  - [x] Add `capabilities` property to `AgentProvider` Protocol
+  - [x] Update `__all__` exports
+- [x] **Add `capabilities` to `OpenAICompatibleProvider`**
+  - [x] Return `ProviderCapabilities(can_read_files=False, supports_system_prompt=True, supports_streaming=True)`
+- [x] **Add `capabilities` to `SDKAgentProvider` (pre-rename)**
+  - [x] Return `ProviderCapabilities(can_read_files=True, supports_system_prompt=True, supports_streaming=True)`
+- [x] Success: all providers expose `capabilities`; existing tests pass
 
 ### T2: ProviderCapabilities tests
 
-- [ ] **Add tests for ProviderCapabilities**
-  - [ ] Test: `ProviderCapabilities()` defaults are `can_read_files=False, supports_system_prompt=True, supports_streaming=False`
-  - [ ] Test: OpenAI provider `capabilities.can_read_files` is `False`
-  - [ ] Test: SDK provider `capabilities.can_read_files` is `True`
-  - [ ] Test: capabilities dataclass is frozen (assignment raises)
-  - [ ] Success: all tests pass
+- [x] **Add tests for ProviderCapabilities**
+  - [x] Test: `ProviderCapabilities()` defaults are `can_read_files=False, supports_system_prompt=True, supports_streaming=False`
+  - [x] Test: OpenAI provider `capabilities.can_read_files` is `False`
+  - [x] Test: SDK provider `capabilities.can_read_files` is `True`
+  - [x] Test: capabilities dataclass is frozen (assignment raises)
+  - [x] Success: all tests pass
 
 **Commit**: `feat: add ProviderCapabilities dataclass to AgentProvider Protocol`
 
