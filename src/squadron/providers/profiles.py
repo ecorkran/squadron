@@ -60,6 +60,13 @@ BUILT_IN_PROFILES: dict[str, ProviderProfile] = {
         description="Claude Code SDK (uses active Claude Code session credentials)",
         auth_type="session",
     ),
+    "codex": ProviderProfile(
+        name="codex",
+        provider="codex",
+        api_key_env=None,
+        description="OpenAI Codex agent (MCP) — agentic tasks with sandbox",
+        auth_type="oauth",
+    ),
 }
 
 

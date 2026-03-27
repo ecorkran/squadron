@@ -158,9 +158,19 @@ class ApiKeyStrategy:
 # Each class must implement from_config(config, profile) classmethod.
 AUTH_STRATEGIES: dict[str, type] = {
     "api_key": ApiKeyStrategy,
-    # "oauth" added by codex provider (slice 128)
-    # "session" is a no-op placeholder for SDK (no credentials needed)
+    # "session" added below
+    # "oauth" added below (lazy import to avoid circular dependency)
 }
+
+
+def _register_oauth_strategy() -> None:
+    """Register OAuthFileStrategy lazily to avoid circular import."""
+    from squadron.providers.codex.auth import OAuthFileStrategy
+
+    AUTH_STRATEGIES["oauth"] = OAuthFileStrategy
+
+
+_register_oauth_strategy()
 
 
 class _SessionStrategy:

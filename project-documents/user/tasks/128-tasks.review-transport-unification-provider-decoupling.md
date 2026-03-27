@@ -87,29 +87,29 @@ status: in_progress
 
 ### T5: OAuthFileStrategy (rename + from_config)
 
-- [ ] **Create `src/squadron/providers/codex/auth.py` with `OAuthFileStrategy`**
-  - [ ] Resolution order: `~/.codex/auth.json` (subscription) → `OPENAI_API_KEY` (fallback) → raise `ProviderAuthError`
-  - [ ] `from_config` classmethod (no-op — reads from fixed file path)
-  - [ ] `active_source` property: returns `"~/.codex/auth.json"` or `"OPENAI_API_KEY"` or `None`
-  - [ ] `setup_hint` property: returns `"Run 'codex' CLI to authenticate, or set OPENAI_API_KEY"`
-  - [ ] `is_valid()`, `get_credentials()`, `refresh_if_needed()` per AuthStrategy Protocol
-- [ ] **Register `"oauth"` in `AUTH_STRATEGIES` dict**
-- [ ] **Update codex profile in `BUILT_IN_PROFILES` (`profiles.py`)**
-  - [ ] Add `codex` profile with `provider="codex"`, `auth_type="oauth"`
-- [ ] Success: `OAuthFileStrategy` satisfies `AuthStrategy` Protocol; registered as `"oauth"`
+- [x] **Create `src/squadron/providers/codex/auth.py` with `OAuthFileStrategy`**
+  - [x] Resolution order: `~/.codex/auth.json` (subscription) → `OPENAI_API_KEY` (fallback) → raise `ProviderAuthError`
+  - [x] `from_config` classmethod (no-op — reads from fixed file path)
+  - [x] `active_source` property: returns `"~/.codex/auth.json"` or `"OPENAI_API_KEY"` or `None`
+  - [x] `setup_hint` property: returns `"Run 'codex' CLI to authenticate, or set OPENAI_API_KEY"`
+  - [x] `is_valid()`, `get_credentials()`, `refresh_if_needed()` per AuthStrategy Protocol
+- [x] **Register `"oauth"` in `AUTH_STRATEGIES` dict**
+- [x] **Update codex profile in `BUILT_IN_PROFILES` (`profiles.py`)**
+  - [x] Add `codex` profile with `provider="codex"`, `auth_type="oauth"`
+- [x] Success: `OAuthFileStrategy` satisfies `AuthStrategy` Protocol; registered as `"oauth"`
 
 ### T6: OAuthFileStrategy tests
 
-- [ ] **Create `tests/providers/codex/test_auth.py`**
-  - [ ] Test: auth file exists → `is_valid()` True, `get_credentials()` returns `{"auth_file": path}`
-  - [ ] Test: no auth file, `OPENAI_API_KEY` set → `is_valid()` True, `get_credentials()` returns `{"api_key": value}`
-  - [ ] Test: neither source → `is_valid()` False, `get_credentials()` raises `ProviderAuthError`
-  - [ ] Test: auth file preferred over API key when both exist
-  - [ ] Test: `from_config` returns working strategy
-  - [ ] Test: `active_source` reports correct source
-  - [ ] Test: `setup_hint` returns actionable message
-  - [ ] Use `monkeypatch` for env vars and `tmp_path` for auth file fixture
-- [ ] Success: all tests pass
+- [x] **Create `tests/providers/codex/test_auth.py`**
+  - [x] Test: auth file exists → `is_valid()` True, `get_credentials()` returns `{"auth_file": path}`
+  - [x] Test: no auth file, `OPENAI_API_KEY` set → `is_valid()` True, `get_credentials()` returns `{"api_key": value}`
+  - [x] Test: neither source → `is_valid()` False, `get_credentials()` raises `ProviderAuthError`
+  - [x] Test: auth file preferred over API key when both exist
+  - [x] Test: `from_config` returns working strategy
+  - [x] Test: `active_source` reports correct source
+  - [x] Test: `setup_hint` returns actionable message
+  - [x] Use `monkeypatch` for env vars and `tmp_path` for auth file fixture
+- [x] Success: all tests pass
 
 **Commit**: `feat: add OAuthFileStrategy for subscription credential resolution`
 
