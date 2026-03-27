@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
@@ -15,6 +17,11 @@ from squadron.providers.base import ProviderType
 from squadron.providers.errors import ProviderError
 
 _log = get_logger("squadron.providers.codex.agent")
+
+# Suppress MCP library validation warnings for Codex custom notifications
+# (codex/event). These are non-standard MCP notifications that the library
+# doesn't recognize but are harmless.
+logging.getLogger("mcp").setLevel(logging.ERROR)
 
 _DEFAULT_SANDBOX = "read-only"
 
@@ -85,8 +92,10 @@ class CodexAgent:
 
         self._exit_stack = AsyncExitStack()
         try:
+            # Suppress MCP stderr output (codex/event validation warnings)
+            devnull = io.StringIO()
             transport = await self._exit_stack.enter_async_context(
-                stdio_client(server_params)
+                stdio_client(server_params, errlog=devnull)
             )
             read_stream, write_stream = transport
             session = await self._exit_stack.enter_async_context(
