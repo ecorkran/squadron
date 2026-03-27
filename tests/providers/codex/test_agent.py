@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Generator
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,6 +12,20 @@ import pytest
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.errors import ProviderError
+
+
+@pytest.fixture(autouse=True)
+def _mock_sdk_imports() -> Generator[None]:
+    """Mock codex_app_server imports so tests work without the SDK installed."""
+    mock_mod = MagicMock()
+    with patch.dict(
+        "sys.modules",
+        {
+            "codex_app_server": mock_mod,
+            "codex_app_server.client": mock_mod,
+        },
+    ):
+        yield
 
 
 @pytest.fixture()

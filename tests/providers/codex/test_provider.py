@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -81,7 +81,13 @@ class TestValidateCredentials:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        assert asyncio.run(provider.validate_credentials()) is True
+        # Mock the SDK as importable
+        with patch.dict("sys.modules", {"codex_app_server": MagicMock()}):
+            with patch(
+                "squadron.providers.codex.agent.resolve_codex_binary",
+                return_value="/usr/local/bin/codex",
+            ):
+                assert asyncio.run(provider.validate_credentials()) is True
 
     def test_false_when_sdk_not_importable(
         self,
