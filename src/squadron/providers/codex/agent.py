@@ -17,9 +17,7 @@ _DEFAULT_SANDBOX = "read-only"
 
 # The Codex Python SDK is installed from the openai/codex GitHub repo.
 # It requires the Codex CLI binary on PATH (installed via npm).
-_SDK_INSTALL_URL = (
-    "https://github.com/openai/codex/tree/main/sdk/python"
-)
+_SDK_INSTALL_URL = "https://github.com/openai/codex/tree/main/sdk/python"
 _CLI_INSTALL_CMD = "npm i -g @openai/codex"
 
 
@@ -112,8 +110,7 @@ class CodexAgent:
             codex_bin = _resolve_codex_binary()
             if codex_bin is None:
                 raise ProviderError(
-                    "Codex CLI not found on PATH. "
-                    f"Install with: {_CLI_INSTALL_CMD}"
+                    f"Codex CLI not found on PATH. Install with: {_CLI_INSTALL_CMD}"
                 )
 
             config = AppServerConfig(codex_bin=codex_bin)
