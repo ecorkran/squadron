@@ -21,7 +21,7 @@ _SDK_INSTALL_URL = "https://github.com/openai/codex/tree/main/sdk/python"
 _CLI_INSTALL_CMD = "npm i -g @openai/codex"
 
 
-def _resolve_codex_binary() -> str | None:
+def resolve_codex_binary() -> str | None:
     """Find the Codex CLI binary on PATH (installed via npm)."""
     return shutil.which("codex")
 
@@ -88,8 +88,12 @@ class CodexAgent:
     async def _run_prompt(self, prompt: str) -> str:
         """Send prompt via SDK and return response text."""
         try:
-            from codex_app_server import AsyncCodex
-            from codex_app_server.client import AppServerConfig
+            from codex_app_server import (
+                AsyncCodex,  # pyright: ignore[reportMissingImports]
+            )
+            from codex_app_server.client import (
+                AppServerConfig,  # pyright: ignore[reportMissingImports]
+            )
         except ImportError as exc:
             raise ProviderError(
                 "Codex Python SDK (codex_app_server) not installed. "
@@ -107,14 +111,14 @@ class CodexAgent:
             )
 
         if self._codex is None:
-            codex_bin = _resolve_codex_binary()
+            codex_bin = resolve_codex_binary()
             if codex_bin is None:
                 raise ProviderError(
                     f"Codex CLI not found on PATH. Install with: {_CLI_INSTALL_CMD}"
                 )
 
-            config = AppServerConfig(codex_bin=codex_bin)
-            self._codex = await AsyncCodex(config=config).__aenter__()
+            config = AppServerConfig(codex_bin=codex_bin)  # pyright: ignore[reportUnknownVariableType]
+            self._codex = await AsyncCodex(config=config).__aenter__()  # pyright: ignore[reportUnknownMemberType]
             sandbox = self._config.credentials.get("sandbox", _DEFAULT_SANDBOX)
             cwd = self._config.cwd or os.getcwd()
 
@@ -137,4 +141,4 @@ class CodexAgent:
             )
 
         result = await self._thread.run(prompt)  # type: ignore[union-attr]
-        return result.final_response or ""
+        return result.final_response or ""  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]

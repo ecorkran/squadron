@@ -45,8 +45,8 @@ class CodexProvider:
         except ImportError:
             return False
 
-        from squadron.providers.codex.agent import _resolve_codex_binary
+        from squadron.providers.codex.agent import resolve_codex_binary
 
-        if _resolve_codex_binary() is None:
+        if resolve_codex_binary() is None:
             return False
         return OAuthFileStrategy().is_valid()

@@ -223,7 +223,7 @@ def resolve_auth_strategy(
             f"Unknown auth_type {auth_type!r}. Available: {available}"
         )
 
-    return strategy_cls.from_config(config, profile)
+    return strategy_cls.from_config(config, profile)  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 
 
 def resolve_auth_strategy_for_profile(profile: ProviderProfile) -> AuthStrategy:
