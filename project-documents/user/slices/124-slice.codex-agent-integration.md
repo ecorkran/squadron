@@ -5,12 +5,19 @@ project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [auth-strategy-credential-management, agent-registry-lifecycle]
 interfaces: []
-status: not_started
+status: superseded
 dateCreated: 20260325
-dateUpdated: 20260325
+dateUpdated: 20260327
+supersededBy: 128-slice.review-transport-unification-provider-decoupling.md
 ---
 
 # Slice Design: Codex Agent Integration
+
+⏪ **Status: Superseded by [Slice 128](128-slice.review-transport-unification-provider-decoupling.md)**
+
+This slice was rewound during Phase 6 implementation. The Codex agent provider was built in isolation without addressing the underlying review system coupling issue — reviews still used direct `AsyncOpenAI` instantiation and if/elif dispatch on profile names. Rather than patch around that, we addressed the root architectural problem in slice 128 (Review Transport Unification & Provider Decoupling), which includes the Codex provider as a natural consequence of proper provider abstraction.
+
+Slice 124 is preserved for reference. All Codex agent integration goals were achieved in slice 128.
 
 ## Overview
 
