@@ -1,8 +1,6 @@
-"""CodexProvider — creates Codex agents via MCP transport."""
+"""CodexProvider — creates Codex agents via the Codex Python SDK."""
 
 from __future__ import annotations
-
-import shutil
 
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
@@ -15,7 +13,7 @@ _log = get_logger("squadron.providers.codex.provider")
 
 
 class CodexProvider:
-    """Creates agentic Codex agents backed by ``codex mcp-server``."""
+    """Creates agentic Codex agents backed by the Codex Python SDK."""
 
     @property
     def provider_type(self) -> str:
@@ -41,7 +39,9 @@ class CodexProvider:
         return CodexAgent(name=config.name, config=config)
 
     async def validate_credentials(self) -> bool:
-        """Return True if ``codex`` CLI is on PATH and credentials exist."""
-        if shutil.which("codex") is None:
+        """Return True if Codex SDK is importable and credentials exist."""
+        try:
+            __import__("codex_app_server")
+        except ImportError:
             return False
         return OAuthFileStrategy().is_valid()

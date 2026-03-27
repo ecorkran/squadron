@@ -1,8 +1,9 @@
-"""Tests for CodexAgent — MCP transport path."""
+"""Tests for CodexAgent — Python SDK transport."""
 
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,8 +17,8 @@ from squadron.providers.errors import ProviderError
 def agent_config() -> AgentConfig:
     return AgentConfig(
         name="test-codex",
-        agent_type="codex",
-        provider="codex",
+        agent_type="openai-oauth",
+        provider="openai-oauth",
         model="gpt-5.3-codex",
         cwd="/tmp/test-project",
     )
@@ -37,20 +38,15 @@ def _make_message(content: str = "hello") -> Message:
     )
 
 
-def _mock_call_tool_result(
-    text: str = "Codex response",
-    *,
-    is_error: bool = False,
-    thread_id: str | None = "thread-abc-123",
-) -> MagicMock:
-    text_content = MagicMock()
-    text_content.text = text
-    result = MagicMock()
-    result.isError = is_error
-    result.content = [text_content]
-    result.structuredContent = {"threadId": thread_id} if thread_id else None
-    result._meta = None
-    return result
+@dataclass
+class _MockRunResult:
+    final_response: str | None = "Codex response"
+    items: list[object] | None = None
+    usage: object | None = None
+
+    def __post_init__(self) -> None:
+        if self.items is None:
+            self.items = []
 
 
 class TestInitialState:
@@ -67,35 +63,36 @@ class TestInitialState:
 
 
 class TestHandleMessage:
-    def test_first_message_initializes_client(self, agent: CodexAgent) -> None:
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(return_value=_mock_call_tool_result())
-        mock_session.initialize = AsyncMock()
+    def test_first_message_initializes_sdk(self, agent: CodexAgent) -> None:
+        mock_thread = AsyncMock()
+        mock_thread.run = AsyncMock(return_value=_MockRunResult())
 
-        with patch.object(agent, "_start_client", new_callable=AsyncMock) as mock_start:
-            agent._session = None
+        mock_codex = AsyncMock()
+        mock_codex.thread_start = AsyncMock(return_value=mock_thread)
+
+        with patch(
+            "codex_app_server.AsyncCodex",
+            return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_codex)),
+        ):
 
             async def run() -> list[Message]:
-                async def fake_start() -> None:
-                    agent._session = mock_session
-
-                mock_start.side_effect = fake_start
                 msgs: list[Message] = []
                 async for msg in agent.handle_message(_make_message()):
                     msgs.append(msg)
                 return msgs
 
             msgs = asyncio.run(run())
-            mock_start.assert_awaited_once()
             assert len(msgs) == 1
             assert msgs[0].content == "Codex response"
+            mock_codex.thread_start.assert_awaited_once()
 
     def test_subsequent_message_reuses_thread(self, agent: CodexAgent) -> None:
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(return_value=_mock_call_tool_result())
+        mock_thread = AsyncMock()
+        mock_thread.run = AsyncMock(return_value=_MockRunResult())
 
-        agent._session = mock_session
-        agent._thread_id = "existing-thread"
+        # Pre-set the SDK state
+        agent._codex = MagicMock()
+        agent._thread = mock_thread
 
         async def run() -> list[Message]:
             msgs: list[Message] = []
@@ -104,26 +101,24 @@ class TestHandleMessage:
             return msgs
 
         msgs = asyncio.run(run())
-        mock_session.call_tool.assert_awaited_once_with(
-            "codex-reply",
-            {"prompt": "follow up", "threadId": "existing-thread"},
-        )
+        mock_thread.run.assert_awaited_once_with("follow up")
         assert msgs[0].content == "Codex response"
 
     def test_state_transitions(self, agent: CodexAgent) -> None:
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(return_value=_mock_call_tool_result())
-        agent._session = mock_session
-        agent._thread_id = "thread-1"
+        mock_thread = AsyncMock()
+        mock_thread.run = AsyncMock(return_value=_MockRunResult())
+        agent._codex = MagicMock()
+        agent._thread = mock_thread
 
         observed_states: list[AgentState] = []
-        original_codex_reply = agent._codex_reply
 
-        async def spy_reply(prompt: str) -> Message:
+        original_run = agent._run_prompt
+
+        async def spy_run(prompt: str) -> str:
             observed_states.append(agent.state)
-            return await original_codex_reply(prompt)
+            return await original_run(prompt)
 
-        agent._codex_reply = spy_reply  # type: ignore[assignment]
+        agent._run_prompt = spy_run  # type: ignore[assignment]
 
         async def run() -> None:
             async for _ in agent.handle_message(_make_message()):
@@ -134,12 +129,12 @@ class TestHandleMessage:
         assert agent.state == AgentState.idle
 
     def test_yields_message_with_correct_fields(self, agent: CodexAgent) -> None:
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(
-            return_value=_mock_call_tool_result(text="detailed output")
+        mock_thread = AsyncMock()
+        mock_thread.run = AsyncMock(
+            return_value=_MockRunResult(final_response="detailed output")
         )
-        agent._session = mock_session
-        agent._thread_id = None
+        agent._codex = MagicMock()
+        agent._thread = mock_thread
 
         async def run() -> Message:
             async for msg in agent.handle_message(_make_message()):
@@ -151,33 +146,29 @@ class TestHandleMessage:
         assert msg.content == "detailed output"
         assert msg.message_type == MessageType.chat
 
-    def test_tool_error_raises_provider_error(self, agent: CodexAgent) -> None:
-        mock_session = AsyncMock()
-        mock_session.call_tool = AsyncMock(
-            return_value=_mock_call_tool_result(
-                text="something went wrong", is_error=True
-            )
-        )
-        agent._session = mock_session
-        agent._thread_id = None
+    def test_none_response_yields_empty(self, agent: CodexAgent) -> None:
+        mock_thread = AsyncMock()
+        mock_thread.run = AsyncMock(return_value=_MockRunResult(final_response=None))
+        agent._codex = MagicMock()
+        agent._thread = mock_thread
 
-        async def run() -> None:
-            async for _ in agent.handle_message(_make_message()):
-                pass
+        async def run() -> Message:
+            async for msg in agent.handle_message(_make_message()):
+                return msg
+            raise AssertionError("no message yielded")
 
-        with pytest.raises(ProviderError, match="Codex tool error"):
-            asyncio.run(run())
+        msg = asyncio.run(run())
+        assert msg.content == ""
 
     def test_missing_model_raises(self) -> None:
         config = AgentConfig(
             name="no-model",
-            agent_type="codex",
-            provider="codex",
+            agent_type="openai-oauth",
+            provider="openai-oauth",
             model=None,
         )
         agent = CodexAgent(name="no-model", config=config)
-        mock_session = AsyncMock()
-        agent._session = mock_session
+        agent._codex = MagicMock()
 
         async def run() -> None:
             async for _ in agent.handle_message(_make_message()):
@@ -186,32 +177,33 @@ class TestHandleMessage:
         with pytest.raises(ProviderError, match="model is required"):
             asyncio.run(run())
 
+    def test_sdk_import_error_raises(self, agent: CodexAgent) -> None:
+        with patch.dict("sys.modules", {"codex_app_server": None}):
+            with patch(
+                "builtins.__import__",
+                side_effect=ImportError("no module"),
+            ):
+
+                async def run() -> None:
+                    async for _ in agent.handle_message(_make_message()):
+                        pass
+
+                with pytest.raises(ProviderError, match="SDK not installed"):
+                    asyncio.run(run())
+
 
 class TestShutdown:
     def test_sets_terminated(self, agent: CodexAgent) -> None:
         asyncio.run(agent.shutdown())
         assert agent.state == AgentState.terminated
 
-    def test_cleans_up_exit_stack(self, agent: CodexAgent) -> None:
-        mock_stack = AsyncMock()
-        agent._exit_stack = mock_stack
-        agent._session = MagicMock()
-        agent._thread_id = "thread-1"
+    def test_cleans_up_sdk(self, agent: CodexAgent) -> None:
+        mock_codex = AsyncMock()
+        agent._codex = mock_codex
+        agent._thread = MagicMock()
 
         asyncio.run(agent.shutdown())
 
-        mock_stack.aclose.assert_awaited_once()
-        assert agent._session is None
-        assert agent._thread_id is None
-        assert agent._exit_stack is None
-
-
-class TestResolveCodexCommand:
-    def test_not_found_raises(self, agent: CodexAgent) -> None:
-        with patch("shutil.which", return_value=None):
-            with pytest.raises(ProviderError, match="Codex CLI not found"):
-                agent._resolve_codex_command()
-
-    def test_found_returns_path(self, agent: CodexAgent) -> None:
-        with patch("shutil.which", return_value="/usr/local/bin/codex"):
-            assert agent._resolve_codex_command() == "/usr/local/bin/codex"
+        mock_codex.__aexit__.assert_awaited_once()
+        assert agent._codex is None
+        assert agent._thread is None

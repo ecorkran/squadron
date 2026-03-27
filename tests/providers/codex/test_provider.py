@@ -75,20 +75,19 @@ class TestCreateAgent:
 
 
 class TestValidateCredentials:
-    def test_true_when_codex_on_path_and_creds(
+    def test_true_when_sdk_importable_and_creds(
         self,
         provider: CodexProvider,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        with patch("shutil.which", return_value="/usr/local/bin/codex"):
-            assert asyncio.run(provider.validate_credentials()) is True
+        assert asyncio.run(provider.validate_credentials()) is True
 
-    def test_false_when_codex_not_on_path(
+    def test_false_when_sdk_not_importable(
         self,
         provider: CodexProvider,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        with patch("shutil.which", return_value=None):
+        with patch("builtins.__import__", side_effect=ImportError):
             assert asyncio.run(provider.validate_credentials()) is False
