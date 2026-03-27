@@ -6,7 +6,7 @@ import shutil
 
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
-from squadron.providers.base import ProviderCapabilities
+from squadron.providers.base import ProviderCapabilities, ProviderType
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.auth import OAuthFileStrategy
 from squadron.providers.errors import ProviderAuthError
@@ -19,7 +19,7 @@ class CodexProvider:
 
     @property
     def provider_type(self) -> str:
-        return "codex"
+        return ProviderType.OPENAI_OAUTH
 
     @property
     def capabilities(self) -> ProviderCapabilities:

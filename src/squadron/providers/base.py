@@ -4,9 +4,37 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 from squadron.core.models import AgentConfig, AgentState, Message
+
+
+class ProviderType(StrEnum):
+    """Registered provider type identifiers."""
+
+    OPENAI = "openai"
+    SDK = "sdk"
+    OPENAI_OAUTH = "openai-oauth"
+
+
+class ProfileName(StrEnum):
+    """Built-in profile identifiers."""
+
+    OPENAI = "openai"
+    OPENROUTER = "openrouter"
+    LOCAL = "local"
+    GEMINI = "gemini"
+    SDK = "sdk"
+    OPENAI_OAUTH = "openai-oauth"
+
+
+class AuthType(StrEnum):
+    """Authentication strategy identifiers."""
+
+    API_KEY = "api_key"
+    SESSION = "session"
+    OAUTH = "oauth"
 
 
 @dataclass(frozen=True)

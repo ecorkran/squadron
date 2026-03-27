@@ -61,7 +61,9 @@ class TestInitialState:
         assert agent.name == "test-codex"
 
     def test_agent_type(self, agent: CodexAgent) -> None:
-        assert agent.agent_type == "codex"
+        from squadron.providers.base import ProviderType
+
+        assert agent.agent_type == ProviderType.OPENAI_OAUTH
 
 
 class TestHandleMessage:

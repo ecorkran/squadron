@@ -11,6 +11,7 @@ from mcp import ClientSession, StdioServerParameters, stdio_client
 
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.logging import get_logger
+from squadron.providers.base import ProviderType
 from squadron.providers.errors import ProviderError
 
 _log = get_logger("squadron.providers.codex.agent")
@@ -39,7 +40,7 @@ class CodexAgent:
 
     @property
     def agent_type(self) -> str:
-        return "codex"
+        return ProviderType.OPENAI_OAUTH
 
     @property
     def state(self) -> AgentState:

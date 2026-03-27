@@ -29,8 +29,10 @@ def agent_config() -> AgentConfig:
 
 
 class TestProviderType:
-    def test_returns_codex(self, provider: CodexProvider) -> None:
-        assert provider.provider_type == "codex"
+    def test_returns_openai_oauth(self, provider: CodexProvider) -> None:
+        from squadron.providers.base import ProviderType
+
+        assert provider.provider_type == ProviderType.OPENAI_OAUTH
 
 
 class TestCapabilities:

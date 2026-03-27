@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from squadron.providers.base import AuthType
 from squadron.providers.errors import ProviderAuthError
 
 if TYPE_CHECKING:
@@ -157,9 +158,9 @@ class ApiKeyStrategy:
 # Registry mapping auth_type strings to strategy classes.
 # Each class must implement from_config(config, profile) classmethod.
 AUTH_STRATEGIES: dict[str, type] = {
-    "api_key": ApiKeyStrategy,
-    # "session" added below
-    # "oauth" added below (lazy import to avoid circular dependency)
+    AuthType.API_KEY: ApiKeyStrategy,
+    # AuthType.SESSION added below
+    # AuthType.OAUTH added below (lazy import to avoid circular dependency)
 }
 
 
@@ -167,7 +168,7 @@ def _register_oauth_strategy() -> None:
     """Register OAuthFileStrategy lazily to avoid circular import."""
     from squadron.providers.codex.auth import OAuthFileStrategy
 
-    AUTH_STRATEGIES["oauth"] = OAuthFileStrategy
+    AUTH_STRATEGIES[AuthType.OAUTH] = OAuthFileStrategy
 
 
 _register_oauth_strategy()
@@ -202,7 +203,7 @@ class _SessionStrategy:
         return "No setup needed — uses active Claude Code session"
 
 
-AUTH_STRATEGIES["session"] = _SessionStrategy
+AUTH_STRATEGIES[AuthType.SESSION] = _SessionStrategy
 
 
 def resolve_auth_strategy(
@@ -215,7 +216,7 @@ def resolve_auth_strategy(
     Dispatches to the strategy's ``from_config`` classmethod — no
     if/elif chains on auth_type values.
     """
-    auth_type: str = profile.auth_type if profile is not None else "api_key"
+    auth_type: str = profile.auth_type if profile is not None else AuthType.API_KEY
 
     strategy_cls = AUTH_STRATEGIES.get(auth_type)
     if strategy_cls is None:

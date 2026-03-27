@@ -1,4 +1,4 @@
-"""Integration tests for Codex provider auto-registration."""
+"""Integration tests for Codex (openai-oauth) provider auto-registration."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from collections.abc import Generator
 import pytest
 
 from squadron.providers import registry as reg_module
+from squadron.providers.base import ProviderType
 from squadron.providers.registry import get_provider, list_providers
 
 
@@ -30,16 +31,16 @@ def _import_codex_package() -> None:
 
 
 class TestAutoRegistration:
-    def test_codex_in_list_after_import(self) -> None:
+    def test_openai_oauth_in_list_after_import(self) -> None:
         _import_codex_package()
-        assert "codex" in list_providers()
+        assert ProviderType.OPENAI_OAUTH in list_providers()
 
     def test_get_provider_returns_codex_provider(self) -> None:
         _import_codex_package()
         from squadron.providers.codex.provider import CodexProvider
 
-        assert isinstance(get_provider("codex"), CodexProvider)
+        assert isinstance(get_provider(ProviderType.OPENAI_OAUTH), CodexProvider)
 
-    def test_provider_type_is_codex(self) -> None:
+    def test_provider_type_is_openai_oauth(self) -> None:
         _import_codex_package()
-        assert get_provider("codex").provider_type == "codex"
+        assert get_provider(ProviderType.OPENAI_OAUTH).provider_type == ProviderType.OPENAI_OAUTH

@@ -8,7 +8,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
-from squadron.providers.base import ProviderCapabilities
+from squadron.providers.base import ProviderCapabilities, ProviderType
 
 if TYPE_CHECKING:
     from squadron.providers.sdk.agent import ClaudeSDKAgent
@@ -24,7 +24,7 @@ class ClaudeSDKProvider:
 
     @property
     def provider_type(self) -> str:
-        return "sdk"
+        return ProviderType.SDK
 
     @property
     def capabilities(self) -> ProviderCapabilities:

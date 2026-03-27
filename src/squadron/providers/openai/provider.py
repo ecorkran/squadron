@@ -10,7 +10,7 @@ from openai import AsyncOpenAI
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
 from squadron.providers.auth import resolve_auth_strategy
-from squadron.providers.base import ProviderCapabilities
+from squadron.providers.base import ProviderCapabilities, ProviderType
 from squadron.providers.errors import ProviderError
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ class OpenAICompatibleProvider:
 
     @property
     def provider_type(self) -> str:
-        return "openai"
+        return ProviderType.OPENAI
 
     @property
     def capabilities(self) -> ProviderCapabilities:
