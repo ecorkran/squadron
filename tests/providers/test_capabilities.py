@@ -32,9 +32,9 @@ class TestProviderCapabilities:
         assert OpenAICompatibleProvider().capabilities.can_read_files is False
 
     def test_sdk_provider_can_read_files(self) -> None:
-        from squadron.providers.sdk.provider import SDKAgentProvider
+        from squadron.providers.sdk.provider import ClaudeSDKProvider
 
-        assert SDKAgentProvider().capabilities.can_read_files is True
+        assert ClaudeSDKProvider().capabilities.can_read_files is True
 
     def test_openai_supports_streaming(self) -> None:
         from squadron.providers.openai.provider import OpenAICompatibleProvider
@@ -42,6 +42,6 @@ class TestProviderCapabilities:
         assert OpenAICompatibleProvider().capabilities.supports_streaming is True
 
     def test_sdk_supports_streaming(self) -> None:
-        from squadron.providers.sdk.provider import SDKAgentProvider
+        from squadron.providers.sdk.provider import ClaudeSDKProvider
 
-        assert SDKAgentProvider().capabilities.supports_streaming is True
+        assert ClaudeSDKProvider().capabilities.supports_streaming is True

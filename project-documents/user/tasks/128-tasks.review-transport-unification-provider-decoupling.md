@@ -117,27 +117,27 @@ status: in_progress
 
 ### T7: Rename SDKAgent → ClaudeSDKAgent, SDKAgentProvider → ClaudeSDKProvider
 
-- [ ] **Rename classes in `src/squadron/providers/sdk/agent.py`**
-  - [ ] `SDKAgent` → `ClaudeSDKAgent`
-  - [ ] Update all internal references
-- [ ] **Rename classes in `src/squadron/providers/sdk/provider.py`**
-  - [ ] `SDKAgentProvider` → `ClaudeSDKProvider`
-  - [ ] Update all internal references
-- [ ] **Update `src/squadron/providers/sdk/__init__.py`**
-  - [ ] Update imports and `__all__` exports
-  - [ ] Registration: `register_provider("sdk", ClaudeSDKProvider())` (key unchanged)
-- [ ] **Update all test files referencing old names**
-  - [ ] `tests/providers/sdk/test_agent.py`, `test_provider.py`, `test_registration.py`
-- [ ] **Update any other imports across codebase**
-  - [ ] Search for `SDKAgent` and `SDKAgentProvider` in all `.py` files
-- [ ] Success: `ruff check` clean; all tests pass; `get_provider("sdk")` returns `ClaudeSDKProvider`
+- [x] **Rename classes in `src/squadron/providers/sdk/agent.py`**
+  - [x] `SDKAgent` → `ClaudeSDKAgent`
+  - [x] Update all internal references
+- [x] **Rename classes in `src/squadron/providers/sdk/provider.py`**
+  - [x] `SDKAgentProvider` → `ClaudeSDKProvider`
+  - [x] Update all internal references
+- [x] **Update `src/squadron/providers/sdk/__init__.py`**
+  - [x] Update imports and `__all__` exports
+  - [x] Registration: `register_provider("sdk", ClaudeSDKProvider())` (key unchanged)
+- [x] **Update all test files referencing old names**
+  - [x] `tests/providers/sdk/test_agent.py`, `test_provider.py`, `test_registration.py`
+- [x] **Update any other imports across codebase**
+  - [x] Search for `SDKAgent` and `SDKAgentProvider` in all `.py` files
+- [x] Success: `ruff check` clean; all tests pass; `get_provider("sdk")` returns `ClaudeSDKProvider`
 
 ### T8: Rename tests
 
-- [ ] **Verify all SDK tests pass after rename**
-  - [ ] `pytest tests/providers/sdk/ -v` — all green
-  - [ ] `pytest tests/ -v` — full suite green (no broken imports)
-- [ ] Success: zero test failures
+- [x] **Verify all SDK tests pass after rename**
+  - [x] `pytest tests/providers/sdk/ -v` — all green
+  - [x] `pytest tests/ -v` — full suite green (no broken imports)
+- [x] Success: zero test failures
 
 **Commit**: `refactor: rename SDKAgent to ClaudeSDKAgent for clarity`
 

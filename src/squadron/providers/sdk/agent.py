@@ -1,4 +1,4 @@
-"""SDKAgent implementation. Wraps claude-agent-sdk query/client for task execution."""
+"""ClaudeSDKAgent — wraps claude-agent-sdk for task execution."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from squadron.providers.errors import (
 from squadron.providers.sdk.translation import translate_sdk_message
 
 
-class SDKAgent:
+class ClaudeSDKAgent:
     """An autonomous agent backed by claude-agent-sdk."""
 
     def __init__(
