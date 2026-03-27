@@ -43,4 +43,5 @@ class TestAutoRegistration:
 
     def test_provider_type_is_openai_oauth(self) -> None:
         _import_codex_package()
-        assert get_provider(ProviderType.OPENAI_OAUTH).provider_type == ProviderType.OPENAI_OAUTH
+        provider = get_provider(ProviderType.OPENAI_OAUTH)
+        assert provider.provider_type == ProviderType.OPENAI_OAUTH

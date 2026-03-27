@@ -89,7 +89,8 @@ class TestActiveSource:
     def test_auth_file_source(self, tmp_path: pytest.TempPathFactory) -> None:
         auth_file = tmp_path / "auth.json"  # type: ignore[operator]
         auth_file.write_text("{}")
-        assert OAuthFileStrategy(auth_file=auth_file).active_source == "~/.codex/auth.json"
+        strategy = OAuthFileStrategy(auth_file=auth_file)
+        assert strategy.active_source == "~/.codex/auth.json"
 
     @pytest.mark.usefixtures("_no_api_key")
     def test_api_key_source(
@@ -114,7 +115,8 @@ class TestActiveSource:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         auth_file = tmp_path / "auth.json"  # type: ignore[operator]
         auth_file.write_text("{}")
-        assert OAuthFileStrategy(auth_file=auth_file).active_source == "~/.codex/auth.json"
+        strategy = OAuthFileStrategy(auth_file=auth_file)
+        assert strategy.active_source == "~/.codex/auth.json"
 
 
 class TestSetupHint:

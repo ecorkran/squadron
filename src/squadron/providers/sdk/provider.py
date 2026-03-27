@@ -35,7 +35,7 @@ class ClaudeSDKProvider:
         )
 
     async def create_agent(self, config: AgentConfig) -> ClaudeSDKAgent:
-        """Build ``ClaudeAgentOptions`` from *config* and return an ``ClaudeSDKAgent``."""
+        """Build ``ClaudeAgentOptions`` from *config* and return agent."""
         kwargs: dict[str, object] = {}
 
         if config.instructions is not None:

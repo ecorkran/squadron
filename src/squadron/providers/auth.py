@@ -142,9 +142,7 @@ class ApiKeyStrategy:
         """
         key = self._resolve()
         if key is None:
-            raise ProviderAuthError(
-                f"No API key found. {self.setup_hint}."
-            )
+            raise ProviderAuthError(f"No API key found. {self.setup_hint}.")
         return {"api_key": key}
 
     async def refresh_if_needed(self) -> None:

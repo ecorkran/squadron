@@ -75,9 +75,7 @@ class OAuthFileStrategy:
         if api_key:
             return {"api_key": api_key}
 
-        raise ProviderAuthError(
-            f"No credentials found. {self.setup_hint}."
-        )
+        raise ProviderAuthError(f"No credentials found. {self.setup_hint}.")
 
     async def refresh_if_needed(self) -> None:
         """No-op — token refresh handled by the runtime internally."""

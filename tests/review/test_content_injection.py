@@ -275,7 +275,9 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
     async def capture_handle(message: Message) -> AsyncIterator[Message]:
         captured_prompts.append(message.content)
         yield Message(
-            sender="mock", recipients=[], content=review_output,
+            sender="mock",
+            recipients=[],
+            content=review_output,
             message_type=MessageType.chat,
         )
 
@@ -289,14 +291,19 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
         patch(
             "squadron.review.review_client.get_profile",
             return_value=ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             ),
         ),
         patch("squadron.review.review_client.get_provider", return_value=mock_provider),
         patch("squadron.review.review_client._ensure_provider_loaded"),
     ):
         result = await run_review_with_profile(
-            template, inputs, profile="openai", model="gpt-4o",
+            template,
+            inputs,
+            profile="openai",
+            model="gpt-4o",
         )
 
     # Verify file contents were injected into the prompt

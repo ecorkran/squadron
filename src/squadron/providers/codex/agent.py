@@ -107,8 +107,7 @@ class CodexAgent:
         cmd = shutil.which("codex")
         if cmd is None:
             raise ProviderError(
-                "Codex CLI not found on PATH. "
-                "Install it with: npm i -g @openai/codex"
+                "Codex CLI not found on PATH. Install it with: npm i -g @openai/codex"
             )
         return cmd
 

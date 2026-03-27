@@ -11,9 +11,11 @@ import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.providers.base import ProviderCapabilities
-from squadron.review.models import ReviewResult, Verdict
+from squadron.review.models import ReviewResult
 from squadron.review.review_client import _write_prompt_log, run_review_with_profile
 from squadron.review.templates import ReviewTemplate
+
+_P = "squadron.review.review_client"
 
 
 def _make_template(
@@ -88,9 +90,9 @@ class TestUnifiedPath:
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
@@ -100,7 +102,10 @@ class TestUnifiedPath:
                 api_key_env="OPENAI_API_KEY",
             )
             result = await run_review_with_profile(
-                template, inputs, profile="openai", model="gpt-4o",
+                template,
+                inputs,
+                profile="openai",
+                model="gpt-4o",
             )
 
         assert isinstance(result, ReviewResult)
@@ -114,9 +119,9 @@ class TestUnifiedPath:
         mock_provider = _make_mock_provider(can_read_files=True)
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.base import AuthType, ProfileName, ProviderType
             from squadron.providers.profiles import ProviderProfile
@@ -127,7 +132,9 @@ class TestUnifiedPath:
                 auth_type=AuthType.SESSION,
             )
             result = await run_review_with_profile(
-                template, inputs, profile="sdk",
+                template,
+                inputs,
+                profile="sdk",
             )
 
         assert isinstance(result, ReviewResult)
@@ -140,9 +147,9 @@ class TestUnifiedPath:
         mock_provider = _make_mock_provider(can_read_files=True)
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.base import AuthType, ProfileName, ProviderType
             from squadron.providers.profiles import ProviderProfile
@@ -153,7 +160,10 @@ class TestUnifiedPath:
                 auth_type=AuthType.OAUTH,
             )
             result = await run_review_with_profile(
-                template, inputs, profile="openai-oauth", model="gpt-5.3-codex",
+                template,
+                inputs,
+                profile="openai-oauth",
+                model="gpt-5.3-codex",
             )
 
         assert isinstance(result, ReviewResult)
@@ -174,17 +184,22 @@ class TestFileInjection:
         mock_provider = _make_mock_provider(can_read_files=False, agent=mock_agent)
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             await run_review_with_profile(
-                template, inputs, profile="openai", model="gpt-4o",
+                template,
+                inputs,
+                profile="openai",
+                model="gpt-4o",
             )
 
         # The prompt sent to handle_message should contain the file contents
@@ -201,19 +216,23 @@ class TestFileInjection:
         mock_provider = _make_mock_provider(can_read_files=True)
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
-            patch("squadron.review.review_client._inject_file_contents") as mock_inject,
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}._inject_file_contents") as mock_inject,
         ):
             from squadron.providers.base import AuthType, ProviderType
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="sdk", provider=ProviderType.SDK, auth_type=AuthType.SESSION,
+                name="sdk",
+                provider=ProviderType.SDK,
+                auth_type=AuthType.SESSION,
             )
             await run_review_with_profile(
-                template, inputs, profile="sdk",
+                template,
+                inputs,
+                profile="sdk",
             )
 
         mock_inject.assert_not_called()
@@ -224,16 +243,17 @@ class TestVerbosity:
 
     @pytest.mark.asyncio
     async def test_debug_output_at_verbosity_3(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         template = _make_template(model="test-model")
         inputs = {"input": "file.md"}
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
             patch(
                 "squadron.review.review_client._write_prompt_log",
                 return_value=Path("/tmp/test-log.md"),
@@ -242,10 +262,16 @@ class TestVerbosity:
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             await run_review_with_profile(
-                template, inputs, profile="openai", model="test-model", verbosity=3,
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
             )
 
         captured = capsys.readouterr()
@@ -254,24 +280,31 @@ class TestVerbosity:
 
     @pytest.mark.asyncio
     async def test_no_debug_at_verbosity_2(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         template = _make_template(model="test-model")
         inputs = {"input": "file.md"}
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             await run_review_with_profile(
-                template, inputs, profile="openai", model="test-model", verbosity=2,
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=2,
             )
 
         captured = capsys.readouterr()
@@ -284,17 +317,23 @@ class TestVerbosity:
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             result = await run_review_with_profile(
-                template, inputs, profile="openai", model="test-model", verbosity=2,
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=2,
             )
 
         assert result.system_prompt is not None
@@ -307,17 +346,23 @@ class TestVerbosity:
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             result = await run_review_with_profile(
-                template, inputs, profile="openai", model="test-model", verbosity=1,
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=1,
             )
 
         assert result.system_prompt is None
@@ -329,9 +374,9 @@ class TestVerbosity:
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
             patch(
                 "squadron.review.review_client._write_prompt_log",
                 return_value=Path("/tmp/test-log.md"),
@@ -340,26 +385,33 @@ class TestVerbosity:
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             await run_review_with_profile(
-                template, inputs, profile="openai", model="test-model", verbosity=3,
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
             )
 
         mock_write_log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_debug_rules_shown_when_present(
-        self, capsys: pytest.CaptureFixture[str],
+        self,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         template = _make_template(model="test-model")
         inputs = {"input": "file.md"}
         mock_provider = _make_mock_provider()
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
             patch(
                 "squadron.review.review_client._write_prompt_log",
                 return_value=Path("/tmp/test-log.md"),
@@ -368,11 +420,17 @@ class TestVerbosity:
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             await run_review_with_profile(
-                template, inputs, profile="openai", model="test-model",
-                verbosity=3, rules_content="Always check for SQL injection.",
+                template,
+                inputs,
+                profile="openai",
+                model="test-model",
+                verbosity=3,
+                rules_content="Always check for SQL injection.",
             )
 
         captured = capsys.readouterr()
@@ -388,7 +446,10 @@ class TestEdgeCases:
 
         with pytest.raises(KeyError, match="not found"):
             await run_review_with_profile(
-                template, inputs, profile="nonexistent", model="some-model",
+                template,
+                inputs,
+                profile="nonexistent",
+                model="some-model",
             )
 
     @pytest.mark.asyncio
@@ -404,17 +465,22 @@ class TestEdgeCases:
         mock_provider = _make_mock_provider(agent=_make_mock_agent(review_text))
 
         with (
-            patch("squadron.review.review_client.get_profile") as mock_get_profile,
-            patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-            patch("squadron.review.review_client._ensure_provider_loaded"),
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}._ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
             mock_get_profile.return_value = ProviderProfile(
-                name="openai", provider="openai", api_key_env="OPENAI_API_KEY",
+                name="openai",
+                provider="openai",
+                api_key_env="OPENAI_API_KEY",
             )
             result = await run_review_with_profile(
-                template, inputs, profile="openai", model="gpt-4o",
+                template,
+                inputs,
+                profile="openai",
+                model="gpt-4o",
             )
 
         assert result.verdict is not None
@@ -449,15 +515,25 @@ class TestWritePromptLog:
 
     def test_filename_format(self, tmp_path: Path) -> None:
         path = _write_prompt_log(
-            system_prompt="sys", user_prompt="usr", rules_content=None,
-            model="opus", profile="sdk", template_name="slice", log_dir=tmp_path,
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="opus",
+            profile="sdk",
+            template_name="slice",
+            log_dir=tmp_path,
         )
         assert re.match(r"review-prompt-\d{8}-\d{6}\.md", path.name)
 
     def test_contains_metadata(self, tmp_path: Path) -> None:
         path = _write_prompt_log(
-            system_prompt="sys", user_prompt="usr", rules_content=None,
-            model="gpt-4o", profile="openrouter", template_name="tasks", log_dir=tmp_path,
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="gpt-4o",
+            profile="openrouter",
+            template_name="tasks",
+            log_dir=tmp_path,
         )
         content = path.read_text()
         assert "template: tasks" in content
@@ -466,8 +542,13 @@ class TestWritePromptLog:
 
     def test_no_rules(self, tmp_path: Path) -> None:
         path = _write_prompt_log(
-            system_prompt="sys", user_prompt="usr", rules_content=None,
-            model="opus", profile="sdk", template_name="code", log_dir=tmp_path,
+            system_prompt="sys",
+            user_prompt="usr",
+            rules_content=None,
+            model="opus",
+            profile="sdk",
+            template_name="code",
+            log_dir=tmp_path,
         )
         content = path.read_text()
         assert "\nNone\n" in content

@@ -72,9 +72,7 @@ class TestHandleMessage:
         mock_session.call_tool = AsyncMock(return_value=_mock_call_tool_result())
         mock_session.initialize = AsyncMock()
 
-        with patch.object(
-            agent, "_start_client", new_callable=AsyncMock
-        ) as mock_start:
+        with patch.object(agent, "_start_client", new_callable=AsyncMock) as mock_start:
             agent._session = None
 
             async def run() -> list[Message]:

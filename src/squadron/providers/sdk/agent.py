@@ -26,7 +26,6 @@ from squadron.providers.errors import (
 )
 from squadron.providers.sdk.translation import translate_sdk_message
 
-
 _MAX_RATE_LIMIT_RETRIES = 10
 
 
