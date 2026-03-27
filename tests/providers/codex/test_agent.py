@@ -85,9 +85,15 @@ class TestHandleMessage:
         mock_codex = AsyncMock()
         mock_codex.thread_start = AsyncMock(return_value=mock_thread)
 
-        with patch(
-            "codex_app_server.AsyncCodex",
-            return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_codex)),
+        with (
+            patch(
+                "codex_app_server.AsyncCodex",
+                return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_codex)),
+            ),
+            patch(
+                "squadron.providers.codex.agent.resolve_codex_binary",
+                return_value="/usr/local/bin/codex",
+            ),
         ):
 
             async def run() -> list[Message]:
