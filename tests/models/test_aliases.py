@@ -62,10 +62,10 @@ def test_resolve_codex_agent() -> None:
 
 
 def test_resolve_codex_spark() -> None:
-    """codex-spark resolves to gpt-5.3-codex-spark on openai profile."""
+    """codex-spark resolves to gpt-5.3-codex-spark on openai-oauth profile."""
     model, profile = resolve_model_alias("codex-spark")
     assert model == "gpt-5.3-codex-spark"
-    assert profile == "openai"
+    assert profile == "openai-oauth"
 
 
 # ---------------------------------------------------------------------------

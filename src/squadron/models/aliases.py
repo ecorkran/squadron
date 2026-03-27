@@ -128,7 +128,7 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
         "notes": "Agentic: sandbox, subscription auth",
     },
     "codex-spark": {
-        "profile": "openai",
+        "profile": "openai-oauth",
         "model": "gpt-5.3-codex-spark",
         "private": True,
         "cost_tier": "subscription",
