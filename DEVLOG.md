@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260325
+dateUpdated: 20260326
 ---
 
 # Development Log
@@ -11,6 +11,21 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260326
+
+### Slice 124: Codex Agent Integration — Rewound
+- Implementation completed but discovered fundamental architecture gap: review system bypasses Agent/AgentProvider Protocols entirely, tightly coupled to AsyncOpenAI and ClaudeSDKClient
+- Codex subscription auth (OAuth token from `~/.codex/auth.json`) can't call Chat Completions API directly — must route through Codex runtime. But review system can't use non-OpenAI transports
+- String-based dispatch (`if profile == "sdk"`, `if auth_type == "codex"`) throughout codebase
+- Branch rewound to main. Slice superseded by 128
+
+### Slice 128: Review Transport Unification — Slice Design (Phase 4)
+- Reviews use `Agent.handle_message()` via provider registry instead of bespoke transport implementations
+- `ProviderCapabilities` dataclass: `can_read_files`, `supports_system_prompt`, `supports_streaming`
+- Auth strategy dispatch via registry (eliminate if/elif chains), `"codex"` auth type → `"oauth"`
+- `SDKAgent` → `ClaudeSDKAgent`, `runner.py` deleted (absorbed into agent)
+- Enables Codex subscription reviews and future Anthropic API without review system changes
 
 ## 20260325
 
