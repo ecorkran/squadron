@@ -20,12 +20,17 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 - String-based dispatch (`if profile == "sdk"`, `if auth_type == "codex"`) throughout codebase
 - Branch rewound to main. Slice superseded by 128
 
-### Slice 128: Review Transport Unification — Slice Design (Phase 4)
+### Slice 128: Review Transport Unification — Slice Design Complete (Phase 4)
 - Reviews use `Agent.handle_message()` via provider registry instead of bespoke transport implementations
 - `ProviderCapabilities` dataclass: `can_read_files`, `supports_system_prompt`, `supports_streaming`
 - Auth strategy dispatch via registry (eliminate if/elif chains), `"codex"` auth type → `"oauth"`
 - `SDKAgent` → `ClaudeSDKAgent`, `runner.py` deleted (absorbed into agent)
 - Enables Codex subscription reviews and future Anthropic API without review system changes
+
+### Slice 128: Review Transport Unification — Task Breakdown Complete (Phase 5)
+- 19 tasks: capabilities, auth refactor, OAuth strategy, SDK rename, Codex provider, runner.py migration, review_client unification, CLI auth cleanup, model aliases, validation, docs
+- Test-with pattern throughout; 9 commit checkpoints
+- Key sequence: capabilities first → auth cleanup → providers → review client unification → CLI cleanup
 
 ## 20260325
 
