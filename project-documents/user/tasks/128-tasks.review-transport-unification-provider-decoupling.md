@@ -195,18 +195,18 @@ status: in_progress
 - [x] **Ensure `ClaudeSDKProvider.create_agent()` accepts review-relevant config**
   - [x] `AgentConfig.credentials.get("hooks")` → passed to `ClaudeAgentOptions` if present
   - [x] `allowed_tools`, `permission_mode`, `setting_sources` already on `AgentConfig` and consumed
-- [ ] **Delete `src/squadron/review/runner.py`**
-- [ ] **Remove `run_review` import from `review_client.py`**
-- [ ] Success: SDK agent handles the full review lifecycle internally; `runner.py` is gone
+- [x] **Delete `src/squadron/review/runner.py`**
+- [x] **Remove `run_review` import from `review_client.py`**
+- [x] Success: SDK agent handles the full review lifecycle internally; `runner.py` is gone
 
 ### T12: Migrate runner.py tests
 
-- [ ] **Migrate `tests/review/test_runner.py` tests to `tests/providers/sdk/test_agent.py`**
-  - [ ] Adapt test fixtures to use `ClaudeSDKAgent.handle_message()` instead of `run_review()`
-  - [ ] Preserve coverage for rate-limit retry behavior
-  - [ ] Preserve coverage for text extraction from SDK messages
-- [ ] **Delete `tests/review/test_runner.py`** (or empty it with a note pointing to new location)
-- [ ] Success: equivalent coverage exists in SDK agent tests; no test file references `runner.py`
+- [x] **Migrate `tests/review/test_runner.py` tests to `tests/providers/sdk/test_agent.py`**
+  - [x] Adapt test fixtures to use `ClaudeSDKAgent.handle_message()` instead of `run_review()`
+  - [x] Preserve coverage for rate-limit retry behavior
+  - [x] Preserve coverage for text extraction from SDK messages
+- [x] **Delete `tests/review/test_runner.py`** (or empty it with a note pointing to new location)
+- [x] Success: equivalent coverage exists in SDK agent tests; no test file references `runner.py`
 
 **Commit**: `refactor: absorb runner.py SDK review path into ClaudeSDKAgent`
 
@@ -214,38 +214,38 @@ status: in_progress
 
 ### T13: Unify review_client.py — replace bespoke transports with handle_message()
 
-- [ ] **Rewrite `run_review_with_profile()` to use provider registry**
-  - [ ] Look up profile: `profile_obj = get_profile(profile_name)`
-  - [ ] Load provider: ensure provider module imported (same pattern as `engine.py:_load_provider`)
-  - [ ] Get provider: `provider = get_provider(profile_obj.provider)`
-  - [ ] Check capabilities: `if not provider.capabilities.can_read_files: prompt = _inject_file_contents(prompt, inputs)`
-  - [ ] Build `AgentConfig` from profile, model, system_prompt, review template settings
-  - [ ] Create agent: `agent = await provider.create_agent(config)`
-  - [ ] Send message: collect all `Message` objects from `agent.handle_message(message)`
-  - [ ] Extract raw text, shut down agent
-  - [ ] Pass to `parse_review_output()` (unchanged)
-- [ ] **Remove `_run_non_sdk_review()` function entirely**
-- [ ] **Remove `_resolve_api_key()` function** (auth is now the provider's concern via `create_agent`)
-- [ ] **Remove `from openai import AsyncOpenAI`** import
-- [ ] **Remove `from squadron.review.runner import run_review`** import
-- [ ] **Preserve prompt logging and verbosity behavior** (debug output at -vvv, prompt capture at -vv)
-- [ ] **Preserve file injection logic** (`_inject_file_contents` stays — called conditionally based on capabilities)
-- [ ] Success: `review_client.py` has no provider-specific imports; one code path for all profiles
+- [x] **Rewrite `run_review_with_profile()` to use provider registry**
+  - [x] Look up profile: `profile_obj = get_profile(profile_name)`
+  - [x] Load provider: ensure provider module imported (same pattern as `engine.py:_load_provider`)
+  - [x] Get provider: `provider = get_provider(profile_obj.provider)`
+  - [x] Check capabilities: `if not provider.capabilities.can_read_files: prompt = _inject_file_contents(prompt, inputs)`
+  - [x] Build `AgentConfig` from profile, model, system_prompt, review template settings
+  - [x] Create agent: `agent = await provider.create_agent(config)`
+  - [x] Send message: collect all `Message` objects from `agent.handle_message(message)`
+  - [x] Extract raw text, shut down agent
+  - [x] Pass to `parse_review_output()` (unchanged)
+- [x] **Remove `_run_non_sdk_review()` function entirely**
+- [x] **Remove `_resolve_api_key()` function** (auth is now the provider's concern via `create_agent`)
+- [x] **Remove `from openai import AsyncOpenAI`** import
+- [x] **Remove `from squadron.review.runner import run_review`** import
+- [x] **Preserve prompt logging and verbosity behavior** (debug output at -vvv, prompt capture at -vv)
+- [x] **Preserve file injection logic** (`_inject_file_contents` stays — called conditionally based on capabilities)
+- [x] Success: `review_client.py` has no provider-specific imports; one code path for all profiles
 
 ### T14: Review client unification tests
 
-- [ ] **Update `tests/review/test_review_client.py`**
-  - [ ] Existing tests should pass against the new unified path (may need fixture updates)
-  - [ ] Test: SDK profile routes through provider registry and ClaudeSDKAgent
-  - [ ] Test: OpenAI profile routes through provider registry and OpenAICompatibleAgent
-  - [ ] Test: Codex profile routes through provider registry and CodexAgent (mocked MCP client)
-  - [ ] Test: file injection happens when `can_read_files=False`
-  - [ ] Test: file injection skipped when `can_read_files=True` (SDK and Codex profiles)
-  - [ ] Test: prompt logging preserved at verbosity >= 3
-  - [ ] Test: prompt capture fields populated at verbosity >= 2
-- [ ] **Update `tests/review/test_content_injection.py`** if it references old functions
-- [ ] **Update `tests/review/test_verbosity.py`** if it references old functions
-- [ ] Success: all review tests pass; `review_client.py` has zero provider-specific imports
+- [x] **Update `tests/review/test_review_client.py`**
+  - [x] Existing tests should pass against the new unified path (may need fixture updates)
+  - [x] Test: SDK profile routes through provider registry and ClaudeSDKAgent
+  - [x] Test: OpenAI profile routes through provider registry and OpenAICompatibleAgent
+  - [x] Test: Codex profile routes through provider registry and CodexAgent (mocked MCP client)
+  - [x] Test: file injection happens when `can_read_files=False`
+  - [x] Test: file injection skipped when `can_read_files=True` (SDK and Codex profiles)
+  - [x] Test: prompt logging preserved at verbosity >= 3
+  - [x] Test: prompt capture fields populated at verbosity >= 2
+- [x] **Update `tests/review/test_content_injection.py`** if it references old functions
+- [x] **Update `tests/review/test_verbosity.py`** if it references old functions
+- [x] Success: all review tests pass; `review_client.py` has zero provider-specific imports
 
 **Commit**: `refactor: unify review transport through Agent.handle_message()`
 

@@ -1,28 +1,44 @@
 """Provider-agnostic review execution.
 
-Routes reviews through the SDK path (existing run_review()) or through
-any configured provider profile using the OpenAI-compatible API.
+Routes all reviews through Agent.handle_message() via the provider
+registry. No provider-specific imports — transport is the provider's
+concern.
 """
 
 from __future__ import annotations
 
 import glob as glob_mod
+import importlib
 import logging
 import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from openai import AsyncOpenAI
-
-from squadron.providers.auth import ApiKeyStrategy
-from squadron.providers.profiles import ProviderProfile, get_profile
+from squadron.core.models import AgentConfig, Message, MessageType
+from squadron.providers.profiles import get_profile
+from squadron.providers.registry import get_provider
 from squadron.review.models import ReviewResult
 from squadron.review.parsers import parse_review_output
-from squadron.review.runner import run_review
 from squadron.review.templates import ReviewTemplate
 
 _logger = logging.getLogger(__name__)
+
+# Provider type → module name mapping (mirrors engine.py).
+_PROVIDER_MODULES: dict[str, str] = {
+    "openai": "openai",
+    "sdk": "sdk",
+    "openai-oauth": "codex",
+}
+
+
+def _ensure_provider_loaded(provider_type: str) -> None:
+    """Import the provider module to trigger auto-registration if needed."""
+    module_name = _PROVIDER_MODULES.get(provider_type, provider_type)
+    try:
+        importlib.import_module(f"squadron.providers.{module_name}")
+    except ImportError:
+        pass  # Let get_provider raise KeyError with available providers
 
 
 async def run_review_with_profile(
@@ -36,56 +52,29 @@ async def run_review_with_profile(
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
-    If profile is "sdk", delegates to the existing run_review() which
-    uses ClaudeSDKClient. Otherwise, creates an AsyncOpenAI client
-    from the profile's credentials and base_url.
+    All reviews go through the same path:
+    1. Look up profile → get provider from registry
+    2. Check capabilities → inject file contents if provider can't read files
+    3. Create one-shot agent → send prompt via handle_message()
+    4. Collect response → parse into ReviewResult
     """
-    if profile == "sdk":
-        return await run_review(
-            template,
-            inputs,
-            rules_content=rules_content,
-            model=model,
-        )
-
-    return await _run_non_sdk_review(
-        template,
-        inputs,
-        profile=profile,
-        rules_content=rules_content,
-        model=model,
-        verbosity=verbosity,
-    )
-
-
-async def _run_non_sdk_review(
-    template: ReviewTemplate,
-    inputs: dict[str, str],
-    *,
-    profile: str,
-    rules_content: str | None = None,
-    model: str | None = None,
-    verbosity: int = 0,
-) -> ReviewResult:
-    """Execute a review via the OpenAI-compatible API path."""
     import sys
 
     provider_profile = get_profile(profile)
-    api_key = await _resolve_api_key(provider_profile)
+    _ensure_provider_loaded(provider_profile.provider)
+    provider = get_provider(provider_profile.provider)
 
-    # Build prompts and inject file contents for non-SDK path
+    # Build prompts
     prompt = template.build_prompt(inputs)
-    prompt = _inject_file_contents(prompt, inputs)
     system_prompt = template.system_prompt
     if rules_content:
         system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
 
+    # Inject file contents only if the provider can't read files directly
+    if not provider.capabilities.can_read_files:
+        prompt = _inject_file_contents(prompt, inputs)
+
     resolved_model = model if model is not None else template.model
-    if resolved_model is None:
-        raise ValueError(
-            f"No model specified for non-SDK profile '{profile}'. "
-            "Use --model or set model in the template."
-        )
 
     # Debug output at -vvv (verbosity >= 3)
     if verbosity >= 3:
@@ -97,37 +86,54 @@ async def _run_non_sdk_review(
             system_prompt=system_prompt,
             user_prompt=prompt,
             rules_content=rules_content,
-            model=resolved_model,
+            model=resolved_model or "(default)",
             profile=profile,
             template_name=template.name,
         )
         print(f"[DEBUG] Prompt log: {log_path}", file=sys.stderr)
 
-    # Create client and call API
-    client_kwargs: dict[str, object] = {"api_key": api_key}
-    if provider_profile.base_url:
-        client_kwargs["base_url"] = provider_profile.base_url
-    if provider_profile.default_headers:
-        client_kwargs["default_headers"] = provider_profile.default_headers
-
-    client = AsyncOpenAI(**client_kwargs)  # type: ignore[arg-type]
+    # Build agent config from profile and template settings
+    config = AgentConfig(
+        name=f"review-{template.name}",
+        agent_type=provider_profile.provider,
+        provider=provider_profile.provider,
+        model=resolved_model,
+        instructions=system_prompt,
+        api_key=None,
+        base_url=provider_profile.base_url,
+        cwd=inputs.get("cwd"),
+        allowed_tools=template.allowed_tools,
+        permission_mode=template.permission_mode,
+        setting_sources=template.setting_sources,
+        credentials={
+            "api_key_env": provider_profile.api_key_env,
+            "default_headers": provider_profile.default_headers,
+            "hooks": template.hooks,
+            "mode": "client",
+        },
+    )
 
     _logger.info(
-        "Review via %s (model=%s, base_url=%s)",
+        "Review via %s (provider=%s, model=%s)",
         profile,
-        resolved_model,
-        provider_profile.base_url or "default",
+        provider_profile.provider,
+        resolved_model or "(default)",
     )
 
-    response = await client.chat.completions.create(
-        model=resolved_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-    )
-
-    raw_output = response.choices[0].message.content or ""
+    # Create agent, send prompt, collect response, shut down
+    agent = await provider.create_agent(config)
+    raw_output = ""
+    try:
+        review_message = Message(
+            sender="review-system",
+            recipients=[config.name],
+            content=prompt,
+            message_type=MessageType.chat,
+        )
+        async for response in agent.handle_message(review_message):
+            raw_output += response.content
+    finally:
+        await agent.shutdown()
 
     result = parse_review_output(
         raw_output=raw_output,
@@ -162,7 +168,7 @@ def _truncate(content: str, label: str) -> str:
 
 
 def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
-    """Inject file contents into the prompt for non-SDK reviews.
+    """Inject file contents into the prompt for providers that can't read files.
 
     Iterates input values, checks if each is a real file path via
     Path.is_file(), and appends file contents as fenced code blocks.
@@ -266,26 +272,6 @@ def _inject_glob_files(
 
         if not add_fn(f"file: {match}", content):
             break
-
-
-async def _resolve_api_key(profile: ProviderProfile) -> str:
-    """Resolve API key for a provider profile.
-
-    Uses the profile's api_key_env to look up the environment variable.
-    For localhost profiles, returns a placeholder.
-    """
-    strategy = ApiKeyStrategy(
-        env_var=profile.api_key_env,
-        base_url=profile.base_url,
-    )
-    if not strategy.is_valid():
-        env_hint = profile.api_key_env or "OPENAI_API_KEY"
-        raise ValueError(
-            f"No API key found for profile '{profile.name}'. "
-            f"Set {env_hint} environment variable."
-        )
-    creds = await strategy.get_credentials()
-    return creds["api_key"]
 
 
 _PROMPT_LOG_DIR = Path.home() / ".config" / "squadron" / "logs"

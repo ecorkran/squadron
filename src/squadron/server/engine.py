@@ -19,10 +19,20 @@ from squadron.providers.base import Agent
 logger = get_logger(__name__)
 
 
+# Provider type → module name mapping. Module names are implementation
+# details; provider type strings are the public identifiers.
+_PROVIDER_MODULES: dict[str, str] = {
+    "openai": "openai",
+    "sdk": "sdk",
+    "openai-oauth": "codex",
+}
+
+
 def _load_provider(name: str) -> None:
     """Import the provider module to trigger its auto-registration side effect."""
+    module_name = _PROVIDER_MODULES.get(name, name)
     try:
-        importlib.import_module(f"squadron.providers.{name}")
+        importlib.import_module(f"squadron.providers.{module_name}")
     except ImportError:
         pass  # Unknown name; let get_provider raise KeyError naturally
 
