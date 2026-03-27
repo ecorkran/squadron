@@ -39,9 +39,14 @@ class CodexProvider:
         return CodexAgent(name=config.name, config=config)
 
     async def validate_credentials(self) -> bool:
-        """Return True if Codex SDK is importable and credentials exist."""
+        """Return True if Codex SDK + binary available and credentials exist."""
         try:
             __import__("codex_app_server")
         except ImportError:
+            return False
+
+        from squadron.providers.codex.agent import _resolve_codex_binary
+
+        if _resolve_codex_binary() is None:
             return False
         return OAuthFileStrategy().is_valid()

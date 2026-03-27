@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from collections.abc import AsyncIterator
 
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
@@ -13,6 +14,41 @@ from squadron.providers.errors import ProviderError
 _log = get_logger("squadron.providers.codex.agent")
 
 _DEFAULT_SANDBOX = "read-only"
+
+_SDK_INSTALL_HINT = (
+    "Install the Codex Python SDK: "
+    "pip install 'codex-app-server-sdk @ "
+    "git+https://github.com/openai/codex.git#subdirectory=sdk/python'"
+)
+
+_BINARY_INSTALL_HINT = (
+    "Codex binary not found. Either:\n"
+    "  1. Install the published SDK with bundled binary: "
+    "pip install codex-app-server-sdk\n"
+    "  2. Or install the Codex CLI separately: "
+    "npm i -g @openai/codex"
+)
+
+
+def _resolve_codex_binary() -> str | None:
+    """Find the Codex binary — SDK bundled or system-installed.
+
+    Resolution order:
+    1. SDK's bundled binary (codex-cli-bin wheel, if installed)
+    2. ``codex`` on PATH (npm global install)
+    """
+    # Try SDK bundled binary first
+    try:
+        from codex_app_server._bootstrap import pinned_binary_path
+
+        bundled = pinned_binary_path()
+        if bundled and os.path.isfile(bundled):
+            return str(bundled)
+    except (ImportError, Exception):
+        pass
+
+    # Fall back to system PATH
+    return shutil.which("codex")
 
 
 class CodexAgent:
@@ -74,10 +110,10 @@ class CodexAgent:
         """Send prompt via SDK and return response text."""
         try:
             from codex_app_server import AsyncCodex
+            from codex_app_server.client import AppServerConfig
         except ImportError as exc:
             raise ProviderError(
-                "Codex Python SDK not installed. "
-                "Install from: https://github.com/openai/codex/tree/main/sdk/python"
+                f"Codex Python SDK not installed. {_SDK_INSTALL_HINT}"
             ) from exc
 
         if self._config.model is None:
@@ -88,7 +124,12 @@ class CodexAgent:
 
         # Lazy initialization
         if self._codex is None:
-            self._codex = await AsyncCodex().__aenter__()
+            codex_bin = _resolve_codex_binary()
+            if codex_bin is None:
+                raise ProviderError(_BINARY_INSTALL_HINT)
+
+            config = AppServerConfig(codex_bin=codex_bin)
+            self._codex = await AsyncCodex(config=config).__aenter__()
             sandbox = self._config.credentials.get("sandbox", _DEFAULT_SANDBOX)
             cwd = self._config.cwd or os.getcwd()
             self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
@@ -98,9 +139,10 @@ class CodexAgent:
                 approval_policy="never",
             )
             _log.debug(
-                "Codex SDK session started: model=%s, sandbox=%s",
+                "Codex SDK session started: model=%s, sandbox=%s, bin=%s",
                 self._config.model,
                 sandbox,
+                codex_bin,
             )
 
         result = await self._thread.run(prompt)  # type: ignore[union-attr]
