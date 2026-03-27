@@ -45,6 +45,9 @@ Documentation = "https://github.com/ecorkran/squadron/blob/main/README.md"
 Issues = "https://github.com/ecorkran/squadron/issues"
 
 [project.optional-dependencies]
+codex = [
+    "codex-app-server-sdk @ git+https://github.com/openai/codex.git#subdirectory=sdk/python",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
