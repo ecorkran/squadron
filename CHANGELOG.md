@@ -10,6 +10,11 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] - 20260328
+
+### Added
+- `SQUADRON_APP_NAME` env var support — when set, passed as `user` field in OpenAI-compatible requests; visible in OpenRouter traces and Langfuse dashboards
+
 ## [0.2.11] - 20260328
 
 ### Added

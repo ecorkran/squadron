@@ -2259,7 +2259,7 @@ wheels = [
 
 [[package]]
 name = "squadron-ai"
-version = "0.2.10"
+version = "0.2.12"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

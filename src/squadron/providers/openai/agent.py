@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -81,12 +82,16 @@ class OpenAICompatibleAgent:
         text_buffer = ""
         tool_calls_dict: dict[int, dict[str, Any]] = {}
 
+        app_name = os.environ.get("SQUADRON_APP_NAME")
+        extra: dict[str, Any] = {"user": app_name} if app_name else {}
+
         stream: AsyncStream[
             ChatCompletionChunk
         ] = await self._client.chat.completions.create(
             model=self._model,
             messages=cast(list[ChatCompletionMessageParam], self._history),
             stream=True,
+            extra_body=extra or None,
         )
         async for chunk in stream:
             if not chunk.choices:
