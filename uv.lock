@@ -261,14 +261,6 @@ wheels = [
 ]
 
 [[package]]
-name = "codex-app-server-sdk"
-version = "0.2.0"
-source = { git = "https://github.com/openai/codex.git?subdirectory=sdk%2Fpython#617475e54be4ac4bc3aca3868c979f157f5ca7ae" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2267,7 +2259,7 @@ wheels = [
 
 [[package]]
 name = "squadron-ai"
-version = "0.2.7"
+version = "0.2.10"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
@@ -2287,9 +2279,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-codex = [
-    { name = "codex-app-server-sdk" },
-]
 dev = [
     { name = "pyright" },
     { name = "pytest" },
@@ -2309,7 +2298,6 @@ dev = [
 requires-dist = [
     { name = "anthropic", specifier = ">=0.40.0" },
     { name = "claude-agent-sdk", specifier = ">=0.1.38" },
-    { name = "codex-app-server-sdk", marker = "extra == 'codex'", git = "https://github.com/openai/codex.git?subdirectory=sdk%2Fpython" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "google-adk", specifier = ">=0.1.0" },
     { name = "httpx", specifier = ">=0.27.0" },
