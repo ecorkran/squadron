@@ -16,7 +16,7 @@ status: in-progress
 
 **M1 — SDK agent task execution:** Spawn a Claude Agent SDK agent, give it a task, get structured output via CLI. Uses Max subscription — no API cost.
 
-Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-communication.md`.
+Multi-agent milestones (M2, M3) have been moved to `180-slices.multi-agent-communication.md`.
 
 ---
 
@@ -70,13 +70,9 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 20. [x] **(127) Scoped Code Review & Prompt Logging** — Enable `sq review code 122` to automatically scope the diff to the commits introduced by slice 122's branch, rather than diffing against main. Resolve commit range from branch name (`122-slice.*`) or merge base. Add prompt log persistence: `-vvv` output written to `~/.config/squadron/logs/review-prompt-{timestamp}.md` alongside stderr. Optionally include full prompt/response in the saved review file at `-vv+`. Dependencies: [Review Context Enrichment (122)]. Risk: Low. Effort: 2/5
 
-21. [ ] **(123) Review Findings Pipeline** — Automated triage and tracking for review output. When a review produces findings, classify each by complexity (auto-fix, guided fix, design decision, skip/acknowledged) and route accordingly. Auto-fixable findings applied directly with commit. Guided fixes get context annotation before handoff. Design decisions surfaced to human PM. Findings ledger for pattern detection and audit trail. Dependencies: [Review Workflow Templates (105), M1 Polish (106)]. Risk: Medium (classification heuristics need tuning). Effort: 3/5
-
 21. [x] **(124) Codex Agent Integration** — ⏪ Superseded by slice 128 (Review Transport Unification). Original implementation rewound — built agentic provider but failed to address review system coupling and subscription auth routing. Codex provider integration will be completed as part of 128. Dependencies: [128]. Effort: included in 128
 
 22. [x] **(128) Review Transport Unification & Provider Decoupling** — Decouple the review system from direct `AsyncOpenAI` usage and `if profile == "sdk"` string dispatch. Reviews use `Agent.handle_message()` via the provider registry like everything else. Extract provider capability declarations (`can_read_files`) so the review pipeline can adapt (e.g., inject file contents for API providers, skip for SDK/agentic providers). Rename `SDKAgent` → `ClaudeSDKAgent`. Auth type `"codex"` → `"oauth"`. Clean up all string-dispatch anti-patterns in auth resolution and CLI auth status. Enables Codex subscription-auth reviews and future Anthropic API provider without review system changes. Dependencies: [Review Provider & Model Selection (119), Auth Strategy (114)]. Risk: Medium (review system refactor touches many callers). Effort: 4/5
-
-23. [ ] **(125) Conversation Persistence & Management** — Replace the engine's in-memory _histories dict with a ConversationStore protocol backed by SQLite. Conversations persist across daemon restarts and agent shutdowns. CLI additions: history --list, --export, --search. Retention policies with --prune. Dependencies: [Local Daemon (112)]. Risk: Low. Effort: 2/5
 
 23. [x] **(126) Context Forge Integration Layer** — Centralize all Context Forge CLI interactions behind a `ContextForgeClient` abstraction in `src/squadron/integrations/context_forge.py`. Replace scattered `subprocess.run(["cf", ...])` calls with typed methods. Update to CF's current command surface (`cf list slices --json`, etc.). Design for multiple transport backends: subprocess CLI (current, fallback), MCP client (preferred when CF MCP server is available). Optionally surface key CF commands as `sq` subcommands (`sq guides`, `sq list slices`) delegating to CF — no logic duplication. Dependencies: [CLI Foundation (103)]. Risk: Low. Effort: 2/5
 
@@ -84,7 +80,7 @@ Multi-agent milestones (M2, M3) have been moved to `160-slices.multi-agent-commu
 
 ## Future Work
 
-1. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands as tools available to non-SDK agents. Likely moves to the automated pipeline initiative. Dependencies: [160-series MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
+1. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands as tools available to non-SDK agents. Likely moves to the automated pipeline initiative. Dependencies: [180-series MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
 
 2. [DEFERRED] **SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
 
@@ -119,17 +115,15 @@ Post-M1:
   126. Context Forge Integration Layer                   ✅ complete
   122. Review Context Enrichment                        ✅ complete
   127. Scoped Code Review & Prompt Logging              ✅ complete
-  123. Review Findings Pipeline                         (after 105, 106)
   124. Codex Agent Integration                          ⏪ superseded by 128
   128. Review Transport Unification & Provider Decoupling  ✅ complete
-  125. Conversation Persistence & Management           (after 112)
 ```
 
 ### Parallelization Notes
 
 - **Slice 126 (Context Forge Integration Layer) is complete.** CF calls centralized behind `ContextForgeClient` in `src/squadron/integrations/context_forge.py`.
 - **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management.
-- Multi-agent slices (M2, M3) are now tracked in `160-slices.multi-agent-communication.md`.
+- Multi-agent slices (M2, M3) are now tracked in `180-slices.multi-agent-communication.md`.
 
 ---
 
@@ -151,9 +145,11 @@ Post-M1:
 
 ## Notes
 
-- **Slices 100-122, 126-127 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI as v0.2.5.
-- **Slice 124 (Codex Agent Integration) was rewound.** Implementation built an agentic provider but failed to address the core need: routing reviews through subscription auth. The review system's tight coupling to AsyncOpenAI and string-based dispatch blocked this. Slice 128 supersedes 124 with a proper architectural fix.
-- **Multi-agent work** (M2, M3) has been moved to `160-arch.multi-agent-communication.md` and `160-slices.multi-agent-communication.md`.
+- **Slices 100-122, 126-128 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI as v0.2.5.
+- **Slice 124 (Codex Agent Integration) was rewound.** Superseded by slice 128. Archived.
+- **Slice 123 (Review Findings Pipeline) migrated to initiative 140** as slice 141 (Structured Review Findings). Scope refocused for pipeline consumption.
+- **Slice 125 (Conversation Persistence) migrated to initiative 160** (Pipeline Intelligence). Pipeline steps are stateless in 140; conversation persistence across retries is a 160 capability.
+- **Multi-agent work** (M2, M3) has been moved to `180-arch.multi-agent-communication.md` and `180-slices.multi-agent-communication.md`.
 - **SDK initialization cost**: Each `query()` call spawns a fresh subprocess with 2-12s+ overhead. Slice 104 deferred pending redesign.
 - **Multi-provider validation**: Slices 111-114 complete. The AgentProvider Protocol generalizes beyond Anthropic.
-- **Slice 124 (Codex Agent Integration) was rewound.** Implementation built an agentic provider but failed to address the core need: routing reviews through subscription auth. The review system's tight coupling to AsyncOpenAI and string-based dispatch blocked this. Slice 128 supersedes 124.
+- **Initiative 100 is effectively complete.** All remaining work has migrated to initiatives 140, 160, or 180.
