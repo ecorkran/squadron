@@ -44,14 +44,20 @@ def install_commands(
     target_dir = Path(target).expanduser()
 
     installed: list[str] = []
+    removed: list[str] = []
     for sub in sorted(source.iterdir()):
         if not sub.is_dir():
             continue
         dest_sub = target_dir / sub.name
         dest_sub.mkdir(parents=True, exist_ok=True)
+        source_files = {md_file.name for md_file in sub.glob("*.md")}
         for md_file in sorted(sub.glob("*.md")):
             shutil.copy2(md_file, dest_sub / md_file.name)
             installed.append(f"{sub.name}/{md_file.name}")
+        for existing in sorted(dest_sub.glob("*.md")):
+            if existing.name not in source_files:
+                existing.unlink()
+                removed.append(f"{sub.name}/{existing.name}")
 
     if not installed:
         rprint("[yellow]No command files found to install.[/yellow]")
@@ -60,6 +66,11 @@ def install_commands(
     rprint(f"[green]Installed {len(installed)} command(s) to {target_dir}:[/green]")
     for name in installed:
         rprint(f"  {name}")
+
+    if removed:
+        rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
+        for name in removed:
+            rprint(f"  {name}")
 
 
 def uninstall_commands(
