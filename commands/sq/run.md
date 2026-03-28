@@ -1,8 +1,27 @@
+Run a squadron workflow.
+
+## Input parsing
+
+The first word of `$ARGUMENTS` is the subcommand. The remainder is the argument passed to the workflow.
+
+Valid subcommands: `slice`
+
+If the subcommand is missing or unrecognized, show the usage below and stop.
+
+**Usage:**
+```
+/sq:run slice [NUMBER | NAME]    — automate full slice lifecycle
+```
+
+---
+
+## Subcommand: slice
+
 Automate the full slice lifecycle — design, task breakdown, and implementation — for the specified slice.
 
-Input: `$ARGUMENTS` is the slice number or name (e.g., `118` or `composed-workflows`).
+The remainder of `$ARGUMENTS` (after stripping the leading `slice` word) is the slice number or name (e.g., `118` or `composed-workflows`).
 
-If no arguments are provided, ask the user which slice to run.
+If no slice number or name is provided, ask the user which slice to run.
 
 ## Step 0: Validate
 
@@ -12,7 +31,7 @@ Run `cf get` to confirm:
 
 If `cf get` fails or is not available, report that Context-Forge is required and stop.
 
-Run `cf list slices --json` and find the entry matching `$ARGUMENTS` (by index number or by name). Extract:
+Run `cf list slices --json` and find the entry matching the slice argument (by index number or by name). Extract:
 - The slice `index` (referred to as `{nnn}` below)
 - The slice `name`
 - The `designFile` path (may be null if not yet created)
