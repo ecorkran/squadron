@@ -12,6 +12,19 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260328
+
+### Slice 140: Command Surface Parity — Task Breakdown (Phase 5) [revised]
+- 11 tasks: create review.md (4 subcommands), create auth.md, delete 4 old files, handle run-slice, fix installer stale removal, smoke-test, close
+- install.py gets stale-file cleanup (source-authoritative deletion, same pattern as CF daec117)
+- Revised after design correction: consolidated dispatch pattern replaces per-subcommand files
+
+### Slice 140: Command Surface Parity — Slice Design (Phase 4)
+- Designed slash command parity: add `/sq:review arch`, deprecate `/sq:run-slice`
+- Naming convention formalized: `commands/sq/{parent}-{child}.md` maps to `sq {parent} {child}`
+- Existing names already follow convention — primary work is adding `review-arch.md` and deprecation banner
+- Effort: 1/5 — markdown files and settings only, no Python changes
+
 ## 20260327
 
 ### Slice 128: Review Transport Unification — Implementation Complete (Phase 6)

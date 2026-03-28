@@ -4,7 +4,7 @@ parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
 dateUpdated: 20260327
-status: not_started
+status: in_progress
 ---
 
 # Slice Plan: Pipeline Foundation
@@ -16,7 +16,7 @@ status: not_started
 
 ## Foundation Work
 
-1. [ ] **(140) Command Surface Parity** — Rename slash commands to match CLI subcommand structure: `/sq:review-code` → `/sq:review code`, `/sq:review-slice` → `/sq:review slice`, `/sq:review-tasks` → `/sq:review tasks`, `/sq:auth-status` → `/sq:auth status`. Add `/sq:run` slash command. Add `sq review arch` command and `/sq:review arch` slash command for architecture reviews (template/prompt driven, same pattern as existing review types — `arch.yaml` template in `builtin/`). Retire `/sq:run-slice` (superseded by `sq run`). Dependencies: [100-band complete]. Risk: Low. Effort: 1/5
+1. [x] **(140) Command Surface Parity** — Rename slash commands to match CLI subcommand structure: `/sq:review-code` → `/sq:review code`, `/sq:review-slice` → `/sq:review slice`, `/sq:review-tasks` → `/sq:review tasks`, `/sq:auth-status` → `/sq:auth status`. Add `/sq:run` slash command. Add `sq review arch` command and `/sq:review arch` slash command for architecture reviews (template/prompt driven, same pattern as existing review types — `arch.yaml` template in `builtin/`). Retire `/sq:run-slice` (superseded by `sq run`). Dependencies: [100-band complete]. Risk: Low. Effort: 1/5
 
 2. [ ] **(141) Configuration Externalization** — Consolidate all shipped data files into `src/squadron/data/`: model aliases (TOML, moved from Python dict in `aliases.py`), review templates (YAML, moved from `review/templates/builtin/`), and pipeline definitions (YAML, new in later slices). Built-in and user override files use identical formats — users can copy blocks between shipped defaults and their `~/.config/squadron/` overrides. Runtime loads from `data/` first, then layers user config on top (existing merge behavior preserved). "All defaults live in `squadron/data/`" becomes the single answer for where to find shipped configuration. Dependencies: [100-band complete]. Risk: Low. Effort: 2/5
 
