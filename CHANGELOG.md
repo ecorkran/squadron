@@ -10,6 +10,18 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.11] - 20260328
+
+### Added
+- `sq review arch` command — standalone architecture review using `arch.yaml` template, reviews documents on their own merits without `--against` (replaces deprecated redirect to `review slice`)
+- Initiative index shorthand for arch reviews: `sq review arch 140` resolves to the matching architecture document
+- Per-template default model config keys: `default_model_arch`, `default_model_slice`, `default_model_tasks`, `default_model_code` (override `default_model` per review type)
+- `sq config unset` command for removing config keys, reverting to defaults
+- `arch.yaml` built-in review template for architecture document evaluation
+
+### Changed
+- Model resolution cascade extended: CLI flag > per-template config > global config > template default
+
 ## [Unreleased]
 
 ### Added
