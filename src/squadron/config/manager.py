@@ -119,6 +119,30 @@ def set_config(
         tomli_w.dump(existing, f)
 
 
+def unset_config(
+    key: str,
+    *,
+    project: bool = False,
+    cwd: str = ".",
+) -> bool:
+    """Remove a config key from the user or project TOML file.
+
+    Returns True if the key was present and removed, False if not found.
+    """
+    if key not in CONFIG_KEYS:
+        raise KeyError(f"Unknown config key: {key}")
+
+    path = project_config_path(cwd) if project else user_config_path()
+    existing = _read_toml(path)
+    if key not in existing:
+        return False
+
+    del existing[key]
+    with open(path, "wb") as f:
+        tomli_w.dump(existing, f)
+    return True
+
+
 def resolve_config_source(key: str, cwd: str = ".") -> str:
     """Determine which source provides the resolved value for a key.
 

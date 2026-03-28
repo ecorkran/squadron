@@ -92,7 +92,7 @@ class TestModelCLIFlag:
     ) -> None:
         result = cli_runner.invoke(
             app,
-            ["review", "arch", "a.md", "--against", "b.md", "--model", "sonnet"],
+            ["review", "arch", "a.md", "--model", "sonnet", "--no-save"],
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs

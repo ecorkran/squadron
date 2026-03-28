@@ -11,6 +11,7 @@ from squadron.config.manager import (
     project_config_path,
     resolve_config_source,
     set_config,
+    unset_config,
     user_config_path,
 )
 
@@ -39,6 +40,28 @@ def config_set(
 
     source = "project" if project else "user"
     rprint(f"Set {key} = {value} ({source} config)")
+
+
+@config_app.command("unset")
+def config_unset(
+    key: str = typer.Argument(help="Config key to remove"),
+    project: bool = typer.Option(
+        False, "--project", help="Remove from project-level config"
+    ),
+    cwd: str = typer.Option(".", "--cwd", help="Working directory"),
+) -> None:
+    """Remove a config key, reverting to its default value."""
+    try:
+        removed = unset_config(key, project=project, cwd=cwd)
+    except KeyError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    source = "project" if project else "user"
+    if removed:
+        rprint(f"Removed {key} from {source} config")
+    else:
+        rprint(f"{key} is not set in {source} config")
 
 
 @config_app.command("get")

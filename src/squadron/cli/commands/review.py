@@ -297,6 +297,29 @@ def _extract_diff_paths(diff_ref: str, cwd: str) -> list[str]:
     return []
 
 
+def _resolve_arch_file(num: str) -> str:
+    """Resolve an initiative index to an architecture document path.
+
+    Searches ``project-documents/user/architecture/`` for files matching
+    ``{num}-arch.*.md``.
+    """
+    arch_dir = Path("project-documents/user/architecture")
+    pattern = f"{num}-arch.*.md"
+    matches = sorted(arch_dir.glob(pattern))
+    if not matches:
+        rprint(
+            f"[red]Error: No architecture document matching"
+            f" '{pattern}' in {arch_dir}/[/red]"
+        )
+        raise typer.Exit(code=1)
+    if len(matches) > 1:
+        rprint(
+            f"[yellow]Warning: Multiple arch docs for index {num},"
+            f" using {matches[0].name}[/yellow]"
+        )
+    return str(matches[0])
+
+
 class SliceInfo(TypedDict):
     """Resolved slice metadata from Context-Forge."""
 
@@ -386,11 +409,26 @@ def _resolve_profile(
 
 
 def _resolve_model(
-    flag: str | None, template: ReviewTemplate | None = None
+    flag: str | None,
+    template: ReviewTemplate | None = None,
+    template_name: str | None = None,
 ) -> str | None:
-    """Resolve model: CLI flag → config → template default → None (SDK default)."""
+    """Resolve model: CLI flag → per-template config → global config → template default.
+
+    Per-template config keys follow the pattern ``default_model_{template}``
+    (e.g. ``default_model_arch``, ``default_model_code``).
+    """
     if flag is not None:
         return flag
+    # Per-template config (e.g. default_model_arch)
+    if template_name is not None:
+        try:
+            tmpl_val = get_config(f"default_model_{template_name}")
+            if isinstance(tmpl_val, str):
+                return tmpl_val
+        except KeyError:
+            pass
+    # Global default
     config_val = get_config("default_model")
     if isinstance(config_val, str):
         return config_val
@@ -443,8 +481,8 @@ def _run_review_command(
                 else f"{template_rules}\n\n---\n\n{rules_content}"
             )
 
-    # Resolve model from flag → config → template, then resolve alias
-    raw_model = _resolve_model(model_flag, template)
+    # Resolve model from flag → per-template config → config → template default
+    raw_model = _resolve_model(model_flag, template, template_name)
     alias_model: str | None = None
     alias_profile: str | None = None
     if raw_model is not None:
@@ -584,11 +622,10 @@ def review_slice(
         rprint(f"[green]Saved review to {path}[/green]")
 
 
-@review_app.command("arch", hidden=True)
+@review_app.command("arch")
 def review_arch(
-    input_file: str = typer.Argument(help="Document to review (or slice number)"),
-    against: str | None = typer.Option(
-        None, "--against", help="Architecture document to review against"
+    input_file: str = typer.Argument(
+        help="Architecture document to review (path or initiative index)"
     ),
     cwd: str | None = typer.Option(
         None, "--cwd", help="Working directory (default: config or .)"
@@ -614,25 +651,56 @@ def review_arch(
         False, "--json", help="Output and save as JSON instead of markdown"
     ),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
+    rules_dir_flag: str | None = typer.Option(
+        None, "--rules-dir", help="Rules directory override"
+    ),
 ) -> None:
-    """Run a slice design review (deprecated: use 'review slice')."""
-    rprint(
-        "[yellow]Warning: 'review arch' is deprecated,"
-        " use 'review slice' instead[/yellow]"
+    """Review an architecture document on its own merits."""
+    arch_index: int | None = None
+    if input_file.isdigit():
+        arch_index = int(input_file)
+        input_file = _resolve_arch_file(input_file)
+
+    if use_json:
+        output = "json"
+
+    verbosity = _resolve_verbosity(verbose)
+    resolved_cwd = _resolve_cwd(cwd)
+    resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
+    inputs = {
+        "input": input_file,
+        "cwd": resolved_cwd,
+    }
+    result = _run_review_command(
+        "arch",
+        inputs,
+        output,
+        output_path,
+        verbosity,
+        model_flag=model,
+        profile_flag=profile,
+        rules_dir=resolved_rules_dir,
     )
-    review_slice(
-        input_file=input_file,
-        against=against,
-        cwd=cwd,
-        model=model,
-        profile=profile,
-        verbose=verbose,
-        output=output,
-        output_path=output_path,
-        use_json=use_json,
-        no_save=no_save,
-        rules_dir_flag=None,
-    )
+
+    if arch_index is not None and not no_save:
+        # Build a minimal SliceInfo for save — arch reviews use initiative index
+        arch_name = (
+            Path(input_file).stem.split(".", 1)[1]
+            if "." in Path(input_file).stem
+            else Path(input_file).stem
+        )
+        arch_slice_info = SliceInfo(
+            index=arch_index,
+            name=arch_name,
+            slice_name=arch_name,
+            design_file=None,
+            task_files=[],
+            arch_file=input_file,
+        )
+        path = _save_review_file(
+            result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
+        )
+        rprint(f"[green]Saved review to {path}[/green]")
 
 
 @review_app.command("tasks")

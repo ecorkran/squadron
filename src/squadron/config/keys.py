@@ -48,6 +48,30 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default=None,
         description="Default model for review and spawn commands (e.g. opus, sonnet)",
     ),
+    "default_model_arch": ConfigKey(
+        name="default_model_arch",
+        type_=str,
+        default=None,
+        description="Default model for 'review arch' (overrides default_model)",
+    ),
+    "default_model_slice": ConfigKey(
+        name="default_model_slice",
+        type_=str,
+        default=None,
+        description="Default model for 'review slice' (overrides default_model)",
+    ),
+    "default_model_tasks": ConfigKey(
+        name="default_model_tasks",
+        type_=str,
+        default=None,
+        description="Default model for 'review tasks' (overrides default_model)",
+    ),
+    "default_model_code": ConfigKey(
+        name="default_model_code",
+        type_=str,
+        default=None,
+        description="Default model for 'review code' (overrides default_model)",
+    ),
     "rules_dir": ConfigKey(
         name="rules_dir",
         type_=str,

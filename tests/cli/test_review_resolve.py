@@ -157,20 +157,32 @@ def test_review_slice_digit_routes_through_resolver(
 
 @patch("squadron.cli.commands.review._save_review_file")
 @patch("squadron.cli.commands.review._run_review_command")
-def test_review_arch_alias_delegates_to_slice(
+def test_review_arch_resolves_index(
     mock_review: object,
     mock_save: object,
+    tmp_path: object,
 ) -> None:
-    """review arch hidden alias delegates to review_slice and prints deprecation."""
+    """review arch resolves an initiative index to an architecture document."""
     from typer.testing import CliRunner
 
     from squadron.cli.app import app
 
     runner = CliRunner()
-    with _patch_client():
-        result = runner.invoke(app, ["review", "arch", "118"])
-    assert "deprecated" in result.output.lower()
+    # When no matching arch file exists, it should error clearly
+    result = runner.invoke(app, ["review", "arch", "999"])
+    assert result.exit_code == 1
+    assert "no architecture document" in result.output.lower()
+
+    # When a matching file exists, it should use the "arch" template
+    result = runner.invoke(
+        app,
+        [
+            "review",
+            "arch",
+            "project-documents/user/architecture/140-arch.pipeline-foundation.md",
+            "--no-save",
+        ],
+    )
     assert mock_review.called  # type: ignore[union-attr]
     call_args = mock_review.call_args  # type: ignore[union-attr]
-    # Alias delegates to review_slice, which passes "slice" template name
-    assert call_args[0][0] == "slice"
+    assert call_args[0][0] == "arch"

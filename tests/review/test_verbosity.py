@@ -147,7 +147,7 @@ class TestVerboseFlag:
         mock_review: AsyncMock,
     ) -> None:
         result = cli_runner.invoke(
-            app, ["review", "arch", "a.md", "--against", "b.md", "-v"]
+            app, ["review", "slice", "a.md", "--against", "b.md", "-v"]
         )
         assert result.exit_code == 0
         assert "Input not validated" in result.output
@@ -162,7 +162,7 @@ class TestVerboseFlag:
             return_value=0,
         ):
             result = cli_runner.invoke(
-                app, ["review", "arch", "a.md", "--against", "b.md"]
+                app, ["review", "slice", "a.md", "--against", "b.md"]
             )
             assert result.exit_code == 0
             assert "Input not validated" not in result.output
@@ -190,7 +190,7 @@ class TestConfigDefaultVerbosity:
             return_value=1,
         ):
             result = cli_runner.invoke(
-                app, ["review", "arch", "a.md", "--against", "b.md"]
+                app, ["review", "slice", "a.md", "--against", "b.md"]
             )
             assert result.exit_code == 0
             assert "Input not validated" in result.output

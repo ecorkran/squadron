@@ -194,7 +194,7 @@ class TestOutputModes:
             app,
             [
                 "review",
-                "arch",
+                "slice",
                 "a.md",
                 "--against",
                 "b.md",
