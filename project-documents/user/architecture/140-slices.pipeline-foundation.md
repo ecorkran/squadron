@@ -26,7 +26,7 @@ status: not_started
 
 ## Migration Work
 
-4. [ ] **(143) Structured Review Findings** — Extract structured findings from review output as typed data: id, severity, category, summary, location. Absorbs the scope of former 100-band slice 123 (Review Findings Pipeline), refocused for pipeline consumption. Reviews produce structured JSON findings alongside prose markdown. Finding schema designed with 160's cross-iteration identity matching in mind (category + location fingerprint). Standalone value before pipelines exist: `sq review` commands gain machine-readable structured output. Dependencies: [142, Review System (105/128)]. Risk: Medium (finding extraction parsing heuristics). Effort: 3/5
+4. [ ] **(143) Structured Review Findings** — Extract structured findings from review output as typed data: id, severity, category, summary, location. Single-file format: structured findings index in YAML frontmatter, full prose descriptions in the markdown body. Absorbs the scope of former 100-band slice 123 (Review Findings Pipeline), refocused for pipeline consumption. Finding schema designed with 160's cross-iteration identity matching in mind (category + location fingerprint). Standalone value before pipelines exist: `sq review` commands gain machine-readable structured output in frontmatter. Dependencies: [142, Review System (105/128)]. Risk: Medium (finding extraction parsing heuristics). Effort: 3/5
 
 ---
 

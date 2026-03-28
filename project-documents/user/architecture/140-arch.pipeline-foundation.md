@@ -5,7 +5,7 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20260327
+dateUpdated: 20260328
 status: draft
 ---
 
@@ -95,13 +95,13 @@ class Action(Protocol):
         ...
 ```
 
-`ActionContext` carries: pipeline state, resolved parameters, model resolution chain, CF client reference, and output from prior steps. `ActionResult` carries: success/failure, output artifacts (files, structured data), and metadata for downstream steps.
+`ActionContext` is a typed struct (not a service object) carrying data that actions may need: pipeline state, resolved parameters, model resolver reference, CF client reference, and output from prior steps. Each action pulls what it needs and ignores the rest — the struct avoids deep dependency injection while keeping a single, predictable interface. `ActionResult` carries: success/failure, output artifacts (files, structured data), and metadata for downstream steps.
 
 ### Core Action Types
 
 | Action | Responsibility | Owns |
 |--------|---------------|------|
-| `dispatch` | Send assembled context to a model, capture output | Model resolution, output capture, token tracking |
+| `dispatch` | Resolve model alias via the model resolver, create an agent via the agent provider registry, send assembled context through `agent.handle_message()`, capture output | Model resolution, agent lifecycle, output capture, token tracking |
 | `review` | Run a review template against an artifact | Verdict parsing, finding extraction, file persistence, output format (prose + structured JSON) |
 | `compact` | Issue parameterized compaction instructions | Instruction templates, context preservation rules |
 | `checkpoint` | Pause for human decision | State serialization, presentation, resume token |
@@ -245,8 +245,10 @@ cf-op(set phase N) → cf-op(build) → dispatch(model) → review(template) →
 
 **`compact`**:
 ```
-compact(instructions from params)
+compact(instructions translated from step params)
 ```
+
+The compact *step type* translates high-level params (`keep: [design, tasks]`, `summarize: true`) into CF-compatible compaction instructions. The compact *action* sends those instructions to CF via `ContextForgeClient`. The step type is the policy layer (what to preserve); the action is the execution layer (how to invoke CF).
 
 **`checkpoint`** (standalone):
 ```
@@ -255,8 +257,10 @@ checkpoint(present state, await human)
 
 **`devlog`**:
 ```
-devlog(auto-generate from pipeline state)
+devlog(content from step type)
 ```
+
+The devlog *step type* decides what to log by inspecting pipeline state (completed steps, review verdicts, model used, outputs produced). `auto` means the step type auto-generates all content from state. The devlog *action* handles formatting and file write using entry templates. Users can provide explicit content via the step config as a future enhancement.
 
 **`review`** (standalone — for review-only pipelines):
 ```
@@ -368,25 +372,37 @@ For the weighted convergence loop (160) to work, reviews must produce structured
 
 Current review output: markdown prose with a PASS/CONCERNS/FAIL verdict in frontmatter.
 
-Enhanced review output: the same prose, plus a structured findings section:
+Enhanced review output: a single markdown file with structured findings in the frontmatter (machine-readable index) and full prose in the body (human-readable detail). No companion files.
 
 ```yaml
-# In the review file's frontmatter or a companion .json
+---
+verdict: CONCERNS
+model: minimax/minimax-m2.7
 findings:
   - id: F001
     severity: concern           # concern | fail | note
     category: error-handling    # structural tag for matching
     summary: "Missing error handling in parse_config"
     location: src/squadron/pipeline/executor.py:45
-    
   - id: F002
     severity: note
     category: naming
     summary: "Variable name 'x' is unclear"
     location: src/squadron/pipeline/actions/dispatch.py:12
+---
+
+## Findings
+
+### [CONCERN] Missing error handling in parse_config
+category: error-handling
+Full description with references, code samples, and rich markdown formatting...
+
+### [NOTE] Variable name 'x' is unclear
+category: naming
+Full description...
 ```
 
-Finding identity (`id` + `category` + `location`) enables 160's cross-iteration matching. A finding in iteration 2 at the same location and category as iteration 1 is a **persisting** finding (full weight). A finding at a new location or new category is a **novel** finding (decayed weight).
+The frontmatter is the structured index: compact, machine-parseable, what the pipeline reads for programmatic access. The prose body is unchanged from current output — rich formatting, backticks, bullet points, references. Finding identity (`category` + `location`) enables 160's cross-iteration matching. A finding in iteration 2 at the same category and location as iteration 1 is a **persisting** finding (full weight). A finding at a new location or category is **novel** (decayed weight).
 
 The review action in 140 produces this structured output. The pipeline in 140 doesn't use the structure beyond the verdict. 160's convergence strategy does.
 
@@ -400,6 +416,7 @@ Pipeline execution produces a state file that enables resume after interruption,
 
 ```json
 {
+  "schema_version": 1,
   "run_id": "run-20260327-191-slice-lifecycle",
   "pipeline": "slice-lifecycle",
   "params": { "slice": 191, "model": "opus" },
@@ -587,11 +604,15 @@ src/squadron/pipeline/
 - Review context enrichment (122)
 - Scoped code review (127)
 
-### In-Progress / Deferred (moved to 140 or 160)
+### Within This Initiative
 
-- **Review Findings Pipeline (123)** → moves to 140. Structured finding extraction is foundational for the review action.
-- **Conversation Persistence (125)** → moves to 160. Pipeline steps are stateless in 140.
+- **Structured Review Findings (141, formerly 100-band slice 123)** — Finding extraction is foundational for the review action. Absorbed into this initiative's slice plan.
+- **Conversation Persistence (125)** → moved to initiative 160. Pipeline steps are stateless in 140.
 - **SDK Client Warm Pool (104)** → remains deferred. Nice-to-have optimization for reducing per-step latency.
+
+### CF Connection Model
+
+The `ContextForgeClient` (slice 126, complete) wraps CF CLI subprocess calls behind a typed interface. Pipeline actions use this client for all CF operations. Subprocess calls run via `asyncio.to_thread` to avoid blocking the async executor. Migration to MCP client transport is a future optimization when CF's HTTP transport is available — the `ContextForgeClient` abstraction isolates this change from action implementations.
 
 ### From Context Forge
 
@@ -619,9 +640,9 @@ src/squadron/pipeline/
 - Built-in pipelines: slice-lifecycle, review-only, implementation-only, design-batch
 - Custom pipeline discovery and loading
 - Pipeline validation (`--validate`)
-- Structured review findings output (JSON alongside markdown)
+- Structured review findings in frontmatter (single-file format: YAML index + prose body)
 - DEVLOG automation
-- Review findings extraction (structured output from slice 123)
+- Review findings extraction (structured output, slice 141)
 
 ### Out of Scope (initiative 160: Pipeline Intelligence)
 
@@ -648,11 +669,11 @@ src/squadron/pipeline/
 
 1. **Pipeline definition storage for custom pipelines:** Convention is `project-documents/user/pipelines/`. Is this sufficient or should we also support `~/.config/squadron/pipelines/` for cross-project definitions? Likely: both, with project-local taking precedence.
 
-2. **Structured findings format:** JSON companion file vs. embedded in YAML frontmatter vs. structured section within the markdown review file? JSON companion is cleanest for machine processing. Embedded in frontmatter keeps it as one file. Decide during slice design.
+2. **[RESOLVED] Structured findings format:** Single-file format. Structured findings index in YAML frontmatter (id, severity, category, summary, location). Full prose descriptions in the markdown body. Pipeline reads frontmatter for programmatic access; humans read the body for detail.
 
-3. **CF connection model:** The `ContextForgeClient` (slice 126) already handles subprocess CLI calls. For pipeline use, do we keep CLI-based calls or move to MCP client? CLI is proven and works now. MCP client is architecturally cleaner but adds complexity. Start with CLI, migrate when HTTP transport is available in CF.
+3. **[RESOLVED] CF connection model:** Use `ContextForgeClient` (slice 126, complete) with subprocess CLI transport. Async compatibility via `asyncio.to_thread`. MCP client transport is a future optimization isolated behind the client abstraction.
 
-4. **Step-level vs. action-level model specification in YAML:** The current grammar puts `review.model` as a nested field inside the step. Alternative: make `models` a map at step level (`models: { dispatch: opus, review: minimax2.7 }`). The nested form reads more naturally; the map form is more explicit. Choose during grammar finalization with real examples.
+4. **[RESOLVED] Model specification in YAML:** Nested form (`review.model: minimax2.7`) rather than map form (`models: { dispatch: opus, review: minimax2.7 }`). The nested form reads more naturally and matches how users think about step configuration.
 
 5. **Collection loop item binding:** How does `{slice.index}` resolve inside an `each` block? Simple string interpolation? Template engine? Python f-string semantics? Keep it as simple as possible — likely just dot-path access into the bound item dict.
 
