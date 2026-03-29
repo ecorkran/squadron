@@ -83,7 +83,7 @@ class OpenAICompatibleAgent:
         tool_calls_dict: dict[int, dict[str, Any]] = {}
 
         app_name = os.environ.get("SQUADRON_APP_NAME")
-        extra: dict[str, Any] = {"user": app_name} if app_name else {}
+        extra_body = {"user": app_name} if app_name else None
 
         stream: AsyncStream[
             ChatCompletionChunk
@@ -91,7 +91,7 @@ class OpenAICompatibleAgent:
             model=self._model,
             messages=cast(list[ChatCompletionMessageParam], self._history),
             stream=True,
-            extra_body=extra or None,
+            extra_body=extra_body,
         )
         async for chunk in stream:
             if not chunk.choices:
