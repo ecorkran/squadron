@@ -8,15 +8,9 @@ from squadron.review.templates import load_template
 
 
 def _slice_yaml() -> Path:
-    return (
-        Path(__file__).resolve().parent.parent.parent
-        / "src"
-        / "squadron"
-        / "review"
-        / "templates"
-        / "builtin"
-        / "slice.yaml"
-    )
+    from squadron.data import data_dir
+
+    return data_dir() / "templates" / "slice.yaml"
 
 
 class TestArchTemplate:

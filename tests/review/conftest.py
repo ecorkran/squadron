@@ -74,11 +74,6 @@ def sample_review_result() -> dict[str, Any]:
 @pytest.fixture
 def builtin_templates_dir() -> Path:
     """Path to the built-in templates directory."""
-    return (
-        Path(__file__).resolve().parent.parent.parent
-        / "src"
-        / "squadron"
-        / "review"
-        / "templates"
-        / "builtin"
-    )
+    from squadron.data import data_dir
+
+    return data_dir() / "templates"

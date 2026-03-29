@@ -303,3 +303,9 @@ class TestBuiltinTemplateHardening:
     def test_code_template_has_consistency_instruction(self) -> None:
         t = self._get("code")
         assert "CRITICAL" in t.system_prompt
+
+    def test_all_four_templates_registered(self) -> None:
+        """load_all_templates registers all four expected template names."""
+        for name in ("code", "slice", "tasks", "arch"):
+            t = get_template(name)
+            assert t is not None, f"Template '{name}' not registered"

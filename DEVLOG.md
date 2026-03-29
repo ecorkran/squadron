@@ -12,7 +12,27 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260329
+
+**Slice 141: Configuration Externalization — Implementation Complete (Phase 6)**
+Created `src/squadron/data/` package with `data_dir()` two-path fallback. Transcribed 18 built-in model aliases to `data/models.toml`. Moved review templates to `data/templates/`. Refactored `aliases.py` (extracted `_load_aliases_from_file`, removed `BUILT_IN_ALIASES`). Updated `review/templates/__init__.py` to use `data_dir()`. Updated `pyproject.toml` force-include. Deleted `review/templates/builtin/`. Updated all tests referencing old paths. 681 tests pass (8 pre-existing failures unrelated to this slice). Slice 141 marked complete.
+
+---
+
 ## 20260328
+
+### Slice 141: Configuration Externalization — Task Breakdown Complete (Phase 5)
+- Task file created: `project-documents/user/tasks/141-tasks.configuration-externalization.md`
+- 11 tasks (T1–T11): create data/ package, copy templates, transcribe models.toml, refactor aliases.py, update template loader, update pyproject.toml, delete builtin/, verify, commit
+- Test tasks interleaved after each implementation task (T5 after T4, T7 after T6)
+- No blockers — straightforward reorganization, all design decisions resolved
+
+### Slice 141: Configuration Externalization — Design Complete (Phase 4)
+- Slice design created: `project-documents/user/slices/141-slice.configuration-externalization.md`
+- Scope: move `BUILT_IN_ALIASES` Python dict → `src/squadron/data/models.toml`; move `review/templates/builtin/*.yaml` → `src/squadron/data/templates/`; add `DataLoader.data_dir()` utility; reserve `data/pipelines/` for slice 148
+- Key decision: `data_dir()` uses same two-path fallback pattern as `install.py`'s `_get_commands_source()`
+- Public APIs unchanged; merge precedence (built-ins → user overrides) preserved
+- Slice plan entry already had (141) index materialized — no update needed
 
 ### Slice 140: Command Surface Parity — Task Breakdown (Phase 5) [revised]
 - 11 tasks: create review.md (4 subcommands), create auth.md, delete 4 old files, handle run-slice, fix installer stale removal, smoke-test, close
