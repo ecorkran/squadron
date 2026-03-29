@@ -163,7 +163,7 @@ BUILT_IN_ALIASES: dict[str, ModelAlias] = {
     },
     "flash3-lite": {
         "profile": "gemini",
-        "model": "gemini-3-flash-lite-preview",
+        "model": "gemini-3.1-flash-lite-preview",
         "private": True,
         "cost_tier": "cheap",
         "notes": "very cheap",
