@@ -316,6 +316,8 @@ steps:
 
 Semantics: execute the step, check the `until` condition against the step's output, repeat or proceed. If `max` is reached without the condition being met, the `on-exhaust` behavior fires (checkpoint, fail, or skip).
 
+**[DEFERRED → 149]** The condition grammar (`until: review.pass`) is illustrative syntax. The formal definition — whether conditions are field paths into `ActionResult`, named properties, or a structured expression — is a 149 design decision. The validator and executor both depend on this being resolved before implementation.
+
 ### Collection Loops (140 scope)
 
 Iterate over a set of items from a known source. The primary use case: batch operations across a slice plan.
