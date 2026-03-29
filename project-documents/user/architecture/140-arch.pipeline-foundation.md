@@ -675,7 +675,7 @@ The `ContextForgeClient` (slice 126, complete) wraps CF CLI subprocess calls beh
 
 4. **[RESOLVED] Model specification in YAML:** Nested form (`review.model: minimax2.7`) rather than map form (`models: { dispatch: opus, review: minimax2.7 }`). The nested form reads more naturally and matches how users think about step configuration.
 
-5. **Collection loop item binding:** How does `{slice.index}` resolve inside an `each` block? Simple string interpolation? Template engine? Python f-string semantics? Keep it as simple as possible — likely just dot-path access into the bound item dict.
+5. **[DEFERRED → 149] Collection loop item binding:** How does `{slice.index}` resolve inside an `each` block? Simple string interpolation? Template engine? Python f-string semantics? Keep it as simple as possible — likely just dot-path access into the bound item dict. Full semantics (item type/schema, field traversal, missing field behavior, read-only binding) are a 149 design decision. The `design-batch` example in this document uses `{slice.index}` as illustrative syntax only — the binding mechanism is not implemented in 140.
 
 ---
 
