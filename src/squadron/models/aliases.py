@@ -1,6 +1,6 @@
 """Model alias registry — maps short names to (profile, model_id) tuples.
 
-Built-in defaults cover common Claude, OpenAI, and other models.
+Built-in defaults are loaded from ``src/squadron/data/models.toml``.
 Users can add or override aliases via ~/.config/squadron/models.toml.
 """
 
@@ -41,216 +41,6 @@ class ModelAlias(_ModelAliasRequired, total=False):
     cost_tier: str
     notes: str
     pricing: ModelPricing
-
-
-BUILT_IN_ALIASES: dict[str, ModelAlias] = {
-    # Claude family — Max subscription, no per-token pricing
-    "opus": {
-        "profile": "sdk",
-        "model": "claude-opus-4-6",
-        "private": True,
-        "cost_tier": "subscription",
-        "notes": "Max sub",
-    },
-    "sonnet": {
-        "profile": "sdk",
-        "model": "claude-sonnet-4-6",
-        "private": True,
-        "cost_tier": "subscription",
-        "notes": "Max sub",
-    },
-    "haiku": {
-        "profile": "sdk",
-        "model": "claude-haiku-4-5-20251001",
-        "private": True,
-        "cost_tier": "subscription",
-        "notes": "Max sub",
-    },
-    # OpenAI GPT-5.4 family
-    "gpt54": {
-        "profile": "openai",
-        "model": "gpt-5.4",
-        "private": True,
-        "cost_tier": "expensive",
-        "notes": "Frontier",
-        "pricing": {
-            "input": 2.50,
-            "output": 15.00,
-            "cache_read": 0.25,
-            "cache_write": 2.50,
-        },
-    },
-    "gpt54-mini": {
-        "profile": "openai",
-        "model": "gpt-5.4-mini",
-        "private": True,
-        "cost_tier": "moderate",
-        "notes": "Balanced",
-        "pricing": {
-            "input": 0.75,
-            "output": 4.50,
-            "cache_read": 0.075,
-            "cache_write": 0.75,
-        },
-    },
-    "gpt54-nano": {
-        "profile": "openai",
-        "model": "gpt-5.4-nano",
-        "private": True,
-        "cost_tier": "cheap",
-        "notes": "Lightweight",
-        "pricing": {
-            "input": 0.20,
-            "output": 1.25,
-            "cache_read": 0.02,
-            "cache_write": 1.25,
-        },
-    },
-    # OpenAI specialized
-    "codex": {
-        "profile": "openai",
-        "model": "gpt-5.3-codex",
-        "private": True,
-        "cost_tier": "expensive",
-        "notes": "Code-specialized",
-        "pricing": {
-            "input": 1.75,
-            "output": 14.00,
-            "cache_read": 0.0175,
-            "cache_write": 1.75,
-        },
-    },
-    "codex-agent": {
-        "profile": "openai-oauth",
-        "model": "gpt-5.3-codex",
-        "private": True,
-        "cost_tier": "subscription",
-        "notes": "Agentic: sandbox, subscription auth",
-    },
-    "codex-spark": {
-        "profile": "openai-oauth",
-        "model": "gpt-5.3-codex-spark",
-        "private": True,
-        "cost_tier": "subscription",
-        "notes": "Near-instant, Pro only",
-    },
-    # Google Gemini — free tier
-    "gemini": {
-        "profile": "gemini",
-        "model": "gemini-3.1-pro-preview-customtools",
-        "private": True,
-        "cost_tier": "expensive",
-        "notes": "Preview",
-        "pricing": {
-            "input": 2.00,
-            "output": 12.00,
-            "cache_read": 0.20,
-            "cache_write": 2.00,
-        },
-    },
-    "flash3": {
-        "profile": "gemini",
-        "model": "gemini-3-flash-preview",
-        "private": True,
-        "cost_tier": "cheap",
-        "notes": "Fast, cheap",
-        "pricing": {
-            "input": 0.50,
-            "output": 3.00,
-            "cache_read": 0.05,
-            "cache_write": 0.50,
-        },
-    },
-    "flash3-lite": {
-        "profile": "gemini",
-        "model": "gemini-3.1-flash-lite-preview",
-        "private": True,
-        "cost_tier": "cheap",
-        "notes": "very cheap",
-        "pricing": {
-            "input": 0.25,
-            "output": 1.50,
-            "cache_read": 0.025,
-            "cache_write": 0.25,
-        },
-    },
-    # OpenRouter — cost-effective, no retention/training
-    "kimi25": {
-        "profile": "openrouter",
-        "model": "moonshotai/kimi-k2.5",
-        "private": True,
-        "cost_tier": "cheap",
-        "notes": "1M context",
-        "pricing": {
-            "input": 0.45,
-            "output": 2.83,
-            "cache_read": 0.189,
-            "cache_write": 2.83,
-        },
-    },
-    "minimax": {
-        "profile": "openrouter",
-        "model": "minimax/minimax-m2.7",
-        "private": True,
-        "cost_tier": "cheap",
-        "pricing": {
-            "input": 0.30,
-            "output": 1.25,
-            "cache_read": 0.06,
-            "cache_write": 0.30,
-        },
-    },
-    "glm5": {
-        "profile": "openrouter",
-        "model": "z-ai/glm-5",
-        "private": True,
-        "cost_tier": "cheap",
-        "pricing": {
-            "input": 0.72,
-            "output": 2.30,
-            "cache_read": 0.72,
-            "cache_write": 2.30,
-        },
-    },
-    "glm5-turbo": {
-        "profile": "openrouter",
-        "model": "z-ai/glm-5-turbo",
-        "private": True,
-        "cost_tier": "moderate",
-        "notes": "on sale",
-        "pricing": {
-            "input": 0.96,
-            "output": 3.20,
-            "cache_read": 0.192,
-            "cache_write": 3.20,
-        },
-    },
-    "mimo-omni": {
-        "profile": "openrouter",
-        "model": "xiaomi/mimo-v2-omni",
-        "private": True,
-        "cost_tier": "cheap",
-        "pricing": {
-            "input": 0.40,
-            "output": 2.00,
-            "cache_read": 0.08,
-            "cache_write": 2.00,
-        },
-    },
-    "grok-fast": {
-        "profile": "openrouter",
-        "model": "x-ai/grok-4.1-fast",
-        "private": True,
-        "cost_tier": "cheap",
-        "notes": "2M context",
-        "pricing": {
-            "input": 0.20,
-            "output": 0.50,
-            "cache_read": 0.05,
-            "cache_write": 0.20,
-        },
-    },
-}
 
 
 def models_toml_path() -> Path:
@@ -307,12 +97,12 @@ def _extract_pricing(
     return pricing if pricing else None
 
 
-def load_user_aliases() -> dict[str, ModelAlias]:
-    """Load user-defined aliases from models.toml.
+def _load_aliases_from_file(path: Path) -> dict[str, ModelAlias]:
+    """Parse an aliases TOML file and return a dict of ModelAlias entries.
 
     Returns an empty dict if the file is missing or has no [aliases] section.
+    Raises ValueError on TOML parse errors.
     """
-    path = models_toml_path()
     if not path.is_file():
         return {}
 
@@ -354,12 +144,27 @@ def load_user_aliases() -> dict[str, ModelAlias]:
     return result
 
 
+def _load_builtin_aliases() -> dict[str, ModelAlias]:
+    """Load built-in aliases from the shipped data/models.toml."""
+    from squadron.data import data_dir
+
+    return _load_aliases_from_file(data_dir() / "models.toml")
+
+
+def load_user_aliases() -> dict[str, ModelAlias]:
+    """Load user-defined aliases from models.toml.
+
+    Returns an empty dict if the file is missing or has no [aliases] section.
+    """
+    return _load_aliases_from_file(models_toml_path())
+
+
 def get_all_aliases() -> dict[str, ModelAlias]:
     """Return merged aliases: built-in defaults + user overrides.
 
     User entries override built-in aliases by name.
     """
-    merged = dict(BUILT_IN_ALIASES)
+    merged = _load_builtin_aliases()
     merged.update(load_user_aliases())
     return merged
 

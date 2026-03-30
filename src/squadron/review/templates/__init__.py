@@ -183,7 +183,9 @@ def load_all_templates(
     override built-in ones.
     """
     # Built-in templates
-    builtin_dir = Path(__file__).parent / "builtin"
+    from squadron.data import data_dir
+
+    builtin_dir = data_dir() / "templates"
     if builtin_dir.is_dir():
         for yaml_file in sorted(builtin_dir.glob("*.yaml")):
             template = load_template(yaml_file)

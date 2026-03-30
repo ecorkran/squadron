@@ -8,15 +8,9 @@ from squadron.review.templates import load_template
 
 
 def _tasks_yaml() -> Path:
-    return (
-        Path(__file__).resolve().parent.parent.parent
-        / "src"
-        / "squadron"
-        / "review"
-        / "templates"
-        / "builtin"
-        / "tasks.yaml"
-    )
+    from squadron.data import data_dir
+
+    return data_dir() / "templates" / "tasks.yaml"
 
 
 class TestTasksTemplate:

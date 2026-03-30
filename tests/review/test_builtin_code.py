@@ -9,15 +9,9 @@ from squadron.review.templates import load_template
 
 
 def _code_yaml() -> Path:
-    return (
-        Path(__file__).resolve().parent.parent.parent
-        / "src"
-        / "squadron"
-        / "review"
-        / "templates"
-        / "builtin"
-        / "code.yaml"
-    )
+    from squadron.data import data_dir
+
+    return data_dir() / "templates" / "code.yaml"
 
 
 class TestCodeTemplate:

@@ -553,7 +553,9 @@ src/squadron/pipeline/
 │   ├── review.py            # standalone review step type
 │   ├── collection.py        # each/collection loop step type
 │   └── devlog.py            # devlog step type
-└── pipelines/
+
+src/squadron/data/
+└── pipelines/               # built-in pipeline definitions (slice 141 establishes this)
     ├── slice-lifecycle.yaml
     ├── review-only.yaml
     ├── implementation-only.yaml
@@ -608,7 +610,7 @@ src/squadron/pipeline/
 
 ### Within This Initiative
 
-- **Structured Review Findings (141, formerly 100-band slice 123)** — Finding extraction is foundational for the review action. Absorbed into this initiative's slice plan.
+- **Structured Review Findings (143, formerly 100-band slice 123)** — Finding extraction is foundational for the review action. Absorbed into this initiative's slice plan.
 - **Conversation Persistence (125)** → moved to initiative 160. Pipeline steps are stateless in 140.
 - **SDK Client Warm Pool (104)** → remains deferred. Nice-to-have optimization for reducing per-step latency.
 

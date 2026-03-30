@@ -10,6 +10,14 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Built-in model aliases moved from Python dict `BUILT_IN_ALIASES` to `src/squadron/data/models.toml` (same TOML format as user `~/.config/squadron/models.toml`)
+- Built-in review templates moved from `src/squadron/review/templates/builtin/` to `src/squadron/data/templates/`
+- Added `src/squadron/data/` as canonical location for all shipped default data files; `data_dir()` utility resolves path in both wheel and editable installs
+- Reserved `src/squadron/data/pipelines/` for pipeline definitions (slice 148)
+
 ## [0.2.12] - 20260328
 
 ### Added

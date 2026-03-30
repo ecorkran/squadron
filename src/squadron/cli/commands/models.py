@@ -10,7 +10,7 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
-from squadron.models.aliases import BUILT_IN_ALIASES, ModelAlias, get_all_aliases
+from squadron.models.aliases import ModelAlias, _load_builtin_aliases, get_all_aliases
 from squadron.providers.profiles import get_profile
 
 # cost_tier display mapping
@@ -51,9 +51,10 @@ def _show_aliases(*, verbose: bool = False) -> None:
 
     table.add_column("Source", style="dim")
 
+    builtin_aliases = _load_builtin_aliases()
     for name, alias in sorted(all_aliases.items()):
-        source = "(user)" if name not in BUILT_IN_ALIASES else ""
-        if name in BUILT_IN_ALIASES and alias != BUILT_IN_ALIASES[name]:
+        source = "(user)" if name not in builtin_aliases else ""
+        if name in builtin_aliases and alias != builtin_aliases[name]:
             source = "(user override)"
 
         row: list[str] = [name, alias["profile"], alias["model"]]
