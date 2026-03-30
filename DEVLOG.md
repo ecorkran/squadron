@@ -2,13 +2,23 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260326
+dateUpdated: 20260330
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
+
+---
+
+## 20260330
+
+**Slice 142: Pipeline Core Models and Action Protocol — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/142-tasks.pipeline-core-models-and-action-protocol.md`. 14 tasks (T1–T14): package skeleton + stubs, data models, Action protocol + registry, StepType protocol + registry, ModelResolver (5-level cascade, pool: stub), pipeline `__init__` public surface, full test/pyright pass, verification walkthrough and closeout. Tests interleaved after each implementation group. No blockers.
+
+**Slice 142: Pipeline Core Models and Action Protocol — Design Complete (Phase 4)**
+Created `project-documents/user/slices/142-slice.pipeline-core-models-and-action-protocol.md`. Defines `ActionContext`, `ActionResult`, `PipelineDefinition`, `StepConfig`, `ValidationError` dataclasses; `Action` and `StepType` protocols; action/step-type registries; `ModelResolver` with 5-level cascade chain and `pool:` prefix error stub. Full `src/squadron/pipeline/` package layout with stub modules for all future action and step type files. No blockers — all design decisions resolved by architecture.
 
 ---
 
