@@ -52,6 +52,22 @@ cd squadron
 uv sync --dev
 ```
 
+#### Pre-commit hook (recommended)
+
+A self-healing pre-commit hook auto-formats code and fixes import order before every commit, keeping CI green:
+
+```bash
+cat > .git/hooks/pre-commit << 'EOF'
+#!/bin/sh
+uv run ruff format .
+uv run ruff check --fix --exit-zero .
+git add -u
+EOF
+chmod +x .git/hooks/pre-commit
+```
+
+> **Note:** `.git/hooks/` is not tracked by git. Run the above after every fresh clone or worktree creation.
+
 ## Quickstart
 
 ### 1. Configure credentials
