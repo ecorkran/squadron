@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- SDK reviews (Claude/Anthropic) no longer duplicate findings — `ResultMessage` content was being appended alongside the identical `AssistantMessage`
+
 ### Changed
 - Built-in model aliases moved from Python dict `BUILT_IN_ALIASES` to `src/squadron/data/models.toml` (same TOML format as user `~/.config/squadron/models.toml`)
 - Built-in review templates moved from `src/squadron/review/templates/builtin/` to `src/squadron/data/templates/`

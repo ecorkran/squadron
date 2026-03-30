@@ -131,6 +131,11 @@ async def run_review_with_profile(
             message_type=MessageType.chat,
         )
         async for response in agent.handle_message(review_message):
+            # SDK providers emit both an AssistantMessage and a ResultMessage
+            # with identical content.  Skip the ResultMessage to avoid
+            # duplicating findings in the review output.
+            if response.metadata.get("sdk_type") == "result":
+                continue
             raw_output += response.content
     finally:
         await agent.shutdown()
