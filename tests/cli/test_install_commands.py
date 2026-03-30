@@ -12,12 +12,10 @@ from squadron.cli.commands.install import _get_commands_source
 runner = CliRunner()
 
 EXPECTED_FILES = {
-    "auth-status.md",
+    "auth.md",
     "list.md",
-    "review-slice.md",
-    "review-code.md",
-    "review-tasks.md",
-    "run-slice.md",
+    "review.md",
+    "run.md",
     "shutdown.md",
     "spawn.md",
     "task.md",
@@ -25,7 +23,7 @@ EXPECTED_FILES = {
 
 
 def test_install_copies_files(tmp_path: Path) -> None:
-    """Install copies all 9 command files to the target directory."""
+    """Install copies all 7 command files to the target directory."""
     result = runner.invoke(app, ["install-commands", "--target", str(tmp_path)])
     assert result.exit_code == 0
 
@@ -41,7 +39,7 @@ def test_install_creates_directories(tmp_path: Path) -> None:
     result = runner.invoke(app, ["install-commands", "--target", str(deep_target)])
     assert result.exit_code == 0
     assert (deep_target / "sq").is_dir()
-    assert len(list((deep_target / "sq").glob("*.md"))) == 9
+    assert len(list((deep_target / "sq").glob("*.md"))) == 7
 
 
 def test_install_overwrites_existing(tmp_path: Path) -> None:
@@ -98,7 +96,7 @@ def test_target_flag_overrides_default(tmp_path: Path) -> None:
     result = runner.invoke(app, ["install-commands", "--target", str(custom)])
     assert result.exit_code == 0
     assert (custom / "sq").is_dir()
-    assert len(list((custom / "sq").glob("*.md"))) == 9
+    assert len(list((custom / "sq").glob("*.md"))) == 7
 
 
 def test_get_commands_source_returns_valid_dir() -> None:
@@ -106,7 +104,7 @@ def test_get_commands_source_returns_valid_dir() -> None:
     source = _get_commands_source()
     assert source.is_dir()
     assert (source / "sq").is_dir()
-    assert len(list((source / "sq").glob("*.md"))) == 9
+    assert len(list((source / "sq").glob("*.md"))) == 7
 
 
 # ---------------------------------------------------------------------------
@@ -118,11 +116,9 @@ EXPECTED_COMMANDS = {
     "task.md": "sq task",
     "list.md": "sq list",
     "shutdown.md": "sq shutdown",
-    "review-slice.md": "sq review slice",
-    "review-tasks.md": "sq review tasks",
-    "review-code.md": "sq review code",
-    "auth-status.md": "sq auth status",
-    "run-slice.md": "cf get",
+    "review.md": "sq review",
+    "auth.md": "sq auth",
+    "run.md": "/sq:run",
 }
 
 

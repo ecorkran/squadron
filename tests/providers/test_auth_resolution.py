@@ -113,7 +113,8 @@ class TestActiveSource:
         strategy = ApiKeyStrategy(explicit_key="sk-explicit")
         assert strategy.active_source == "explicit"
 
-    def test_returns_localhost(self) -> None:
+    def test_returns_localhost(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         strategy = ApiKeyStrategy(base_url="http://localhost:8080")
         assert strategy.active_source == "localhost"
 
