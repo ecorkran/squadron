@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260330
 
+**Slice 142: Pipeline Core Models and Action Protocol — Implementation Complete (Phase 6)**
+Implemented full `src/squadron/pipeline/` package: 5 dataclasses in `models.py`, `Action` protocol + `ActionType` StrEnum + action registry, `StepType` protocol + `StepTypeName` StrEnum + step-type registry, `ModelResolver` (5-level cascade, pool: stub), stub modules for 7 actions and 5 step types, public `__init__` surface. 26 new tests across 3 test files — all pass. Pyright: 0 errors. Full repo: 707 passed, 8 pre-existing failures (unrelated). Slice 142 marked complete.
+
 **Slice 142: Pipeline Core Models and Action Protocol — Task Breakdown Complete (Phase 5)**
 Created `project-documents/user/tasks/142-tasks.pipeline-core-models-and-action-protocol.md`. 14 tasks (T1–T14): package skeleton + stubs, data models, Action protocol + registry, StepType protocol + registry, ModelResolver (5-level cascade, pool: stub), pipeline `__init__` public surface, full test/pyright pass, verification walkthrough and closeout. Tests interleaved after each implementation group. No blockers.
 
