@@ -10,8 +10,8 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.models.aliases import (
-    load_builtin_aliases,
     estimate_cost,
+    load_builtin_aliases,
     load_user_aliases,
 )
 

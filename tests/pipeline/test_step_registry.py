@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 import squadron.pipeline.steps as steps_pkg
+from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import (
     StepType,
     StepTypeName,
@@ -12,7 +13,6 @@ from squadron.pipeline.steps import (
     list_step_types,
     register_step_type,
 )
-from squadron.pipeline.models import StepConfig, ValidationError
 
 
 class _MinimalStepType:

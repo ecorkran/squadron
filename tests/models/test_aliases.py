@@ -8,8 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from squadron.models.aliases import (
-    load_builtin_aliases,
     get_all_aliases,
+    load_builtin_aliases,
     load_user_aliases,
     resolve_model_alias,
 )
