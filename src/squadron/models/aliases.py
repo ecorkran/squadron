@@ -144,7 +144,7 @@ def _load_aliases_from_file(path: Path) -> dict[str, ModelAlias]:
     return result
 
 
-def _load_builtin_aliases() -> dict[str, ModelAlias]:
+def load_builtin_aliases() -> dict[str, ModelAlias]:
     """Load built-in aliases from the shipped data/models.toml."""
     from squadron.data import data_dir
 
@@ -164,7 +164,7 @@ def get_all_aliases() -> dict[str, ModelAlias]:
 
     User entries override built-in aliases by name.
     """
-    merged = _load_builtin_aliases()
+    merged = load_builtin_aliases()
     merged.update(load_user_aliases())
     return merged
 

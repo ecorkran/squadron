@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from squadron.models.aliases import (
-    _load_builtin_aliases,
+    load_builtin_aliases,
     get_all_aliases,
     load_user_aliases,
     resolve_model_alias,
@@ -155,7 +155,7 @@ def test_get_all_aliases_includes_builtins(tmp_path: Path) -> None:
         assert "opus" in aliases
         assert "sonnet" in aliases
         assert "gpt54-nano" in aliases
-        assert len(aliases) >= len(_load_builtin_aliases())
+        assert len(aliases) >= len(load_builtin_aliases())
 
 
 def test_get_all_aliases_merges_user(tmp_path: Path) -> None:
@@ -175,19 +175,19 @@ kimi25 = { profile = "openrouter", model = "moonshotai/kimi-k2" }
 
 
 # ---------------------------------------------------------------------------
-# _load_builtin_aliases — data/ TOML source
+# load_builtin_aliases — data/ TOML source
 # ---------------------------------------------------------------------------
 
 
-def test_load_builtin_aliases_nonempty() -> None:
-    """_load_builtin_aliases returns a non-empty dict."""
-    aliases = _load_builtin_aliases()
+def testload_builtin_aliases_nonempty() -> None:
+    """load_builtin_aliases returns a non-empty dict."""
+    aliases = load_builtin_aliases()
     assert len(aliases) > 0
 
 
-def test_load_builtin_aliases_contains_claude() -> None:
-    """_load_builtin_aliases contains opus, sonnet, haiku."""
-    aliases = _load_builtin_aliases()
+def testload_builtin_aliases_contains_claude() -> None:
+    """load_builtin_aliases contains opus, sonnet, haiku."""
+    aliases = load_builtin_aliases()
     assert "opus" in aliases
     assert "sonnet" in aliases
     assert "haiku" in aliases

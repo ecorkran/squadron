@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.models.aliases import (
-    _load_builtin_aliases,
+    load_builtin_aliases,
     estimate_cost,
     load_user_aliases,
 )
@@ -101,14 +101,14 @@ _SDK_ALIASES = {"opus", "sonnet", "haiku"}
 
 def test_builtin_aliases_have_metadata() -> None:
     """All built-in aliases have private and cost_tier keys."""
-    for name, alias in _load_builtin_aliases().items():
+    for name, alias in load_builtin_aliases().items():
         assert "private" in alias, f"{name} missing 'private'"
         assert "cost_tier" in alias, f"{name} missing 'cost_tier'"
 
 
 def test_builtin_sdk_aliases_have_no_pricing() -> None:
     """SDK aliases (opus, sonnet, haiku) do NOT have pricing."""
-    builtin = _load_builtin_aliases()
+    builtin = load_builtin_aliases()
     for name in _SDK_ALIASES:
         assert name in builtin
         assert "pricing" not in builtin[name], f"{name} should not have pricing"
@@ -116,7 +116,7 @@ def test_builtin_sdk_aliases_have_no_pricing() -> None:
 
 def test_builtin_api_aliases_have_pricing() -> None:
     """API aliases have pricing with input and output fields."""
-    builtin = _load_builtin_aliases()
+    builtin = load_builtin_aliases()
     api_aliases_with_pricing = {
         name for name, alias in builtin.items() if "pricing" in alias
     }
@@ -267,7 +267,7 @@ def test_existing_toml_backward_compat(tmp_path: Path) -> None:
 
 def test_estimate_cost_full_pricing() -> None:
     """Known alias with pricing returns correct USD result."""
-    pricing = _load_builtin_aliases()["kimi25"]["pricing"]
+    pricing = load_builtin_aliases()["kimi25"]["pricing"]
     with patch(
         "squadron.models.aliases.models_toml_path",
         return_value=Path("/nonexistent/models.toml"),
@@ -280,7 +280,7 @@ def test_estimate_cost_full_pricing() -> None:
 
 def test_estimate_cost_with_cache() -> None:
     """Cache cost is included when cached_tokens > 0 and cache_read present."""
-    pricing = _load_builtin_aliases()["kimi25"]["pricing"]
+    pricing = load_builtin_aliases()["kimi25"]["pricing"]
     with patch(
         "squadron.models.aliases.models_toml_path",
         return_value=Path("/nonexistent/models.toml"),
