@@ -276,7 +276,7 @@ grep -n "BUILT_IN_ALIASES" src/squadron/models/aliases.py
 # → no results (or only the function reference in get_all_aliases comment)
 
 # 3. Model aliases still load
-uv run sq model list
+uv run sq models list
 # → shows opus, sonnet, haiku, gpt54, ... (all expected aliases)
 
 # 4. Review templates still load — run a code review
