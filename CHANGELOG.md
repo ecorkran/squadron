@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `src/squadron/pipeline/` package — foundational scaffolding for the pipeline system (slice 142)
+  - `pipeline/models.py`: `ActionContext`, `ActionResult`, `PipelineDefinition`, `StepConfig`, `ValidationError` dataclasses
+  - `pipeline/actions/`: `Action` protocol (`@runtime_checkable`), `ActionType` StrEnum, action registry (`register_action`, `get_action`, `list_actions`)
+  - `pipeline/steps/`: `StepType` protocol, `StepTypeName` StrEnum, step-type registry
+  - `pipeline/resolver.py`: `ModelResolver` with 5-level cascade (CLI → action → step → pipeline → config default); delegates to `resolve_model_alias()`; raises `ModelPoolNotImplemented` on `pool:` prefix (160 scope stub)
+  - Stub modules for all future action/step-type files
+
 ### Fixed
 - SDK reviews (Claude/Anthropic) no longer duplicate findings — `ResultMessage` content was being appended alongside the identical `AssistantMessage`
 

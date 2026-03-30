@@ -7,7 +7,7 @@ sliceIndex: 142
 sliceName: pipeline-core-models-and-action-protocol
 dateCreated: 20260330
 dateUpdated: 20260330
-status: design
+status: complete
 ---
 
 # Slice Design: Pipeline Core Models and Action Protocol (142)
@@ -475,9 +475,26 @@ manager on construction.  No new config keys needed in this slice.
 ```bash
 # 1. Package structure exists
 find src/squadron/pipeline -type f | sort
-# → lists __init__.py, models.py, resolver.py,
-#   actions/__init__.py, actions/protocol.py, actions/dispatch.py, …
-#   steps/__init__.py, steps/protocol.py, steps/phase.py, …
+# Actual output (verified 2026-03-30, Python 3.13.3):
+# src/squadron/pipeline/__init__.py
+# src/squadron/pipeline/actions/__init__.py
+# src/squadron/pipeline/actions/cf_op.py
+# src/squadron/pipeline/actions/checkpoint.py
+# src/squadron/pipeline/actions/commit.py
+# src/squadron/pipeline/actions/compact.py
+# src/squadron/pipeline/actions/devlog.py
+# src/squadron/pipeline/actions/dispatch.py
+# src/squadron/pipeline/actions/protocol.py
+# src/squadron/pipeline/actions/review.py
+# src/squadron/pipeline/models.py
+# src/squadron/pipeline/resolver.py
+# src/squadron/pipeline/steps/__init__.py
+# src/squadron/pipeline/steps/collection.py
+# src/squadron/pipeline/steps/compact.py
+# src/squadron/pipeline/steps/devlog.py
+# src/squadron/pipeline/steps/phase.py
+# src/squadron/pipeline/steps/protocol.py
+# src/squadron/pipeline/steps/review.py
 
 # 2. Top-level imports work
 uv run python -c "
@@ -498,7 +515,7 @@ r = ModelResolver(pipeline_model='sonnet')
 model_id, profile = r.resolve()
 print(model_id, profile)
 "
-# → claude-sonnet-4-6 sdk   (resolved via alias registry)
+# → claude-sonnet-4-6 sdk
 
 # 4. Pool prefix raises
 uv run python -c "
@@ -509,7 +526,7 @@ try:
 except ModelPoolNotImplemented as e:
     print('pool: correctly blocked:', e)
 "
-# → pool: correctly blocked: Model pools require Pipeline Intelligence …
+# → pool: correctly blocked: Pool-based model selection is not yet implemented (slate 160): 'pool:high'
 
 # 5. No model raises
 uv run python -c "
@@ -520,15 +537,15 @@ try:
 except ModelResolutionError as e:
     print('empty cascade correctly raised:', e)
 "
-# → empty cascade correctly raised: No model specified at any cascade level.
+# → empty cascade correctly raised: No model could be resolved: all cascade levels are None. Set a pipeline model, config default, or pass --model.
 
 # 6. Tests
 uv run pytest tests/pipeline/ -v
-# → all tests pass
+# → 26 passed in 0.03s
 
 # 7. Pyright
 uv run pyright src/squadron/pipeline/
-# → 0 errors, 0 warnings
+# → 0 errors, 0 warnings, 0 informations
 ```
 
 ---

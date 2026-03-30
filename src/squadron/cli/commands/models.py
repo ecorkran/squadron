@@ -10,7 +10,7 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
-from squadron.models.aliases import ModelAlias, load_builtin_aliases, get_all_aliases
+from squadron.models.aliases import ModelAlias, get_all_aliases, load_builtin_aliases
 from squadron.providers.profiles import get_profile
 
 # cost_tier display mapping
