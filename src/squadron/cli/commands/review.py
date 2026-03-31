@@ -139,6 +139,11 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _yaml_escape(text: str) -> str:
+    """Escape double quotes in a string for YAML double-quoted values."""
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _format_review_markdown(
     result: ReviewResult,
     review_type: str,
@@ -161,14 +166,25 @@ def _format_review_markdown(
         "status: complete",
         f"dateCreated: {today}",
         f"dateUpdated: {today}",
-        "---",
-        "",
-        f"# Review: {review_type} — slice {slice_info['index']}",
-        "",
-        f"**Verdict:** {result.verdict.value}",
-        f"**Model:** {result.model or 'default'}",
-        "",
     ]
+
+    if result.findings:
+        lines.append("findings:")
+        for sf in result.structured_findings:
+            lines.append(f"  - id: {sf.id}")
+            lines.append(f"    severity: {sf.severity}")
+            lines.append(f"    category: {sf.category}")
+            lines.append(f'    summary: "{_yaml_escape(sf.summary)}"')
+            if sf.location:
+                lines.append(f"    location: {sf.location}")
+
+    lines.append("---")
+    lines.append("")
+    lines.append(f"# Review: {review_type} — slice {slice_info['index']}")
+    lines.append("")
+    lines.append(f"**Verdict:** {result.verdict.value}")
+    lines.append(f"**Model:** {result.model or 'default'}")
+    lines.append("")
 
     if result.findings:
         lines.append("## Findings")
