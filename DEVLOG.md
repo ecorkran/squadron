@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260330
 
+**Slice 143: Structured Review Findings — Design Complete (Phase 4)**
+Created `project-documents/user/slices/143-slice.structured-review-findings.md`. Extends review output with machine-readable structured findings in YAML frontmatter. Adds `StructuredFinding` dataclass (id, severity, category, summary, location), `NOTE` severity level, parser extensions for category extraction, and prompt enhancement for all review templates. Single-file format: frontmatter is the programmatic index, prose body unchanged. Absorbs former slice 123 scope. Designed for slice 160 cross-iteration identity matching via (category, location) fingerprint.
+
 **Slice 142: Pipeline Core Models and Action Protocol — Implementation Complete (Phase 6)**
 Implemented full `src/squadron/pipeline/` package: 5 dataclasses in `models.py`, `Action` protocol + `ActionType` StrEnum + action registry, `StepType` protocol + `StepTypeName` StrEnum + step-type registry, `ModelResolver` (5-level cascade, pool: stub), stub modules for 7 actions and 5 step types, public `__init__` surface. 26 new tests across 3 test files — all pass. Pyright: 0 errors. Full repo: 707 passed, 8 pre-existing failures (unrelated). Slice 142 marked complete.
 
