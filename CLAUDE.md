@@ -11,6 +11,8 @@
 - Never include credentials, API keys, or secrets in source code 
   or comments. Load from environment variables; ensure .env is 
   in .gitignore. Raise an issue if violations are found.
+- When debugging a failure, get the actual error message before attempting any fix. Never apply more than one speculative fix without first obtaining concrete evidence (logs, error text, stack trace) that diagnoses the root cause. If you cannot get the evidence yourself, ask the Project Manager for it.
+
 
 ## Code Structure
 
