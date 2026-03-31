@@ -42,3 +42,5 @@ jobs:
           skip-existing: true
           attestations: false
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: false
