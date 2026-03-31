@@ -10,6 +10,7 @@ from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
     Severity,
+    StructuredFinding,
     Verdict,
 )
 
@@ -38,6 +39,7 @@ class TestSeverity:
         ("member", "expected"),
         [
             (Severity.PASS, "PASS"),
+            (Severity.NOTE, "NOTE"),
             (Severity.CONCERN, "CONCERN"),
             (Severity.FAIL, "FAIL"),
         ],
@@ -45,6 +47,15 @@ class TestSeverity:
     def test_string_values(self, member: Severity, expected: str) -> None:
         assert member.value == expected
         assert str(member) == expected
+
+    def test_enum_ordering(self) -> None:
+        members = list(Severity)
+        assert members == [
+            Severity.PASS,
+            Severity.NOTE,
+            Severity.CONCERN,
+            Severity.FAIL,
+        ]
 
 
 class TestReviewFinding:
@@ -68,6 +79,53 @@ class TestReviewFinding:
             description="Module layout is clean.",
         )
         assert finding.file_ref is None
+
+    def test_category_and_location_kwargs(self) -> None:
+        finding = ReviewFinding(
+            severity=Severity.CONCERN,
+            title="Naming",
+            description="Unclear names.",
+            category="naming",
+            location="src/foo.py:10",
+        )
+        assert finding.category == "naming"
+        assert finding.location == "src/foo.py:10"
+
+    def test_category_and_location_default_none(self) -> None:
+        finding = ReviewFinding(
+            severity=Severity.PASS,
+            title="OK",
+            description="Fine.",
+        )
+        assert finding.category is None
+        assert finding.location is None
+
+
+class TestStructuredFinding:
+    """StructuredFinding dataclass."""
+
+    def test_construction_all_fields(self) -> None:
+        sf = StructuredFinding(
+            id="F001",
+            severity="concern",
+            category="error-handling",
+            summary="Missing error handling",
+            location="src/foo.py:45",
+        )
+        assert sf.id == "F001"
+        assert sf.severity == "concern"
+        assert sf.category == "error-handling"
+        assert sf.summary == "Missing error handling"
+        assert sf.location == "src/foo.py:45"
+
+    def test_location_none(self) -> None:
+        sf = StructuredFinding(
+            id="F002",
+            severity="note",
+            category="naming",
+            summary="Unclear variable",
+        )
+        assert sf.location is None
 
 
 class TestReviewResult:
@@ -164,3 +222,85 @@ class TestReviewResult:
         assert r.has_failures is False
         assert r.concern_count == 0
         assert r.to_dict()["findings"] == []
+
+
+class TestStructuredFindingsProperty:
+    """ReviewResult.structured_findings computed property."""
+
+    @pytest.fixture
+    def result_with_findings(self) -> ReviewResult:
+        return ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Missing error handling",
+                    description="No try/except.",
+                    file_ref="src/app.py:10",
+                    category="error-handling",
+                    location="src/app.py:10",
+                ),
+                ReviewFinding(
+                    severity=Severity.NOTE,
+                    title="Unclear variable name",
+                    description="Variable x is unclear.",
+                    file_ref="src/utils.py:5",
+                ),
+                ReviewFinding(
+                    severity=Severity.FAIL,
+                    title="SQL injection",
+                    description="Unparameterized query.",
+                    category="security",
+                ),
+            ],
+            raw_output="",
+            template_name="code",
+            input_files={},
+        )
+
+    def test_returns_correct_count(self, result_with_findings: ReviewResult) -> None:
+        assert len(result_with_findings.structured_findings) == 3
+
+    def test_auto_assigns_ids(self, result_with_findings: ReviewResult) -> None:
+        ids = [sf.id for sf in result_with_findings.structured_findings]
+        assert ids == ["F001", "F002", "F003"]
+
+    def test_maps_severity_to_lowercase(
+        self, result_with_findings: ReviewResult
+    ) -> None:
+        severities = [sf.severity for sf in result_with_findings.structured_findings]
+        assert severities == ["concern", "note", "fail"]
+
+    def test_defaults_category_to_uncategorized(
+        self, result_with_findings: ReviewResult
+    ) -> None:
+        sf = result_with_findings.structured_findings
+        assert sf[0].category == "error-handling"
+        assert sf[1].category == "uncategorized"
+        assert sf[2].category == "security"
+
+    def test_uses_location_over_file_ref(
+        self, result_with_findings: ReviewResult
+    ) -> None:
+        sf = result_with_findings.structured_findings[0]
+        assert sf.location == "src/app.py:10"
+
+    def test_falls_back_to_file_ref(self, result_with_findings: ReviewResult) -> None:
+        sf = result_with_findings.structured_findings[1]
+        assert sf.location == "src/utils.py:5"
+
+    def test_location_none_when_both_absent(
+        self, result_with_findings: ReviewResult
+    ) -> None:
+        sf = result_with_findings.structured_findings[2]
+        assert sf.location is None
+
+    def test_empty_findings(self) -> None:
+        r = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="",
+            template_name="arch",
+            input_files={},
+        )
+        assert r.structured_findings == []
