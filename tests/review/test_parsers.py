@@ -394,3 +394,166 @@ class TestReviewResultPromptFields:
         assert "system_prompt" not in d
         assert "user_prompt" not in d
         assert "rules_content_used" not in d
+
+
+# ---------------------------------------------------------------------------
+# T4: NOTE severity and category/location extraction
+# ---------------------------------------------------------------------------
+
+
+class TestNoteSeverityParsing:
+    """Test NOTE severity parsed from all finding formats."""
+
+    def test_note_bracketed_heading(self) -> None:
+        text = "## Summary\nPASS\n\n### [NOTE] Informational\nJust a note.\n"
+        result = parse_review_output(text, "code", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.NOTE
+
+    def test_note_unbracketed_heading(self) -> None:
+        text = "## Summary\nPASS\n\n### NOTE Informational\nJust a note.\n"
+        result = parse_review_output(text, "code", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.NOTE
+
+    def test_note_bold_brackets(self) -> None:
+        text = "## Summary\nPASS\n\n**[NOTE]** Informational\nJust a note.\n"
+        result = parse_review_output(text, "code", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.NOTE
+
+    def test_note_bullet(self) -> None:
+        text = "## Summary\nPASS\n\n- [NOTE] Informational\nJust a note.\n"
+        result = parse_review_output(text, "code", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.NOTE
+
+
+class TestCategoryExtraction:
+    """Test category: tag extraction from finding bodies."""
+
+    def test_category_extracted(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Missing error handling\n"
+            "category: error-handling\n"
+            "No try/except around file read.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].category == "error-handling"
+
+    def test_category_different_value(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Unclear naming\n"
+            "category: naming\n"
+            "Variable x is unclear.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].category == "naming"
+
+    def test_no_category_returns_none(self) -> None:
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Something\nJust description.\n"
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].category is None
+
+    def test_category_stripped_from_description(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Missing validation\n"
+            "category: validation\n"
+            "Input not checked.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert "category:" not in result.findings[0].description
+        assert "Input not checked" in result.findings[0].description
+
+    def test_category_case_insensitive(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Title\n"
+            "Category: error-handling\n"
+            "Detail.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].category == "error-handling"
+
+    def test_category_uppercase(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n### [CONCERN] Title\nCATEGORY: naming\nDetail.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].category == "naming"
+
+
+class TestLocationExtraction:
+    """Test location: tag extraction from finding bodies."""
+
+    def test_location_extracted(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "location: src/foo.py:45\n"
+            "Some detail.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].location == "src/foo.py:45"
+
+    def test_location_stripped_from_description(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "location: src/foo.py:45\n"
+            "Some detail.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        assert "location:" not in result.findings[0].description
+
+    def test_no_location_returns_none(self) -> None:
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nSome detail.\n"
+        result = parse_review_output(text, "code", {})
+        assert result.findings[0].location is None
+
+    def test_both_category_and_location(self) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "category: error-handling\n"
+            "location: src/foo.py:45\n"
+            "Detail here.\n"
+        )
+        result = parse_review_output(text, "code", {})
+        f = result.findings[0]
+        assert f.category == "error-handling"
+        assert f.location == "src/foo.py:45"
+
+    def test_file_ref_populates_location(self) -> None:
+        """-> path/to/file.py:123 also populates location when no location: tag."""
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "Some detail.\n"
+            "-> src/handler.py:42\n"
+        )
+        result = parse_review_output(text, "code", {})
+        f = result.findings[0]
+        assert f.file_ref == "src/handler.py:42"
+        assert f.location == "src/handler.py:42"
+
+
+class TestExistingFormatsRegression:
+    """Ensure existing PASS, CONCERN, FAIL formats still work after NOTE addition."""
+
+    @pytest.mark.parametrize(
+        ("sev_str", "expected"),
+        [
+            ("PASS", Severity.PASS),
+            ("CONCERN", Severity.CONCERN),
+            ("FAIL", Severity.FAIL),
+        ],
+    )
+    def test_bracketed_heading(self, sev_str: str, expected: Severity) -> None:
+        text = f"## Summary\nPASS\n\n### [{sev_str}] Title\nDetail.\n"
+        result = parse_review_output(text, "code", {})
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == expected
