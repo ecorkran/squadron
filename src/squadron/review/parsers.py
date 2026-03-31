@@ -23,6 +23,7 @@ _VERDICT_MAP: dict[str, Verdict] = {
 
 _SEVERITY_MAP: dict[str, Severity] = {
     "PASS": Severity.PASS,
+    "NOTE": Severity.NOTE,
     "CONCERN": Severity.CONCERN,
     "FAIL": Severity.FAIL,
 }
@@ -42,18 +43,18 @@ _SUMMARY_RE = re.compile(
 _FINDING_RE = re.compile(
     r"(?:"
     # Heading formats: ### [SEV] Title, ### SEV Title, ### SEV: Title
-    r"###\s+\[?(PASS|CONCERN|FAIL)\]?:?\s+(.+?)"
+    r"###\s+\[?(PASS|NOTE|CONCERN|FAIL)\]?:?\s+(.+?)"
     r"|"
     # Bold bracket format: **[SEV]** Title
-    r"\*\*\[(PASS|CONCERN|FAIL)\]\*\*\s+(.+?)"
+    r"\*\*\[(PASS|NOTE|CONCERN|FAIL)\]\*\*\s+(.+?)"
     r"|"
     # Bullet format: - [SEV] Title
-    r"-\s+\[(PASS|CONCERN|FAIL)\]\s+(.+?)"
+    r"-\s+\[(PASS|NOTE|CONCERN|FAIL)\]\s+(.+?)"
     r")"
     r"(?="
-    r"\n###\s+\[?(?:PASS|CONCERN|FAIL)"
-    r"|\n\*\*\[(?:PASS|CONCERN|FAIL)\]"
-    r"|\n-\s+\[(?:PASS|CONCERN|FAIL)\]"
+    r"\n###\s+\[?(?:PASS|NOTE|CONCERN|FAIL)"
+    r"|\n\*\*\[(?:PASS|NOTE|CONCERN|FAIL)\]"
+    r"|\n-\s+\[(?:PASS|NOTE|CONCERN|FAIL)\]"
     r"|\n##\s+"
     r"|\Z"
     r")",
@@ -62,9 +63,15 @@ _FINDING_RE = re.compile(
 
 # Lenient: scan for lines that contain severity keywords in paragraph context
 _LENIENT_RE = re.compile(
-    r"(?:^|\n)([^\n]*\b(CONCERN|FAIL)\b[^\n]*)\n((?:[^\n]+\n?)*)",
+    r"(?:^|\n)([^\n]*\b(NOTE|CONCERN|FAIL)\b[^\n]*)\n((?:[^\n]+\n?)*)",
     re.IGNORECASE,
 )
+
+# Structured tag patterns for category/location extraction from finding bodies
+_CATEGORY_RE = re.compile(r"^category:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+_LOCATION_RE = re.compile(r"^location:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+# Existing file_ref pattern: -> path/to/file.py:123
+_FILE_REF_RE = re.compile(r"^->\s*(.+)$", re.MULTILINE)
 
 # Debug log path
 _DEBUG_LOG_PATH = Path.home() / ".config" / "squadron" / "logs" / "review-debug.jsonl"
@@ -97,12 +104,39 @@ def _extract_findings(text: str) -> list[ReviewFinding]:
         title = title_raw.strip().split("\n")[0]
         full_block = match.group(0)
         lines = full_block.split("\n")
-        description = "\n".join(lines[1:]).strip()
+        body = "\n".join(lines[1:]).strip()
+
+        # Extract category tag and strip from description
+        category: str | None = None
+        cat_match = _CATEGORY_RE.search(body)
+        if cat_match:
+            category = cat_match.group(1).strip()
+            body = _CATEGORY_RE.sub("", body).strip()
+
+        # Extract location tag and strip from description
+        location: str | None = None
+        loc_match = _LOCATION_RE.search(body)
+        if loc_match:
+            location = loc_match.group(1).strip()
+            body = _LOCATION_RE.sub("", body).strip()
+
+        # Extract file_ref from -> pattern
+        file_ref: str | None = None
+        ref_match = _FILE_REF_RE.search(body)
+        if ref_match:
+            file_ref = ref_match.group(1).strip()
+            # Use file_ref as location fallback
+            if location is None:
+                location = file_ref
+
         findings.append(
             ReviewFinding(
                 severity=severity,
                 title=title,
-                description=description,
+                description=body,
+                file_ref=file_ref,
+                category=category,
+                location=location,
             )
         )
     return findings
@@ -120,6 +154,8 @@ def _lenient_extract_findings(text: str, verdict: Verdict) -> list[ReviewFinding
             severity = Severity.FAIL
         elif "CONCERN" in upper:
             severity = Severity.CONCERN
+        elif "NOTE" in upper:
+            severity = Severity.NOTE
         else:
             continue
         findings.append(
