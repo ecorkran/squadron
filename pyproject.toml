@@ -1,6 +1,6 @@
 [project]
 name = "squadron-ai"
-version = "0.2.17"
+version = "0.2.18"
 description = "Multi-agent squadron framework"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -65,7 +65,6 @@ packages = ["src/squadron"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "commands" = "squadron/commands"
-"src/squadron/data" = "squadron/data"
 
 [tool.ruff]
 line-length = 88
