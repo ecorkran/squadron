@@ -36,6 +36,7 @@ jobs:
       - run: uv sync
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
+        continue-on-error: true
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
