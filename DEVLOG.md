@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260330
 
+**Slice 143: Structured Review Findings — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/143-tasks.structured-review-findings.md`. 10 tasks (T1–T10): models (StructuredFinding + NOTE severity), parser extensions (category/location extraction), frontmatter formatter, JSON serialization, prompt enhancement, full verification. Test-with pattern throughout. No blockers.
+
 **Slice 143: Structured Review Findings — Design Complete (Phase 4)**
 Created `project-documents/user/slices/143-slice.structured-review-findings.md`. Extends review output with machine-readable structured findings in YAML frontmatter. Adds `StructuredFinding` dataclass (id, severity, category, summary, location), `NOTE` severity level, parser extensions for category extraction, and prompt enhancement for all review templates. Single-file format: frontmatter is the programmatic index, prose body unchanged. Absorbs former slice 123 scope. Designed for slice 160 cross-iteration identity matching via (category, location) fingerprint.
 
