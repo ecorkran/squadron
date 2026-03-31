@@ -79,8 +79,20 @@ class ReviewResult:
                     "title": f.title,
                     "description": f.description,
                     "file_ref": f.file_ref,
+                    "category": f.category,
+                    "location": f.location,
                 }
                 for f in self.findings
+            ],
+            "structured_findings": [
+                {
+                    "id": sf.id,
+                    "severity": sf.severity,
+                    "category": sf.category,
+                    "summary": sf.summary,
+                    "location": sf.location,
+                }
+                for sf in self.structured_findings
             ],
             "template_name": self.template_name,
             "input_files": self.input_files,

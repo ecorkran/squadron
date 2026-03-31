@@ -211,6 +211,71 @@ class TestReviewResult:
         assert "timestamp" in d
         assert isinstance(d["input_files"], dict)
 
+    def test_to_dict_findings_include_category_location(self) -> None:
+        r = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Test",
+                    description="Desc.",
+                    category="naming",
+                    location="src/x.py:1",
+                ),
+            ],
+            raw_output="",
+            template_name="code",
+            input_files={},
+        )
+        d = r.to_dict()
+        assert d["findings"][0]["category"] == "naming"
+        assert d["findings"][0]["location"] == "src/x.py:1"
+
+    def test_to_dict_has_structured_findings(self) -> None:
+        r = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Missing validation",
+                    description="No check.",
+                    category="validation",
+                    location="src/api.py:20",
+                ),
+                ReviewFinding(
+                    severity=Severity.NOTE,
+                    title="Naming",
+                    description="Unclear.",
+                ),
+            ],
+            raw_output="",
+            template_name="code",
+            input_files={},
+        )
+        d = r.to_dict()
+        assert "structured_findings" in d
+        sf = d["structured_findings"]
+        assert len(sf) == 2
+        assert sf[0]["id"] == "F001"
+        assert sf[0]["severity"] == "concern"
+        assert sf[0]["category"] == "validation"
+        assert sf[0]["summary"] == "Missing validation"
+        assert sf[0]["location"] == "src/api.py:20"
+        assert sf[1]["id"] == "F002"
+        assert sf[1]["category"] == "uncategorized"
+        assert sf[1]["location"] is None
+
+    def test_to_dict_empty_structured_findings(self) -> None:
+        r = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="",
+            template_name="arch",
+            input_files={},
+        )
+        d = r.to_dict()
+        assert d["structured_findings"] == []
+
     def test_empty_findings(self) -> None:
         r = ReviewResult(
             verdict=Verdict.PASS,
