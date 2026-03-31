@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260331
 
+**Slice 144: Utility Actions — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/144-tasks.utility-actions.md`. 8 tasks (T1–T8): CfOpAction implementation + tests, CommitAction implementation + tests, DevlogAction implementation + tests, registry integration verification, full verification and closeout. Test-with pattern throughout. No blockers.
+
 **Slice 144: Utility Actions — Design Complete (Phase 4)**
 Created `project-documents/user/slices/144-slice.utility-actions.md`. Three action implementations: CfOpAction (set_phase, build_context, summarize via ContextForgeClient), CommitAction (git commit with semantic messages, no-op on clean tree), DevlogAction (structured DEVLOG entries auto-generated from pipeline state or explicit content). Each action auto-registers at import time. Mock I/O boundaries for testing. Unblocks slice 147 (step types).
 
