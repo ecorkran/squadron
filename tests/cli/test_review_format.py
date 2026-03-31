@@ -22,9 +22,13 @@ SLICE_INFO: SliceInfo = {
     "index": 143,
     "name": "Structured Review Findings",
     "slice_name": "structured-review-findings",
-    "design_file": "project-documents/user/slices/143-slice.structured-review-findings.md",
+    "design_file": (
+        "project-documents/user/slices/143-slice.structured-review-findings.md"
+    ),
     "task_files": ["143-tasks.structured-review-findings.md"],
-    "arch_file": "project-documents/user/architecture/140-arch.pipeline-foundation.md",
+    "arch_file": (
+        "project-documents/user/architecture/140-arch.pipeline-foundation.md"
+    ),
 }
 
 
@@ -93,7 +97,7 @@ class TestFrontmatterFindings:
         md = _format_review_markdown(result, "code", SLICE_INFO)
         # Second finding (F002) has no location — check it's not emitted
         lines = md.split("\n")
-        f002_idx = next(i for i, l in enumerate(lines) if "id: F002" in l)
+        f002_idx = next(i for i, line in enumerate(lines) if "id: F002" in line)
         # Lines between F002 and the closing --- should not have location
         f002_block = []
         for line in lines[f002_idx:]:
@@ -102,7 +106,7 @@ class TestFrontmatterFindings:
             if line.startswith("  - id:") and "F002" not in line:
                 break
             f002_block.append(line)
-        assert not any("location:" in l for l in f002_block)
+        assert not any("location:" in entry for entry in f002_block)
 
     def test_summary_with_double_quotes_escaped(self) -> None:
         result = ReviewResult(
