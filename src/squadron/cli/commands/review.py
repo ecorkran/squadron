@@ -54,6 +54,7 @@ _VERDICT_COLORS: dict[Verdict, str] = {
 
 _SEVERITY_COLORS: dict[Severity, str] = {
     Severity.PASS: "bright_green",
+    Severity.NOTE: "cyan",
     Severity.CONCERN: "yellow",
     Severity.FAIL: "red",
 }

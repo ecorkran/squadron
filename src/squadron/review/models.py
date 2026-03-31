@@ -20,12 +20,24 @@ class Severity(StrEnum):
     """Severity level for an individual finding."""
 
     PASS = "PASS"
+    NOTE = "NOTE"
     CONCERN = "CONCERN"
     FAIL = "FAIL"
 
 
 class TemplateValidationError(Exception):
     """Raised when a template YAML file fails validation."""
+
+
+@dataclass
+class StructuredFinding:
+    """Machine-readable finding for frontmatter and pipeline consumption."""
+
+    id: str
+    severity: str
+    category: str
+    summary: str
+    location: str | None = None
 
 
 @dataclass
@@ -36,6 +48,8 @@ class ReviewFinding:
     title: str
     description: str
     file_ref: str | None = None
+    category: str | None = None
+    location: str | None = None
 
 
 @dataclass
@@ -73,6 +87,22 @@ class ReviewResult:
             "timestamp": self.timestamp.isoformat(),
             "model": self.model,
         }
+
+    @property
+    def structured_findings(self) -> list[StructuredFinding]:
+        """Derive structured findings from parsed findings list."""
+        result: list[StructuredFinding] = []
+        for i, f in enumerate(self.findings, 1):
+            result.append(
+                StructuredFinding(
+                    id=f"F{i:03d}",
+                    severity=f.severity.value.lower(),
+                    category=f.category or "uncategorized",
+                    summary=f.title,
+                    location=f.location or f.file_ref,
+                )
+            )
+        return result
 
     @property
     def has_failures(self) -> bool:
