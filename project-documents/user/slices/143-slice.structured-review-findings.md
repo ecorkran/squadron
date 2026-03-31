@@ -11,7 +11,7 @@ interfaces:
   - 160-pipeline-intelligence (cross-iteration matching)
 dateCreated: 20260330
 dateUpdated: 20260330
-status: not_started
+status: complete
 ---
 
 # Slice 143: Structured Review Findings
@@ -311,33 +311,30 @@ Cross-iteration identity matching uses `(category, location)` as the finding fin
 ## Verification Walkthrough
 
 ```bash
-# 1. Run a code review and check the saved file
-sq review code --diff main -v
-# Expected: review file saved to project-documents/user/reviews/
-# Open the file and verify:
-#   - YAML frontmatter contains findings: array
-#   - Each finding has id, severity, category, summary
-#   - Prose body is unchanged
+# 1. Verify StructuredFinding is importable
+uv run python -c "from squadron.review.models import StructuredFinding; print(StructuredFinding.__dataclass_fields__.keys())"
+# Actual: dict_keys(['id', 'severity', 'category', 'summary', 'location'])
 
-# 2. Run a review with JSON output
-sq review code --diff main --output json
-# Expected: JSON output includes "structured_findings" array
+# 2. Verify NOTE severity
+uv run python -c "from squadron.review.models import Severity; print(list(Severity))"
+# Actual: [<Severity.PASS: 'PASS'>, <Severity.NOTE: 'NOTE'>, <Severity.CONCERN: 'CONCERN'>, <Severity.FAIL: 'FAIL'>]
 
-# 3. Verify StructuredFinding is importable
-python -c "from squadron.review.models import StructuredFinding; print(StructuredFinding.__dataclass_fields__.keys())"
-# Expected: dict_keys(['id', 'severity', 'category', 'summary', 'location'])
+# 3. Run all tests
+uv run pytest
+# Actual: 761 passed
 
-# 4. Verify NOTE severity
-python -c "from squadron.review.models import Severity; print(Severity.NOTE)"
-# Expected: NOTE
-
-# 5. Run tests
-uv run pytest tests/review/ -v
-# Expected: all tests pass including new structured finding tests
-
-# 6. Type check
+# 4. Type check
 uv run pyright
-# Expected: 0 errors
+# Actual: 0 errors, 0 warnings, 0 informations
+
+# 5. Lint and format
+uv run ruff check && uv run ruff format --check
+# Actual: All checks passed! 185 files already formatted
+
+# 6. Run a code review to verify end-to-end (manual)
+# sq review code --diff main -v
+# Expected: review file in project-documents/user/reviews/ with findings: array in frontmatter
+# Caveat: requires active API credentials; automated tests cover formatter output
 ```
 
 ## Risk Assessment

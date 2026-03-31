@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260330
 
+**Slice 143: Structured Review Findings — Implementation Complete (Phase 6)**
+Implemented all 10 tasks (T1–T10). Added `StructuredFinding` dataclass and `NOTE` severity to `review/models.py`. Extended parser with NOTE support, `category:` and `location:` tag extraction from finding blocks. Extended frontmatter formatter to emit `findings:` YAML array with structured entries. Extended `to_dict()` with `structured_findings` and `category`/`location` on findings. Injected structured output instructions into all review template system prompts via `review_client.py`. 761 tests pass (0 pre-existing failures), pyright 0 errors, ruff clean. Slice 143 marked complete.
+
 **Slice 143: Structured Review Findings — Task Breakdown Complete (Phase 5)**
 Created `project-documents/user/tasks/143-tasks.structured-review-findings.md`. 10 tasks (T1–T10): models (StructuredFinding + NOTE severity), parser extensions (category/location extraction), frontmatter formatter, JSON serialization, prompt enhancement, full verification. Test-with pattern throughout. No blockers.
 

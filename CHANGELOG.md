@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Structured review findings in YAML frontmatter (slice 143)
+  - `StructuredFinding` dataclass in `review/models.py` — machine-readable finding with `id`, `severity`, `category`, `summary`, `location`
+  - `NOTE` severity level added to `Severity` enum (between PASS and CONCERN)
+  - `ReviewResult.structured_findings` computed property derives structured findings from parsed findings
+  - Parser extracts `category:` and `location:` tags from finding blocks; strips tags from description
+  - Review frontmatter now includes `findings:` array with structured finding entries
+  - JSON output (`to_dict()`) includes `structured_findings` array and `category`/`location` on findings
+  - Structured output instructions injected into all review template system prompts
 - `src/squadron/pipeline/` package — foundational scaffolding for the pipeline system (slice 142)
   - `pipeline/models.py`: `ActionContext`, `ActionResult`, `PipelineDefinition`, `StepConfig`, `ValidationError` dataclasses
   - `pipeline/actions/`: `Action` protocol (`@runtime_checkable`), `ActionType` StrEnum, action registry (`register_action`, `get_action`, `list_actions`)
