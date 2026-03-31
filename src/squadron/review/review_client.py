@@ -32,6 +32,29 @@ _PROVIDER_MODULES: dict[str, str] = {
 }
 
 
+_STRUCTURED_OUTPUT_INSTRUCTIONS = """
+
+## Output Structure Requirements
+
+For each finding, include a category tag on the line immediately after the heading:
+
+### [CONCERN] Finding title
+category: error-handling
+
+You may also include a location tag:
+
+### [CONCERN] Finding title
+category: error-handling
+location: src/module.py:45
+
+Valid severity levels: PASS, NOTE, CONCERN, FAIL
+
+Use NOTE for informational observations that don't require action.
+Use CONCERN for issues that should be addressed but don't block progress.
+Use FAIL for issues that must be fixed before proceeding.
+"""
+
+
 def _ensure_provider_loaded(provider_type: str) -> None:
     """Import the provider module to trigger auto-registration if needed."""
     module_name = _PROVIDER_MODULES.get(provider_type, provider_type)
@@ -67,6 +90,7 @@ async def run_review_with_profile(
     # Build prompts
     prompt = template.build_prompt(inputs)
     system_prompt = template.system_prompt
+    system_prompt += _STRUCTURED_OUTPUT_INSTRUCTIONS
     if rules_content:
         system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
 
