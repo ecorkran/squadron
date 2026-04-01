@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260331
 
+**Slice 146: Review and Checkpoint Actions — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/146-tasks.review-and-checkpoint-actions.md`. 8 tasks (T1–T8): review persistence extraction + tests, CheckpointAction implementation + tests, ReviewAction implementation + tests, registry integration verification, full verification and closeout. Test-with pattern throughout. No blockers.
+
 **Slice 146: Review and Checkpoint Actions — Design Complete (Phase 4)**
 Created `project-documents/user/slices/146-slice.review-and-checkpoint-actions.md`. Two actions: ReviewAction delegates to `run_review_with_profile()`, populates `ActionResult.verdict` and `ActionResult.findings` from structured findings (slice 143), persists review files. CheckpointAction evaluates trigger (always, on-concerns, on-fail, never) against prior review verdict, returns paused/skipped result for executor interpretation. Includes persistence extraction from CLI to shared `review/persistence.py`. Dependencies: [143, 145]. Unblocks slices 147, 149, 150.
 
