@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Agent shutdown guaranteed via `try/finally` block
   - Auto-registers at module import time
 
+### Fixed
+- Review files now saved on FAIL verdict; exit-on-fail moved after file write in all review commands
+- Terminal finding display: removed excess indentation on headings and descriptions, added blank-line separators
+
 ### Changed
 - Extracted `_ensure_provider_loaded` from `review_client.py` to shared `providers/loader.py` as public `ensure_provider_loaded()` (slice 145)
 

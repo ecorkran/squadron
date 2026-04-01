@@ -108,15 +108,19 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
 
     for finding in result.findings:
         sev_color = _SEVERITY_COLORS.get(finding.severity, "dim")
+        console.print()  # blank line before each finding
         console.print(
-            f"  [{sev_color}][{finding.severity.value}][/{sev_color}] "
+            f"[{sev_color}][{finding.severity.value}][/{sev_color}] "
             f"[bold white]{finding.title}[/bold white]"
         )
+        if verbosity >= 1 and finding.category:
+            console.print(f"  category: {finding.category}", style="dim")
+            console.print()  # blank line after category
         if verbosity >= 1 and finding.description:
             for line in finding.description.split("\n"):
-                console.print(f"    {line}")
+                console.print(line)
         if verbosity >= 1 and finding.file_ref:
-            console.print(f"    -> {finding.file_ref}", style="cyan")
+            console.print(f"  -> {finding.file_ref}", style="cyan")
 
 
 def _display_json(result: ReviewResult) -> None:
@@ -531,10 +535,6 @@ def _run_review_command(
 
     display_result(result, output, output_path, verbosity)
 
-    # Exit with non-zero if review has failures
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
-
     return result
 
 
@@ -638,6 +638,9 @@ def review_slice(
         )
         rprint(f"[green]Saved review to {path}[/green]")
 
+    if result.verdict == Verdict.FAIL:
+        raise typer.Exit(code=2)
+
 
 @review_app.command("arch")
 def review_arch(
@@ -718,6 +721,9 @@ def review_arch(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
         )
         rprint(f"[green]Saved review to {path}[/green]")
+
+    if result.verdict == Verdict.FAIL:
+        raise typer.Exit(code=2)
 
 
 @review_app.command("tasks")
@@ -800,6 +806,9 @@ def review_tasks(
             result, "tasks", slice_info, as_json=use_json, input_file=input_file
         )
         rprint(f"[green]Saved review to {path}[/green]")
+
+    if result.verdict == Verdict.FAIL:
+        raise typer.Exit(code=2)
 
 
 @review_app.command("code")
@@ -913,6 +922,9 @@ def review_code(
     if slice_info and not no_save:
         path = _save_review_file(result, "code", slice_info, as_json=use_json)
         rprint(f"[green]Saved review to {path}[/green]")
+
+    if result.verdict == Verdict.FAIL:
+        raise typer.Exit(code=2)
 
 
 @review_app.command("list")
