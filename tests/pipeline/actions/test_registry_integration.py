@@ -1,0 +1,44 @@
+"""Integration tests — verify all three utility actions register and coexist."""
+
+from __future__ import annotations
+
+import squadron.pipeline.actions.cf_op  # noqa: F401
+import squadron.pipeline.actions.commit  # noqa: F401
+import squadron.pipeline.actions.devlog  # noqa: F401
+from squadron.pipeline.actions import get_action, list_actions
+from squadron.pipeline.actions.cf_op import CfOpAction
+from squadron.pipeline.actions.commit import CommitAction
+from squadron.pipeline.actions.devlog import DevlogAction
+from squadron.pipeline.actions.protocol import Action
+
+
+def test_list_actions_includes_all_three() -> None:
+    actions = list_actions()
+    assert "cf-op" in actions
+    assert "commit" in actions
+    assert "devlog" in actions
+
+
+def test_get_action_cf_op() -> None:
+    action = get_action("cf-op")
+    assert isinstance(action, CfOpAction)
+    assert isinstance(action, Action)
+
+
+def test_get_action_commit() -> None:
+    action = get_action("commit")
+    assert isinstance(action, CommitAction)
+    assert isinstance(action, Action)
+
+
+def test_get_action_devlog() -> None:
+    action = get_action("devlog")
+    assert isinstance(action, DevlogAction)
+    assert isinstance(action, Action)
+
+
+def test_no_import_errors() -> None:
+    """Importing all action modules should not raise."""
+
+    # If we got here, no circular dependency or import error
+    assert True
