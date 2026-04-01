@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260331
 
+**Slice 145: Dispatch Action — Design Complete (Phase 4)**
+Created `project-documents/user/slices/145-slice.dispatch-action.md`. Dispatch action resolves model alias via 5-level cascade (`ModelResolver`), creates one-shot agent through provider registry, sends prompt via `handle_message()`, captures response and token metadata. Follows review system's proven dispatch pattern. Includes provider loader extraction from `review_client.py` to shared location. Dependencies: [142, 102]. Unblocks slices 146, 147.
+
 **Slice 144: Utility Actions — Implementation Complete (Phase 6)**
 Implemented all 8 tasks (T1–T8). `CfOpAction` delegates to `cf_client._run()` with `pyright: ignore[reportPrivateUsage]` per project convention. `CommitAction` uses `subprocess.run()` with real `git init` test repos via `tmp_path`. `DevlogAction` handles DEVLOG insertion with date header deduplication and auto-generation from `prior_outputs`. All three actions satisfy `Action` protocol and auto-register at import time. 39 new tests, 800 total pass, pyright 0 errors, ruff clean. Slice 144 marked complete.
 
