@@ -7,7 +7,7 @@ dependencies: [142]
 projectState: Pipeline scaffolding complete (slice 142). Action protocol, registries, and stub modules in place. Utility actions operational (slice 144). Agent registry and provider system from slices 102/128.
 dateCreated: 20260331
 dateUpdated: 20260331
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -25,18 +25,18 @@ status: not_started
 
 ### T1 — Extract Provider Loader to Shared Module
 
-- [ ] **Extract `_ensure_provider_loaded` from `src/squadron/review/review_client.py` to `src/squadron/providers/loader.py`**
-  - [ ] Create `src/squadron/providers/loader.py` with:
+- [x] **Extract `_ensure_provider_loaded` from `src/squadron/review/review_client.py` to `src/squadron/providers/loader.py`**
+  - [x] Create `src/squadron/providers/loader.py` with:
     - `_PROVIDER_MODULES` dict (moved from `review_client.py`)
     - `ensure_provider_loaded(provider_type: str) -> None` (public, renamed from private)
     - Same logic: `importlib.import_module(f"squadron.providers.{module_name}")`, swallow `ImportError`
-  - [ ] Update `src/squadron/review/review_client.py`:
+  - [x] Update `src/squadron/review/review_client.py`:
     - Remove `_PROVIDER_MODULES` dict and `_ensure_provider_loaded` function
     - Import `ensure_provider_loaded` from `squadron.providers.loader`
     - Replace `_ensure_provider_loaded(...)` call with `ensure_provider_loaded(...)`
-  - [ ] Ensure `from __future__ import annotations` is present in new file
-  - [ ] Verify all existing tests pass (`python -m pytest --tb=short -q`)
-  - [ ] pyright clean on both `providers/loader.py` and `review/review_client.py`
+  - [x] Ensure `from __future__ import annotations` is present in new file
+  - [x] Verify all existing tests pass (`python -m pytest --tb=short -q`)
+  - [x] pyright clean on both `providers/loader.py` and `review/review_client.py`
 
 **Commit**: `refactor: extract provider loader to shared module`
 
@@ -44,13 +44,13 @@ status: not_started
 
 ### T2 — Provider Loader: Tests
 
-- [ ] **Create tests at `tests/providers/test_loader.py`**
-  - [ ] Create `tests/providers/__init__.py` if it doesn't exist
-  - [ ] Test `ensure_provider_loaded` with a known provider type (mock `importlib.import_module`)
-  - [ ] Test `ensure_provider_loaded` with unknown provider type falls back to type as module name
-  - [ ] Test `ensure_provider_loaded` swallows `ImportError` silently
-  - [ ] Test `_PROVIDER_MODULES` contains expected entries (`openai`, `sdk`, `openai-oauth`)
-  - [ ] All tests pass
+- [x] **Create tests at `tests/providers/test_loader.py`**
+  - [x] Create `tests/providers/__init__.py` if it doesn't exist
+  - [x] Test `ensure_provider_loaded` with a known provider type (mock `importlib.import_module`)
+  - [x] Test `ensure_provider_loaded` with unknown provider type falls back to type as module name
+  - [x] Test `ensure_provider_loaded` swallows `ImportError` silently
+  - [x] Test `_PROVIDER_MODULES` contains expected entries (`openai`, `sdk`, `openai-oauth`)
+  - [x] All tests pass
 
 **Commit**: `test: add provider loader unit tests`
 
@@ -58,8 +58,8 @@ status: not_started
 
 ### T3 — DispatchAction: Implementation
 
-- [ ] **Implement `DispatchAction` in `src/squadron/pipeline/actions/dispatch.py`**
-  - [ ] Implement `DispatchAction` class satisfying the `Action` protocol:
+- [x] **Implement `DispatchAction` in `src/squadron/pipeline/actions/dispatch.py`**
+  - [x] Implement `DispatchAction` class satisfying the `Action` protocol:
     - `action_type` property returns `ActionType.DISPATCH` value (`"dispatch"`)
     - `validate(config)` checks:
       - `"prompt"` key present in config
@@ -76,13 +76,13 @@ status: not_started
       - **Token metadata**: extract `prompt_tokens`, `completion_tokens`, `total_tokens` from response metadata when present
       - **Shutdown**: always shut down agent in `finally` block via `registry.shutdown_agent(config.name)`
       - **Result**: return `ActionResult(success=True, action_type=self.action_type, outputs={"response": text}, metadata={"model": ..., "profile": ..., **token_metadata})`
-  - [ ] Error handling — catch all exceptions, return `ActionResult(success=False, action_type=self.action_type, outputs={}, error=str(exc))`:
+  - [x] Error handling — catch all exceptions, return `ActionResult(success=False, action_type=self.action_type, outputs={}, error=str(exc))`:
     - `ModelResolutionError` / `ModelPoolNotImplemented` from resolver
     - `KeyError` from `get_profile()` or `get_provider()`
     - Any exception from `agent.handle_message()`
     - Agent shutdown must still execute (use `try/finally`)
-  - [ ] Add module-level auto-registration: `register_action(ActionType.DISPATCH, DispatchAction())`
-  - [ ] Ensure `from __future__ import annotations` is present
+  - [x] Add module-level auto-registration: `register_action(ActionType.DISPATCH, DispatchAction())`
+  - [x] Ensure `from __future__ import annotations` is present
 
 **Commit**: `feat: implement DispatchAction for pipeline model dispatch`
 
@@ -90,26 +90,26 @@ status: not_started
 
 ### T4 — DispatchAction: Tests
 
-- [ ] **Create tests at `tests/pipeline/actions/test_dispatch.py`**
-  - [ ] Test `action_type` property returns `"dispatch"`
-  - [ ] Test `isinstance(DispatchAction(), Action)` (protocol compliance)
-  - [ ] Test `validate()` — missing `prompt` key returns error with `field="prompt"`
-  - [ ] Test `validate()` — config with `prompt` present returns empty list
-  - [ ] Test `execute()` — happy path: prompt dispatched, response captured in `outputs["response"]`
-  - [ ] Test `execute()` — model resolution: `resolver.resolve()` called with `action_model` and `step_model` from params
-  - [ ] Test `execute()` — profile from alias: when resolver returns `(model_id, "openrouter")`, profile is `"openrouter"`
-  - [ ] Test `execute()` — profile override: explicit `profile` in params takes precedence over alias-derived profile
-  - [ ] Test `execute()` — default profile: when no alias profile and no explicit profile, defaults to `ProfileName.SDK`
-  - [ ] Test `execute()` — system prompt passed as `instructions` in AgentConfig
-  - [ ] Test `execute()` — SDK dedup: messages with `sdk_type="result"` are filtered out
-  - [ ] Test `execute()` — token metadata: `prompt_tokens`/`completion_tokens` extracted from response metadata into `ActionResult.metadata`
-  - [ ] Test `execute()` — token metadata absent: result metadata still has `model` and `profile` but no token keys
-  - [ ] Test `execute()` — agent shutdown always called (even on error)
-  - [ ] Test `execute()` — `ModelResolutionError` returns `success=False` with error message
-  - [ ] Test `execute()` — `KeyError` from `get_profile()` returns `success=False` with error message
-  - [ ] Test `execute()` — agent `handle_message()` exception returns `success=False`, agent still shut down
-  - [ ] Mock boundaries: `ModelResolver`, `get_registry()`, `get_profile()`, `ensure_provider_loaded()`, `Agent.handle_message()`, `Agent.shutdown()`
-  - [ ] All tests pass, pyright clean on the action module
+- [x] **Create tests at `tests/pipeline/actions/test_dispatch.py`**
+  - [x] Test `action_type` property returns `"dispatch"`
+  - [x] Test `isinstance(DispatchAction(), Action)` (protocol compliance)
+  - [x] Test `validate()` — missing `prompt` key returns error with `field="prompt"`
+  - [x] Test `validate()` — config with `prompt` present returns empty list
+  - [x] Test `execute()` — happy path: prompt dispatched, response captured in `outputs["response"]`
+  - [x] Test `execute()` — model resolution: `resolver.resolve()` called with `action_model` and `step_model` from params
+  - [x] Test `execute()` — profile from alias: when resolver returns `(model_id, "openrouter")`, profile is `"openrouter"`
+  - [x] Test `execute()` — profile override: explicit `profile` in params takes precedence over alias-derived profile
+  - [x] Test `execute()` — default profile: when no alias profile and no explicit profile, defaults to `ProfileName.SDK`
+  - [x] Test `execute()` — system prompt passed as `instructions` in AgentConfig
+  - [x] Test `execute()` — SDK dedup: messages with `sdk_type="result"` are filtered out
+  - [x] Test `execute()` — token metadata: `prompt_tokens`/`completion_tokens` extracted from response metadata into `ActionResult.metadata`
+  - [x] Test `execute()` — token metadata absent: result metadata still has `model` and `profile` but no token keys
+  - [x] Test `execute()` — agent shutdown always called (even on error)
+  - [x] Test `execute()` — `ModelResolutionError` returns `success=False` with error message
+  - [x] Test `execute()` — `KeyError` from `get_profile()` returns `success=False` with error message
+  - [x] Test `execute()` — agent `handle_message()` exception returns `success=False`, agent still shut down
+  - [x] Mock boundaries: `ModelResolver`, `get_registry()`, `get_profile()`, `ensure_provider_loaded()`, `Agent.handle_message()`, `Agent.shutdown()`
+  - [x] All tests pass, pyright clean on the action module
 
 **Commit**: `test: add DispatchAction unit tests`
 
@@ -117,13 +117,13 @@ status: not_started
 
 ### T5 — Action Registration and Integration Verification
 
-- [ ] **Verify dispatch registers correctly alongside existing actions**
-  - [ ] Update `tests/pipeline/actions/test_registry_integration.py`:
+- [x] **Verify dispatch registers correctly alongside existing actions**
+  - [x] Update `tests/pipeline/actions/test_registry_integration.py`:
     - Add import for `squadron.pipeline.actions.dispatch`
     - Add test: `"dispatch"` appears in `list_actions()`
     - Add test: `get_action("dispatch")` returns a `DispatchAction` instance
-  - [ ] Confirm no import errors or circular dependencies
-  - [ ] All existing tests still pass (`python -m pytest --tb=short -q`)
+  - [x] Confirm no import errors or circular dependencies
+  - [x] All existing tests still pass (`python -m pytest --tb=short -q`)
 
 **Commit**: `test: add dispatch to action registry integration tests`
 
@@ -131,19 +131,19 @@ status: not_started
 
 ### T6 — Full Verification and Closeout
 
-- [ ] **Run full verification suite**
-  - [ ] `python -m pytest --tb=short -q` — all tests pass
-  - [ ] `pyright src/squadron/pipeline/actions/dispatch.py` — 0 errors
-  - [ ] `pyright src/squadron/providers/loader.py` — 0 errors
-  - [ ] `ruff check src/squadron/pipeline/actions/dispatch.py` — 0 warnings
-  - [ ] `ruff check src/squadron/providers/loader.py` — 0 warnings
-  - [ ] `ruff format --check src/squadron/pipeline/actions/ src/squadron/providers/loader.py` — no formatting issues
-  - [ ] Run the verification walkthrough from the slice design document
-  - [ ] Update slice design verification walkthrough with actual commands and output
-  - [ ] Check off success criteria in slice design
-  - [ ] Mark slice 145 as complete in slice design frontmatter
-  - [ ] Mark slice 145 as complete in slice plan (`140-slices.pipeline-foundation.md`)
-  - [ ] Update CHANGELOG.md with slice 145 entries
-  - [ ] Update DEVLOG.md with implementation completion entry
+- [x] **Run full verification suite**
+  - [x] `python -m pytest --tb=short -q` — all tests pass
+  - [x] `pyright src/squadron/pipeline/actions/dispatch.py` — 0 errors
+  - [x] `pyright src/squadron/providers/loader.py` — 0 errors
+  - [x] `ruff check src/squadron/pipeline/actions/dispatch.py` — 0 warnings
+  - [x] `ruff check src/squadron/providers/loader.py` — 0 warnings
+  - [x] `ruff format --check src/squadron/pipeline/actions/ src/squadron/providers/loader.py` — no formatting issues
+  - [x] Run the verification walkthrough from the slice design document
+  - [x] Update slice design verification walkthrough with actual commands and output
+  - [x] Check off success criteria in slice design
+  - [x] Mark slice 145 as complete in slice design frontmatter
+  - [x] Mark slice 145 as complete in slice plan (`140-slices.pipeline-foundation.md`)
+  - [x] Update CHANGELOG.md with slice 145 entries
+  - [x] Update DEVLOG.md with implementation completion entry
 
 **Commit**: `docs: mark slice 145 dispatch action complete`

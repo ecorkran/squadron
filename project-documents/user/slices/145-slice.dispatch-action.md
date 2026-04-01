@@ -7,7 +7,7 @@ dependencies: [142]
 interfaces: [146, 147, 149]
 dateCreated: 20260331
 dateUpdated: 20260331
-status: not_started
+status: complete
 ---
 
 # Slice Design: Dispatch Action (145)
@@ -292,30 +292,30 @@ This is a minor refactor of an existing private function — not a new feature.
 
 ### Functional Requirements
 
-- [ ] `DispatchAction` satisfies the `Action` protocol (`isinstance` check passes)
-- [ ] `action_type` returns `"dispatch"`
-- [ ] `validate()` returns error when `prompt` is missing from config
-- [ ] `validate()` returns empty list for valid config
-- [ ] `execute()` resolves model through `context.resolver.resolve()` with action-level and step-level params
-- [ ] `execute()` resolves profile from alias result, with explicit `profile` param override
-- [ ] `execute()` creates agent via registry, sends prompt, collects response
-- [ ] `execute()` deduplicates SDK `result` messages
-- [ ] `execute()` captures token metadata when available
-- [ ] `execute()` always shuts down agent (even on failure)
-- [ ] `execute()` returns `success=False` with error on any failure (never raises)
-- [ ] Auto-registers at module import time
+- [x] `DispatchAction` satisfies the `Action` protocol (`isinstance` check passes)
+- [x] `action_type` returns `"dispatch"`
+- [x] `validate()` returns error when `prompt` is missing from config
+- [x] `validate()` returns empty list for valid config
+- [x] `execute()` resolves model through `context.resolver.resolve()` with action-level and step-level params
+- [x] `execute()` resolves profile from alias result, with explicit `profile` param override
+- [x] `execute()` creates agent via registry, sends prompt, collects response
+- [x] `execute()` deduplicates SDK `result` messages
+- [x] `execute()` captures token metadata when available
+- [x] `execute()` always shuts down agent (even on failure)
+- [x] `execute()` returns `success=False` with error on any failure (never raises)
+- [x] Auto-registers at module import time
 
 ### Technical Requirements
 
-- [ ] pyright clean (0 errors) on `src/squadron/pipeline/actions/dispatch.py`
-- [ ] ruff clean on the module
-- [ ] All existing tests continue to pass
-- [ ] New tests mock all external boundaries (no real API calls)
-- [ ] `_ensure_provider_loaded` extracted to shared location
+- [x] pyright clean (0 errors) on `src/squadron/pipeline/actions/dispatch.py`
+- [x] ruff clean on the module
+- [x] All existing tests continue to pass
+- [x] New tests mock all external boundaries (no real API calls)
+- [x] `_ensure_provider_loaded` extracted to shared location
 
 ### Verification Walkthrough
 
-*Draft — will be refined after implementation.*
+*Verified 2026-03-31. All steps pass.*
 
 **1. Protocol compliance:**
 ```bash
@@ -326,7 +326,8 @@ a = DispatchAction()
 print('protocol:', isinstance(a, Action))
 print('type:', a.action_type)
 "
-# Expected: protocol: True, type: dispatch
+# Output: protocol: True
+# Output: type: dispatch
 ```
 
 **2. Registration:**
@@ -336,7 +337,7 @@ import squadron.pipeline.actions.dispatch
 from squadron.pipeline.actions import list_actions
 print('dispatch' in list_actions())
 "
-# Expected: True
+# Output: True
 ```
 
 **3. Validation:**
@@ -347,15 +348,16 @@ a = DispatchAction()
 print('missing prompt:', a.validate({}))
 print('valid:', a.validate({'prompt': 'hello'}))
 "
-# Expected: missing prompt: [ValidationError(...)], valid: []
+# Output: missing prompt: [ValidationError(field='prompt', message="'prompt' is required for dispatch action", action_type=<ActionType.DISPATCH: 'dispatch'>)]
+# Output: valid: []
 ```
 
 **4. Full test suite:**
 ```bash
-python -m pytest tests/pipeline/actions/test_dispatch.py -v
-python -m pytest --tb=short -q  # all tests pass
-pyright src/squadron/pipeline/actions/dispatch.py
-ruff check src/squadron/pipeline/actions/dispatch.py
+python -m pytest tests/pipeline/actions/test_dispatch.py -v  # 17 passed
+python -m pytest --tb=short -q  # 827 passed
+pyright src/squadron/pipeline/actions/dispatch.py  # 0 errors
+ruff check src/squadron/pipeline/actions/dispatch.py  # All checks passed
 ```
 
 ---

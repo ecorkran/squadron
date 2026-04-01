@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `DispatchAction` — pipeline action for language model dispatch (slice 145)
+  - Resolves model alias via 5-level cascade (`ModelResolver`), creates one-shot agent, sends prompt, captures response
+  - Profile resolution: explicit param override > alias-derived profile > SDK default
+  - SDK response deduplication (skips `sdk_type="result"` messages)
+  - Token metadata passthrough (`prompt_tokens`, `completion_tokens`, `total_tokens`)
+  - Error handling: never raises, returns `ActionResult(success=False)` on any failure
+  - Agent shutdown guaranteed via `try/finally` block
+  - Auto-registers at module import time
+
+### Changed
+- Extracted `_ensure_provider_loaded` from `review_client.py` to shared `providers/loader.py` as public `ensure_provider_loaded()` (slice 145)
+
+### Previous
 - Three utility actions for the pipeline system (slice 144)
   - `CfOpAction` in `pipeline/actions/cf_op.py` — delegates `set_phase`, `build_context`, `summarize` to ContextForge CLI via `cf_client._run()`
   - `CommitAction` in `pipeline/actions/commit.py` — stages files and creates git commits with semantic messages; returns `committed=False` on clean working tree
