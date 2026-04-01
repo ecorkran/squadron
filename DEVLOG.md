@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260331
 
+**Slice 146: Review and Checkpoint Actions — Design Complete (Phase 4)**
+Created `project-documents/user/slices/146-slice.review-and-checkpoint-actions.md`. Two actions: ReviewAction delegates to `run_review_with_profile()`, populates `ActionResult.verdict` and `ActionResult.findings` from structured findings (slice 143), persists review files. CheckpointAction evaluates trigger (always, on-concerns, on-fail, never) against prior review verdict, returns paused/skipped result for executor interpretation. Includes persistence extraction from CLI to shared `review/persistence.py`. Dependencies: [143, 145]. Unblocks slices 147, 149, 150.
+
 **Slice 145: Dispatch Action — Implementation Complete (Phase 6)**
 Implemented all 6 tasks (T1–T6). Extracted `_ensure_provider_loaded` from `review_client.py` to shared `providers/loader.py`. Implemented `DispatchAction` with 5-level model resolution, profile resolution (explicit override > alias > SDK default), one-shot agent lifecycle, SDK response deduplication, token metadata passthrough, and comprehensive error handling (never raises). 26 new tests (17 dispatch + 9 loader), 827 total pass, pyright 0 errors, ruff clean. Slice 145 marked complete.
 
