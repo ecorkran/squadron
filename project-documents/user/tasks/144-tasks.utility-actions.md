@@ -123,7 +123,7 @@ status: not_started
 - [ ] **Implement `DevlogAction` in `src/squadron/pipeline/actions/devlog.py`**
   - [ ] Implement `DevlogAction` class satisfying the `Action` protocol:
     - `action_type` property returns `ActionType.DEVLOG` value (`"devlog"`)
-    - `validate(config)` — minimal validation; returns empty list (devlog is always valid)
+    - `validate(config)` — warn if `content` absent and no `prior_outputs` in context (return `ValidationError` with warning severity); otherwise return empty list
     - `execute(context)` implementation:
       - Determine DEVLOG path: `params.get("path")` or `Path(context.cwd) / "DEVLOG.md"`
       - Determine entry content:
@@ -153,6 +153,8 @@ status: not_started
 - [ ] **Create tests at `tests/pipeline/actions/test_devlog.py`**
   - [ ] Test `action_type` property returns `"devlog"`
   - [ ] Test `isinstance(DevlogAction(), Action)` (protocol compliance)
+  - [ ] Test `validate()` — returns warning when `content` absent and no `prior_outputs`
+  - [ ] Test `validate()` — returns empty list when `content` provided
   - [ ] Test `execute()` — explicit content written to DEVLOG.md
   - [ ] Test `execute()` — auto-generated content from prior_outputs
   - [ ] Test `execute()` — creates DEVLOG.md if it doesn't exist
