@@ -4,7 +4,7 @@ slice: dispatch-action
 project: squadron
 parent: 140-slices.pipeline-foundation.md
 dependencies: [142]
-interfaces: [146, 147]
+interfaces: [146, 147, 149]
 dateCreated: 20260331
 dateUpdated: 20260331
 status: not_started
@@ -276,7 +276,7 @@ This is a minor refactor of an existing private function — not a new feature.
 
 ### Provides to Other Slices
 
-- **Slice 146 (Review and Checkpoint)** — Review action will use dispatch internally or alongside it in step sequences
+- **Slice 146 (Review and Checkpoint)** — Slice 147 (Step Types) composes dispatch and review actions together in step sequences; the review action itself does not depend on dispatch
 - **Slice 147 (Step Types)** — Phase step type expands to include a dispatch action in its action sequence
 - **Slice 149 (Pipeline Executor)** — Executor invokes dispatch actions as part of step execution
 
