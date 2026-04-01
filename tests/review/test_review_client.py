@@ -92,7 +92,7 @@ class TestUnifiedPath:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
@@ -121,7 +121,7 @@ class TestUnifiedPath:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.base import AuthType, ProfileName, ProviderType
             from squadron.providers.profiles import ProviderProfile
@@ -149,7 +149,7 @@ class TestUnifiedPath:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.base import AuthType, ProfileName, ProviderType
             from squadron.providers.profiles import ProviderProfile
@@ -186,7 +186,7 @@ class TestFileInjection:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
@@ -218,7 +218,7 @@ class TestFileInjection:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
             patch(f"{_P}._inject_file_contents") as mock_inject,
         ):
             from squadron.providers.base import AuthType, ProviderType
@@ -253,7 +253,7 @@ class TestVerbosity:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
             patch(
                 "squadron.review.review_client._write_prompt_log",
                 return_value=Path("/tmp/test-log.md"),
@@ -290,7 +290,7 @@ class TestVerbosity:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
@@ -319,7 +319,7 @@ class TestVerbosity:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
@@ -348,7 +348,7 @@ class TestVerbosity:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 
@@ -376,7 +376,7 @@ class TestVerbosity:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
             patch(
                 "squadron.review.review_client._write_prompt_log",
                 return_value=Path("/tmp/test-log.md"),
@@ -411,7 +411,7 @@ class TestVerbosity:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
             patch(
                 "squadron.review.review_client._write_prompt_log",
                 return_value=Path("/tmp/test-log.md"),
@@ -467,7 +467,7 @@ class TestEdgeCases:
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
-            patch(f"{_P}._ensure_provider_loaded"),
+            patch(f"{_P}.ensure_provider_loaded"),
         ):
             from squadron.providers.profiles import ProviderProfile
 

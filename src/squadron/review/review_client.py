@@ -8,7 +8,6 @@ concern.
 from __future__ import annotations
 
 import glob as glob_mod
-import importlib
 import logging
 import subprocess
 from collections.abc import Callable
@@ -16,6 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.core.models import AgentConfig, Message, MessageType
+from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
 from squadron.providers.registry import get_provider
 from squadron.review.models import ReviewResult
@@ -23,13 +23,6 @@ from squadron.review.parsers import parse_review_output
 from squadron.review.templates import ReviewTemplate
 
 _logger = logging.getLogger(__name__)
-
-# Provider type → module name mapping (mirrors engine.py).
-_PROVIDER_MODULES: dict[str, str] = {
-    "openai": "openai",
-    "sdk": "sdk",
-    "openai-oauth": "codex",
-}
 
 
 _STRUCTURED_OUTPUT_INSTRUCTIONS = """
@@ -55,15 +48,6 @@ Use FAIL for issues that must be fixed before proceeding.
 """
 
 
-def _ensure_provider_loaded(provider_type: str) -> None:
-    """Import the provider module to trigger auto-registration if needed."""
-    module_name = _PROVIDER_MODULES.get(provider_type, provider_type)
-    try:
-        importlib.import_module(f"squadron.providers.{module_name}")
-    except ImportError:
-        pass  # Let get_provider raise KeyError with available providers
-
-
 async def run_review_with_profile(
     template: ReviewTemplate,
     inputs: dict[str, str],
@@ -84,7 +68,7 @@ async def run_review_with_profile(
     import sys
 
     provider_profile = get_profile(profile)
-    _ensure_provider_loaded(provider_profile.provider)
+    ensure_provider_loaded(provider_profile.provider)
     provider = get_provider(provider_profile.provider)
 
     # Build prompts

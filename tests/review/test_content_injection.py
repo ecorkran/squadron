@@ -297,7 +297,7 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
             ),
         ),
         patch("squadron.review.review_client.get_provider", return_value=mock_provider),
-        patch("squadron.review.review_client._ensure_provider_loaded"),
+        patch("squadron.review.review_client.ensure_provider_loaded"),
     ):
         result = await run_review_with_profile(
             template,
