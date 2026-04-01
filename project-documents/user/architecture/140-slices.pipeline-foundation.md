@@ -32,7 +32,7 @@ status: in_progress
 
 ## Feature Slices
 
-5. [ ] **(144) Utility Actions** — Implement three simple actions that validate the action protocol against well-defined operations: cf-op action (set phase, build context, summarize via ContextForgeClient), commit action (git commit at phase boundaries with semantic message conventions), and devlog action (structured DEVLOG entries auto-generated from pipeline state). Dependencies: [142, CF Integration (126)]. Risk: Low. Effort: 2/5
+5. [x] **(144) Utility Actions** — Implement three simple actions that validate the action protocol against well-defined operations: cf-op action (set phase, build context, summarize via ContextForgeClient), commit action (git commit at phase boundaries with semantic message conventions), and devlog action (structured DEVLOG entries auto-generated from pipeline state). Dependencies: [142, CF Integration (126)]. Risk: Low. Effort: 2/5
 
 6. [ ] **(145) Dispatch Action** — Send assembled context to a model via agent registry, capture output (file artifacts or code changes), record metadata (model used, token counts). Integrates with model resolver for alias resolution through the cascade chain. Handles both SDK and API provider dispatch transparently through the AgentProvider protocol. Dependencies: [142, Agent Registry (102)]. Risk: Low. Effort: 2/5
 

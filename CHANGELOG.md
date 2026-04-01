@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Three utility actions for the pipeline system (slice 144)
+  - `CfOpAction` in `pipeline/actions/cf_op.py` — delegates `set_phase`, `build_context`, `summarize` to ContextForge CLI via `cf_client._run()`
+  - `CommitAction` in `pipeline/actions/commit.py` — stages files and creates git commits with semantic messages; returns `committed=False` on clean working tree
+  - `DevlogAction` in `pipeline/actions/devlog.py` — appends structured entries to DEVLOG.md; auto-generates content from `prior_outputs` or accepts explicit content; handles date header deduplication
+  - All three satisfy the `Action` protocol and auto-register at import time
 - Structured review findings in YAML frontmatter (slice 143)
   - `StructuredFinding` dataclass in `review/models.py` — machine-readable finding with `id`, `severity`, `category`, `summary`, `location`
   - `NOTE` severity level added to `Severity` enum (between PASS and CONCERN)

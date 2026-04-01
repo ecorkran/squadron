@@ -9,7 +9,7 @@ dependencies: [142]
 interfaces: [147]
 dateCreated: 20260331
 dateUpdated: 20260331
-status: not_started
+status: complete
 ---
 
 # Slice Design: Utility Actions (144)
@@ -265,60 +265,68 @@ This mirrors the provider registry pattern established in the codebase. Actions 
 
 ### Functional
 
-- [ ] `CfOpAction` successfully executes `set_phase`, `build_context`, and `summarize` operations against a mocked `ContextForgeClient`
-- [ ] `CommitAction` creates a git commit with the expected message in a test repository
-- [ ] `CommitAction` returns `committed=False` (not an error) when there are no changes
-- [ ] `DevlogAction` appends an entry to DEVLOG.md at the correct insertion point
-- [ ] `DevlogAction` auto-generates content from `prior_outputs` when no explicit content is provided
-- [ ] Each action's `validate()` method returns errors for missing required config
+- [x] `CfOpAction` successfully executes `set_phase`, `build_context`, and `summarize` operations against a mocked `ContextForgeClient`
+- [x] `CommitAction` creates a git commit with the expected message in a test repository
+- [x] `CommitAction` returns `committed=False` (not an error) when there are no changes
+- [x] `DevlogAction` appends an entry to DEVLOG.md at the correct insertion point
+- [x] `DevlogAction` auto-generates content from `prior_outputs` when no explicit content is provided
+- [x] Each action's `validate()` method returns errors for missing required config
 
 ### Technical
 
-- [ ] All three actions satisfy the `Action` protocol (runtime checkable)
-- [ ] All three actions auto-register in the action registry at import time
-- [ ] `get_action(ActionType.CF_OP)` / `COMMIT` / `DEVLOG` returns the registered instance
-- [ ] Pyright reports 0 errors
-- [ ] Ruff reports 0 warnings
-- [ ] All existing tests continue to pass
+- [x] All three actions satisfy the `Action` protocol (runtime checkable)
+- [x] All three actions auto-register in the action registry at import time
+- [x] `get_action(ActionType.CF_OP)` / `COMMIT` / `DEVLOG` returns the registered instance
+- [x] Pyright reports 0 errors
+- [x] Ruff reports 0 warnings
+- [x] All existing tests continue to pass
 
 ### Integration
 
-- [ ] Action registry contains all three new actions plus any previously registered
-- [ ] `list_actions()` includes `"cf-op"`, `"commit"`, `"devlog"`
+- [x] Action registry contains all three new actions plus any previously registered
+- [x] `list_actions()` includes `"cf-op"`, `"commit"`, `"devlog"`
 
 ---
 
 ## Verification Walkthrough
 
-*Draft — to be refined during implementation.*
+*Verified during implementation — 2026-03-31.*
 
 ```bash
-# 1. Run the new tests
+# 1. Run the new tests (13 + 9 + 12 + 5 = 39 tests)
 cd /Users/manta/source/repos/manta/squadron
-python -m pytest tests/pipeline/actions/test_cf_op.py -v
-python -m pytest tests/pipeline/actions/test_commit.py -v
-python -m pytest tests/pipeline/actions/test_devlog.py -v
+python -m pytest tests/pipeline/actions/test_cf_op.py -v          # 13 passed
+python -m pytest tests/pipeline/actions/test_commit.py -v         # 9 passed
+python -m pytest tests/pipeline/actions/test_devlog.py -v         # 12 passed
+python -m pytest tests/pipeline/actions/test_registry_integration.py -v  # 5 passed
 
 # 2. Verify action registration
+# NOTE: Action modules must be explicitly imported to trigger registration.
+# The actions package __init__.py does NOT auto-import them.
+# The executor (slice 149) will import the package to populate the registry.
 python -c "
-from squadron.pipeline.actions import list_actions, get_action, ActionType
+import squadron.pipeline.actions.cf_op
+import squadron.pipeline.actions.commit
+import squadron.pipeline.actions.devlog
+from squadron.pipeline.actions import list_actions, get_action
 actions = list_actions()
 print('Registered actions:', actions)
 assert 'cf-op' in actions
 assert 'commit' in actions
 assert 'devlog' in actions
-# Verify instances satisfy protocol
 from squadron.pipeline.actions.protocol import Action
 for name in ['cf-op', 'commit', 'devlog']:
     a = get_action(name)
     assert isinstance(a, Action), f'{name} does not satisfy Action protocol'
 print('All actions registered and protocol-compliant')
 "
+# Output: Registered actions: ['cf-op', 'commit', 'devlog']
+# Output: All actions registered and protocol-compliant
 
 # 3. Verify no regressions
-python -m pytest --tb=short -q
-pyright src/squadron/pipeline/actions/
-ruff check src/squadron/pipeline/actions/
+python -m pytest --tb=short -q     # 800 passed
+pyright src/squadron/pipeline/actions/  # 0 errors
+ruff check src/squadron/pipeline/actions/  # All checks passed
 ```
 
 ---

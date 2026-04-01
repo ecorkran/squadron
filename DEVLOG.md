@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260331
 
+**Slice 144: Utility Actions — Implementation Complete (Phase 6)**
+Implemented all 8 tasks (T1–T8). `CfOpAction` delegates to `cf_client._run()` with `pyright: ignore[reportPrivateUsage]` per project convention. `CommitAction` uses `subprocess.run()` with real `git init` test repos via `tmp_path`. `DevlogAction` handles DEVLOG insertion with date header deduplication and auto-generation from `prior_outputs`. All three actions satisfy `Action` protocol and auto-register at import time. 39 new tests, 800 total pass, pyright 0 errors, ruff clean. Slice 144 marked complete.
+
 **Slice 144: Utility Actions — Task Breakdown Complete (Phase 5)**
 Created `project-documents/user/tasks/144-tasks.utility-actions.md`. 8 tasks (T1–T8): CfOpAction implementation + tests, CommitAction implementation + tests, DevlogAction implementation + tests, registry integration verification, full verification and closeout. Test-with pattern throughout. No blockers.
 
