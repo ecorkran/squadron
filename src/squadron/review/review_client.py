@@ -14,7 +14,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from squadron.core.models import AgentConfig, Message, MessageType
+from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
 from squadron.providers.registry import get_provider
@@ -142,7 +142,7 @@ async def run_review_with_profile(
             # SDK providers emit both an AssistantMessage and a ResultMessage
             # with identical content.  Skip the ResultMessage to avoid
             # duplicating findings in the review output.
-            if response.metadata.get("sdk_type") == "result":
+            if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
                 continue
             raw_output += response.content
     finally:

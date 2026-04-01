@@ -83,6 +83,11 @@ class ShutdownReport(BaseModel):
     failed: dict[str, str] = Field(default_factory=dict)  # name → error message
 
 
+# SDK providers tag duplicate messages with this metadata value.
+# Consumers should skip messages where metadata["sdk_type"] == SDK_RESULT_TYPE.
+SDK_RESULT_TYPE = "result"
+
+
 class TopologyConfig(BaseModel):
     """Configuration for the agent communication topology."""
 

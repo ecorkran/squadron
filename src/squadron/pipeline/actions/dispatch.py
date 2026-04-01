@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from squadron.core.agent_registry import get_registry
-from squadron.core.models import AgentConfig, Message, MessageType
+from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
@@ -14,6 +14,8 @@ from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
 
 _logger = logging.getLogger(__name__)
+
+_TOKEN_METADATA_KEYS = ("prompt_tokens", "completion_tokens", "total_tokens")
 
 
 class DispatchAction:
@@ -39,14 +41,25 @@ class DispatchAction:
         return []
 
     async def execute(self, context: ActionContext) -> ActionResult:
+        """Execute dispatch, returning ActionResult(success=False) on error.
+
+        Pipeline executor relies on ActionResult.success for flow control,
+        so dispatch catches all errors. Unexpected exceptions are logged
+        at ERROR level so they surface in diagnostics.
+        """
         try:
             return await self._dispatch(context)
-        except (
-            ModelResolutionError,
-            ModelPoolNotImplemented,
-            KeyError,
-            Exception,
-        ) as exc:
+        except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=str(exc),
+            )
+        except Exception as exc:
+            _logger.exception(
+                "dispatch: unexpected error in step %s", context.step_name
+            )
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
@@ -104,14 +117,10 @@ class DispatchAction:
             response_parts: list[str] = []
             token_metadata: dict[str, object] = {}
             async for response in agent.handle_message(message):
-                if response.metadata.get("sdk_type") == "result":
+                if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
                     continue
                 response_parts.append(response.content)
-                for key in (
-                    "prompt_tokens",
-                    "completion_tokens",
-                    "total_tokens",
-                ):
+                for key in _TOKEN_METADATA_KEYS:
                     if key in response.metadata:
                         token_metadata[key] = response.metadata[key]
         finally:

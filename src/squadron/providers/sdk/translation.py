@@ -12,7 +12,7 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 
-from squadron.core.models import Message, MessageType
+from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
 
 
 def translate_sdk_message(sdk_msg: Any, sender: str) -> list[Message]:
@@ -84,12 +84,12 @@ def _translate_result(msg: ResultMessage, sender: str) -> Message:
             recipients=["all"],
             content=content,
             message_type=MessageType.chat,
-            metadata={"sdk_type": "result", "subtype": "success"},
+            metadata={"sdk_type": SDK_RESULT_TYPE, "subtype": "success"},
         )
     return Message(
         sender=sender,
         recipients=["all"],
         content=content,
         message_type=MessageType.system,
-        metadata={"sdk_type": "result", "subtype": msg.subtype},
+        metadata={"sdk_type": SDK_RESULT_TYPE, "subtype": msg.subtype},
     )
