@@ -75,8 +75,8 @@ status: not_started
       - **SDK dedup**: skip messages where `metadata.get("sdk_type") == "result"`
       - **Token metadata**: extract `prompt_tokens`, `completion_tokens`, `total_tokens` from response metadata when present
       - **Shutdown**: always shut down agent in `finally` block via `registry.shutdown_agent(config.name)`
-      - **Result**: return `ActionResult(success=True, outputs={"response": text}, metadata={"model": ..., "profile": ..., **token_metadata})`
-  - [ ] Error handling — catch all exceptions, return `ActionResult(success=False, error=str(exc))`:
+      - **Result**: return `ActionResult(success=True, action_type=self.action_type, outputs={"response": text}, metadata={"model": ..., "profile": ..., **token_metadata})`
+  - [ ] Error handling — catch all exceptions, return `ActionResult(success=False, action_type=self.action_type, outputs={}, error=str(exc))`:
     - `ModelResolutionError` / `ModelPoolNotImplemented` from resolver
     - `KeyError` from `get_profile()` or `get_provider()`
     - Any exception from `agent.handle_message()`
