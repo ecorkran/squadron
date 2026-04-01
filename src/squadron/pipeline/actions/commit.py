@@ -25,12 +25,13 @@ class CommitAction:
 
         # Check for changes
         status = _git(["status", "--porcelain"], cwd=cwd)
-        if status is None:
+        if status is None or status.returncode != 0:
+            stderr = status.stderr if status else "git status failed"
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
                 outputs={},
-                error="git status failed — is this a git repository?",
+                error=stderr or "git status failed — is this a git repository?",
             )
 
         if not status.stdout.strip():
