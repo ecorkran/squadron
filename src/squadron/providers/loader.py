@@ -1,4 +1,7 @@
-"""Shared provider loading — lazily import provider modules to trigger auto-registration."""
+"""Shared provider loading.
+
+Lazily import provider modules to trigger auto-registration.
+"""
 
 from __future__ import annotations
 
