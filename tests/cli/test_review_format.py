@@ -6,16 +6,16 @@ from datetime import datetime
 
 import yaml
 
-from squadron.cli.commands.review import (
-    SliceInfo,
-    _format_review_markdown,
-    _yaml_escape,
-)
 from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
     Severity,
     Verdict,
+)
+from squadron.review.persistence import (
+    SliceInfo,
+    format_review_markdown,
+    yaml_escape,
 )
 
 SLICE_INFO: SliceInfo = {
@@ -76,12 +76,12 @@ class TestFrontmatterFindings:
 
     def test_findings_block_present(self) -> None:
         result = _make_result_with_structured_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         assert "findings:" in md
 
     def test_finding_has_required_fields(self) -> None:
         result = _make_result_with_structured_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         assert "  - id: F001" in md
         assert "    severity: concern" in md
         assert "    category: error-handling" in md
@@ -89,12 +89,12 @@ class TestFrontmatterFindings:
 
     def test_finding_with_location(self) -> None:
         result = _make_result_with_structured_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         assert "    location: src/foo.py:10" in md
 
     def test_finding_without_location_omits_field(self) -> None:
         result = _make_result_with_structured_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         # Second finding (F002) has no location — check it's not emitted
         lines = md.split("\n")
         f002_idx = next(i for i, line in enumerate(lines) if "id: F002" in line)
@@ -125,12 +125,12 @@ class TestFrontmatterFindings:
             timestamp=datetime(2026, 3, 30, 12, 0, 0),
             model="opus",
         )
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         assert r'summary: "Variable \"x\" unclear"' in md
 
     def test_frontmatter_is_valid_yaml(self) -> None:
         result = _make_result_with_structured_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         # Extract frontmatter between --- markers
         parts = md.split("---")
         frontmatter_text = parts[1]
@@ -144,24 +144,24 @@ class TestFrontmatterFindings:
 
     def test_no_findings_block_when_empty(self) -> None:
         result = _make_result_no_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         assert "findings:" not in md
 
     def test_prose_body_unchanged(self) -> None:
         result = _make_result_with_structured_findings()
-        md = _format_review_markdown(result, "code", SLICE_INFO)
+        md = format_review_markdown(result, "code", SLICE_INFO)
         assert "### [CONCERN] Missing error handling" in md
         assert "### [NOTE] Variable name unclear" in md
 
 
 class TestYamlEscape:
-    """Test _yaml_escape helper."""
+    """Test yaml_escape helper."""
 
     def test_escapes_double_quotes(self) -> None:
-        assert _yaml_escape('hello "world"') == 'hello \\"world\\"'
+        assert yaml_escape('hello "world"') == 'hello \\"world\\"'
 
     def test_no_quotes_unchanged(self) -> None:
-        assert _yaml_escape("hello world") == "hello world"
+        assert yaml_escape("hello world") == "hello world"
 
     def test_escapes_backslash(self) -> None:
-        assert _yaml_escape("path\\to\\file") == "path\\\\to\\\\file"
+        assert yaml_escape("path\\to\\file") == "path\\\\to\\\\file"

@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import TypedDict
 
 import typer
 from openai import RateLimitError
@@ -23,6 +22,7 @@ from squadron.integrations.context_forge import (
 from squadron.models.aliases import resolve_model_alias
 from squadron.review.git_utils import resolve_slice_diff_range
 from squadron.review.models import ReviewResult, Severity, Verdict
+from squadron.review.persistence import SliceInfo, save_review_result
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
     detect_languages_from_paths,
@@ -139,131 +139,6 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Review file persistence
-# ---------------------------------------------------------------------------
-
-
-def _yaml_escape(text: str) -> str:
-    """Escape double quotes in a string for YAML double-quoted values."""
-    return text.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def _format_review_markdown(
-    result: ReviewResult,
-    review_type: str,
-    slice_info: SliceInfo,
-    input_file: str | None = None,
-) -> str:
-    """Format a ReviewResult as markdown with YAML frontmatter."""
-    today = result.timestamp.strftime("%Y%m%d")
-    source_doc = input_file or slice_info.get("design_file") or ""
-    lines = [
-        "---",
-        "docType: review",
-        "layer: project",
-        f"reviewType: {review_type}",
-        f"slice: {slice_info['slice_name']}",
-        "project: squadron",
-        f"verdict: {result.verdict.value}",
-        f"sourceDocument: {source_doc}",
-        f"aiModel: {result.model or 'unknown'}",
-        "status: complete",
-        f"dateCreated: {today}",
-        f"dateUpdated: {today}",
-    ]
-
-    if result.findings:
-        lines.append("findings:")
-        for sf in result.structured_findings:
-            lines.append(f"  - id: {sf.id}")
-            lines.append(f"    severity: {sf.severity}")
-            lines.append(f"    category: {sf.category}")
-            lines.append(f'    summary: "{_yaml_escape(sf.summary)}"')
-            if sf.location:
-                lines.append(f"    location: {sf.location}")
-
-    lines.append("---")
-    lines.append("")
-    lines.append(f"# Review: {review_type} — slice {slice_info['index']}")
-    lines.append("")
-    lines.append(f"**Verdict:** {result.verdict.value}")
-    lines.append(f"**Model:** {result.model or 'default'}")
-    lines.append("")
-
-    if result.findings:
-        lines.append("## Findings")
-        lines.append("")
-        for finding in result.findings:
-            lines.append(f"### [{finding.severity.value}] {finding.title}")
-            if finding.description:
-                lines.append("")
-                lines.append(finding.description)
-            if finding.file_ref:
-                lines.append(f"\n-> {finding.file_ref}")
-            lines.append("")
-    else:
-        lines.append("No specific findings.")
-        lines.append("")
-
-    # Debug appendix — included when prompt capture fields are populated
-    if result.system_prompt is not None:
-        lines.append("---")
-        lines.append("")
-        lines.append("## Debug: Prompt & Response")
-        lines.append("")
-        lines.append("### System Prompt")
-        lines.append("")
-        lines.append(result.system_prompt)
-        lines.append("")
-        lines.append("### User Prompt")
-        lines.append("")
-        lines.append(result.user_prompt or "")
-        lines.append("")
-        lines.append("### Rules Injected")
-        lines.append("")
-        lines.append(result.rules_content_used or "None")
-        lines.append("")
-        lines.append("### Raw Response")
-        lines.append("")
-        lines.append(result.raw_output)
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-_REVIEWS_DIR = Path("project-documents/user/reviews")
-
-
-def _save_review_file(
-    result: ReviewResult,
-    review_type: str,
-    slice_info: SliceInfo,
-    as_json: bool = False,
-    reviews_dir: Path | None = None,
-    input_file: str | None = None,
-) -> Path:
-    """Save review output to the reviews directory.
-
-    Returns the path of the saved file.
-    """
-    target = reviews_dir or _REVIEWS_DIR
-    target.mkdir(parents=True, exist_ok=True)
-
-    base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
-
-    if as_json:
-        path = target / f"{base}.json"
-        path.write_text(json.dumps(result.to_dict(), indent=2))
-    else:
-        path = target / f"{base}.md"
-        path.write_text(
-            _format_review_markdown(result, review_type, slice_info, input_file)
-        )
-
-    return path
-
-
-# ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
@@ -339,17 +214,6 @@ def _resolve_arch_file(num: str) -> str:
             f" using {matches[0].name}[/yellow]"
         )
     return str(matches[0])
-
-
-class SliceInfo(TypedDict):
-    """Resolved slice metadata from Context-Forge."""
-
-    index: int
-    name: str
-    slice_name: str
-    design_file: str | None
-    task_files: list[str]
-    arch_file: str
 
 
 def _resolve_slice_number(num: str) -> SliceInfo:
@@ -633,7 +497,7 @@ def review_slice(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(
+        path = save_review_result(
             result, "slice", slice_info, as_json=use_json, input_file=input_file
         )
         rprint(f"[green]Saved review to {path}[/green]")
@@ -717,7 +581,7 @@ def review_arch(
             task_files=[],
             arch_file=input_file,
         )
-        path = _save_review_file(
+        path = save_review_result(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
         )
         rprint(f"[green]Saved review to {path}[/green]")
@@ -802,7 +666,7 @@ def review_tasks(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(
+        path = save_review_result(
             result, "tasks", slice_info, as_json=use_json, input_file=input_file
         )
         rprint(f"[green]Saved review to {path}[/green]")
@@ -920,7 +784,7 @@ def review_code(
     )
 
     if slice_info and not no_save:
-        path = _save_review_file(result, "code", slice_info, as_json=use_json)
+        path = save_review_result(result, "code", slice_info, as_json=use_json)
         rprint(f"[green]Saved review to {path}[/green]")
 
     if result.verdict == Verdict.FAIL:

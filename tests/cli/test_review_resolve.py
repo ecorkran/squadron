@@ -111,7 +111,7 @@ def test_resolve_slice_cf_not_installed() -> None:
 # ---------------------------------------------------------------------------
 
 
-@patch("squadron.cli.commands.review._save_review_file")
+@patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_tasks_digit_routes_through_resolver(
     mock_review: object,
@@ -133,7 +133,7 @@ def test_review_tasks_digit_routes_through_resolver(
     assert "118-slice.composed-workflows.md" in inputs["against"]
 
 
-@patch("squadron.cli.commands.review._save_review_file")
+@patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_slice_digit_routes_through_resolver(
     mock_review: object,
@@ -155,7 +155,7 @@ def test_review_slice_digit_routes_through_resolver(
     assert "100-arch.orchestration-v2.md" in inputs["against"]
 
 
-@patch("squadron.cli.commands.review._save_review_file")
+@patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_arch_resolves_index(
     mock_review: object,
