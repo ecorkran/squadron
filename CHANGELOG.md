@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `ReviewAction` — pipeline action for review gates (slice 146)
+  - Delegates to `run_review_with_profile()`, maps `ReviewResult` to `ActionResult` with verdict and structured findings
+  - Model/profile resolution via 5-level cascade, same pattern as dispatch
+  - Review file persistence (non-fatal on failure)
+  - Auto-registers at module import time
+- `CheckpointAction` — pipeline action for quality gates (slice 146)
+  - Evaluates trigger (`always`, `on-concerns`, `on-fail`, `never`) against prior review verdict
+  - Returns `paused`/`skipped` data — executor interprets the result
+  - `CheckpointTrigger` StrEnum with four values
+  - Auto-registers at module import time
+- `review/persistence.py` — shared review file formatting and saving (slice 146)
+  - `format_review_markdown()`, `save_review_file()`, `yaml_escape()`, `SliceInfo` TypedDict
+  - Extracted from `cli/commands/review.py` for reuse by pipeline review action
 - `DispatchAction` — pipeline action for language model dispatch (slice 145)
   - Resolves model alias via 5-level cascade (`ModelResolver`), creates one-shot agent, sends prompt, captures response
   - Profile resolution: explicit param override > alias-derived profile > SDK default

@@ -2,13 +2,20 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260331
+dateUpdated: 20260402
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
+
+---
+
+## 20260402
+
+**Slice 146: Review and Checkpoint Actions — Implementation Complete (Phase 6)**
+Implemented all 8 tasks (T1–T8). Extracted review persistence to shared `review/persistence.py` (`format_review_markdown`, `save_review_file`, `yaml_escape`, `SliceInfo`). Implemented `CheckpointAction` with `CheckpointTrigger` enum and trigger×verdict evaluation matrix. Implemented `ReviewAction` delegating to `run_review_with_profile()` with model/profile resolution, template input passthrough, review file persistence (non-fatal), and verdict/findings mapping. 57 new tests (13 persistence + 21 checkpoint + 21 review + 2 registry), 884 total pass, pyright 0 errors, ruff clean. Slice 146 marked complete.
 
 ---
 

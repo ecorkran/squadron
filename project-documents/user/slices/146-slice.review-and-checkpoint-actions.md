@@ -6,8 +6,8 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [143, 145]
 interfaces: [147, 149, 150]
 dateCreated: 20260331
-dateUpdated: 20260331
-status: not_started
+dateUpdated: 20260402
+status: complete
 ---
 
 # Slice Design: Review and Checkpoint Actions (146)
@@ -464,40 +464,40 @@ The CLI commands would then import from `review/persistence.py` instead of using
 
 ### Functional Requirements
 
-- [ ] `ReviewAction` satisfies the `Action` protocol (`isinstance` check passes)
-- [ ] `ReviewAction.action_type` returns `"review"`
-- [ ] `ReviewAction.validate()` returns error when `template` is missing
-- [ ] `ReviewAction.validate()` returns error when `cwd` is missing
-- [ ] `ReviewAction.validate()` returns empty list for valid config
-- [ ] `ReviewAction.execute()` resolves template via `get_template()`
-- [ ] `ReviewAction.execute()` resolves model through `context.resolver.resolve()`
-- [ ] `ReviewAction.execute()` calls `run_review_with_profile()` with correct template, inputs, model, profile
-- [ ] `ReviewAction.execute()` populates `ActionResult.verdict` from review verdict
-- [ ] `ReviewAction.execute()` populates `ActionResult.findings` from structured findings
-- [ ] `ReviewAction.execute()` persists review file to disk
-- [ ] `ReviewAction.execute()` returns `success=False` on any error (never raises)
-- [ ] `ReviewAction` auto-registers at module import time
-- [ ] `CheckpointAction` satisfies the `Action` protocol
-- [ ] `CheckpointAction.action_type` returns `"checkpoint"`
-- [ ] `CheckpointAction.validate()` rejects invalid trigger values
-- [ ] `CheckpointAction.validate()` accepts valid triggers and empty config
-- [ ] `CheckpointAction.execute()` returns `checkpoint="skipped"` when trigger is `never`
-- [ ] `CheckpointAction.execute()` returns `checkpoint="paused"` when trigger is `always`
-- [ ] `CheckpointAction.execute()` evaluates `on-concerns` correctly: fires on CONCERNS and FAIL, skips on PASS
-- [ ] `CheckpointAction.execute()` evaluates `on-fail` correctly: fires on FAIL only, skips on PASS and CONCERNS
-- [ ] `CheckpointAction.execute()` handles missing prior review verdict gracefully (no review = no fire, except `always`)
-- [ ] `CheckpointAction` auto-registers at module import time
-- [ ] `CheckpointTrigger` enum has values: `always`, `on-concerns`, `on-fail`, `never`
+- [x] `ReviewAction` satisfies the `Action` protocol (`isinstance` check passes)
+- [x] `ReviewAction.action_type` returns `"review"`
+- [x] `ReviewAction.validate()` returns error when `template` is missing
+- [x] `ReviewAction.validate()` returns error when `cwd` is missing
+- [x] `ReviewAction.validate()` returns empty list for valid config
+- [x] `ReviewAction.execute()` resolves template via `get_template()`
+- [x] `ReviewAction.execute()` resolves model through `context.resolver.resolve()`
+- [x] `ReviewAction.execute()` calls `run_review_with_profile()` with correct template, inputs, model, profile
+- [x] `ReviewAction.execute()` populates `ActionResult.verdict` from review verdict
+- [x] `ReviewAction.execute()` populates `ActionResult.findings` from structured findings
+- [x] `ReviewAction.execute()` persists review file to disk
+- [x] `ReviewAction.execute()` returns `success=False` on any error (never raises)
+- [x] `ReviewAction` auto-registers at module import time
+- [x] `CheckpointAction` satisfies the `Action` protocol
+- [x] `CheckpointAction.action_type` returns `"checkpoint"`
+- [x] `CheckpointAction.validate()` rejects invalid trigger values
+- [x] `CheckpointAction.validate()` accepts valid triggers and empty config
+- [x] `CheckpointAction.execute()` returns `checkpoint="skipped"` when trigger is `never`
+- [x] `CheckpointAction.execute()` returns `checkpoint="paused"` when trigger is `always`
+- [x] `CheckpointAction.execute()` evaluates `on-concerns` correctly: fires on CONCERNS and FAIL, skips on PASS
+- [x] `CheckpointAction.execute()` evaluates `on-fail` correctly: fires on FAIL only, skips on PASS and CONCERNS
+- [x] `CheckpointAction.execute()` handles missing prior review verdict gracefully (no review = no fire, except `always`)
+- [x] `CheckpointAction` auto-registers at module import time
+- [x] `CheckpointTrigger` enum has values: `always`, `on-concerns`, `on-fail`, `never`
 
 ### Technical Requirements
 
-- [ ] pyright clean (0 errors) on both action modules
-- [ ] ruff clean on all modified files
-- [ ] All existing tests continue to pass
-- [ ] New tests mock all external boundaries (no real API calls, no real file I/O for review)
-- [ ] Review persistence logic extracted to shared module (not duplicated from CLI)
-- [ ] Both actions registered and visible in `list_actions()`
-- [ ] Integration tests verify coexistence with dispatch, cf-op, commit, devlog actions
+- [x] pyright clean (0 errors) on both action modules
+- [x] ruff clean on all modified files
+- [x] All existing tests continue to pass
+- [x] New tests mock all external boundaries (no real API calls, no real file I/O for review)
+- [x] Review persistence logic extracted to shared module (not duplicated from CLI)
+- [x] Both actions registered and visible in `list_actions()`
+- [x] Integration tests verify coexistence with dispatch, cf-op, commit, devlog actions
 
 ### Verification Walkthrough
 
@@ -554,14 +554,16 @@ print('valid:', a.validate({'template': 'code', 'cwd': '.'}))
 
 **5. Full test suite:**
 ```bash
-python -m pytest tests/pipeline/actions/test_review_action.py -v
-python -m pytest tests/pipeline/actions/test_checkpoint.py -v
-python -m pytest tests/pipeline/actions/test_registry_integration.py -v
-python -m pytest --tb=short -q  # all tests pass
-pyright src/squadron/pipeline/actions/review.py
-pyright src/squadron/pipeline/actions/checkpoint.py
-ruff check src/squadron/pipeline/actions/
+python -m pytest tests/pipeline/actions/test_review_action.py -v  # 21 passed
+python -m pytest tests/pipeline/actions/test_checkpoint.py -v  # 21 passed
+python -m pytest tests/pipeline/actions/test_registry_integration.py -v  # 8 passed
+python -m pytest --tb=short -q  # 884 passed
+pyright src/squadron/pipeline/actions/review.py  # 0 errors
+pyright src/squadron/pipeline/actions/checkpoint.py  # 0 errors
+ruff check src/squadron/pipeline/actions/  # All checks passed
 ```
+
+**Verified:** 2026-04-02. All steps pass as expected.
 
 ---
 
