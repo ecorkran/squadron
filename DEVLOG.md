@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260403
 
+**Slice 150: Pipeline State and Resume — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/150-tasks.pipeline-state-and-resume.md`. 26 tasks (T1–T26): test infrastructure (conftest fixtures), Pydantic models (`RunState`/`StepState`/`CheckpointState`/`SchemaVersionError`), `StateManager.__init__` + atomic write helper, `init_run`, `make_step_callback` + `_append_step`, `finalize`, `load` + `SchemaVersionError` check, `load_prior_outputs`, `first_unfinished_step`, `list_runs`, `find_matching_run`, `prune`, integration tests (full run + resume), exports/lint, closeout. Test-with pattern throughout; 3 commit checkpoints. No blockers.
+
 **Slice 150: Pipeline State and Resume — Design Complete (Phase 4)**
 Created `project-documents/user/slices/150-slice.pipeline-state-and-resume.md`. `StateManager` persists `RunState` JSON to `~/.config/squadron/runs/` after every completed step via `on_step_complete` callback. Pydantic models: `RunState`, `StepState`, `CheckpointState`. Atomic write pattern for corruption safety. `load_prior_outputs` reconstructs `dict[str, ActionResult]` from stored `action_results`. `find_matching_run` enables implicit resume detection. `prune(keep=10)` per-pipeline auto-prune on `init_run`. `SchemaVersionError` for forward-compatibility. Provides `StateManager` interface to slice 151 (CLI). Dependencies: [149]. Status: not_started.
 
