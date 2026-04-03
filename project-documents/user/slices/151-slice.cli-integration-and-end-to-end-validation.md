@@ -7,7 +7,7 @@ dependencies: [148, 149, 150]
 interfaces: [152]
 dateCreated: 20260403
 dateUpdated: 20260403
-status: not_started
+status: complete
 ---
 
 # Slice Design: CLI Integration and End-to-End Validation
@@ -489,87 +489,85 @@ orphan state files for runs that can never execute.
 
 ## Verification Walkthrough
 
-Draft verification steps — to be refined with actual output after Phase 6.
+Verified during Phase 6 implementation (2026-04-03).
 
 **1. List available pipelines:**
 
 ```bash
-sq run --list
+$ sq run --list
+# Output: Rich table showing slice-lifecycle, review-only,
+# implementation-only, design-batch — all built-in source.
 ```
-
-Expected: Table showing at least `slice-lifecycle`, `review-only`,
-`implementation-only`, `design-batch` with descriptions and sources.
 
 **2. Validate a pipeline:**
 
 ```bash
-sq run --validate slice-lifecycle
+$ sq run --validate slice-lifecycle
+# Output: Pipeline 'slice-lifecycle' is valid.
 ```
-
-Expected: "Pipeline 'slice-lifecycle' is valid." (or list of errors if any).
 
 **3. Dry-run a pipeline:**
 
 ```bash
-sq run --dry-run slice-lifecycle --slice 191
+$ sq run --dry-run slice-lifecycle 191
+# Output:
+#   Pipeline: slice-lifecycle
+#   Description: Full slice lifecycle — design through implementation
+#   Params: {'slice': '191'}
+#   Steps:
+#     design-0 (design)
+#     tasks-1 (tasks)
+#     compact-2 (compact)
+#     implement-3 (implement)
+#     devlog-4 (devlog)
 ```
 
-Expected: Step-by-step execution plan showing step names, types, and resolved
-models. No state file created.
+**Caveat:** Step names include auto-generated index suffixes (e.g. `design-0`,
+`implement-3`). The `--from` flag must use these full names.
 
 **4. Execute a pipeline (integration test with mocks):**
 
 ```python
-# In pytest with mock action registry
-from squadron.cli.commands.run import _run_pipeline
-
+# In pytest — tests/pipeline/test_cli_integration.py
 result = await _run_pipeline(
-    pipeline_name="slice-lifecycle",
-    params={"slice": "191"},
-    model_override="opus",
+    "slice-lifecycle", {"slice": "191"},
     runs_dir=tmp_path,
     _action_registry=success_registry,
 )
 assert result.status == ExecutionStatus.COMPLETED
-# State file exists and reflects all steps
+# State file exists with 5 completed steps
 ```
 
-**5. Resume a paused run:**
+**5. Resume a paused run (integration test):**
 
 ```python
-# Create and pause a run
-run_id = state_mgr.init_run("slice-lifecycle", {"slice": "191"})
-# ... execute with pause-on-step-3 registry ...
-state = state_mgr.load(run_id)
-assert state.status == "paused"
-
-# Resume via CLI function
-result = await _run_pipeline(
-    resume_id=run_id,
-    runs_dir=tmp_path,
-    _action_registry=success_registry,
-)
-assert result.status == ExecutionStatus.COMPLETED
+# First run pauses (checkpoint action returns pause signal)
+result1 = await _run_pipeline(...)  # status=PAUSED
+# Resume via executor with start_from
+result2 = await execute_pipeline(..., start_from=next_step)
+# Final state: completed, 5 steps
 ```
 
 **6. Check run status:**
 
 ```bash
-sq run --status run-20260403-slice-lifecycle-a3f7b21c
+$ sq run --status latest
+# Output: Rich panel with run_id, pipeline, params, status, timestamps,
+# step count, and checkpoint info if paused.
 ```
-
-Expected: Panel showing run_id, pipeline, params, status, completed steps
-with verdicts, and checkpoint info if paused.
 
 **7. Mutual exclusivity enforcement:**
 
 ```bash
-sq run --resume run-abc --from implement
-# Expected: Error: --resume and --from are mutually exclusive.
+$ sq run --resume run-abc --from implement
+# Error: --resume and --from cannot be used together.
 
-sq run --list --validate slice-lifecycle
-# Expected: Error: --list cannot be combined with other options.
+$ sq run --list --validate slice-lifecycle
+# Error: --list cannot be combined with other options.
 ```
+
+All 43 unit and integration tests pass (`tests/cli/commands/test_run.py`,
+`tests/pipeline/test_cli_integration.py`).
 
 ---
 

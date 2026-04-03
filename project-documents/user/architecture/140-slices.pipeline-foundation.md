@@ -46,7 +46,7 @@ status: in_progress
 
 11. [x] **(150) Pipeline State and Resume** — State file persistence as JSON in `~/.config/squadron/runs/`. State captures completed steps with outputs, current step, checkpoint reason, review verdicts, and pipeline params. Resume from checkpoint or interruption via `sq run --resume <run-id>`. Mid-process adoption via `--from <step>` for starting at a specific step. Implicit resume detection when an existing run matches the same pipeline and params. Old run pruning. Dependencies: [149]. Risk: Low. Effort: 2/5
 
-12. [ ] **(151) CLI Integration and End-to-End Validation** — `sq run` Typer command surface: run a pipeline by name or path, `--resume`, `--status`, `--list`, `--validate`, `--dry-run`, `--slice`, `--model`, `--from`. Wire executor, state manager, and pipeline loader into the CLI presentation layer. Integration testing of built-in pipelines against a real CF project structure. Completes the initiative: `sq run slice-lifecycle --slice 191` is a working replacement for the markdown-based `/sq:run-slice`. Dependencies: [148, 149, 150]. Risk: Low. Effort: 2/5
+12. [x] **(151) CLI Integration and End-to-End Validation** — `sq run` Typer command surface: run a pipeline by name or path, `--resume`, `--status`, `--list`, `--validate`, `--dry-run`, `--slice`, `--model`, `--from`. Wire executor, state manager, and pipeline loader into the CLI presentation layer. Integration testing of built-in pipelines against a real CF project structure. Completes the initiative: `sq run slice-lifecycle --slice 191` is a working replacement for the markdown-based `/sq:run-slice`. Dependencies: [148, 149, 150]. Risk: Low. Effort: 2/5
 
 ---
 
