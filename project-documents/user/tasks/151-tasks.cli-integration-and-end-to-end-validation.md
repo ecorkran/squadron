@@ -123,20 +123,7 @@ Key patterns:
 
 **Commit:** `feat: implement sq run --list, --validate, --status`
 
-### T8: Implement `--dry-run`
-
-- [ ] When `dry_run` is True (and pipeline arg present):
-  - Call `load_pipeline(pipeline)` + `validate_pipeline()`
-  - Assemble `params` dict from `slice_param` and `model`
-  - Print pipeline name, description, and resolved params
-  - Print each step: name, type, config model (if any)
-  - Do NOT create any state file
-  - Exit 0
-- [ ] Write unit tests:
-  - [ ] Dry-run output contains pipeline name and step names
-  - [ ] No state file created in `tmp_path`
-
-### T9: Implement parameter assembly helper
+### T8: Implement parameter assembly helper
 
 - [ ] Extract `_assemble_params(slice_param, model) -> dict[str, object]` function:
   - Adds `"slice"` key if `slice_param` is not None
@@ -145,6 +132,21 @@ Key patterns:
   - [ ] `slice_param="191", model="opus"` → `{"slice": "191", "model": "opus"}`
   - [ ] `slice_param=None, model=None` → `{}`
   - [ ] `slice_param="191", model=None` → `{"slice": "191"}`
+
+### T9: Implement `--dry-run`
+
+- [ ] When `dry_run` is True (and pipeline arg present):
+  - Call `load_pipeline(pipeline)`; handle `FileNotFoundError` → print error with
+    searched directories, exit 1
+  - Call `validate_pipeline(definition)`
+  - Call `_assemble_params(slice_param, model)` for resolved params display
+  - Print pipeline name, description, and resolved params
+  - Print each step: name, type, config model (if any)
+  - Do NOT create any state file
+  - Exit 0
+- [ ] Write unit tests:
+  - [ ] Dry-run output contains pipeline name and step names
+  - [ ] No state file created in `tmp_path`
 
 ### T10: Implement CF pre-flight check helper
 
@@ -171,7 +173,9 @@ Key patterns:
   ) -> PipelineResult:
   ```
 - [ ] Implementation:
-  - Load definition via `load_pipeline(pipeline_name)`
+  - Load definition via `load_pipeline(pipeline_name)`; on `FileNotFoundError`,
+    print a clear message that includes the searched directories and re-raise so
+    the sync `run()` caller can exit 1 (covers SC12)
   - Construct `ModelResolver(cli_override=model_override, pipeline_model=definition.model)`
   - Construct `ContextForgeClient()`; call `_check_cf(cf_client)`
   - Construct `StateManager(runs_dir=runs_dir)`
@@ -182,15 +186,34 @@ Key patterns:
       _action_registry=_action_registry)`
   - Call `state_mgr.finalize(run_id, result)` in a `finally` block
   - Return `result`
-- [ ] In the sync `run()` function, call:
-  ```python
-  result = asyncio.run(_run_pipeline(...))
-  ```
+- [ ] In the sync `run()` function, call `asyncio.run(_run_pipeline(...))`;
+  catch `FileNotFoundError` → print message, `raise typer.Exit(1)`
 - [ ] Display final summary: status (with color), step count, verdicts
+- [ ] Write unit tests for `_run_pipeline`:
+  - [ ] `FileNotFoundError` from `load_pipeline` propagates and triggers exit 1
+  - [ ] Successful call returns `PipelineResult` and finalizes state
+
+### T12: Integration test — full execution
+
+- [ ] In `tests/pipeline/test_cli_integration.py`, create `TestCliIntegration` class
+- [ ] Test: `_run_pipeline("slice-lifecycle", {"slice": "191"}, ...)` with success
+  registry:
+  - Returns `PipelineResult` with `status=COMPLETED`
+  - State file in `tmp_path` has `status="completed"` and 5 completed steps
+- [ ] Test: state file exists after run and is loadable via `StateManager.load()`
+
+### T13: Integration test — resume from paused
+
+- [ ] Test: first `_run_pipeline` call pauses (using `_paused_checkpoint_registry`):
+  - Returns `status=PAUSED`
+  - State file `status="paused"`
+- [ ] Second `_run_pipeline` call with `resume_id`:
+  - Returns `status=COMPLETED`
+  - Final state file has all 5 steps
 
 **Commit:** `feat: implement sq run core execution flow`
 
-### T12: Implement `--resume` flow
+### T14: Implement `--resume` flow
 
 - [ ] When `resume` is provided:
   - Call `StateManager().load(resume)`; handle errors → exit 1
@@ -207,7 +230,7 @@ Key patterns:
   - [ ] `--resume` with missing run-id → exit 1 with FileNotFoundError message
   - [ ] `--resume` + `--from` → exits 1 (mutual exclusivity — already in T4)
 
-### T13: Implement implicit resume detection
+### T15: Implement implicit resume detection
 
 - [ ] After loading the pipeline and assembling params (standard execution path),
   before calling `init_run`:
@@ -221,7 +244,7 @@ Key patterns:
   - [ ] Matching paused run found + user declines → fresh run executed
   - [ ] No matching run → proceeds to fresh run without prompt
 
-### T14: Implement `--from` (mid-process adoption)
+### T16: Implement `--from` (mid-process adoption)
 
 - [ ] When `from_step` is provided (without `--resume`):
   - Load pipeline, assemble params
@@ -231,7 +254,7 @@ Key patterns:
   - [ ] `--from implement` → `execute_pipeline` called with `start_from="implement"`
   - [ ] `--from` + `--resume` → mutual exclusivity error (already in T4)
 
-### T15: Implement keyboard interrupt handling
+### T17: Implement keyboard interrupt handling
 
 - [ ] Wrap the `asyncio.run(_run_pipeline(...))` call in `run()` with:
   ```python
@@ -248,24 +271,6 @@ Key patterns:
   - [ ] Simulate `KeyboardInterrupt` → resume instructions printed, exit 1
 
 **Commit:** `feat: implement sq run --resume, --from, implicit resume, interrupt handling`
-
-### T16: Integration test — full execution
-
-- [ ] In `tests/pipeline/test_cli_integration.py`, create `TestCliIntegration` class
-- [ ] Test: `_run_pipeline("slice-lifecycle", {"slice": "191"}, ...)` with success
-  registry:
-  - Returns `PipelineResult` with `status=COMPLETED`
-  - State file in `tmp_path` has `status="completed"` and 5 completed steps
-- [ ] Test: state file exists after run and is loadable via `StateManager.load()`
-
-### T17: Integration test — resume from paused
-
-- [ ] Test: first `_run_pipeline` call pauses (using `_paused_checkpoint_registry`):
-  - Returns `status=PAUSED`
-  - State file `status="paused"`
-- [ ] Second `_run_pipeline` call with `resume_id`:
-  - Returns `status=COMPLETED`
-  - Final state file has all 5 steps
 
 ### T18: Integration test — `--from` mid-process adoption
 
