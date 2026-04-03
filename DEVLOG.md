@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260403
 
+**Slice 151: CLI Integration and End-to-End Validation — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/151-tasks.cli-integration-and-end-to-end-validation.md`. 21 tasks (T1–T21): command skeleton + registration, Typer argument signatures, mutual exclusivity validation, `--list`, `--validate`, `--status` (with `"latest"` sentinel), `--dry-run`, parameter assembly helper, CF pre-flight check, core execution flow (`_run_pipeline` async helper + `asyncio.run` bridge), `--resume` flow, implicit resume detection (`find_matching_run` + `typer.confirm`), `--from` mid-process adoption, keyboard interrupt handling, 4 integration tests (full run, resume, from-step, dry-run no state file), exports/lint/pyright, verification and closeout. Test-with pattern throughout; 5 commit checkpoints. No blockers.
+
 **Slice 151: CLI Integration and End-to-End Validation — Design Complete (Phase 4)**
 Created `project-documents/user/slices/151-slice.cli-integration-and-end-to-end-validation.md`. Typer `sq run` command surface wiring executor, state manager, and pipeline loader into the CLI presentation layer. Options: `--slice`, `--model`, `--from`, `--resume`, `--dry-run`, `--validate`, `--list`, `--status`. Implicit resume detection when paused run matches pipeline+params. Rich terminal output for all display modes. Integration tests with mock action registries. Async executor bridged via `asyncio.run()`. Pre-flight CF check to avoid orphan state files. Dependencies: [148, 149, 150]. Completes the Pipeline Foundation initiative (140).
 
