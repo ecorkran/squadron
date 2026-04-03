@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260403
 
+**Slice 149: Pipeline Executor and Loops — Implementation Complete (Phase 6)**
+Implemented all tasks T1–T10. Created `src/squadron/pipeline/executor.py` (~570 lines): `ExecutionStatus`/`StepResult`/`PipelineResult` result types; `resolve_placeholders` with dotted-path traversal; `LoopCondition`/`evaluate_condition` with closed 3-value enum; `ExhaustBehavior`/`LoopConfig`; `_cf_unfinished_slices` source fn + `_SOURCE_REGISTRY`; `_parse_source` with regex validation; `execute_pipeline` async core with sequential steps, `start_from` skip, checkpoint and failure propagation, `each` branch via `_execute_each_step`, and loop wrapping via `_execute_loop_step`. Replaced `steps/collection.py` stub with `EachStepType` (structural validation, empty `expand()`). Added `collection` import to `validate_pipeline` in `loader.py`. 52 unit tests in `test_executor.py`, 6 integration tests in `test_executor_integration.py`. 296 total pipeline tests pass; pyright 0 errors; ruff clean. Slice 149 marked complete.
+
 **Slice 149: Pipeline Executor and Loops — Task Breakdown Complete (Phase 5)**
 Created `project-documents/user/tasks/149-tasks.pipeline-executor-and-loops.md`. 10 tasks (T1–T10): test infrastructure, result types (`ExecutionStatus`, `StepResult`, `PipelineResult`), placeholder resolution, loop condition grammar (`LoopCondition` enum + `evaluate_condition`), core sequential executor with checkpoint/failure handling, retry loop execution (`LoopConfig`, `ExhaustBehavior`), `EachStepType` implementation, source registry + `each` execution branch, integration tests, verification and closeout. Test-with pattern throughout; 3 commit checkpoints. No blockers.
 

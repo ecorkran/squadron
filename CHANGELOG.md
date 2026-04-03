@@ -13,6 +13,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pipeline executor — `execute_pipeline()` async function in `executor.py` (slice 149)
+  - Sequential step execution: resolves placeholders, expands step types, runs each action
+  - Parameter merging: definition defaults merged with caller params; required params validated
+  - `start_from` skip logic: resume from a named step, `ValueError` if step not found
+  - Checkpoint pause propagation: `outputs["checkpoint"] == "paused"` stops pipeline with `PAUSED` status
+  - Action failure propagation: `ActionResult.success == False` stops pipeline with `FAILED` status
+  - `on_step_complete` observer callback for progress tracking (enables state manager and CLI integration)
+  - Auto-generated `run_id` (12-char hex) when not provided
+- Result types for executor (slice 149)
+  - `ExecutionStatus(StrEnum)` — `COMPLETED`, `FAILED`, `PAUSED`, `SKIPPED`
+  - `StepResult` dataclass — step name, type, status, action results, iteration, error
+  - `PipelineResult` dataclass — pipeline name, status, step results, paused_at, error
+- Parameter placeholder resolution — `resolve_placeholders(config, params)` (slice 149)
+  - Simple `{name}` → `str(params[name])`; left as-is if missing
+  - Dotted `{name.field}` → nested dict traversal; left as-is if not resolvable
+  - Recursive resolution for nested dicts and list elements
+- Retry loop execution with configurable exit conditions (slice 149)
+  - `LoopCondition(StrEnum)` — `REVIEW_PASS`, `REVIEW_CONCERNS_OR_BETTER`, `ACTION_SUCCESS`
+  - `ExhaustBehavior(StrEnum)` — `FAIL`, `CHECKPOINT`, `SKIP`
+  - `LoopConfig` dataclass parsed from `loop:` step config key
+  - Loop runs until `until` condition met or `max` iterations exhausted
+  - `on_exhaust` controls behavior at max: fail pipeline, pause at checkpoint, or skip step
+  - `loop.strategy` field logged as warning; falls back to basic max-iteration loop (160 scope)
+  - Checkpoint pause inside a loop stops the loop immediately
+- `EachStepType` in `steps/collection.py` — iterates over a source collection (slice 149)
+  - Structural validation: `source`, `as`, `steps` required; source must match regex pattern
+  - `expand()` returns empty list; executor handles `each` execution directly
+  - Registered under `StepTypeName.EACH` at module load
+- Source registry for `each` collection queries (slice 149)
+  - `_SOURCE_REGISTRY` keyed by `(namespace, function)` tuple
+  - `_cf_unfinished_slices` — queries `ContextForgeClient.list_slices()`, filters `status != "complete"`
+  - `_parse_source()` parses and validates source strings against registered registry entries
+  - Item binding: `{as_name.field}` resolves against item dict for each iteration
+
 - Pipeline Pydantic schema models — `PipelineSchema`, `StepSchema` for YAML validation with step shorthand expansion (slice 148)
 - Pipeline loader — `load_pipeline()` with multi-source discovery: project → user → built-in directory precedence (slice 148)
 - Pipeline discovery — `discover_pipelines()` enumerates all available pipelines with source attribution (slice 148)
