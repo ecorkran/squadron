@@ -151,14 +151,15 @@ sq run slice-lifecycle --slice 191 --model opus
   │
   ├─ load_pipeline("slice-lifecycle")
   ├─ validate_pipeline(definition)  # optional, always on first run
-  ├─ StateManager().find_matching_run("slice-lifecycle", {"slice": "191"})
+  ├─ params = {"slice": "191", "model": "opus"}  # model stored for resume
+  ├─ StateManager().find_matching_run("slice-lifecycle", params)
   │   └─ if paused match found → prompt user for resume
-  ├─ StateManager().init_run("slice-lifecycle", {"slice": "191", "model": "opus"})
+  ├─ StateManager().init_run("slice-lifecycle", params)
   ├─ ModelResolver(cli_override="opus", pipeline_model=definition.model)
   ├─ ContextForgeClient()
   ├─ execute_pipeline(
-  │     definition, {"slice": "191", "model": "opus"},
-  │     resolver=resolver, cf_client=cf_client,
+  │     definition, params,
+  │     resolver=resolver, cf_client=cf_client,  # resolver is authoritative
   │     run_id=run_id,
   │     on_step_complete=state_mgr.make_step_callback(run_id),
   │   )
@@ -238,7 +239,7 @@ def run(
     ),
     status: str | None = typer.Option(
         None, "--status",
-        help="Show run status. Omit run-id for most recent.",
+        help="Show run status. Pass 'latest' or omit value for most recent.",
     ),
 ) -> None:
 ```
@@ -256,6 +257,21 @@ Several options are mutually exclusive. The command validates at entry:
 
 Invalid combinations produce a clear error message and exit.
 
+### `--status` Optional Value Handling
+
+Typer string options require a value when the flag is present, so
+`sq run --status` (no value) would raise a parse error. To support the
+"most recent run" shorthand, `--status` accepts an explicit `"latest"`
+sentinel value. The user invokes either:
+
+- `sq run --status latest` — show most recent run
+- `sq run --status <run-id>` — show a specific run
+
+The implementation checks for `"latest"` and calls
+`StateManager.list_runs()[0]` to resolve the most recent run. This avoids
+Click-level `nargs` customization while keeping the UX clean. A future
+enhancement could add a `--recent` boolean flag as a pure shorthand.
+
 ### Parameter Assembly
 
 The `params` dict passed to `execute_pipeline` is assembled from CLI options:
@@ -272,6 +288,17 @@ if model is not None:
 The pipeline definition's `params` section declares required and default
 parameters. The executor merges CLI params over definition defaults. Missing
 required params raise an error before execution begins.
+
+**Model in `params` vs `ModelResolver`:** The `model` value appears in two
+places — `ModelResolver(cli_override=model)` and `params["model"]`. These
+serve different purposes. The `ModelResolver` is authoritative for dispatch
+(cascade level 1). The `params["model"]` entry is recorded in the state file
+for resume fidelity — when resuming, the CLI reconstructs `ModelResolver`
+from `state.params["model"]` so the same override applies. The executor does
+not read `params["model"]` for model resolution; it uses the resolver
+exclusively. Pipeline definitions that declare `model` as a param default
+(e.g. `params: { model: opus }`) populate cascade level 4 via
+`ModelResolver(pipeline_model=definition.model)`, not via `params`.
 
 ---
 
@@ -372,7 +399,7 @@ orphan state files for runs that can never execute.
    step, reconstructs prior outputs, and resumes execution.
 6. `sq run --status <run-id>` displays run metadata, completed steps, and
    checkpoint info.
-7. `sq run --status` (no run-id) displays the most recent run's status.
+7. `sq run --status latest` displays the most recent run's status.
 8. `sq run slice-lifecycle --slice 191` when a paused run exists for the same
    pipeline+params prompts the user to resume or start fresh.
 9. `sq run slice-lifecycle --slice 191 --from implement` starts execution at
@@ -528,6 +555,18 @@ Integration tests use `StateManager(runs_dir=tmp_path)` and mock action
 registries (same pattern as `tests/pipeline/test_state_integration.py`).
 They do NOT invoke the Typer CLI runner — they call the async helper directly,
 keeping tests fast and avoiding Typer's process model.
+
+**Scope note on "real CF project structure":** The slice plan mentions
+"integration testing of built-in pipelines against a real CF project
+structure." This slice interprets that as testing the full wiring path
+(CLI args → loader → executor → state manager) with mock action registries
+substituted at the action boundary. Tests validate that built-in pipeline
+definitions load correctly and that the executor processes their step
+sequences end-to-end. Actual CF subprocess calls are not exercised in
+automated tests — CF availability is environment-dependent and would make
+tests flaky. The pre-flight CF check is tested in isolation (mock subprocess).
+Manual verification against a real CF project is covered in the Verification
+Walkthrough.
 
 ### Special Considerations
 
