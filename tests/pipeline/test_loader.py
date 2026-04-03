@@ -29,12 +29,12 @@ class TestLoadPipelineBuiltIn:
 
     def test_load_slice_lifecycle(self) -> None:
         defn = load_pipeline(
-            "slice-lifecycle",
+            "slice",
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
         assert isinstance(defn, PipelineDefinition)
-        assert defn.name == "slice-lifecycle"
+        assert defn.name == "slice"
         assert len(defn.steps) == 5
 
     def test_unknown_name_raises(self) -> None:
@@ -61,9 +61,9 @@ class TestLoadPipelinePrecedence:
 
     def test_project_overrides_builtin(self, tmp_path: Path) -> None:
         proj = tmp_path / "project"
-        _write_pipeline_yaml(proj, "slice-lifecycle", steps=2)
+        _write_pipeline_yaml(proj, "slice", steps=2)
         defn = load_pipeline(
-            "slice-lifecycle",
+            "slice",
             project_dir=proj,
             user_dir=Path("/nonexistent"),
         )
@@ -72,9 +72,9 @@ class TestLoadPipelinePrecedence:
 
     def test_user_overrides_builtin(self, tmp_path: Path) -> None:
         user = tmp_path / "user"
-        _write_pipeline_yaml(user, "slice-lifecycle", steps=3)
+        _write_pipeline_yaml(user, "slice", steps=3)
         defn = load_pipeline(
-            "slice-lifecycle",
+            "slice",
             project_dir=Path("/nonexistent"),
             user_dir=user,
         )
@@ -102,9 +102,9 @@ class TestDiscoverPipelines:
             user_dir=Path("/nonexistent"),
         )
         names = [p.name for p in pipelines]
-        assert "slice-lifecycle" in names
-        assert "review-only" in names
-        assert "implementation-only" in names
+        assert "slice" in names
+        assert "review" in names
+        assert "implement" in names
         assert "design-batch" in names
         assert len(pipelines) >= 4
 
@@ -118,13 +118,13 @@ class TestDiscoverPipelines:
 
     def test_project_overrides_builtin(self, tmp_path: Path) -> None:
         proj = tmp_path / "project"
-        _write_pipeline_yaml(proj, "slice-lifecycle", steps=2)
+        _write_pipeline_yaml(proj, "slice", steps=2)
         pipelines = discover_pipelines(
             project_dir=proj,
             user_dir=Path("/nonexistent"),
         )
         by_name = {p.name: p for p in pipelines}
-        assert by_name["slice-lifecycle"].source == "project"
+        assert by_name["slice"].source == "project"
 
     def test_nonexistent_dirs_no_error(self) -> None:
         pipelines = discover_pipelines(
@@ -144,4 +144,4 @@ class TestDiscoverPipelines:
         )
         names = [p.name for p in pipelines]
         assert "broken" not in names
-        assert "slice-lifecycle" in names
+        assert "slice" in names

@@ -55,7 +55,7 @@ def _success_registry() -> dict[str, object]:
 class TestSliceLifecycleIntegration:
     @pytest.mark.asyncio
     async def test_all_steps_completed(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         registry = _success_registry()
 
         result = await execute_pipeline(
@@ -72,7 +72,7 @@ class TestSliceLifecycleIntegration:
 
     @pytest.mark.asyncio
     async def test_on_step_complete_called_in_order(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         registry = _success_registry()
         received: list[StepResult] = []
 
@@ -93,7 +93,7 @@ class TestSliceLifecycleIntegration:
 
     @pytest.mark.asyncio
     async def test_start_from_compact_skips_earlier_steps(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         registry = _success_registry()
 
         # compact-2 is the third step (0-indexed)
@@ -113,7 +113,7 @@ class TestSliceLifecycleIntegration:
 
     @pytest.mark.asyncio
     async def test_missing_required_param_slice(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
 
         with pytest.raises(ValueError, match="slice"):
             await execute_pipeline(
@@ -128,7 +128,7 @@ class TestSliceLifecycleIntegration:
 class TestReviewOnlyIntegration:
     @pytest.mark.asyncio
     async def test_completed_with_pass_verdict(self) -> None:
-        definition = _no_project_pipeline("review-only")
+        definition = _no_project_pipeline("review")
         registry = _success_registry()
 
         result = await execute_pipeline(

@@ -109,7 +109,7 @@ class TestCliIntegration:
         """_run_pipeline returns COMPLETED and persists state."""
         with patch("squadron.cli.commands.run._check_cf"):
             result = await _run_pipeline(
-                "slice-lifecycle",
+                "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
                 _action_registry=_success_registry(),
@@ -130,7 +130,7 @@ class TestCliIntegration:
         """State file is persisted and loadable via StateManager."""
         with patch("squadron.cli.commands.run._check_cf"):
             await _run_pipeline(
-                "slice-lifecycle",
+                "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
                 _action_registry=_success_registry(),
@@ -139,7 +139,7 @@ class TestCliIntegration:
         mgr = StateManager(runs_dir=tmp_path)
         runs = mgr.list_runs()
         state = mgr.load(runs[0].run_id)
-        assert state.pipeline == "slice-lifecycle"
+        assert state.pipeline == "slice"
         assert state.params["slice"] == "191"
 
     # -------------------------------------------------------------------
@@ -151,7 +151,7 @@ class TestCliIntegration:
         """First run pauses; second run resumes and completes all steps."""
         with patch("squadron.cli.commands.run._check_cf"):
             result1 = await _run_pipeline(
-                "slice-lifecycle",
+                "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
                 _action_registry=_paused_checkpoint_registry(pause_on_step=2),
@@ -165,7 +165,7 @@ class TestCliIntegration:
         run_id = runs[0].run_id
 
         # Resume: load definition, find next step, re-execute
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         next_step = mgr.first_unfinished_step(run_id, definition)
         assert next_step is not None
 
@@ -197,7 +197,7 @@ class TestCliIntegration:
         """Starting from 'implement-3' skips design/tasks/compact."""
         with patch("squadron.cli.commands.run._check_cf"):
             result = await _run_pipeline(
-                "slice-lifecycle",
+                "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
                 from_step="implement-3",

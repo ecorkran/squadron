@@ -94,10 +94,10 @@ def _paused_checkpoint_registry(pause_on_step: int = 2) -> dict[str, object]:
 class TestStateIntegration:
     @pytest.mark.asyncio
     async def test_full_run_state_reflects_all_steps(self, tmp_path: Path) -> None:
-        """Full run through slice-lifecycle populates state with all 5 steps."""
-        definition = _no_project_pipeline("slice-lifecycle")
+        """Full run through slice populates state with all 5 steps."""
+        definition = _no_project_pipeline("slice")
         mgr = StateManager(runs_dir=tmp_path)
-        run_id = mgr.init_run("slice-lifecycle", {"slice": "191"})
+        run_id = mgr.init_run("slice", {"slice": "191"})
 
         result = await execute_pipeline(
             definition,
@@ -120,9 +120,9 @@ class TestStateIntegration:
     @pytest.mark.asyncio
     async def test_resume_from_paused_completes_all_steps(self, tmp_path: Path) -> None:
         """A paused run can be resumed; final state has all 5 steps completed."""
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         mgr = StateManager(runs_dir=tmp_path)
-        run_id = mgr.init_run("slice-lifecycle", {"slice": "191"})
+        run_id = mgr.init_run("slice", {"slice": "191"})
 
         # First execution — checkpoint pauses at 2nd checkpoint call (tasks step)
         result1 = await execute_pipeline(

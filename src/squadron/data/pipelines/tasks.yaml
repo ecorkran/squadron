@@ -1,0 +1,28 @@
+name: tasks
+description: Tasks lifecycle — task breakdown through implementation
+
+params:
+  slice: required
+
+steps:
+  - tasks:
+      phase: 5
+      model: sonnet
+      review: 
+        template: tasks
+        model: minimax
+      checkpoint: on-fail
+
+  - compact:
+      keep: [design, tasks]
+      summarize: true
+
+  - implement:
+      phase: 6
+      model: sonnet
+      review:
+        template: code
+        model: minimax
+      checkpoint: on-fail
+
+  - devlog: auto

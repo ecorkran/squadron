@@ -55,7 +55,7 @@ class TestMutualExclusivity:
         assert "--resume and --from cannot be used together" in result.output
 
     def test_list_with_pipeline_exits_error(self) -> None:
-        result = runner.invoke(app, ["run", "--list", "slice-lifecycle"])
+        result = runner.invoke(app, ["run", "--list", "slice"])
         assert result.exit_code == 1
         assert "--list cannot be combined" in result.output
 
@@ -65,7 +65,7 @@ class TestMutualExclusivity:
         assert "--list cannot be combined" in result.output
 
     def test_status_with_pipeline_exits_error(self) -> None:
-        result = runner.invoke(app, ["run", "--status", "latest", "slice-lifecycle"])
+        result = runner.invoke(app, ["run", "--status", "latest", "slice"])
         assert result.exit_code == 1
         assert "--status cannot be combined" in result.output
 
@@ -156,13 +156,13 @@ class TestList:
     def test_list_shows_pipeline_names(self) -> None:
         pipelines = [
             PipelineInfo(
-                name="slice-lifecycle",
+                name="slice",
                 description="Full slice lifecycle",
                 source="built-in",
                 path=MagicMock(),
             ),
             PipelineInfo(
-                name="review-only",
+                name="review",
                 description="Run a review",
                 source="built-in",
                 path=MagicMock(),
@@ -174,8 +174,8 @@ class TestList:
         ):
             result = runner.invoke(app, ["run", "--list"])
         assert result.exit_code == 0
-        assert "slice-lifecycle" in result.output
-        assert "review-only" in result.output
+        assert "slice" in result.output
+        assert "review" in result.output
         assert "built-in" in result.output
 
     def test_list_empty(self) -> None:
@@ -247,7 +247,7 @@ class TestValidate:
 
 def _make_run_state(
     run_id: str = "run-20260403-test-abc12345",
-    pipeline: str = "slice-lifecycle",
+    pipeline: str = "slice",
     status: str = "completed",
     checkpoint: CheckpointState | None = None,
 ) -> RunState:
@@ -275,7 +275,7 @@ class TestStatus:
             result = runner.invoke(app, ["run", "--status", "latest"])
         assert result.exit_code == 0
         assert "run-20260403-test-abc12345" in result.output
-        assert "slice-lifecycle" in result.output
+        assert "slice" in result.output
 
     def test_status_latest_no_runs(self) -> None:
         with patch("squadron.cli.commands.run.StateManager") as mock_cls:
@@ -431,7 +431,7 @@ class TestResume:
             mock_result = MagicMock()
             mock_result.status = MagicMock()
             mock_result.status.value = "completed"
-            mock_result.pipeline_name = "slice-lifecycle"
+            mock_result.pipeline_name = "slice"
             mock_result.step_results = []
             mock_asyncio.run.return_value = mock_result
             result = runner.invoke(
