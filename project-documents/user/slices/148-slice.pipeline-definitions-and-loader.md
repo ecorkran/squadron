@@ -7,7 +7,7 @@ dependencies: [147]
 interfaces: [149, 151]
 dateCreated: 20260402
 dateUpdated: 20260402
-status: not_started
+status: complete
 ---
 
 # Slice 148: Pipeline Definitions and Loader
@@ -362,10 +362,14 @@ Step configs may contain `{param_name}` placeholders referencing pipeline params
 
 ### Verification Walkthrough
 
+**Verified 2026-04-02.** All steps pass. Caveat: `load_pipeline()` and `discover_pipelines()` use `Path.cwd()` for default project dir — pass explicit `project_dir`/`user_dir` in tests to avoid picking up files from the working directory.
+
 1. **Load a built-in pipeline:**
    ```python
+   from pathlib import Path
    from squadron.pipeline.loader import load_pipeline
-   defn = load_pipeline("slice-lifecycle")
+   NE = Path("/nonexistent")
+   defn = load_pipeline("slice-lifecycle", project_dir=NE, user_dir=NE)
    assert defn.name == "slice-lifecycle"
    assert len(defn.steps) == 5
    assert defn.steps[0].step_type == "design"
@@ -374,23 +378,23 @@ Step configs may contain `{param_name}` placeholders referencing pipeline params
 2. **Discover all pipelines:**
    ```python
    from squadron.pipeline.loader import discover_pipelines
-   pipelines = discover_pipelines()
+   pipelines = discover_pipelines(project_dir=NE, user_dir=NE)
    names = [p.name for p in pipelines]
    assert "slice-lifecycle" in names
    assert "review-only" in names
+   # Returns 4 built-in pipelines
    ```
 
 3. **Validate a pipeline:**
    ```python
    from squadron.pipeline.loader import load_pipeline, validate_pipeline
-   defn = load_pipeline("slice-lifecycle")
+   defn = load_pipeline("slice-lifecycle", project_dir=NE, user_dir=NE)
    errors = validate_pipeline(defn)
-   assert errors == []  # built-in definitions should be clean
+   assert errors == []  # built-in definitions validate clean
    ```
 
 4. **Reject malformed YAML:**
    ```python
-   # Missing required 'name' field
    import yaml
    from squadron.pipeline.schema import PipelineSchema
    from pydantic import ValidationError
@@ -399,15 +403,16 @@ Step configs may contain `{param_name}` placeholders referencing pipeline params
        PipelineSchema.model_validate(raw)
        assert False, "Should have raised"
    except ValidationError:
-       pass  # expected
+       pass  # raises for missing 'name'
    ```
 
 5. **Run tests:**
    ```bash
    cd /Users/manta/source/repos/manta/squadron
-   python -m pytest tests/pipeline/ -v
-   pyright src/squadron/pipeline/schema.py src/squadron/pipeline/loader.py
-   ruff check src/squadron/pipeline/
+   python -m pytest tests/pipeline/ -v          # 43 pipeline tests pass
+   pyright src/squadron/pipeline/schema.py src/squadron/pipeline/loader.py  # 0 errors
+   ruff check src/squadron/pipeline/            # All checks passed
+   python -m pytest                             # 995 total tests pass
    ```
 
 ## Implementation Notes

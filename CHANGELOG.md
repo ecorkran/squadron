@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pipeline Pydantic schema models — `PipelineSchema`, `StepSchema` for YAML validation with step shorthand expansion (slice 148)
+- Pipeline loader — `load_pipeline()` with multi-source discovery: project → user → built-in directory precedence (slice 148)
+- Pipeline discovery — `discover_pipelines()` enumerates all available pipelines with source attribution (slice 148)
+- Pipeline semantic validation — `validate_pipeline()` checks step type registry, model alias resolution, review template existence, param placeholder declarations (slice 148)
+- Built-in pipeline definitions — `slice-lifecycle`, `review-only`, `implementation-only`, `design-batch` YAML files in `data/pipelines/` (slice 148)
 - `CompactAction` — pipeline action for context compaction (slice 147)
   - Loads compaction instruction templates by name from `data/compaction/` with user override layering
   - Renders instructions with `keep` and `summarize` parameters
