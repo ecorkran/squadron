@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260402
 
+**Slice 148: Pipeline Definitions and Loader — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/148-tasks.pipeline-definitions-and-loader.md`. 13 tasks (T1–T13): Pydantic schema models + tests, four built-in pipeline YAML files, pipeline loader with 3-source discovery + tests, `discover_pipelines` + tests, semantic validation (`validate_pipeline`) + tests, integration tests for all built-ins, two commit checkpoints, closeout. Test-with pattern throughout. No blockers.
+
 **Slice 148: Pipeline Definitions and Loader — Design Complete (Phase 4)**
 Created `project-documents/user/slices/148-slice.pipeline-definitions-and-loader.md`. YAML pipeline grammar with Pydantic v2 schema validation (`schema.py`), loader with 3-source discovery (built-in → user → project), four built-in pipelines (slice-lifecycle, review-only, implementation-only, design-batch), and semantic validation (step types, model aliases, review templates, param references). Pydantic validates at boundary, converts to existing `PipelineDefinition`/`StepConfig` dataclasses. Dependencies: [147]. Unblocks slice 149 (Executor) and 151 (CLI).
 
