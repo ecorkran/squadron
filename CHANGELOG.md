@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pipeline state persistence — `StateManager` in `state.py` (slice 150)
+  - `RunState`, `StepState`, `CheckpointState` Pydantic models; `SchemaVersionError` exception
+  - Atomic write-then-rename: interrupted writes never corrupt existing state files
+  - `init_run()` creates state file; `make_step_callback()` appends step after each step completes
+  - `finalize()` writes terminal status (`completed`/`failed`)
+  - `load()` deserializes and validates; `load_prior_outputs()` reconstructs `prior_outputs` for resume
+  - `first_unfinished_step()` locates resume entry point; `find_matching_run()` for implicit resume detection
+  - `list_runs()` with pipeline/status filters; `prune()` auto-deletes oldest completed/failed runs
+  - All tests use `tmp_path` injection — real `~/.config` is never touched during tests
 - Pipeline executor — `execute_pipeline()` async function in `executor.py` (slice 149)
   - Sequential step execution: resolves placeholders, expands step types, runs each action
   - Parameter merging: definition defaults merged with caller params; required params validated
