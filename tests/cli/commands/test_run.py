@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -9,8 +10,14 @@ import typer
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.cli.commands.run import _assemble_params, _resolve_target
-from squadron.pipeline.models import PipelineDefinition, StepConfig
+from squadron.cli.commands.run import _assemble_params, _check_cf, _resolve_target
+from squadron.integrations.context_forge import (
+    ContextForgeError,
+    ContextForgeNotAvailable,
+)
+from squadron.pipeline.loader import PipelineInfo
+from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
+from squadron.pipeline.state import CheckpointState, RunState
 
 runner = CliRunner()
 
@@ -135,3 +142,215 @@ class TestAssembleParams:
         defn = _make_definition(params={})
         with pytest.raises(typer.BadParameter, match="Invalid --param format"):
             _assemble_params(defn, None, None, ["=nope"])
+
+
+# ---------------------------------------------------------------------------
+# T5: --list
+# ---------------------------------------------------------------------------
+
+
+class TestList:
+    """sq run --list displays discovered pipelines."""
+
+    def test_list_shows_pipeline_names(self) -> None:
+        pipelines = [
+            PipelineInfo(
+                name="slice-lifecycle",
+                description="Full slice lifecycle",
+                source="built-in",
+                path=MagicMock(),
+            ),
+            PipelineInfo(
+                name="review-only",
+                description="Run a review",
+                source="built-in",
+                path=MagicMock(),
+            ),
+        ]
+        with patch(
+            "squadron.cli.commands.run.discover_pipelines",
+            return_value=pipelines,
+        ):
+            result = runner.invoke(app, ["run", "--list"])
+        assert result.exit_code == 0
+        assert "slice-lifecycle" in result.output
+        assert "review-only" in result.output
+        assert "built-in" in result.output
+
+    def test_list_empty(self) -> None:
+        with patch(
+            "squadron.cli.commands.run.discover_pipelines",
+            return_value=[],
+        ):
+            result = runner.invoke(app, ["run", "--list"])
+        assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# T6: --validate
+# ---------------------------------------------------------------------------
+
+
+class TestValidate:
+    """sq run --validate checks pipeline definitions."""
+
+    def test_validate_valid_pipeline(self) -> None:
+        defn = _make_definition()
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch(
+                "squadron.cli.commands.run.validate_pipeline",
+                return_value=[],
+            ),
+        ):
+            result = runner.invoke(app, ["run", "--validate", "test"])
+        assert result.exit_code == 0
+        assert "is valid" in result.output
+
+    def test_validate_with_errors(self) -> None:
+        defn = _make_definition()
+        errors = [
+            ValidationError(
+                field="step_type", message="Unknown step type 'bad'", action_type="bad"
+            ),
+            ValidationError(
+                field="model", message="Unresolved alias 'foo'", action_type="pipeline"
+            ),
+        ]
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch(
+                "squadron.cli.commands.run.validate_pipeline",
+                return_value=errors,
+            ),
+        ):
+            result = runner.invoke(app, ["run", "--validate", "test"])
+        assert result.exit_code == 1
+        assert "Unknown step type" in result.output
+        assert "Unresolved alias" in result.output
+
+    def test_validate_pipeline_not_found(self) -> None:
+        with patch(
+            "squadron.cli.commands.run.load_pipeline",
+            side_effect=FileNotFoundError("not found"),
+        ):
+            result = runner.invoke(app, ["run", "--validate", "missing"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# T7: --status
+# ---------------------------------------------------------------------------
+
+
+def _make_run_state(
+    run_id: str = "run-20260403-test-abc12345",
+    pipeline: str = "slice-lifecycle",
+    status: str = "completed",
+    checkpoint: CheckpointState | None = None,
+) -> RunState:
+    now = datetime(2026, 4, 3, 12, 0, 0, tzinfo=UTC)
+    return RunState(
+        run_id=run_id,
+        pipeline=pipeline,
+        params={"slice": "191"},
+        started_at=now,
+        updated_at=now,
+        status=status,
+        checkpoint=checkpoint,
+    )
+
+
+class TestStatus:
+    """sq run --status displays run information."""
+
+    def test_status_latest_with_runs(self) -> None:
+        state = _make_run_state()
+        with patch("squadron.cli.commands.run.StateManager") as mock_cls:
+            mock_mgr = MagicMock()
+            mock_mgr.list_runs.return_value = [state]
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(app, ["run", "--status", "latest"])
+        assert result.exit_code == 0
+        assert "run-20260403-test-abc12345" in result.output
+        assert "slice-lifecycle" in result.output
+
+    def test_status_latest_no_runs(self) -> None:
+        with patch("squadron.cli.commands.run.StateManager") as mock_cls:
+            mock_mgr = MagicMock()
+            mock_mgr.list_runs.return_value = []
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(app, ["run", "--status", "latest"])
+        assert result.exit_code == 0
+        assert "No runs found" in result.output
+
+    def test_status_run_id_found(self) -> None:
+        state = _make_run_state()
+        with patch("squadron.cli.commands.run.StateManager") as mock_cls:
+            mock_mgr = MagicMock()
+            mock_mgr.load.return_value = state
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(
+                app, ["run", "--status", "run-20260403-test-abc12345"]
+            )
+        assert result.exit_code == 0
+        assert "run-20260403-test-abc12345" in result.output
+
+    def test_status_run_id_not_found(self) -> None:
+        with patch("squadron.cli.commands.run.StateManager") as mock_cls:
+            mock_mgr = MagicMock()
+            mock_mgr.load.side_effect = FileNotFoundError()
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(app, ["run", "--status", "run-missing"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    def test_status_with_checkpoint(self) -> None:
+        now = datetime(2026, 4, 3, 12, 0, 0, tzinfo=UTC)
+        cp = CheckpointState(
+            reason="review concerns",
+            step="design",
+            verdict="CONCERNS",
+            paused_at=now,
+        )
+        state = _make_run_state(status="paused", checkpoint=cp)
+        with patch("squadron.cli.commands.run.StateManager") as mock_cls:
+            mock_mgr = MagicMock()
+            mock_mgr.load.return_value = state
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(
+                app, ["run", "--status", "run-20260403-test-abc12345"]
+            )
+        assert result.exit_code == 0
+        assert "Checkpoint" in result.output
+        assert "design" in result.output
+
+
+# ---------------------------------------------------------------------------
+# T10: CF pre-flight check
+# ---------------------------------------------------------------------------
+
+
+class TestCheckCf:
+    """_check_cf verifies Context Forge availability."""
+
+    def test_cf_available(self) -> None:
+        client = MagicMock()
+        client.get_project.return_value = MagicMock()
+        # Should not raise
+        _check_cf(client)
+
+    def test_cf_not_available(self) -> None:
+        client = MagicMock()
+        client.get_project.side_effect = ContextForgeNotAvailable("not found")
+        with pytest.raises(typer.Exit) as exc_info:
+            _check_cf(client)
+        assert exc_info.value.exit_code == 1
+
+    def test_cf_error(self) -> None:
+        client = MagicMock()
+        client.get_project.side_effect = ContextForgeError("connection failed")
+        with pytest.raises(typer.Exit) as exc_info:
+            _check_cf(client)
+        assert exc_info.value.exit_code == 1

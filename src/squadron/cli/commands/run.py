@@ -204,9 +204,8 @@ def _display_run_status(state: object) -> None:
 def _display_result(result: PipelineResult) -> None:
     """Print a brief final summary of a completed pipeline run."""
     color = _STATUS_COLORS.get(result.status.value, "dim")
-    rprint(
-        f"\n[{color}]Pipeline '{result.pipeline_name}' — {result.status.value}[/{color}]"
-    )
+    name = result.pipeline_name
+    rprint(f"\n[{color}]Pipeline '{name}' — {result.status.value}[/{color}]")
     rprint(f"  Steps: {len(result.step_results)}")
 
     for sr in result.step_results:
@@ -274,7 +273,8 @@ def run(
 
     if not list_pipelines and status is None and resume is None and pipeline is None:
         rprint(
-            "[red]Error: pipeline argument is required unless using --list, --status, or --resume.[/red]"
+            "[red]Error: pipeline argument is required"
+            " unless using --list, --status, or --resume.[/red]"
         )
         raise typer.Exit(1)
 
