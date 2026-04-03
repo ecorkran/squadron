@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260402
 
+**Slice 148: Pipeline Definitions and Loader — Design Complete (Phase 4)**
+Created `project-documents/user/slices/148-slice.pipeline-definitions-and-loader.md`. YAML pipeline grammar with Pydantic v2 schema validation (`schema.py`), loader with 3-source discovery (built-in → user → project), four built-in pipelines (slice-lifecycle, review-only, implementation-only, design-batch), and semantic validation (step types, model aliases, review templates, param references). Pydantic validates at boundary, converts to existing `PipelineDefinition`/`StepConfig` dataclasses. Dependencies: [147]. Unblocks slice 149 (Executor) and 151 (CLI).
+
 **Slice 147: Compact Action and Step Types — Implementation Complete (Phase 6)**
 Implemented all 13 tasks (T1–T13). Created compaction instruction template (`data/compaction/default.yaml`) with loader supporting user overrides from `~/.config/squadron/compaction/`. Implemented `CompactAction` with template-based CF instructions, `keep`/`summarize` params, and optional CF summarize call. Implemented four step types: `PhaseStepType` (3 registrations, 6-action expansion with optional review/checkpoint), `CompactStepType` (single compact action passthrough), `ReviewStepType` (review + optional checkpoint), `DevlogStepType` (single devlog with auto/explicit mode). 76 new tests (17 compact action + 17 phase + 7 compact step + 8 review step + 9 devlog step + 17 registry integration + 1 init), 952 total pass, pyright 0 errors, ruff clean. Slice 147 marked complete.
 
