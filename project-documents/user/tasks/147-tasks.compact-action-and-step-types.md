@@ -47,12 +47,12 @@ status: not_started
 - [ ] **Implement `CompactAction` in `src/squadron/pipeline/actions/compact.py`** (replace stub)
   - [ ] `action_type` property returns `ActionType.COMPACT`
   - [ ] `validate(config)`:
-    - [ ] If `keep` is present, validate it is a list of strings
+    - [ ] If `keep` is present, validate it is a list of strings (semantic whitelist validation deferred to slice 151 when artifact names are finalized through E2E testing)
     - [ ] If `summarize` is present, validate it is a boolean
     - [ ] If `template` is present, validate it is a string
     - [ ] Return `list[ValidationError]`
   - [ ] `async execute(context)`:
-    - [ ] Load compaction instruction template (from T1 loader), defaulting to `"default"`
+    - [ ] Load compaction instruction template using `context.params.get("template", "default")` to select template name
     - [ ] Render template with `keep` and `summarize` params from `context.params`
     - [ ] Issue rendered instructions to CF via `cf_client._run()` (same pattern as `CfOpAction`)
     - [ ] If `summarize` is truthy, also call `cf summarize`
@@ -80,6 +80,7 @@ status: not_started
   - [ ] Test `execute` — `ContextForgeError` returns `ActionResult(success=False)`
   - [ ] Test `execute` — `summarize=True` triggers CF summarize call
   - [ ] Test `execute` — no `keep` or `summarize` still succeeds (defaults)
+  - [ ] Test `execute` — custom `template` param selects non-default template
   - [ ] Test `action_type` returns `ActionType.COMPACT`
   - [ ] All tests pass
 

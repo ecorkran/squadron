@@ -216,7 +216,7 @@ Each step type's `validate()` method checks that required config keys are presen
 | Step Type | Required Config | Optional Config |
 |-----------|----------------|-----------------|
 | Phase | `phase` (int) | `model`, `review` (str or dict), `checkpoint` (trigger value) |
-| Compact | (none) | `keep` (list of str), `summarize` (bool) |
+| Compact | (none) | `keep` (list of str), `summarize` (bool), `template` (str, defaults to `"default"`) |
 | Review | `template` (str) | `model`, `checkpoint` (trigger value) |
 | Devlog | (none) | `mode` ("auto" or "explicit"), `content` (str, required if explicit) |
 
