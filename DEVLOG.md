@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260402
 
+**Slice 147: Compact Action and Step Types — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/147-tasks.compact-action-and-step-types.md`. 13 tasks (T1–T13): compaction instruction template + loader, CompactAction implementation + tests, PhaseStepType (3-phase registration) + tests, CompactStepType + tests, ReviewStepType + tests, DevlogStepType + tests, registry integration tests, verification and closeout. Test-with pattern throughout. No blockers.
+
 **Slice 147: Compact Action and Step Types — Design Complete (Phase 4)**
 Created `project-documents/user/slices/147-slice.compact-action-and-step-types.md`. Compact action issues parameterized compaction instructions to CF with configurable `keep`/`summarize` params. Four step types: phase (cf-op→dispatch→review→checkpoint→commit), compact (single compact action), review (review + optional checkpoint), devlog (single devlog action). Step types are pure data transformers — `expand()` returns `(action_type, action_config)` tuples for the executor. Dependencies: [144, 145, 146]. Unblocks slice 148 (Pipeline Definitions) and 149 (Executor).
 
