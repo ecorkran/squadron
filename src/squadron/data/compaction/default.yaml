@@ -1,0 +1,18 @@
+name: default
+description: "Default compaction instructions — compress context while preserving key artifacts"
+
+instructions: |
+  Compact the current context according to these rules:
+
+  ## Preservation
+  {keep_section}
+
+  ## Summarization
+  {summarize_section}
+
+  ## General Guidelines
+  - Remove verbose intermediate outputs and redundant detail.
+  - Preserve all decisions, rationale, and architectural choices.
+  - Keep error resolutions and their root causes.
+  - Maintain references to file paths and line numbers where relevant.
+  - Condense repetitive patterns into representative examples.
