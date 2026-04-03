@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260402
+dateUpdated: 20260403
 ---
 
 # Development Log
@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260403
+
+**Slice 149: Pipeline Executor and Loops — Design Complete (Phase 4)**
+Created `project-documents/user/slices/149-slice.pipeline-executor-and-loops.md`. Async executor engine takes validated `PipelineDefinition`, expands step types into action sequences, resolves `{param}` placeholders, and executes actions sequentially. Retry loops (`loop: {max, until, on_exhaust}`) with closed condition grammar (`review.pass`, `review.concerns_or_better`, `action.success`). `each` collection loop step type with source query dispatch (`cf.unfinished_slices`) and dot-path item binding (`{slice.index}`). Convergence loop strategy field acknowledged but stubbed (160 scope). Checkpoint pausing and action failure propagation. `on_step_complete` callback for state manager/CLI integration. Dependencies: [147, 148]. Unblocks slices 150 (State/Resume) and 151 (CLI).
 
 ## 20260402
 
