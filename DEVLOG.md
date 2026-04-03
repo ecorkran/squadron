@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260403
 
+**Slice 151: CLI Integration and End-to-End Validation — Design Complete (Phase 4)**
+Created `project-documents/user/slices/151-slice.cli-integration-and-end-to-end-validation.md`. Typer `sq run` command surface wiring executor, state manager, and pipeline loader into the CLI presentation layer. Options: `--slice`, `--model`, `--from`, `--resume`, `--dry-run`, `--validate`, `--list`, `--status`. Implicit resume detection when paused run matches pipeline+params. Rich terminal output for all display modes. Integration tests with mock action registries. Async executor bridged via `asyncio.run()`. Pre-flight CF check to avoid orphan state files. Dependencies: [148, 149, 150]. Completes the Pipeline Foundation initiative (140).
+
 **Slice 150: Pipeline State and Resume — Implementation Complete (Phase 6)**
 Implemented all tasks T1–T26. Created `src/squadron/pipeline/state.py` (~280 lines): Pydantic models (`RunState`, `StepState`, `CheckpointState`), `SchemaVersionError`, and `StateManager` with full public interface (10 methods). Atomic write via `.tmp` sibling + rename; `init_run` generates `run-{YYYYMMDD}-{slug}-{hash8}` IDs and auto-prunes; `make_step_callback` returns executor-ready closure; `_append_step` extracts verdict (last non-None) and outputs (last action); paused steps set `status="paused"` + `checkpoint` field; `finalize` writes terminal status; `load` validates schema version; `load_prior_outputs` reconstructs `dict[str, ActionResult]` defensively; `first_unfinished_step` scans definition in order; `list_runs` globs+filters+sorts; `find_matching_run` exact params match; `prune` skips paused runs. 43 unit tests + 2 integration tests (full run + resume) all pass. pyright 0 errors; ruff clean. Slice 150 marked complete.
 
