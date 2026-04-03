@@ -50,7 +50,7 @@ class TestStepShorthandExpansion:
     """Scalar step values expand to {"mode": value}."""
 
     def test_string_shorthand(self) -> None:
-        """``devlog: auto`` becomes StepSchema(step_type="devlog", config={"mode": "auto"})."""
+        """``devlog: auto`` expands to config={"mode": "auto"}."""
         raw = {
             "name": "test",
             "steps": [{"devlog": "auto"}],
