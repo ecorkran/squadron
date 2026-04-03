@@ -161,12 +161,19 @@ def validate_pipeline(
     - Param placeholders in step configs reference declared params
     """
     # Trigger step type registration by importing step modules
+    import squadron.pipeline.steps.collection as _collection  # noqa: F401
     import squadron.pipeline.steps.compact as _compact  # noqa: F401
     import squadron.pipeline.steps.devlog as _devlog  # noqa: F401
     import squadron.pipeline.steps.phase as _phase  # noqa: F401
     import squadron.pipeline.steps.review as _review  # noqa: F401
 
-    _ = (_compact, _devlog, _phase, _review)  # satisfy unused-import checks
+    _ = (
+        _collection,
+        _compact,
+        _devlog,
+        _phase,
+        _review,
+    )  # satisfy unused-import checks
 
     from squadron.models.aliases import resolve_model_alias
     from squadron.pipeline.steps import get_step_type, list_step_types
