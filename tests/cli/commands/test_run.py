@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -354,3 +355,49 @@ class TestCheckCf:
         with pytest.raises(typer.Exit) as exc_info:
             _check_cf(client)
         assert exc_info.value.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# T11: _run_pipeline unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestRunPipeline:
+    """Unit tests for _run_pipeline async helper."""
+
+    def test_pipeline_not_found_propagates(self) -> None:
+        """FileNotFoundError from load_pipeline propagates."""
+        from squadron.cli.commands.run import _run_pipeline
+
+        with patch(
+            "squadron.cli.commands.run.load_pipeline",
+            side_effect=FileNotFoundError("not found"),
+        ):
+            with pytest.raises(FileNotFoundError):
+                import asyncio
+
+                asyncio.run(_run_pipeline("missing", {}))
+
+    def test_dry_run_via_cli_produces_no_state(self, tmp_path: Path) -> None:
+        """--dry-run path does not create state files."""
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[StepConfig(step_type="phase", name="s1", config={})],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        ):
+            result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
+        assert result.exit_code == 0
+        assert not list(tmp_path.glob("*.json"))
+
+    def test_missing_pipeline_via_cli_exits_1(self) -> None:
+        """sq run <missing> exits 1 with error message."""
+        with patch(
+            "squadron.cli.commands.run.load_pipeline",
+            side_effect=FileNotFoundError("not found in [...]"),
+        ):
+            result = runner.invoke(app, ["run", "missing", "191"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
