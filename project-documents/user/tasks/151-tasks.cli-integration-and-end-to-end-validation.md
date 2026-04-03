@@ -23,6 +23,7 @@ complete.
 **Test files:** `tests/cli/commands/test_run.py`, `tests/pipeline/test_cli_integration.py`
 
 Key patterns:
+- `sq run <pipeline> <target>` — positional target maps to first required param
 - Sync Typer function → `asyncio.run()` → async `_run_pipeline()` helper
 - `StateManager(runs_dir=tmp_path)` in all tests — never touches real `~/.config`
 - `_action_registry=...` injected into `execute_pipeline` for integration tests
@@ -55,8 +56,9 @@ Key patterns:
 
 - [ ] Define all parameters in `run()`:
   - `pipeline: str | None = typer.Argument(None, help="Pipeline name or path.")`
-  - `slice_param: str | None = typer.Option(None, "--slice", "-s")`
+  - `target: str | None = typer.Argument(None, help="Target for pipeline's primary required param.")`
   - `model: str | None = typer.Option(None, "--model", "-m")`
+  - `param: list[str] | None = typer.Option(None, "--param", "-p", help="Additional param as key=value.")`
   - `from_step: str | None = typer.Option(None, "--from")`
   - `resume: str | None = typer.Option(None, "--resume", "-r")`
   - `dry_run: bool = typer.Option(False, "--dry-run")`
@@ -123,15 +125,26 @@ Key patterns:
 
 **Commit:** `feat: implement sq run --list, --validate, --status`
 
-### T8: Implement parameter assembly helper
+### T8: Implement target resolution and parameter assembly
 
-- [ ] Extract `_assemble_params(slice_param, model) -> dict[str, object]` function:
-  - Adds `"slice"` key if `slice_param` is not None
-  - Adds `"model"` key if `model` is not None (for state-file recording)
+- [ ] Implement `_resolve_target(definition, target) -> tuple[str, str] | None`:
+  - Iterate `definition.params`; find first param where value is `"required"`
+  - If found and `target` is not None: return `(param_name, target)`
+  - If found and `target` is None: raise `typer.BadParameter` with message
+    naming the missing param
+  - If no required param found: return `None`
+- [ ] Implement `_assemble_params(definition, target, model, param_list) -> dict[str, object]`:
+  - Call `_resolve_target` to bind positional target to first required param
+  - Parse `--param key=value` entries from `param_list`
+  - Add `model` to params if not None (for state-file recording)
+  - Return assembled dict
 - [ ] Write unit tests:
-  - [ ] `slice_param="191", model="opus"` → `{"slice": "191", "model": "opus"}`
-  - [ ] `slice_param=None, model=None` → `{}`
-  - [ ] `slice_param="191", model=None` → `{"slice": "191"}`
+  - [ ] `_resolve_target` with `slice: required` and target `"191"` → `("slice", "191")`
+  - [ ] `_resolve_target` with `plan: required` and target `"140"` → `("plan", "140")`
+  - [ ] `_resolve_target` with required param and `target=None` → `BadParameter`
+  - [ ] `_resolve_target` with no required params → `None`
+  - [ ] `_assemble_params` with target + model + `--param template=arch` → correct dict
+  - [ ] `_assemble_params` with no target, no model → `{}`
 
 ### T9: Implement `--dry-run`
 
@@ -139,7 +152,7 @@ Key patterns:
   - Call `load_pipeline(pipeline)`; handle `FileNotFoundError` → print error with
     searched directories, exit 1
   - Call `validate_pipeline(definition)`
-  - Call `_assemble_params(slice_param, model)` for resolved params display
+  - Call `_assemble_params(definition, target, model, param)` for resolved params
   - Print pipeline name, description, and resolved params
   - Print each step: name, type, config model (if any)
   - Do NOT create any state file
@@ -300,7 +313,7 @@ Key patterns:
 - [ ] Manual smoke test: `sq run --help` shows all options
 - [ ] Manual smoke test: `sq run --list` shows built-in pipelines
 - [ ] Manual smoke test: `sq run --validate slice-lifecycle` passes validation
-- [ ] Manual smoke test: `sq run --dry-run slice-lifecycle --slice 191` shows plan
+- [ ] Manual smoke test: `sq run --dry-run slice-lifecycle 191` shows plan
 - [ ] Update `dateUpdated` in `151-slice.cli-integration-and-end-to-end-validation.md`
   and set `status: complete`
 - [ ] Mark slice 151 `[x]` in `140-slices.pipeline-foundation.md`

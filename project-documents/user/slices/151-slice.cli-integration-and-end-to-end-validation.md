@@ -17,8 +17,8 @@ status: not_started
 Wire the pipeline executor, state manager, and pipeline loader into a Typer
 `sq run` command surface. This slice is the presentation layer that connects all
 pipeline foundation work (slices 142-150) to the user. After this slice,
-`sq run slice-lifecycle --slice 191` is a working replacement for the
-markdown-based `/sq:run slice` command.
+`sq run slice-lifecycle 191` is a working replacement for the markdown-based
+`/sq:run slice` command.
 
 This is the final feature slice in the Pipeline Foundation initiative (140).
 
@@ -45,19 +45,27 @@ This is the final feature slice in the Pipeline Foundation initiative (140).
 1. **`sq run` Typer command** — Top-level command registered on the main app.
    Accepts a pipeline name or path as the primary argument.
 
-2. **Runtime options:**
-   - `--slice <index>` — target slice parameter (most common param)
+2. **Positional target argument:** `sq run <pipeline> <target>` where `<target>`
+   maps to the pipeline's first `required` param. This keeps the CLI natural —
+   `sq run slice-lifecycle 191`, `sq run design-batch 140` — because the
+   pipeline name already implies what the target means. Pipelines without
+   required params (or with multiple required params) can omit the positional
+   or use `--param key=value` for additional params.
+
+3. **Runtime options:**
    - `--model <alias>` — CLI-level model override (cascade level 1)
    - `--from <step>` — start at a specific step (mid-process adoption)
    - `--resume <run-id>` — resume a paused or interrupted run
    - `--dry-run` — show execution plan without running
    - `--validate` — validate pipeline definition and exit
+   - `--param key=value` — pass additional pipeline params beyond the
+     positional target (e.g. `--param template=arch` for review-only)
 
-3. **Informational options:**
+4. **Informational options:**
    - `--list` — discover and display available pipelines
    - `--status [run-id]` — show status of a specific run or most recent run
 
-4. **Execution flow:**
+5. **Execution flow:**
    - Load pipeline via `load_pipeline()`
    - Optionally validate via `validate_pipeline()`
    - Construct `ModelResolver` with CLI override and pipeline default
@@ -67,16 +75,16 @@ This is the final feature slice in the Pipeline Foundation initiative (140).
    - Finalize run state
    - Display results
 
-5. **Implicit resume detection** — When `sq run <pipeline> --slice N` matches
+6. **Implicit resume detection** — When `sq run <pipeline> <target>` matches
    an existing paused run (same pipeline + params), prompt the user: "Found a
    paused run. Resume? [Y/n]". Configurable: prompt (default), auto-resume,
    or fresh-start.
 
-6. **Rich terminal output** — Progress display showing current step, elapsed
+7. **Rich terminal output** — Progress display showing current step, elapsed
    time, and step completion status. Review verdicts displayed with color
    coding (same palette as `sq review`).
 
-7. **Integration tests** — End-to-end tests using mock action registries
+8. **Integration tests** — End-to-end tests using mock action registries
    against built-in pipeline definitions, verifying the full path from CLI
    argument parsing through execution and state persistence.
 
@@ -147,11 +155,11 @@ app.command("run")(run)
 
 **Standard execution:**
 ```
-sq run slice-lifecycle --slice 191 --model opus
+sq run slice-lifecycle 191 --model opus
   │
   ├─ load_pipeline("slice-lifecycle")
   ├─ validate_pipeline(definition)  # optional, always on first run
-  ├─ params = {"slice": "191", "model": "opus"}  # model stored for resume
+  ├─ params = {"slice": "191", "model": "opus"}  # "191" mapped to first required param
   ├─ StateManager().find_matching_run("slice-lifecycle", params)
   │   └─ if paused match found → prompt user for resume
   ├─ StateManager().init_run("slice-lifecycle", params)
@@ -189,7 +197,7 @@ sq run --resume run-20260403-slice-lifecycle-a3f7b21c
 
 **Dry-run flow:**
 ```
-sq run slice-lifecycle --slice 191 --dry-run
+sq run slice-lifecycle 191 --dry-run
   │
   ├─ load_pipeline("slice-lifecycle")
   ├─ validate_pipeline(definition)
@@ -200,22 +208,27 @@ sq run slice-lifecycle --slice 191 --dry-run
 
 ### CLI Argument Design
 
-The command uses Typer's argument/option pattern consistent with existing
-squadron commands:
+The command uses two positional arguments: the pipeline name and an optional
+target. The target maps to the pipeline's first `required` param, letting users
+write `sq run slice-lifecycle 191` instead of `sq run slice-lifecycle 191`.
 
 ```python
 def run(
-    pipeline: str = typer.Argument(
+    pipeline: str | None = typer.Argument(
         None,
         help="Pipeline name or path to YAML definition.",
     ),
-    slice: str | None = typer.Option(
-        None, "--slice", "-s",
-        help="Target slice index or name.",
+    target: str | None = typer.Argument(
+        None,
+        help="Target for the pipeline's primary required param (e.g. slice index).",
     ),
     model: str | None = typer.Option(
         None, "--model", "-m",
         help="Model alias override (highest cascade priority).",
+    ),
+    param: list[str] | None = typer.Option(
+        None, "--param", "-p",
+        help="Additional pipeline param as key=value (repeatable).",
     ),
     from_step: str | None = typer.Option(
         None, "--from",
@@ -229,7 +242,7 @@ def run(
         False, "--dry-run",
         help="Show execution plan without running.",
     ),
-    validate: bool = typer.Option(
+    validate_only: bool = typer.Option(
         False, "--validate",
         help="Validate pipeline definition and exit.",
     ),
@@ -243,6 +256,40 @@ def run(
     ),
 ) -> None:
 ```
+
+### Positional Target Resolution
+
+The `target` positional argument is mapped to the pipeline's first `required`
+param by inspecting `definition.params`:
+
+```python
+def _resolve_target(
+    definition: PipelineDefinition,
+    target: str | None,
+) -> tuple[str, str] | None:
+    """Find the first required param name and bind target to it.
+
+    Returns (param_name, target_value) or None if no required param exists.
+    """
+    for name, default in definition.params.items():
+        if default == "required":
+            if target is None:
+                raise typer.BadParameter(
+                    f"Pipeline '{definition.name}' requires a '{name}' argument."
+                )
+            return (name, target)
+    return None  # no required param — target is ignored
+```
+
+This means:
+- `sq run slice-lifecycle 191` → `params["slice"] = "191"` (first required = `slice`)
+- `sq run design-batch 140` → `params["plan"] = "140"` (first required = `plan`)
+- `sq run review-only 191 --param template=arch` → `params["slice"] = "191"`,
+  `params["template"] = "arch"`
+
+Pipelines with multiple required params use `--param` for all beyond the first.
+`--model` remains a dedicated flag because it serves a dual purpose (cascade
+override + state recording).
 
 ### Mutual Exclusivity
 
@@ -274,15 +321,26 @@ enhancement could add a `--recent` boolean flag as a pure shorthand.
 
 ### Parameter Assembly
 
-The `params` dict passed to `execute_pipeline` is assembled from CLI options:
+The `params` dict passed to `execute_pipeline` is assembled from three sources:
+
+1. **Positional target** → bound to first required param name via `_resolve_target`
+2. **`--param key=value`** → parsed and merged (additional required/optional params)
+3. **`--model`** → added as `params["model"]` for state-file recording
 
 ```python
 params: dict[str, object] = {}
-if slice is not None:
-    params["slice"] = slice
+# 1. Positional target
+binding = _resolve_target(definition, target)
+if binding is not None:
+    params[binding[0]] = binding[1]
+# 2. --param key=value entries
+if param:
+    for entry in param:
+        key, _, value = entry.partition("=")
+        params[key] = value
+# 3. Model for state recording
 if model is not None:
     params["model"] = model
-# Additional params could come from --param key=value in future
 ```
 
 The pipeline definition's `params` section declares required and default
@@ -387,7 +445,7 @@ orphan state files for runs that can never execute.
 
 ### Functional Requirements
 
-1. `sq run slice-lifecycle --slice 191` loads the pipeline, creates a run,
+1. `sq run slice-lifecycle 191` loads the pipeline, creates a run,
    executes all steps, finalizes state, and displays a summary.
 2. `sq run --list` displays all available pipelines (built-in, user, project)
    in a formatted table.
@@ -400,11 +458,11 @@ orphan state files for runs that can never execute.
 6. `sq run --status <run-id>` displays run metadata, completed steps, and
    checkpoint info.
 7. `sq run --status latest` displays the most recent run's status.
-8. `sq run slice-lifecycle --slice 191` when a paused run exists for the same
+8. `sq run slice-lifecycle 191` when a paused run exists for the same
    pipeline+params prompts the user to resume or start fresh.
-9. `sq run slice-lifecycle --slice 191 --from implement` starts execution at
+9. `sq run slice-lifecycle 191 --from implement` starts execution at
    the `implement` step, skipping earlier steps.
-10. `sq run slice-lifecycle --slice 191 --model opus` applies the model
+10. `sq run slice-lifecycle 191 --model opus` applies the model
     override as cascade level 1.
 11. Keyboard interrupt during execution finalizes the run as failed and
     displays resume instructions.
