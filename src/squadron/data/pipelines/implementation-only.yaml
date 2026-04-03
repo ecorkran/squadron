@@ -1,0 +1,15 @@
+name: implementation-only
+description: Implementation when design and tasks already exist
+
+params:
+  slice: required
+  model: sonnet
+
+steps:
+  - implement:
+      phase: 6
+      review:
+        template: code
+      checkpoint: on-fail
+
+  - devlog: auto

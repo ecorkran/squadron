@@ -1,0 +1,17 @@
+name: design-batch
+description: Run phase 4 design for every unfinished slice in a plan
+
+params:
+  plan: required
+  model: opus
+
+steps:
+  - each:
+      source: cf.unfinished_slices("{plan}")
+      as: slice
+      steps:
+        - design:
+            phase: 4
+            slice: "{slice.index}"
+            review: arch
+            checkpoint: always
