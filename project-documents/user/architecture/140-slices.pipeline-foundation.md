@@ -96,7 +96,9 @@ Integration:
 
 2. [FUTURE] **Pipeline Notifications** — Notify human when a long-running pipeline hits a checkpoint (email, webhook, desktop notification). CLI-first checkpoints assume the human is at the terminal. Dependencies: [150]. Effort: 2/5
 
-3. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
+3. [FUTURE] **Multiple Positional Target Arguments** — Support additional positional args or `key=value` positional syntax for pipelines with multiple required params (e.g. `sq run review-only 123 template=arch` or `sq run review-only 123 arch`). Currently only the first required param is bound to the positional target; additional required params need `--param key=value`. Dependencies: [151]. Effort: 1/5
+
+4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
 
 ---
 
