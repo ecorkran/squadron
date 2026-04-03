@@ -3,7 +3,7 @@ docType: slice-design
 slice: compact-action-and-step-types
 project: squadron
 parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
-dependencies: [144, 145, 146]
+dependencies: [142, 144, 145, 146]
 interfaces: [148, 149]
 dateCreated: 20260402
 dateUpdated: 20260402
@@ -190,7 +190,7 @@ The compact action needs to issue compaction instructions to CF. The existing `C
 2. For `keep` parameters, pass them as arguments to the CF CLI: `cf context summarize --keep design,tasks` (or equivalent CF syntax). If CF doesn't support `--keep` flags directly, the compact action will construct the appropriate CF command.
 3. The compact action will validate `keep` values against a known set of artifact names.
 
-If the CF CLI's `summarize` command doesn't support `--keep`, the compact action will issue the compaction as a custom instruction via `cf_client._run(["context", "summarize"])` with appropriate arguments. The action is the integration layer — it adapts pipeline-level semantics to CF-level commands.
+The compact action uses `cf_client._run()` to issue CF commands — the same pattern established by `CfOpAction` in slice 144, which uses `_run()` with `pyright: ignore[reportPrivateUsage]`. This is a known limitation: `ContextForgeClient` currently exposes only high-level typed methods (`list_slices`, `list_tasks`, `get_project`) with no public method for issuing arbitrary CF commands. All pipeline actions that need raw CF access use `_run()`. A future improvement would add a public `run_command()` method to `ContextForgeClient` — tracked as a candidate for CF integration maintenance, not a blocker for this slice.
 
 ### Step Type Registration Pattern
 
