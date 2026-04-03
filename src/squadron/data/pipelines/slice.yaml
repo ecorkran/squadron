@@ -1,29 +1,38 @@
-name: slice-lifecycle
+name: slice
 description: Full slice lifecycle — design through implementation
 
 params:
   slice: required
-  model: opus
 
 steps:
   - design:
       phase: 4
-      review: arch
+      model: opus
+      review: 
+        template: slice
+        model: glm5
       checkpoint: on-concerns
 
   - tasks:
       phase: 5
-      review: tasks
+      model: sonnet
+      review: 
+        template: tasks
+        model: minimax
       checkpoint: on-fail
 
   - compact:
-      keep: [design, tasks]
-      summarize: true
+      template: minimal
 
   - implement:
       phase: 6
+      model: sonnet
       review:
         template: code
+        model: minimax
       checkpoint: on-fail
+
+  - compact:
+      template: minimal
 
   - devlog: auto

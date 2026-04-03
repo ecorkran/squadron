@@ -10,10 +10,11 @@ from squadron.pipeline.loader import load_pipeline, validate_pipeline
 from squadron.pipeline.models import PipelineDefinition
 
 _BUILTIN_NAMES = [
-    "slice-lifecycle",
-    "review-only",
-    "implementation-only",
+    "slice",
+    "review",
+    "implement",
     "design-batch",
+    "tasks",
 ]
 
 _NONEXISTENT = Path("/nonexistent")
@@ -44,17 +45,24 @@ class TestBuiltInPipelineStructure:
 
     def test_slice_lifecycle_steps(self) -> None:
         defn = load_pipeline(
-            "slice-lifecycle",
+            "slice",
             project_dir=_NONEXISTENT,
             user_dir=_NONEXISTENT,
         )
-        assert len(defn.steps) == 5
+        assert len(defn.steps) == 6
         step_types = [s.step_type for s in defn.steps]
-        assert step_types == ["design", "tasks", "compact", "implement", "devlog"]
+        assert step_types == [
+            "design",
+            "tasks",
+            "compact",
+            "implement",
+            "compact",
+            "devlog",
+        ]
 
     def test_review_only_steps(self) -> None:
         defn = load_pipeline(
-            "review-only",
+            "review",
             project_dir=_NONEXISTENT,
             user_dir=_NONEXISTENT,
         )

@@ -30,7 +30,7 @@ class TestValidateBuiltIns:
 
     def test_slice_lifecycle_valid(self) -> None:
         defn = load_pipeline(
-            "slice-lifecycle",
+            "slice",
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
@@ -39,7 +39,7 @@ class TestValidateBuiltIns:
 
     def test_review_only_valid(self) -> None:
         defn = load_pipeline(
-            "review-only",
+            "review",
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
@@ -48,7 +48,7 @@ class TestValidateBuiltIns:
 
     def test_implementation_only_valid(self) -> None:
         defn = load_pipeline(
-            "implementation-only",
+            "implement",
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )

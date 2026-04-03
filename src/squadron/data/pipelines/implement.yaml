@@ -1,4 +1,4 @@
-name: implementation-only
+name: implement
 description: Implementation when design and tasks already exist
 
 params:

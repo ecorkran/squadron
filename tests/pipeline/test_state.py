@@ -148,9 +148,9 @@ class TestInitRun:
         assert state.run_id == custom_id
 
     def test_generated_run_id_format(self, state_manager: StateManager) -> None:
-        run_id = state_manager.init_run("slice-lifecycle", {"slice": "191"})
+        run_id = state_manager.init_run("slice", {"slice": "191"})
         assert run_id.startswith("run-")
-        assert "slice-lifecycle" in run_id
+        assert "slice" in run_id
 
 
 # ---------------------------------------------------------------------------
@@ -539,26 +539,26 @@ class TestFindMatchingRun:
         return run_id
 
     def test_finds_paused_run_by_params(self, state_manager: StateManager) -> None:
-        self._create_paused_run(state_manager, "slice-lifecycle", {"slice": "191"})
+        self._create_paused_run(state_manager, "slice", {"slice": "191"})
         match = state_manager.find_matching_run(
-            "slice-lifecycle", {"slice": "191"}, status="paused"
+            "slice", {"slice": "191"}, status="paused"
         )
         assert match is not None
         assert match.params["slice"] == "191"
 
     def test_returns_none_when_params_differ(self, state_manager: StateManager) -> None:
-        self._create_paused_run(state_manager, "slice-lifecycle", {"slice": "191"})
+        self._create_paused_run(state_manager, "slice", {"slice": "191"})
         match = state_manager.find_matching_run(
-            "slice-lifecycle", {"slice": "192"}, status="paused"
+            "slice", {"slice": "192"}, status="paused"
         )
         assert match is None
 
     def test_returns_none_when_status_doesnt_match(
         self, state_manager: StateManager
     ) -> None:
-        state_manager.init_run("slice-lifecycle", {"slice": "191"})
+        state_manager.init_run("slice", {"slice": "191"})
         match = state_manager.find_matching_run(
-            "slice-lifecycle", {"slice": "191"}, status="paused"
+            "slice", {"slice": "191"}, status="paused"
         )
         assert match is None
 

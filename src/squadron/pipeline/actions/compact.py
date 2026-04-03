@@ -74,31 +74,53 @@ def _parse_template(path: Path) -> CompactionTemplate:
     )
 
 
+class _LenientDict(dict[str, object]):
+    """Dict that returns the placeholder itself for missing keys.
+
+    Prevents ``KeyError`` when a template references a pipeline param
+    that isn't present (e.g. ``{slice}`` when no slice param was given).
+    """
+
+    def __missing__(self, key: str) -> str:
+        return f"{{{key}}}"
+
+
 def render_instructions(
     template: CompactionTemplate,
     *,
     keep: list[str] | None = None,
     summarize: bool = False,
+    pipeline_params: dict[str, object] | None = None,
 ) -> str:
-    """Render compaction instructions with the given parameters."""
+    """Render compaction instructions with the given parameters.
+
+    Pipeline params (e.g. ``slice``, ``model``) are available as
+    ``{param_name}`` placeholders in the template.  Unknown placeholders
+    are left as-is rather than raising ``KeyError``.
+    """
     if keep:
         keep_section = "Preserve the following artifacts in full:\n" + "\n".join(
             f"- {item}" for item in keep
         )
     else:
-        keep_section = "No specific artifacts designated for preservation."
+        keep_section = ""
 
     if summarize:
         summarize_section = (
             "After compaction, generate a concise summary of the compacted content."
         )
     else:
-        summarize_section = "No summary requested."
+        summarize_section = ""
 
-    return template.instructions.format(
+    format_vars = _LenientDict(
         keep_section=keep_section,
         summarize_section=summarize_section,
     )
+    if pipeline_params:
+        for k, v in pipeline_params.items():
+            format_vars[k] = str(v)
+
+    return template.instructions.format_map(format_vars).strip()
 
 
 class CompactAction:
@@ -166,7 +188,12 @@ class CompactAction:
                 error=str(exc),
             )
 
-        instructions = render_instructions(template, keep=keep, summarize=summarize)
+        instructions = render_instructions(
+            template,
+            keep=keep,
+            summarize=summarize,
+            pipeline_params=context.params,
+        )
 
         cf_client: ContextForgeClient = context.cf_client  # type: ignore[assignment]
 

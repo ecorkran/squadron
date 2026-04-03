@@ -55,7 +55,7 @@ def _success_registry() -> dict[str, object]:
 class TestSliceLifecycleIntegration:
     @pytest.mark.asyncio
     async def test_all_steps_completed(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         registry = _success_registry()
 
         result = await execute_pipeline(
@@ -67,12 +67,12 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 5
+        assert len(result.step_results) == 6
         assert all(sr.status == ExecutionStatus.COMPLETED for sr in result.step_results)
 
     @pytest.mark.asyncio
     async def test_on_step_complete_called_in_order(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         registry = _success_registry()
         received: list[StepResult] = []
 
@@ -85,7 +85,7 @@ class TestSliceLifecycleIntegration:
             _action_registry=registry,
         )
 
-        assert len(received) == 5
+        assert len(received) == 6
         step_names = [sr.step_name for sr in received]
         # All 5 lifecycle steps should appear in order
         assert step_names[0].startswith("design")
@@ -93,7 +93,7 @@ class TestSliceLifecycleIntegration:
 
     @pytest.mark.asyncio
     async def test_start_from_compact_skips_earlier_steps(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
         registry = _success_registry()
 
         # compact-2 is the third step (0-indexed)
@@ -107,13 +107,13 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        # Should only have 3 steps: compact, implement, devlog
-        assert len(result.step_results) == 3
+        # Should only have 4 steps: compact, implement, compact, devlog
+        assert len(result.step_results) == 4
         assert result.step_results[0].step_name == "compact-2"
 
     @pytest.mark.asyncio
     async def test_missing_required_param_slice(self) -> None:
-        definition = _no_project_pipeline("slice-lifecycle")
+        definition = _no_project_pipeline("slice")
 
         with pytest.raises(ValueError, match="slice"):
             await execute_pipeline(
@@ -128,7 +128,7 @@ class TestSliceLifecycleIntegration:
 class TestReviewOnlyIntegration:
     @pytest.mark.asyncio
     async def test_completed_with_pass_verdict(self) -> None:
-        definition = _no_project_pipeline("review-only")
+        definition = _no_project_pipeline("review")
         registry = _success_registry()
 
         result = await execute_pipeline(

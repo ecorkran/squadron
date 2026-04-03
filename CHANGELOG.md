@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `sq run` CLI command — pipeline execution, inspection, and management (slice 151)
+  - `sq run <pipeline> <target>` — execute a pipeline with positional target resolution
+  - `sq run --list` — discover and display available pipelines in a Rich table
+  - `sq run --validate <pipeline>` — semantic validation of pipeline definitions
+  - `sq run --dry-run <pipeline> <target>` — show execution plan without running
+  - `sq run --status [latest|<run-id>]` — display run status in a Rich panel
+  - `sq run --resume <run-id>` — resume a paused run from its checkpoint
+  - `sq run --from <step>` — mid-process adoption starting at a named step
+  - Implicit resume detection — prompts when a matching paused run is found
+  - `--param key=value` — repeatable option for additional pipeline parameters
+  - `--model` — CLI-level model override (cascade level 1)
+  - Keyboard interrupt handling with resume instructions
+  - CF pre-flight check prevents orphan state files
 - Pipeline state persistence — `StateManager` in `state.py` (slice 150)
   - `RunState`, `StepState`, `CheckpointState` Pydantic models; `SchemaVersionError` exception
   - Atomic write-then-rename: interrupted writes never corrupt existing state files

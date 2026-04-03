@@ -46,7 +46,7 @@ status: in_progress
 
 11. [x] **(150) Pipeline State and Resume** — State file persistence as JSON in `~/.config/squadron/runs/`. State captures completed steps with outputs, current step, checkpoint reason, review verdicts, and pipeline params. Resume from checkpoint or interruption via `sq run --resume <run-id>`. Mid-process adoption via `--from <step>` for starting at a specific step. Implicit resume detection when an existing run matches the same pipeline and params. Old run pruning. Dependencies: [149]. Risk: Low. Effort: 2/5
 
-12. [ ] **(151) CLI Integration and End-to-End Validation** — `sq run` Typer command surface: run a pipeline by name or path, `--resume`, `--status`, `--list`, `--validate`, `--dry-run`, `--slice`, `--model`, `--from`. Wire executor, state manager, and pipeline loader into the CLI presentation layer. Integration testing of built-in pipelines against a real CF project structure. Completes the initiative: `sq run slice-lifecycle --slice 191` is a working replacement for the markdown-based `/sq:run-slice`. Dependencies: [148, 149, 150]. Risk: Low. Effort: 2/5
+12. [x] **(151) CLI Integration and End-to-End Validation** — `sq run` Typer command surface: run a pipeline by name or path, `--resume`, `--status`, `--list`, `--validate`, `--dry-run`, `--slice`, `--model`, `--from`. Wire executor, state manager, and pipeline loader into the CLI presentation layer. Integration testing of built-in pipelines against a real CF project structure. Completes the initiative: `sq run slice-lifecycle --slice 191` is a working replacement for the markdown-based `/sq:run-slice`. Dependencies: [148, 149, 150]. Risk: Low. Effort: 2/5
 
 ---
 
@@ -96,7 +96,9 @@ Integration:
 
 2. [FUTURE] **Pipeline Notifications** — Notify human when a long-running pipeline hits a checkpoint (email, webhook, desktop notification). CLI-first checkpoints assume the human is at the terminal. Dependencies: [150]. Effort: 2/5
 
-3. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
+3. [FUTURE] **Multiple Positional Target Arguments** — Support additional positional args or `key=value` positional syntax for pipelines with multiple required params (e.g. `sq run review-only 123 template=arch` or `sq run review-only 123 arch`). Currently only the first required param is bound to the positional target; additional required params need `--param key=value`. Dependencies: [151]. Effort: 1/5
+
+4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
 
 ---
 
