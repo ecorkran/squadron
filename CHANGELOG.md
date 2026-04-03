@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `CompactAction` — pipeline action for context compaction (slice 147)
+  - Loads compaction instruction templates by name from `data/compaction/` with user override layering
+  - Renders instructions with `keep` and `summarize` parameters
+  - Issues rendered instructions to CF via `_run()`, optionally triggers CF summarize
+  - Auto-registers at module import time
+- Compaction instruction templates — YAML-based instruction templates (slice 147)
+  - Ships `default.yaml` with draft compaction instructions
+  - User overrides via `~/.config/squadron/compaction/`
+- `PhaseStepType` — step type for design/tasks/implement phases (slice 147)
+  - Expands to 6-action sequence: cf-op(set_phase) → cf-op(build) → dispatch → review → checkpoint → commit
+  - Handles optional review (str or dict) and checkpoint config
+  - Registers for all three phase names
+- `CompactStepType` — step type for context compaction (slice 147)
+  - Translates keep/summarize/template config into single compact action
+- `ReviewStepType` — standalone review step type (slice 147)
+  - Expands to review + optional checkpoint
+- `DevlogStepType` — devlog step type (slice 147)
+  - Expands to single devlog action with auto/explicit mode support
 - `ReviewAction` — pipeline action for review gates (slice 146)
   - Delegates to `run_review_with_profile()`, maps `ReviewResult` to `ActionResult` with verdict and structured findings
   - Model/profile resolution via 5-level cascade, same pattern as dispatch
