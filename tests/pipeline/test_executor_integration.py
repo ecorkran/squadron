@@ -67,7 +67,7 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 5
+        assert len(result.step_results) == 6
         assert all(sr.status == ExecutionStatus.COMPLETED for sr in result.step_results)
 
     @pytest.mark.asyncio
@@ -85,7 +85,7 @@ class TestSliceLifecycleIntegration:
             _action_registry=registry,
         )
 
-        assert len(received) == 5
+        assert len(received) == 6
         step_names = [sr.step_name for sr in received]
         # All 5 lifecycle steps should appear in order
         assert step_names[0].startswith("design")
@@ -107,8 +107,8 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        # Should only have 3 steps: compact, implement, devlog
-        assert len(result.step_results) == 3
+        # Should only have 4 steps: compact, implement, compact, devlog
+        assert len(result.step_results) == 4
         assert result.step_results[0].step_name == "compact-2"
 
     @pytest.mark.asyncio

@@ -49,9 +49,16 @@ class TestBuiltInPipelineStructure:
             project_dir=_NONEXISTENT,
             user_dir=_NONEXISTENT,
         )
-        assert len(defn.steps) == 5
+        assert len(defn.steps) == 6
         step_types = [s.step_type for s in defn.steps]
-        assert step_types == ["design", "tasks", "compact", "implement", "devlog"]
+        assert step_types == [
+            "design",
+            "tasks",
+            "compact",
+            "implement",
+            "compact",
+            "devlog",
+        ]
 
     def test_review_only_steps(self) -> None:
         defn = load_pipeline(

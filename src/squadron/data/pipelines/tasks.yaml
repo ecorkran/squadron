@@ -14,8 +14,7 @@ steps:
       checkpoint: on-fail
 
   - compact:
-      keep: [design, tasks]
-      summarize: true
+      template: minimal
 
   - implement:
       phase: 6
@@ -24,5 +23,8 @@ steps:
         template: code
         model: minimax
       checkpoint: on-fail
+
+  - compact:
+      template: minimal
 
   - devlog: auto

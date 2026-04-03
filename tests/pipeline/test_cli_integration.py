@@ -116,14 +116,14 @@ class TestCliIntegration:
             )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 5
+        assert len(result.step_results) == 6
 
         # State file should be loadable
         mgr = StateManager(runs_dir=tmp_path)
         runs = mgr.list_runs()
         assert len(runs) == 1
         assert runs[0].status == "completed"
-        assert len(runs[0].completed_steps) == 5
+        assert len(runs[0].completed_steps) == 6
 
     @pytest.mark.asyncio
     async def test_state_file_loadable_after_run(self, tmp_path: Path) -> None:
@@ -186,7 +186,7 @@ class TestCliIntegration:
 
         final = mgr.load(run_id)
         assert final.status == "completed"
-        assert len(final.completed_steps) == 5
+        assert len(final.completed_steps) == 6
 
     # -------------------------------------------------------------------
     # T18: --from mid-process adoption

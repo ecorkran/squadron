@@ -1,0 +1,6 @@
+name: minimal
+description: "Lean compaction — keep current slice context, drop the rest"
+
+instructions: |
+  Keep slice design, task breakdown, and any task implementation summaries for slice {slice}.
+  Keep outline of any related architectural or review discussion.

@@ -112,7 +112,7 @@ class TestStateIntegration:
 
         state = mgr.load(run_id)
         assert state.status == "completed"
-        assert len(state.completed_steps) == 5
+        assert len(state.completed_steps) == 6
         step_names = [s.step_name for s in state.completed_steps]
         assert any("design" in n for n in step_names)
         assert any("devlog" in n for n in step_names)
@@ -161,5 +161,5 @@ class TestStateIntegration:
         final = mgr.load(run_id)
         assert final.status == "completed"
         # All 5 steps should be in completed_steps across both segments
-        assert len(final.completed_steps) == 5
+        assert len(final.completed_steps) == 6
         _ = prior_outputs  # consumed by executor internally
