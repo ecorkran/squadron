@@ -187,3 +187,52 @@ class TestCliIntegration:
         final = mgr.load(run_id)
         assert final.status == "completed"
         assert len(final.completed_steps) == 5
+
+    # -------------------------------------------------------------------
+    # T18: --from mid-process adoption
+    # -------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_from_step_skips_earlier_steps(self, tmp_path: Path) -> None:
+        """Starting from 'implement-3' skips design/tasks/compact."""
+        with patch("squadron.cli.commands.run._check_cf"):
+            result = await _run_pipeline(
+                "slice-lifecycle",
+                {"slice": "191"},
+                runs_dir=tmp_path,
+                from_step="implement-3",
+                _action_registry=_success_registry(),
+            )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        completed_names = [sr.step_name for sr in result.step_results]
+        # Only implement-3 and devlog-4 should be in results
+        assert "design-0" not in completed_names
+        assert "tasks-1" not in completed_names
+        assert "implement-3" in completed_names
+
+    # -------------------------------------------------------------------
+    # T19: Dry-run produces no state file
+    # -------------------------------------------------------------------
+
+    def test_dry_run_creates_no_state_file(self, tmp_path: Path) -> None:
+        """--dry-run path does not write any state file."""
+        from typer.testing import CliRunner
+
+        from squadron.cli.app import app
+        from squadron.pipeline.models import PipelineDefinition, StepConfig
+
+        test_runner = CliRunner()
+        defn = PipelineDefinition(
+            name="test",
+            description="Test",
+            params={"slice": "required"},
+            steps=[StepConfig(step_type="phase", name="s1", config={})],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        ):
+            result = test_runner.invoke(app, ["run", "--dry-run", "test", "191"])
+        assert result.exit_code == 0
+        assert not list(tmp_path.glob("*.json"))

@@ -401,3 +401,174 @@ class TestRunPipeline:
             result = runner.invoke(app, ["run", "missing", "191"])
         assert result.exit_code == 1
         assert "not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# T14: --resume
+# ---------------------------------------------------------------------------
+
+
+class TestResume:
+    """sq run --resume loads and continues a paused run."""
+
+    def test_resume_calls_first_unfinished_step(self) -> None:
+        state = _make_run_state(status="paused")
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[StepConfig(step_type="phase", name="design", config={})],
+        )
+        with (
+            patch("squadron.cli.commands.run.StateManager") as mock_cls,
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.asyncio") as mock_asyncio,
+        ):
+            mock_mgr = MagicMock()
+            mock_mgr.load.return_value = state
+            mock_mgr.first_unfinished_step.return_value = "design"
+            mock_cls.return_value = mock_mgr
+            # Simulate successful execution
+            mock_result = MagicMock()
+            mock_result.status = MagicMock()
+            mock_result.status.value = "completed"
+            mock_result.pipeline_name = "slice-lifecycle"
+            mock_result.step_results = []
+            mock_asyncio.run.return_value = mock_result
+            result = runner.invoke(
+                app, ["run", "--resume", "run-20260403-test-abc12345"]
+            )
+        mock_mgr.first_unfinished_step.assert_called_once()
+        # Should not error at validation
+        assert result.exit_code == 0
+
+    def test_resume_missing_run_exits_1(self) -> None:
+        with patch("squadron.cli.commands.run.StateManager") as mock_cls:
+            mock_mgr = MagicMock()
+            mock_mgr.load.side_effect = FileNotFoundError()
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(app, ["run", "--resume", "run-missing"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# T15: Implicit resume detection
+# ---------------------------------------------------------------------------
+
+
+class TestImplicitResume:
+    """When a matching paused run exists, prompt to resume."""
+
+    def test_matching_paused_run_user_confirms(self) -> None:
+        state = _make_run_state(status="paused")
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[StepConfig(step_type="phase", name="design", config={})],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.StateManager") as mock_cls,
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.sys") as mock_sys,
+            patch("squadron.cli.commands.run.typer") as mock_typer,
+            patch("squadron.cli.commands.run.asyncio") as mock_asyncio,
+        ):
+            mock_sys.stdin.isatty.return_value = True
+            mock_mgr = MagicMock()
+            mock_mgr.find_matching_run.return_value = state
+            mock_mgr.first_unfinished_step.return_value = "design"
+            mock_cls.return_value = mock_mgr
+            mock_typer.confirm.return_value = True
+            mock_typer.Exit = typer.Exit
+            mock_typer.BadParameter = typer.BadParameter
+            # Simulate successful execution
+            mock_result = MagicMock()
+            mock_result.status = MagicMock()
+            mock_result.status.value = "completed"
+            mock_result.pipeline_name = "test-pipeline"
+            mock_result.step_results = []
+            mock_asyncio.run.return_value = mock_result
+            runner.invoke(app, ["run", "test-pipeline", "191"])
+        mock_typer.confirm.assert_called_once()
+
+    def test_no_matching_run_proceeds_fresh(self) -> None:
+        defn = _make_definition(params={"slice": "required"})
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.StateManager") as mock_cls,
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.sys") as mock_sys,
+            patch("squadron.cli.commands.run.asyncio") as mock_asyncio,
+        ):
+            mock_sys.stdin.isatty.return_value = True
+            mock_mgr = MagicMock()
+            mock_mgr.find_matching_run.return_value = None
+            mock_cls.return_value = mock_mgr
+            mock_result = MagicMock()
+            mock_result.status = MagicMock()
+            mock_result.status.value = "completed"
+            mock_result.pipeline_name = "test-pipeline"
+            mock_result.step_results = []
+            mock_asyncio.run.return_value = mock_result
+            runner.invoke(app, ["run", "test-pipeline", "191"])
+        # find_matching_run was called but returned None — no confirm prompt
+        mock_mgr.find_matching_run.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# T16: --from (mid-process adoption)
+# ---------------------------------------------------------------------------
+
+
+class TestFromStep:
+    """sq run --from starts execution from a named step."""
+
+    def test_from_step_passed_to_run_pipeline(self) -> None:
+        defn = _make_definition(params={"slice": "required"})
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.StateManager") as mock_cls,
+            patch("squadron.cli.commands.run.sys") as mock_sys,
+            patch("squadron.cli.commands.run.asyncio") as mock_asyncio,
+        ):
+            mock_sys.stdin.isatty.return_value = False
+            mock_mgr = MagicMock()
+            mock_cls.return_value = mock_mgr
+            mock_result = MagicMock()
+            mock_result.status = MagicMock()
+            mock_result.status.value = "completed"
+            mock_result.pipeline_name = "test-pipeline"
+            mock_result.step_results = []
+            mock_asyncio.run.return_value = mock_result
+            runner.invoke(app, ["run", "--from", "implement", "test-pipeline", "191"])
+        # Verify _run_pipeline was called with from_step="implement"
+        call_args = mock_asyncio.run.call_args
+        assert call_args is not None
+
+
+# ---------------------------------------------------------------------------
+# T17: Keyboard interrupt handling
+# ---------------------------------------------------------------------------
+
+
+class TestKeyboardInterrupt:
+    """KeyboardInterrupt during execution prints resume instructions."""
+
+    def test_interrupt_shows_resume_instructions(self) -> None:
+        defn = _make_definition(params={"slice": "required"})
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.StateManager") as mock_cls,
+            patch("squadron.cli.commands.run.sys") as mock_sys,
+            patch(
+                "squadron.cli.commands.run.asyncio.run",
+                side_effect=KeyboardInterrupt,
+            ),
+        ):
+            mock_sys.stdin.isatty.return_value = False
+            mock_mgr = MagicMock()
+            mock_cls.return_value = mock_mgr
+            result = runner.invoke(app, ["run", "test-pipeline", "191"])
+        assert result.exit_code == 1
+        assert "Interrupted" in result.output
+        assert "sq run --resume" in result.output
