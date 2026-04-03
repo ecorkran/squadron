@@ -69,6 +69,14 @@ status: not_started
   - [ ] Add private `_state_path(run_id: str) -> Path` — returns `runs_dir / f"{run_id}.json"`
   - [ ] Success: `StateManager(runs_dir=tmp_path)` creates the directory if missing; `tmp_path` is used (no real `~/.config` accessed)
 
+- [ ] **T4a — Tests: atomic write helper**
+  - [ ] Test that `_write_atomic` creates the target file with the expected content
+  - [ ] Test that a `.tmp` sibling left from a prior interrupted write is overwritten cleanly
+        (write a stale `.tmp` file manually, then call `_write_atomic` and verify target is correct)
+  - [ ] Test that the original target file is not modified if a second write's content is
+        the same (i.e., the rename is idempotent and the original survives a new write)
+  - [ ] All tests pass; no `.tmp` files left on disk after any passing test
+
 - [ ] **T5 — `StateManager.init_run`**
   - [ ] Implement `init_run(self, pipeline_name: str, params: dict[str, object], run_id: str | None = None) -> str`
   - [ ] If `run_id` is `None`, generate: `f"run-{date}-{slug}-{uuid4().hex[:8]}"` where
