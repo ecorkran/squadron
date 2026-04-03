@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import yaml
 
@@ -65,10 +66,11 @@ def _parse_template(path: Path) -> CompactionTemplate:
     if not isinstance(raw, dict):
         raise ValueError(f"Compaction template is not a YAML mapping: {path}")
 
+    data = cast(dict[str, object], raw)
     return CompactionTemplate(
-        name=str(raw["name"]),
-        description=str(raw["description"]),
-        instructions=str(raw["instructions"]),
+        name=str(data["name"]),
+        description=str(data["description"]),
+        instructions=str(data["instructions"]),
     )
 
 
@@ -111,7 +113,8 @@ class CompactAction:
 
         keep = config.get("keep")
         if keep is not None and (
-            not isinstance(keep, list) or not all(isinstance(k, str) for k in keep)
+            not isinstance(keep, list)
+            or not all(isinstance(item, str) for item in cast(list[object], keep))
         ):
             errors.append(
                 ValidationError(
@@ -147,7 +150,9 @@ class CompactAction:
         template_name = str(context.params.get("template", "default"))
         keep_raw = context.params.get("keep")
         keep: list[str] | None = (
-            [str(k) for k in keep_raw] if isinstance(keep_raw, list) else None
+            [str(item) for item in cast(list[object], keep_raw)]
+            if isinstance(keep_raw, list)
+            else None
         )
         summarize = bool(context.params.get("summarize", False))
 
