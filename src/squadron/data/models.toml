@@ -229,3 +229,16 @@ input = 0.20
 output = 0.50
 cache_read = 0.05
 cache_write = 0.20
+
+[aliases.qwen36-free]
+profile = "openrouter"
+model = "qwen/qwen3.6-plus:free"
+private = false
+cost_tier = "free"
+notes = "Preview - Not Private"
+
+[aliases.qwen36-free.pricing]
+input = 0.00
+output = 0.00
+cache_read = 0.00
+cache_write = 0.00
