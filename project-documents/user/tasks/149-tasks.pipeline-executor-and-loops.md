@@ -97,35 +97,44 @@ status: not_started
 
 ---
 
-## T5 — Core Executor (Sequential, No Loops)
+## T5a — Core Executor: Happy Path
 
 - [ ] Implement `execute_pipeline(definition, params, *, resolver, cf_client, cwd=None, run_id=None, start_from=None, on_step_complete=None) -> PipelineResult` in `executor.py`:
   - [ ] Merge params with definition defaults; validate required params (raise `ValueError` for missing)
   - [ ] Auto-generate `run_id` via `uuid.uuid4().hex[:12]` if not provided
   - [ ] Default `cwd` to `os.getcwd()` if not provided
-  - [ ] Skip steps before `start_from` if provided (match by step name); raise `ValueError` if name not found
   - [ ] For each step: resolve placeholders, look up step type, expand to action list
   - [ ] For `each` step type: skip expansion (return empty), handle separately in T8
   - [ ] For each action: build `ActionContext`, call `action.execute(context)`, accumulate in `prior_outputs`
   - [ ] `ActionContext.params` = merged pipeline params + action config (action config keys override)
   - [ ] Key `prior_outputs` by `"{action_type}-{index}"` within the step
-  - [ ] On checkpoint pause (`outputs.get("checkpoint") == "paused"`): build `StepResult(status=PAUSED)`, build `PipelineResult(status=PAUSED, paused_at=step_name)`, call `on_step_complete`, return immediately
-  - [ ] On action failure (`result.success is False`): build `StepResult(status=FAILED)`, `PipelineResult(status=FAILED)`, call callback, return
   - [ ] On step success: build `StepResult(status=COMPLETED)`, call `on_step_complete`
   - [ ] After all steps: return `PipelineResult(status=COMPLETED)`
-  - [ ] All actions imported via `get_action()`, all step types via `get_step_type()`
   - [ ] Import all action and step modules to trigger registration (same pattern as `validate_pipeline`)
 
-- [ ] Tests for core executor (use mocked step types and actions):
+- [ ] Tests for happy path (use mocked step types and actions):
   - [ ] Single step, single action, success → `PipelineResult(status=COMPLETED)`, 1 step result
   - [ ] Two steps → both step results present in order
   - [ ] `prior_outputs` from step 1 action available in step 2 action context
+  - [ ] `on_step_complete` called once per completed step
   - [ ] Missing required param → `ValueError`
+
+---
+
+## T5b — Core Executor: Error Handling and Skip Logic
+
+- [ ] Add `start_from` skip logic to `execute_pipeline()`:
+  - [ ] Skip steps before the named step (match by `step.name`); raise `ValueError` if name not found in definition
+
+- [ ] Add failure and checkpoint handling to `execute_pipeline()`:
+  - [ ] On checkpoint pause (`outputs.get("checkpoint") == "paused"`): build `StepResult(status=PAUSED)`, `PipelineResult(status=PAUSED, paused_at=step_name)`, call `on_step_complete`, return immediately
+  - [ ] On action failure (`result.success is False`): build `StepResult(status=FAILED)`, `PipelineResult(status=FAILED)`, call callback, return
+
+- [ ] Tests for error handling and skip:
   - [ ] `start_from` skips earlier steps; named step executes
   - [ ] `start_from` with unknown step name → `ValueError`
-  - [ ] Action failure → `FAILED`, pipeline stops (no step 2)
-  - [ ] Checkpoint pause → `PAUSED`, `paused_at` set correctly
-  - [ ] `on_step_complete` called once per completed step
+  - [ ] Action failure → `FAILED`, pipeline stops (step 2 does not execute)
+  - [ ] Checkpoint pause → `PAUSED`, `paused_at` set to the correct step name
 
 **Commit:** `feat: add pipeline executor core — sequential step execution`
 
@@ -173,8 +182,7 @@ status: not_started
   - [ ] Class with `step_type = "each"` property
   - [ ] `validate(config) -> list[ValidationError]`:
     - Require `source` (str), `as` (str), `steps` (list)
-    - Source string must match `r"(\w+)\.(\w+)\([^)]*\)"` pattern
-    - Namespace and function must be known in source registry (import source registry from executor)
+    - Source string must match `r"(\w+)\.(\w+)\([^)]*\)"` pattern (structural check only — registry check is executor-time, not validate-time)
     - Inner `steps` list must be non-empty
     - Return `ValidationError` for each violation
   - [ ] `expand(config) -> list[tuple[str, dict[str, object]]]`:
@@ -185,7 +193,7 @@ status: not_started
 - [ ] Tests for `EachStepType`:
   - [ ] `validate()` returns no errors for valid `design-batch`-style config
   - [ ] `validate()` errors on missing `source`, missing `as`, missing `steps`
-  - [ ] `validate()` errors on unrecognized namespace or function in source
+  - [ ] `validate()` errors on malformed source string (no match for the regex pattern)
   - [ ] `validate()` errors on empty inner steps list
   - [ ] `expand()` returns empty list
   - [ ] Step type is registered under `"each"` after import
@@ -199,7 +207,7 @@ status: not_started
   - [ ] `_SOURCE_REGISTRY: dict[tuple[str, str], SourceFn]`
   - [ ] `_cf_unfinished_slices(args, cf_client, params)`: calls `cf_client.list_slices()`, filters `status != "complete"`, returns list of dicts with keys `index`, `name`, `status`, `design_file`
   - [ ] Register `("cf", "unfinished_slices")` in the registry
-  - [ ] `_parse_source(source_str) -> tuple[str, str, list[str]]`: parses namespace, function, args with regex `r"(\w+)\.(\w+)\(([^)]*)\)"`; raises `ValueError` for unrecognized namespace/function
+  - [ ] `_parse_source(source_str) -> tuple[str, str, list[str]]`: parses namespace, function, args with regex `r"(\w+)\.(\w+)\(([^)]*)\)"`; raises `ValueError` for unrecognized namespace/function combination (checked against `_SOURCE_REGISTRY`)
 
 - [ ] In `execute_pipeline()`, add `each` branch:
   - [ ] Detect `step.step_type == "each"` before normal expand path
