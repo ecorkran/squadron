@@ -27,12 +27,13 @@ Implement the compact action and four step type implementations that bridge the 
 ### Included
 
 1. **Compact action** (`src/squadron/pipeline/actions/compact.py`) — Issue compaction instructions to CF with configurable preservation rules.
-2. **Phase step type** (`src/squadron/pipeline/steps/phase.py`) — Expands to: cf-op(set_phase) → cf-op(build) → dispatch → review → checkpoint → commit. Handles optional review/checkpoint/model config.
-3. **Compact step type** (`src/squadron/pipeline/steps/compact.py`) — Translates high-level params (`keep`, `summarize`) into compact action config.
-4. **Review step type** (`src/squadron/pipeline/steps/review.py`) — Standalone review + optional checkpoint sequence.
-5. **Devlog step type** (`src/squadron/pipeline/steps/devlog.py`) — Single devlog action with mode support (`auto` or explicit content).
-6. **Step type auto-registration** — Each step type module registers itself at import time (same pattern as actions).
-7. **Registry integration tests** — Verify all step types coexist in the registry.
+2. **Compaction instruction templates** (`src/squadron/data/compaction/`) — YAML template files following the review templates pattern. Compact action loads instructions by template name, renders with step params (`keep`, `summarize`). Ships a `default.yaml` with draft instructions — content is placeholder until end-to-end pipeline testing in slice 151. User overrides via `~/.config/squadron/compaction/`.
+3. **Phase step type** (`src/squadron/pipeline/steps/phase.py`) — Expands to: cf-op(set_phase) → cf-op(build) → dispatch → review → checkpoint → commit. Handles optional review/checkpoint/model config.
+4. **Compact step type** (`src/squadron/pipeline/steps/compact.py`) — Translates high-level params (`keep`, `summarize`) into compact action config.
+5. **Review step type** (`src/squadron/pipeline/steps/review.py`) — Standalone review + optional checkpoint sequence.
+6. **Devlog step type** (`src/squadron/pipeline/steps/devlog.py`) — Single devlog action with mode support (`auto` or explicit content).
+7. **Step type auto-registration** — Each step type module registers itself at import time (same pattern as actions).
+8. **Registry integration tests** — Verify all step types coexist in the registry.
 
 ### Excluded
 
@@ -186,9 +187,12 @@ When `checkpoint` is omitted, the checkpoint action is omitted.
 The compact action needs to issue compaction instructions to CF. The existing `ContextForgeClient` doesn't have a dedicated `compact()` method — the `summarize` command is the closest operation, already exposed via `CfOperation.SUMMARIZE`.
 
 **Decision:** The compact action will:
-1. Call `cf summarize` via the existing `CfOperation.SUMMARIZE` path for the summarize operation.
-2. For `keep` parameters, pass them as arguments to the CF CLI: `cf context summarize --keep design,tasks` (or equivalent CF syntax). If CF doesn't support `--keep` flags directly, the compact action will construct the appropriate CF command.
-3. The compact action will validate `keep` values against a known set of artifact names.
+1. Load a compaction instruction template by name (defaulting to `default`) from `src/squadron/data/compaction/`, with user overrides from `~/.config/squadron/compaction/` layered on top (same loading pattern as review templates from slice 141).
+2. Render the template with step config params (`keep`, `summarize`) to produce the final instruction text.
+3. Issue the rendered instructions to CF via `cf_client._run()`.
+4. Validate `keep` values against a known set of artifact names.
+
+Compaction instruction templates are YAML files with an `instructions` field containing the prompt text. The `default.yaml` ships with draft content — the instructions will be refined during end-to-end pipeline testing in slice 151 when actual compaction results can be evaluated.
 
 The compact action uses `cf_client._run()` to issue CF commands — the same pattern established by `CfOpAction` in slice 144, which uses `_run()` with `pyright: ignore[reportPrivateUsage]`. This is a known limitation: `ContextForgeClient` currently exposes only high-level typed methods (`list_slices`, `list_tasks`, `get_project`) with no public method for issuing arbitrary CF commands. All pipeline actions that need raw CF access use `_run()`. A future improvement would add a public `run_command()` method to `ContextForgeClient` — tracked as a candidate for CF integration maintenance, not a blocker for this slice.
 
