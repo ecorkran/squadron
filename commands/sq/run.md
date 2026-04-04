@@ -61,7 +61,7 @@ Run the `command` field via Bash. Example: `cf set phase 4`, `cf build`.
 
 ### dispatch
 This is in-session work — you perform the task described in `instruction`.
-If `model_switch` is present (e.g., `/model opus`), **run the model switch command first** before performing the work. Output the command as text (e.g., `/model haiku`) so the system switches to the specified model. After the dispatch work is complete, switch back to the previous model if needed.
+If `model_switch` is present (e.g., `/model opus`), note the recommended model for the user. Model switching cannot be automated — only the user can issue `/model` commands. State which model is recommended so the user can switch if desired.
 
 ### review
 Run the `command` field via Bash. Example: `sq review slice 152 --model glm5 -v`.

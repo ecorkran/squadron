@@ -7,7 +7,7 @@ params:
 steps:
   - design:
       phase: 4
-      model: haiku
+      model: sonnet
       review: 
         template: slice
         model: minimax
