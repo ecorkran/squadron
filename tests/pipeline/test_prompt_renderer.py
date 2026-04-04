@@ -407,7 +407,7 @@ class TestRenderStepInstructions:
         types = [a.action_type for a in result.actions]
         assert "review" not in types
         assert "checkpoint" not in types
-        # Should have: cf-op(set_phase), cf-op(set_slice), cf-op(build), dispatch, commit
+        # set_phase, set_slice, build, dispatch, commit
         assert len(result.actions) == 5
 
     def test_to_json_round_trip(self) -> None:
