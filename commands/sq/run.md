@@ -1,152 +1,142 @@
-Run a squadron workflow.
+Run a squadron pipeline via the prompt-only executor.
 
 ## Input parsing
 
-The first word of `$ARGUMENTS` is the subcommand. The remainder is the argument passed to the workflow.
+The first word of `$ARGUMENTS` is the pipeline name. The remainder is the target argument passed to the pipeline.
 
-Valid subcommands: `slice`
-
-If the subcommand is missing or unrecognized, show the usage below and stop.
+If the pipeline name is missing, show the usage below and stop.
 
 **Usage:**
 ```
-/sq:run slice [NUMBER | NAME]    — automate full slice lifecycle
+/sq:run <pipeline> [target]    — run a pipeline (e.g., /sq:run slice 152)
 ```
 
 ---
 
-## Subcommand: slice
+## Step 0: Validate and Initialize
 
-Automate the full slice lifecycle — design, task breakdown, and implementation — for the specified slice.
-
-The remainder of `$ARGUMENTS` (after stripping the leading `slice` word) is the slice number or name (e.g., `118` or `composed-workflows`).
-
-If no slice number or name is provided, ask the user which slice to run.
-
-## Step 0: Validate
-
-Run `cf get` to confirm:
-- A slice plan is set (fileSlicePlan field is not empty)
-- The project is initialized
-
-If `cf get` fails or is not available, report that Context-Forge is required and stop.
-
-Run `cf list slices --json` and find the entry matching the slice argument (by index number or by name). Extract:
-- The slice `index` (referred to as `{nnn}` below)
-- The slice `name`
-- The `designFile` path (may be null if not yet created)
-
-Extract the slice identifier for `cf set slice` from the design file name or entry name.
-
-If no matching entry is found, report the error and stop.
-
-## Step 1: Phase 4 — Slice Design
-
-Set up and build context for slice design:
-
-`cf set phase 4`
-`cf set slice {slice-identifier}`
-`cf build`
-
-Follow the instructions from `cf build` output to create the slice design. This is the core design work — create the slice design document at the expected path.
-
-When the slice design is complete, proceed to step 2.
-
-## Step 2: Phase 5 — Task Breakdown
-
-Advance to task breakdown:
-
-`cf set phase 5`
-`cf build`
-
-Follow the instructions from `cf build` output to create the task breakdown. Create the task file at the expected path.
-
-When the task breakdown is complete, review it.
-
-Run `cf list slices --json` and `cf list tasks --json` to resolve the current file paths for this slice (they may have been created in step 1/2). Then run:
-
-`sq review tasks {task-file-path} --against {design-file-path} -v`
-
-Note: Add `--model ALIAS` to use a different model (e.g., `--model gpt4o`). Model aliases automatically set the correct provider profile. Run `sq model list` to see available aliases. You can also specify `--profile PROFILE` explicitly (e.g., `--profile openrouter --model anthropic/claude-3.5-sonnet`).
-
-Save the review output to `project-documents/user/reviews/{nnn}-review.tasks.{slice-name}.md`. Include YAML frontmatter:
-
-```yaml
----
-docType: review
-reviewType: tasks
-slice: {slice-name}
-project: squadron
-verdict: {PASS|CONCERNS|FAIL}
-dateCreated: YYYYMMDD
-dateUpdated: YYYYMMDD
----
+Run:
+```bash
+sq run <pipeline> <target> --prompt-only
 ```
 
-Then the full review output as the body.
+This initializes the pipeline run and outputs the first step's instructions as JSON. Capture:
+- The `run_id` (printed to stderr as `run_id=<value>`)
+- The JSON step instructions (printed to stdout)
 
-### Review gate:
-- **PASS**: Commit the task breakdown and review file, proceed to step 3.
-- **CONCERNS (minor)**: Commit the task breakdown and review file, note the concerns but proceed. Minor concerns can be addressed during implementation.
-- **CONCERNS (significant) or FAIL**: Attempt to fix the findings and re-run the review once (overwrite the review file). If it still fails, commit the review file and stop — present the findings to the user for guidance.
+If the command fails (invalid pipeline, missing params), show the error and stop.
 
-<!-- TODO: Smarter review loop — track iteration count, categorize finding severity, signal human when stuck rather than retrying blindly -->
-
-## Step 3: Compact
-
-Compact the context to free space for implementation:
-
-/compact [keep slice design, task breakdown, and task review summaries for slice {nnn}]
-
-## Step 4: Phase 6 — Implementation
-
-Advance to implementation:
-
-`cf set phase 6`
-`cf build`
-
-Follow the instructions from `cf build` output to implement the slice from the task breakdown.
-
-When implementation is complete, review the code:
-
-`sq review code --diff main -v`
-
-Save the review output to `project-documents/user/reviews/{nnn}-review.code.{slice-name}.md`. Include YAML frontmatter:
-
-```yaml
 ---
-docType: review
-reviewType: code
-slice: {slice-name}
-project: squadron
-verdict: {PASS|CONCERNS|FAIL}
-dateCreated: YYYYMMDD
-dateUpdated: YYYYMMDD
----
+
+## Main Loop
+
+Parse the JSON output. The structure is:
+
+```json
+{
+  "run_id": "...",
+  "step_name": "...",
+  "step_type": "...",
+  "step_index": 0,
+  "total_steps": 6,
+  "actions": [
+    {
+      "action_type": "cf-op|dispatch|review|checkpoint|commit|compact|devlog",
+      "instruction": "Human-readable description",
+      "command": "shell command to run (if applicable)",
+      "model": "model alias (if applicable)",
+      "model_switch": "/model alias (if applicable)",
+      "template": "template name (if applicable)",
+      "trigger": "checkpoint trigger (if applicable)",
+      "resolved_instructions": "resolved compact instructions (if applicable)"
+    }
+  ]
+}
 ```
 
-Then the full review output as the body.
+For each action in the step's `actions` list, execute based on `action_type`:
 
-### Review gate:
-- **PASS**: Commit the review file, proceed to step 5.
-- **CONCERNS (minor)**: Commit the review file, note the concerns, proceed to step 5 with caveats.
-- **CONCERNS (significant) or FAIL**: Attempt to fix the findings and re-run the review once (overwrite the review file). If it still fails, commit the review file and stop — present the findings to the user for guidance.
+### cf-op
+Run the `command` field via Bash. Example: `cf set phase 4`, `cf build`.
 
-<!-- TODO: Smarter review loop — detect which findings are auto-fixable vs. need human input, track fix attempts, avoid infinite loops -->
+### dispatch
+This is in-session work — you perform the task described in `instruction`.
+If `model_switch` is present (e.g., `/model opus`), note the recommended model. In Claude Code CLI sessions, you can issue the model switch command. In IDE sessions, this is informational only.
 
-## Step 5: DEVLOG Entry
+### review
+Run the `command` field via Bash. Example: `sq review slice 152 --model glm5 --template slice -v`.
+Capture the output. The review will produce a verdict (PASS, CONCERNS, FAIL) and persist the review file automatically.
 
-Write a session state summary to the project's root `DEVLOG.md`. Use `cf prompt get session-state-summary` to retrieve the summary template. The entry should briefly capture:
-- Which slice was processed
-- Review verdicts (task review and code review)
-- Any unresolved concerns or deferred items
+### checkpoint
+Evaluate based on the `trigger` field and the previous review's verdict:
+- `on-concerns`: Pause if verdict is CONCERNS or FAIL
+- `on-fail`: Pause if verdict is FAIL
+- `always`: Always pause for user decision
+- `never`: Skip (continue automatically)
+
+If the checkpoint triggers, present the review findings to the user and ask for a decision:
+- **Continue**: Proceed to the next step
+- **Abort**: Stop the pipeline
+
+If the checkpoint does not trigger, continue automatically.
+
+### commit
+Run the `command` field via Bash. Example: `git add -A && git commit -m 'phase-4: ...'`.
+
+### compact
+Run the `command` field, which is a `/compact [...]` invocation with resolved instructions.
+The `resolved_instructions` field contains the full compaction instructions for reference.
+
+### devlog
+Execute the work described in `instruction` — write a DEVLOG entry capturing the pipeline run state.
+
+---
+
+## After Each Step
+
+After completing all actions in a step, mark it done:
+
+```bash
+sq run --step-done <run-id>
+```
+
+If the step included a review action, include the verdict:
+
+```bash
+sq run --step-done <run-id> --verdict <PASS|CONCERNS|FAIL>
+```
+
+---
+
+## Get Next Step
+
+After marking a step done, request the next step:
+
+```bash
+sq run --prompt-only --next --resume <run-id>
+```
+
+Parse the JSON output:
+- If it contains `step_name` and `actions`, loop back to the Main Loop.
+- If it contains `"status": "completed"`, the pipeline is done — proceed to Completion.
+
+---
+
+## Error Handling
+
+- If `sq run --prompt-only` fails on initialization: show the error and stop.
+- If `sq run --step-done` fails: show the error but don't lose progress. The run state is preserved and can be resumed.
+- If a checkpoint pauses execution: present findings to the user. On abort, the run can be resumed later with `sq run --prompt-only --next --resume <run-id>`.
+- If a review verdict is FAIL with an `on-fail` checkpoint: stop and present findings. Do not silently continue.
+
+---
 
 ## Completion
 
-When all steps are done, provide a brief summary:
-- Slice design file path
-- Task file path
-- Review file paths
-- Commits made during implementation
-- Review verdicts (task review and code review)
+When the pipeline returns `"status": "completed"`, provide a brief summary:
+- Steps completed and their verdicts
+- Artifacts created (design files, task files, review files)
+- Commits made during the pipeline
 - Any unresolved concerns or deferred items
+
+Run `sq run --status <run-id>` for a final state summary if needed.
