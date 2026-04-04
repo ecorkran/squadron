@@ -100,6 +100,7 @@ class PhaseStepType:
 
         actions: list[tuple[str, dict[str, object]]] = [
             ("cf-op", {"operation": "set_phase", "phase": phase}),
+            ("cf-op", {"operation": "set_slice", "slice": "{slice}"}),
             ("cf-op", {"operation": "build_context"}),
             ("dispatch", {"model": model}),
         ]

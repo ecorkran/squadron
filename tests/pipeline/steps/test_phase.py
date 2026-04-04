@@ -119,13 +119,14 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
         )
     )
 
-    assert len(actions) == 6
+    assert len(actions) == 7
     assert actions[0] == ("cf-op", {"operation": "set_phase", "phase": 4})
-    assert actions[1] == ("cf-op", {"operation": "build_context"})
-    assert actions[2] == ("dispatch", {"model": "opus"})
-    assert actions[3] == ("review", {"template": "slice", "model": None})
-    assert actions[4] == ("checkpoint", {"trigger": "on-concerns"})
-    assert actions[5] == ("commit", {"message_prefix": "phase-4"})
+    assert actions[1] == ("cf-op", {"operation": "set_slice", "slice": "{slice}"})
+    assert actions[2] == ("cf-op", {"operation": "build_context"})
+    assert actions[3] == ("dispatch", {"model": "opus"})
+    assert actions[4] == ("review", {"template": "slice", "model": None})
+    assert actions[5] == ("checkpoint", {"trigger": "on-concerns"})
+    assert actions[6] == ("commit", {"message_prefix": "phase-4"})
 
 
 def test_expand_review_as_dict(design_step: PhaseStepType) -> None:
@@ -139,7 +140,7 @@ def test_expand_review_as_dict(design_step: PhaseStepType) -> None:
         )
     )
 
-    review_action = actions[3]
+    review_action = actions[4]
     assert review_action == (
         "review",
         {"template": "code", "model": "minimax2.7"},
@@ -147,10 +148,10 @@ def test_expand_review_as_dict(design_step: PhaseStepType) -> None:
 
 
 def test_expand_no_review(design_step: PhaseStepType) -> None:
-    """No review config omits review and checkpoint (4-action sequence)."""
+    """No review config omits review and checkpoint (5-action sequence)."""
     actions = design_step.expand(_make_config({"phase": 4}))
 
-    assert len(actions) == 4
+    assert len(actions) == 5
     action_types = [a[0] for a in actions]
     assert "review" not in action_types
     assert "checkpoint" not in action_types
@@ -160,20 +161,20 @@ def test_expand_review_no_checkpoint(design_step: PhaseStepType) -> None:
     """Review present but no checkpoint defaults trigger to 'never'."""
     actions = design_step.expand(_make_config({"phase": 4, "review": "slice"}))
 
-    assert len(actions) == 6
-    checkpoint = actions[4]
+    assert len(actions) == 7
+    checkpoint = actions[5]
     assert checkpoint == ("checkpoint", {"trigger": "never"})
 
 
 def test_expand_dispatch_model_from_config(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4, "model": "opus"}))
-    dispatch = actions[2]
+    dispatch = actions[3]
     assert dispatch == ("dispatch", {"model": "opus"})
 
 
 def test_expand_dispatch_model_none(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4}))
-    dispatch = actions[2]
+    dispatch = actions[3]
     assert dispatch == ("dispatch", {"model": None})
 
 

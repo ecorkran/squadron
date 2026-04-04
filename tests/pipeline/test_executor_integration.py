@@ -186,6 +186,6 @@ class TestDesignBatchIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        # design step expands to: cf-op, cf-op, dispatch, review, checkpoint, commit
-        # = 6 actions × 2 slices = 12 total calls
-        assert call_count == 12
+        # design step expands to: cf-op(set_phase), cf-op(set_slice), cf-op(build),
+        # dispatch, review, checkpoint, commit = 7 actions × 2 slices = 14 total calls
+        assert call_count == 14

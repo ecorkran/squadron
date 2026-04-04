@@ -91,6 +91,13 @@ def _render_cf_op(
             instruction=f"Set phase to {phase}",
             command=f"cf set phase {phase}",
         )
+    if operation == "set_slice":
+        slice_id = config.get("slice", "")
+        return ActionInstruction(
+            action_type=ActionType.CF_OP,
+            instruction=f"Set slice to {slice_id}",
+            command=f"cf set slice {slice_id}",
+        )
     if operation == "build_context":
         return ActionInstruction(
             action_type=ActionType.CF_OP,

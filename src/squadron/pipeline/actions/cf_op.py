@@ -13,6 +13,7 @@ class CfOperation(StrEnum):
     """Supported ContextForge operations."""
 
     SET_PHASE = "set_phase"
+    SET_SLICE = "set_slice"
     BUILD_CONTEXT = "build_context"
     SUMMARIZE = "summarize"
 
@@ -57,6 +58,15 @@ class CfOpAction:
                 )
             )
 
+        if operation == CfOperation.SET_SLICE and "slice" not in config:
+            errors.append(
+                ValidationError(
+                    field="slice",
+                    message="'slice' is required for SET_SLICE operation",
+                    action_type=self.action_type,
+                )
+            )
+
         return errors
 
     async def execute(self, context: ActionContext) -> ActionResult:
@@ -77,6 +87,9 @@ class CfOpAction:
                 case CfOperation.SET_PHASE:
                     phase = context.params["phase"]
                     stdout = cf_client._run(["set", "phase", str(phase)])  # pyright: ignore[reportPrivateUsage]
+                case CfOperation.SET_SLICE:
+                    slice_id = context.params["slice"]
+                    stdout = cf_client._run(["set", "slice", str(slice_id)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.BUILD_CONTEXT:
                     stdout = cf_client._run(["build"])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.SUMMARIZE:

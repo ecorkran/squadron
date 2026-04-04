@@ -302,24 +302,36 @@ class TestRenderStepInstructions:
         assert result.step_index == 0
         assert result.total_steps == 6
 
-        # 6 actions: set_phase, build, dispatch, review, checkpoint, commit
-        assert len(result.actions) == 6
+        # 7 actions: set_phase, set_slice, build, dispatch, review, checkpoint, commit
+        assert len(result.actions) == 7
 
         types = [a.action_type for a in result.actions]
-        assert types == ["cf-op", "cf-op", "dispatch", "review", "checkpoint", "commit"]
+        assert types == [
+            "cf-op",
+            "cf-op",
+            "cf-op",
+            "dispatch",
+            "review",
+            "checkpoint",
+            "commit",
+        ]
+
+        # set_slice resolves {slice} param
+        set_slice = result.actions[1]
+        assert set_slice.command == "cf set slice 152"
 
         # Dispatch has opus model
-        dispatch = result.actions[2]
+        dispatch = result.actions[3]
         assert dispatch.model == "claude-opus-4-20250514"
         assert dispatch.model_switch == "/model opus"
 
         # Review has slice template and glm5 model
-        review = result.actions[3]
+        review = result.actions[4]
         assert review.template == "slice"
         assert review.model == "glm5-resolved"
 
         # Checkpoint has on-concerns trigger
-        checkpoint = result.actions[4]
+        checkpoint = result.actions[5]
         assert checkpoint.trigger == "on-concerns"
 
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
@@ -395,8 +407,8 @@ class TestRenderStepInstructions:
         types = [a.action_type for a in result.actions]
         assert "review" not in types
         assert "checkpoint" not in types
-        # Should have: cf-op, cf-op, dispatch, commit
-        assert len(result.actions) == 4
+        # Should have: cf-op(set_phase), cf-op(set_slice), cf-op(build), dispatch, commit
+        assert len(result.actions) == 5
 
     def test_to_json_round_trip(self) -> None:
         """Verify the full output can round-trip through JSON."""

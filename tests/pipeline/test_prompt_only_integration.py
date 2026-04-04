@@ -119,6 +119,7 @@ class TestPromptOnlyFullCycle:
         assert types == [
             "cf-op",
             "cf-op",
+            "cf-op",
             "dispatch",
             "review",
             "checkpoint",
@@ -127,20 +128,21 @@ class TestPromptOnlyFullCycle:
 
         # CF ops
         assert instructions.actions[0].command == "cf set phase 4"
-        assert instructions.actions[1].command == "cf build"
+        assert instructions.actions[1].command == "cf set slice 152"
+        assert instructions.actions[2].command == "cf build"
 
         # Dispatch should reference opus
-        dispatch = instructions.actions[2]
+        dispatch = instructions.actions[3]
         assert dispatch.model_switch is not None
         assert "opus" in dispatch.model_switch
 
         # Review should reference slice template
-        review = instructions.actions[3]
+        review = instructions.actions[4]
         assert review.template == "slice"
         assert "--template slice" in review.command
 
         # Checkpoint
-        assert instructions.actions[4].trigger == "on-concerns"
+        assert instructions.actions[5].trigger == "on-concerns"
 
     def test_compact_step_resolves_params(self, tmp_path: Path) -> None:
         """Verify compact step has resolved instructions with slice number."""
