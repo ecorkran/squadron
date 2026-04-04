@@ -64,28 +64,29 @@ This is in-session work — you perform the task described in `instruction`.
 If `model_switch` is present (e.g., `/model opus`), note the recommended model. In Claude Code CLI sessions, you can issue the model switch command. In IDE sessions, this is informational only.
 
 ### review
-Run the `command` field via Bash. Example: `sq review slice 152 --model glm5 --template slice -v`.
+Run the `command` field via Bash. Example: `sq review slice 152 --model glm5 -v`.
 Capture the output. The review will produce a verdict (PASS, CONCERNS, FAIL) and persist the review file automatically.
 
 ### checkpoint
 Evaluate based on the `trigger` field and the previous review's verdict:
 - `on-concerns`: Pause if verdict is CONCERNS or FAIL
 - `on-fail`: Pause if verdict is FAIL
-- `always`: Always pause for user decision
+- `always`: Always pause — **you MUST stop and wait for the user**
 - `never`: Skip (continue automatically)
 
-If the checkpoint triggers, present the review findings to the user and ask for a decision:
-- **Continue**: Proceed to the next step
-- **Abort**: Stop the pipeline
+**IMPORTANT**: When a checkpoint triggers, you MUST stop all pipeline work immediately. Do not continue to the next action or step. Present the review findings to the user and explicitly ask:
 
-If the checkpoint does not trigger, continue automatically.
+> "Checkpoint triggered ({trigger}). Verdict: {verdict}. Continue or abort?"
+
+Wait for the user's response before proceeding. This is not optional.
 
 ### commit
 Run the `command` field via Bash. Example: `git add -A && git commit -m 'phase-4: ...'`.
 
 ### compact
-Run the `command` field, which is a `/compact [...]` invocation with resolved instructions.
-The `resolved_instructions` field contains the full compaction instructions for reference.
+The `command` field contains a `/compact [...]` slash command. **Do not run this via Bash.** Output the command as text so the system interprets it as a slash command. The `resolved_instructions` field contains the compaction instructions for reference.
+
+**IMPORTANT**: After outputting the `/compact` command, stop and wait. Context compaction will clear prior messages. The pipeline can be resumed afterward with `sq run --prompt-only --next --resume <run-id>`.
 
 ### devlog
 Execute the work described in `instruction` — write a DEVLOG entry capturing the pipeline run state.
