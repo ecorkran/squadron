@@ -9,6 +9,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
 from squadron.review.persistence import (
+    CfClientProtocol,
     SliceInfo,
     format_review_markdown,
     resolve_slice_info,
@@ -180,7 +181,7 @@ class ReviewAction:
         self,
         template_name: str,
         slice_index: int,
-        cf_client: object,
+        cf_client: CfClientProtocol,
         inputs: dict[str, str],
     ) -> SliceInfo | None:
         """Auto-resolve review inputs from slice number via CF.

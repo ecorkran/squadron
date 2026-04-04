@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, Protocol, TypedDict
 
 from squadron.review.models import ReviewResult
 
@@ -28,7 +28,15 @@ class SliceInfo(TypedDict):
     arch_file: str
 
 
-def resolve_slice_info(cf_client: object, index: int) -> SliceInfo:
+class CfClientProtocol(Protocol):
+    """Minimal duck-type protocol for CF client used by resolve_slice_info."""
+
+    def list_slices(self) -> list[Any]: ...
+    def list_tasks(self) -> list[Any]: ...
+    def get_project(self) -> Any: ...
+
+
+def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:
     """Resolve a slice number to file paths via Context-Forge.
 
     Shared between CLI review commands and pipeline review actions.
@@ -53,7 +61,7 @@ def resolve_slice_info(cf_client: object, index: int) -> SliceInfo:
 
     tasks = cf_client.list_tasks()  # type: ignore[union-attr]
     task_match = next((t for t in tasks if t.index == index), None)
-    task_files = task_match.files if task_match else []
+    task_files: list[str] = list(task_match.files) if task_match else []
 
     project = cf_client.get_project()  # type: ignore[union-attr]
     arch_file = project.arch_file

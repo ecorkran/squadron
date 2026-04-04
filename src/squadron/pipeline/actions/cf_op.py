@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import cast
 
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
@@ -91,8 +92,11 @@ class CfOpAction:
                     slice_id = context.params["slice"]
                     stdout = cf_client._run(["set", "slice", str(slice_id)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.BUILD_CONTEXT:
-                    data = cf_client._run_json(["build", "--json"])  # pyright: ignore[reportPrivateUsage]
-                    stdout = data.get("context", "") if isinstance(data, dict) else ""
+                    raw = cf_client._run_json(["build", "--json"])  # pyright: ignore[reportPrivateUsage]
+                    data_dict = (
+                        cast(dict[str, object], raw) if isinstance(raw, dict) else {}
+                    )
+                    stdout = str(data_dict.get("context", ""))
                 case CfOperation.SUMMARIZE:
                     stdout = cf_client._run(["summarize"])  # pyright: ignore[reportPrivateUsage]
         except ContextForgeError as exc:

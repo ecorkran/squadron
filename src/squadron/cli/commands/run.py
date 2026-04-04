@@ -710,8 +710,8 @@ def run(
             rprint(f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]")
             raise typer.Exit(1)
 
-        next_step = state_mgr.first_unfinished_step(resume, definition)
-        if next_step is None:
+        resume_from = state_mgr.first_unfinished_step(resume, definition)
+        if resume_from is None:
             rprint("[yellow]All steps already completed. Nothing to resume.[/yellow]")
             raise typer.Exit(0)
 
@@ -736,7 +736,7 @@ def run(
                     resolver=resolver,
                     cf_client=cf_client,
                     run_id=run_id,
-                    start_from=next_step,
+                    start_from=resume_from,
                     on_step_complete=state_mgr.make_step_callback(run_id),
                 )
             )
@@ -768,15 +768,17 @@ def run(
             if typer.confirm(
                 f"Found a paused run ({match.run_id}). Resume?", default=True
             ):
-                next_step = state_mgr.first_unfinished_step(match.run_id, definition)
-                if next_step is not None:
+                implicit_from = state_mgr.first_unfinished_step(
+                    match.run_id, definition
+                )
+                if implicit_from is not None:
                     try:
                         result = asyncio.run(
                             _run_pipeline(
                                 pipeline,
                                 params,
                                 model_override=model,
-                                from_step=next_step,
+                                from_step=implicit_from,
                             )
                         )
                     except KeyboardInterrupt:

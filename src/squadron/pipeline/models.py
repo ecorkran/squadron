@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from squadron.pipeline.resolver import ModelResolver
     from squadron.pipeline.sdk_session import SDKExecutionSession
+    from squadron.review.persistence import CfClientProtocol
 
 
 @dataclass
@@ -47,7 +48,7 @@ class ActionContext:
     step_index: int
     prior_outputs: dict[str, ActionResult]
     resolver: ModelResolver
-    cf_client: object  # typed object to avoid importing ContextForgeClient
+    cf_client: CfClientProtocol
     cwd: str
     sdk_session: SDKExecutionSession | None = None
 
