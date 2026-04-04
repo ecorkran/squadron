@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Prompt-only pipeline executor — `--prompt-only` mode for `sq run` (slice 153)
+  - `sq run <pipeline> <target> --prompt-only` — output first step's JSON instructions
+  - `sq run --prompt-only --next --resume <run-id>` — advance to next step
+  - `sq run --step-done <run-id> [--verdict PASS|CONCERNS|FAIL]` — mark step complete
+  - `StepInstructions`, `ActionInstruction`, `CompletionResult` data models
+  - Per-action-type instruction builders (cf-op, dispatch, review, checkpoint, commit, compact, devlog)
+  - `render_step_instructions()` — pure function that expands steps without execution
+  - `StateManager.record_step_done()` — public method for prompt-only feedback
+  - `/sq:run` slash command rewritten to consume prompt-only executor output
 - `sq run` CLI command — pipeline execution, inspection, and management (slice 151)
   - `sq run <pipeline> <target>` — execute a pipeline with positional target resolution
   - `sq run --list` — discover and display available pipelines in a Rich table

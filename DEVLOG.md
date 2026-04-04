@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260403
+dateUpdated: 20260404
 ---
 
 # Development Log
@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260404
+
+**Slice 153: Prompt-Only Pipeline Executor — Implementation Complete (Phase 6)**
+Implemented all 17 tasks (T1–T17). Created `src/squadron/pipeline/prompt_renderer.py`: `StepInstructions`, `ActionInstruction`, `CompletionResult` dataclasses, per-action-type builders (cf-op, dispatch, review, checkpoint, commit, compact, devlog), `render_step_instructions()` entry point. Added `StateManager.record_step_done()` public method. CLI: `--prompt-only`, `--next`, `--step-done`, `--verdict` flags on `sq run`. `/sq:run` slash command rewritten to consume prompt-only output. 30 unit tests, 4 integration tests, 12 CLI tests. Full verification walkthrough passed: all 6 slice pipeline steps cycle correctly, model aliases resolve, compact params resolve `{slice}` → target. 1193 total tests pass, zero regressions. Slice 153 complete.
 
 ## 20260403
 
