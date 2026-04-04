@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -99,6 +100,28 @@ def _assemble_params(
         params["model"] = model
 
     return params
+
+
+def _resolve_execution_mode(prompt_only: bool) -> str:
+    """Determine pipeline execution mode from flags and environment.
+
+    Returns:
+        ``"prompt-only"`` when ``--prompt-only`` is set.
+        ``"sdk"`` when running from a standard terminal.
+
+    Raises:
+        typer.Exit(1): When invoked from inside a Claude Code session.
+    """
+    if prompt_only:
+        return "prompt-only"
+    if os.environ.get("CLAUDECODE"):
+        rprint(
+            "[red]Error: SDK pipeline execution cannot run inside a Claude Code "
+            "session.[/red]\n"
+            "Use [bold]--prompt-only[/bold] mode or run from a standard terminal."
+        )
+        raise typer.Exit(1)
+    return "sdk"
 
 
 def _check_cf(cf_client: ContextForgeClient) -> None:
@@ -665,6 +688,9 @@ def run(
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
+
+    # Raises typer.Exit(1) if inside a Claude Code session.
+    _resolve_execution_mode(prompt_only=False)
 
     try:
         definition = load_pipeline(pipeline)
