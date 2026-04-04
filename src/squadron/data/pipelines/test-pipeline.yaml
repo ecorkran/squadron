@@ -1,0 +1,25 @@
+name: test-pipeline
+description: Pipeline for testing pipelines.
+
+params:
+  slice: required
+
+steps:
+  - design:
+      phase: 4
+      model: haiku
+      review: 
+        template: slice
+        model: minimax
+      checkpoint: on-concerns
+
+  - tasks:
+      phase: 5
+      model: haiku
+      review: 
+        template: tasks
+        model: minimax
+      checkpoint: always
+
+  - compact:
+      template: minimal
