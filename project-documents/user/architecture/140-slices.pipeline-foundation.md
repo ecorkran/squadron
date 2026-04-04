@@ -86,7 +86,7 @@ Feature Slices:
 Feature:
   153. Prompt-Only Pipeline Executor                     (after 151)
   154. Prompt-Only Loops                                  (after 153)
-  155. SDK Pipeline Executor                              (after 154)
+  155. SDK Pipeline Executor                              (after 154) ✓ complete
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)

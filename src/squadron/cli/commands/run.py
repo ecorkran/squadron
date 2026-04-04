@@ -209,9 +209,12 @@ async def _run_pipeline_sdk(
 ) -> PipelineResult:
     """Create an SDK session, run the pipeline, and disconnect on exit.
 
+    Raises typer.Exit(1) when running inside a Claude Code session.
     The session is disconnected in a ``finally`` block so cleanup happens
     on success, failure, checkpoint pause, and keyboard interrupt.
     """
+    _resolve_execution_mode(prompt_only=False)
+
     import claude_agent_sdk
 
     options = claude_agent_sdk.ClaudeAgentOptions(cwd=str(Path.cwd()))
@@ -725,9 +728,6 @@ def run(
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
-
-    # Raises typer.Exit(1) if inside a Claude Code session.
-    _resolve_execution_mode(prompt_only=False)
 
     try:
         definition = load_pipeline(pipeline)

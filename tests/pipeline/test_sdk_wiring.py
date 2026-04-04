@@ -129,6 +129,7 @@ async def test_run_pipeline_sdk_connects_and_disconnects_on_success() -> None:
     mock_session.disconnect = AsyncMock()
 
     with (
+        patch("squadron.cli.commands.run._resolve_execution_mode"),
         patch(
             "squadron.cli.commands.run._run_pipeline",
             new_callable=AsyncMock,
@@ -158,6 +159,7 @@ async def test_run_pipeline_sdk_disconnects_on_failure() -> None:
     mock_session.disconnect = AsyncMock()
 
     with (
+        patch("squadron.cli.commands.run._resolve_execution_mode"),
         patch(
             "squadron.cli.commands.run._run_pipeline",
             new_callable=AsyncMock,

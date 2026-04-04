@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- SDK pipeline executor — autonomous pipeline execution via `ClaudeSDKClient` (slice 155)
+  - `SDKExecutionSession` — persistent client wrapper with `set_model()`, `dispatch()`, `configure_compaction()` lifecycle
+  - Per-step model switching via `client.set_model(model_id)` across pipeline steps
+  - Compact action SDK path — configures server-side compaction instead of calling CF
+  - `ActionContext.sdk_session` — optional field propagated to all actions by the executor
+  - Environment detection — `sq run` from inside Claude Code session shows clear error directing to `--prompt-only`
+  - Session lifecycle managed in `_run_pipeline_sdk()` with `finally` disconnect on success, failure, or interrupt
 - Prompt-only pipeline executor — `--prompt-only` mode for `sq run` (slice 153)
   - `sq run <pipeline> <target> --prompt-only` — output first step's JSON instructions
   - `sq run --prompt-only --next --resume <run-id>` — advance to next step

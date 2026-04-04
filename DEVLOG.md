@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260404
 
+**Slice 155: SDK Pipeline Executor — Implementation Complete (Phase 6)**
+Implemented all 20 tasks (T1–T20). Created `src/squadron/pipeline/sdk_session.py`: `SDKExecutionSession` dataclass wrapping `ClaudeSDKClient` with `set_model()` (skips if unchanged), `dispatch()` (rate-limit retry, error translation), `configure_compaction()` (stores config), `connect()`/`disconnect()` lifecycle. Extended `ActionContext` with `sdk_session: SDKExecutionSession | None = None`. Dispatch action gains `_dispatch_via_session()` path; routing checks `context.sdk_session`. Compact action gains SDK path that calls `session.configure_compaction()` instead of CF. Environment detection via `_resolve_execution_mode()` raises `typer.Exit(1)` for `CLAUDECODE` env var. CLI wiring: `_run_pipeline_sdk()` async helper creates session, connects, calls `_run_pipeline()`, disconnects in `finally`. Executor propagates `sdk_session` through all `_execute_step_once()`/loop/each call chains. 38 new tests across 5 test files. Full suite: 1228 tests pass, zero regressions. Slice 155 marked complete.
+
 **Slice 155: SDK Pipeline Executor — Task Breakdown Complete (Phase 5)**
 Created `project-documents/user/tasks/155-tasks.sdk-pipeline-executor.md`. 20 tasks (T1–T20): SDKExecutionSession module with persistent client lifecycle and set_model()/dispatch()/configure_compaction() methods (T1-T3), ActionContext extension with sdk_session field (T4), dispatch action session path with model switching (T5-T7), compact action SDK compaction path via context_management API (T8-T10), environment detection for CLAUDECODE rejection (T11-T13), CLI wiring and executor propagation (T14-T17), integration test with full pipeline cycle (T18-T19), lint/verify/closeout (T20). Test-with pattern throughout; 7 commit checkpoints.
 
