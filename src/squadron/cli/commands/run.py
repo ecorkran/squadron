@@ -33,6 +33,7 @@ from squadron.pipeline.prompt_renderer import (
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ModelResolver
+from squadron.pipeline.sdk_session import SDKExecutionSession
 from squadron.pipeline.state import SchemaVersionError, StateManager
 
 # ---------------------------------------------------------------------------
@@ -148,6 +149,7 @@ async def _run_pipeline(
     model_override: str | None = None,
     runs_dir: Path | None = None,
     from_step: str | None = None,
+    sdk_session: object | None = None,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
@@ -179,6 +181,7 @@ async def _run_pipeline(
             cf_client=cf_client,
             run_id=run_id,
             start_from=from_step,
+            sdk_session=sdk_session,  # type: ignore[arg-type]
             on_step_complete=state_mgr.make_step_callback(run_id),
             _action_registry=_action_registry,
         )
@@ -194,6 +197,40 @@ async def _run_pipeline(
         raise
 
     state_mgr.finalize(run_id, result)
+    return result
+
+
+async def _run_pipeline_sdk(
+    pipeline_name: str,
+    params: dict[str, object],
+    model_override: str | None = None,
+    runs_dir: Path | None = None,
+    from_step: str | None = None,
+) -> PipelineResult:
+    """Create an SDK session, run the pipeline, and disconnect on exit.
+
+    The session is disconnected in a ``finally`` block so cleanup happens
+    on success, failure, checkpoint pause, and keyboard interrupt.
+    """
+    import claude_agent_sdk
+
+    options = claude_agent_sdk.ClaudeAgentOptions(cwd=str(Path.cwd()))
+    client = claude_agent_sdk.ClaudeSDKClient(options=options)
+    session = SDKExecutionSession(client=client)
+
+    await session.connect()
+    try:
+        result = await _run_pipeline(
+            pipeline_name,
+            params,
+            model_override=model_override,
+            runs_dir=runs_dir,
+            from_step=from_step,
+            sdk_session=session,
+        )
+    finally:
+        await session.disconnect()
+
     return result
 
 
@@ -732,7 +769,7 @@ def run(
     # Fresh run
     try:
         result = asyncio.run(
-            _run_pipeline(
+            _run_pipeline_sdk(
                 pipeline,
                 params,
                 model_override=model,

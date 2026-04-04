@@ -24,6 +24,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefini
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
     from squadron.pipeline.resolver import ModelResolver
+    from squadron.pipeline.sdk_session import SDKExecutionSession
 
 _logger = logging.getLogger(__name__)
 
@@ -317,6 +318,7 @@ async def execute_pipeline(
     cwd: str | None = None,
     run_id: str | None = None,
     start_from: str | None = None,
+    sdk_session: SDKExecutionSession | None = None,
     on_step_complete: Callable[[StepResult], None] | None = None,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
@@ -430,6 +432,7 @@ async def execute_pipeline(
                 cwd=effective_cwd,
                 resolver=resolver,
                 cf_client=cf_client,
+                sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
                 get_action_fn=_action_registry.__getitem__
                 if _action_registry
@@ -457,6 +460,7 @@ async def execute_pipeline(
                     cwd=effective_cwd,
                     resolver=resolver,
                     cf_client=cf_client,
+                    sdk_session=sdk_session,
                     get_step_type_fn=get_step_type,
                     get_action_fn=_action_registry.__getitem__
                     if _action_registry
@@ -474,6 +478,7 @@ async def execute_pipeline(
                     cwd=effective_cwd,
                     resolver=resolver,
                     cf_client=cf_client,
+                    sdk_session=sdk_session,
                     get_step_type_fn=get_step_type,
                     get_action_fn=_action_registry.__getitem__
                     if _action_registry
@@ -524,6 +529,7 @@ async def _execute_step_once(
     cwd: str,
     resolver: Any,
     cf_client: Any,
+    sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
@@ -548,6 +554,7 @@ async def _execute_step_once(
             resolver=resolver,
             cf_client=cf_client,
             cwd=cwd,
+            sdk_session=sdk_session,
         )
 
         action_impl = get_action_fn(action_type)
@@ -600,6 +607,7 @@ async def _execute_loop_step(
     cwd: str,
     resolver: Any,
     cf_client: Any,
+    sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
 ) -> StepResult:
@@ -634,6 +642,7 @@ async def _execute_loop_step(
             cwd=cwd,
             resolver=resolver,
             cf_client=cf_client,
+            sdk_session=sdk_session,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             iteration=iteration,
@@ -725,6 +734,7 @@ async def _execute_each_step(
     cwd: str,
     resolver: Any,
     cf_client: Any,
+    sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
 ) -> StepResult:
@@ -771,6 +781,7 @@ async def _execute_each_step(
                 cwd=cwd,
                 resolver=resolver,
                 cf_client=cf_client,
+                sdk_session=sdk_session,
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
             )
