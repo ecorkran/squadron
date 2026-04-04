@@ -14,6 +14,9 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260404
 
+**Slice 155: SDK Pipeline Executor — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/155-tasks.sdk-pipeline-executor.md`. 20 tasks (T1–T20): SDKExecutionSession module with persistent client lifecycle and set_model()/dispatch()/configure_compaction() methods (T1-T3), ActionContext extension with sdk_session field (T4), dispatch action session path with model switching (T5-T7), compact action SDK compaction path via context_management API (T8-T10), environment detection for CLAUDECODE rejection (T11-T13), CLI wiring and executor propagation (T14-T17), integration test with full pipeline cycle (T18-T19), lint/verify/closeout (T20). Test-with pattern throughout; 7 commit checkpoints.
+
 **Slice 155: SDK Pipeline Executor — Design Complete (Phase 4)**
 Created `project-documents/user/slices/155-slice.sdk-pipeline-executor.md`. Full pipeline automation via `ClaudeSDKClient` with persistent session, per-step model switching via `set_model()`, and server-side compaction via `context_management` API (`compact_20260112` beta). Slice review (glm-5) raised FAIL on persistent session violating 140's "stateless steps" principle. Resolved by updating `140-arch.pipeline-foundation.md` to distinguish SDK session persistence (runtime optimization, 140 scope) from conversation persistence (semantic dependency, 160 scope). Architecture updated: "Interaction with Conversations" section clarified, dependency notes updated.
 
