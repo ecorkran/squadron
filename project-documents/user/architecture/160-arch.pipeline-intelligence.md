@@ -5,7 +5,7 @@ project: squadron
 archIndex: 160
 component: pipeline-intelligence
 dateCreated: 20260327
-dateUpdated: 20260327
+dateUpdated: 20260404
 status: draft
 ---
 
@@ -398,6 +398,67 @@ This is a natural extension but not in first delivery. Single-step escalation co
 
 ---
 
+## Finding Triage and Scope Classification
+
+### Problem
+
+Review findings sometimes target the wrong architectural level. A reviewer examining a slice design may flag a violation of an architecture constraint — but the correct fix is updating the architecture, not the slice. An automated system that blindly addresses findings would change the wrong artifact.
+
+Real example: Slice 155 (SDK Pipeline Executor) was reviewed and received a FAIL verdict because a persistent SDK client session "violated" the architecture's "stateless steps" principle. The correct response was updating the architecture to distinguish session persistence (runtime optimization) from conversation persistence (semantic dependency) — not removing the persistent session from the slice design.
+
+### Concept
+
+Finding triage classifies each review finding by **scope level** before deciding how to handle it:
+
+| Scope | Target Artifact | Auto-Addressable? |
+|-------|----------------|-------------------|
+| `code` | Implementation files | Yes — agent can fix |
+| `slice` | Slice design document | Yes — agent can refine |
+| `architecture` | Architecture document | No — escalate to PM |
+| `process` | Workflow, conventions | No — escalate to PM |
+| `external` | Dependency, third-party | No — escalate to PM |
+
+Findings at or below the current work level (code findings during implementation, slice findings during design) can be auto-addressed. Findings that reference artifacts *above* the current level must be escalated.
+
+### Detection Signals
+
+How the triage step identifies cross-boundary findings:
+
+1. **Document references**: Finding cites a specific architecture document, slice plan, or process guide by name → likely cross-boundary.
+2. **Constraint language**: Finding says "violates", "contradicts", or "conflicts with" a principle, constraint, or decision documented elsewhere → cross-boundary candidate.
+3. **Scope mismatch**: Finding recommends changing something outside the current artifact's scope (e.g., "the architecture should allow..." in a slice review) → definitely cross-boundary.
+4. **Structured finding metadata**: Review templates can require the reviewer to tag findings with a `scope` field. This is the most reliable signal but depends on reviewer compliance.
+
+### Integration with Pipeline
+
+Finding triage is a step in the review loop, between review execution and auto-fix:
+
+```
+review → triage → {
+  code/slice scope: auto-address → re-review
+  architecture+ scope: checkpoint(escalate to PM)
+}
+```
+
+When a cross-boundary finding is detected, the pipeline pauses at a checkpoint with a clear message:
+
+```
+Finding F001 targets architecture level — cannot auto-resolve.
+  "Persistent session violates stateless steps principle"
+  Referenced: 140-arch.pipeline-foundation.md §Interaction with Conversations
+
+Action required: Update architecture or dismiss finding.
+Resume with: sq run --resume <run-id>
+```
+
+The PM then decides whether to update the referenced artifact or dismiss the finding, and resumes the pipeline.
+
+### Dependency on Structured Findings
+
+Finding triage requires structured review findings (slice 143, complete). The structured finding format already captures `category` and `severity`. Adding a `scope` field to `ReviewFinding` enables explicit scope tagging by the reviewer. Heuristic detection (document references, constraint language) provides a fallback when the scope field is absent.
+
+---
+
 ## Conversation Persistence
 
 ### Concept
@@ -570,6 +631,10 @@ src/squadron/pipeline/
 │   │   ├── strategies.py          # random, round-robin, cheapest, weighted-random
 │   │   ├── models.py              # ModelPool, SelectionContext
 │   │   └── loader.py              # Load pools.toml
+│   ├── triage/
+│   │   ├── __init__.py
+│   │   ├── classifier.py          # Scope classification logic
+│   │   └── models.py              # ScopeLevel enum, TriageResult
 │   ├── escalation/
 │   │   ├── __init__.py
 │   │   ├── behavior.py            # EscalationBehavior
@@ -617,6 +682,7 @@ Everything. Specifically:
 - **Model pools:** Pool definitions, selection strategies (random, round-robin, cheapest, weighted-random)
 - **Pool resolver:** Integration with 140's model resolver
 - **Escalation behavior:** Single-step model escalation on review failure
+- **Finding triage:** Scope classification of review findings (code/slice/architecture/process/external) with auto-escalation to PM for cross-boundary findings
 - **Conversation persistence:** Within-step persistence across retries
 - **Convergence reporting:** Summary output for DEVLOG and human review
 - **CLI:** `sq pools`, pool management commands
