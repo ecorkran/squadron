@@ -139,7 +139,8 @@ class TestPromptOnlyFullCycle:
         # Review should reference slice template
         review = instructions.actions[4]
         assert review.template == "slice"
-        assert "--template slice" in review.command
+        assert "--template" not in review.command
+        assert "sq review slice" in review.command
 
         # Checkpoint
         assert instructions.actions[5].trigger == "on-concerns"

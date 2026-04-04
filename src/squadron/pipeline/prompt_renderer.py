@@ -149,29 +149,32 @@ def _render_review(
 ) -> ActionInstruction:
     """Build instruction for a review action."""
     template_name = str(config.get("template", ""))
-    review_model_raw = config.get("model")
-    review_model: str | None = None
+    review_model_alias = config.get("model")
+    review_model_id: str | None = None
 
-    if review_model_raw is not None:
+    # Keep the raw alias for the CLI command; resolve for the model field
+    alias_str: str | None = None
+    if review_model_alias is not None:
+        alias_str = str(review_model_alias)
         try:
-            review_model, _ = resolver.resolve(str(review_model_raw))
+            review_model_id, _ = resolver.resolve(alias_str)
         except Exception:
-            review_model = str(review_model_raw)
+            review_model_id = alias_str
 
-    # Build the CLI command
+    # Build the CLI command — template is the subcommand, not a flag
     target = str(params.get("slice", ""))
     cmd_parts = ["sq", "review", template_name]
     if target:
         cmd_parts.append(target)
-    if review_model:
-        cmd_parts.extend(["--model", review_model])
-    cmd_parts.extend(["--template", template_name, "-v"])
+    if alias_str:
+        cmd_parts.extend(["--model", alias_str])
+    cmd_parts.append("-v")
 
     return ActionInstruction(
         action_type=ActionType.REVIEW,
         instruction=f"Review using template '{template_name}'",
         command=" ".join(cmd_parts),
-        model=review_model,
+        model=review_model_id,
         template=template_name,
     )
 

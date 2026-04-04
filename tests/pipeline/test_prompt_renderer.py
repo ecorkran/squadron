@@ -178,9 +178,11 @@ class TestRenderReview:
         assert result.action_type == ActionType.REVIEW
         assert result.template == "slice"
         assert result.model == "glm5-resolved"
-        assert "--template slice" in result.command
-        assert "--model glm5-resolved" in result.command
+        assert "--template" not in result.command
+        assert "--model glm5" in result.command
+        assert "--model glm5-resolved" not in result.command
         assert "152" in result.command
+        assert result.command == "sq review slice 152 --model glm5 -v"
 
 
 class TestRenderCheckpoint:

@@ -270,7 +270,7 @@ The slash command prompt shrinks significantly — it no longer needs to know ab
 ### 1. Prompt-only first step
 
 ```bash
-sq run slice 152 --prompt-only
+sq run test-pipeline 154 --prompt-only
 ```
 
 **Result**: JSON output with `step_name: "design-0"`, 6 actions: cf-op(set_phase 4), cf-op(build), dispatch(model: claude-opus-4-6, model_switch: /model opus), review(template: slice, model: z-ai/glm-5), checkpoint(trigger: on-concerns), commit. Run ID printed to stderr.
@@ -294,9 +294,10 @@ sq run --prompt-only --next --resume <run-id>
 **Result**: `compact-2` with `resolved_instructions` containing "slice 152" — `{slice}` placeholder resolved from pipeline params. Template: `minimal`.
 
 ### 4. Slash command end-to-end
+This runs a test pipeline to verify the functionality.  It will design and create task breakdown for a real slice, but it will do so intentionally using small models, and will perform no implementation.
 
 ```
-/sq:run slice 152
+/sq:run test-pipeline 154
 ```
 
 **Result**: Slash command rewritten to consume `sq run --prompt-only` output. Follows JSON-driven loop: init → parse actions → execute → step-done → next → repeat until completion. Not yet end-to-end tested in a live session (requires manual slash command invocation).
