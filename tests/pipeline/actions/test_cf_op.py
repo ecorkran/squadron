@@ -111,11 +111,13 @@ async def test_execute_build_context(
     action: CfOpAction, mock_context: ActionContext
 ) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
-    mock_context.cf_client._run = MagicMock(return_value="Context built")  # type: ignore[union-attr]
+    mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
+        return_value={"context": "Context built"},
+    )
 
     result = await action.execute(mock_context)
 
-    mock_context.cf_client._run.assert_called_once_with(["build"])  # type: ignore[union-attr]
+    mock_context.cf_client._run_json.assert_called_once_with(["build", "--json"])  # type: ignore[union-attr]
     assert result.success is True
     assert result.outputs["stdout"] == "Context built"
     assert result.outputs["operation"] == "build_context"
@@ -155,7 +157,7 @@ async def test_execute_cf_error(
     action: CfOpAction, mock_context: ActionContext
 ) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
-    mock_context.cf_client._run = MagicMock(  # type: ignore[union-attr]
+    mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
         side_effect=ContextForgeError("cf build failed")
     )
 

@@ -41,6 +41,54 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
+# Logging helpers
+# ---------------------------------------------------------------------------
+
+
+def _summarize_action_config(action_type: str, config: dict[str, object]) -> str:
+    """One-line summary of action config for verbose logging."""
+    match action_type:
+        case "cf-op":
+            op = config.get("operation", "?")
+            if op == "set_phase":
+                return f"set_phase({config.get('phase', '?')})"
+            if op == "set_slice":
+                return f"set_slice({config.get('slice', '?')})"
+            return str(op)
+        case "dispatch":
+            model = config.get("model", "default")
+            return f"model={model}"
+        case "review":
+            tmpl = config.get("template", "?")
+            model = config.get("model", "default")
+            return f"template={tmpl}, model={model}"
+        case "checkpoint":
+            return f"trigger={config.get('trigger', '?')}"
+        case "compact":
+            return f"template={config.get('template', '?')}"
+        case "commit":
+            return f"prefix={config.get('message_prefix', '?')}"
+        case _:
+            return str(config) if config else ""
+
+
+def _log_action_result(action_type: str, result: ActionResult) -> None:
+    """Log action outcome at INFO (success/fail) and DEBUG (details)."""
+    if result.success:
+        extras: list[str] = []
+        if result.verdict:
+            extras.append(f"verdict={result.verdict}")
+        if model := result.metadata.get("model"):
+            extras.append(f"model={model}")
+        suffix = f" ({', '.join(extras)})" if extras else ""
+        _logger.info("    -> ok%s", suffix)
+    else:
+        _logger.info("    -> FAILED: %s", result.error or "no details")
+
+    _logger.debug("    outputs=%s metadata=%s", result.outputs, result.metadata)
+
+
+# ---------------------------------------------------------------------------
 # Result types
 # ---------------------------------------------------------------------------
 
@@ -538,12 +586,28 @@ async def _execute_step_once(
     step_type_impl = get_step_type_fn(step.step_type)
     actions = step_type_impl.expand(step)
 
+    _logger.info(
+        "step %s [%s]: %d actions",
+        step.name,
+        step.step_type,
+        len(actions),
+    )
+
     action_results: list[ActionResult] = []
     step_prior = dict(prior_outputs)  # snapshot; updated within step
 
     for action_index, (action_type, action_config) in enumerate(actions):
         resolved_action_config = resolve_placeholders(action_config, merged_params)
         merged_action_params = {**merged_params, **resolved_action_config}
+
+        _logger.info(
+            "  action %d/%d: %s %s",
+            action_index + 1,
+            len(actions),
+            action_type,
+            _summarize_action_config(action_type, resolved_action_config),
+        )
+
         ctx = ActionContext(
             pipeline_name=pipeline_name,
             run_id=run_id,
@@ -560,6 +624,8 @@ async def _execute_step_once(
         action_impl = get_action_fn(action_type)
         result: ActionResult = await action_impl.execute(ctx)
         action_results.append(result)
+
+        _log_action_result(action_type, result)
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"

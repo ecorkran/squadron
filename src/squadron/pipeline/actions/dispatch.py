@@ -35,14 +35,8 @@ class DispatchAction:
         return ActionType.DISPATCH
 
     def validate(self, config: dict[str, object]) -> list[ValidationError]:
-        if "prompt" not in config:
-            return [
-                ValidationError(
-                    field="prompt",
-                    message="'prompt' is required for dispatch action",
-                    action_type=ActionType.DISPATCH,
-                )
-            ]
+        # prompt is resolved at runtime: explicit param or prior build_context
+        # output.  No static validation needed here.
         return []
 
     async def execute(self, context: ActionContext) -> ActionResult:
@@ -87,6 +81,11 @@ class DispatchAction:
 
         Resolves the model via the cascade chain, switches the session model
         if needed, sends the prompt, and captures the response.
+
+        When no explicit ``prompt`` param is provided, the dispatch action
+        looks for a prior ``build_context`` cf-op output and uses its
+        ``stdout`` as the prompt.  This is the normal flow for phase steps:
+        cf-op(build_context) produces the context text, dispatch sends it.
         """
         action_model = (
             str(context.params["model"]) if "model" in context.params else None
@@ -100,7 +99,7 @@ class DispatchAction:
 
         await session.set_model(model_id)
 
-        prompt = str(context.params["prompt"])
+        prompt = self._resolve_prompt(context)
         response_text = await session.dispatch(prompt)
 
         return ActionResult(
@@ -109,6 +108,37 @@ class DispatchAction:
             outputs={"response": response_text},
             metadata={"model": model_id, "profile": "sdk-session"},
         )
+
+    def _resolve_prompt(self, context: ActionContext) -> str:
+        """Return the prompt text for this dispatch.
+
+        Checks ``context.params["prompt"]`` first.  If absent, scans
+        ``prior_outputs`` for the most recent ``build_context`` cf-op
+        result and uses its ``stdout``.  This is the normal phase-step
+        flow where cf-op(build_context) precedes dispatch.
+        """
+        explicit = context.params.get("prompt")
+        if explicit is not None:
+            return str(explicit)
+
+        # Search prior outputs for a build_context cf-op result (reverse
+        # order so the most recent one wins).
+        for key in reversed(list(context.prior_outputs)):
+            result = context.prior_outputs[key]
+            if (
+                result.action_type == "cf-op"
+                and result.outputs.get("operation") == "build_context"
+                and result.outputs.get("stdout") is not None
+            ):
+                _logger.debug("dispatch: using build_context output as prompt")
+                return str(result.outputs["stdout"])
+
+        msg = (
+            "No 'prompt' param and no prior build_context output found. "
+            "Dispatch requires a prompt — either pass one explicitly or "
+            "include a cf-op(build_context) action before dispatch."
+        )
+        raise KeyError(msg)
 
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""
@@ -155,7 +185,7 @@ class DispatchAction:
             message = Message(
                 sender="pipeline",
                 recipients=[config.name],
-                content=str(context.params["prompt"]),
+                content=self._resolve_prompt(context),
                 message_type=MessageType.chat,
             )
             response_parts: list[str] = []

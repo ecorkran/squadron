@@ -22,7 +22,11 @@ from squadron.integrations.context_forge import (
 from squadron.models.aliases import resolve_model_alias
 from squadron.review.git_utils import resolve_slice_diff_range
 from squadron.review.models import ReviewResult, Severity, Verdict
-from squadron.review.persistence import SliceInfo, save_review_result
+from squadron.review.persistence import (
+    SliceInfo,
+    resolve_slice_info,
+    save_review_result,
+)
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
     detect_languages_from_paths,
@@ -219,59 +223,21 @@ def _resolve_arch_file(num: str) -> str:
 def _resolve_slice_number(num: str) -> SliceInfo:
     """Resolve a bare slice number to file paths via Context-Forge.
 
-    Uses ``ContextForgeClient`` to call ``cf list slices --json``,
-    ``cf list tasks --json``, and ``cf get --json``.
+    Delegates to ``resolve_slice_info`` (shared with pipeline review
+    action) and wraps errors in CLI-friendly messages.
     """
-    index = int(num)
-
     try:
         client = ContextForgeClient()
-
-        # --- slice list ---
-        slices = client.list_slices()
-        match = next((s for s in slices if s.index == index), None)
-        if match is None:
-            rprint(
-                f"[red]Error: No slice with index {index}"
-                " in the current slice plan.[/red]"
-            )
-            raise typer.Exit(code=1)
-
-        design_file = match.design_file
-        # derive kebab-case slice name from design file path or entry name
-        if design_file:
-            stem = Path(design_file).stem
-            slice_name = stem.split(".", 1)[1] if "." in stem else stem
-        else:
-            slice_name = match.name.lower().replace(" ", "-")
-
-        # --- tasks list ---
-        tasks = client.list_tasks()
-        task_match = next((t for t in tasks if t.index == index), None)
-        task_files = task_match.files if task_match else []
-
-        # --- architecture doc ---
-        project = client.get_project()
-        arch_file = project.arch_file
-
+        return resolve_slice_info(client, int(num))
     except ContextForgeNotAvailable:
         rprint(
             "[red]Error: 'cf' (Context-Forge CLI) is not installed"
             " or not on PATH.[/red]"
         )
         raise typer.Exit(code=1)
-    except ContextForgeError as exc:
+    except (ContextForgeError, ValueError) as exc:
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
-
-    return SliceInfo(
-        index=index,
-        name=match.name,
-        slice_name=slice_name,
-        design_file=design_file,
-        task_files=task_files,
-        arch_file=arch_file,
-    )
 
 
 def _resolve_profile(

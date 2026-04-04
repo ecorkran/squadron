@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
@@ -277,11 +278,16 @@ def _display_result(result: PipelineResult) -> None:
 
     for sr in result.step_results:
         verdict_parts: list[str] = []
+        error_msg: str | None = None
         for ar in sr.action_results:
             if ar.verdict:
                 verdict_parts.append(ar.verdict)
+            if ar.error and not error_msg:
+                error_msg = ar.error
         verdict_str = f" ({', '.join(verdict_parts)})" if verdict_parts else ""
         rprint(f"    {sr.step_name}: {sr.status.value}{verdict_str}")
+        if error_msg:
+            rprint(f"      [red]Error: {error_msg}[/red]")
 
 
 # ---------------------------------------------------------------------------
@@ -522,6 +528,13 @@ def run(
         "--verdict",
         help="Review verdict for --step-done (PASS, CONCERNS, FAIL).",
     ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Verbosity (-v for action summaries, -vv for full details).",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
@@ -559,6 +572,16 @@ def run(
     ):
         rprint("[red]Error: --status cannot be combined with execution options.[/red]")
         raise typer.Exit(1)
+
+    # ---- configure logging verbosity ----
+    if verbose > 0:
+        pipeline_logger = logging.getLogger("squadron.pipeline")
+        level = logging.DEBUG if verbose >= 2 else logging.INFO
+        pipeline_logger.setLevel(level)
+        if not pipeline_logger.handlers:
+            handler = logging.StreamHandler(sys.stderr)
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            pipeline_logger.addHandler(handler)
 
     if (
         not list_pipelines

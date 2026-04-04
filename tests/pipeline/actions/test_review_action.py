@@ -38,7 +38,6 @@ def _make_context(**overrides: object) -> ActionContext:
         "run_id": "run-12345678",
         "params": {
             "template": "code",
-            "cwd": "/tmp/test",
         },
         "step_name": "review-step",
         "step_index": 0,
@@ -100,24 +99,13 @@ class TestReviewActionBasics:
 
 class TestReviewValidation:
     def test_missing_template(self) -> None:
-        errors = ReviewAction().validate({"cwd": "."})
+        errors = ReviewAction().validate({})
         assert len(errors) == 1
         assert errors[0].field == "template"
 
-    def test_missing_cwd(self) -> None:
-        errors = ReviewAction().validate({"template": "code"})
-        assert len(errors) == 1
-        assert errors[0].field == "cwd"
-
     def test_valid_config(self) -> None:
-        errors = ReviewAction().validate({"template": "code", "cwd": "."})
+        errors = ReviewAction().validate({"template": "code"})
         assert errors == []
-
-    def test_both_missing(self) -> None:
-        errors = ReviewAction().validate({})
-        assert len(errors) == 2
-        fields = {e.field for e in errors}
-        assert fields == {"template", "cwd"}
 
 
 # ---------------------------------------------------------------------------
@@ -238,7 +226,7 @@ class TestReviewModelResolution:
         mock_get_template.return_value = _mock_template()
         mock_run_review.return_value = _make_review_result()
 
-        ctx = _make_context(params={"template": "code", "cwd": "/tmp", "model": "opus"})
+        ctx = _make_context(params={"template": "code", "model": "opus"})
         await ReviewAction().execute(ctx)
         ctx.resolver.resolve.assert_called_once_with("opus", None)
 
@@ -259,7 +247,7 @@ class TestReviewModelResolution:
         mock_get_template.return_value = _mock_template()
         mock_run_review.return_value = _make_review_result()
 
-        ctx = _make_context(params={"template": "code", "cwd": "/tmp"})
+        ctx = _make_context(params={"template": "code"})
         ctx.resolver.resolve.return_value = ("gpt-4o", "openrouter")
 
         result = await ReviewAction().execute(ctx)
@@ -282,9 +270,7 @@ class TestReviewModelResolution:
         mock_get_template.return_value = _mock_template()
         mock_run_review.return_value = _make_review_result()
 
-        ctx = _make_context(
-            params={"template": "code", "cwd": "/tmp", "profile": "openai"}
-        )
+        ctx = _make_context(params={"template": "code", "profile": "openai"})
         ctx.resolver.resolve.return_value = ("gpt-4o", "openrouter")
 
         result = await ReviewAction().execute(ctx)
@@ -307,7 +293,7 @@ class TestReviewModelResolution:
         mock_get_template.return_value = _mock_template()
         mock_run_review.return_value = _make_review_result()
 
-        ctx = _make_context(params={"template": "code", "cwd": "/tmp"})
+        ctx = _make_context(params={"template": "code"})
         ctx.resolver.resolve.return_value = ("sonnet", None)
 
         result = await ReviewAction().execute(ctx)
@@ -340,7 +326,6 @@ class TestReviewInputPassthrough:
         ctx = _make_context(
             params={
                 "template": "code",
-                "cwd": "/tmp",
                 "diff": "main",
                 "files": "src/**/*.py",
                 "against": "arch.md",
@@ -353,7 +338,7 @@ class TestReviewInputPassthrough:
         assert inputs["diff"] == "main"
         assert inputs["files"] == "src/**/*.py"
         assert inputs["against"] == "arch.md"
-        assert inputs["cwd"] == "/tmp"
+        assert inputs["cwd"] == "/tmp/test"
 
 
 # ---------------------------------------------------------------------------

@@ -91,7 +91,8 @@ class CfOpAction:
                     slice_id = context.params["slice"]
                     stdout = cf_client._run(["set", "slice", str(slice_id)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.BUILD_CONTEXT:
-                    stdout = cf_client._run(["build"])  # pyright: ignore[reportPrivateUsage]
+                    data = cf_client._run_json(["build", "--json"])  # pyright: ignore[reportPrivateUsage]
+                    stdout = data.get("context", "") if isinstance(data, dict) else ""
                 case CfOperation.SUMMARIZE:
                     stdout = cf_client._run(["summarize"])  # pyright: ignore[reportPrivateUsage]
         except ContextForgeError as exc:

@@ -9,8 +9,11 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
 from squadron.review.persistence import (
+    SliceInfo,
     format_review_markdown,
+    resolve_slice_info,
     save_review_file,
+    save_review_result,
 )
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import get_template, load_all_templates
@@ -42,14 +45,7 @@ class ReviewAction:
                     action_type=ActionType.REVIEW,
                 )
             )
-        if "cwd" not in config:
-            errors.append(
-                ValidationError(
-                    field="cwd",
-                    message="'cwd' is required for review action",
-                    action_type=ActionType.REVIEW,
-                )
-            )
+        # cwd comes from ActionContext.cwd, not from config
         return errors
 
     async def execute(self, context: ActionContext) -> ActionResult:
@@ -98,11 +94,21 @@ class ReviewAction:
         )
 
         # Build review inputs
-        cwd = str(context.params["cwd"])
+        cwd = context.cwd
         inputs: dict[str, str] = {"cwd": cwd}
         for key in _INPUT_PASSTHROUGH_KEYS:
             if key in context.params:
                 inputs[key] = str(context.params[key])
+
+        # Auto-resolve template inputs from slice number when not explicit.
+        # Mirrors CLI behavior: `sq review slice 154` resolves input/against
+        # automatically — pipelines should do the same.
+        slice_param = context.params.get("slice")
+        slice_info: SliceInfo | None = None
+        if slice_param is not None and "input" not in inputs:
+            slice_info = self._resolve_slice_inputs(
+                template_name, int(str(slice_param)), context.cf_client, inputs
+            )
 
         # Rules content
         rules_content: str | None = None
@@ -118,21 +124,34 @@ class ReviewAction:
             rules_content=rules_content,
         )
 
-        # File persistence (non-fatal)
+        # File persistence (non-fatal).
+        # When slice_info is available, use save_review_result for correct
+        # naming (e.g. 154-review.slice.prompt-only-loops.md). Otherwise
+        # fall back to save_review_file with step name/index.
         review_file_path: str | None = None
         try:
-            md_content = format_review_markdown(
-                result, template_name, source_document=inputs.get("input")
-            )
-            path = save_review_file(
-                md_content,
-                template_name,
-                context.step_name,
-                context.step_index,
-                cwd=cwd,
-            )
-            if path is not None:
-                review_file_path = str(path)
+            if slice_info is not None:
+                review_file_path = str(
+                    save_review_result(
+                        result,
+                        template_name,
+                        slice_info,
+                        input_file=inputs.get("input"),
+                    )
+                )
+            else:
+                md_content = format_review_markdown(
+                    result, template_name, source_document=inputs.get("input")
+                )
+                path = save_review_file(
+                    md_content,
+                    template_name,
+                    context.step_name,
+                    context.step_index,
+                    cwd=cwd,
+                )
+                if path is not None:
+                    review_file_path = str(path)
         except Exception:
             _logger.warning(
                 "review: failed to persist review file for step %s",
@@ -156,6 +175,47 @@ class ReviewAction:
                 "template": template_name,
             },
         )
+
+    def _resolve_slice_inputs(
+        self,
+        template_name: str,
+        slice_index: int,
+        cf_client: object,
+        inputs: dict[str, str],
+    ) -> SliceInfo | None:
+        """Auto-resolve review inputs from slice number via CF.
+
+        Maps slice index to template-specific input/against values,
+        matching the behavior of CLI commands like ``sq review slice 154``.
+        Returns the resolved SliceInfo for use in file persistence naming.
+        """
+        try:
+            info = resolve_slice_info(cf_client, slice_index)
+        except (ValueError, TypeError) as exc:
+            _logger.warning("review: could not resolve slice %d: %s", slice_index, exc)
+            return None
+
+        match template_name:
+            case "slice":
+                if info["design_file"]:
+                    inputs["input"] = info["design_file"]
+                inputs["against"] = info["arch_file"]
+            case "tasks":
+                if info["task_files"]:
+                    inputs["input"] = (
+                        f"project-documents/user/tasks/{info['task_files'][0]}"
+                    )
+                if info["design_file"]:
+                    inputs["against"] = info["design_file"]
+            case "arch":
+                inputs["input"] = info["arch_file"]
+            case _:
+                _logger.debug(
+                    "review: no auto-resolution for template '%s'",
+                    template_name,
+                )
+
+        return info
 
 
 register_action(ActionType.REVIEW, ReviewAction())

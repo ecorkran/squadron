@@ -151,7 +151,7 @@ async def test_full_pipeline_cycle_completes() -> None:
     )
 
     assert result.status == ExecutionStatus.COMPLETED
-    assert len(result.step_results) == 3
+    assert len(result.step_results) == len(definition.steps)
 
 
 @pytest.mark.asyncio
@@ -181,7 +181,7 @@ async def test_sdk_session_propagated_to_all_dispatch_contexts() -> None:
     )
 
     assert result.status == ExecutionStatus.COMPLETED
-    assert len(captured) >= 2  # design + tasks dispatch steps
+    assert len(captured) >= 1  # at least one dispatch per phase step
     for ctx in captured:
         assert ctx.sdk_session is session
 

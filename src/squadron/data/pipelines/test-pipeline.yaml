@@ -7,17 +7,9 @@ params:
 steps:
   - design:
       phase: 4
-      model: sonnet
-      review: 
-        template: slice
-        model: minimax
-      checkpoint: on-concerns
-
-  - tasks:
-      phase: 5
       model: haiku
       review: 
-        template: tasks
+        template: slice
         model: minimax
       checkpoint: always
 

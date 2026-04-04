@@ -101,15 +101,10 @@ def test_protocol_compliance(action: DispatchAction) -> None:
 # --- validate() ---
 
 
-def test_validate_missing_prompt(action: DispatchAction) -> None:
-    errors = action.validate({})
-    assert len(errors) == 1
-    assert errors[0].field == "prompt"
-
-
-def test_validate_valid_config(action: DispatchAction) -> None:
-    errors = action.validate({"prompt": "hello"})
-    assert errors == []
+def test_validate_always_passes(action: DispatchAction) -> None:
+    """Dispatch validates at runtime — prompt resolved from prior outputs."""
+    assert action.validate({}) == []
+    assert action.validate({"prompt": "hello"}) == []
 
 
 # --- execute() ---

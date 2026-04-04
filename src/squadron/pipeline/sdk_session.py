@@ -56,8 +56,10 @@ class SDKExecutionSession:
     _compaction_config: dict[str, object] | None = field(default=None, repr=False)
 
     async def connect(self) -> None:
-        """Connect the underlying SDK client."""
+        """Connect the underlying SDK client and enable tool use."""
         await self.client.connect()
+        await self.client.set_permission_mode("bypassPermissions")
+        _logger.debug("SDKExecutionSession: connected, permissions set to bypass")
 
     async def disconnect(self) -> None:
         """Disconnect the SDK client. Best-effort — ignores errors."""

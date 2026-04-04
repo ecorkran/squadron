@@ -28,6 +28,46 @@ class SliceInfo(TypedDict):
     arch_file: str
 
 
+def resolve_slice_info(cf_client: object, index: int) -> SliceInfo:
+    """Resolve a slice number to file paths via Context-Forge.
+
+    Shared between CLI review commands and pipeline review actions.
+    The ``cf_client`` is duck-typed — must have ``list_slices()``,
+    ``list_tasks()``, and ``get_project()`` methods.
+
+    Raises:
+        ValueError: If the slice index is not found.
+    """
+    # Duck-typed: cf_client must have list_slices(), list_tasks(), get_project()
+    slices = cf_client.list_slices()  # type: ignore[union-attr]
+    match = next((s for s in slices if s.index == index), None)
+    if match is None:
+        raise ValueError(f"No slice with index {index} in the current slice plan")
+
+    design_file = match.design_file
+    if design_file:
+        stem = Path(design_file).stem
+        slice_name = stem.split(".", 1)[1] if "." in stem else stem
+    else:
+        slice_name = match.name.lower().replace(" ", "-")
+
+    tasks = cf_client.list_tasks()  # type: ignore[union-attr]
+    task_match = next((t for t in tasks if t.index == index), None)
+    task_files = task_match.files if task_match else []
+
+    project = cf_client.get_project()  # type: ignore[union-attr]
+    arch_file = project.arch_file
+
+    return SliceInfo(
+        index=index,
+        name=match.name,
+        slice_name=slice_name,
+        design_file=design_file,
+        task_files=task_files,
+        arch_file=arch_file,
+    )
+
+
 def yaml_escape(text: str) -> str:
     """Escape backslashes and double quotes for YAML double-quoted values."""
     return text.replace("\\", "\\\\").replace('"', '\\"')
