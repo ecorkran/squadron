@@ -195,6 +195,19 @@ class CompactAction:
             pipeline_params=context.params,
         )
 
+        # SDK mode: configure compaction on the session instead of calling CF.
+        if context.sdk_session is not None:
+            context.sdk_session.configure_compaction(
+                instructions=instructions,
+                trigger_tokens=50_000,
+                pause_after=True,
+            )
+            return ActionResult(
+                success=True,
+                action_type=self.action_type,
+                outputs={"compaction_configured": True, "instructions": instructions},
+            )
+
         cf_client: ContextForgeClient = context.cf_client  # type: ignore[assignment]
 
         try:
