@@ -7,6 +7,7 @@ Re-exports all types needed by pipeline consumers:
     render_step_instructions
   - Resolver: ModelResolver, ModelResolutionError, ModelPoolNotImplemented
   - Enums: ActionType, StepTypeName
+  - SDK session: SDKExecutionSession
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from squadron.pipeline.resolver import (
     ModelResolutionError,
     ModelResolver,
 )
+from squadron.pipeline.sdk_session import SDKExecutionSession
 from squadron.pipeline.steps import StepTypeName
 
 __all__ = [
@@ -46,5 +48,6 @@ __all__ = [
     "StepInstructions",
     "StepTypeName",
     "ValidationError",
+    "SDKExecutionSession",
     "render_step_instructions",
 ]
