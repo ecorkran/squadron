@@ -27,6 +27,10 @@ from squadron.pipeline.loader import (
     validate_pipeline,
 )
 from squadron.pipeline.models import PipelineDefinition
+from squadron.pipeline.prompt_renderer import (
+    CompletionResult,
+    render_step_instructions,
+)
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.state import SchemaVersionError, StateManager
 
@@ -218,6 +222,189 @@ def _display_result(result: PipelineResult) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Prompt-only handlers
+# ---------------------------------------------------------------------------
+
+
+def _handle_prompt_only_init(
+    pipeline_name: str,
+    target: str | None,
+    model_override: str | None,
+    param_list: list[str] | None,
+) -> None:
+    """Initialize a prompt-only run and emit the first step's JSON."""
+    try:
+        definition = load_pipeline(pipeline_name)
+    except FileNotFoundError:
+        rprint(
+            f"[red]Error: Pipeline '{pipeline_name}' not found.[/red]",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+
+    errors = validate_pipeline(definition)
+    if errors:
+        rprint(
+            f"[red]Validation errors for '{definition.name}':[/red]",
+            file=sys.stderr,
+        )
+        for err in errors:
+            rprint(f"  {err.field}: {err.message}", file=sys.stderr)
+        raise typer.Exit(1)
+
+    params = _assemble_params(definition, target, model_override, param_list)
+    resolver = ModelResolver(
+        cli_override=model_override,
+        pipeline_model=definition.model,
+    )
+
+    state_mgr = StateManager()
+    run_id = state_mgr.init_run(pipeline_name, params)
+    rprint(f"run_id={run_id}", file=sys.stderr)
+
+    # Render first step
+    first_step = definition.steps[0]
+    instructions = render_step_instructions(
+        first_step,
+        step_index=0,
+        total_steps=len(definition.steps),
+        params=params,
+        resolver=resolver,
+        run_id=run_id,
+    )
+    print(instructions.to_json())
+
+
+def _handle_prompt_only_next(
+    run_id: str,
+    model_override: str | None,
+) -> None:
+    """Emit the next unfinished step's JSON for an existing run."""
+    state_mgr = StateManager()
+    try:
+        state = state_mgr.load(run_id)
+    except FileNotFoundError:
+        rprint(
+            f"[red]Error: Run '{run_id}' not found.[/red]",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+    except SchemaVersionError as exc:
+        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+        raise typer.Exit(1)
+
+    try:
+        definition = load_pipeline(state.pipeline)
+    except FileNotFoundError:
+        rprint(
+            f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+
+    next_name = state_mgr.first_unfinished_step(run_id, definition)
+    if next_name is None:
+        # All done — finalize and return completion
+        from squadron.pipeline.executor import PipelineResult
+
+        state_mgr.finalize(
+            run_id,
+            PipelineResult(
+                pipeline_name=state.pipeline,
+                status=ExecutionStatus.COMPLETED,
+                step_results=[],
+            ),
+        )
+        result = CompletionResult(
+            status="completed",
+            message="All steps complete",
+            run_id=run_id,
+        )
+        print(result.to_json())
+        return
+
+    # Find the step config and its index
+    step_index = 0
+    step_config = None
+    for i, step in enumerate(definition.steps):
+        if step.name == next_name:
+            step_index = i
+            step_config = step
+            break
+
+    if step_config is None:
+        rprint(
+            f"[red]Error: Step '{next_name}' not found in pipeline.[/red]",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+
+    resume_model = (
+        model_override or str(state.params.get("model"))
+        if state.params.get("model")
+        else model_override
+    )
+    resolver = ModelResolver(
+        cli_override=resume_model,
+        pipeline_model=definition.model,
+    )
+    params = dict(state.params)
+
+    instructions = render_step_instructions(
+        step_config,
+        step_index=step_index,
+        total_steps=len(definition.steps),
+        params=params,
+        resolver=resolver,
+        run_id=run_id,
+    )
+    print(instructions.to_json())
+
+
+def _handle_step_done(
+    run_id: str,
+    verdict: str | None,
+) -> None:
+    """Mark the current step complete in a prompt-only run."""
+    state_mgr = StateManager()
+    try:
+        state = state_mgr.load(run_id)
+    except FileNotFoundError:
+        rprint(
+            f"[red]Error: Run '{run_id}' not found.[/red]",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+    except SchemaVersionError as exc:
+        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+        raise typer.Exit(1)
+
+    try:
+        definition = load_pipeline(state.pipeline)
+    except FileNotFoundError:
+        rprint(
+            f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]",
+            file=sys.stderr,
+        )
+        raise typer.Exit(1)
+
+    next_name = state_mgr.first_unfinished_step(run_id, definition)
+    if next_name is None:
+        rprint("[yellow]All steps already completed.[/yellow]")
+        return
+
+    # Find step type from definition
+    step_type = "unknown"
+    for step in definition.steps:
+        if step.name == next_name:
+            step_type = step.step_type
+            break
+
+    state_mgr.record_step_done(run_id, next_name, step_type, verdict=verdict)
+    rprint(f"Step '{next_name}' marked complete.", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # Typer command
 # ---------------------------------------------------------------------------
 
@@ -252,11 +439,50 @@ def run(
     status: str | None = typer.Option(
         None, "--status", help="Show run status. Use 'latest' for most recent."
     ),
+    prompt_only: bool = typer.Option(
+        False,
+        "--prompt-only",
+        help="Output step instructions as JSON without executing.",
+    ),
+    next_step: bool = typer.Option(
+        False,
+        "--next",
+        help="Emit next unfinished step (requires --prompt-only --resume).",
+    ),
+    step_done: str | None = typer.Option(
+        None,
+        "--step-done",
+        help="Mark current step complete for a run-id.",
+    ),
+    verdict: str | None = typer.Option(
+        None,
+        "--verdict",
+        help="Review verdict for --step-done (PASS, CONCERNS, FAIL).",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
     if resume is not None and from_step is not None:
         rprint("[red]Error: --resume and --from cannot be used together.[/red]")
+        raise typer.Exit(1)
+
+    if prompt_only and dry_run:
+        rprint("[red]Error: --prompt-only and --dry-run cannot be used together.[/red]")
+        raise typer.Exit(1)
+
+    if next_step and not (prompt_only and resume):
+        rprint("[red]Error: --next requires both --prompt-only and --resume.[/red]")
+        raise typer.Exit(1)
+
+    if step_done is not None and any([prompt_only, dry_run]):
+        rprint(
+            "[red]Error: --step-done cannot be combined "
+            "with --prompt-only or --dry-run.[/red]"
+        )
+        raise typer.Exit(1)
+
+    if verdict is not None and step_done is None:
+        rprint("[red]Error: --verdict requires --step-done.[/red]")
         raise typer.Exit(1)
 
     if list_pipelines and any(
@@ -271,12 +497,37 @@ def run(
         rprint("[red]Error: --status cannot be combined with execution options.[/red]")
         raise typer.Exit(1)
 
-    if not list_pipelines and status is None and resume is None and pipeline is None:
+    if (
+        not list_pipelines
+        and status is None
+        and resume is None
+        and step_done is None
+        and pipeline is None
+    ):
         rprint(
             "[red]Error: pipeline argument is required"
-            " unless using --list, --status, or --resume.[/red]"
+            " unless using --list, --status, --resume,"
+            " or --step-done.[/red]"
         )
         raise typer.Exit(1)
+
+    # ---- --step-done ----
+    if step_done is not None:
+        _handle_step_done(step_done, verdict)
+        raise typer.Exit(0)
+
+    # ---- --prompt-only --next --resume ----
+    if prompt_only and next_step and resume is not None:
+        _handle_prompt_only_next(resume, model)
+        raise typer.Exit(0)
+
+    # ---- --prompt-only (init) ----
+    if prompt_only:
+        if pipeline is None:
+            rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
+            raise typer.Exit(1)
+        _handle_prompt_only_init(pipeline, target, model, param)
+        raise typer.Exit(0)
 
     # ---- --list ----
     if list_pipelines:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -21,6 +22,12 @@ from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationE
 from squadron.pipeline.state import CheckpointState, RunState
 
 runner = CliRunner()
+
+
+def _extract_json(output: str) -> dict[str, object]:
+    """Extract the first JSON object from mixed CLI output."""
+    start = output.index("{")
+    return json.loads(output[start:])
 
 
 # ---------------------------------------------------------------------------
@@ -572,3 +579,306 @@ class TestKeyboardInterrupt:
         assert result.exit_code == 1
         assert "Interrupted" in result.output
         assert "sq run --resume" in result.output
+
+
+# ---------------------------------------------------------------------------
+# T10: --prompt-only CLI tests
+# ---------------------------------------------------------------------------
+
+
+class TestPromptOnly:
+    """Tests for --prompt-only, --next, --step-done, and --verdict."""
+
+    def test_prompt_only_and_dry_run_exclusive(self) -> None:
+        result = runner.invoke(
+            app, ["run", "slice", "152", "--prompt-only", "--dry-run"]
+        )
+        assert result.exit_code == 1
+        assert "cannot be used together" in result.output
+
+    def test_next_requires_prompt_only_and_resume(self) -> None:
+        result = runner.invoke(app, ["run", "--next", "--resume", "r1"])
+        assert result.exit_code == 1
+        assert "--next requires both" in result.output
+
+    def test_verdict_requires_step_done(self) -> None:
+        result = runner.invoke(app, ["run", "slice", "152", "--verdict", "PASS"])
+        assert result.exit_code == 1
+        assert "--verdict requires --step-done" in result.output
+
+    def test_step_done_exclusive_with_prompt_only(self) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "slice",
+                "152",
+                "--step-done",
+                "r1",
+                "--prompt-only",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "--step-done cannot be combined" in result.output
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.validate_pipeline", return_value=[])
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_outputs_json(
+        self, mock_cls: MagicMock, mock_validate: MagicMock, mock_load: MagicMock
+    ) -> None:
+
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="devlog",
+                    name="devlog-0",
+                    config={"mode": "auto"},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.init_run.return_value = "run-test-123"
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(app, ["run", "slice", "152", "--prompt-only"])
+        assert result.exit_code == 0
+        parsed = _extract_json(result.output)
+        assert parsed["run_id"] == "run-test-123"
+        assert parsed["step_name"] == "devlog-0"
+        assert len(parsed["actions"]) == 1
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_creates_state(
+        self, mock_cls: MagicMock, mock_load: MagicMock
+    ) -> None:
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="devlog",
+                    name="devlog-0",
+                    config={"mode": "auto"},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.init_run.return_value = "run-test-123"
+        mock_cls.return_value = mock_mgr
+
+        with patch("squadron.cli.commands.run.validate_pipeline", return_value=[]):
+            runner.invoke(app, ["run", "slice", "152", "--prompt-only"])
+        mock_mgr.init_run.assert_called_once()
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_next(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
+
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="devlog",
+                    name="devlog-0",
+                    config={"mode": "auto"},
+                ),
+                StepConfig(
+                    step_type="devlog",
+                    name="devlog-1",
+                    config={"mode": "auto"},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "devlog-1"
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={"slice": "152"},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--prompt-only",
+                "--next",
+                "--resume",
+                "run-123",
+            ],
+        )
+        assert result.exit_code == 0
+        parsed = _extract_json(result.output)
+        assert parsed["step_name"] == "devlog-1"
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_next_all_done(
+        self, mock_cls: MagicMock, mock_load: MagicMock
+    ) -> None:
+
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = None
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--prompt-only",
+                "--next",
+                "--resume",
+                "run-123",
+            ],
+        )
+        assert result.exit_code == 0
+        parsed = _extract_json(result.output)
+        assert parsed["status"] == "completed"
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_step_done_marks_complete(
+        self, mock_cls: MagicMock, mock_load: MagicMock
+    ) -> None:
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[
+                StepConfig(
+                    step_type="design",
+                    name="design-0",
+                    config={},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "design-0"
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+        assert result.exit_code == 0
+        mock_mgr.record_step_done.assert_called_once_with(
+            "run-123", "design-0", "design", verdict=None
+        )
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_step_done_with_verdict(
+        self, mock_cls: MagicMock, mock_load: MagicMock
+    ) -> None:
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[
+                StepConfig(
+                    step_type="design",
+                    name="design-0",
+                    config={},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "design-0"
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(
+            app,
+            ["run", "--step-done", "run-123", "--verdict", "PASS"],
+        )
+        assert result.exit_code == 0
+        mock_mgr.record_step_done.assert_called_once_with(
+            "run-123", "design-0", "design", verdict="PASS"
+        )
+
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_step_done_nonexistent_run(self, mock_cls: MagicMock) -> None:
+        mock_mgr = MagicMock()
+        mock_mgr.load.side_effect = FileNotFoundError("not found")
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(app, ["run", "--step-done", "no-such-run"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_step_done_all_steps_done(
+        self, mock_cls: MagicMock, mock_load: MagicMock
+    ) -> None:
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = None
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+        assert result.exit_code == 0
+        assert "already completed" in result.output
