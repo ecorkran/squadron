@@ -21,6 +21,27 @@ status: not_started
 
 ---
 
+## Implementation Notes
+
+### Compaction Unknowns
+
+The `context_management` API integration has significant unknowns:
+
+1. **SDK client surface**: Whether `ClaudeSDKClient` exposes `context_management` parameters is unconfirmed. T1 and T8 should be implemented with a fallback path (session restart with summary prompt) if the API isn't available through the SDK.
+
+2. **Default compaction behavior**: What the API keeps without custom `instructions` is undocumented. Our compact templates provide explicit instructions, but the quality of compaction with vs without them is unknown.
+
+3. **Pre/post compaction hooks**: Regardless of mechanism, compaction benefits from bracketing with known state:
+   - **Pre-hook**: Generate a summary instruction ("Keep slice design, task breakdown for slice {slice}...") — this is the compact template's `resolved_instructions`, already implemented.
+   - **Post-hook**: Take the compaction summary output and inject it as seed context for the next dispatch. This ensures the model starts the next step with a known baseline rather than whatever the compaction preserved.
+   - Hook-style compaction may be more reliable than relying on `context_management` alone, and would work across all execution modes (SDK, prompt-only, future modes).
+
+4. **Fallback strategy**: If `context_management` is unavailable or unreliable, the fallback is: disconnect session → start new session with compacted system prompt (built from compact template instructions + pipeline state). This is functionally equivalent but loses in-session context benefits.
+
+These unknowns should be investigated early in implementation (T1/T8). If the SDK doesn't expose `context_management`, pivot to the fallback strategy and document for future revisit.
+
+---
+
 ## Tasks
 
 ### T1: SDK Execution Session — Core Module
@@ -155,6 +176,7 @@ status: not_started
     - Pass `sdk_session` through to `execute_pipeline()` via action registry or context factory
   - [ ] Ensure session is disconnected in `finally` block (cleanup on success, failure, or interrupt)
   - [ ] Pass session through to `ActionContext` construction in the executor
+  - [ ] **Checkpoint handling in SDK mode**: When executor returns `ExecutionStatus.PAUSED` (checkpoint triggered), disconnect session before exiting. Existing checkpoint logic (state persistence, `--resume` flag) from slice 151 handles the rest — the only new behavior is `session.disconnect()` before the pause exit. Resume creates a fresh session.
   - [ ] Success: `sq run test-pipeline 154` from terminal creates session and attempts execution
 
 ### T15: Executor — ActionContext Session Propagation
@@ -192,6 +214,7 @@ status: not_started
     - Verify `configure_compaction()` called at compact step
   - [ ] Test checkpoint triggers session disconnect and state persistence
   - [ ] Test resume after checkpoint creates new session and continues
+  - [ ] Test review actions still use subprocess dispatch path (not SDK session) — verify review action does not receive or use `sdk_session`, spawns via existing provider system with correct model/profile
   - [ ] Success: all integration tests pass
 
 ### T19: Commit — Integration tests
