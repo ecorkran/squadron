@@ -1,0 +1,321 @@
+"""Prompt-only pipeline renderer — generates step instructions without execution.
+
+Converts pipeline step configs into structured instruction objects that can be
+serialized as JSON and consumed by external callers (e.g. the /sq:run slash
+command). This is the core of the --prompt-only mode.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import asdict, dataclass
+from typing import TYPE_CHECKING
+
+from squadron.pipeline.actions import ActionType
+from squadron.pipeline.actions.compact import (
+    load_compaction_template,
+    render_instructions,
+)
+from squadron.pipeline.executor import resolve_placeholders
+from squadron.pipeline.steps import get_step_type
+
+if TYPE_CHECKING:
+    from squadron.pipeline.models import StepConfig
+    from squadron.pipeline.resolver import ModelResolver
+
+_logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ActionInstruction:
+    """A single action's instructions for prompt-only output."""
+
+    action_type: str
+    instruction: str
+    command: str | None = None
+    model: str | None = None
+    model_switch: str | None = None
+    template: str | None = None
+    trigger: str | None = None
+    resolved_instructions: str | None = None
+
+
+@dataclass
+class StepInstructions:
+    """Complete instructions for one pipeline step."""
+
+    run_id: str
+    step_name: str
+    step_type: str
+    step_index: int
+    total_steps: int
+    actions: list[ActionInstruction]
+
+    def to_json(self) -> str:
+        """Serialize to indented JSON string."""
+        return json.dumps(asdict(self), indent=2)
+
+
+@dataclass
+class CompletionResult:
+    """Returned when no more steps remain in the pipeline."""
+
+    status: str
+    message: str
+    run_id: str
+
+    def to_json(self) -> str:
+        """Serialize to indented JSON string."""
+        return json.dumps(asdict(self), indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Action instruction builders
+# ---------------------------------------------------------------------------
+
+
+def _render_cf_op(
+    config: dict[str, object], params: dict[str, object]
+) -> ActionInstruction:
+    """Build instruction for a cf-op action (set_phase or build_context)."""
+    operation = str(config.get("operation", ""))
+    if operation == "set_phase":
+        phase = config.get("phase", "")
+        return ActionInstruction(
+            action_type=ActionType.CF_OP,
+            instruction=f"Set phase to {phase}",
+            command=f"cf set phase {phase}",
+        )
+    if operation == "build_context":
+        return ActionInstruction(
+            action_type=ActionType.CF_OP,
+            instruction="Build context",
+            command="cf build",
+        )
+    if operation == "summarize":
+        return ActionInstruction(
+            action_type=ActionType.CF_OP,
+            instruction="Summarize context",
+            command="cf summarize",
+        )
+    return ActionInstruction(
+        action_type=ActionType.CF_OP,
+        instruction=f"CF operation: {operation}",
+        command=f"cf {operation}",
+    )
+
+
+def _render_dispatch(
+    config: dict[str, object],
+    params: dict[str, object],
+    resolver: ModelResolver,
+) -> ActionInstruction:
+    """Build instruction for a dispatch action (in-session work)."""
+    action_model = str(config["model"]) if config.get("model") else None
+    model_id: str | None = None
+    model_switch: str | None = None
+
+    if action_model is not None:
+        try:
+            model_id, _ = resolver.resolve(action_model)
+        except Exception:
+            model_id = action_model
+        model_switch = f"/model {action_model}"
+
+    return ActionInstruction(
+        action_type=ActionType.DISPATCH,
+        instruction="Execute the work using the assembled context",
+        model=model_id or action_model,
+        model_switch=model_switch,
+    )
+
+
+def _render_review(
+    config: dict[str, object],
+    params: dict[str, object],
+    resolver: ModelResolver,
+) -> ActionInstruction:
+    """Build instruction for a review action."""
+    template_name = str(config.get("template", ""))
+    review_model_raw = config.get("model")
+    review_model: str | None = None
+
+    if review_model_raw is not None:
+        try:
+            review_model, _ = resolver.resolve(str(review_model_raw))
+        except Exception:
+            review_model = str(review_model_raw)
+
+    # Build the CLI command
+    target = str(params.get("slice", ""))
+    cmd_parts = ["sq", "review", template_name]
+    if target:
+        cmd_parts.append(target)
+    if review_model:
+        cmd_parts.extend(["--model", review_model])
+    cmd_parts.extend(["--template", template_name, "-v"])
+
+    return ActionInstruction(
+        action_type=ActionType.REVIEW,
+        instruction=f"Review using template '{template_name}'",
+        command=" ".join(cmd_parts),
+        model=review_model,
+        template=template_name,
+    )
+
+
+def _render_checkpoint(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a checkpoint action."""
+    trigger = str(config.get("trigger", "on-concerns"))
+
+    instruction_map = {
+        "on-concerns": "Pause if review verdict is CONCERNS or worse",
+        "on-fail": "Pause if review verdict is FAIL",
+        "always": "Always pause for user decision",
+        "never": "Skip checkpoint (never pause)",
+    }
+    instruction = instruction_map.get(trigger, f"Checkpoint with trigger: {trigger}")
+
+    return ActionInstruction(
+        action_type=ActionType.CHECKPOINT,
+        instruction=instruction,
+        trigger=trigger,
+    )
+
+
+def _render_commit(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a commit action."""
+    prefix = str(config.get("message_prefix", ""))
+    message = f"{prefix}: pipeline step" if prefix else "chore: pipeline step"
+
+    return ActionInstruction(
+        action_type=ActionType.COMMIT,
+        instruction="Commit the artifacts",
+        command=f"git add -A && git commit -m '{message}'",
+    )
+
+
+def _render_compact(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a compact action."""
+    template_name = str(config.get("template", "default"))
+
+    try:
+        template = load_compaction_template(template_name)
+        resolved = render_instructions(template, pipeline_params=params)
+    except FileNotFoundError:
+        resolved = f"(template '{template_name}' not found)"
+
+    return ActionInstruction(
+        action_type=ActionType.COMPACT,
+        instruction="Compact context to free space",
+        command=f"/compact [{resolved}]",
+        template=template_name,
+        resolved_instructions=resolved,
+    )
+
+
+def _render_devlog(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a devlog action."""
+    mode = str(config.get("mode", "auto"))
+    return ActionInstruction(
+        action_type=ActionType.DEVLOG,
+        instruction=f"Write DEVLOG entry (mode: {mode})",
+    )
+
+
+# Map action type -> builder function signature
+_BUILDERS: dict[str, object] = {
+    ActionType.CF_OP: _render_cf_op,
+    ActionType.DISPATCH: _render_dispatch,
+    ActionType.REVIEW: _render_review,
+    ActionType.CHECKPOINT: _render_checkpoint,
+    ActionType.COMMIT: _render_commit,
+    ActionType.COMPACT: _render_compact,
+    ActionType.DEVLOG: _render_devlog,
+}
+
+
+def _build_action_instruction(
+    action_type: str,
+    config: dict[str, object],
+    params: dict[str, object],
+    resolver: ModelResolver,
+) -> ActionInstruction:
+    """Dispatch to the appropriate builder for an action type."""
+    builder = _BUILDERS.get(action_type)
+    if builder is None:
+        return ActionInstruction(
+            action_type=action_type,
+            instruction=f"Execute {action_type} action",
+        )
+
+    # Builders that need the resolver
+    if action_type in (ActionType.DISPATCH, ActionType.REVIEW):
+        return builder(config, params, resolver)  # type: ignore[operator]
+
+    return builder(config, params)  # type: ignore[operator]
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+
+
+def render_step_instructions(
+    step: StepConfig,
+    *,
+    step_index: int,
+    total_steps: int,
+    params: dict[str, object],
+    resolver: ModelResolver,
+    run_id: str,
+) -> StepInstructions:
+    """Expand a step into executable instruction objects.
+
+    Uses existing step type ``expand()`` to get the action sequence,
+    then generates an ``ActionInstruction`` for each action.
+    """
+    # Ensure step types are registered
+    import squadron.pipeline.steps.compact as _s_compact  # noqa: F401
+    import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
+    import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
+    import squadron.pipeline.steps.review as _s_review  # noqa: F401
+
+    _ = (_s_compact, _s_devlog, _s_phase, _s_review)
+
+    step_type_impl = get_step_type(step.step_type)
+    actions = step_type_impl.expand(step)
+
+    instructions: list[ActionInstruction] = []
+    for action_type, action_config in actions:
+        resolved_config = resolve_placeholders(action_config, params)
+        instruction = _build_action_instruction(
+            action_type, resolved_config, params, resolver
+        )
+        instructions.append(instruction)
+
+    return StepInstructions(
+        run_id=run_id,
+        step_name=step.name,
+        step_type=step.step_type,
+        step_index=step_index,
+        total_steps=total_steps,
+        actions=instructions,
+    )
