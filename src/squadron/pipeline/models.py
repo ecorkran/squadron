@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from squadron.pipeline.resolver import ModelResolver
+    from squadron.pipeline.sdk_session import SDKExecutionSession
 
 
 @dataclass
@@ -48,6 +49,7 @@ class ActionContext:
     resolver: ModelResolver
     cf_client: object  # typed object to avoid importing ContextForgeClient
     cwd: str
+    sdk_session: SDKExecutionSession | None = None
 
 
 @dataclass
