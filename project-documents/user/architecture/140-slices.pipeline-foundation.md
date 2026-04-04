@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
-dateUpdated: 20260403
+dateUpdated: 20260404
 status: in_progress
 ---
 
@@ -50,13 +50,15 @@ status: in_progress
 
 13. [x] **(153) Prompt-Only Pipeline Executor** — Add `--prompt-only --next` mode to `sq run` CLI that outputs one step's instructions at a time without dispatching to an LLM. Each call returns the next step's structured instructions (CF commands, model to switch to, review command with template/model from YAML, compact instructions with resolved params, checkpoint decisions). Pipeline executor tracks state across calls. Update `/sq:run` slash command to consume executor output instead of reimplementing YAML interpretation — slash command becomes a thin loop: call `sq run --prompt-only --next`, execute instructions, repeat. Sequential steps only. Dependencies: [151]. Risk: Low. Effort: 3/5
 
-14. [ ] **(154) Prompt-Only Loops and Model Switching** — Extend prompt-only mode with `each`/collection loop support (executor returns successive iteration instructions via `--next`, caller doesn't need to know it's a loop) and automated `/model` command emission in step instruction output. Enables design-batch pipelines and per-step model switching in CLI sessions. Dependencies: [153]. Risk: Low. Effort: 2/5
+14. [ ] **(154) Prompt-Only Loops** — Extend prompt-only mode with `each`/collection loop support (executor returns successive iteration instructions via `--next`, caller doesn't need to know it's a loop). Enables design-batch pipelines in prompt-only mode. Model switching is informational only in prompt-only mode — `/model` commands cannot be automated from within Claude Code sessions (IDE or CLI). The `model_switch` field remains in step instructions for user reference. Automated model switching requires the SDK executor (slice 155). Dependencies: [153]. Risk: Low. Effort: 2/5
+
+15. [ ] **(155) SDK Pipeline Executor** — Full pipeline automation via `ClaudeSDKClient`. Dispatch steps spawn a persistent SDK session that executes work autonomously with tool use (file I/O, commands, web search). Per-step model switching via `client.set_model(model)`. Server-side context compaction via the `context_management` API (`compact_20260112` beta) with pipeline-defined `instructions` from compact templates and configurable `trigger` thresholds. Reviews execute normally (SDK can spawn subprocesses). Checkpoints pause and optionally notify. Runs outside Claude Code sessions only (`sq run slice 154` from straight CLI). This is the fully automated path — prompt-only mode (slices 153-154) remains the interactive bridge for IDE and Claude Code CLI sessions. Dependencies: [154]. Risk: Medium (SDK API stability, compaction beta). Effort: 3/5
 
 ---
 
 ## Integration Work
 
-15. [ ] **(152) Pipeline Documentation and Authoring Guide** — Pipeline authoring documentation: YAML grammar reference, action type catalog, step type catalog, model resolution rules and cascade precedence, built-in pipeline descriptions with annotated examples. Configuration surface guide: where built-in defaults live (shipped TOML and YAML), where user overrides live, how layering works. Example custom pipeline definition. README updates for `sq run`. Dependencies: [all prior slices]. Risk: Low. Effort: 1/5
+16. [ ] **(152) Pipeline Documentation and Authoring Guide** — Pipeline authoring documentation: YAML grammar reference, action type catalog, step type catalog, model resolution rules and cascade precedence, built-in pipeline descriptions with annotated examples. Configuration surface guide: where built-in defaults live (shipped TOML and YAML), where user overrides live, how layering works. Example custom pipeline definition. README updates for `sq run`. Dependencies: [all prior slices]. Risk: Low. Effort: 1/5
 
 ---
 
@@ -83,7 +85,8 @@ Feature Slices:
 
 Feature:
   153. Prompt-Only Pipeline Executor                     (after 151)
-  154. Prompt-Only Loops and Model Switching              (after 153)
+  154. Prompt-Only Loops                                  (after 153)
+  155. SDK Pipeline Executor                              (after 154)
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
@@ -106,9 +109,7 @@ Integration:
 
 3. [FUTURE] **Multiple Positional Target Arguments** — Support additional positional args or `key=value` positional syntax for pipelines with multiple required params (e.g. `sq run review-only 123 template=arch` or `sq run review-only 123 arch`). Currently only the first required param is bound to the positional target; additional required params need `--param key=value`. Dependencies: [151]. Effort: 1/5
 
-4. [FUTURE] **External Model Dispatch for Pipeline Steps** — Send built pipeline contexts to external LLMs (non-Claude Code) for execution, similar to how reviews already dispatch externally. Would enable fully automated pipelines without requiring a Claude Code session as runtime. Quality tradeoffs vs Claude Code agents (loses tool use, code editing, etc). Could target capable models (GLM, Minimax) for specific step types. Dependencies: [153, Agent Registry]. Effort: 3/5
-
-5. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
+4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
 
 ---
 
