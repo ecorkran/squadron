@@ -36,9 +36,9 @@ The `context_management` API integration has significant unknowns:
    - **Post-hook**: Take the compaction summary output and inject it as seed context for the next dispatch. This ensures the model starts the next step with a known baseline rather than whatever the compaction preserved.
    - Hook-style compaction may be more reliable than relying on `context_management` alone, and would work across all execution modes (SDK, prompt-only, future modes).
 
-4. **Fallback strategy**: If `context_management` is unavailable or unreliable, the fallback is: disconnect session → start new session with compacted system prompt (built from compact template instructions + pipeline state). This is functionally equivalent but loses in-session context benefits.
+4. **Session-rotate compaction** (alternative strategy): Rather than relying on token-count triggers, the compact step can be implemented as a deterministic sequence: (1) ask the model to summarize using compact template instructions, (2) capture the summary, (3) disconnect session, (4) create new session with summary injected as system prompt seed, (5) continue pipeline. This fires at exactly the right moment (when the pipeline says to compact, not when a token count is crossed), works with any model, and requires no beta API. Trade-off: loses any in-session context the summary didn't capture. This may be the more practical approach for pipelines with well-defined compact points (e.g., after phase 5 in a phase 4→5→6 pipeline). CLI-only — prompt-only mode can't manage sessions.
 
-These unknowns should be investigated early in implementation (T1/T8). If the SDK doesn't expose `context_management`, pivot to the fallback strategy and document for future revisit.
+5. **Investigation priority**: Evaluate both `context_management` API and session-rotate approaches early in implementation (T1/T8). Session-rotate is the safer bet if `context_management` isn't exposed through the SDK client or proves unreliable for on-demand compaction.
 
 ---
 
