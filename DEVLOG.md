@@ -14,6 +14,12 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260404
 
+**Slice 155: SDK Pipeline Executor — Design Complete (Phase 4)**
+Created `project-documents/user/slices/155-slice.sdk-pipeline-executor.md`. Full pipeline automation via `ClaudeSDKClient` with persistent session, per-step model switching via `set_model()`, and server-side compaction via `context_management` API (`compact_20260112` beta). Slice review (glm-5) raised FAIL on persistent session violating 140's "stateless steps" principle. Resolved by updating `140-arch.pipeline-foundation.md` to distinguish SDK session persistence (runtime optimization, 140 scope) from conversation persistence (semantic dependency, 160 scope). Architecture updated: "Interaction with Conversations" section clarified, dependency notes updated.
+
+**Slice 153: Verification and Pipeline Testing**
+Ran prompt-only pipeline end-to-end in IDE extension, Claude Code CLI, and straight CLI. Findings: (1) reviews blocked inside Claude Code sessions ("no nested Claude Code") regardless of model — review dispatch goes through SDK subprocess; (2) `/model` and `/compact` slash commands cannot be automated — only user can issue slash commands; (3) checkpoint `always` trigger required stronger prompt language to enforce. Fixed: review command now uses model alias (not resolved ID) to preserve profile resolution; removed invalid `--template` flag; strengthened checkpoint/compact instructions in `/sq:run`. Added `test-pipeline.yaml` for low-cost pipeline testing. Added slice 155 to slice plan, updated slice 154 scope (loops only, model switching informational).
+
 **Slice 153: Prompt-Only Pipeline Executor — Implementation Complete (Phase 6)**
 Implemented all 17 tasks (T1–T17). Created `src/squadron/pipeline/prompt_renderer.py`: `StepInstructions`, `ActionInstruction`, `CompletionResult` dataclasses, per-action-type builders (cf-op, dispatch, review, checkpoint, commit, compact, devlog), `render_step_instructions()` entry point. Added `StateManager.record_step_done()` public method. CLI: `--prompt-only`, `--next`, `--step-done`, `--verdict` flags on `sq run`. `/sq:run` slash command rewritten to consume prompt-only output. 30 unit tests, 4 integration tests, 12 CLI tests. Full verification walkthrough passed: all 6 slice pipeline steps cycle correctly, model aliases resolve, compact params resolve `{slice}` → target. 1193 total tests pass, zero regressions. Slice 153 complete.
 

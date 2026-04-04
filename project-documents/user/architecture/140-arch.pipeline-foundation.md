@@ -5,7 +5,7 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20260328
+dateUpdated: 20260404
 status: draft
 ---
 
@@ -467,16 +467,22 @@ Pipeline execution produces a state file that enables resume after interruption,
 
 ### Interaction with Conversations
 
-Pipeline steps use fresh agents by default — no conversation state carries between steps. The pipeline state file is the continuity mechanism, not conversation history.
+Pipeline steps are logically stateless — the pipeline state file is the continuity mechanism across checkpoints, interruptions, and resume. Each step's context is fully assembled from CF + pipeline state + prior step outputs. No step *requires* conversation history from a prior step to function correctly.
 
-Slice 125 (Conversation Persistence) is deferred to initiative 160. When implemented, a pipeline step could opt into persistent conversations:
+However, within a single uninterrupted run, the execution runtime may maintain a persistent client session across steps for efficiency. This is a **runtime optimization**, not a semantic dependency:
+
+- **SDK execution mode** (slice 155): A single `ClaudeSDKClient` session spans the pipeline run. This enables per-step model switching via `set_model()` and server-side compaction via `context_management`. Steps benefit from the model retaining context from earlier steps, but do not depend on it — if the session is interrupted, resume rebuilds context from CF + state.
+- **Prompt-only mode** (slices 153-154): No persistent session. The human is the runtime.
+- **One-shot agent mode**: Each dispatch creates a fresh agent. Used for non-SDK providers.
+
+The distinction is: **session persistence** (runtime optimization within a single run, 140 scope) vs. **conversation persistence** (semantic dependency where a step requires specific prior conversation state to function, 160 scope). A persistent session improves quality because the model has richer context, but the pipeline is correct without it.
+
+Slice 125 (Conversation Persistence) remains deferred to initiative 160. That work covers opt-in persistence across retries, checkpoint resume, and step-level `persistence: true` configuration:
 
 ```yaml
 - implement:
     persistence: true            # 160: maintain conversation across retries
 ```
-
-In 140, every step is stateless. Context is fully assembled from CF + pipeline state + prior step outputs.
 
 ---
 
@@ -611,7 +617,7 @@ src/squadron/data/
 ### Within This Initiative
 
 - **Structured Review Findings (143, formerly 100-band slice 123)** — Finding extraction is foundational for the review action. Absorbed into this initiative's slice plan.
-- **Conversation Persistence (125)** → moved to initiative 160. Pipeline steps are stateless in 140.
+- **Conversation Persistence (125)** → moved to initiative 160. Pipeline steps are logically stateless in 140. SDK session persistence within a single run is a runtime optimization (140 scope, slice 155); semantic conversation persistence across retries/resume is 160 scope.
 - **SDK Client Warm Pool (104)** → remains deferred. Nice-to-have optimization for reducing per-step latency.
 
 ### CF Connection Model
@@ -653,7 +659,7 @@ The `ContextForgeClient` (slice 126, complete) wraps CF CLI subprocess calls beh
 - Weighted review convergence strategies
 - Model pools with selection strategies (random, round-robin, cheapest)
 - Escalation behaviors (retry with stronger model)
-- Conversation persistence across pipeline steps
+- Conversation persistence across pipeline steps (semantic dependency on prior conversation state for retries/resume)
 - Cross-iteration finding matching and identity
 - Advanced loop constructs beyond basic/collection
 - Finding severity classification and auto-fix routing

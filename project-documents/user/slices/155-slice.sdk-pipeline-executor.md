@@ -234,7 +234,11 @@ The step-specific instructions come from the step type expansion — each phase 
 
 ### Client Per Pipeline, Not Per Step
 
-Creating a new `ClaudeSDKClient` per step would lose conversation context between steps. A persistent client preserves the context window, allowing later steps to reference earlier work. Compaction manages context size; the client stays connected.
+A single `ClaudeSDKClient` session spans the pipeline run. This is a **runtime optimization** — the model benefits from retaining context from earlier steps, but no step semantically depends on prior conversation state. If the session is interrupted (checkpoint, crash), resume rebuilds context from CF + pipeline state, as the architecture prescribes.
+
+This is distinct from conversation persistence (160 scope), which would make steps *depend* on specific prior conversation state for correctness (e.g., retry loops that need the model to remember what it tried). Here, each step could function with a fresh session; the persistent session simply avoids redundant context rebuilding and enables `set_model()`.
+
+See architecture update: "Interaction with Conversations" section in `140-arch.pipeline-foundation.md`.
 
 ### SDK Client Owns Compaction
 
