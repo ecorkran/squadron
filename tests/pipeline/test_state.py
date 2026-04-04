@@ -656,3 +656,45 @@ class TestPrune:
             self._create_completed_run(state_manager, "pipe")
         deleted = state_manager.prune("pipe", keep=10)
         assert deleted == 0
+
+
+# ---------------------------------------------------------------------------
+# record_step_done tests (T8)
+# ---------------------------------------------------------------------------
+
+
+class TestRecordStepDone:
+    def test_basic_step_completion(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipe", {"slice": "152"})
+        mgr.record_step_done(run_id, "design-0", "design")
+
+        state = mgr.load(run_id)
+        assert len(state.completed_steps) == 1
+        assert state.completed_steps[0].step_name == "design-0"
+        assert state.completed_steps[0].step_type == "design"
+        assert state.completed_steps[0].status == "completed"
+
+    def test_with_verdict(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipe", {})
+        mgr.record_step_done(run_id, "design-0", "design", verdict="PASS")
+
+        state = mgr.load(run_id)
+        assert state.completed_steps[0].verdict == "PASS"
+
+    def test_sequential_steps(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipe", {})
+        mgr.record_step_done(run_id, "design-0", "design")
+        mgr.record_step_done(run_id, "tasks-1", "tasks")
+
+        state = mgr.load(run_id)
+        assert len(state.completed_steps) == 2
+        assert state.completed_steps[0].step_name == "design-0"
+        assert state.completed_steps[1].step_name == "tasks-1"
+
+    def test_invalid_run_id(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        with pytest.raises(FileNotFoundError):
+            mgr.record_step_done("nonexistent-run", "s", "t")

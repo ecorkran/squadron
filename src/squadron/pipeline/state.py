@@ -232,6 +232,39 @@ class StateManager:
             json.dumps(state.model_dump(mode="json"), indent=2),
         )
 
+    def record_step_done(
+        self,
+        run_id: str,
+        step_name: str,
+        step_type: str,
+        verdict: str | None = None,
+    ) -> None:
+        """Mark a step as completed in prompt-only mode.
+
+        Constructs a minimal ``StepResult`` and delegates to
+        ``_append_step()`` for persistence.
+
+        Raises FileNotFoundError if the run does not exist.
+        """
+        action_results: list[ActionResult] = []
+        if verdict is not None:
+            action_results.append(
+                ActionResult(
+                    success=True,
+                    action_type="prompt-only-feedback",
+                    outputs={},
+                    verdict=verdict,
+                )
+            )
+
+        step_result = StepResult(
+            step_name=step_name,
+            step_type=step_type,
+            status=ExecutionStatus.COMPLETED,
+            action_results=action_results,
+        )
+        self._append_step(run_id, step_result)
+
     def load(self, run_id: str) -> RunState:
         """Load and validate a run state file.
 
