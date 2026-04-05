@@ -215,6 +215,22 @@ class TestInitRun:
         assert run_id.startswith("run-")
         assert "slice" in run_id
 
+    def test_init_run_stores_execution_mode_prompt_only(
+        self, state_manager: StateManager
+    ) -> None:
+        run_id = state_manager.init_run(
+            "pipe", {}, execution_mode=ExecutionMode.PROMPT_ONLY
+        )
+        state = state_manager.load(run_id)
+        assert state.execution_mode == ExecutionMode.PROMPT_ONLY
+
+    def test_init_run_normalises_pipeline_name_to_lowercase(
+        self, state_manager: StateManager
+    ) -> None:
+        run_id = state_manager.init_run("Test-Pipeline", {})
+        state = state_manager.load(run_id)
+        assert state.pipeline == "test-pipeline"
+
 
 # ---------------------------------------------------------------------------
 # T8: make_step_callback / _append_step tests

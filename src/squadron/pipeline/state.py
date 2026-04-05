@@ -154,18 +154,21 @@ class StateManager:
         pipeline_name: str,
         params: dict[str, object],
         run_id: str | None = None,
+        execution_mode: ExecutionMode = ExecutionMode.SDK,
     ) -> str:
         """Create an initial state file and return the run_id."""
+        pipeline_name = pipeline_name.lower()
         now = datetime.now(UTC)
         if run_id is None:
             date = now.strftime("%Y%m%d")
-            slug = _SLUG_RE.sub("-", pipeline_name.lower()).strip("-")
+            slug = _SLUG_RE.sub("-", pipeline_name).strip("-")
             run_id = f"run-{date}-{slug}-{uuid.uuid4().hex[:8]}"
 
         state = RunState(
             run_id=run_id,
             pipeline=pipeline_name,
             params=params,
+            execution_mode=execution_mode,
             started_at=now,
             updated_at=now,
             status="running",
