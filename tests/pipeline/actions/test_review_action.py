@@ -76,7 +76,10 @@ def _make_review_result(
 
 
 def _mock_template() -> ReviewTemplate:
-    return MagicMock(spec=ReviewTemplate, name="code")
+    mock = MagicMock(spec=ReviewTemplate, name="code")
+    mock.required_inputs = []
+    mock.optional_inputs = []
+    return mock
 
 
 # ---------------------------------------------------------------------------
@@ -407,6 +410,25 @@ class TestReviewErrors:
         result = await ReviewAction().execute(_make_context())
         assert result.success is False
         assert "not found" in (result.error or "")
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_missing_required_input(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+    ) -> None:
+        from squadron.review.templates import InputDef
+
+        mock_tpl = _mock_template()
+        mock_tpl.required_inputs = [InputDef(name="input", description="doc to review")]
+        mock_get_template.return_value = mock_tpl
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.success is False
+        assert "missing required input" in (result.error or "").lower()
+        assert "input" in (result.error or "")
 
     @pytest.mark.asyncio
     @patch(f"{_P}.get_template")

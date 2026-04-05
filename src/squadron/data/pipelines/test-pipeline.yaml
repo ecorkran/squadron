@@ -11,7 +11,7 @@ steps:
       review: 
         template: slice
         model: minimax
-      checkpoint: concerns
+      checkpoint: always
 
   - compact:
       template: minimal
