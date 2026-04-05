@@ -113,6 +113,8 @@ Integration:
 
 4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
 
+5. [FUTURE] **Run State Lifecycle Management** — Prune unreadable/schema-obsolete state files that the current `prune()` skips (schema version mismatches, corrupt JSON); expose as `sq run --gc` or automatic cleanup on `init_run`. Add global TTL (e.g. 30-day max age) and optional total-file cap across all pipeline names to prevent unbounded growth when many distinct pipelines have been run. Dependencies: [150, 156]. Effort: 1/5
+
 ---
 
 ## Notes
