@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260404
+dateUpdated: 20260405
 ---
 
 # Development Log
@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260405
+
+**Slice 156: Pipeline Executor Hardening — Implementation Complete (Phase 6)**
+Implemented all 14 tasks. `ExecutionMode` StrEnum added to `state.py`; `RunState` schema bumped to v2 with `execution_mode` field (default `SDK` for forward-compat with v1 files); `init_run` gains `execution_mode` param and `pipeline_name.lower()` normalisation. `_run_pipeline` gains `run_id` param (skips `init_run` when provided); `_run_pipeline_sdk` gains `run_id` param and forwards with `execution_mode=SDK`. Both `--resume` and implicit resume paths rewritten to dispatch via `match state.execution_mode:` — no string literals. `_handle_prompt_only_init` records `PROMPT_ONLY`. `load_pipeline` and `discover_pipelines` normalise names to lowercase; CLI `run()` normalises at `--validate`, `--dry-run`, `--prompt-only`, and standard execution entry points. `--status` output includes `Mode:` line. 1251 tests pass; pyright zero errors; ruff clean. Branch: `156-slice.pipeline-executor-hardening`.
 
 ## 20260404
 
