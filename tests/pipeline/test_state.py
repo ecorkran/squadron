@@ -18,11 +18,31 @@ from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResu
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import (
     CheckpointState,
+    ExecutionMode,
     RunState,
     SchemaVersionError,
     StateManager,
     StepState,
 )
+
+# ---------------------------------------------------------------------------
+# T1: ExecutionMode enum tests
+# ---------------------------------------------------------------------------
+
+
+class TestExecutionMode:
+    def test_sdk_value(self) -> None:
+        assert ExecutionMode.SDK.value == "sdk"
+
+    def test_prompt_only_value(self) -> None:
+        assert ExecutionMode.PROMPT_ONLY.value == "prompt-only"
+
+    def test_round_trip_from_string_sdk(self) -> None:
+        assert ExecutionMode("sdk") == ExecutionMode.SDK
+
+    def test_round_trip_from_string_prompt_only(self) -> None:
+        assert ExecutionMode("prompt-only") == ExecutionMode.PROMPT_ONLY
+
 
 # ---------------------------------------------------------------------------
 # T3: Pydantic model tests
@@ -36,6 +56,7 @@ class TestPydanticModels:
             run_id="run-20260403-test-abc12345",
             pipeline="test-pipeline",
             params={"slice": "191"},
+            execution_mode=ExecutionMode.SDK,
             started_at=now,
             updated_at=now,
             status="running",
@@ -46,6 +67,48 @@ class TestPydanticModels:
         assert restored.pipeline == original.pipeline
         assert restored.params == original.params
         assert restored.status == original.status
+
+    def test_run_state_execution_mode_sdk_serialises(self) -> None:
+        now = datetime.now(UTC)
+        state = RunState(
+            run_id="run-x",
+            pipeline="pipe",
+            params={},
+            execution_mode=ExecutionMode.SDK,
+            started_at=now,
+            updated_at=now,
+            status="running",
+        )
+        dumped = state.model_dump(mode="json")
+        assert dumped["execution_mode"] == "sdk"
+
+    def test_run_state_execution_mode_prompt_only_serialises(self) -> None:
+        now = datetime.now(UTC)
+        state = RunState(
+            run_id="run-x",
+            pipeline="pipe",
+            params={},
+            execution_mode=ExecutionMode.PROMPT_ONLY,
+            started_at=now,
+            updated_at=now,
+            status="running",
+        )
+        dumped = state.model_dump(mode="json")
+        assert dumped["execution_mode"] == "prompt-only"
+
+    def test_run_state_missing_execution_mode_defaults_to_sdk(self) -> None:
+        now = datetime.now(UTC)
+        data: dict[str, object] = {
+            "schema_version": 2,
+            "run_id": "run-x",
+            "pipeline": "pipe",
+            "params": {},
+            "started_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "status": "running",
+        }
+        state = RunState.model_validate(data)
+        assert state.execution_mode == ExecutionMode.SDK
 
     def test_step_state_defaults(self) -> None:
         now = datetime.now(UTC)
@@ -305,6 +368,18 @@ class TestLoad:
         )
         with pytest.raises(SchemaVersionError):
             state_manager.load("run-bad")
+
+    def test_load_schema_version_1_raises_with_message(
+        self, state_manager: StateManager, tmp_path: Path
+    ) -> None:
+        bad = tmp_path / "run-v1.json"
+        bad.write_text(
+            json.dumps({"schema_version": 1, "run_id": "run-v1"}), encoding="utf-8"
+        )
+        with pytest.raises(
+            SchemaVersionError, match="Unsupported state file schema_version"
+        ):
+            state_manager.load("run-v1")
 
     def test_load_schema_version_0_raises(
         self, state_manager: StateManager, tmp_path: Path
