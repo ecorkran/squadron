@@ -232,6 +232,13 @@ async def _run_pipeline_sdk(
     """
     _resolve_execution_mode(prompt_only=False)
 
+    # Validate before connecting the SDK session — fail fast on bad YAML
+    definition = load_pipeline(pipeline_name)
+    errors = validate_pipeline(definition)
+    if errors:
+        msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
+        raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
+
     import claude_agent_sdk
 
     options = claude_agent_sdk.ClaudeAgentOptions(cwd=str(Path.cwd()))
@@ -843,6 +850,9 @@ def run(
         )
     except FileNotFoundError:
         # Already printed by _run_pipeline
+        raise typer.Exit(1)
+    except ValueError as exc:
+        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
         raise typer.Exit(1)
     except KeyboardInterrupt:
         rprint("\n[yellow]Interrupted. Run state saved as failed.[/yellow]")

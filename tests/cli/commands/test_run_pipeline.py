@@ -186,6 +186,11 @@ class TestRunPipelineSdkRunId:
         with (
             patch("squadron.cli.commands.run._resolve_execution_mode"),
             patch(
+                "squadron.cli.commands.run.load_pipeline",
+                return_value=_make_definition(),
+            ),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch(
                 "squadron.cli.commands.run._run_pipeline",
                 new_callable=AsyncMock,
                 return_value=mock_result,
@@ -220,6 +225,11 @@ class TestRunPipelineSdkRunId:
         with (
             patch("squadron.cli.commands.run._resolve_execution_mode"),
             patch(
+                "squadron.cli.commands.run.load_pipeline",
+                return_value=_make_definition(),
+            ),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch(
                 "squadron.cli.commands.run._run_pipeline",
                 new_callable=AsyncMock,
                 return_value=mock_result,
@@ -235,6 +245,41 @@ class TestRunPipelineSdkRunId:
 
         call_kwargs = mock_inner.call_args.kwargs
         assert call_kwargs.get("run_id") is None
+
+
+class TestRunPipelineSdkValidation:
+    def test_sdk_rejects_invalid_pipeline_before_connect(self) -> None:
+        """_run_pipeline_sdk raises ValueError before SDK session connects."""
+        import asyncio
+
+        from squadron.cli.commands.run import _run_pipeline_sdk
+        from squadron.pipeline.models import ValidationError
+
+        errors = [
+            ValidationError(
+                field="checkpoint",
+                message="'concerns' is not a valid checkpoint trigger",
+                action_type="design",
+            )
+        ]
+
+        with (
+            patch("squadron.cli.commands.run._resolve_execution_mode"),
+            patch(
+                "squadron.cli.commands.run.load_pipeline",
+                return_value=_make_definition(),
+            ),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=errors),
+            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+        ):
+            mock_session = AsyncMock()
+            mock_session_cls.return_value = mock_session
+
+            with pytest.raises(ValueError, match="validation errors"):
+                asyncio.run(_run_pipeline_sdk("test-pipeline", {}))
+
+            # Session should never have connected
+            mock_session.connect.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
