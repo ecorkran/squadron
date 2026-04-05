@@ -145,3 +145,79 @@ class TestDiscoverPipelines:
         names = [p.name for p in pipelines]
         assert "broken" not in names
         assert "slice" in names
+
+
+# ---------------------------------------------------------------------------
+# T9: load_pipeline case-insensitive name lookup
+# ---------------------------------------------------------------------------
+
+
+class TestLoadPipelineCaseNormalisation:
+    def test_mixed_case_name_finds_lowercase_file(self, tmp_path: Path) -> None:
+        """load_pipeline("Test-Pipeline") finds test-pipeline.yaml."""
+        proj = tmp_path / "project"
+        _write_pipeline_yaml(proj, "test-pipeline")
+        defn = load_pipeline(
+            "Test-Pipeline",
+            project_dir=proj,
+            user_dir=Path("/nonexistent"),
+        )
+        assert defn.name == "test-pipeline"
+
+    def test_uppercase_name_finds_lowercase_file(self, tmp_path: Path) -> None:
+        """load_pipeline("TEST-PIPELINE") also finds test-pipeline.yaml."""
+        proj = tmp_path / "project"
+        _write_pipeline_yaml(proj, "test-pipeline")
+        defn = load_pipeline(
+            "TEST-PIPELINE",
+            project_dir=proj,
+            user_dir=Path("/nonexistent"),
+        )
+        assert defn.name == "test-pipeline"
+
+    def test_direct_file_path_not_normalised(self, tmp_path: Path) -> None:
+        """load_pipeline("/path/to/My-Pipeline.yaml") loads the exact path."""
+        # Write a file with a mixed-case filename; it should be loaded as-is
+        mixed_path = _write_pipeline_yaml(tmp_path, "My-Pipeline")
+        defn = load_pipeline(str(mixed_path))
+        # The name inside the YAML is "My-Pipeline" (as written by the helper)
+        assert defn.name == "My-Pipeline"
+
+
+# ---------------------------------------------------------------------------
+# T10: discover_pipelines lowercase normalisation
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoverPipelinesNormalisation:
+    def _write_yaml_with_name(self, directory: Path, filename: str, name: str) -> None:
+        """Write a pipeline YAML where the 'name' field may differ from filename."""
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / filename
+        data = {
+            "name": name,
+            "description": f"test pipeline {name}",
+            "steps": [],
+        }
+        path.write_text(__import__("yaml").dump(data))
+
+    def test_discover_returns_lowercase_name(self, tmp_path: Path) -> None:
+        """discover_pipelines normalises names to lowercase."""
+        import yaml
+
+        proj = tmp_path / "project"
+        proj.mkdir()
+        # Write a valid pipeline YAML with a mixed-case 'name' field
+        data = {
+            "name": "MyPipeline",
+            "description": "test",
+            "steps": [{"design": {"phase": 0}}],
+        }
+        (proj / "mypipeline.yaml").write_text(yaml.dump(data))
+        pipelines = discover_pipelines(
+            project_dir=proj,
+            user_dir=Path("/nonexistent"),
+        )
+        names = [p.name for p in pipelines]
+        assert "mypipeline" in names
+        assert "MyPipeline" not in names

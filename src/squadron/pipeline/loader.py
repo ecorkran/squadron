@@ -65,6 +65,9 @@ def load_pipeline(
     if candidate.is_file():
         return _load_yaml(candidate)
 
+    # Normalise name to lowercase for case-insensitive lookup
+    name_or_path = name_or_path.lower()
+
     # Search directories: project (highest priority) → user → built-in
     search_dirs = _search_dirs(project_dir=project_dir, user_dir=user_dir)
     for search_dir in search_dirs:
@@ -135,7 +138,7 @@ def discover_pipelines(
                 with open(yaml_path) as f:
                     raw = yaml.safe_load(f)
                 schema = PipelineSchema.model_validate(raw)
-                pipeline_name = schema.name
+                pipeline_name = schema.name.lower()
                 found[pipeline_name] = PipelineInfo(
                     name=pipeline_name,
                     description=schema.description,
