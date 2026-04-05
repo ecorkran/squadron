@@ -738,10 +738,6 @@ def run(
             if state.params.get("model")
             else model
         )
-        resolver = ModelResolver(
-            cli_override=resume_model,
-            pipeline_model=definition.model,
-        )
 
         run_id = resume
         try:
