@@ -76,6 +76,7 @@ class TestRunPipelineRunId:
 
         with (
             patch("squadron.cli.commands.run.load_pipeline", return_value=definition),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run._check_cf"),
             patch(
                 "squadron.cli.commands.run.execute_pipeline",
@@ -110,6 +111,7 @@ class TestRunPipelineRunId:
 
         with (
             patch("squadron.cli.commands.run.load_pipeline", return_value=definition),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run._check_cf"),
             patch(
                 "squadron.cli.commands.run.execute_pipeline",
@@ -131,6 +133,36 @@ class TestRunPipelineRunId:
         state_files = list(tmp_path.glob("*.json"))
         assert len(state_files) == 1
         assert state_files[0].stem == existing_id
+
+
+# ---------------------------------------------------------------------------
+# _run_pipeline rejects invalid pipelines at validation
+# ---------------------------------------------------------------------------
+
+
+class TestRunPipelineValidation:
+    def test_invalid_pipeline_raises_value_error(self) -> None:
+        """_run_pipeline raises ValueError when validate_pipeline finds errors."""
+        import asyncio
+
+        from squadron.cli.commands.run import _run_pipeline
+        from squadron.pipeline.models import ValidationError
+
+        definition = _make_definition()
+        errors = [
+            ValidationError(
+                field="checkpoint",
+                message="'concerns' is not a valid checkpoint trigger",
+                action_type="design",
+            )
+        ]
+
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=definition),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=errors),
+        ):
+            with pytest.raises(ValueError, match="validation errors"):
+                asyncio.run(_run_pipeline("test-pipeline", {}))
 
 
 # ---------------------------------------------------------------------------

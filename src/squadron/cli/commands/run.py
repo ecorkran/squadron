@@ -169,6 +169,11 @@ async def _run_pipeline(
     """
     definition = load_pipeline(pipeline_name)
 
+    errors = validate_pipeline(definition)
+    if errors:
+        msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
+        raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
+
     resolver = ModelResolver(
         cli_override=model_override,
         pipeline_model=definition.model,

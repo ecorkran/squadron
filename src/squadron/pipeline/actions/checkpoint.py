@@ -82,7 +82,20 @@ class CheckpointAction:
     async def execute(self, context: ActionContext) -> ActionResult:
         # Trigger resolution
         trigger_str = str(context.params.get("trigger", CheckpointTrigger.ON_CONCERNS))
-        trigger = CheckpointTrigger(trigger_str)
+        try:
+            trigger = CheckpointTrigger(trigger_str)
+        except ValueError:
+            valid = [t.value for t in CheckpointTrigger]
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={
+                    "error": (
+                        f"Invalid checkpoint trigger '{trigger_str}'. "
+                        f"Valid values: {valid}"
+                    ),
+                },
+            )
 
         # Prior verdict lookup
         verdict = _find_review_verdict(context.prior_outputs)

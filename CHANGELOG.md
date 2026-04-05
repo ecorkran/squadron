@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Schema version bumped to 2; v1 state files raise `SchemaVersionError` on resume
 
 ### Fixed
+- `sq run` now validates pipeline before execution — invalid action parameters (e.g. bad checkpoint trigger) caught with clear errors instead of runtime `ValueError`
+- `CheckpointAction.execute()` returns `ActionResult(success=False)` on invalid trigger instead of unhandled exception
 - `sq run --resume <id>` on SDK runs no longer falls through to non-existent `cf compact` CLI call
 - Implicit resume detects paused runs regardless of pipeline name case (macOS/Linux consistent)
 - SDK pipeline executor — autonomous pipeline execution via `ClaudeSDKClient` (slice 155)
