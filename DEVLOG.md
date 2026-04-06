@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260405
+dateUpdated: 20260406
 ---
 
 # Development Log
@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260406
+
+**Slice 157: SDK Session Management and Compaction — Design Complete (Phase 4)**
+Created `project-documents/user/slices/157-slice.sdk-session-management-and-compaction.md`. Core approach: session rotate compaction at pipeline step boundaries. When compact step executes, switch model to cheap summarizer (e.g. haiku) in the *current* session, query with compact template instructions, capture summary, disconnect, start fresh session seeded with summary. Key insight: summarize in the live session (model has full context) rather than resuming in a new process (loads entire context just to read it). Also wires `PreCompact` hook for interactive `/compact` instruction injection. Adds optional `model` field to compact YAML. Removes unconnected `configure_compaction()` stub from slice 155. Agent SDK investigation confirmed: no `context_management`, no `compaction_control`, no threshold control — session rotate is the only deterministic compaction path. Dependencies: [155, 156]. Effort: 3/5.
 
 ## 20260405
 
