@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
-dateUpdated: 20260404
+dateUpdated: 20260405
 status: in_progress
 ---
 
@@ -56,6 +56,8 @@ status: in_progress
 
 16. [x] **(156) Pipeline Executor Hardening** — Fix resume-with-correct-mode: add `execution_mode` enum field to `RunState` (schema v2) so resume always uses the same runner as the original run — no hardcoded mode-name strings, dispatch via enum match. Fix implicit resume and `--resume` paths to both honour the stored mode. Normalize pipeline names to lowercase at load time and CLI input boundary (case-insensitive lookup and state matching). Dependencies: [155]. Risk: Low. Effort: 2/5
 
+17. [ ] **(157) SDK Session Management and Compaction** — Controlled context compaction at pipeline step boundaries via session rotate: disconnect SDK session after compact step, construct summary prompt from compact template instructions and accumulated pipeline state/step outputs, reconnect with fresh context. Replaces the unconnected `configure_compaction()` stub from slice 155. Wire the Agent SDK `PreCompact` hook for best-effort instruction injection during auto-compaction within long individual steps. Add optional `model` field to compact step YAML for cheaper summarization. The Agent SDK (`ClaudeSDKClient`) does not expose `context_management` or `compaction_control` — session rotate is the only path to deterministic, step-boundary compaction. Dependencies: [155, 156]. Risk: Medium (session lifecycle edge cases, state continuity across reconnects, summary quality). Effort: 3/5
+
 ---
 
 ## Integration Work
@@ -89,6 +91,8 @@ Feature:
   153. Prompt-Only Pipeline Executor                     (after 151)
   154. Prompt-Only Loops                                  (after 153)
   155. SDK Pipeline Executor                              (after 154) ✓ complete
+  156. Pipeline Executor Hardening                        (after 155) ✓ complete
+  157. SDK Session Management and Compaction              (after 155, 156)
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
