@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 20260407
+
 ### Added
 - Interactive `/compact` PreCompact hook for Claude Code (slice 157)
   - Hidden `sq _precompact-hook` subcommand emits the Claude Code `PreCompact` payload on stdout; user-facing surface is config only
