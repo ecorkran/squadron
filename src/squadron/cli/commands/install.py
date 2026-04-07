@@ -8,6 +8,11 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from squadron.cli.commands.install_settings import (
+    _remove_precompact_hook,
+    _write_precompact_hook,
+)
+
 
 def _get_commands_source() -> Path:
     """Locate the bundled commands directory.
@@ -38,6 +43,11 @@ def install_commands(
         "--target",
         help="Target directory for command files",
     ),
+    hook_target: str = typer.Option(
+        "./.claude/settings.json",
+        "--hook-target",
+        help="Target settings.json for the PreCompact hook entry",
+    ),
 ) -> None:
     """Install squadron slash commands for Claude Code."""
     source = _get_commands_source()
@@ -61,16 +71,24 @@ def install_commands(
 
     if not installed:
         rprint("[yellow]No command files found to install.[/yellow]")
-        return
-
-    rprint(f"[green]Installed {len(installed)} command(s) to {target_dir}:[/green]")
-    for name in installed:
-        rprint(f"  {name}")
-
-    if removed:
-        rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
-        for name in removed:
+    else:
+        rprint(f"[green]Installed {len(installed)} command(s) to {target_dir}:[/green]")
+        for name in installed:
             rprint(f"  {name}")
+
+        if removed:
+            rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
+            for name in removed:
+                rprint(f"  {name}")
+
+    # Install the PreCompact hook entry into the project-local settings.json.
+    hook_path = Path(hook_target).expanduser()
+    try:
+        _write_precompact_hook(hook_path)
+    except RuntimeError as exc:
+        rprint(f"[red]Error installing PreCompact hook: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    rprint(f"[green]Installed PreCompact hook to {hook_path}[/green]")
 
 
 def uninstall_commands(
@@ -79,6 +97,11 @@ def uninstall_commands(
         "--target",
         help="Target directory to remove commands from",
     ),
+    hook_target: str = typer.Option(
+        "./.claude/settings.json",
+        "--hook-target",
+        help="Target settings.json to remove the PreCompact hook entry from",
+    ),
 ) -> None:
     """Remove squadron slash commands from Claude Code."""
     target_dir = Path(target).expanduser()
@@ -86,8 +109,17 @@ def uninstall_commands(
 
     if not sq_dir.is_dir():
         rprint(f"[yellow]Nothing to remove — {sq_dir} does not exist.[/yellow]")
-        return
+    else:
+        files_removed = list(sq_dir.glob("*.md"))
+        shutil.rmtree(sq_dir)
+        rprint(f"[green]Removed {sq_dir} ({len(files_removed)} file(s)).[/green]")
 
-    files_removed = list(sq_dir.glob("*.md"))
-    shutil.rmtree(sq_dir)
-    rprint(f"[green]Removed {sq_dir} ({len(files_removed)} file(s)).[/green]")
+    # Remove the PreCompact hook entry from the project-local settings.json.
+    hook_path = Path(hook_target).expanduser()
+    try:
+        removed = _remove_precompact_hook(hook_path)
+    except RuntimeError as exc:
+        rprint(f"[red]Error removing PreCompact hook: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    if removed:
+        rprint(f"[green]Removed PreCompact hook from {hook_path}[/green]")

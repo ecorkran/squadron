@@ -22,10 +22,41 @@ EXPECTED_FILES = {
 }
 
 
+def _hook_target(tmp_path: Path) -> str:
+    """Return a tmp-path-scoped settings.json path to keep install tests hermetic."""
+    return str(tmp_path / ".claude" / "settings.json")
+
+
+def _install(runner_: CliRunner, target: Path, hook_target: str) -> object:
+    return runner_.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(target),
+            "--hook-target",
+            hook_target,
+        ],
+    )
+
+
+def _uninstall(runner_: CliRunner, target: Path, hook_target: str) -> object:
+    return runner_.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(target),
+            "--hook-target",
+            hook_target,
+        ],
+    )
+
+
 def test_install_copies_files(tmp_path: Path) -> None:
     """Install copies all 7 command files to the target directory."""
-    result = runner.invoke(app, ["install-commands", "--target", str(tmp_path)])
-    assert result.exit_code == 0
+    result = _install(runner, tmp_path, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
 
     sq_dir = tmp_path / "sq"
     assert sq_dir.is_dir()
@@ -36,8 +67,8 @@ def test_install_copies_files(tmp_path: Path) -> None:
 def test_install_creates_directories(tmp_path: Path) -> None:
     """Install creates target and subdirectories if they don't exist."""
     deep_target = tmp_path / "a" / "b" / "c"
-    result = runner.invoke(app, ["install-commands", "--target", str(deep_target)])
-    assert result.exit_code == 0
+    result = _install(runner, deep_target, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
     assert (deep_target / "sq").is_dir()
     assert len(list((deep_target / "sq").glob("*.md"))) == 7
 
@@ -48,8 +79,8 @@ def test_install_overwrites_existing(tmp_path: Path) -> None:
     sq_dir.mkdir(parents=True)
     (sq_dir / "spawn.md").write_text("old content")
 
-    result = runner.invoke(app, ["install-commands", "--target", str(tmp_path)])
-    assert result.exit_code == 0
+    result = _install(runner, tmp_path, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
 
     content = (sq_dir / "spawn.md").read_text()
     assert content != "old content"
@@ -59,42 +90,42 @@ def test_install_overwrites_existing(tmp_path: Path) -> None:
 def test_uninstall_removes_sq_directory(tmp_path: Path) -> None:
     """Uninstall removes the sq/ directory and its contents."""
     # First install
-    runner.invoke(app, ["install-commands", "--target", str(tmp_path)])
+    _install(runner, tmp_path, _hook_target(tmp_path))
     assert (tmp_path / "sq").is_dir()
 
     # Then uninstall
-    result = runner.invoke(app, ["uninstall-commands", "--target", str(tmp_path)])
-    assert result.exit_code == 0
+    result = _uninstall(runner, tmp_path, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
     assert not (tmp_path / "sq").exists()
 
 
 def test_uninstall_preserves_other_files(tmp_path: Path) -> None:
     """Uninstall only removes sq/, not other files in the target."""
     # Install commands
-    runner.invoke(app, ["install-commands", "--target", str(tmp_path)])
+    _install(runner, tmp_path, _hook_target(tmp_path))
 
     # Add a non-sq file
     (tmp_path / "other-command.md").write_text("keep me")
 
     # Uninstall
-    result = runner.invoke(app, ["uninstall-commands", "--target", str(tmp_path)])
-    assert result.exit_code == 0
+    result = _uninstall(runner, tmp_path, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
     assert not (tmp_path / "sq").exists()
     assert (tmp_path / "other-command.md").read_text() == "keep me"
 
 
 def test_uninstall_graceful_when_nothing_installed(tmp_path: Path) -> None:
     """Uninstall reports gracefully when nothing is installed."""
-    result = runner.invoke(app, ["uninstall-commands", "--target", str(tmp_path)])
-    assert result.exit_code == 0
-    assert "Nothing to remove" in result.output
+    result = _uninstall(runner, tmp_path, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert "Nothing to remove" in result.output  # type: ignore[attr-defined]
 
 
 def test_target_flag_overrides_default(tmp_path: Path) -> None:
     """--target flag directs installation to a custom path."""
     custom = tmp_path / "custom-location"
-    result = runner.invoke(app, ["install-commands", "--target", str(custom)])
-    assert result.exit_code == 0
+    result = _install(runner, custom, _hook_target(tmp_path))
+    assert result.exit_code == 0  # type: ignore[attr-defined]
     assert (custom / "sq").is_dir()
     assert len(list((custom / "sq").glob("*.md"))) == 7
 
@@ -148,3 +179,177 @@ def test_command_files_reference_correct_subcommand() -> None:
         assert expected_cmd in content, (
             f"{filename} missing reference to '{expected_cmd}'"
         )
+
+
+# ---------------------------------------------------------------------------
+# T10/T11: PreCompact hook install/uninstall integration
+# ---------------------------------------------------------------------------
+
+
+def _read_settings(path: Path) -> dict:  # type: ignore[type-arg]
+    import json
+
+    with open(path) as f:
+        return json.load(f)
+
+
+def test_install_writes_precompact_hook(tmp_path: Path) -> None:
+    """install-commands writes the squadron PreCompact entry to settings.json."""
+    hook_target = tmp_path / "settings.json"
+    result = runner.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+    assert result.exit_code == 0
+    assert hook_target.is_file()
+    data = _read_settings(hook_target)
+    precompact = data["hooks"]["PreCompact"]
+    assert len(precompact) == 1
+    assert precompact[0]["hooks"][0]["command"] == "sq _precompact-hook"
+    assert precompact[0]["hooks"][0]["_managed_by"] == "squadron"
+    assert "Installed PreCompact hook" in result.output
+
+
+def test_install_is_idempotent_for_hook(tmp_path: Path) -> None:
+    """Running install twice leaves exactly one squadron entry."""
+    hook_target = tmp_path / "settings.json"
+    for _ in range(2):
+        result = runner.invoke(
+            app,
+            [
+                "install-commands",
+                "--target",
+                str(tmp_path),
+                "--hook-target",
+                str(hook_target),
+            ],
+        )
+        assert result.exit_code == 0
+    data = _read_settings(hook_target)
+    precompact = data["hooks"]["PreCompact"]
+    assert len(precompact) == 1
+
+
+def test_install_corrupt_settings_json_exits_nonzero(tmp_path: Path) -> None:
+    """Install refuses to overwrite a corrupt settings.json."""
+    hook_target = tmp_path / "settings.json"
+    hook_target.write_text("{not valid json")
+    result = runner.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "Error installing PreCompact hook" in result.output
+    # File must remain untouched
+    assert hook_target.read_text() == "{not valid json"
+
+
+def test_uninstall_removes_squadron_hook_preserves_third_party(
+    tmp_path: Path,
+) -> None:
+    """Uninstall leaves third-party PreCompact entries intact."""
+    import json
+
+    hook_target = tmp_path / "settings.json"
+    hook_target.parent.mkdir(parents=True, exist_ok=True)
+    third_party = {
+        "hooks": {
+            "PreCompact": [
+                {
+                    "matcher": "",
+                    "hooks": [{"type": "command", "command": "echo other"}],
+                }
+            ]
+        }
+    }
+    hook_target.write_text(json.dumps(third_party))
+
+    # Install (adds squadron entry alongside third-party)
+    runner.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+
+    # Uninstall
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+    assert result.exit_code == 0
+    data = _read_settings(hook_target)
+    precompact = data["hooks"]["PreCompact"]
+    assert len(precompact) == 1
+    assert precompact[0]["hooks"][0]["command"] == "echo other"
+    assert "Removed PreCompact hook" in result.output
+
+
+def test_uninstall_silent_when_no_settings_json(tmp_path: Path) -> None:
+    """Uninstall with no settings.json is a no-op success."""
+    hook_target = tmp_path / "settings.json"
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+    assert result.exit_code == 0
+    assert not hook_target.exists()
+    # Should NOT print the removal message
+    assert "Removed PreCompact hook" not in result.output
+
+
+def test_install_uninstall_round_trip_cleans_up(tmp_path: Path) -> None:
+    """install → uninstall leaves settings.json either gone or cleanly empty."""
+    hook_target = tmp_path / "settings.json"
+    runner.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+    runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(tmp_path),
+            "--hook-target",
+            str(hook_target),
+        ],
+    )
+    # After round-trip the file exists but hooks key is gone (nothing else
+    # was in it so the file ends up as "{}")
+    data = _read_settings(hook_target)
+    assert "hooks" not in data
