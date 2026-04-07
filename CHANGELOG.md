@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pipeline executor hardening — resume mode correctness and case-insensitive pipeline names (slice 156)
+  - `ExecutionMode` StrEnum (`SDK`, `PROMPT_ONLY`) in `state.py` — no string literals in dispatch logic
+  - `RunState.execution_mode` field — persisted in state file (schema v2); defaults to `SDK` for forward-compat
+  - `_run_pipeline_sdk` and `_run_pipeline` accept `run_id` param — resumes reuse existing state file
+  - `--resume` and implicit resume both dispatch via `match state.execution_mode:` — correct runner always used
+  - `_handle_prompt_only_init` records `ExecutionMode.PROMPT_ONLY` in initial state
+  - `sq run --status` output includes `Mode:` line showing execution mode
+  - Pipeline name normalised to lowercase at four boundaries: `load_pipeline`, `discover_pipelines`, `init_run`, CLI input
+  - Schema version bumped to 2; v1 state files raise `SchemaVersionError` on resume
+
+### Fixed
+- `sq run` now validates pipeline before execution — invalid action parameters (e.g. bad checkpoint trigger) caught with clear errors instead of runtime `ValueError`
+- `CheckpointAction.execute()` returns `ActionResult(success=False)` on invalid trigger instead of unhandled exception
+- `sq run --resume <id>` on SDK runs no longer falls through to non-existent `cf compact` CLI call
+- Implicit resume detects paused runs regardless of pipeline name case (macOS/Linux consistent)
 - SDK pipeline executor — autonomous pipeline execution via `ClaudeSDKClient` (slice 155)
   - `SDKExecutionSession` — persistent client wrapper with `set_model()`, `dispatch()`, `configure_compaction()` lifecycle
   - Per-step model switching via `client.set_model(model_id)` across pipeline steps

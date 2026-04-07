@@ -220,3 +220,12 @@ class TestCheckpointExecute:
         ctx_skip = _make_context(params={"trigger": "never"})
         assert (await CheckpointAction().execute(ctx_fire)).success is True
         assert (await CheckpointAction().execute(ctx_skip)).success is True
+
+    @pytest.mark.asyncio
+    async def test_invalid_trigger_returns_failure(self) -> None:
+        """Invalid trigger value returns ActionResult(success=False)."""
+        ctx = _make_context(params={"trigger": "concerns"})
+        result = await CheckpointAction().execute(ctx)
+        assert result.success is False
+        assert "concerns" in result.outputs["error"]
+        assert "on-concerns" in result.outputs["error"]

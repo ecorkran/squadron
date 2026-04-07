@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
-dateUpdated: 20260404
+dateUpdated: 20260405
 status: in_progress
 ---
 
@@ -50,9 +50,17 @@ status: in_progress
 
 13. [x] **(153) Prompt-Only Pipeline Executor** — Add `--prompt-only --next` mode to `sq run` CLI that outputs one step's instructions at a time without dispatching to an LLM. Each call returns the next step's structured instructions (CF commands, model to switch to, review command with template/model from YAML, compact instructions with resolved params, checkpoint decisions). Pipeline executor tracks state across calls. Update `/sq:run` slash command to consume executor output instead of reimplementing YAML interpretation — slash command becomes a thin loop: call `sq run --prompt-only --next`, execute instructions, repeat. Sequential steps only. Dependencies: [151]. Risk: Low. Effort: 3/5
 
-14. [ ] **(154) Prompt-Only Loops** — Extend prompt-only mode with `each`/collection loop support (executor returns successive iteration instructions via `--next`, caller doesn't need to know it's a loop). Enables design-batch pipelines in prompt-only mode. Model switching is informational only in prompt-only mode — `/model` commands cannot be automated from within Claude Code sessions (IDE or CLI). The `model_switch` field remains in step instructions for user reference. Automated model switching requires the SDK executor (slice 155). Dependencies: [153]. Risk: Low. Effort: 2/5. **[Slice design: (154) Prompt-Only Loops]**
+14. [x] **(154) Prompt-Only Loops** — Extend prompt-only mode with `each`/collection loop support (executor returns successive iteration instructions via `--next`, caller doesn't need to know it's a loop). Enables design-batch pipelines in prompt-only mode. Model switching is informational only in prompt-only mode — `/model` commands cannot be automated from within Claude Code sessions (IDE or CLI). The `model_switch` field remains in step instructions for user reference. Automated model switching requires the SDK executor (slice 155). Dependencies: [153]. Risk: Low. Effort: 2/5. **✓ Design Complete: [154-slice.prompt-only-loops.md](user/slices/154-slice.prompt-only-loops.md)**
 
 15. [x] **(155) SDK Pipeline Executor** — Full pipeline automation via `ClaudeSDKClient`. Dispatch steps spawn a persistent SDK session that executes work autonomously with tool use (file I/O, commands, web search). Per-step model switching via `client.set_model(model)`. Server-side context compaction via the `context_management` API (`compact_20260112` beta) with pipeline-defined `instructions` from compact templates and configurable `trigger` thresholds. Reviews execute normally (SDK can spawn subprocesses). Checkpoints pause and optionally notify. Runs outside Claude Code sessions only (`sq run slice 154` from straight CLI). This is the fully automated path — prompt-only mode (slices 153-154) remains the interactive bridge for IDE and Claude Code CLI sessions. Dependencies: [154]. Risk: Medium (SDK API stability, compaction beta). Effort: 3/5
+
+16. [x] **(156) Pipeline Executor Hardening** — Fix resume-with-correct-mode: add `execution_mode` enum field to `RunState` (schema v2) so resume always uses the same runner as the original run — no hardcoded mode-name strings, dispatch via enum match. Fix implicit resume and `--resume` paths to both honour the stored mode. Normalize pipeline names to lowercase at load time and CLI input boundary (case-insensitive lookup and state matching). Dependencies: [155]. Risk: Low. Effort: 2/5
+
+17. [ ] **(157) SDK Session Management and Compaction** — Controlled context compaction at pipeline step boundaries via session rotate: switch to cheap summarizer model in current session, query with compact template instructions, capture summary, disconnect, start fresh session with summary as context. Replaces the unconnected `configure_compaction()` stub from slice 155. Wire the Agent SDK `PreCompact` hook for best-effort instruction injection during auto-compaction within long individual steps and user `/compact` in interactive mode. Add optional `model` field to compact step YAML for cheaper summarization. The Agent SDK (`ClaudeSDKClient`) does not expose `context_management` or `compaction_control` — session rotate is the only path to deterministic, step-boundary compaction. Dependencies: [155, 156]. Risk: Medium (session lifecycle edge cases, state continuity across reconnects, summary quality). Effort: 3/5. **Design Complete: [157-slice.sdk-session-management-and-compaction.md](user/slices/157-slice.sdk-session-management-and-compaction.md)**
+
+18. [ ] **(158) Pipeline Fan-Out / Fan-In Step Type** — General-purpose parallel branch infrastructure: a new `fan_out` step type that dispatches N copies of an inner step config concurrently (each with its own resolved model from a model pool or explicit list), waits for all to complete via `asyncio.gather`, then passes the collected results through a `fan_in` reducer to produce a single coherent step result. The reducer is pluggable: a default identity reducer returns all results in arrival order; a `consensus` reducer is registered as a stub here (real consensus logic is 160 scope). Demonstrates with N>1 reviews against multiple models — proves the infrastructure end-to-end while consensus intelligence remains a black box. Each branch's outputs (and any internal compact summaries) are keyed by branch index in pipeline state so resume and debugging can distinguish them. Adds `model_pool` config field and a minimal pool resolver (alias list, round-robin or explicit per-branch). Dependencies: [157]. Risk: Medium (concurrency edge cases, state-keying for branches, error semantics when one branch fails). Effort: 3/5
+
+19. [ ] **(159) Interactive Checkpoint Resolution** — Replace pause-and-exit checkpoint behavior with an interactive prompt offering three options: (1) **Accept** the suggested resolution from the prior review/finding (if any) and continue in-process, (2) **Override** with custom instructions entered at the prompt and continue in-process, (3) **Exit** the pipeline and resume later via `sq run <pipeline> <index>` (current behavior). Options 1 and 2 avoid the full disconnect/persist/exit/resume cycle, keeping the SDK session live for fast iteration on reviewable artifacts. Applies to both prompt-only and SDK execution modes. Includes display of the triggering review verdict and any extracted suggestion text so the user has context before deciding. Dependencies: [156]. Risk: Low. Effort: 2/5
 
 ---
 
@@ -87,6 +95,10 @@ Feature:
   153. Prompt-Only Pipeline Executor                     (after 151)
   154. Prompt-Only Loops                                  (after 153)
   155. SDK Pipeline Executor                              (after 154) ✓ complete
+  156. Pipeline Executor Hardening                        (after 155) ✓ complete
+  157. SDK Session Management and Compaction              (after 155, 156)
+  158. Pipeline Fan-Out / Fan-In Step Type                 (after 157)
+  159. Interactive Checkpoint Resolution                  (after 156)
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
@@ -110,6 +122,8 @@ Integration:
 3. [FUTURE] **Multiple Positional Target Arguments** — Support additional positional args or `key=value` positional syntax for pipelines with multiple required params (e.g. `sq run review-only 123 template=arch` or `sq run review-only 123 arch`). Currently only the first required param is bound to the positional target; additional required params need `--param key=value`. Dependencies: [151]. Effort: 1/5
 
 4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
+
+5. [FUTURE] **Run State Lifecycle Management** — Prune unreadable/schema-obsolete state files that the current `prune()` skips (schema version mismatches, corrupt JSON); expose as `sq run --gc` or automatic cleanup on `init_run`. Add global TTL (e.g. 30-day max age) and optional total-file cap across all pipeline names to prevent unbounded growth when many distinct pipelines have been run. Dependencies: [150, 156]. Effort: 1/5
 
 ---
 

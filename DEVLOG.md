@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260404
+dateUpdated: 20260407
 ---
 
 # Development Log
@@ -12,7 +12,43 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260407
+
+**Slices 158, 159: Pipeline plan additions**
+Added two new feature slices to `140-slices.pipeline-foundation.md`. Slice 158 (Pipeline Fan-Out / Fan-In Step Type) — general parallel branch infrastructure with pluggable fan-in reducer; ships with identity reducer, consensus reducer is a stub for 160; demonstrates with N>1 reviews against multiple models; foundational for consensus review infrastructure. Slice 159 (Interactive Checkpoint Resolution) — replace pause-and-exit with interactive prompt offering accept/override/exit options; first two avoid the full resume cycle. Both slices need design (Phase 4) before implementation.
+
+**Slice 157: SDK Session Management and Compaction — Design Updated (Phase 4 revision)**
+Revised `157-slice.sdk-session-management-and-compaction.md` to address two review concerns: (1) checkpoint resume after compact loses the summary because the previous process's session is gone — fixed by persisting compact summaries in a new keyed `compact_summaries` dict on `RunState` (schema bump v2 → v3); (2) executor-owned re-injection on resume via a new `seed_context()` session method. Keying scheme `{step_index}:{step_name}` is forward-compatible with slice 158 fan-out branches (will extend with `#branch{n}` suffix). Added `CompactSummary` dataclass, `record_compact_summary` state manager method, and `active_compact_summary_for_resume` helper. Re-reviewed task breakdown follows in same session.
+
+**Slice 157: SDK Session Management and Compaction — Task Breakdown Updated (Phase 5 revision)**
+Expanded `157-tasks.sdk-session-management-and-compaction.md` from 11 tasks to 18 to cover the design revision: T2/T3 add `CompactSummary` dataclass, schema v3 bump, state manager persistence and lookup helpers; T7 adds `seed_context()` method; T11 wires the compact summary persistence via the executor's `on_step_complete` callback (action stays free of state-manager coupling); T12 implements executor resume injection; T14 adds an automated integration test for the full session rotate flow; T15 adds an automated test specifically for resume-after-compact. T13 (PreCompact hook) retains its investigation-first note. Test-with pattern throughout; 452 lines.
+
+## 20260406
+
+**Slice 157: SDK Session Management and Compaction — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/157-tasks.sdk-session-management-and-compaction.md`. 11 tasks (T1–T11): capture `session_id` from `ResultMessage` in translation (T1); add `session_id` and `options` fields to `SDKExecutionSession` (T2); pass options into session from `_run_pipeline_sdk` (T3); implement `compact()` session rotate method (T4); remove `configure_compaction()` stub (T5); add `model` field to compact step YAML (T6); wire compact action to call `session.compact()` (T7); register `PreCompact` hook for interactive instruction injection (T8); end-to-end smoke test via test-pipeline (T9); lint/type-check/full suite (T10); closeout (T11). Test-with pattern throughout; commits after each implementation+test pair. Note: T8 includes verification-before-implement note for the `PreCompact` hook return format as that API detail needs confirmation.
+
+**Slice 157: SDK Session Management and Compaction — Design Complete (Phase 4)**
+Created `project-documents/user/slices/157-slice.sdk-session-management-and-compaction.md`. Core approach: session rotate compaction at pipeline step boundaries. When compact step executes, switch model to cheap summarizer (e.g. haiku) in the *current* session, query with compact template instructions, capture summary, disconnect, start fresh session seeded with summary. Key insight: summarize in the live session (model has full context) rather than resuming in a new process (loads entire context just to read it). Also wires `PreCompact` hook for interactive `/compact` instruction injection. Adds optional `model` field to compact YAML. Removes unconnected `configure_compaction()` stub from slice 155. Agent SDK investigation confirmed: no `context_management`, no `compaction_control`, no threshold control — session rotate is the only deterministic compaction path. Dependencies: [155, 156]. Effort: 3/5.
+
+## 20260405
+
+**Fix: validate pipeline before execution, not just `--validate`**
+`_run_pipeline` now calls `validate_pipeline()` before `execute_pipeline()`, so invalid action parameters (e.g. `checkpoint: concerns` instead of `on-concerns`) are caught with a clear error before execution begins. Previously validation only ran for `--validate` and `--dry-run`. Also added defense-in-depth in `CheckpointAction.execute()` — invalid trigger values now return `ActionResult(success=False)` instead of an unhandled `ValueError`. 1253 tests pass.
+
+**Slice 154: Prompt-Only Loops — Design Complete (Phase 4)**
+Created `project-documents/user/slices/154-slice.prompt-only-loops.md`. Slice extends slice 153's prompt-only mode to transparently support `each`/collection loops. Core design: `EachLoopState` dataclass tracks iteration context (current item index, inner step name, cached source query results) persisted in `RunState`; `render_each_step_instructions()` resolves CF source queries on first entry; placeholder resolution enhanced to support `{param.field}` dot-path syntax for item binding; `StateManager` methods `first_unfinished_step()` and `advance_iteration()` handle navigation within/across iterations. To the caller, loops are transparent — each `--next` returns the next instruction in flattened execution order, whether it's a new step or next iteration. Model switching is informational only (slash command handles manually). Technical decisions documented: transparent iteration, params-based item binding, single-depth loops (nesting deferred to 160), convergence strategies stubbed (160 scope). Data flows, state persistence format, and integration points detailed. Ready for Phase 5 (task breakdown) and Phase 6 (implementation). Effort: 2/5, risk: low.
+
+**Slice 156: Pipeline Executor Hardening — Implementation Complete (Phase 6)**
+Implemented all 14 tasks. `ExecutionMode` StrEnum added to `state.py`; `RunState` schema bumped to v2 with `execution_mode` field (default `SDK` for forward-compat with v1 files); `init_run` gains `execution_mode` param and `pipeline_name.lower()` normalisation. `_run_pipeline` gains `run_id` param (skips `init_run` when provided); `_run_pipeline_sdk` gains `run_id` param and forwards with `execution_mode=SDK`. Both `--resume` and implicit resume paths rewritten to dispatch via `match state.execution_mode:` — no string literals. `_handle_prompt_only_init` records `PROMPT_ONLY`. `load_pipeline` and `discover_pipelines` normalise names to lowercase; CLI `run()` normalises at `--validate`, `--dry-run`, `--prompt-only`, and standard execution entry points. `--status` output includes `Mode:` line. 1251 tests pass; pyright zero errors; ruff clean. Branch: `156-slice.pipeline-executor-hardening`.
+
 ## 20260404
+
+**Slice 156: Pipeline Executor Hardening — Task Breakdown Complete (Phase 5)**
+Created `project-documents/user/tasks/156-tasks.pipeline-executor-hardening.md`. 14 tasks (T1–T14): `ExecutionMode` StrEnum in state.py (T1); schema v2 with `execution_mode` field on `RunState` (T2); `init_run` gains `execution_mode` param and lowercase normalisation (T3); `_run_pipeline` gains `run_id` and `execution_mode` params (T4); `_run_pipeline_sdk` gains `run_id` param (T5); fix `--resume` dispatch via `match state.execution_mode` (T6); fix implicit resume dispatch (T7); `_handle_prompt_only_init` records `PROMPT_ONLY` (T8); lowercase normalisation in `load_pipeline` (T9) and `discover_pipelines` (T10); CLI input normalisation (T11); display `execution_mode` in `--status` (T12); lint/type-check/full suite (T13); closeout (T14). Test-with pattern throughout; 6 commit checkpoints.
+
+**Slice 156: Pipeline Executor Hardening — Design Complete (Phase 4)**
+Diagnosed resume failure: both `--resume` and implicit resume paths bypass `_run_pipeline_sdk`, so `sdk_session` is `None` on resume; compact action falls through to `cf compact --instructions ...` which does not exist. Fix scope: (1) `ExecutionMode` StrEnum added to `state.py`; (2) `RunState.execution_mode` field (schema v2); (3) both resume paths dispatch by enum match to the correct runner; (4) `_run_pipeline_sdk` accepts `run_id` for resume-in-place; (5) pipeline name normalised to lowercase at load and CLI input boundary. Design created at `project-documents/user/slices/156-slice.pipeline-executor-hardening.md`.
 
 **Slice 154: Prompt-Only Loops — Design Complete (Phase 4)**
 Created `project-documents/user/slices/154-slice.prompt-only-loops.md` and `project-documents/user/tasks/154-tasks.prompt-only-loops.md`. Slice extends prompt-only mode to transparently support `each`/collection loops — executor expands loops internally, returns successive iteration instructions via `--next` calls. To the caller, a loop appears as a sequence of steps. Enables design-batch pipelines (multi-slice batch operations) in interactive prompt-only mode. Architecture: loop state tracking (iteration count, bound item) in StateManager; placeholder resolution (`{slice.index}` → actual value from item); query source executor for CF `cf.unfinished_slices(plan)` integration; loop expansion in executor's `next_step()` / advancement in `step_done()`. Convergence loop syntax acknowledged in YAML but stubbed (strategies are 155/160 scope). 20 implementation tasks; test-with pattern throughout. No design blockers; ready for implementation.

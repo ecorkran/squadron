@@ -111,6 +111,18 @@ class ReviewAction:
                 template_name, int(str(slice_param)), context.cf_client, inputs
             )
 
+        # Check required inputs are satisfied after auto-resolution
+        missing = [
+            inp.name for inp in template.required_inputs if inp.name not in inputs
+        ]
+        if missing:
+            names = ", ".join(missing)
+            raise KeyError(
+                f"Review template '{template_name}' missing required "
+                f"input(s): {names}. The prior step may not have "
+                f"created the expected file."
+            )
+
         # Rules content
         rules_content: str | None = None
         if "rules_content" in context.params:

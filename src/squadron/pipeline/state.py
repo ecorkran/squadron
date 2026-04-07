@@ -16,6 +16,7 @@ import re
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ExecutionMode",
     "StateManager",
     "RunState",
     "StepState",
@@ -37,7 +39,19 @@ __all__ = [
     "SchemaVersionError",
 ]
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+class ExecutionMode(StrEnum):
+    """Identifies which runner was used to start a pipeline run."""
+
+    SDK = "sdk"
+    PROMPT_ONLY = "prompt-only"
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +100,7 @@ class RunState(BaseModel):
     run_id: str
     pipeline: str
     params: dict[str, object]
+    execution_mode: ExecutionMode = ExecutionMode.SDK
     started_at: datetime
     updated_at: datetime
     status: str  # ExecutionStatus string value
@@ -139,18 +154,21 @@ class StateManager:
         pipeline_name: str,
         params: dict[str, object],
         run_id: str | None = None,
+        execution_mode: ExecutionMode = ExecutionMode.SDK,
     ) -> str:
         """Create an initial state file and return the run_id."""
+        pipeline_name = pipeline_name.lower()
         now = datetime.now(UTC)
         if run_id is None:
             date = now.strftime("%Y%m%d")
-            slug = _SLUG_RE.sub("-", pipeline_name.lower()).strip("-")
+            slug = _SLUG_RE.sub("-", pipeline_name).strip("-")
             run_id = f"run-{date}-{slug}-{uuid.uuid4().hex[:8]}"
 
         state = RunState(
             run_id=run_id,
             pipeline=pipeline_name,
             params=params,
+            execution_mode=execution_mode,
             started_at=now,
             updated_at=now,
             status="running",

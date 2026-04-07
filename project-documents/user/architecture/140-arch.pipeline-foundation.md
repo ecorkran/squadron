@@ -471,7 +471,7 @@ Pipeline steps are logically stateless — the pipeline state file is the contin
 
 However, within a single uninterrupted run, the execution runtime may maintain a persistent client session across steps for efficiency. This is a **runtime optimization**, not a semantic dependency:
 
-- **SDK execution mode** (slice 155): A single `ClaudeSDKClient` session spans the pipeline run. This enables per-step model switching via `set_model()` and server-side compaction via `context_management`. Steps benefit from the model retaining context from earlier steps, but do not depend on it — if the session is interrupted, resume rebuilds context from CF + state.
+- **SDK execution mode** (slices 155, 157): A `ClaudeSDKClient` session spans steps between compact points. Per-step model switching via `set_model()` works within a session. When a compact step executes, the session rotates: the current session summarizes its context (using a potentially cheaper model), disconnects, and a fresh session continues with the summary. The Agent SDK does not expose `context_management` or compaction thresholds — session rotation is the only path to deterministic, step-boundary compaction. Steps benefit from the model retaining context from earlier steps, but do not depend on it — if the session is interrupted or rotated, resume and subsequent steps rebuild context from CF + state + injected summary.
 - **Prompt-only mode** (slices 153-154): No persistent session. The human is the runtime.
 - **One-shot agent mode**: Each dispatch creates a fresh agent. Used for non-SDK providers.
 

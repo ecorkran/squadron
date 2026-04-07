@@ -35,7 +35,7 @@ from squadron.pipeline.prompt_renderer import (
 )
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.sdk_session import SDKExecutionSession
-from squadron.pipeline.state import SchemaVersionError, StateManager
+from squadron.pipeline.state import ExecutionMode, SchemaVersionError, StateManager
 
 # ---------------------------------------------------------------------------
 # Status display colours
@@ -104,18 +104,18 @@ def _assemble_params(
     return params
 
 
-def _resolve_execution_mode(prompt_only: bool) -> str:
+def _resolve_execution_mode(prompt_only: bool) -> ExecutionMode:
     """Determine pipeline execution mode from flags and environment.
 
     Returns:
-        ``"prompt-only"`` when ``--prompt-only`` is set.
-        ``"sdk"`` when running from a standard terminal.
+        ``ExecutionMode.PROMPT_ONLY`` when ``--prompt-only`` is set.
+        ``ExecutionMode.SDK`` when running from a standard terminal.
 
     Raises:
         typer.Exit(1): When invoked from inside a Claude Code session.
     """
     if prompt_only:
-        return "prompt-only"
+        return ExecutionMode.PROMPT_ONLY
     if os.environ.get("CLAUDECODE"):
         rprint(
             "[red]Error: SDK pipeline execution cannot run inside a Claude Code "
@@ -123,7 +123,7 @@ def _resolve_execution_mode(prompt_only: bool) -> str:
             "Use [bold]--prompt-only[/bold] mode or run from a standard terminal."
         )
         raise typer.Exit(1)
-    return "sdk"
+    return ExecutionMode.SDK
 
 
 def _check_cf(cf_client: ContextForgeClient) -> None:
@@ -151,6 +151,8 @@ async def _run_pipeline(
     runs_dir: Path | None = None,
     from_step: str | None = None,
     sdk_session: object | None = None,
+    run_id: str | None = None,
+    execution_mode: ExecutionMode = ExecutionMode.SDK,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
@@ -159,10 +161,18 @@ async def _run_pipeline(
     ``asyncio.run()``.  All dependency construction happens here so that
     integration tests can call this directly.
 
+    When *run_id* is provided the existing state file is reused (resume path);
+    ``init_run`` is skipped so no new state file is created.
+
     Raises ``FileNotFoundError`` when the pipeline cannot be found — the
     caller is responsible for printing the message and exiting.
     """
     definition = load_pipeline(pipeline_name)
+
+    errors = validate_pipeline(definition)
+    if errors:
+        msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
+        raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
     resolver = ModelResolver(
         cli_override=model_override,
@@ -172,7 +182,10 @@ async def _run_pipeline(
     _check_cf(cf_client)
 
     state_mgr = StateManager(runs_dir=runs_dir)
-    run_id = state_mgr.init_run(pipeline_name, params)
+    if run_id is None:
+        run_id = state_mgr.init_run(
+            pipeline_name, params, execution_mode=execution_mode
+        )
 
     try:
         result = await execute_pipeline(
@@ -207,14 +220,24 @@ async def _run_pipeline_sdk(
     model_override: str | None = None,
     runs_dir: Path | None = None,
     from_step: str | None = None,
+    run_id: str | None = None,
 ) -> PipelineResult:
     """Create an SDK session, run the pipeline, and disconnect on exit.
+
+    When *run_id* is provided the existing run state is reused (resume path).
 
     Raises typer.Exit(1) when running inside a Claude Code session.
     The session is disconnected in a ``finally`` block so cleanup happens
     on success, failure, checkpoint pause, and keyboard interrupt.
     """
     _resolve_execution_mode(prompt_only=False)
+
+    # Validate before connecting the SDK session — fail fast on bad YAML
+    definition = load_pipeline(pipeline_name)
+    errors = validate_pipeline(definition)
+    if errors:
+        msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
+        raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
     import claude_agent_sdk
 
@@ -231,6 +254,8 @@ async def _run_pipeline_sdk(
             runs_dir=runs_dir,
             from_step=from_step,
             sdk_session=session,
+            run_id=run_id,
+            execution_mode=ExecutionMode.SDK,
         )
     finally:
         await session.disconnect()
@@ -256,6 +281,7 @@ def _display_run_status(state: object) -> None:
         f"[bold]Pipeline:[/bold] {state.pipeline}",
         f"[bold]Params:[/bold]   {state.params}",
         f"[bold]Status:[/bold]   [{color}]{state.status}[/{color}]",
+        f"[bold]Mode:[/bold]     {state.execution_mode.value}",
         f"[bold]Started:[/bold]  {state.started_at:%Y-%m-%d %H:%M:%S}",
         f"[bold]Updated:[/bold]  {state.updated_at:%Y-%m-%d %H:%M:%S}",
         f"[bold]Steps:[/bold]    {len(state.completed_steps)} completed",
@@ -328,7 +354,9 @@ def _handle_prompt_only_init(
     )
 
     state_mgr = StateManager()
-    run_id = state_mgr.init_run(pipeline_name, params)
+    run_id = state_mgr.init_run(
+        pipeline_name, params, execution_mode=ExecutionMode.PROMPT_ONLY
+    )
     rprint(f"run_id={run_id}", file=sys.stderr)
 
     # Render first step
@@ -612,7 +640,7 @@ def run(
         if pipeline is None:
             rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
             raise typer.Exit(1)
-        _handle_prompt_only_init(pipeline, target, model, param)
+        _handle_prompt_only_init(pipeline.lower(), target, model, param)
         raise typer.Exit(0)
 
     # ---- --list ----
@@ -651,6 +679,7 @@ def run(
     # ---- --validate ----
     if validate_only:
         assert pipeline is not None  # guarded above
+        pipeline = pipeline.lower()
         try:
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
@@ -670,6 +699,7 @@ def run(
     # ---- --dry-run ----
     if dry_run:
         assert pipeline is not None  # guarded above
+        pipeline = pipeline.lower()
         try:
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
@@ -720,37 +750,41 @@ def run(
             if state.params.get("model")
             else model
         )
-        resolver = ModelResolver(
-            cli_override=resume_model,
-            pipeline_model=definition.model,
-        )
-        cf_client = ContextForgeClient()
-        _check_cf(cf_client)
 
         run_id = resume
         try:
-            result = asyncio.run(
-                execute_pipeline(
-                    definition,
-                    dict(state.params),
-                    resolver=resolver,
-                    cf_client=cf_client,
-                    run_id=run_id,
-                    start_from=resume_from,
-                    on_step_complete=state_mgr.make_step_callback(run_id),
-                )
-            )
+            match state.execution_mode:
+                case ExecutionMode.SDK:
+                    result = asyncio.run(
+                        _run_pipeline_sdk(
+                            state.pipeline,
+                            dict(state.params),
+                            model_override=resume_model,
+                            run_id=run_id,
+                            from_step=resume_from,
+                        )
+                    )
+                case ExecutionMode.PROMPT_ONLY:
+                    result = asyncio.run(
+                        _run_pipeline(
+                            state.pipeline,
+                            dict(state.params),
+                            model_override=resume_model,
+                            run_id=run_id,
+                            from_step=resume_from,
+                        )
+                    )
         except KeyboardInterrupt:
             rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
             rprint(f"Resume with: [bold]sq run --resume {run_id}[/bold]")
             raise typer.Exit(1)
 
-        state_mgr.finalize(run_id, result)
         _display_result(result)
         raise typer.Exit(0)
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
+    pipeline = pipeline.lower()
 
     try:
         definition = load_pipeline(pipeline)
@@ -773,14 +807,27 @@ def run(
                 )
                 if implicit_from is not None:
                     try:
-                        result = asyncio.run(
-                            _run_pipeline(
-                                pipeline,
-                                params,
-                                model_override=model,
-                                from_step=implicit_from,
-                            )
-                        )
+                        match match.execution_mode:
+                            case ExecutionMode.SDK:
+                                result = asyncio.run(
+                                    _run_pipeline_sdk(
+                                        match.pipeline,
+                                        dict(match.params),
+                                        model_override=model,
+                                        run_id=match.run_id,
+                                        from_step=implicit_from,
+                                    )
+                                )
+                            case ExecutionMode.PROMPT_ONLY:
+                                result = asyncio.run(
+                                    _run_pipeline(
+                                        match.pipeline,
+                                        dict(match.params),
+                                        model_override=model,
+                                        run_id=match.run_id,
+                                        from_step=implicit_from,
+                                    )
+                                )
                     except KeyboardInterrupt:
                         rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
                         rprint(
@@ -803,6 +850,9 @@ def run(
         )
     except FileNotFoundError:
         # Already printed by _run_pipeline
+        raise typer.Exit(1)
+    except ValueError as exc:
+        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
         raise typer.Exit(1)
     except KeyboardInterrupt:
         rprint("\n[yellow]Interrupted. Run state saved as failed.[/yellow]")
