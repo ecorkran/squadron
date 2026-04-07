@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260406
+dateUpdated: 20260407
 ---
 
 # Development Log
@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260407
+
+**Slices 158, 159: Pipeline plan additions**
+Added two new feature slices to `140-slices.pipeline-foundation.md`. Slice 158 (Pipeline Fan-Out / Fan-In Step Type) — general parallel branch infrastructure with pluggable fan-in reducer; ships with identity reducer, consensus reducer is a stub for 160; demonstrates with N>1 reviews against multiple models; foundational for consensus review infrastructure. Slice 159 (Interactive Checkpoint Resolution) — replace pause-and-exit with interactive prompt offering accept/override/exit options; first two avoid the full resume cycle. Both slices need design (Phase 4) before implementation.
+
+**Slice 157: SDK Session Management and Compaction — Design Updated (Phase 4 revision)**
+Revised `157-slice.sdk-session-management-and-compaction.md` to address two review concerns: (1) checkpoint resume after compact loses the summary because the previous process's session is gone — fixed by persisting compact summaries in a new keyed `compact_summaries` dict on `RunState` (schema bump v2 → v3); (2) executor-owned re-injection on resume via a new `seed_context()` session method. Keying scheme `{step_index}:{step_name}` is forward-compatible with slice 158 fan-out branches (will extend with `#branch{n}` suffix). Added `CompactSummary` dataclass, `record_compact_summary` state manager method, and `active_compact_summary_for_resume` helper. Re-reviewed task breakdown follows in same session.
+
+**Slice 157: SDK Session Management and Compaction — Task Breakdown Updated (Phase 5 revision)**
+Expanded `157-tasks.sdk-session-management-and-compaction.md` from 11 tasks to 18 to cover the design revision: T2/T3 add `CompactSummary` dataclass, schema v3 bump, state manager persistence and lookup helpers; T7 adds `seed_context()` method; T11 wires the compact summary persistence via the executor's `on_step_complete` callback (action stays free of state-manager coupling); T12 implements executor resume injection; T14 adds an automated integration test for the full session rotate flow; T15 adds an automated test specifically for resume-after-compact. T13 (PreCompact hook) retains its investigation-first note. Test-with pattern throughout; 452 lines.
 
 ## 20260406
 
