@@ -89,11 +89,16 @@ def _gather_params(cwd: str) -> dict[str, object]:
         except OSError:
             pass
 
-    return {
-        "slice": info.slice or "",
-        "phase": info.phase or "",
-        "project": project_name,
-    }
+    # Only include non-empty values so that LenientDict leaves placeholders
+    # intact for params CF doesn't actually know about. Rendering {slice}
+    # as empty text produces awkward output like "for slice ." — better to
+    # keep the literal placeholder in that case.
+    params: dict[str, object] = {"project": project_name}
+    if info.slice:
+        params["slice"] = info.slice
+    if info.phase:
+        params["phase"] = info.phase
+    return params
 
 
 def precompact_hook(

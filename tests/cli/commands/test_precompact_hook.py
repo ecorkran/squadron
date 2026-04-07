@@ -136,6 +136,18 @@ class TestGatherParams:
         # No patching needed — chdir into a missing dir should short-circuit
         assert _gather_params(str(nonexistent)) == {}
 
+    def test_empty_slice_and_phase_are_omitted(self, tmp_path: Path) -> None:
+        """Empty CF values should NOT clobber {slice}/{phase} placeholders."""
+        info = ProjectInfo(arch_file="x.md", slice_plan="y.md", phase="", slice="")
+        with patch.object(
+            hook_mod.ContextForgeClient,
+            "get_project",
+            return_value=info,
+        ):
+            params = _gather_params(str(tmp_path))
+        # project is always set; slice/phase omitted when empty
+        assert params == {"project": tmp_path.name}
+
 
 # ---------------------------------------------------------------------------
 # T5: precompact_hook command body
