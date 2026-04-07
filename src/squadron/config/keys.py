@@ -78,6 +78,25 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default=None,
         description="Default rules directory for auto-detected language rules",
     ),
+    "compact.template": ConfigKey(
+        name="compact.template",
+        type_=str,
+        default="minimal",
+        description=(
+            "Compaction template name for the interactive PreCompact hook. "
+            "Resolved against ~/.config/squadron/compaction/ then "
+            "src/squadron/data/compaction/."
+        ),
+    ),
+    "compact.instructions": ConfigKey(
+        name="compact.instructions",
+        type_=str,
+        default=None,
+        description=(
+            "Literal compaction instructions for the interactive PreCompact hook. "
+            "If set, overrides compact.template. Param substitution still applies."
+        ),
+    ),
 }
 
 
