@@ -266,7 +266,30 @@ sq config list
 
 **Precedence** (highest wins): CLI flag → project config (`.squadron.toml`) → user config (`~/.config/squadron/config.toml`) → built-in default.
 
-Available keys: `cwd`, `verbosity`, `default_rules`. See [docs/COMMANDS.md](docs/COMMANDS.md) for full details.
+Available keys: `cwd`, `verbosity`, `default_rules`, `compact.template`, `compact.instructions`. See [docs/COMMANDS.md](docs/COMMANDS.md) for full details.
+
+## Interactive `/compact` for Claude Code
+
+Squadron ships a `PreCompact` hook that runs whenever you type `/compact` (or auto-compaction fires) inside an interactive Claude Code session — VS Code extension or CLI Claude Code. The hook feeds project-aware instructions into Claude Code's compaction summarizer so slice context isn't lost.
+
+`sq install-commands` writes the hook entry into your project's `.claude/settings.json` alongside the slash command files:
+
+```bash
+sq install-commands   # installs slash commands AND the PreCompact hook
+```
+
+Pick the instructions the hook emits with either of two config keys:
+
+```bash
+# Named template (resolved from ~/.config/squadron/compaction/ then built-ins)
+sq config set compact.template minimal --project
+
+# Or a literal string — wins over compact.template if both are set.
+# Params {slice}, {phase}, and {project} are substituted from Context Forge.
+sq config set compact.instructions "Keep slice {slice} design and tasks only." --project
+```
+
+Both keys honour the usual `--project` / user layering. `sq uninstall-commands` removes the squadron-managed hook entry while preserving any third-party hooks.
 
 ## Agent management
 
