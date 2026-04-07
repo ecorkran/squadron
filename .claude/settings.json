@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sq _precompact-hook",
+            "_managed_by": "squadron"
+          }
+        ]
+      }
+    ]
+  }
+}
