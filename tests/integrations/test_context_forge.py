@@ -162,8 +162,8 @@ class TestListTasks:
 _PROJECT_JSON = {
     "fileArch": "100-arch.orchestration-v2",
     "fileSlicePlan": "100-slices.orchestration-v2",
-    "phase": "Phase 6: Implementation",
-    "slice": "126-slice.context-forge-integration-layer",
+    "developmentPhase": "Phase 6: Implementation",
+    "fileSlice": "126-slice.context-forge-integration-layer",
 }
 
 
@@ -176,7 +176,27 @@ class TestGetProject:
             info = ContextForgeClient().get_project()
             assert info.slice_plan == "100-slices.orchestration-v2"
             assert info.phase == "Phase 6: Implementation"
-            assert info.slice == "126-slice.context-forge-integration-layer"
+            # fileSlice="126-slice.context-forge-..." → slice="126"
+            assert info.slice == "126"
+
+    def test_get_project_slice_fallback_when_no_leading_digits(self) -> None:
+        data = {**_PROJECT_JSON, "fileSlice": "custom-slice-name"}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ):
+            info = ContextForgeClient().get_project()
+            # No leading digits → full stem returned as graceful fallback
+            assert info.slice == "custom-slice-name"
+
+    def test_get_project_slice_empty_when_no_fileSlice(self) -> None:
+        data = {k: v for k, v in _PROJECT_JSON.items() if k != "fileSlice"}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ):
+            info = ContextForgeClient().get_project()
+            assert info.slice == ""
 
     def test_get_project_arch_path_resolution(self) -> None:
         with patch(

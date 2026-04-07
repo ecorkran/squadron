@@ -7,6 +7,7 @@ with typed return values, replacing scattered subprocess.run() calls.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any
@@ -136,7 +137,21 @@ class ContextForgeClient:
         ]
 
     def get_project(self) -> ProjectInfo:
-        """Return project metadata from ``cf get --json``."""
+        """Return project metadata from ``cf get --json``.
+
+        CF's JSON shape uses ``fileArch``, ``fileSlicePlan``, ``fileSlice``,
+        and ``developmentPhase`` — these are the file-discovery fields CF
+        populates by scanning the slice plan. The legacy ``slice`` /
+        ``taskFile`` "tag" fields were removed from CF's output and are not
+        read.
+
+        ``fileSlice`` is the slice filename stem (e.g.
+        ``"157-slice.precompact-hook-for-interactive-claude-code"``). We
+        extract the leading numeric index for ``ProjectInfo.slice`` so
+        consumers (and template placeholders like ``{slice}``) see ``"157"``
+        — matching what ``cf status`` displays. If the stem doesn't start
+        with digits, the full stem is returned as a graceful fallback.
+        """
         data: dict[str, Any] = self._run_json(["get", "--json"])
         arch_raw: str = str(data.get("fileArch", ""))
         # Resolve arch file: bare name → full path with .md suffix
@@ -144,9 +159,14 @@ class ContextForgeClient:
             arch_file = f"project-documents/user/architecture/{arch_raw}.md"
         else:
             arch_file = arch_raw
+
+        file_slice = str(data.get("fileSlice", ""))
+        slice_match = re.match(r"^(\d+)", file_slice)
+        slice_index = slice_match.group(1) if slice_match else file_slice
+
         return ProjectInfo(
             arch_file=arch_file,
             slice_plan=str(data.get("fileSlicePlan", "")),
-            phase=str(data.get("phase", "")),
-            slice=str(data.get("slice", "")),
+            phase=str(data.get("developmentPhase", "")),
+            slice=slice_index,
         )
