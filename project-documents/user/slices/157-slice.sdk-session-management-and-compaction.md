@@ -16,13 +16,12 @@ status: not_started
 
 Replace the unconnected `configure_compaction()` stub from slice 155 with working context compaction via session rotation. When a compact step executes in SDK mode, the current session's model is switched to a cheap summarizer, the compact template instructions are sent as a query, the summary response is captured, the session is disconnected, and a fresh session continues with the summary as its opening context.
 
-Additionally, wire the Agent SDK `PreCompact` hook so that interactive pipeline sessions (prompt-only mode where the user types `/compact`) automatically receive the pipeline's compact template instructions instead of requiring the user to type them manually.
+Scope is strictly SDK mode. Interactive Claude Code compaction (VS Code extension, CLI Claude Code) is handled by a separate `PreCompact` settings hook in a follow-up slice — squadron does not register hooks programmatically here.
 
 ## Value
 
 - **Deterministic compaction at step boundaries**: Compaction happens exactly where the pipeline author placed the compact step — not at arbitrary token thresholds. This prevents context loss mid-phase (e.g., losing design context during task breakdown).
 - **Cost savings via summarization model**: The compact YAML can specify a cheap model (haiku) for summarization, avoiding the cost of using opus/sonnet to compress context.
-- **Interactive quality-of-life**: When users type `/compact` during prompt-only pipeline work, they get pipeline-aware compaction instructions automatically via the `PreCompact` hook.
 
 ## Technical Scope
 
@@ -33,15 +32,14 @@ Additionally, wire the Agent SDK `PreCompact` hook so that interactive pipeline 
 3. **Executor-owned summary injection on resume** — When `execute_pipeline` resumes from a non-zero start position with an active SDK session, it asks state for the active compact summary (most recent compact preceding the resume point) and seeds the new session with it before running the next action.
 4. **Session ID capture** — Extract `session_id` from `ResultMessage` during dispatch so the session can be identified for logging and diagnostics.
 5. **Compact YAML `model` field** — Optional model alias for the summarization query. Validated at load time like other model aliases.
-6. **`PreCompact` hook wiring** — Register a `PreCompact` hook via `ClaudeAgentOptions.hooks` that returns the current pipeline's compact template instructions when Claude Code's internal compaction fires.
-7. **Cleanup of `configure_compaction()` stub** — Remove the unused `_compaction_config` field and `configure_compaction()` method from `SDKExecutionSession`.
+6. **Cleanup of `configure_compaction()` stub** — Remove the unused `_compaction_config` field and `configure_compaction()` method from `SDKExecutionSession`.
 
 ### Out of Scope
 
 - Controlling Claude Code's internal compaction threshold (no API exposed).
 - Server-side `context_management` API integration (Agent SDK doesn't expose it).
 - Manual compaction triggering from SDK mode (no `compact()` method on `ClaudeSDKClient`).
-- `PostCompact` hook (doesn't exist in the SDK).
+- `PreCompact` / `PostCompact` hooks for interactive Claude Code (VS Code extension, CLI Claude Code) — covered by a separate slice that ships a `.claude/settings.json` hook script.
 - Pipeline artifact summary action (separate future work).
 
 ## Architecture
@@ -146,36 +144,6 @@ steps:
 When omitted, the summarization query uses whatever model the session currently has active (typically the dispatch model from the previous step).
 
 Validation: the `model` field is validated by `_validate_model_alias` in `validate_pipeline`, same as step-level and action-level model aliases. The compact step's `validate()` method checks the field type.
-
-### PreCompact Hook for Interactive Mode
-
-When `_run_pipeline_sdk` creates the `ClaudeAgentOptions`, it registers a `PreCompact` hook that injects the pipeline's compact template instructions:
-
-```python
-async def _pre_compact_hook(
-    input: PreCompactHookInput,
-    result: str | None,
-    context: HookContext,
-) -> dict:
-    """Inject pipeline compact instructions on user /compact."""
-    return {"custom_instructions": rendered_instructions}
-
-options = claude_agent_sdk.ClaudeAgentOptions(
-    cwd=str(Path.cwd()),
-    hooks={
-        "PreCompact": [
-            claude_agent_sdk.HookMatcher(
-                matcher=None,  # match all compact events
-                hooks=[_pre_compact_hook],
-            )
-        ]
-    },
-)
-```
-
-This fires when the user types `/compact` in interactive sessions. In SDK mode, auto-compaction may fire during very long individual steps — the hook provides best-effort instruction injection there too.
-
-The hook needs access to the rendered compact instructions. These are resolved from the pipeline's compact step configuration at pipeline load time and stored on the session or passed via closure.
 
 ### Data Flow
 
@@ -290,10 +258,6 @@ The `SDKExecutionSession` replaces its own `ClaudeSDKClient` during compact. Thi
 
 If no `model` is specified in the compact YAML, the session uses whatever model is currently active. This is fine for pipelines where the dispatch model is already cheap. For expensive models (opus dispatching design work), authors should specify `model: haiku` on the compact step to save tokens.
 
-### PreCompact Hook Is Best-Effort
-
-The `PreCompact` hook fires on Claude Code's internal compaction schedule, which we don't control. The hook provides pipeline-aware instructions but can't guarantee optimal timing. For SDK mode, session rotate at step boundaries is the primary compaction mechanism. The hook is a safety net for long individual steps and a quality-of-life feature for interactive `/compact` usage.
-
 ## Implementation Details
 
 ### Changes to `src/squadron/pipeline/sdk_session.py`
@@ -332,8 +296,6 @@ The `PreCompact` hook fires on Claude Code's internal compaction schedule, which
 ### Changes to `src/squadron/cli/commands/run.py`
 
 - Pass `ClaudeAgentOptions` to `SDKExecutionSession` constructor (needed for client recreation during rotate).
-- Register `PreCompact` hook in `ClaudeAgentOptions.hooks` with rendered compact instructions.
-- Resolve compact instructions at pipeline load time for hook use.
 
 ### Changes to `src/squadron/providers/sdk/translation.py`
 

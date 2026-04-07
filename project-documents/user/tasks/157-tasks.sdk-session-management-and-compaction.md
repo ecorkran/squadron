@@ -20,7 +20,6 @@ status: not_started
 - Compact summaries persisted in `RunState.compact_summaries` (schema v3) so they survive checkpoint and resume
 - On resume, the executor seeds the new SDK session with the most recent applicable compact summary before running the next step
 - Agent SDK does not expose `context_management`, `compaction_control`, or compaction thresholds — session rotation is the only deterministic path
-- Also wires `PreCompact` hook for interactive `/compact` instruction injection in prompt-only mode
 - Adds optional `model` field to compact YAML for cost control
 - Keying scheme is forward-compatible with slice 158 (fan-out branches)
 
@@ -30,7 +29,7 @@ status: not_started
 - `src/squadron/pipeline/actions/compact.py` — replace stub with real `compact()` invocation; emit summary in outputs
 - `src/squadron/pipeline/steps/compact.py` — pass through `model` field
 - `src/squadron/pipeline/executor.py` — persist compact summaries via state callback; inject summary on resume entry
-- `src/squadron/cli/commands/run.py` — pass options to session, wire `PreCompact` hook
+- `src/squadron/cli/commands/run.py` — pass options to session
 - `src/squadron/providers/sdk/translation.py` — capture `session_id` from `ResultMessage`
 
 **Next planned slice:** 158 (Pipeline Fan-Out / Fan-In Step Type)
@@ -335,34 +334,9 @@ status: not_started
 
 ---
 
-### T13 — Wire `PreCompact` hook in `_run_pipeline_sdk`
+### T13 — (removed: PreCompact hook moved to a separate slice)
 
-- [ ] **Investigation step (do this first):** In `src/squadron/cli/commands/run.py`, before writing the hook, open `claude_agent_sdk.types.PreCompactHookInput` and confirm the exact return shape for hook callbacks. Two candidates from prior research:
-  - `{"hookSpecificOutput": {"hookEventName": "PreCompact", "additionalContext": "..."}}`
-  - `{"custom_instructions": "..."}`
-  Use whichever the SDK actually expects.
-- [ ] Resolve compact instructions at pipeline load time:
-  - Find the first compact step in `definition.steps`
-  - If found, load its template and render instructions with `params`
-  - Store as a closure variable for the hook
-- [ ] Define the local async hook function returning the correct shape per the investigation
-- [ ] Register the hook in `ClaudeAgentOptions`:
-  ```python
-  hooks={
-      "PreCompact": [
-          claude_agent_sdk.HookMatcher(matcher=None, hooks=[_pre_compact_hook])
-      ]
-  }
-  ```
-- [ ] If no compact steps exist in the pipeline, skip hook registration entirely (pass `hooks=None` or omit the field)
-
-**Test T13** — `tests/cli/commands/test_run_pipeline.py`
-
-- [ ] Add test: `_run_pipeline_sdk` with a pipeline containing a compact step constructs `ClaudeAgentOptions` with a `PreCompact` hook registered
-- [ ] Add test: `_run_pipeline_sdk` with a pipeline containing no compact steps does not register the hook
-- [ ] Add test: the hook function, when called with a mock `PreCompactHookInput`, returns a dict containing the rendered compact instructions in the field confirmed by the investigation
-
-**Commit:** `feat: wire PreCompact hook for interactive compact instruction injection`
+The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude Code) is a `.claude/settings.json` shell hook, not an Agent SDK option. It is unrelated to SDK-mode session management and is covered by a follow-up slice.
 
 ---
 
@@ -435,7 +409,7 @@ status: not_started
 - [ ] Set `status: complete` and update `dateUpdated` in `157-slice.sdk-session-management-and-compaction.md`
 - [ ] In `140-slices.pipeline-foundation.md`, check off slice 157 and update `dateUpdated`
 - [ ] Add DEVLOG entry summarizing the implementation per `prompt.ai-project.system.md` Session State Summary format
-- [ ] Add CHANGELOG entries: `### Added` (session rotate compaction, persisted compact summaries, schema v3, executor resume injection, PreCompact hook, compact model field) and `### Removed` (`configure_compaction()` stub)
+- [ ] Add CHANGELOG entries: `### Added` (session rotate compaction, persisted compact summaries, schema v3, executor resume injection, compact model field) and `### Removed` (`configure_compaction()` stub)
 - [ ] Final commit
 
 **Commit:** `docs: mark slice 157 SDK session management and compaction complete`
@@ -444,7 +418,6 @@ status: not_started
 
 ## Notes
 
-- **PreCompact hook return format uncertainty (T13)**: The exact return schema for `PreCompactHookInput` hooks needs to be verified against `claude_agent_sdk.types` before implementation. T13 includes an investigation step. If the SDK's expected field name differs from both candidates, adjust accordingly — the design intent is to inject the rendered compact instructions.
 - **Summary injection seeding (T6)**: The new session receives the summary as the first user message via `dispatch()`. The model's response is typically a brief acknowledgment, which we discard. This establishes the summary as the conversation's starting context. If this proves unreliable (model treats the summary as a task to execute), consider a system prompt prefix instead — fallback for implementation discovery, not the default approach.
 - **Executor callback wiring for T11**: Slice 156 already wired `make_step_callback` through `execute_pipeline` for state updates. T11 should reuse that path. If the callback signature doesn't naturally surface compact-specific persistence, extend it minimally (e.g., the callback could detect compact action type and dispatch accordingly), but avoid re-architecting the callback wiring.
 - **State manager reference in compact action**: The action does NOT call `state_manager` directly. The summary travels in `ActionResult.outputs`, and the executor's per-step handler builds the `CompactSummary` record and calls `record_compact_summary`. This keeps actions free of state-manager coupling and matches how prior outputs are already handled.
