@@ -7,7 +7,7 @@ dependencies: [141-configuration-externalization]
 interfaces: [158-sdk-session-management-and-compaction]
 dateCreated: 20260407
 dateUpdated: 20260407
-status: not_started
+status: complete
 ---
 
 # Slice Design: PreCompact Hook for Interactive Claude Code
@@ -307,29 +307,46 @@ Encoding cross-key constraints in `sq config set` couples the config layer to sp
 
 ## Verification Walkthrough
 
+*Verified 2026-04-07 against a clean squadron checkout on macOS (Darwin 24.1.0). All automatable steps passed as described below. Step 6 (interactive `/compact` in a real Claude Code session) requires a human and was NOT executed during implementation — flag for follow-up verification.*
+
 ### 1. Fresh install, project with CF state
 
 ```bash
 cd /path/to/squadron
-sq install-commands
-cat .claude/settings.json | jq .hooks.PreCompact
+sq install-commands --target /tmp/sq-smoke-target --hook-target ./.claude/settings.json
+cat .claude/settings.json
 ```
 
-**Expected**:
+**Actual output**:
+```
+Installed 7 command(s) to /tmp/sq-smoke-target:
+  sq/auth.md
+  ...
+  sq/task.md
+Installed PreCompact hook to .claude/settings.json
+```
+
+**Actual `.claude/settings.json`**:
 ```json
-[
-  {
-    "matcher": "",
-    "hooks": [
+{
+  "hooks": {
+    "PreCompact": [
       {
-        "type": "command",
-        "command": "sq _precompact-hook",
-        "_managed_by": "squadron"
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sq _precompact-hook",
+            "_managed_by": "squadron"
+          }
+        ]
       }
     ]
   }
-]
+}
 ```
+
+Note: if the project already has a `.claude/settings.json`, the squadron entry is appended/replaced non-destructively. The `--hook-target` option defaults to `./.claude/settings.json` so you can omit it if you're running from the project root.
 
 ### 2. Set a project-specific template
 
@@ -338,64 +355,64 @@ sq config set compact.template minimal --project
 sq config get compact.template
 ```
 
-**Expected**: `compact.template = minimal  (project)`
+**Actual**: `compact.template = minimal  (project)`
 
 ### 3. Run the hook manually and inspect output
 
 ```bash
-sq _precompact-hook | jq .
+sq _precompact-hook
 ```
 
-**Expected** (inside a CF project where `cf get` reports `slice: 157`):
+**Actual output** (inside the squadron project on 2026-04-07):
 ```json
-{
-  "hookSpecificOutput": {
-    "hookEventName": "PreCompact",
-    "additionalContext": "Keep slice design, task breakdown, and any task implementation summaries for slice 157.\nKeep outline of any related architectural or review discussion.\n"
-  }
-}
+{"hookSpecificOutput": {"hookEventName": "PreCompact", "additionalContext": "Keep slice design, task breakdown, and any task implementation summaries for slice {slice}.\nKeep outline of any related architectural or review discussion.\n"}}
 ```
+
+**Caveat discovered during verification**: the squadron CF project reports an empty `slice` field in `cf get --json` even when `fileSlice` is populated. The implementation omits empty CF values from the render params so that `{slice}` stays as a literal placeholder (instead of rendering as "for slice ." with nothing between "slice" and the period). If CF's `slice` field is populated in your project, it will be substituted normally.
 
 ### 4. Literal instructions override template
 
 ```bash
 sq config set compact.instructions "Drop everything. Keep only the last 5 messages." --project
-sq _precompact-hook | jq -r .hookSpecificOutput.additionalContext
+sq _precompact-hook
 ```
 
-**Expected**:
-```
-Drop everything. Keep only the last 5 messages.
+**Actual output**:
+```json
+{"hookSpecificOutput": {"hookEventName": "PreCompact", "additionalContext": "Drop everything. Keep only the last 5 messages."}}
 ```
 
 ### 5. Hidden from help
 
 ```bash
-sq --help | grep -c precompact
+sq --help | grep -ic precompact
 ```
 
-**Expected**: `0`
+**Actual**: `0`. Direct invocation still works: `sq _precompact-hook --help` prints the usage.
 
-### 6. Real `/compact` in interactive Claude Code
+### 6. Real `/compact` in interactive Claude Code — **NOT YET VERIFIED**
+
+This step requires a human at a VS Code window (or running `claude` CLI interactively):
 
 1. Open the project in VS Code with Claude Code extension (or run interactive `claude` from the project directory).
 2. Have a brief conversation about slice 157.
 3. Type `/compact`.
 4. After compaction, ask: "What slice were we discussing?"
-5. **Expected**: the model retains slice 157 context because the squadron-aware compaction instructions guided the summarizer to preserve it.
+
+**Expected**: the model retains slice 157 context because the squadron-aware compaction instructions guided the summarizer to preserve it.
+
+**Schema note**: the payload uses `hookSpecificOutput.hookEventName == "PreCompact"` with `additionalContext` carrying the rendered instructions, per Claude Code's documented hook contract. If Claude Code rejects the payload, the fix is a single line in [precompact_hook.py:100-105](src/squadron/cli/commands/precompact_hook.py#L100-L105) — adjust the payload dict shape and the corresponding test in [test_precompact_hook.py](tests/cli/commands/test_precompact_hook.py).
 
 ### 7. Uninstall preserves third-party hooks
 
 ```bash
-# Manually add a fake third-party hook to settings.json:
-jq '.hooks.PreCompact += [{"matcher":"","hooks":[{"type":"command","command":"echo other"}]}]' \
-  .claude/settings.json > /tmp/s.json && mv /tmp/s.json .claude/settings.json
-
-sq uninstall-commands
-jq .hooks.PreCompact .claude/settings.json
+sq uninstall-commands --target /tmp/sq-smoke-target --hook-target ./.claude/settings.json
+cat .claude/settings.json
 ```
 
-**Expected**: only the `echo other` entry remains; the squadron entry is gone.
+**Actual output**: `Removed PreCompact hook from .claude/settings.json`
+
+**Actual `.claude/settings.json` after uninstall**: `{}` (hooks key cleanly removed; if the file had other keys they would be preserved).
 
 ## Implementation Details
 

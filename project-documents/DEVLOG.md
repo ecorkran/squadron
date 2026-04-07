@@ -10,6 +10,56 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260407
+
+### Slice 157: PreCompact Hook for Interactive Claude Code — Phase 6 Implementation Complete
+
+**Completed:**
+- All 15 tasks (T1–T15) in `user/tasks/157-tasks.precompact-hook-for-interactive-claude-code.md` implemented and marked complete.
+- New shared module `src/squadron/pipeline/compact_render.py` with `LenientDict` + `render_with_params`, extracted from `actions/compact.py`. Both the compact action and the PreCompact hook consume it.
+- New hidden Typer subcommand `sq _precompact-hook` (registered on the top-level app with `hidden=True`). Not listed in `sq --help`; direct invocation still works. Emits the Claude Code `PreCompact` payload on stdout, always exits 0.
+- New module `src/squadron/cli/commands/install_settings.py` with `settings_json_path`, `_load_settings`, `_save_settings`, `write_precompact_hook`, `remove_precompact_hook`, and `_is_squadron_entry`. Squadron owns its entry in `.claude/settings.json` via a `_managed_by: "squadron"` marker; third-party hooks are preserved on both install and uninstall.
+- `sq install-commands` / `sq uninstall-commands` extended with `--hook-target` option (default `./.claude/settings.json`). Installation is idempotent; uninstall tidies `hooks.PreCompact` and `hooks` keys when they become empty.
+- Two new config keys: `compact.template` (default `"minimal"`) and `compact.instructions` (default `None`). Literal wins at resolve time.
+- `_gather_params` uses best-effort `ContextForgeClient()` with `os.chdir` context management (the CF client has no `cwd` kwarg — task file's pseudocode was updated in practice to match the real API). Catches `ContextForgeError`, `ContextForgeNotAvailable`, `FileNotFoundError`, `OSError`.
+- Empty CF values (e.g. `slice=""` as the current squadron project reports) are **omitted** from params so `{slice}` renders as a literal placeholder rather than empty text — discovered during smoke testing and fixed in T14.
+- README updated with "Interactive `/compact` for Claude Code" section.
+- Full test suite: 1315 passed, 0 failures. Pyright: 0 errors. Ruff: clean.
+
+**Commits on `157-slice.precompact-hook-for-interactive-claude-code` branch:**
+- `feat: add compact.template and compact.instructions config keys`
+- `refactor: extract LenientDict and render_with_params to compact_render module`
+- `feat: add hidden _precompact-hook subcommand for interactive Claude Code`
+- `feat: add settings.json merge helpers for PreCompact hook install`
+- `feat: install PreCompact hook entry during sq install-commands`
+- `docs: document PreCompact hook and compact config keys`
+- `chore: rename hook helpers to public names to satisfy pyright`
+- `fix: omit empty CF params so PreCompact hook preserves placeholders`
+- `docs: mark slice 157 PreCompact hook for interactive Claude Code complete` (pending)
+
+**Deviations from task file:**
+- Renamed module-public helpers from `_write_precompact_hook` / `_remove_precompact_hook` / `_settings_json_path` to non-underscored names because pyright's `reportPrivateUsage` flagged cross-module usage with leading underscores. Functionally identical; names reflect convention more accurately.
+- Tests for T3/T4/T5 and the module file itself were combined into one commit because all three helpers live in the same file; splitting would have been artificial.
+- Test T14 revealed the CF empty-string behavior, which was fixed in `_gather_params` with a tiny non-destructive change: only populate `slice` and `phase` when truthy.
+- Also moved the `patch_config_paths` fixture from `tests/config/conftest.py` up to `tests/conftest.py` so CLI command tests can reuse it.
+
+**Smoke tested (automatable parts):**
+- `sq install-commands` writes the expected `.claude/settings.json` shape.
+- `sq _precompact-hook` emits valid JSON with `hookEventName == "PreCompact"`.
+- `{slice}` placeholder preserved when CF reports empty slice.
+- Literal `compact.instructions` override wins over template.
+- `sq --help` hides the command; `sq _precompact-hook --help` still works.
+- `sq uninstall-commands` cleanly removes the entry.
+
+**Not verified (requires human in the loop):**
+- Step 6 of the verification walkthrough: real `/compact` in an interactive VS Code Claude Code session or `claude` CLI. Flagged in the slice design for follow-up. The hook payload schema (`hookSpecificOutput.additionalContext`) is based on Claude Code docs; if it turns out to differ, the fix is a single line in `precompact_hook.py` plus one test update.
+
+**Status:**
+- Slice 157 complete. Slice plan `140-slices.pipeline-foundation.md` slot 157 checked off.
+- Branch: `157-slice.precompact-hook-for-interactive-claude-code` — ready for merge to `main` pending the human-driven `/compact` smoke test.
+
+---
+
 ## 20260405
 
 ### Slice 154: Prompt-Only Loops — Design Complete

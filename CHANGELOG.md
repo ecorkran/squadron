@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Interactive `/compact` PreCompact hook for Claude Code (slice 157)
+  - Hidden `sq _precompact-hook` subcommand emits the Claude Code `PreCompact` payload on stdout; user-facing surface is config only
+  - Two new config keys: `compact.template` (YAML template name, default `minimal`) and `compact.instructions` (literal override; wins over template)
+  - `sq install-commands` / `sq uninstall-commands` now write/remove the squadron-managed `PreCompact` entry in project-local `.claude/settings.json` alongside the slash commands, non-destructively merging with existing hooks via a `_managed_by: "squadron"` marker
+  - `--hook-target` option on install/uninstall (defaults to `./.claude/settings.json`)
+  - `LenientDict` and `render_with_params` extracted from `actions/compact.py` into shared `squadron.pipeline.compact_render` module
+  - Hook is fail-open: any render failure degrades to empty `additionalContext`, always exits 0
 - Pipeline executor hardening — resume mode correctness and case-insensitive pipeline names (slice 156)
   - `ExecutionMode` StrEnum (`SDK`, `PROMPT_ONLY`) in `state.py` — no string literals in dispatch logic
   - `RunState.execution_mode` field — persisted in state file (schema v2); defaults to `SDK` for forward-compat
