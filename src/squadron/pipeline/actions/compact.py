@@ -11,6 +11,7 @@ import yaml
 from squadron.data import data_dir
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.compact_render import LenientDict
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 
 _USER_COMPACTION_DIR = Path.home() / ".config" / "squadron" / "compaction"
@@ -74,17 +75,6 @@ def _parse_template(path: Path) -> CompactionTemplate:
     )
 
 
-class _LenientDict(dict[str, object]):
-    """Dict that returns the placeholder itself for missing keys.
-
-    Prevents ``KeyError`` when a template references a pipeline param
-    that isn't present (e.g. ``{slice}`` when no slice param was given).
-    """
-
-    def __missing__(self, key: str) -> str:
-        return f"{{{key}}}"
-
-
 def render_instructions(
     template: CompactionTemplate,
     *,
@@ -112,7 +102,7 @@ def render_instructions(
     else:
         summarize_section = ""
 
-    format_vars = _LenientDict(
+    format_vars = LenientDict(
         keep_section=keep_section,
         summarize_section=summarize_section,
     )
