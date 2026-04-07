@@ -9,8 +9,8 @@ import typer
 from rich import print as rprint
 
 from squadron.cli.commands.install_settings import (
-    _remove_precompact_hook,
-    _write_precompact_hook,
+    remove_precompact_hook,
+    write_precompact_hook,
 )
 
 
@@ -84,7 +84,7 @@ def install_commands(
     # Install the PreCompact hook entry into the project-local settings.json.
     hook_path = Path(hook_target).expanduser()
     try:
-        _write_precompact_hook(hook_path)
+        write_precompact_hook(hook_path)
     except RuntimeError as exc:
         rprint(f"[red]Error installing PreCompact hook: {exc}[/red]")
         raise typer.Exit(code=1) from exc
@@ -117,7 +117,7 @@ def uninstall_commands(
     # Remove the PreCompact hook entry from the project-local settings.json.
     hook_path = Path(hook_target).expanduser()
     try:
-        removed = _remove_precompact_hook(hook_path)
+        removed = remove_precompact_hook(hook_path)
     except RuntimeError as exc:
         rprint(f"[red]Error removing PreCompact hook: {exc}[/red]")
         raise typer.Exit(code=1) from exc

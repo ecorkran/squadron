@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import cast
 
 
-def _settings_json_path(target_root: Path) -> Path:
+def settings_json_path(target_root: Path) -> Path:
     """Return ``<target_root>/.claude/settings.json``."""
     return target_root / ".claude" / "settings.json"
 
@@ -79,12 +79,15 @@ def _is_squadron_entry(entry: object) -> bool:
     """
     if not isinstance(entry, dict):
         return False
-    inner = entry.get("hooks")
+    entry_dict = cast(dict[str, object], entry)
+    inner = entry_dict.get("hooks")
     if not isinstance(inner, list):
         return False
     for hook in cast(list[object], inner):
-        if isinstance(hook, dict) and hook.get("_managed_by") == "squadron":
-            return True
+        if isinstance(hook, dict):
+            hook_dict = cast(dict[str, object], hook)
+            if hook_dict.get("_managed_by") == "squadron":
+                return True
     return False
 
 
@@ -93,7 +96,7 @@ def _is_squadron_entry(entry: object) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _write_precompact_hook(settings_path: Path) -> None:
+def write_precompact_hook(settings_path: Path) -> None:
     """Add or refresh the squadron PreCompact entry in ``settings_path``.
 
     - Creates the file (and its parent directory) if missing.
@@ -132,7 +135,7 @@ def _write_precompact_hook(settings_path: Path) -> None:
     _save_settings(settings_path, data)
 
 
-def _remove_precompact_hook(settings_path: Path) -> bool:
+def remove_precompact_hook(settings_path: Path) -> bool:
     """Remove the squadron-managed PreCompact entry, preserving others.
 
     Returns:

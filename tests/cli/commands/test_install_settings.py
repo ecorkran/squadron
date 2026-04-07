@@ -10,11 +10,11 @@ import pytest
 from squadron.cli.commands.install_settings import (
     _is_squadron_entry,
     _load_settings,
-    _remove_precompact_hook,
     _save_settings,
-    _settings_json_path,
     _squadron_entry,
-    _write_precompact_hook,
+    remove_precompact_hook,
+    settings_json_path,
+    write_precompact_hook,
 )
 
 # ---------------------------------------------------------------------------
@@ -42,8 +42,8 @@ def _third_party_entry() -> dict[str, object]:
 
 
 class TestSettingsPath:
-    def test_settings_json_path(self, tmp_path: Path) -> None:
-        assert _settings_json_path(tmp_path) == tmp_path / ".claude" / "settings.json"
+    def testsettings_json_path(self, tmp_path: Path) -> None:
+        assert settings_json_path(tmp_path) == tmp_path / ".claude" / "settings.json"
 
 
 class TestLoadSettings:
@@ -107,14 +107,14 @@ class TestIsSquadronEntry:
 
 
 # ---------------------------------------------------------------------------
-# T8: _write_precompact_hook merge logic
+# T8: write_precompact_hook merge logic
 # ---------------------------------------------------------------------------
 
 
 class TestWritePrecompactHook:
     def test_fresh_file_creates_single_entry(self, tmp_path: Path) -> None:
         path = tmp_path / ".claude" / "settings.json"
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
         data = _read_json(path)
         assert "hooks" in data
@@ -128,7 +128,7 @@ class TestWritePrecompactHook:
     def test_existing_file_without_hooks_key(self, tmp_path: Path) -> None:
         path = tmp_path / "settings.json"
         _save_settings(path, {"theme": "dark"})
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
         data = _read_json(path)
         assert data["theme"] == "dark"
@@ -141,7 +141,7 @@ class TestWritePrecompactHook:
     ) -> None:
         path = tmp_path / "settings.json"
         _save_settings(path, {"hooks": {"PreCompact": [_third_party_entry()]}})
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
         data = _read_json(path)
         precompact = data["hooks"]["PreCompact"]  # type: ignore[index]
@@ -160,7 +160,7 @@ class TestWritePrecompactHook:
             path,
             {"hooks": {"PreCompact": [_third_party_entry(), stale]}},
         )
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
         data = _read_json(path)
         precompact = data["hooks"]["PreCompact"]  # type: ignore[index]
@@ -174,7 +174,7 @@ class TestWritePrecompactHook:
     def test_preserves_unrelated_top_level_keys(self, tmp_path: Path) -> None:
         path = tmp_path / "settings.json"
         _save_settings(path, {"theme": "dark", "model": "claude-opus"})
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
         data = _read_json(path)
         assert data["theme"] == "dark"
@@ -190,7 +190,7 @@ class TestWritePrecompactHook:
                 }
             },
         )
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
         data = _read_json(path)
         hooks = data["hooks"]
@@ -199,22 +199,22 @@ class TestWritePrecompactHook:
 
     def test_idempotent(self, tmp_path: Path) -> None:
         path = tmp_path / "settings.json"
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
         first = path.read_text()
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
         second = path.read_text()
         assert first == second
 
 
 # ---------------------------------------------------------------------------
-# T9: _remove_precompact_hook
+# T9: remove_precompact_hook
 # ---------------------------------------------------------------------------
 
 
 class TestRemovePrecompactHook:
     def test_nonexistent_file_returns_false(self, tmp_path: Path) -> None:
         path = tmp_path / "settings.json"
-        assert _remove_precompact_hook(path) is False
+        assert remove_precompact_hook(path) is False
         assert not path.exists()
 
     def test_no_squadron_entry_returns_false_unchanged(self, tmp_path: Path) -> None:
@@ -222,14 +222,14 @@ class TestRemovePrecompactHook:
         _save_settings(path, {"hooks": {"PreCompact": [_third_party_entry()]}})
         original = path.read_text()
 
-        assert _remove_precompact_hook(path) is False
+        assert remove_precompact_hook(path) is False
         assert path.read_text() == original
 
     def test_only_squadron_entry_removes_key(self, tmp_path: Path) -> None:
         path = tmp_path / "settings.json"
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
-        assert _remove_precompact_hook(path) is True
+        assert remove_precompact_hook(path) is True
         data = _read_json(path)
         # hooks.PreCompact should be gone; since hooks became empty, hooks too
         assert "hooks" not in data
@@ -239,9 +239,9 @@ class TestRemovePrecompactHook:
     ) -> None:
         path = tmp_path / "settings.json"
         _save_settings(path, {"hooks": {"PreCompact": [_third_party_entry()]}})
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
-        assert _remove_precompact_hook(path) is True
+        assert remove_precompact_hook(path) is True
         data = _read_json(path)
         precompact = data["hooks"]["PreCompact"]  # type: ignore[index]
         assert len(precompact) == 1
@@ -250,9 +250,9 @@ class TestRemovePrecompactHook:
     def test_preserves_unrelated_top_level_keys(self, tmp_path: Path) -> None:
         path = tmp_path / "settings.json"
         _save_settings(path, {"theme": "dark"})
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
-        assert _remove_precompact_hook(path) is True
+        assert remove_precompact_hook(path) is True
         data = _read_json(path)
         assert data["theme"] == "dark"
         assert "hooks" not in data
@@ -263,9 +263,9 @@ class TestRemovePrecompactHook:
             path,
             {"hooks": {"PostToolUse": [{"matcher": "", "hooks": []}]}},
         )
-        _write_precompact_hook(path)
+        write_precompact_hook(path)
 
-        assert _remove_precompact_hook(path) is True
+        assert remove_precompact_hook(path) is True
         data = _read_json(path)
         # PostToolUse should still be there; PreCompact gone
         assert "hooks" in data
