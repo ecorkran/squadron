@@ -58,6 +58,8 @@ status: in_progress
 
 17. [ ] **(157) SDK Session Management and Compaction** — Controlled context compaction at pipeline step boundaries via session rotate: switch to cheap summarizer model in current session, query with compact template instructions, capture summary, disconnect, start fresh session with summary as context. Replaces the unconnected `configure_compaction()` stub from slice 155. Wire the Agent SDK `PreCompact` hook for best-effort instruction injection during auto-compaction within long individual steps and user `/compact` in interactive mode. Add optional `model` field to compact step YAML for cheaper summarization. The Agent SDK (`ClaudeSDKClient`) does not expose `context_management` or `compaction_control` — session rotate is the only path to deterministic, step-boundary compaction. Dependencies: [155, 156]. Risk: Medium (session lifecycle edge cases, state continuity across reconnects, summary quality). Effort: 3/5. **Design Complete: [157-slice.sdk-session-management-and-compaction.md](user/slices/157-slice.sdk-session-management-and-compaction.md)**
 
+18. [ ] **(158) Interactive Checkpoint Resolution** — Replace pause-and-exit checkpoint behavior with an interactive prompt offering three options: (1) **Accept** the suggested resolution from the prior review/finding (if any) and continue in-process, (2) **Override** with custom instructions entered at the prompt and continue in-process, (3) **Exit** the pipeline and resume later via `sq run <pipeline> <index>` (current behavior). Options 1 and 2 avoid the full disconnect/persist/exit/resume cycle, keeping the SDK session live for fast iteration on reviewable artifacts. Applies to both prompt-only and SDK execution modes. Includes display of the triggering review verdict and any extracted suggestion text so the user has context before deciding. Dependencies: [156]. Risk: Low. Effort: 2/5
+
 ---
 
 ## Integration Work
@@ -93,6 +95,7 @@ Feature:
   155. SDK Pipeline Executor                              (after 154) ✓ complete
   156. Pipeline Executor Hardening                        (after 155) ✓ complete
   157. SDK Session Management and Compaction              (after 155, 156)
+  158. Interactive Checkpoint Resolution                  (after 156)
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
