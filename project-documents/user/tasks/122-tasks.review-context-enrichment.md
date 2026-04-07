@@ -7,6 +7,7 @@ projectState: Slice 126 complete. Parser in parsers.py uses _FINDING_RE and _SUM
 dateCreated: 20260325
 dateUpdated: 20260325
 status: complete
+docType: tasks
 ---
 
 ## Context Summary

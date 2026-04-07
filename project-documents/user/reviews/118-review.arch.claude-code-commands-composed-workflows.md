@@ -6,6 +6,7 @@ project: squadron
 verdict: CONCERNS
 dateCreated: 20260321
 dateUpdated: 20260321
+status: not_started
 ---
 
 # Review: arch — slice 118

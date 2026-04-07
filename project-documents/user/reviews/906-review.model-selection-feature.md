@@ -2,6 +2,9 @@
 docType: review
 layer: project
 dateCreated: 20260223
+project: squadron
+status: not_started
+dateUpdated: 20260223
 ---
 
 # Code Review: Model Selection Support Feature

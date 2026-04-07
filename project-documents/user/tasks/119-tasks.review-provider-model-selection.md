@@ -8,6 +8,7 @@ dateCreated: 20260321
 dateUpdated: 20260321
 reviewUpdated: 20260321
 status: complete
+docType: tasks
 ---
 
 ## Context Summary

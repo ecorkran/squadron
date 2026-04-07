@@ -7,6 +7,7 @@ projectState: Slice 116 complete. CLI entry points `sq`/`squadron` working. Whee
 dateCreated: 20260307
 dateUpdated: 20260313
 status: complete
+docType: tasks
 ---
 
 ## Context Summary

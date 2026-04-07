@@ -4,7 +4,7 @@ parent: 100-arch.orchestration-v2.md
 project: squadron
 dateCreated: 20260217
 dateUpdated: 20260326
-status: in-progress
+status: complete
 ---
 
 # Slice Plan: Orchestration (Python Reboot)
@@ -16,7 +16,7 @@ status: in-progress
 
 **M1 — SDK agent task execution:** Spawn a Claude Agent SDK agent, give it a task, get structured output via CLI. Uses Max subscription — no API cost.
 
-Multi-agent milestones (M2, M3) have been moved to `180-slices.multi-agent-communication.md`.
+Multi-agent milestones (M2, M3) have been moved to `200-slices.multi-agent-communication.md`.
 
 ---
 
@@ -80,7 +80,7 @@ Multi-agent milestones (M2, M3) have been moved to `180-slices.multi-agent-commu
 
 ## Future Work
 
-1. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands as tools available to non-SDK agents. Likely moves to the automated pipeline initiative. Dependencies: [180-series MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
+1. [FUTURE] **Context Forge as Agent Tools** — Expose Context Forge commands as tools available to non-SDK agents. Likely moves to the automated pipeline initiative. Dependencies: [200-series MCP Server or Agent Registry]. Risk: Low. Effort: 2/5
 
 2. [DEFERRED] **SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
 
@@ -123,7 +123,7 @@ Post-M1:
 
 - **Slice 126 (Context Forge Integration Layer) is complete.** CF calls centralized behind `ContextForgeClient` in `src/squadron/integrations/context_forge.py`.
 - **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management.
-- Multi-agent slices (M2, M3) are now tracked in `180-slices.multi-agent-communication.md`.
+- Multi-agent slices (M2, M3) are now tracked in `200-slices.multi-agent-communication.md`.
 
 ---
 
@@ -148,8 +148,8 @@ Post-M1:
 - **Slices 100-122, 126-128 are complete.** M1 is fully shipped and published. Project renamed to squadron, published to PyPI as v0.2.5.
 - **Slice 124 (Codex Agent Integration) was rewound.** Superseded by slice 128. Archived.
 - **Slice 123 (Review Findings Pipeline) migrated to initiative 140** as slice 141 (Structured Review Findings). Scope refocused for pipeline consumption.
-- **Slice 125 (Conversation Persistence) migrated to initiative 160** (Pipeline Intelligence). Pipeline steps are stateless in 140; conversation persistence across retries is a 160 capability.
-- **Multi-agent work** (M2, M3) has been moved to `180-arch.multi-agent-communication.md` and `180-slices.multi-agent-communication.md`.
+- **Slice 125 (Conversation Persistence) migrated to initiative 180** (Pipeline Intelligence). Pipeline steps are stateless in 140; conversation persistence across retries is a 180 capability.
+- **Multi-agent work** (M2, M3) has been moved to `200-arch.multi-agent-communication.md` and `200-slices.multi-agent-communication.md`.
 - **SDK initialization cost**: Each `query()` call spawns a fresh subprocess with 2-12s+ overhead. Slice 104 deferred pending redesign.
 - **Multi-provider validation**: Slices 111-114 complete. The AgentProvider Protocol generalizes beyond Anthropic.
-- **Initiative 100 is effectively complete.** All remaining work has migrated to initiatives 140, 160, or 180.
+- **Initiative 100 is effectively complete.** All remaining work has migrated to initiatives 140, 180, or 200.

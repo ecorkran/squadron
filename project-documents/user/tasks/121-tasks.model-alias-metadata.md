@@ -7,6 +7,7 @@ projectState: Slices 100-120 complete. ModelAlias TypedDict with profile/model f
 dateCreated: 20260322
 dateUpdated: 20260323
 status: complete
+docType: tasks
 ---
 
 ## Context Summary

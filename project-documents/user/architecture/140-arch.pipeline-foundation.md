@@ -27,7 +27,7 @@ This work is split across two initiatives:
 
 **140: Pipeline Foundation** (this document) — Everything needed for `sq run` to work. Action protocol, pipeline definitions with model resolution, executor, basic loops, state/resume, CLI, built-in pipelines. Ships a working replacement for run-slice that is substantially more capable.
 
-**160: Pipeline Intelligence** (future) — The things that make pipelines smart. Weighted review convergence loops, model pools with selection strategies, escalation behaviors, conversation persistence across pipeline steps. Builds on 140's abstractions.
+**180: Pipeline Intelligence** (future) — The things that make pipelines smart. Weighted review convergence loops, model pools with selection strategies, escalation behaviors, conversation persistence across pipeline steps. Builds on 140's abstractions.
 
 The split is along the foundation/intelligence boundary. 140 is independently shippable and useful. 160 layers sophistication on top.
 

@@ -7,6 +7,7 @@ projectState: Slice 116 complete. Eight sq/ command files working. Install/unins
 dateCreated: 20260317
 dateUpdated: 20260320
 status: complete
+docType: tasks
 ---
 
 ## Context Summary

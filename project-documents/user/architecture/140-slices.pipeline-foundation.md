@@ -121,7 +121,7 @@ Integration:
 
 3. [FUTURE] **Multiple Positional Target Arguments** — Support additional positional args or `key=value` positional syntax for pipelines with multiple required params (e.g. `sq run review-only 123 template=arch` or `sq run review-only 123 arch`). Currently only the first required param is bound to the positional target; additional required params need `--param key=value`. Dependencies: [151]. Effort: 1/5
 
-4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 180-series MCP Server]. Effort: 2/5
+4. [FUTURE] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 200-series MCP Server]. Effort: 2/5
 
 5. [FUTURE] **Run State Lifecycle Management** — Prune unreadable/schema-obsolete state files that the current `prune()` skips (schema version mismatches, corrupt JSON); expose as `sq run --gc` or automatic cleanup on `init_run`. Add global TTL (e.g. 30-day max age) and optional total-file cap across all pipeline names to prevent unbounded growth when many distinct pipelines have been run. Dependencies: [150, 156]. Effort: 1/5
 
@@ -130,7 +130,7 @@ Integration:
 ## Notes
 
 - **Slice 123 (Review Findings Pipeline) absorbed into slice 143.** The original 100-band scope (automated triage, auto-fix routing, design decision surfacing) is narrowed to structured finding extraction — the foundational piece. Automated routing/triage is deferred as it depends on the pipeline executor being operational.
-- **Slice 125 (Conversation Persistence) belongs in initiative 160 (Pipeline Intelligence)**, not here. The 140 architecture explicitly states pipeline steps are stateless in this initiative. Conversation persistence across retries is a 160 capability.
+- **Slice 125 (Conversation Persistence) belongs in initiative 180 (Pipeline Intelligence)**, not here. The 140 architecture explicitly states pipeline steps are stateless in this initiative. Conversation persistence across retries is a 180 capability.
 - **Convergence loop strategies are 160 scope.** Slice 149 parses the `loop.strategy` YAML field and applies basic max-iteration fallback. Strategy registration and weighted-decay execution are 160 deliverables that plug into 149's extension point.
 - **Model pools are 160 scope.** The model resolver in slice 142 recognizes the `pool:` prefix but raises a clear error ("model pools require Pipeline Intelligence initiative"). Pool resolution logic is a 160 deliverable.
 - **This initiative supersedes `/sq:run-slice` (slice 118).** The markdown command is retired in slice 140; `sq run slice-lifecycle` is the primary path forward.

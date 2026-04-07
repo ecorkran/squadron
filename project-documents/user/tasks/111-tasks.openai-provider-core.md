@@ -7,6 +7,7 @@ projectState: M1 complete and published. Review workflows and M1 polish done. SD
 status: complete
 dateCreated: 20260226
 dateUpdated: 20260226
+docType: tasks
 ---
 
 ## Context Summary

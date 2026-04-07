@@ -6,7 +6,7 @@ project: squadron
 lldReference: project-documents/user/slices/141-slice.configuration-externalization.md
 dependencies:
   - 100-band complete
-status: not_started
+status: complete
 dateCreated: 20260329
 dateUpdated: 20260329
 ---

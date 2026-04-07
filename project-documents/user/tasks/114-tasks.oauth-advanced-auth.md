@@ -7,6 +7,7 @@ projectState: Slices 111-113 complete. OpenAICompatibleProvider has inline crede
 status: complete
 dateCreated: 20260301
 dateUpdated: 20260301
+docType: tasks
 ---
 
 ## Context Summary

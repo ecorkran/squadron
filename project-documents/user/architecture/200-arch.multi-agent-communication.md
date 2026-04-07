@@ -2,7 +2,7 @@
 docType: architecture
 layer: project
 project: squadron
-archIndex: 180
+archIndex: 200
 component: multi-agent-communication
 dateCreated: 20260322
 dateUpdated: 20260327
@@ -19,7 +19,7 @@ This initiative builds on the foundation established in the 100-series (agent re
 
 ### Relationship to 100-Series
 
-The 100-series delivers the single-agent platform: CLI, reviews, provider infrastructure, model aliases, and the local daemon. This 160-series adds:
+The 100-series delivers the single-agent platform: CLI, reviews, provider infrastructure, model aliases, and the local daemon. This 200-series adds:
 - Message bus for agent-to-agent communication
 - Supervision and health monitoring
 - Communication topologies (broadcast, filtered, hierarchical, custom)
@@ -178,6 +178,6 @@ The Anthropic API Provider (123) is the first API provider built specifically fo
 
 ## Notes
 
-- The 100-series agent registry, provider infrastructure, and daemon are prerequisites. All 160-series slices depend on at least some 100-series work being complete.
-- Ensemble Review (170) is included here because its full value requires M2 parallel fan-out, though it can be experimentally run sequentially using the 100-series review system.
-- Subprocess Agent Support (171) extends the agent registry to spawn OS processes, piping through the message bus.
+- The 100-series agent registry, provider infrastructure, and daemon are prerequisites. All 200-series slices depend on at least some 100-series work being complete.
+- Ensemble Review (190) is included here because its full value requires M2 parallel fan-out, though it can be experimentally run sequentially using the 100-series review system.
+- Subprocess Agent Support (191) extends the agent registry to spawn OS processes, piping through the message bus.

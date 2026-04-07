@@ -6,7 +6,7 @@ archIndex: 100
 component: orchestration
 dateCreated: 20251019
 dateUpdated: 20260322
-status: in_progress
+status: complete
 ---
 
 # High-Level Design: Orchestration (Python Reboot)
@@ -200,7 +200,7 @@ User defines workflow (parallel, sequential, custom) → ADK orchestrates agent 
 
 ## Communication Topologies
 
-Communication topologies (broadcast, filtered, hierarchical, custom) are covered in detail in `160-arch.multi-agent-communication.md`.
+Communication topologies (broadcast, filtered, hierarchical, custom) are covered in detail in `200-arch.multi-agent-communication.md`.
 
 ---
 

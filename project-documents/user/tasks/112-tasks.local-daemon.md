@@ -7,6 +7,7 @@ projectState: M1 complete and published. OpenAI-compatible provider (slice 111) 
 status: complete
 dateCreated: 20260228
 dateUpdated: 20260228
+docType: tasks
 ---
 
 ## Context Summary

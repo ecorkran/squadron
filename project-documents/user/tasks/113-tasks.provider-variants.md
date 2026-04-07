@@ -7,6 +7,7 @@ projectState: Slices 111 (OpenAI-Compatible Provider Core) and 112 (Local Server
 status: complete
 dateCreated: 20260228
 dateUpdated: 20260228
+docType: tasks
 ---
 
 ## Context Summary

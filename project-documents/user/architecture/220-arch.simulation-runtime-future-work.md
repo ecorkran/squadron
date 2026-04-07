@@ -1,6 +1,18 @@
+---
+docType: architecture
+layer: project
+project: squadron
+archIndex: 220
+component: simulation-runtime-future-work
+dateCreated: 20260322
+dateUpdated: 20260406
+status: future_work
+---
 
-# Status
-This is a draft document.  It is not refined for compliance with Architectural Document (Phase 2) guidelines.  This is required before creating a slice plan from this document.
+# Architecture: Simulation Runtime (Future Work)
+
+## Status
+This is a draft document. It is not refined for compliance with Architectural Document (Phase 2) guidelines. This is required before creating a slice plan from this document.
 
 ## Future Work: Simulation Runtime
 The orchestration system's original motivation — experimenting with agent interaction patterns — naturally extends to a simulation runtime where agents are persistent entities with identity, personality, and emergent behavior rather than task-completion nodes in a workflow.

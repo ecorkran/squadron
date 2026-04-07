@@ -1,10 +1,11 @@
 ---
 docType: slice-design
-parent: 160-slices.orchestration-v2.md
+parent: 200-slices.multi-agent-communication.md
 project: squadron
 status: not-started
 dateCreated: 20260218
 dateUpdated: 20260218
+slice: supervisor-component
 ---
 
 ## Architecture Note from Parent:

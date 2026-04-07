@@ -9,6 +9,8 @@ projectState: >
   105-slice.review-workflow-templates is current.
 dateCreated: 20260222
 dateUpdated: 20260222
+docType: tasks
+status: complete
 ---
 
 ## Context Summary

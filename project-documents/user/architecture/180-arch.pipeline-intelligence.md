@@ -2,10 +2,10 @@
 docType: architecture
 layer: project
 project: squadron
-archIndex: 160
+archIndex: 180
 component: pipeline-intelligence
 dateCreated: 20260327
-dateUpdated: 20260404
+dateUpdated: 20260406
 status: draft
 ---
 
@@ -29,7 +29,7 @@ The weighted convergence strategy is a principled solution: trust decays for nov
 
 Every capability in this initiative plugs into extension points defined in 140:
 
-| 160 Capability | 140 Extension Point |
+| 180 Capability | 140 Extension Point |
 |---|---|
 | Convergence strategies | `loop.strategy` field on review steps |
 | Model pools | `pool:` prefix in model resolver |
@@ -37,7 +37,7 @@ Every capability in this initiative plugs into extension points defined in 140:
 | Conversation persistence | `persistence` field on steps |
 | Finding matching | Structured findings JSON from review action |
 
-No 140 code is modified. 160 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes.
+No 140 code is modified. 180 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes.
 
 ---
 
@@ -674,7 +674,7 @@ Everything. Specifically:
 
 ## Scope Boundaries
 
-### In Scope (initiative 160)
+### In Scope (initiative 180)
 
 - **Convergence strategies:** `weighted-decay` and `strict` implementations
 - **Findings ledger:** Cross-iteration finding tracking with identity matching
@@ -701,7 +701,7 @@ Everything. Specifically:
 
 - Changes to 140's pipeline grammar (only registration of new strategies/behaviors)
 - Changes to the review system's core models (builds on existing `ReviewFinding`)
-- Multi-agent communication topology (that's initiative 180)
+- Multi-agent communication topology (that's initiative 200)
 - GUI for convergence visualization (useful but separate)
 
 ---

@@ -8,6 +8,7 @@ sliceName: configuration-externalization
 dateCreated: 20260328
 dateUpdated: 20260329
 status: complete
+slice: configuration-externalization
 ---
 
 # Slice Design: Configuration Externalization (141)

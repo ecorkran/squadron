@@ -8,6 +8,7 @@ sliceName: pipeline-core-models-and-action-protocol
 dateCreated: 20260330
 dateUpdated: 20260330
 status: complete
+slice: pipeline-core-models-and-action-protocol
 ---
 
 # Slice Design: Pipeline Core Models and Action Protocol (142)
@@ -26,7 +27,7 @@ ActionContext, ActionResult).  Action protocol and action registry.  StepType
 protocol and step type registry.  Model resolver with cascade chain (5 levels).
 Package scaffolding for `src/squadron/pipeline/` matching the architecture's
 package structure.  Pool prefix (`pool:`) acknowledged in resolver interface
-but not implemented (160 scope).
+but not implemented (180 scope).
 Dependencies: [100-band complete].  Risk: Low.  Effort: 2/5
 
 ---

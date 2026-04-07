@@ -6,6 +6,7 @@ project: squadron
 verdict: CONCERNS
 dateCreated: 20260322
 dateUpdated: 20260322
+status: not_started
 ---
 
 # Review: slice — slice 121

@@ -7,6 +7,7 @@ projectState: Slices 100-119 complete. Review commands work via SDK and non-SDK 
 dateCreated: 20260321
 dateUpdated: 20260321
 status: complete
+docType: tasks
 ---
 
 ## Context Summary

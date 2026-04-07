@@ -7,6 +7,7 @@ projectState: Slices 100-121 complete. CF calls via subprocess in review.py (_ru
 dateCreated: 20260324
 dateUpdated: 20260324
 status: complete
+docType: tasks
 ---
 
 ## Context Summary
