@@ -173,6 +173,27 @@ class SDKExecutionSession:
         except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
             raise ProviderError(str(exc)) from exc
 
+    async def capture_summary(
+        self,
+        instructions: str,
+        summary_model: str | None = None,
+        restore_model: str | None = None,
+    ) -> str:
+        """Generate a summary of the live session without rotating.
+
+        Switches to summary_model if provided, dispatches instructions,
+        captures the response as the summary, optionally restores the
+        prior model, and returns the summary text. Does NOT disconnect
+        the client or create a new session.
+        """
+        if summary_model is not None and summary_model != self.current_model:
+            await self.set_model(summary_model)
+        _logger.debug("SDKExecutionSession.capture_summary: dispatching instructions")
+        summary = await self.dispatch(instructions)
+        if restore_model is not None and restore_model != self.current_model:
+            await self.set_model(restore_model)
+        return summary
+
     async def compact(
         self,
         instructions: str,
