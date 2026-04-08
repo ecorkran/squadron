@@ -374,6 +374,50 @@ class TestCompactSessionRotate:
         old.query.assert_called_once_with("Keep X")
         new.query.assert_called_once_with(frame_summary_for_seed("SUMMARY TEXT"))
 
+    @pytest.mark.asyncio
+    async def test_compact_with_pre_made_summary_skips_capture(self) -> None:
+        """When summary= provided, old client is NOT queried for instructions."""
+        old = _make_client()
+        new = _make_client()
+        new.receive_response.return_value = _result_message_gen("ack")
+        session = _make_session(old)
+
+        from squadron.pipeline.sdk_session import frame_summary_for_seed
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+            result = await session.compact(instructions="x", summary="pre-made")
+
+        old.query.assert_not_called()
+        new.query.assert_called_once_with(frame_summary_for_seed("pre-made"))
+        assert result == "pre-made"
+
+    @pytest.mark.asyncio
+    async def test_compact_with_pre_made_summary_restores_model(self) -> None:
+        old = _make_client()
+        new = _make_client()
+        new.receive_response.return_value = _result_message_gen("ack")
+        session = _make_session(old)
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+            await session.compact(
+                instructions="x", summary="pre-made", restore_model="sonnet-id"
+            )
+
+        new.set_model.assert_called_once_with("sonnet-id")
+        assert session.current_model == "sonnet-id"
+
+    @pytest.mark.asyncio
+    async def test_compact_with_pre_made_summary_returns_unchanged(self) -> None:
+        old = _make_client()
+        new = _make_client()
+        new.receive_response.return_value = _result_message_gen("ack")
+        session = _make_session(old)
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+            result = await session.compact(instructions="x", summary="pre-made")
+
+        assert result == "pre-made"
+
 
 # ---------------------------------------------------------------------------
 # seed_context

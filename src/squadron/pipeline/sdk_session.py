@@ -199,24 +199,30 @@ class SDKExecutionSession:
         instructions: str,
         summary_model: str | None = None,
         restore_model: str | None = None,
+        summary: str | None = None,
     ) -> str:
         """Perform session-rotate compaction. Returns the summary text.
 
-        Flow:
+        Flow (when ``summary`` is None):
           1. Optionally switch to a cheap summarization model.
           2. Dispatch the compact instructions to the live session and
-             capture the response as the summary.
+             capture the response as the summary via ``capture_summary``.
           3. Disconnect the old client and create a fresh ``ClaudeSDKClient``
              with the same options.
           4. Re-connect and re-inject the summary as the opening message.
           5. Optionally restore the prior model.
 
+        When ``summary`` is provided, the capture phase is skipped entirely
+        and the given text is used directly for seeding. This allows callers
+        that have already captured a summary (e.g. the summary action) to
+        reuse it without dispatching again.
+
         Exceptions are allowed to propagate; the compact action wraps them.
         """
-        if summary_model is not None and summary_model != self.current_model:
-            await self.set_model(summary_model)
-        _logger.debug("SDKExecutionSession.compact: dispatching instructions")
-        summary = await self.dispatch(instructions)
+        if summary is None:
+            summary = await self.capture_summary(
+                instructions, summary_model=summary_model, restore_model=None
+            )
 
         _logger.debug("SDKExecutionSession.compact: disconnecting old client")
         await self.disconnect()
