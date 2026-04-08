@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `summary` pipeline step type with `emit` destinations: `stdout`, `file: <path>`,
+  `clipboard` (via pyperclip), and `rotate` (session-rotate compaction). Default
+  `emit: [stdout]`. A `checkpoint: always` shorthand pauses after emit.
+- Emit registry (`EmitKind`, `EmitFn`, `register_emit`, `get_emit`) for
+  registering and looking up emit destination implementations.
+- `SDKExecutionSession.capture_summary()`: generates a session summary without
+  rotating — switches to summary model, dispatches instructions, captures response,
+  optionally restores prior model. Returns summary text without disconnecting.
+
+### Changed
+- `SDKExecutionSession.compact()` gained an optional `summary=` kwarg. When
+  provided, the capture phase is skipped entirely and the given text seeds the
+  new session directly. Allows pre-captured summaries to be reused across multiple
+  emit destinations without re-dispatching.
+- `CompactAction`'s SDK path now delegates into the shared `_execute_summary()`
+  helper (backward compatible — same outputs, same `action_type == "compact"` for
+  state persistence; `compact_summaries` population is unaffected).
+
 ### Changed
 - `sq install-commands` no longer writes the `PreCompact` hook entry to
   `.claude/settings.json`. Claude Code's `PreCompact` hook API has no

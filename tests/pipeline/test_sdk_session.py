@@ -374,6 +374,50 @@ class TestCompactSessionRotate:
         old.query.assert_called_once_with("Keep X")
         new.query.assert_called_once_with(frame_summary_for_seed("SUMMARY TEXT"))
 
+    @pytest.mark.asyncio
+    async def test_compact_with_pre_made_summary_skips_capture(self) -> None:
+        """When summary= provided, old client is NOT queried for instructions."""
+        old = _make_client()
+        new = _make_client()
+        new.receive_response.return_value = _result_message_gen("ack")
+        session = _make_session(old)
+
+        from squadron.pipeline.sdk_session import frame_summary_for_seed
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+            result = await session.compact(instructions="x", summary="pre-made")
+
+        old.query.assert_not_called()
+        new.query.assert_called_once_with(frame_summary_for_seed("pre-made"))
+        assert result == "pre-made"
+
+    @pytest.mark.asyncio
+    async def test_compact_with_pre_made_summary_restores_model(self) -> None:
+        old = _make_client()
+        new = _make_client()
+        new.receive_response.return_value = _result_message_gen("ack")
+        session = _make_session(old)
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+            await session.compact(
+                instructions="x", summary="pre-made", restore_model="sonnet-id"
+            )
+
+        new.set_model.assert_called_once_with("sonnet-id")
+        assert session.current_model == "sonnet-id"
+
+    @pytest.mark.asyncio
+    async def test_compact_with_pre_made_summary_returns_unchanged(self) -> None:
+        old = _make_client()
+        new = _make_client()
+        new.receive_response.return_value = _result_message_gen("ack")
+        session = _make_session(old)
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+            result = await session.compact(instructions="x", summary="pre-made")
+
+        assert result == "pre-made"
+
 
 # ---------------------------------------------------------------------------
 # seed_context
@@ -390,3 +434,70 @@ async def test_seed_context_calls_dispatch_once() -> None:
     result = await session.seed_context("prior summary")
     assert result is None
     client.query.assert_called_once_with(frame_summary_for_seed("prior summary"))
+
+
+# ---------------------------------------------------------------------------
+# capture_summary
+# ---------------------------------------------------------------------------
+
+
+class TestCaptureSummary:
+    @pytest.mark.asyncio
+    async def test_capture_summary_dispatches_and_returns_text(self) -> None:
+        client = _make_client()
+        client.receive_response.return_value = _result_message_gen("SUMMARY")
+        session = _make_session(client)
+
+        result = await session.capture_summary("summarize this")
+
+        client.query.assert_called_once_with("summarize this")
+        assert result == "SUMMARY"
+
+    @pytest.mark.asyncio
+    async def test_capture_summary_sets_model_before_dispatch(self) -> None:
+        client = _make_client()
+        client.receive_response.return_value = _result_message_gen("SUMMARY")
+        session = _make_session(client)
+
+        await session.capture_summary("instr", summary_model="haiku-id")
+
+        client.set_model.assert_called_once_with("haiku-id")
+        assert session.current_model == "haiku-id"
+
+    @pytest.mark.asyncio
+    async def test_capture_summary_restores_model_after_dispatch(self) -> None:
+        client = _make_client()
+        client.receive_response.return_value = _result_message_gen("SUMMARY")
+        session = SDKExecutionSession(
+            client=client,
+            options=_make_options(),
+            current_model="sonnet-id",
+        )
+
+        await session.capture_summary(
+            "instr", summary_model="haiku-id", restore_model="sonnet-id"
+        )
+
+        # set_model called twice: once to switch to haiku, once to restore sonnet
+        assert client.set_model.call_count == 2
+        assert session.current_model == "sonnet-id"
+
+    @pytest.mark.asyncio
+    async def test_capture_summary_does_not_disconnect_or_replace_client(self) -> None:
+        client = _make_client()
+        client.receive_response.return_value = _result_message_gen("SUMMARY")
+        session = _make_session(client)
+
+        await session.capture_summary("instr")
+
+        client.disconnect.assert_not_called()
+        assert session.client is client
+
+    @pytest.mark.asyncio
+    async def test_capture_summary_propagates_dispatch_exception(self) -> None:
+        client = _make_client()
+        client.query.side_effect = RuntimeError("network error")
+        session = _make_session(client)
+
+        with pytest.raises(RuntimeError, match="network error"):
+            await session.capture_summary("instr")

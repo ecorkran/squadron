@@ -25,6 +25,7 @@ class StepTypeName(StrEnum):
     TASKS = "tasks"
     IMPLEMENT = "implement"
     COMPACT = "compact"
+    SUMMARY = "summary"
     REVIEW = "review"
     EACH = "each"
     DEVLOG = "devlog"

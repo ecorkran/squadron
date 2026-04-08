@@ -401,11 +401,13 @@ async def execute_pipeline(
     import squadron.pipeline.actions.devlog as _a_devlog  # noqa: F401
     import squadron.pipeline.actions.dispatch as _a_dispatch  # noqa: F401
     import squadron.pipeline.actions.review as _a_review  # noqa: F401
+    import squadron.pipeline.actions.summary as _a_summary  # noqa: F401
     import squadron.pipeline.steps.collection as _s_collection  # noqa: F401
     import squadron.pipeline.steps.compact as _s_compact  # noqa: F401
     import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
     import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
     import squadron.pipeline.steps.review as _s_review  # noqa: F401
+    import squadron.pipeline.steps.summary as _s_summary  # noqa: F401
 
     _ = (
         _a_cf_op,
@@ -415,11 +417,13 @@ async def execute_pipeline(
         _a_devlog,
         _a_dispatch,
         _a_review,
+        _a_summary,
         _s_collection,
         _s_compact,
         _s_devlog,
         _s_phase,
         _s_review,
+        _s_summary,
     )
 
     from squadron.pipeline.actions import get_action

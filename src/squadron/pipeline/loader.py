@@ -169,6 +169,7 @@ def validate_pipeline(
     import squadron.pipeline.steps.devlog as _devlog  # noqa: F401
     import squadron.pipeline.steps.phase as _phase  # noqa: F401
     import squadron.pipeline.steps.review as _review  # noqa: F401
+    import squadron.pipeline.steps.summary as _summary  # noqa: F401
 
     _ = (
         _collection,
@@ -176,6 +177,7 @@ def validate_pipeline(
         _devlog,
         _phase,
         _review,
+        _summary,
     )  # satisfy unused-import checks
 
     from squadron.models.aliases import resolve_model_alias

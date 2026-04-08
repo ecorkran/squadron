@@ -385,3 +385,28 @@ async def test_execute_handle_message_error_still_shuts_down(
 
     assert result.success is False
     mock_registry.shutdown_agent.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_execute_agent_cli_error_response_returns_failure(
+    action: DispatchAction,
+) -> None:
+    """CLI API errors surfaced as text must not be treated as successful dispatch."""
+    error_text = (
+        'API Error: 500 {"type":"error","error":{"type":"api_error",'
+        '"message":"Internal server error"}}'
+    )
+    mock_agent = _make_agent_mock(error_text)
+    mock_registry = _make_registry(mock_agent)
+
+    ctx = _make_context()
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.success is False
+    assert result.error == error_text
+    assert result.outputs["response"] == error_text

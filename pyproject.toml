@@ -1,6 +1,6 @@
 [project]
 name = "squadron-ai"
-version = "0.3.2"
+version = "0.3.3"
 description = "Multi-agent squadron framework"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -33,6 +33,7 @@ dependencies = [
     "openai>=1.0.0",
     "pyyaml>=6.0",
     "tomli-w>=1.0",
+    "pyperclip>=1.8.2",
 ]
 
 [project.scripts]
