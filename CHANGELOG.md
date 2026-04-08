@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- SDK session management and compaction (slice 158)
+  - `SDKExecutionSession.compact()` session-rotate compaction: optionally switches
+    to a cheap summary model, dispatches compact instructions, captures the
+    summary, disconnects the old client, creates and reconnects a fresh
+    `ClaudeSDKClient` with the same options, seeds the new session with the
+    summary, and optionally restores the prior model
+  - `SDKExecutionSession.seed_context()` for re-injecting prior summaries on
+    resume; `session_id` captured from `ResultMessage` metadata
+  - `CompactSummary` persisted in `RunState.compact_summaries` (schema v3),
+    keyed `"{source_step_index}:{source_step_name}"`
+  - `StateManager.record_compact_summary()` and
+    `RunState.active_compact_summary_for_resume()` lookup helper
+  - Compact step/action gain optional `model` field for cost-controlled
+    summarization
+  - Executor seeds the SDK session from the most recent applicable compact
+    summary on resume before the first action runs
+  - `session_id` field included in translated `ResultMessage` metadata
+    (success and error subtypes)
+
+### Removed
+- `SDKExecutionSession.configure_compaction()` stub and `_compaction_config`
+  field — replaced by real `compact()` session rotation
+
 ## [0.3.2] - 20260407
 
 ### Fixed

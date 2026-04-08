@@ -99,7 +99,7 @@ Feature:
   155. SDK Pipeline Executor                              (after 154) ✓ complete
   156. Pipeline Executor Hardening                        (after 155) ✓ complete
   157. PreCompact Hook for Interactive Claude Code        
-  158. SDK Session Management and Compaction              
+  158. SDK Session Management and Compaction              ✓ complete
   159. Pipeline Fan-Out / Fan-In Step Type                
   160. Interactive Checkpoint Resolution
 

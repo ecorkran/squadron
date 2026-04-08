@@ -7,7 +7,7 @@ dependencies: [155-sdk-pipeline-executor, 156-pipeline-executor-hardening]
 projectState: Slice 156 complete (pipeline executor hardening); SDK mode working for pipelines without compact steps. Compact step currently stubbed via configure_compaction() which stores config but never applies it. RunState schema is v2.
 dateCreated: 20260406
 dateUpdated: 20260407
-status: not_started
+status: complete
 ---
 
 # Tasks: SDK Session Management and Compaction
@@ -40,7 +40,7 @@ status: not_started
 
 ### T1 — Capture `session_id` from `ResultMessage` in translation
 
-- [ ] In `src/squadron/providers/sdk/translation.py`, update `_translate_result` to include `session_id` in the metadata dict for both success and error subtype branches:
+- [x] In `src/squadron/providers/sdk/translation.py`, update `_translate_result` to include `session_id` in the metadata dict for both success and error subtype branches:
   ```python
   metadata={
       "sdk_type": SDK_RESULT_TYPE,
@@ -48,12 +48,12 @@ status: not_started
       "session_id": msg.session_id,
   }
   ```
-- [ ] The field is `msg.session_id` per the `ResultMessage` dataclass from `claude_agent_sdk`
+- [x] The field is `msg.session_id` per the `ResultMessage` dataclass from `claude_agent_sdk`
 
 **Test T1** — `tests/providers/sdk/test_translation.py`
 
-- [ ] Add test: `_translate_result` for a success `ResultMessage` with `session_id="sess-abc"` produces a Message whose metadata includes `session_id == "sess-abc"`
-- [ ] Add test: same for the error subtype branch
+- [x] Add test: `_translate_result` for a success `ResultMessage` with `session_id="sess-abc"` produces a Message whose metadata includes `session_id == "sess-abc"`
+- [x] Add test: same for the error subtype branch
 
 **Commit:** `feat: capture session_id from ResultMessage in SDK translation`
 
@@ -61,7 +61,7 @@ status: not_started
 
 ### T2 — Add `CompactSummary` dataclass and bump RunState schema to v3
 
-- [ ] In `src/squadron/pipeline/state.py`, add a new dataclass before the `RunState` definition:
+- [x] In `src/squadron/pipeline/state.py`, add a new dataclass before the `RunState` definition:
   ```python
   @dataclass
   class CompactSummary:
@@ -72,18 +72,18 @@ status: not_started
       source_step_name: str
       created_at: datetime
   ```
-- [ ] Add `CompactSummary` to `__all__`
-- [ ] Bump `_SCHEMA_VERSION` from 2 → 3
-- [ ] Add `compact_summaries: dict[str, CompactSummary] = Field(default_factory=dict)` to `RunState` (use the appropriate Pydantic field syntax — confirm whether `RunState` uses Pydantic or dataclass; existing `execution_mode` field is the pattern reference)
-- [ ] Confirm `_load_raw` raises `SchemaVersionError` for version mismatches (existing behavior — verify v2 files now fail-load for the same reason v1 did before)
+- [x] Add `CompactSummary` to `__all__`
+- [x] Bump `_SCHEMA_VERSION` from 2 → 3
+- [x] Add `compact_summaries: dict[str, CompactSummary] = Field(default_factory=dict)` to `RunState` (use the appropriate Pydantic field syntax — confirm whether `RunState` uses Pydantic or dataclass; existing `execution_mode` field is the pattern reference)
+- [x] Confirm `_load_raw` raises `SchemaVersionError` for version mismatches (existing behavior — verify v2 files now fail-load for the same reason v1 did before)
 
 **Test T2** — `tests/pipeline/test_state.py`
 
-- [ ] Add test class `TestCompactSummary` with serialization round-trip test (build a `CompactSummary`, dump to dict, reload, assert equal)
-- [ ] Add test: `RunState` round-trip with `compact_summaries={}` (empty default)
-- [ ] Add test: `RunState` round-trip with `compact_summaries={"3:compact": CompactSummary(...)}` — full populated case
-- [ ] Add test: loading a v2-shaped JSON dict (with `schema_version: 2`) raises `SchemaVersionError`
-- [ ] Add test: loading a JSON dict at v3 without `compact_summaries` field defaults to `{}`
+- [x] Add test class `TestCompactSummary` with serialization round-trip test (build a `CompactSummary`, dump to dict, reload, assert equal)
+- [x] Add test: `RunState` round-trip with `compact_summaries={}` (empty default)
+- [x] Add test: `RunState` round-trip with `compact_summaries={"3:compact": CompactSummary(...)}` — full populated case
+- [x] Add test: loading a v2-shaped JSON dict (with `schema_version: 2`) raises `SchemaVersionError`
+- [x] Add test: loading a JSON dict at v3 without `compact_summaries` field defaults to `{}`
 
 **Commit:** `feat: add CompactSummary and bump RunState schema to v3`
 
@@ -91,12 +91,12 @@ status: not_started
 
 ### T3 — Add `record_compact_summary` and `active_compact_summary_for_resume`
 
-- [ ] In `src/squadron/pipeline/state.py`, add a method to `StateManager`:
+- [x] In `src/squadron/pipeline/state.py`, add a method to `StateManager`:
   ```python
   def record_compact_summary(self, run_id: str, summary: CompactSummary) -> None:
       """Load state, add summary to compact_summaries dict keyed by summary.key, persist."""
   ```
-- [ ] Add a method to `RunState`:
+- [x] Add a method to `RunState`:
   ```python
   def active_compact_summary_for_resume(
       self, resume_step_index: int
@@ -104,16 +104,16 @@ status: not_started
       """Return the compact summary with the highest source_step_index strictly
       less than resume_step_index, or None if no such summary exists."""
   ```
-- [ ] The lookup logic: iterate `self.compact_summaries.values()`, filter by `source_step_index < resume_step_index`, return the one with the highest `source_step_index` (or None if filter is empty)
+- [x] The lookup logic: iterate `self.compact_summaries.values()`, filter by `source_step_index < resume_step_index`, return the one with the highest `source_step_index` (or None if filter is empty)
 
 **Test T3** — `tests/pipeline/test_state.py`
 
-- [ ] Add test: `record_compact_summary` adds a new summary to a state file and persists it (load the file back, verify the summary is present)
-- [ ] Add test: `record_compact_summary` overwrites an existing summary with the same key
-- [ ] Add test: `active_compact_summary_for_resume` returns `None` when `compact_summaries` is empty
-- [ ] Add test: with one summary at `source_step_index=3`, `active_compact_summary_for_resume(5)` returns it
-- [ ] Add test: with one summary at `source_step_index=3`, `active_compact_summary_for_resume(3)` returns `None` (strict less-than)
-- [ ] Add test: with two summaries at indices 2 and 5, `active_compact_summary_for_resume(7)` returns the index-5 one
+- [x] Add test: `record_compact_summary` adds a new summary to a state file and persists it (load the file back, verify the summary is present)
+- [x] Add test: `record_compact_summary` overwrites an existing summary with the same key
+- [x] Add test: `active_compact_summary_for_resume` returns `None` when `compact_summaries` is empty
+- [x] Add test: with one summary at `source_step_index=3`, `active_compact_summary_for_resume(5)` returns it
+- [x] Add test: with one summary at `source_step_index=3`, `active_compact_summary_for_resume(3)` returns `None` (strict less-than)
+- [x] Add test: with two summaries at indices 2 and 5, `active_compact_summary_for_resume(7)` returns the index-5 one
 
 **Commit:** `feat: add compact summary persistence and resume lookup helpers`
 
@@ -121,17 +121,17 @@ status: not_started
 
 ### T4 — Add `session_id` field and `options` to `SDKExecutionSession`
 
-- [ ] In `src/squadron/pipeline/sdk_session.py`, import `ClaudeAgentOptions` from `claude_agent_sdk`
-- [ ] Add two new fields to the `SDKExecutionSession` dataclass:
+- [x] In `src/squadron/pipeline/sdk_session.py`, import `ClaudeAgentOptions` from `claude_agent_sdk`
+- [x] Add two new fields to the `SDKExecutionSession` dataclass:
   - `options: ClaudeAgentOptions` — required, no default
   - `session_id: str | None = None`
-- [ ] Update `dispatch()` to extract `session_id` from each translated message's metadata and store the most recent one on `self.session_id`
-- [ ] Log captured session ID at DEBUG level: `"SDKExecutionSession: session_id=%s"`
+- [x] Update `dispatch()` to extract `session_id` from each translated message's metadata and store the most recent one on `self.session_id`
+- [x] Log captured session ID at DEBUG level: `"SDKExecutionSession: session_id=%s"`
 
 **Test T4** — `tests/pipeline/test_sdk_session.py`
 
-- [ ] Add test: `SDKExecutionSession.dispatch()` captures `session_id` from a mocked response — after dispatch, `session.session_id` equals the mocked value
-- [ ] Add test: session_id is updated on subsequent dispatches (latest wins)
+- [x] Add test: `SDKExecutionSession.dispatch()` captures `session_id` from a mocked response — after dispatch, `session.session_id` equals the mocked value
+- [x] Add test: session_id is updated on subsequent dispatches (latest wins)
 
 **Commit:** `feat: add session_id and options to SDKExecutionSession`
 
@@ -139,18 +139,18 @@ status: not_started
 
 ### T5 — Update `_run_pipeline_sdk` to pass options to session
 
-- [ ] In `src/squadron/cli/commands/run.py`, update `_run_pipeline_sdk` to pass `options` when constructing `SDKExecutionSession`:
+- [x] In `src/squadron/cli/commands/run.py`, update `_run_pipeline_sdk` to pass `options` when constructing `SDKExecutionSession`:
   ```python
   options = claude_agent_sdk.ClaudeAgentOptions(cwd=str(Path.cwd()))
   client = claude_agent_sdk.ClaudeSDKClient(options=options)
   session = SDKExecutionSession(client=client, options=options)
   ```
-- [ ] Grep for any other `SDKExecutionSession(` construction sites and update them
+- [x] Grep for any other `SDKExecutionSession(` construction sites and update them
 
 **Test T5** — `tests/cli/commands/test_run_pipeline.py` and `tests/pipeline/test_sdk_wiring.py`
 
-- [ ] Update existing tests that mock `SDKExecutionSession` to provide `options` (or verify patches are unaffected)
-- [ ] All prior SDK tests still pass
+- [x] Update existing tests that mock `SDKExecutionSession` to provide `options` (or verify patches are unaffected)
+- [x] All prior SDK tests still pass
 
 **Commit:** `feat: pass ClaudeAgentOptions into SDKExecutionSession`
 
@@ -158,7 +158,7 @@ status: not_started
 
 ### T6 — Implement `SDKExecutionSession.compact()` method
 
-- [ ] In `src/squadron/pipeline/sdk_session.py`, add a new async method:
+- [x] In `src/squadron/pipeline/sdk_session.py`, add a new async method:
   ```python
   async def compact(
       self,
@@ -168,7 +168,7 @@ status: not_started
   ) -> str:
       """Perform session-rotate compaction. Returns the summary text."""
   ```
-- [ ] Implementation order:
+- [x] Implementation order:
   1. If `summary_model` provided and different from current, `await self.set_model(summary_model)`
   2. `summary = await self.dispatch(instructions)` — query live session with compact template
   3. `await self.disconnect()` — close old conversation
@@ -179,19 +179,19 @@ status: not_started
   8. `await self.dispatch(summary)` — seed new session with summary text (discard response)
   9. If `restore_model` provided, `await self.set_model(restore_model)`
   10. Return `summary`
-- [ ] Log each major step at DEBUG level
-- [ ] Allow exceptions to propagate — caller (compact action) catches them
+- [x] Log each major step at DEBUG level
+- [x] Allow exceptions to propagate — caller (compact action) catches them
 
 **Test T6** — `tests/pipeline/test_sdk_session.py`
 
-- [ ] Add test class `TestCompactSessionRotate`
-- [ ] Test: `compact()` with `summary_model=None` skips the initial set_model call
-- [ ] Test: `compact()` with `summary_model="haiku-id"` calls `set_model("haiku-id")` before dispatch
-- [ ] Test: `compact()` dispatches the instructions, captures the response as summary, returns it
-- [ ] Test: `compact()` calls `disconnect()` on the old client and creates a new `ClaudeSDKClient`
-- [ ] Test: after `compact()`, `self.client` is the new client and `self.current_model` matches `restore_model`
-- [ ] Test: `compact()` with `restore_model="sonnet-id"` calls `set_model("sonnet-id")` at the end
-- [ ] Use `patch("squadron.pipeline.sdk_session.ClaudeSDKClient")` to intercept client creation
+- [x] Add test class `TestCompactSessionRotate`
+- [x] Test: `compact()` with `summary_model=None` skips the initial set_model call
+- [x] Test: `compact()` with `summary_model="haiku-id"` calls `set_model("haiku-id")` before dispatch
+- [x] Test: `compact()` dispatches the instructions, captures the response as summary, returns it
+- [x] Test: `compact()` calls `disconnect()` on the old client and creates a new `ClaudeSDKClient`
+- [x] Test: after `compact()`, `self.client` is the new client and `self.current_model` matches `restore_model`
+- [x] Test: `compact()` with `restore_model="sonnet-id"` calls `set_model("sonnet-id")` at the end
+- [x] Use `patch("squadron.pipeline.sdk_session.ClaudeSDKClient")` to intercept client creation
 
 **Commit:** `feat: add SDKExecutionSession.compact() session rotate method`
 
@@ -199,7 +199,7 @@ status: not_started
 
 ### T7 — Add `seed_context` method to `SDKExecutionSession`
 
-- [ ] In `src/squadron/pipeline/sdk_session.py`, add:
+- [x] In `src/squadron/pipeline/sdk_session.py`, add:
   ```python
   async def seed_context(self, text: str) -> None:
       """Seed a fresh session with prior compact summary on resume.
@@ -208,12 +208,12 @@ status: not_started
       output identifies seeding events vs. real step dispatches.
       """
   ```
-- [ ] Implementation: log at DEBUG `"SDKExecutionSession: seed_context (%d chars)"`, then call `await self.dispatch(text)`, discard the response
+- [x] Implementation: log at DEBUG `"SDKExecutionSession: seed_context (%d chars)"`, then call `await self.dispatch(text)`, discard the response
 
 **Test T7** — `tests/pipeline/test_sdk_session.py`
 
-- [ ] Add test: `seed_context("summary text")` calls `dispatch("summary text")` exactly once
-- [ ] Add test: return value is `None` even though dispatch returns a string (response is discarded)
+- [x] Add test: `seed_context("summary text")` calls `dispatch("summary text")` exactly once
+- [x] Add test: return value is `None` even though dispatch returns a string (response is discarded)
 
 **Commit:** `feat: add seed_context method for resume re-injection`
 
@@ -221,16 +221,16 @@ status: not_started
 
 ### T8 — Remove `configure_compaction()` stub and `_compaction_config`
 
-- [ ] In `src/squadron/pipeline/sdk_session.py`, delete:
+- [x] In `src/squadron/pipeline/sdk_session.py`, delete:
   - The `_compaction_config` field
   - The `configure_compaction()` method
   - The import of `field` from `dataclasses` if no longer needed
-- [ ] Grep for `configure_compaction` and `_compaction_config` to verify no remaining references
+- [x] Grep for `configure_compaction` and `_compaction_config` to verify no remaining references
 
 **Test T8** — `tests/pipeline/test_sdk_session.py`
 
-- [ ] Delete any tests that exercised `configure_compaction()` directly
-- [ ] Run the full file to confirm no references remain
+- [x] Delete any tests that exercised `configure_compaction()` directly
+- [x] Run the full file to confirm no references remain
 
 **Commit:** `refactor: remove configure_compaction stub from SDKExecutionSession`
 
@@ -238,23 +238,23 @@ status: not_started
 
 ### T9 — Add `model` field to compact step YAML and step validator
 
-- [ ] In `src/squadron/pipeline/steps/compact.py`, update `validate()` to check optional `model` field:
+- [x] In `src/squadron/pipeline/steps/compact.py`, update `validate()` to check optional `model` field:
   - Allow `None`
   - Must be `str` if present
   - Add `ValidationError` with field `"model"` on type mismatch
-- [ ] In `expand()`, pass `model` through to the compact action config:
+- [x] In `expand()`, pass `model` through to the compact action config:
   ```python
   action_config = {"template": template, "model": cfg.get("model"), ...}
   ```
-- [ ] Verify `validate_pipeline` in `loader.py` picks up compact step's model for alias validation (the existing `_validate_model_alias` loop iterates over all steps and checks `step.config.get("model")`)
+- [x] Verify `validate_pipeline` in `loader.py` picks up compact step's model for alias validation (the existing `_validate_model_alias` loop iterates over all steps and checks `step.config.get("model")`)
 
 **Test T9** — `tests/pipeline/steps/test_compact.py`
 
-- [ ] Add test: compact step with `model: haiku` validates successfully
-- [ ] Add test: compact step with `model: 42` (non-string) produces `ValidationError` on field `"model"`
-- [ ] Add test: compact step without `model` validates successfully (optional)
-- [ ] Add test: `expand()` includes `model` in the action config when present
-- [ ] Add test: `expand()` produces `model: None` in the action config when absent
+- [x] Add test: compact step with `model: haiku` validates successfully
+- [x] Add test: compact step with `model: 42` (non-string) produces `ValidationError` on field `"model"`
+- [x] Add test: compact step without `model` validates successfully (optional)
+- [x] Add test: `expand()` includes `model` in the action config when present
+- [x] Add test: `expand()` produces `model: None` in the action config when absent
 
 **Commit:** `feat: add optional model field to compact step`
 
@@ -262,25 +262,25 @@ status: not_started
 
 ### T10 — Wire compact action to call `SDKExecutionSession.compact()`
 
-- [ ] In `src/squadron/pipeline/actions/compact.py`, update the SDK-mode branch of `execute()`:
+- [x] In `src/squadron/pipeline/actions/compact.py`, update the SDK-mode branch of `execute()`:
   - Remove the `configure_compaction()` call
   - Resolve summary model if `context.params.get("model")` is set: `model_id, _ = context.resolver.resolve(action_model=model, step_model=None)`
   - Capture current model before compact: `restore_model = context.sdk_session.current_model`
   - Call `summary = await context.sdk_session.compact(instructions=instructions, summary_model=model_id, restore_model=restore_model)`
   - Build `outputs` dict including `summary` (text) and `instructions`; also include the keying primitives the executor needs to persist (`source_step_index=context.step_index`, `source_step_name=context.step_name`, `summary_model=model_id`)
   - Return `ActionResult(success=True, outputs=outputs, metadata={"summary_model": model_id or ""})`
-- [ ] Wrap in `try/except` to catch provider/SDK errors → `ActionResult(success=False, error=str(exc))`
-- [ ] Update the compact action's `validate()` to accept `model` as optional string
+- [x] Wrap in `try/except` to catch provider/SDK errors → `ActionResult(success=False, error=str(exc))`
+- [x] Update the compact action's `validate()` to accept `model` as optional string
 
 **Test T10** — `tests/pipeline/actions/test_compact.py` and `tests/pipeline/actions/test_compact_sdk.py`
 
-- [ ] Update existing SDK tests that used `configure_compaction()` to verify `compact()` is called instead
-- [ ] Test: SDK-mode compact with `model: "haiku"` calls `resolver.resolve("haiku", None)` and passes the resolved model_id as `summary_model`
-- [ ] Test: SDK-mode compact without `model` passes `summary_model=None`
-- [ ] Test: SDK-mode compact captures `current_model` before invoking `compact()` and passes it as `restore_model`
-- [ ] Test: successful compact returns `ActionResult(success=True)` with `summary`, `instructions`, `source_step_index`, `source_step_name` in outputs
-- [ ] Test: exception from `session.compact()` returns `ActionResult(success=False)` with the error message
-- [ ] Test: non-SDK-mode compact path (no `sdk_session`) still uses CF compaction — unchanged
+- [x] Update existing SDK tests that used `configure_compaction()` to verify `compact()` is called instead
+- [x] Test: SDK-mode compact with `model: "haiku"` calls `resolver.resolve("haiku", None)` and passes the resolved model_id as `summary_model`
+- [x] Test: SDK-mode compact without `model` passes `summary_model=None`
+- [x] Test: SDK-mode compact captures `current_model` before invoking `compact()` and passes it as `restore_model`
+- [x] Test: successful compact returns `ActionResult(success=True)` with `summary`, `instructions`, `source_step_index`, `source_step_name` in outputs
+- [x] Test: exception from `session.compact()` returns `ActionResult(success=False)` with the error message
+- [x] Test: non-SDK-mode compact path (no `sdk_session`) still uses CF compaction — unchanged
 
 **Commit:** `feat: wire compact action to session rotate compaction`
 
@@ -288,17 +288,17 @@ status: not_started
 
 ### T11 — Persist compact summary via executor `on_step_complete` callback
 
-- [ ] In `src/squadron/pipeline/executor.py`, locate the per-step completion handling. After a successful compact action, the executor should:
+- [x] In `src/squadron/pipeline/executor.py`, locate the per-step completion handling. After a successful compact action, the executor should:
   - Detect that the action type is `compact` and `outputs` contains `summary` and the keying primitives
   - Build a `CompactSummary` record with `key=f"{source_step_index}:{source_step_name}"` and the other fields from outputs (and `created_at=datetime.now(UTC)`)
   - Call `state_manager.record_compact_summary(run_id, summary)` (the state manager reference is already wired through `make_step_callback` per slice 156)
-- [ ] If the callback wiring doesn't currently expose the state manager directly, route via the existing callback signature (the `on_step_complete` callable). If the callable can't reach `record_compact_summary`, extend it — but prefer the smallest plumbing change
+- [x] If the callback wiring doesn't currently expose the state manager directly, route via the existing callback signature (the `on_step_complete` callable). If the callable can't reach `record_compact_summary`, extend it — but prefer the smallest plumbing change
 
 **Test T11** — `tests/pipeline/test_executor.py` (or an executor-focused test file)
 
-- [ ] Build a fake compact `ActionResult` with `success=True`, `outputs={"summary": "abc", "instructions": "...", "source_step_index": 3, "source_step_name": "compact-mid", "summary_model": "haiku-id"}`
-- [ ] Test: after the executor processes this result, `state_manager.record_compact_summary` is called once with a `CompactSummary` whose key is `"3:compact-mid"` and text is `"abc"`
-- [ ] Test: a non-compact `ActionResult` does not trigger `record_compact_summary`
+- [x] Build a fake compact `ActionResult` with `success=True`, `outputs={"summary": "abc", "instructions": "...", "source_step_index": 3, "source_step_name": "compact-mid", "summary_model": "haiku-id"}`
+- [x] Test: after the executor processes this result, `state_manager.record_compact_summary` is called once with a `CompactSummary` whose key is `"3:compact-mid"` and text is `"abc"`
+- [x] Test: a non-compact `ActionResult` does not trigger `record_compact_summary`
 
 **Commit:** `feat: persist compact summaries via executor callback`
 
@@ -306,7 +306,7 @@ status: not_started
 
 ### T12 — Executor resume injection
 
-- [ ] In `src/squadron/pipeline/executor.py`, at the resume entry point (when `start_from is not None`), add logic before the first action runs:
+- [x] In `src/squadron/pipeline/executor.py`, at the resume entry point (when `start_from is not None`), add logic before the first action runs:
   ```python
   if start_from is not None and sdk_session is not None:
       active = state.active_compact_summary_for_resume(start_step_index)
@@ -317,18 +317,18 @@ status: not_started
           )
           await sdk_session.seed_context(active.text)
   ```
-- [ ] `start_step_index` here is the index of the step the executor is about to run (not the last completed step). Verify the existing resume code computes this — name it consistently with what's already there.
-- [ ] The state object available in the executor: confirm `RunState` is loaded and accessible at this point (it should be, since the executor already uses it for `prior_outputs`). If not, load it via `state_manager.load(run_id)`.
+- [x] `start_step_index` here is the index of the step the executor is about to run (not the last completed step). Verify the existing resume code computes this — name it consistently with what's already there.
+- [x] The state object available in the executor: confirm `RunState` is loaded and accessible at this point (it should be, since the executor already uses it for `prior_outputs`). If not, load it via `state_manager.load(run_id)`.
 
 **Test T12** — `tests/pipeline/test_executor.py`
 
-- [ ] Build a `RunState` with one `CompactSummary` at `source_step_index=2`
-- [ ] Mock an `SDKExecutionSession` (specifically its `seed_context` method)
-- [ ] Invoke `execute_pipeline` with `start_from` pointing to step index 4 (or whatever maps to a step beyond the compact)
-- [ ] Assert: `sdk_session.seed_context` is called once with the summary text BEFORE any action executes
-- [ ] Test: when `start_from is None` (fresh run), `seed_context` is NOT called
-- [ ] Test: when `sdk_session is None` (prompt-only resume), `seed_context` is NOT called
-- [ ] Test: when `compact_summaries` is empty, `seed_context` is NOT called
+- [x] Build a `RunState` with one `CompactSummary` at `source_step_index=2`
+- [x] Mock an `SDKExecutionSession` (specifically its `seed_context` method)
+- [x] Invoke `execute_pipeline` with `start_from` pointing to step index 4 (or whatever maps to a step beyond the compact)
+- [x] Assert: `sdk_session.seed_context` is called once with the summary text BEFORE any action executes
+- [x] Test: when `start_from is None` (fresh run), `seed_context` is NOT called
+- [x] Test: when `sdk_session is None` (prompt-only resume), `seed_context` is NOT called
+- [x] Test: when `compact_summaries` is empty, `seed_context` is NOT called
 
 **Commit:** `feat: executor seeds SDK session from compact summary on resume`
 
@@ -342,7 +342,7 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 
 ### T14 — Automated integration test for full session rotate flow
 
-- [ ] In `tests/pipeline/test_sdk_wiring.py`, add a test that exercises dispatch → compact → dispatch with a mocked session:
+- [x] In `tests/pipeline/test_sdk_wiring.py`, add a test that exercises dispatch → compact → dispatch with a mocked session:
   - Build a pipeline definition with three steps: dispatch → compact → dispatch
   - Mock `SDKExecutionSession` (or pass a mock via `_action_registry`) so that:
     - `dispatch()` returns a fake response
@@ -359,7 +359,7 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 
 ### T15 — Automated test for resume-after-compact
 
-- [ ] In `tests/cli/commands/test_run_pipeline.py` (or `tests/pipeline/test_executor.py` if it fits better), add a test:
+- [x] In `tests/cli/commands/test_run_pipeline.py` (or `tests/pipeline/test_executor.py` if it fits better), add a test:
   - Pre-build a state file with: completed dispatch (step 0), completed compact (step 1) including a `CompactSummary` in `compact_summaries`, paused checkpoint, status `paused`
   - Mock `SDKExecutionSession` with spy methods on `seed_context`, `set_model`, `dispatch`, `connect`, `disconnect`
   - Invoke `_run_pipeline_sdk` with the existing `run_id` (resume path)
@@ -373,19 +373,19 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 
 ### T16 — End-to-end manual smoke test with test-pipeline
 
-- [ ] Add `model: haiku` to the compact step in `src/squadron/data/pipelines/test-pipeline.yaml`
-- [ ] Manual verification (not automated):
+- [x] Add `model: haiku` to the compact step in `src/squadron/data/pipelines/test-pipeline.yaml`
+- [x] Manual verification (not automated):
   - Run `uv run sq run test-pipeline 154 -vv` from a standard terminal
   - Expected log lines: model switch to haiku, compact dispatch, summary captured, disconnect, new connect, summary injected, model restored
   - Expected: subsequent dispatch steps succeed with the new session
   - Inspect `~/.config/squadron/runs/<run-id>.json` and confirm `compact_summaries` contains the recorded summary
-- [ ] Manual resume verification:
+- [x] Manual resume verification:
   - Modify `test-pipeline.yaml` temporarily to add a checkpoint after compact (`always` trigger)
   - Run the pipeline; checkpoint fires after compact and exits
   - Run `uv run sq run --resume <run-id> -vv`
   - Expected log lines: `executor: resuming at step N; seeding session from compact summary "..."` followed by `SDKExecutionSession: seed_context (... chars)`
   - Revert the test-pipeline.yaml change after verification
-- [ ] Document the captured log lines in the DEVLOG entry for closeout
+- [x] Document the captured log lines in the DEVLOG entry for closeout
 
 **Commit:** `test: add model field to test-pipeline compact step for verification`
 
@@ -393,10 +393,10 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 
 ### T17 — Lint, type-check, and full test suite
 
-- [ ] Run `uv run ruff check src/ tests/` — zero errors
-- [ ] Run `uv run ruff format src/ tests/` — no reformatting needed on changed files
-- [ ] Run `uv run pyright src/squadron/pipeline/state.py src/squadron/pipeline/sdk_session.py src/squadron/pipeline/actions/compact.py src/squadron/pipeline/steps/compact.py src/squadron/pipeline/executor.py src/squadron/cli/commands/run.py src/squadron/providers/sdk/translation.py` — zero errors, zero warnings
-- [ ] Run `uv run pytest -q` — all tests pass
+- [x] Run `uv run ruff check src/ tests/` — zero errors
+- [x] Run `uv run ruff format src/ tests/` — no reformatting needed on changed files
+- [x] Run `uv run pyright src/squadron/pipeline/state.py src/squadron/pipeline/sdk_session.py src/squadron/pipeline/actions/compact.py src/squadron/pipeline/steps/compact.py src/squadron/pipeline/executor.py src/squadron/cli/commands/run.py src/squadron/providers/sdk/translation.py` — zero errors, zero warnings
+- [x] Run `uv run pytest -q` — all tests pass
 
 **Commit:** `chore: lint and verify slice 158 session management and compaction`
 
@@ -404,13 +404,13 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 
 ### T18 — Slice closeout
 
-- [ ] Mark all T1–T17 tasks complete in this file
-- [ ] Set `status: complete` and update `dateUpdated` in this task file's frontmatter
-- [ ] Set `status: complete` and update `dateUpdated` in `157-slice.sdk-session-management-and-compaction.md`
-- [ ] In `140-slices.pipeline-foundation.md`, check off slice 158 and update `dateUpdated`
-- [ ] Add DEVLOG entry summarizing the implementation per `prompt.ai-project.system.md` Session State Summary format
-- [ ] Add CHANGELOG entries: `### Added` (session rotate compaction, persisted compact summaries, schema v3, executor resume injection, compact model field) and `### Removed` (`configure_compaction()` stub)
-- [ ] Final commit
+- [x] Mark all T1–T17 tasks complete in this file
+- [x] Set `status: complete` and update `dateUpdated` in this task file's frontmatter
+- [x] Set `status: complete` and update `dateUpdated` in `157-slice.sdk-session-management-and-compaction.md`
+- [x] In `140-slices.pipeline-foundation.md`, check off slice 158 and update `dateUpdated`
+- [x] Add DEVLOG entry summarizing the implementation per `prompt.ai-project.system.md` Session State Summary format
+- [x] Add CHANGELOG entries: `### Added` (session rotate compaction, persisted compact summaries, schema v3, executor resume injection, compact model field) and `### Removed` (`configure_compaction()` stub)
+- [x] Final commit
 
 **Commit:** `docs: mark slice 158 SDK session management and compaction complete`
 
