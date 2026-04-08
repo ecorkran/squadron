@@ -1,6 +1,6 @@
 [project]
 name = "squadron-ai"
-version = "0.3.1"
+version = "0.3.2"
 description = "Multi-agent squadron framework"
 readme = "README.md"
 license = {file = "LICENSE"}

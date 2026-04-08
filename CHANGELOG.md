@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 20260407
+
+### Fixed
+- SDK permission mode is now set at session start via `ClaudeAgentOptions(permission_mode="bypassPermissions")` instead of via runtime `set_permission_mode()`. The Claude Agent SDK began rejecting the runtime call (requires `--dangerously-skip-permissions` at CLI launch), which broke `sq run` against pipelines using the SDK executor. Affects all pipeline runs in SDK mode.
+- PreCompact hook payload now uses top-level `systemMessage` instead of `hookSpecificOutput.additionalContext`. Claude Code's `PreCompact` hook does not support `hookSpecificOutput` (that field is for `PreToolUse` / `UserPromptSubmit` / `PostToolUse`); the prior shape produced a "Hook JSON output validation failed" error in interactive Claude Code sessions. Verified end-to-end via the BANANA literal test in a real `/compact` session.
+- `.squadron.toml` is now gitignored — per-developer project config should not be committed.
+
 ## [0.3.1] - 20260407
 
 ### Added
