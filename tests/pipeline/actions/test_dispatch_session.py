@@ -173,3 +173,22 @@ async def test_session_dispatch_failure_returns_action_result_false(
     result = await action.execute(ctx)
     assert result.success is False
     assert "connection dropped" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_session_dispatch_cli_error_response_returns_failure(
+    action: DispatchAction,
+) -> None:
+    """CLI API errors surfaced as text (e.g. '500 Internal Server Error') must
+    not be treated as successful dispatch — executor uses result.success for
+    flow control and must not proceed to review/checkpoint on a failed call."""
+    error_text = (
+        'API Error: 500 {"type":"error","error":{"type":"api_error",'
+        '"message":"Internal server error"}}'
+    )
+    session = _make_session(response=error_text)
+    ctx = _make_context(session=session)
+    result = await action.execute(ctx)
+    assert result.success is False
+    assert result.error == error_text
+    assert result.outputs["response"] == error_text

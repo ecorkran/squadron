@@ -21,6 +21,22 @@ _logger = logging.getLogger(__name__)
 
 _TOKEN_METADATA_KEYS = ("prompt_tokens", "completion_tokens", "total_tokens")
 
+# The Claude CLI surfaces API-level errors as assistant text with this prefix.
+# e.g. "API Error: 500 {"type":"error","error":{...}}"
+_CLI_ERROR_PREFIX = "API Error:"
+
+
+def _check_cli_error(response_text: str) -> ActionResult | None:
+    """Return a failed ActionResult if response_text is a CLI-formatted error."""
+    if response_text.startswith(_CLI_ERROR_PREFIX):
+        return ActionResult(
+            success=False,
+            action_type=ActionType.DISPATCH,
+            outputs={"response": response_text},
+            error=response_text,
+        )
+    return None
+
 
 class DispatchAction:
     """Pipeline action that dispatches a prompt to a language model.
@@ -101,6 +117,9 @@ class DispatchAction:
 
         prompt = self._resolve_prompt(context)
         response_text = await session.dispatch(prompt)
+
+        if error_result := _check_cli_error(response_text):
+            return error_result
 
         return ActionResult(
             success=True,
@@ -201,6 +220,10 @@ class DispatchAction:
             await registry.shutdown_agent(config.name)
 
         response_text = "".join(response_parts)
+
+        if error_result := _check_cli_error(response_text):
+            return error_result
+
         return ActionResult(
             success=True,
             action_type=self.action_type,
