@@ -8,10 +8,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
-from squadron.cli.commands.install_settings import (
-    remove_precompact_hook,
-    write_precompact_hook,
-)
+from squadron.cli.commands.install_settings import remove_precompact_hook
 
 
 def _get_commands_source() -> Path:
@@ -43,13 +40,18 @@ def install_commands(
         "--target",
         help="Target directory for command files",
     ),
-    hook_target: str = typer.Option(
-        "./.claude/settings.json",
-        "--hook-target",
-        help="Target settings.json for the PreCompact hook entry",
-    ),
 ) -> None:
-    """Install squadron slash commands for Claude Code."""
+    """Install squadron slash commands for Claude Code.
+
+    Note: the PreCompact hook is no longer installed by default. Claude
+    Code's PreCompact hook API has no documented way to override
+    compaction instructions — the hook's output fields (``systemMessage``
+    et al.) cannot authoritatively replace the default summarizer prompt,
+    and injection behavior is inconsistent across Claude Code versions.
+    Use ``sq run`` pipelines from a standard terminal for deterministic,
+    project-aware compaction (see slice 158). ``sq uninstall-commands``
+    will still remove a previously installed squadron PreCompact entry.
+    """
     source = _get_commands_source()
     target_dir = Path(target).expanduser()
 
@@ -80,15 +82,6 @@ def install_commands(
             rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
             for name in removed:
                 rprint(f"  {name}")
-
-    # Install the PreCompact hook entry into the project-local settings.json.
-    hook_path = Path(hook_target).expanduser()
-    try:
-        write_precompact_hook(hook_path)
-    except RuntimeError as exc:
-        rprint(f"[red]Error installing PreCompact hook: {exc}[/red]")
-        raise typer.Exit(code=1) from exc
-    rprint(f"[green]Installed PreCompact hook to {hook_path}[/green]")
 
 
 def uninstall_commands(

@@ -406,7 +406,7 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 
 - [x] Mark all T1–T17 tasks complete in this file
 - [x] Set `status: complete` and update `dateUpdated` in this task file's frontmatter
-- [x] Set `status: complete` and update `dateUpdated` in `157-slice.sdk-session-management-and-compaction.md`
+- [x] Set `status: complete` and update `dateUpdated` in `158-slice.sdk-session-management-and-compaction.md`
 - [x] In `140-slices.pipeline-foundation.md`, check off slice 158 and update `dateUpdated`
 - [x] Add DEVLOG entry summarizing the implementation per `prompt.ai-project.system.md` Session State Summary format
 - [x] Add CHANGELOG entries: `### Added` (session rotate compaction, persisted compact summaries, schema v3, executor resume injection, compact model field) and `### Removed` (`configure_compaction()` stub)

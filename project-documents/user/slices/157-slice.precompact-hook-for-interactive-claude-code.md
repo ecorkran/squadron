@@ -6,11 +6,42 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [141-configuration-externalization]
 interfaces: [158-sdk-session-management-and-compaction]
 dateCreated: 20260407
-dateUpdated: 20260407
-status: complete
+dateUpdated: 20260408
+status: superseded
 ---
 
 # Slice Design: PreCompact Hook for Interactive Claude Code
+
+> **⚠️ Post-ship note (2026-04-08)**: Empirical testing shows that Claude
+> Code's `PreCompact` hook API has no documented mechanism that lets a hook
+> authoritatively override the compaction instructions sent to the
+> summarizer model. The output schema for synchronous hooks exposes
+> `systemMessage`, `reason`, `decision`, `continue_`, `suppressOutput`,
+> `stopReason`, and a `hookSpecificOutput` object — none of which
+> enumerate `PreCompact` among their supported event types, and none
+> documented as replacing the default compaction prompt. In a literal
+> canary test ("BANANA" marker), squadron's injected instructions were
+> *referenced* by the summarizer alongside its default behavior but did
+> not replace it. Behavior is inconsistent across manual `/compact
+> <instructions>` invocations as well.
+>
+> **As of 2026-04-08**, `sq install-commands` no longer writes the
+> PreCompact hook entry to `.claude/settings.json`. The hidden
+> `sq _precompact-hook` command, the `compact.template` /
+> `compact.instructions` config keys, and the install_settings helpers
+> are all retained — anyone who wants to manually wire up the hook can
+> still do so, and `sq uninstall-commands` still removes a previously
+> installed entry.
+>
+> **Recommended path for deterministic, project-aware compaction**:
+> `sq run` pipelines from a standard terminal, which use session-rotate
+> compaction via the Agent SDK (slice 158). That path works end-to-end
+> and is fully validated.
+>
+> This slice is left in place for historical context and because the
+> infrastructure is still useful — it is simply no longer installed by
+> default.
+
 
 ## Overview
 

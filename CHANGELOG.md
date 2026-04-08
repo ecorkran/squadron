@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- `sq install-commands` no longer writes the `PreCompact` hook entry to
+  `.claude/settings.json`. Claude Code's `PreCompact` hook API has no
+  documented output field that authoritatively overrides compaction
+  instructions — testing confirmed squadron's injected instructions are
+  referenced alongside the default summarizer prompt, not in place of it,
+  and behavior is inconsistent. The hidden `sq _precompact-hook`
+  subcommand, the `compact.template` / `compact.instructions` config keys,
+  and the install_settings helpers are retained so anyone who wants to
+  manually wire up the hook can still do so, and `sq uninstall-commands`
+  still removes a previously installed squadron entry. For deterministic,
+  project-aware compaction, use `sq run` pipelines from a standard
+  terminal (slice 158). The `--hook-target` option on
+  `sq install-commands` has been removed; the same option on
+  `sq uninstall-commands` remains for cleanup.
 - SDK pipeline sessions now default to the Claude Code system prompt preset
   (`system_prompt={"type": "preset", "preset": "claude_code"}`) instead of
   the Agent SDK's minimal tool-only prompt. All prior SDK pipeline dispatches
