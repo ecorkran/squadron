@@ -13,6 +13,18 @@ steps:
         model: minimax
       checkpoint: on-fail
 
+  - tasks:
+      phase: 5
+      model: haiku
+      review: 
+        template: tasks
+        model: minimax
+      checkpoint: on-fail
+
   - compact:
       template: minimal-sdk
+      model: haiku
+
+  - design:        # same slice, should now "remember" prior design via summary
+      phase: 4
       model: haiku
