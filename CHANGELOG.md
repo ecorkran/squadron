@@ -10,76 +10,44 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.3] - 20260408
 
 ### Added
-- `summary` pipeline step type with `emit` destinations: `stdout`, `file: <path>`,
-  `clipboard` (via pyperclip), and `rotate` (session-rotate compaction). Default
-  `emit: [stdout]`. A `checkpoint: always` shorthand pauses after emit.
-- Emit registry (`EmitKind`, `EmitFn`, `register_emit`, `get_emit`) for
-  registering and looking up emit destination implementations.
-- `SDKExecutionSession.capture_summary()`: generates a session summary without
-  rotating — switches to summary model, dispatches instructions, captures response,
-  optionally restores prior model. Returns summary text without disconnecting.
+- `summary` pipeline step type — captures a session summary and emits it to one
+  or more destinations: `stdout`, `file: <path>`, `clipboard`, or `rotate`
+  (session-rotate compaction). Replaces `compact:` for new pipelines; `compact:`
+  remains a backward-compatible alias. Optional `checkpoint:` shorthand pauses
+  after emit.
+- `SDKExecutionSession.capture_summary()` — generates a session summary without
+  rotating. Useful for fanout: capture once, emit to multiple destinations.
+- SDK session management and compaction — `SDKExecutionSession.compact()` rotates
+  the session: switches to a summary model, captures a summary, disconnects,
+  reconnects a fresh session, and seeds it with the summary. On resume, the
+  executor automatically re-seeds from the persisted compact summary.
+- `CompactSummary` stored in `RunState.compact_summaries` (schema v3) so summaries
+  survive checkpoint pauses and resume correctly.
+- `minimal-sdk` compaction template for producing clean third-person summaries
+  suitable for seeding a fresh session.
 
 ### Changed
-- `SDKExecutionSession.compact()` gained an optional `summary=` kwarg. When
-  provided, the capture phase is skipped entirely and the given text seeds the
-  new session directly. Allows pre-captured summaries to be reused across multiple
-  emit destinations without re-dispatching.
-- `CompactAction`'s SDK path now delegates into the shared `_execute_summary()`
-  helper (backward compatible — same outputs, same `action_type == "compact"` for
-  state persistence; `compact_summaries` population is unaffected).
-
-### Changed
-- `sq install-commands` no longer writes the `PreCompact` hook entry to
-  `.claude/settings.json`. Claude Code's `PreCompact` hook API has no
-  documented output field that authoritatively overrides compaction
-  instructions — testing confirmed squadron's injected instructions are
-  referenced alongside the default summarizer prompt, not in place of it,
-  and behavior is inconsistent. The hidden `sq _precompact-hook`
-  subcommand, the `compact.template` / `compact.instructions` config keys,
-  and the install_settings helpers are retained so anyone who wants to
-  manually wire up the hook can still do so, and `sq uninstall-commands`
-  still removes a previously installed squadron entry. For deterministic,
-  project-aware compaction, use `sq run` pipelines from a standard
-  terminal (slice 158). The `--hook-target` option on
-  `sq install-commands` has been removed; the same option on
-  `sq uninstall-commands` remains for cleanup.
+- `SDKExecutionSession.compact()` accepts an optional `summary=` kwarg — skips
+  the capture phase and uses the provided text directly, enabling reuse across
+  multiple emit destinations.
 - SDK pipeline sessions now default to the Claude Code system prompt preset
-  (`system_prompt={"type": "preset", "preset": "claude_code"}`) instead of
-  the Agent SDK's minimal tool-only prompt. All prior SDK pipeline dispatches
-  (design, tasks, implement, compact, commit, devlog) had been running without
-  the Claude Code persona, coding conventions, or response-style guidance.
+  instead of the Agent SDK's minimal tool-only prompt.
+- `sq install-commands` no longer installs the `PreCompact` hook. The hook API
+  doesn't reliably override compaction instructions in practice. The underlying
+  `sq _precompact-hook` subcommand and config keys are retained for manual use;
+  `sq uninstall-commands` still cleans up any previously installed entry.
 
-### Added
-- SDK session management and compaction (slice 158)
-  - `SDKExecutionSession.compact()` session-rotate compaction: optionally switches
-    to a cheap summary model, dispatches compact instructions, captures the
-    summary, disconnects the old client, creates and reconnects a fresh
-    `ClaudeSDKClient` with the same options, seeds the new session with the
-    summary, and optionally restores the prior model
-  - `SDKExecutionSession.seed_context()` for re-injecting prior summaries on
-    resume; `session_id` captured from `ResultMessage` metadata
-  - `CompactSummary` persisted in `RunState.compact_summaries` (schema v3),
-    keyed `"{source_step_index}:{source_step_name}"`
-  - `StateManager.record_compact_summary()` and
-    `RunState.active_compact_summary_for_resume()` lookup helper
-  - Compact step/action gain optional `model` field for cost-controlled
-    summarization
-  - `minimal-sdk` compaction template produces a standalone third-person
-    summary suitable for verbatim injection into a fresh session
-  - `frame_summary_for_seed()` wraps seed injections with explicit
-    "historical reference only, do not acknowledge" framing — used by
-    both `compact()` and `seed_context()`
-  - Executor seeds the SDK session from the most recent applicable compact
-    summary on resume before the first action runs
-  - `session_id` field included in translated `ResultMessage` metadata
-    (success and error subtypes)
+### Fixed
+- CLI-formatted API errors (e.g. `API Error: 500 ...`) returned as assistant text
+  by the Claude CLI are now detected and treated as dispatch failures — previously
+  the pipeline continued to the next action (review, checkpoint) as if dispatch
+  had succeeded.
 
 ### Removed
-- `SDKExecutionSession.configure_compaction()` stub and `_compaction_config`
-  field — replaced by real `compact()` session rotation
+- `SDKExecutionSession.configure_compaction()` stub — replaced by `compact()`.
 
 ## [0.3.2] - 20260407
 
@@ -284,51 +252,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Model resolution cascade extended: CLI flag > per-template config > global config > template default
 
-## [Unreleased]
+## [0.2.7]
 
 ### Added
-- `ProviderCapabilities` dataclass on `AgentProvider` Protocol — `can_read_files`, `supports_system_prompt`, `supports_streaming` (slice 128)
-- `ProviderType`, `ProfileName`, `AuthType` enums in `providers/base.py` — all identifier strings defined in one place (slice 128)
-- `OAuthFileStrategy` in `providers/codex/auth.py` — subscription-first credential resolution from `~/.codex/auth.json` or `OPENAI_API_KEY` fallback (slice 128)
-- **[Experimental]** `CodexProvider` and `CodexAgent` in `providers/codex/` — agentic provider via Codex Python SDK (slice 128). Requires separate install of the official OpenAI Codex SDK from GitHub and `codex` CLI via npm. See README for setup.
-- `openai-oauth` built-in profile with OAuth auth type for subscription-auth agent tasks (slice 128)
-- `codex-agent` and `codex-spark` model aliases (slice 128)
-- `from_config` classmethod, `active_source`, `setup_hint` on all auth strategies (slice 128)
-- `resolve_auth_strategy_for_profile()` convenience function for CLI auth status (slice 128)
+- **[Experimental]** Codex provider — `CodexProvider`/`CodexAgent` via Codex Python SDK (slice 128). Requires separate Codex SDK install.
+- `ProviderCapabilities` on `AgentProvider` protocol — `can_read_files`, `supports_system_prompt`, `supports_streaming`
+- `ProviderType`, `ProfileName`, `AuthType` enums — all identifier strings in one place
+- `openai-oauth` profile and `codex-agent`/`codex-spark` model aliases
+- Review finding parser extended to match five formats: `### [SEV]`, `### SEV`, `### SEV:`, `**[SEV]**`, `- [SEV]` (slice 122)
+- Lenient fallback parsing for CONCERNS/FAIL verdicts with no structured findings
+- Auto-detection of language rules in `review code`; template-specific rule injection
+- `--rules-dir` / `--no-rules` options on review commands; `rules_dir` config key
+- Scoped `sq review code` diff — auto-resolves to slice branch commits via merge-base detection (slice 127)
+- `-vvv` debug output: system prompt, user prompt, and injected rules printed to stderr; prompt log saved to `~/.config/squadron/logs/`
 
 ### Changed
-- Review system unified: all reviews route through `Agent.handle_message()` via provider registry — no more direct `AsyncOpenAI` or `ClaudeSDKClient` usage in `review_client.py` (slice 128)
-- `SDKAgent` renamed to `ClaudeSDKAgent`, `SDKAgentProvider` renamed to `ClaudeSDKProvider` (slice 128)
-- `resolve_auth_strategy()` now uses registry-driven dispatch via `from_config` — no if/elif chains on auth type strings (slice 128)
-- `sq auth status` and `sq auth login` delegate to auth strategies — no string dispatch on profile names or auth types (slice 128)
-- File injection in reviews now conditional on `provider.capabilities.can_read_files` instead of profile identity (slice 128)
+- Review system unified through `Agent.handle_message()` — no more direct SDK/OpenAI calls in `review_client.py` (slice 128)
+- File injection in reviews gated on `provider.capabilities.can_read_files` instead of hardcoded profile identity
+- `SDKAgent` → `ClaudeSDKAgent`, `SDKAgentProvider` → `ClaudeSDKProvider`
 
 ### Removed
-- `src/squadron/review/runner.py` — SDK review logic absorbed into `ClaudeSDKAgent.handle_message()` (slice 128)
-- `_run_non_sdk_review()` and `_resolve_api_key()` from `review_client.py` (slice 128)
-
-### Added
-- Expanded `_FINDING_RE` in `parsers.py` to match five finding formats: `### [SEV]`, `### SEV`, `### SEV:`, `**[SEV]**`, and `- [SEV]` (slice 122)
-- Lenient fallback parsing: when verdict is CONCERNS/FAIL but no structured findings parsed, attempt paragraph extraction then synthesize a finding from summary text
-- `fallback_used: bool` field on `ReviewResult` (default `False`) — set when fallback parsing triggered
-- Diagnostic debug log at `~/.config/squadron/logs/review-debug.jsonl` — written on verdict/findings mismatches
-- `CRITICAL` consistency block in all three builtin review templates (slice, tasks, code)
-- `src/squadron/review/rules.py` — `resolve_rules_dir()`, `load_rules_frontmatter()`, `detect_languages_from_paths()`, `match_rules_files()`, `load_rules_content()`, `get_template_rules()`
-- Auto-detection of language rules in `review code` from diff/files paths, matched against rules dir frontmatter
-- Template-specific rule injection: `rules/review.md` and `rules/review-{template}.md` prepended to system prompt
-- `--rules-dir` option on all three review commands; `--no-rules` flag on `review code`
-- `rules_dir` config key for default rules directory
-- Review file YAML alignment: added `layer: project`, `sourceDocument`, `aiModel` (resolved model ID), `status: complete` fields
-- `-vvv` debug output: at verbosity >= 3, prints `[DEBUG] System Prompt:`, `[DEBUG] User Prompt:`, and `[DEBUG] Injected Rules:` to stderr before API call
-
-- `src/squadron/review/git_utils.py` — `_find_slice_branch()`, `_find_merge_commit()`, `resolve_slice_diff_range()` for scoped slice diff resolution (slice 127)
-- Prompt log persistence: `-vvv` writes full prompt to `~/.config/squadron/logs/review-prompt-{timestamp}.md` and prints path to stderr (slice 127)
-- `system_prompt`, `user_prompt`, `rules_content_used` optional fields on `ReviewResult` — populated at verbosity >= 2 (slice 127)
-- Debug appendix `## Debug: Prompt & Response` in saved review markdown when prompt fields present (slice 127)
-
-### Changed
-- `run_review_with_profile()` accepts `verbosity: int = 0` and threads it through to `_run_non_sdk_review()`
-- `sq review code 122` now auto-scopes diff to slice 122's branch commits via merge-base or merge-commit detection, instead of diffing against all of main (slice 127)
+- `src/squadron/review/runner.py` — absorbed into `ClaudeSDKAgent.handle_message()`
 
 ## [0.2.6] - 20260325
 

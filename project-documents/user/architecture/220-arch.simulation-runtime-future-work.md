@@ -6,7 +6,7 @@ archIndex: 220
 component: simulation-runtime-future-work
 dateCreated: 20260322
 dateUpdated: 20260406
-status: future_work
+status: not_started
 ---
 
 # Architecture: Simulation Runtime (Future Work)

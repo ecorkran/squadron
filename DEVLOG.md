@@ -12,6 +12,17 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260408 (session 2)
+
+**v0.3.3 release — merge, tag, PyPI publish**
+
+- Caught that dispatch fix landed on `test-161-pipeline` instead of `161`; cherry-picked `07881d5` → `210950d`
+- Bumped version 0.3.2 → 0.3.3, merged `161-slice.summary-step-with-emit-destinations` → main, tagged `v0.3.3`
+- CI: both push and tag runs triggered; `publish` job succeeded; `squadron-ai==0.3.3` live on PyPI
+- Verified full pipeline smoke test end-to-end (design → tasks → summary:rotate → design again) on separate branch; discarded test branch
+- CHANGELOG restructured: collapsed duplicate `[Unreleased]` sections into proper versioned entries; fixed orphaned `## [Unreleased]` mid-file (was 0.2.7-era content); made entries more concise for human readers
+- **Latent bug fixed:** `DispatchAction` — Claude CLI surfaces API errors (e.g. 500) as assistant text with `"API Error:"` prefix; dispatch was returning `success=True`, allowing review/checkpoint to run against a non-existent output file. Added `_check_cli_error()` detection in both session and agent paths.
+
 ## 20260408
 
 ### Slice 161: Summary Step with Emit Destinations — Complete
