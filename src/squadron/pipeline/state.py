@@ -97,8 +97,9 @@ class CheckpointState(BaseModel):
 class CompactSummary(BaseModel):
     """A persisted compact summary captured by a compact step.
 
-    Keyed in ``RunState.compact_summaries`` by ``"{source_step_index}:{source_step_name}"``.
-    Slice 159 will extend this key with a branch suffix for fan-out branches.
+    Keyed in ``RunState.compact_summaries`` by a string of the form
+    ``"{source_step_index}:{source_step_name}"``. Slice 159 will extend
+    this key with a branch suffix for fan-out branches.
     """
 
     key: str
