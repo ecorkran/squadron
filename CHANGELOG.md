@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- SDK pipeline sessions now default to the Claude Code system prompt preset
+  (`system_prompt={"type": "preset", "preset": "claude_code"}`) instead of
+  the Agent SDK's minimal tool-only prompt. All prior SDK pipeline dispatches
+  (design, tasks, implement, compact, commit, devlog) had been running without
+  the Claude Code persona, coding conventions, or response-style guidance.
+
 ### Added
 - SDK session management and compaction (slice 158)
   - `SDKExecutionSession.compact()` session-rotate compaction: optionally switches
@@ -27,6 +34,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `RunState.active_compact_summary_for_resume()` lookup helper
   - Compact step/action gain optional `model` field for cost-controlled
     summarization
+  - `minimal-sdk` compaction template produces a standalone third-person
+    summary suitable for verbatim injection into a fresh session
+  - `frame_summary_for_seed()` wraps seed injections with explicit
+    "historical reference only, do not acknowledge" framing — used by
+    both `compact()` and `seed_context()`
   - Executor seeds the SDK session from the most recent applicable compact
     summary on resume before the first action runs
   - `session_id` field included in translated `ResultMessage` metadata

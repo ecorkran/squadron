@@ -244,9 +244,14 @@ async def _run_pipeline_sdk(
     # Permission mode must be set at session start; the SDK rejects runtime
     # set_permission_mode("bypassPermissions") calls (since claude-agent-sdk
     # ~Apr 2026). bypassPermissions matches the prior runtime behavior.
+    # Default to the Claude Code system prompt preset so SDK dispatches get the
+    # full Claude Code persona (coding conventions, response style, project
+    # context), not the Agent SDK's minimal tool-only prompt. See
+    # platform.claude.com/docs/en/agent-sdk/modifying-system-prompts.
     options = claude_agent_sdk.ClaudeAgentOptions(
         cwd=str(Path.cwd()),
         permission_mode="bypassPermissions",
+        system_prompt={"type": "preset", "preset": "claude_code"},
     )
     client = claude_agent_sdk.ClaudeSDKClient(options=options)
     session = SDKExecutionSession(client=client, options=options)

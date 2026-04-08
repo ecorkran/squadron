@@ -343,9 +343,11 @@ class TestCompactSessionRotate:
         with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
             result = await session.compact(instructions="Keep X")
 
+        from squadron.pipeline.sdk_session import frame_summary_for_seed
+
         assert result == "SUMMARY TEXT"
         old.query.assert_called_once_with("Keep X")
-        new.query.assert_called_once_with("SUMMARY TEXT")
+        new.query.assert_called_once_with(frame_summary_for_seed("SUMMARY TEXT"))
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +360,8 @@ async def test_seed_context_calls_dispatch_once() -> None:
     client = _make_client()
     client.receive_response.return_value = _result_message_gen("ack")
     session = _make_session(client)
+    from squadron.pipeline.sdk_session import frame_summary_for_seed
+
     result = await session.seed_context("prior summary")
     assert result is None
-    client.query.assert_called_once_with("prior summary")
+    client.query.assert_called_once_with(frame_summary_for_seed("prior summary"))

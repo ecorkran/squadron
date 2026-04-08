@@ -14,5 +14,5 @@ steps:
       checkpoint: on-fail
 
   - compact:
-      template: minimal
+      template: minimal-sdk
       model: haiku

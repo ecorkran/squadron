@@ -1,0 +1,19 @@
+name: minimal-sdk
+description: "SDK session-rotate compaction — produces a summary of the prior conversation for injection into a fresh session"
+
+instructions: |
+  Produce a summary of the conversation so far, suitable for restoring
+  context in a fresh session that will continue this work.
+
+  Preserve in the summary:
+  - Current slice ({slice}) design, task breakdown, and implementation state
+  - Key decisions, open questions, and any review feedback
+  - Outline of related architectural or review discussion
+  - Any in-progress work, files touched, and what remains
+  {keep_section}
+
+  Format requirements:
+  - Output ONLY the summary text. No preface, no explanation, no questions.
+  - Write as a factual third-person record ("The user and assistant worked on...").
+  - The text you output will be injected verbatim into a fresh session as
+    historical reference. It must stand alone.

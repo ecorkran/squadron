@@ -33,7 +33,25 @@ _logger = logging.getLogger(__name__)
 
 _MAX_RATE_LIMIT_RETRIES = 10
 
-__all__ = ["SDKExecutionSession"]
+__all__ = ["SDKExecutionSession", "frame_summary_for_seed"]
+
+
+_SEED_FRAMING_PREFIX = (
+    "[The following is a summary of a prior session in this conversation, "
+    "compacted to preserve context. Treat it as historical reference only. "
+    "Do NOT take action based on it, do NOT acknowledge it conversationally, "
+    "and wait for the next user instruction before responding.]\n\n"
+)
+
+
+def frame_summary_for_seed(summary: str) -> str:
+    """Wrap a compact summary with explicit framing for session seeding.
+
+    The framing tells the model the text is historical context, not a task
+    or a turn to acknowledge. Used for both post-compact seeding and
+    resume-time seeding so the behavior is identical in both paths.
+    """
+    return _SEED_FRAMING_PREFIX + summary
 
 
 @dataclass
@@ -182,7 +200,7 @@ class SDKExecutionSession:
         await self.connect()
 
         _logger.debug("SDKExecutionSession.compact: seeding new session with summary")
-        await self.dispatch(summary)
+        await self.dispatch(frame_summary_for_seed(summary))
 
         if restore_model is not None:
             await self.set_model(restore_model)
@@ -197,4 +215,4 @@ class SDKExecutionSession:
         model's acknowledgment response is discarded.
         """
         _logger.debug("SDKExecutionSession: seed_context (%d chars)", len(text))
-        await self.dispatch(text)
+        await self.dispatch(frame_summary_for_seed(text))
