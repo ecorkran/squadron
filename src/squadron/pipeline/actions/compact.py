@@ -156,6 +156,16 @@ class CompactAction:
                 )
             )
 
+        model = config.get("model")
+        if model is not None and not isinstance(model, str):
+            errors.append(
+                ValidationError(
+                    field="model",
+                    message="'model' must be a string",
+                    action_type=self.action_type,
+                )
+            )
+
         return errors
 
     async def execute(self, context: ActionContext) -> ActionResult:
@@ -185,17 +195,39 @@ class CompactAction:
             pipeline_params=context.params,
         )
 
-        # SDK mode: configure compaction on the session instead of calling CF.
+        # SDK mode: session-rotate compaction via the live SDK session.
         if context.sdk_session is not None:
-            context.sdk_session.configure_compaction(
-                instructions=instructions,
-                trigger_tokens=50_000,
-                pause_after=True,
-            )
+            model_raw = context.params.get("model")
+            model_id: str | None = None
+            if isinstance(model_raw, str) and model_raw:
+                model_id, _ = context.resolver.resolve(
+                    action_model=model_raw, step_model=None
+                )
+            restore_model = context.sdk_session.current_model
+            try:
+                summary = await context.sdk_session.compact(
+                    instructions=instructions,
+                    summary_model=model_id,
+                    restore_model=restore_model,
+                )
+            except Exception as exc:
+                return ActionResult(
+                    success=False,
+                    action_type=self.action_type,
+                    outputs={},
+                    error=str(exc),
+                )
             return ActionResult(
                 success=True,
                 action_type=self.action_type,
-                outputs={"compaction_configured": True, "instructions": instructions},
+                outputs={
+                    "summary": summary,
+                    "instructions": instructions,
+                    "source_step_index": context.step_index,
+                    "source_step_name": context.step_name,
+                    "summary_model": model_id,
+                },
+                metadata={"summary_model": model_id or ""},
             )
 
         cf_client: ContextForgeClient = context.cf_client  # type: ignore[assignment]

@@ -42,6 +42,16 @@ class CompactStepType:
                 )
             )
 
+        model = cfg.get("model")
+        if model is not None and not isinstance(model, str):
+            errors.append(
+                ValidationError(
+                    field="model",
+                    message="'model' must be a string",
+                    action_type=self.step_type,
+                )
+            )
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -54,6 +64,7 @@ class CompactStepType:
             action_config["summarize"] = cfg["summarize"]
         if "template" in cfg:
             action_config["template"] = cfg["template"]
+        action_config["model"] = cfg.get("model")
 
         return [("compact", action_config)]
 

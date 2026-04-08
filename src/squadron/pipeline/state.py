@@ -221,8 +221,33 @@ class StateManager:
 
         def _callback(step_result: StepResult) -> None:
             self._append_step(run_id, step_result)
+            self._maybe_record_compact_summaries(run_id, step_result)
 
         return _callback
+
+    def _maybe_record_compact_summaries(
+        self, run_id: str, step_result: StepResult
+    ) -> None:
+        """Inspect action results for compact summaries and persist them."""
+        for ar in step_result.action_results:
+            if ar.action_type != "compact" or not ar.success:
+                continue
+            outputs = ar.outputs
+            if "summary" not in outputs or "source_step_index" not in outputs:
+                continue
+            key = f"{outputs['source_step_index']}:{outputs['source_step_name']}"
+            summary_model = outputs.get("summary_model")
+            summary = CompactSummary(
+                key=key,
+                text=str(outputs["summary"]),
+                summary_model=(
+                    str(summary_model) if isinstance(summary_model, str) else None
+                ),
+                source_step_index=int(outputs["source_step_index"]),  # type: ignore[arg-type]
+                source_step_name=str(outputs["source_step_name"]),
+                created_at=datetime.now(UTC),
+            )
+            self.record_compact_summary(run_id, summary)
 
     def _append_step(self, run_id: str, step_result: StepResult) -> None:
         """Append a completed step to the persisted run state."""

@@ -457,6 +457,30 @@ async def execute_pipeline(
 
     skipping = start_from is not None
 
+    # Resume: seed SDK session with most recent applicable compact summary
+    if start_from is not None and sdk_session is not None:
+        try:
+            from squadron.pipeline.state import StateManager
+
+            _state_mgr = StateManager()
+            _run_state = _state_mgr.load(effective_run_id)
+            _start_idx = next(
+                (i for i, s in enumerate(definition.steps) if s.name == start_from),
+                None,
+            )
+            if _start_idx is not None:
+                _active = _run_state.active_compact_summary_for_resume(_start_idx)
+                if _active is not None:
+                    _logger.info(
+                        "executor: resuming at step %d; seeding session from "
+                        "compact summary %s",
+                        _start_idx,
+                        _active.key,
+                    )
+                    await sdk_session.seed_context(_active.text)
+        except FileNotFoundError:
+            _logger.debug("executor: no state file for resume seeding; skipping")
+
     for step_index, step in enumerate(definition.steps):
         # Handle start_from skip logic
         if skipping:

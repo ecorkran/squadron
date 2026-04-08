@@ -49,17 +49,33 @@ def test_expand_with_keep_and_summarize() -> None:
     assert len(actions) == 1
     assert actions[0] == (
         "compact",
-        {"keep": ["design", "tasks"], "summarize": True},
+        {"keep": ["design", "tasks"], "summarize": True, "model": None},
     )
 
 
 def test_expand_empty_config() -> None:
     actions = CompactStepType().expand(_make_config({}))
     assert len(actions) == 1
-    assert actions[0] == ("compact", {})
+    assert actions[0] == ("compact", {"model": None})
 
 
 def test_expand_with_template() -> None:
     actions = CompactStepType().expand(_make_config({"template": "custom"}))
     assert len(actions) == 1
-    assert actions[0] == ("compact", {"template": "custom"})
+    assert actions[0] == ("compact", {"template": "custom", "model": None})
+
+
+def test_validate_model_as_string() -> None:
+    errors = CompactStepType().validate(_make_config({"model": "haiku"}))
+    assert errors == []
+
+
+def test_validate_model_as_non_string() -> None:
+    errors = CompactStepType().validate(_make_config({"model": 42}))
+    assert len(errors) == 1
+    assert errors[0].field == "model"
+
+
+def test_expand_with_model() -> None:
+    actions = CompactStepType().expand(_make_config({"model": "haiku"}))
+    assert actions[0] == ("compact", {"model": "haiku"})
