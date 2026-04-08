@@ -369,8 +369,8 @@ status: not_started
     - `model` optional (string)
     - `emit` optional (delegated to `parse_emit_list` — catch
       `ValueError` and produce `ValidationError(field="emit", ...)`)
-  - `execute(context)` that delegates to the shared
-    `_execute_summary()` helper (added in T8).
+  - `execute(context)` — stub implementation: raises
+    `NotImplementedError` (wired to `_execute_summary()` in T9).
 - [ ] Register via `register_action(ActionType.SUMMARY, SummaryAction())`
   at module bottom.
 
@@ -463,6 +463,11 @@ status: not_started
   ONCE (verify `capture_summary` mock called exactly once, and
   verify `session.compact` is called by the rotate emit with the
   same summary text — not a fresh dispatch).
+- [ ] Test: extensibility — register a fake `EmitFn` via
+  `register_emit(EmitKind.STDOUT, fake_fn)`, run `_execute_summary`
+  with `emit=[stdout]`, verify `fake_fn` is called with the captured
+  summary text and the expected `EmitDestination`. Confirms the
+  registry contract works for third-party extensions.
 - [ ] Test: `summary_model_alias="haiku"` causes
   `resolver.resolve(action_model="haiku", step_model=None)` to be
   called and the resolved model ID is passed into `capture_summary`.
