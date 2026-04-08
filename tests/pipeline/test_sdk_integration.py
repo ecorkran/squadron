@@ -65,7 +65,7 @@ def _make_full_registry(
     *,
     dispatch_fn: AsyncMock | None = None,
     review_fn: AsyncMock | None = None,
-    compact_fn: AsyncMock | None = None,
+    summary_fn: AsyncMock | None = None,
     checkpoint_fn: AsyncMock | None = None,
 ) -> dict[str, object]:
     """Build a complete action registry with optional overrides."""
@@ -87,6 +87,14 @@ def _make_full_registry(
     registry: dict[str, object] = {
         "cf-op": _make("cf-op", _success("cf-op")),
         "commit": _make("commit", _success("commit")),
+        "compact": _make(
+            "compact",
+            ActionResult(
+                success=True,
+                action_type="compact",
+                outputs={"compaction_configured": True, "instructions": "Keep things"},
+            ),
+        ),
     }
 
     if dispatch_fn is not None:
@@ -110,15 +118,22 @@ def _make_full_registry(
     else:
         registry["review"] = _make("review", _pass_review())
 
-    if compact_fn is not None:
-        registry["compact"] = _make_with_fn("compact", compact_fn)
+    if summary_fn is not None:
+        registry["summary"] = _make_with_fn("summary", summary_fn)
     else:
-        registry["compact"] = _make(
-            "compact",
+        registry["summary"] = _make(
+            "summary",
             ActionResult(
                 success=True,
-                action_type="compact",
-                outputs={"compaction_configured": True, "instructions": "Keep things"},
+                action_type="summary",
+                outputs={
+                    "summary": "mock summary",
+                    "instructions": "Keep things",
+                    "source_step_index": 2,
+                    "source_step_name": "summary",
+                    "summary_model": None,
+                    "emit_results": [],
+                },
             ),
         )
 
@@ -188,18 +203,25 @@ async def test_sdk_session_propagated_to_all_dispatch_contexts() -> None:
 
 @pytest.mark.asyncio
 async def test_compact_step_receives_session() -> None:
-    """Compact action context has the SDK session."""
+    """Summary action context has the SDK session (test-pipeline uses summary:)."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
 
-    captured_compact: list[ActionContext] = []
+    captured_summary: list[ActionContext] = []
 
-    async def _capture_compact(ctx: ActionContext) -> ActionResult:
-        captured_compact.append(ctx)
+    async def _capture_summary(ctx: ActionContext) -> ActionResult:
+        captured_summary.append(ctx)
         return ActionResult(
             success=True,
-            action_type="compact",
-            outputs={"compaction_configured": True, "instructions": "Keep things"},
+            action_type="summary",
+            outputs={
+                "summary": "captured",
+                "instructions": "x",
+                "source_step_index": ctx.step_index,
+                "source_step_name": ctx.step_name,
+                "summary_model": None,
+                "emit_results": [],
+            },
         )
 
     result = await execute_pipeline(
@@ -208,12 +230,12 @@ async def test_compact_step_receives_session() -> None:
         resolver=_make_resolver(),
         cf_client=MagicMock(),
         sdk_session=session,
-        _action_registry=_make_full_registry(compact_fn=_capture_compact),
+        _action_registry=_make_full_registry(summary_fn=_capture_summary),
     )
 
     assert result.status == ExecutionStatus.COMPLETED
-    assert len(captured_compact) == 1
-    assert captured_compact[0].sdk_session is session
+    assert len(captured_summary) == 1
+    assert captured_summary[0].sdk_session is session
 
 
 @pytest.mark.asyncio

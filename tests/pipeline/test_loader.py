@@ -221,3 +221,46 @@ class TestDiscoverPipelinesNormalisation:
         names = [p.name for p in pipelines]
         assert "mypipeline" in names
         assert "MyPipeline" not in names
+
+
+# ---------------------------------------------------------------------------
+# T13 — validate_pipeline catches bad emit entries in summary steps
+# ---------------------------------------------------------------------------
+
+
+class TestValidatePipelineSummaryStep:
+    """validate_pipeline() propagates SummaryStepType.validate() errors."""
+
+    def _make_pipeline(self, step_cfg: dict[str, object]) -> PipelineDefinition:
+        from squadron.pipeline.models import PipelineDefinition, StepConfig
+
+        return PipelineDefinition(
+            name="test",
+            description="test",
+            params={},
+            steps=[
+                StepConfig(step_type="summary", name="summary-step", config=step_cfg)
+            ],
+        )
+
+    def test_unknown_emit_produces_validation_error(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        defn = self._make_pipeline({"template": "minimal-sdk", "emit": ["banana"]})
+        errors = validate_pipeline(defn)
+        fields = [e.field for e in errors]
+        assert "emit" in fields
+
+    def test_valid_summary_step_no_errors(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        defn = self._make_pipeline({"template": "minimal-sdk"})
+        errors = validate_pipeline(defn)
+        assert errors == []
+
+    def test_rotate_emit_validates_clean(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        defn = self._make_pipeline({"template": "minimal-sdk", "emit": ["rotate"]})
+        errors = validate_pipeline(defn)
+        assert errors == []

@@ -195,39 +195,24 @@ class CompactAction:
             pipeline_params=context.params,
         )
 
-        # SDK mode: session-rotate compaction via the live SDK session.
+        # SDK mode: delegate into the shared summary helper, which captures
+        # the summary once and emits to rotate.  action_type stays "compact" so
+        # StateManager._maybe_record_compact_summaries() continues to fire.
         if context.sdk_session is not None:
+            from squadron.pipeline.actions.summary import (
+                _execute_summary,  # pyright: ignore[reportPrivateUsage]
+            )
+            from squadron.pipeline.emit import EmitDestination, EmitKind
+
             model_raw = context.params.get("model")
-            model_id: str | None = None
-            if isinstance(model_raw, str) and model_raw:
-                model_id, _ = context.resolver.resolve(
-                    action_model=model_raw, step_model=None
-                )
-            restore_model = context.sdk_session.current_model
-            try:
-                summary = await context.sdk_session.compact(
-                    instructions=instructions,
-                    summary_model=model_id,
-                    restore_model=restore_model,
-                )
-            except Exception as exc:
-                return ActionResult(
-                    success=False,
-                    action_type=self.action_type,
-                    outputs={},
-                    error=str(exc),
-                )
-            return ActionResult(
-                success=True,
-                action_type=self.action_type,
-                outputs={
-                    "summary": summary,
-                    "instructions": instructions,
-                    "source_step_index": context.step_index,
-                    "source_step_name": context.step_name,
-                    "summary_model": model_id,
-                },
-                metadata={"summary_model": model_id or ""},
+            summary_model_alias = model_raw if isinstance(model_raw, str) else None
+
+            return await _execute_summary(
+                context=context,
+                instructions=instructions,
+                summary_model_alias=summary_model_alias,
+                emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
+                action_type=self.action_type,  # stays "compact"
             )
 
         cf_client: ContextForgeClient = context.cf_client  # type: ignore[assignment]

@@ -7,7 +7,7 @@ dependencies: [158-sdk-session-management-and-compaction]
 projectState: Slice 158 complete — SDK session-rotate compaction via SDKExecutionSession.compact() working end-to-end. compact action populates RunState.compact_summaries. claude_code system prompt preset wired in run.py. Response-text duplication bug fixed. PreCompact hook no longer installed by default. Test pipeline extended with tasks+post-compact-dispatch for smoke tests.
 dateCreated: 20260408
 dateUpdated: 20260408
-status: not_started
+status: in_progress
 ---
 
 # Tasks: Summary Step with Emit Destinations (Part 1 of 2)
@@ -76,17 +76,17 @@ status: not_started
 
 ### T1 — Add `pyperclip` runtime dependency
 
-- [ ] In `pyproject.toml`, add `pyperclip` to `[project] dependencies`
+- [x] In `pyproject.toml`, add `pyperclip` to `[project] dependencies`
   with a minimum version constraint matching the current stable
   release (`pyperclip>=1.8.2`).
-- [ ] Run `uv lock` (or `uv sync`) to refresh the lockfile.
-- [ ] Confirm `uv run python -c "import pyperclip"` succeeds.
-- [ ] Confirm `uv run ruff check src/ tests/` still passes after
+- [x] Run `uv lock` (or `uv sync`) to refresh the lockfile.
+- [x] Confirm `uv run python -c "import pyperclip"` succeeds.
+- [x] Confirm `uv run ruff check src/ tests/` still passes after
   the dependency update.
 
 **Test T1** — manual only
 
-- [ ] On the developer machine (macOS), confirm
+- [x] On the developer machine (macOS), confirm
   `uv run python -c "import pyperclip; pyperclip.copy('hi'); print(pyperclip.paste())"`
   prints `hi`. This is a smoke check of the dependency, not an
   automated test.
@@ -97,7 +97,7 @@ status: not_started
 
 ### T2 — Add `SDKExecutionSession.capture_summary()` method
 
-- [ ] In `src/squadron/pipeline/sdk_session.py`, add a new async
+- [x] In `src/squadron/pipeline/sdk_session.py`, add a new async
   method alongside the existing `compact()`:
   ```python
   async def capture_summary(
@@ -114,7 +114,7 @@ status: not_started
       the client or create a new session.
       """
   ```
-- [ ] Implementation:
+- [x] Implementation:
   1. If `summary_model` provided and differs from `current_model`,
      `await self.set_model(summary_model)`.
   2. Log DEBUG: `"SDKExecutionSession.capture_summary: dispatching instructions"`.
@@ -122,20 +122,20 @@ status: not_started
   4. If `restore_model` provided and differs from `current_model`
      after the dispatch, `await self.set_model(restore_model)`.
   5. Return `summary`.
-- [ ] Allow exceptions to propagate; callers handle them.
+- [x] Allow exceptions to propagate; callers handle them.
 
 **Test T2** — `tests/pipeline/test_sdk_session.py`
 
-- [ ] Add test class `TestCaptureSummary`.
-- [ ] Test: `capture_summary("instr")` with no model args dispatches
+- [x] Add test class `TestCaptureSummary`.
+- [x] Test: `capture_summary("instr")` with no model args dispatches
   once and returns the response text.
-- [ ] Test: `capture_summary("instr", summary_model="haiku-id")`
+- [x] Test: `capture_summary("instr", summary_model="haiku-id")`
   calls `set_model("haiku-id")` before dispatching.
-- [ ] Test: `capture_summary("instr", restore_model="sonnet-id")`
+- [x] Test: `capture_summary("instr", restore_model="sonnet-id")`
   calls `set_model("sonnet-id")` after dispatching.
-- [ ] Test: `capture_summary` does NOT call `disconnect()` and does
+- [x] Test: `capture_summary` does NOT call `disconnect()` and does
   NOT replace `self.client`.
-- [ ] Test: exception from `dispatch()` propagates unchanged.
+- [x] Test: exception from `dispatch()` propagates unchanged.
 
 **Commit:** `feat: add SDKExecutionSession.capture_summary() method`
 
@@ -143,7 +143,7 @@ status: not_started
 
 ### T3 — Extend `SDKExecutionSession.compact()` with optional `summary` parameter
 
-- [ ] In `sdk_session.py`, modify `compact()` signature:
+- [x] In `sdk_session.py`, modify `compact()` signature:
   ```python
   async def compact(
       self,
@@ -153,7 +153,7 @@ status: not_started
       summary: str | None = None,
   ) -> str:
   ```
-- [ ] Behavior change:
+- [x] Behavior change:
   - If `summary is None` (current slice 158 behavior): call
     `self.capture_summary(instructions, summary_model, restore_model=None)`
     to generate the summary, then proceed to disconnect/reconnect/seed.
@@ -162,23 +162,23 @@ status: not_started
     Proceed directly to disconnect → create new client → connect →
     seed with `frame_summary_for_seed(summary)` → restore_model if
     provided. Return the passed-in `summary` unchanged.
-- [ ] Ensure the existing compact action's path (called with no
+- [x] Ensure the existing compact action's path (called with no
   `summary=` kwarg) is byte-identical to slice 158 behavior.
-- [ ] Update the method's docstring to document the new parameter.
+- [x] Update the method's docstring to document the new parameter.
 
 **Test T3** — `tests/pipeline/test_sdk_session.py`
 
-- [ ] Update existing `TestCompactSessionRotate` tests to account
+- [x] Update existing `TestCompactSessionRotate` tests to account
   for the refactor (should be no behavior change — these must all
   still pass unchanged after T3).
-- [ ] Add test: `compact(instructions="x", summary="pre-made")`
+- [x] Add test: `compact(instructions="x", summary="pre-made")`
   does NOT call `client.query("x")` on the old client (capture is
   skipped), but DOES call `client.query(frame_summary_for_seed("pre-made"))`
   on the new client.
-- [ ] Add test: `compact(instructions="x", summary="pre-made",
+- [x] Add test: `compact(instructions="x", summary="pre-made",
   restore_model="sonnet-id")` calls `set_model("sonnet-id")` on the
   new client after seeding.
-- [ ] Add test: `compact(instructions="x", summary="pre-made")`
+- [x] Add test: `compact(instructions="x", summary="pre-made")`
   returns `"pre-made"` (unchanged).
 
 **Commit:** `feat: add summary= overload to SDKExecutionSession.compact()`
@@ -187,11 +187,11 @@ status: not_started
 
 ### T4 — Create emit registry module and types
 
-- [ ] Create `src/squadron/pipeline/emit.py`.
-- [ ] Define `EmitKind` as a `StrEnum` with members `STDOUT`,
+- [x] Create `src/squadron/pipeline/emit.py`.
+- [x] Define `EmitKind` as a `StrEnum` with members `STDOUT`,
   `FILE`, `CLIPBOARD`, `ROTATE` (values: `"stdout"`, `"file"`,
   `"clipboard"`, `"rotate"`).
-- [ ] Define `EmitDestination` as a frozen dataclass:
+- [x] Define `EmitDestination` as a frozen dataclass:
   ```python
   @dataclass(frozen=True)
   class EmitDestination:
@@ -204,7 +204,7 @@ status: not_started
               return f"file:{self.arg}"
           return self.kind.value
   ```
-- [ ] Define `EmitResult` as a frozen dataclass:
+- [x] Define `EmitResult` as a frozen dataclass:
   ```python
   @dataclass(frozen=True)
   class EmitResult:
@@ -212,7 +212,7 @@ status: not_started
       ok: bool
       detail: str
   ```
-- [ ] Define the registry:
+- [x] Define the registry:
   ```python
   EmitFn = Callable[
       [str, EmitDestination, "ActionContext"],
@@ -223,23 +223,23 @@ status: not_started
   def register_emit(kind: EmitKind, fn: EmitFn) -> None: ...
   def get_emit(kind: EmitKind) -> EmitFn: ...
   ```
-- [ ] Add `__all__` exporting `EmitKind`, `EmitDestination`,
+- [x] Add `__all__` exporting `EmitKind`, `EmitDestination`,
   `EmitResult`, `EmitFn`, `register_emit`, `get_emit`,
   `parse_emit_entry`, `parse_emit_list`.
-- [ ] Do NOT register destination functions yet — those land in
+- [x] Do NOT register destination functions yet — those land in
   T5. The registry exists but is empty until then.
 
 **Test T4** — `tests/pipeline/test_emit.py` (new file)
 
-- [ ] Test: `EmitKind` enum values are lowercase strings matching
+- [x] Test: `EmitKind` enum values are lowercase strings matching
   the YAML grammar.
-- [ ] Test: `EmitDestination(kind=EmitKind.FILE, arg="/tmp/x").display()`
+- [x] Test: `EmitDestination(kind=EmitKind.FILE, arg="/tmp/x").display()`
   returns `"file:/tmp/x"`.
-- [ ] Test: `EmitDestination(kind=EmitKind.STDOUT).display()`
+- [x] Test: `EmitDestination(kind=EmitKind.STDOUT).display()`
   returns `"stdout"`.
-- [ ] Test: `register_emit(EmitKind.STDOUT, fake_fn)` then
+- [x] Test: `register_emit(EmitKind.STDOUT, fake_fn)` then
   `get_emit(EmitKind.STDOUT)` returns `fake_fn`.
-- [ ] Test: `get_emit(EmitKind.CLIPBOARD)` on an empty registry
+- [x] Test: `get_emit(EmitKind.CLIPBOARD)` on an empty registry
   raises `KeyError`.
 
 **Commit:** `feat: add emit destination registry and types`
@@ -248,7 +248,7 @@ status: not_started
 
 ### T5 — Implement built-in emit destinations
 
-- [ ] In `src/squadron/pipeline/emit.py`, implement the four
+- [x] In `src/squadron/pipeline/emit.py`, implement the four
   built-in emit functions and register them at module import time:
   - `_emit_stdout(text, dest, ctx)` — prints the text via
     `print()` (not logger — must survive `--quiet`), returns
@@ -272,34 +272,34 @@ status: not_started
     restore_model=ctx.sdk_session.current_model)` and returns
     `EmitResult(ok=True, detail="session rotated")`. Exceptions
     from `compact()` produce `EmitResult(ok=False, detail=str(exc))`.
-- [ ] Register all four via `register_emit(EmitKind.X, _emit_x)`
+- [x] Register all four via `register_emit(EmitKind.X, _emit_x)`
   at module scope (executed on import).
-- [ ] Import `pyperclip` lazily inside `_emit_clipboard` so module
+- [x] Import `pyperclip` lazily inside `_emit_clipboard` so module
   import does not fail if pyperclip's platform probe fails.
   (Wrap `import pyperclip` in the function body, not at module top.)
 
 **Test T5** — `tests/pipeline/test_emit.py`
 
-- [ ] Test: `_emit_stdout("hello", ...)` prints "hello" to stdout
+- [x] Test: `_emit_stdout("hello", ...)` prints "hello" to stdout
   (use pytest's `capsys` fixture) and returns `ok=True`.
-- [ ] Test: `_emit_file("payload", EmitDestination(FILE, "/tmp/a/b.md"), ctx)`
+- [x] Test: `_emit_file("payload", EmitDestination(FILE, "/tmp/a/b.md"), ctx)`
   with `tmp_path` (override `ctx.cwd`) writes the file, creates
   parent dirs, returns `ok=True` with a byte count in detail.
-- [ ] Test: `_emit_file` with a relative path resolves relative to
+- [x] Test: `_emit_file` with a relative path resolves relative to
   `ctx.cwd`.
-- [ ] Test: `_emit_file` on a read-only directory returns
+- [x] Test: `_emit_file` on a read-only directory returns
   `ok=False` with an error message (use `tmp_path` with
   `chmod(0o555)`; skip on Windows if needed).
-- [ ] Test: `_emit_clipboard("x", ...)` with `pyperclip.copy`
+- [x] Test: `_emit_clipboard("x", ...)` with `pyperclip.copy`
   monkeypatched to succeed returns `ok=True`.
-- [ ] Test: `_emit_clipboard` with `pyperclip.copy` monkeypatched
+- [x] Test: `_emit_clipboard` with `pyperclip.copy` monkeypatched
   to raise `pyperclip.PyperclipException` returns `ok=False`.
-- [ ] Test: `_emit_rotate("summary text", ...)` with
+- [x] Test: `_emit_rotate("summary text", ...)` with
   `ctx.sdk_session = None` returns `ok=False` and does NOT raise.
-- [ ] Test: `_emit_rotate` with a mocked session calls
+- [x] Test: `_emit_rotate` with a mocked session calls
   `session.compact(instructions="", summary="summary text",
   restore_model=...)` once and returns `ok=True`.
-- [ ] Test: `_emit_rotate` propagates the captured summary to
+- [x] Test: `_emit_rotate` propagates the captured summary to
   `compact()` without modification (verify via the mock's
   `call_args.kwargs["summary"]`).
 
@@ -309,7 +309,7 @@ status: not_started
 
 ### T6 — Add `parse_emit_entry()` and `parse_emit_list()` helpers
 
-- [ ] In `emit.py`, add:
+- [x] In `emit.py`, add:
   ```python
   def parse_emit_entry(entry: object) -> EmitDestination:
       """Parse a single YAML emit entry into an EmitDestination.
@@ -330,27 +330,27 @@ status: not_started
       - anything else -> ValueError
       """
   ```
-- [ ] Default (None/missing) returns `[EmitDestination(kind=EmitKind.STDOUT)]`.
-- [ ] Empty list is an error: `ValueError("emit list cannot be empty")`.
-- [ ] Unknown kind is an error: `ValueError(f"unknown emit destination: {name!r}")`.
-- [ ] `file:` with missing/empty `arg` is an error.
+- [x] Default (None/missing) returns `[EmitDestination(kind=EmitKind.STDOUT)]`.
+- [x] Empty list is an error: `ValueError("emit list cannot be empty")`.
+- [x] Unknown kind is an error: `ValueError(f"unknown emit destination: {name!r}")`.
+- [x] `file:` with missing/empty `arg` is an error.
 
 **Test T6** — `tests/pipeline/test_emit.py`
 
-- [ ] Test: `parse_emit_list(None)` returns
+- [x] Test: `parse_emit_list(None)` returns
   `[EmitDestination(EmitKind.STDOUT)]`.
-- [ ] Test: `parse_emit_list(["stdout", "clipboard"])` returns
+- [x] Test: `parse_emit_list(["stdout", "clipboard"])` returns
   two EmitDestinations with matching kinds.
-- [ ] Test: `parse_emit_list([{"file": "/tmp/x.md"}])` returns one
+- [x] Test: `parse_emit_list([{"file": "/tmp/x.md"}])` returns one
   EmitDestination with kind=FILE and arg="/tmp/x.md".
-- [ ] Test: `parse_emit_list(["rotate", {"file": "/tmp/y"}])`
+- [x] Test: `parse_emit_list(["rotate", {"file": "/tmp/y"}])`
   returns two in declared order.
-- [ ] Test: `parse_emit_list([])` raises ValueError.
-- [ ] Test: `parse_emit_list(["banana"])` raises ValueError with
+- [x] Test: `parse_emit_list([])` raises ValueError.
+- [x] Test: `parse_emit_list(["banana"])` raises ValueError with
   `"unknown emit destination"` in the message.
-- [ ] Test: `parse_emit_list([{"file": ""}])` raises ValueError.
-- [ ] Test: `parse_emit_list([{"file": 42}])` raises ValueError.
-- [ ] Test: `parse_emit_list("stdout")` (not a list) raises
+- [x] Test: `parse_emit_list([{"file": ""}])` raises ValueError.
+- [x] Test: `parse_emit_list([{"file": 42}])` raises ValueError.
+- [x] Test: `parse_emit_list("stdout")` (not a list) raises
   ValueError.
 
 **Commit:** `feat: add emit list parser`
@@ -359,10 +359,10 @@ status: not_started
 
 ### T7 — Add `ActionType.SUMMARY` and create summary action module
 
-- [ ] In `src/squadron/pipeline/actions/__init__.py`, add
+- [x] In `src/squadron/pipeline/actions/__init__.py`, add
   `SUMMARY = "summary"` to the `ActionType` StrEnum.
-- [ ] Create `src/squadron/pipeline/actions/summary.py`.
-- [ ] Define `SummaryAction` implementing the action protocol with:
+- [x] Create `src/squadron/pipeline/actions/summary.py`.
+- [x] Define `SummaryAction` implementing the action protocol with:
   - `action_type` property returning `ActionType.SUMMARY`.
   - `validate(config)` that checks:
     - `template` optional (string; default handled at execute time)
@@ -371,20 +371,20 @@ status: not_started
       `ValueError` and produce `ValidationError(field="emit", ...)`)
   - `execute(context)` — stub implementation: raises
     `NotImplementedError` (wired to `_execute_summary()` in T9).
-- [ ] Register via `register_action(ActionType.SUMMARY, SummaryAction())`
+- [x] Register via `register_action(ActionType.SUMMARY, SummaryAction())`
   at module bottom.
 
 **Test T7** — `tests/pipeline/actions/test_summary.py` (new file)
 
-- [ ] Test: `SummaryAction().action_type == "summary"`.
-- [ ] Test: `validate({"template": "minimal-sdk"})` returns no errors.
-- [ ] Test: `validate({"template": 42})` returns one error on field
+- [x] Test: `SummaryAction().action_type == "summary"`.
+- [x] Test: `validate({"template": "minimal-sdk"})` returns no errors.
+- [x] Test: `validate({"template": 42})` returns one error on field
   `"template"`.
-- [ ] Test: `validate({"model": 42})` returns one error on field
+- [x] Test: `validate({"model": 42})` returns one error on field
   `"model"`.
-- [ ] Test: `validate({"emit": ["banana"]})` returns one error on
+- [x] Test: `validate({"emit": ["banana"]})` returns one error on
   field `"emit"` with a useful message.
-- [ ] Test: `validate({"emit": [{"file": "/tmp/x"}]})` returns no
+- [x] Test: `validate({"emit": [{"file": "/tmp/x"}]})` returns no
   errors.
 
 **Commit:** `feat: add SummaryAction with config validation`
@@ -393,7 +393,7 @@ status: not_started
 
 ### T8 — Implement `_execute_summary()` shared helper
 
-- [ ] In `src/squadron/pipeline/actions/summary.py`, implement the
+- [x] In `src/squadron/pipeline/actions/summary.py`, implement the
   shared helper:
   ```python
   async def _execute_summary(
@@ -406,7 +406,7 @@ status: not_started
   ) -> ActionResult:
       ...
   ```
-- [ ] Flow:
+- [x] Flow:
   1. If `context.sdk_session is None`, return
      `ActionResult(success=False, action_type=action_type,
      outputs={}, error="summary action requires SDK execution mode")`.
@@ -434,44 +434,44 @@ status: not_started
        "source_step_name": context.step_name,
        "summary_model": model_id,
      }, metadata={"summary_model": model_id or ""})`.
-- [ ] On exception from `capture_summary()`, return
+- [x] On exception from `capture_summary()`, return
   `ActionResult(success=False, action_type=action_type, outputs={},
   error=str(exc))`.
-- [ ] Non-rotate emit failures log a WARNING via the module logger
+- [x] Non-rotate emit failures log a WARNING via the module logger
   but do NOT affect the action's success status.
 
 **Test T8** — `tests/pipeline/actions/test_summary.py`
 
-- [ ] Test: execute with `emit=[stdout]` calls `capture_summary`
+- [x] Test: execute with `emit=[stdout]` calls `capture_summary`
   once, then `_emit_stdout`, returns success with `emit_results`
   list of length 1 and `ok=True`.
-- [ ] Test: execute with `emit=[stdout, file, clipboard]` calls
+- [x] Test: execute with `emit=[stdout, file, clipboard]` calls
   three emits in order and the returned `emit_results` preserves
   order.
-- [ ] Test: execute with `ctx.sdk_session=None` returns
+- [x] Test: execute with `ctx.sdk_session=None` returns
   `success=False` with a clear error message and does NOT call
   any emit.
-- [ ] Test: execute when `capture_summary` raises returns
+- [x] Test: execute when `capture_summary` raises returns
   `success=False` with the exception message.
-- [ ] Test: execute with a non-rotate emit that returns
+- [x] Test: execute with a non-rotate emit that returns
   `ok=False` (mock the emit fn) still returns `success=True`;
   the failing emit is recorded in `emit_results` with `ok=False`.
-- [ ] Test: execute with `emit=[rotate]` whose rotate emit returns
+- [x] Test: execute with `emit=[rotate]` whose rotate emit returns
   `ok=False` returns `success=False` with the rotate error as the
   action's error.
-- [ ] Test: execute with `emit=[stdout, rotate]` captures summary
+- [x] Test: execute with `emit=[stdout, rotate]` captures summary
   ONCE (verify `capture_summary` mock called exactly once, and
   verify `session.compact` is called by the rotate emit with the
   same summary text — not a fresh dispatch).
-- [ ] Test: extensibility — register a fake `EmitFn` via
+- [x] Test: extensibility — register a fake `EmitFn` via
   `register_emit(EmitKind.STDOUT, fake_fn)`, run `_execute_summary`
   with `emit=[stdout]`, verify `fake_fn` is called with the captured
   summary text and the expected `EmitDestination`. Confirms the
   registry contract works for third-party extensions.
-- [ ] Test: `summary_model_alias="haiku"` causes
+- [x] Test: `summary_model_alias="haiku"` causes
   `resolver.resolve(action_model="haiku", step_model=None)` to be
   called and the resolved model ID is passed into `capture_summary`.
-- [ ] Test: outputs include `source_step_index`, `source_step_name`,
+- [x] Test: outputs include `source_step_index`, `source_step_name`,
   and `summary_model` matching the context and resolved model.
 
 **Commit:** `feat: implement _execute_summary shared helper`
@@ -480,7 +480,7 @@ status: not_started
 
 ### T9 — Wire `SummaryAction.execute()` to `_execute_summary()`
 
-- [ ] In `SummaryAction.execute()`:
+- [x] In `SummaryAction.execute()`:
   1. Extract `template_name = str(context.params.get("template", "default"))`.
   2. Try to load the template via `load_compaction_template(template_name)`;
      on `FileNotFoundError` return
@@ -501,16 +501,16 @@ status: not_started
 
 **Test T9** — `tests/pipeline/actions/test_summary.py`
 
-- [ ] Test: execute with `params={"template": "minimal-sdk"}`
+- [x] Test: execute with `params={"template": "minimal-sdk"}`
   loads the real `minimal-sdk.yaml` template from
   `src/squadron/data/compaction/`, renders instructions, and
   passes them through to `capture_summary`. (Use a real template,
   mock the SDK session.)
-- [ ] Test: execute with `params={"template": "does-not-exist"}`
+- [x] Test: execute with `params={"template": "does-not-exist"}`
   returns `success=False` with a file-not-found error.
-- [ ] Test: execute with no `emit` in params uses the default
+- [x] Test: execute with no `emit` in params uses the default
   `[stdout]` and emits once.
-- [ ] Test: execute with `params={"emit": ["banana"]}` returns
+- [x] Test: execute with `params={"emit": ["banana"]}` returns
   `success=False` with a parse error (not `ValidationError` — the
   parse happens at execute time for dynamic emits).
 

@@ -21,9 +21,12 @@ steps:
         model: minimax
       checkpoint: on-fail
 
-  - compact:
+  # summary with emit:rotate is equivalent to compact — preferred for new pipelines.
+  # Use compact: when the emit destinations don't matter (backward-compatible alias).
+  - summary:
       template: minimal-sdk
       model: haiku
+      emit: [rotate]
 
   - design:        # same slice, should now "remember" prior design via summary
       phase: 4
