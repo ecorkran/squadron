@@ -36,10 +36,11 @@ __all__ = [
     "RunState",
     "StepState",
     "CheckpointState",
+    "CompactSummary",
     "SchemaVersionError",
 ]
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +94,21 @@ class CheckpointState(BaseModel):
     paused_at: datetime
 
 
+class CompactSummary(BaseModel):
+    """A persisted compact summary captured by a compact step.
+
+    Keyed in ``RunState.compact_summaries`` by ``"{source_step_index}:{source_step_name}"``.
+    Slice 159 will extend this key with a branch suffix for fan-out branches.
+    """
+
+    key: str
+    text: str
+    summary_model: str | None
+    source_step_index: int
+    source_step_name: str
+    created_at: datetime
+
+
 class RunState(BaseModel):
     """Complete persisted state of a pipeline run."""
 
@@ -107,6 +123,25 @@ class RunState(BaseModel):
     current_step: str | None = None
     completed_steps: list[StepState] = []
     checkpoint: CheckpointState | None = None
+    compact_summaries: dict[str, CompactSummary] = {}
+
+    def active_compact_summary_for_resume(
+        self, resume_step_index: int
+    ) -> CompactSummary | None:
+        """Return the most recent applicable compact summary for resume.
+
+        Returns the summary whose ``source_step_index`` is the highest value
+        strictly less than ``resume_step_index``, or ``None`` if no such
+        summary exists.
+        """
+        applicable = [
+            s
+            for s in self.compact_summaries.values()
+            if s.source_step_index < resume_step_index
+        ]
+        if not applicable:
+            return None
+        return max(applicable, key=lambda s: s.source_step_index)
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +267,20 @@ class StateManager:
                 paused_at=now,
             )
 
+        self._write_atomic(
+            self._state_path(run_id),
+            json.dumps(state.model_dump(mode="json"), indent=2),
+        )
+
+    def record_compact_summary(self, run_id: str, summary: CompactSummary) -> None:
+        """Add or replace a compact summary in the run state and persist.
+
+        Keyed by ``summary.key``; an existing entry with the same key is
+        overwritten.
+        """
+        state = self.load(run_id)
+        state.compact_summaries[summary.key] = summary
+        state.updated_at = datetime.now(UTC)
         self._write_atomic(
             self._state_path(run_id),
             json.dumps(state.model_dump(mode="json"), indent=2),

@@ -18,6 +18,7 @@ from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResu
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import (
     CheckpointState,
+    CompactSummary,
     ExecutionMode,
     RunState,
     SchemaVersionError,
@@ -99,7 +100,7 @@ class TestPydanticModels:
     def test_run_state_missing_execution_mode_defaults_to_sdk(self) -> None:
         now = datetime.now(UTC)
         data: dict[str, object] = {
-            "schema_version": 2,
+            "schema_version": 3,
             "run_id": "run-x",
             "pipeline": "pipe",
             "params": {},
@@ -789,3 +790,151 @@ class TestRecordStepDone:
         mgr = StateManager(runs_dir=tmp_path)
         with pytest.raises(FileNotFoundError):
             mgr.record_step_done("nonexistent-run", "s", "t")
+
+
+# ---------------------------------------------------------------------------
+# T2/T3: CompactSummary and schema v3
+# ---------------------------------------------------------------------------
+
+
+def _make_summary(
+    key: str = "3:compact",
+    text: str = "summary text",
+    summary_model: str | None = "haiku-id",
+    source_step_index: int = 3,
+    source_step_name: str = "compact",
+) -> CompactSummary:
+    return CompactSummary(
+        key=key,
+        text=text,
+        summary_model=summary_model,
+        source_step_index=source_step_index,
+        source_step_name=source_step_name,
+        created_at=datetime.now(UTC),
+    )
+
+
+class TestCompactSummary:
+    def test_round_trip(self) -> None:
+        s = _make_summary()
+        restored = CompactSummary.model_validate(s.model_dump(mode="json"))
+        assert restored == s
+
+    def test_run_state_empty_compact_summaries_default(self) -> None:
+        now = datetime.now(UTC)
+        state = RunState(
+            run_id="r",
+            pipeline="p",
+            params={},
+            started_at=now,
+            updated_at=now,
+            status="running",
+        )
+        assert state.compact_summaries == {}
+
+    def test_run_state_with_compact_summaries_round_trip(self) -> None:
+        now = datetime.now(UTC)
+        s = _make_summary()
+        state = RunState(
+            run_id="r",
+            pipeline="p",
+            params={},
+            started_at=now,
+            updated_at=now,
+            status="running",
+            compact_summaries={s.key: s},
+        )
+        restored = RunState.model_validate(state.model_dump(mode="json"))
+        assert restored.compact_summaries == {s.key: s}
+
+    def test_load_v2_file_raises_schema_version_error(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        bad = tmp_path / "run-v2.json"
+        bad.write_text(
+            json.dumps({"schema_version": 2, "run_id": "run-v2"}), encoding="utf-8"
+        )
+        with pytest.raises(SchemaVersionError):
+            mgr.load("run-v2")
+
+    def test_load_v3_file_without_compact_summaries_defaults_empty(
+        self, tmp_path: Path
+    ) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        now = datetime.now(UTC)
+        path = tmp_path / "run-v3.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 3,
+                    "run_id": "run-v3",
+                    "pipeline": "p",
+                    "params": {},
+                    "started_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                    "status": "running",
+                }
+            ),
+            encoding="utf-8",
+        )
+        state = mgr.load("run-v3")
+        assert state.compact_summaries == {}
+
+
+class TestRecordCompactSummary:
+    def test_adds_summary(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("pipe", {})
+        s = _make_summary()
+        mgr.record_compact_summary(run_id, s)
+        reloaded = mgr.load(run_id)
+        assert reloaded.compact_summaries == {s.key: s}
+
+    def test_overwrites_same_key(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("pipe", {})
+        first = _make_summary(text="first")
+        second = _make_summary(text="second")
+        mgr.record_compact_summary(run_id, first)
+        mgr.record_compact_summary(run_id, second)
+        reloaded = mgr.load(run_id)
+        assert reloaded.compact_summaries[first.key].text == "second"
+
+
+class TestActiveCompactSummaryForResume:
+    def _state_with(self, summaries: list[CompactSummary]) -> RunState:
+        now = datetime.now(UTC)
+        return RunState(
+            run_id="r",
+            pipeline="p",
+            params={},
+            started_at=now,
+            updated_at=now,
+            status="running",
+            compact_summaries={s.key: s for s in summaries},
+        )
+
+    def test_empty_returns_none(self) -> None:
+        state = self._state_with([])
+        assert state.active_compact_summary_for_resume(5) is None
+
+    def test_single_summary_below_resume_returns_it(self) -> None:
+        s = _make_summary(source_step_index=3)
+        state = self._state_with([s])
+        assert state.active_compact_summary_for_resume(5) == s
+
+    def test_strict_less_than(self) -> None:
+        s = _make_summary(source_step_index=3)
+        state = self._state_with([s])
+        assert state.active_compact_summary_for_resume(3) is None
+
+    def test_picks_highest_applicable(self) -> None:
+        s2 = _make_summary(key="2:a", source_step_index=2, source_step_name="a")
+        s5 = _make_summary(key="5:b", source_step_index=5, source_step_name="b")
+        state = self._state_with([s2, s5])
+        assert state.active_compact_summary_for_resume(7) == s5
+
+    def test_skips_summaries_at_or_beyond_resume(self) -> None:
+        s2 = _make_summary(key="2:a", source_step_index=2, source_step_name="a")
+        s5 = _make_summary(key="5:b", source_step_index=5, source_step_name="b")
+        state = self._state_with([s2, s5])
+        assert state.active_compact_summary_for_resume(4) == s2
