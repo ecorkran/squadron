@@ -56,10 +56,15 @@ class SDKExecutionSession:
     _compaction_config: dict[str, object] | None = field(default=None, repr=False)
 
     async def connect(self) -> None:
-        """Connect the underlying SDK client and enable tool use."""
+        """Connect the underlying SDK client.
+
+        Permission mode is set at session start via ``ClaudeAgentOptions``
+        when the client is constructed (see ``run.py``). The SDK rejects
+        runtime ``set_permission_mode("bypassPermissions")`` calls, so we
+        do not attempt one here.
+        """
         await self.client.connect()
-        await self.client.set_permission_mode("bypassPermissions")
-        _logger.debug("SDKExecutionSession: connected, permissions set to bypass")
+        _logger.debug("SDKExecutionSession: connected")
 
     async def disconnect(self) -> None:
         """Disconnect the SDK client. Best-effort — ignores errors."""

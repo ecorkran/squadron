@@ -48,7 +48,9 @@ class TestHiddenRegistration:
         result = runner.invoke(app, ["_precompact-hook"])
         assert result.exit_code == 0
         payload = json.loads(result.output.strip())
-        assert payload["hookSpecificOutput"]["hookEventName"] == "PreCompact"
+        # PreCompact uses top-level systemMessage, NOT hookSpecificOutput
+        assert "systemMessage" in payload
+        assert isinstance(payload["systemMessage"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +157,7 @@ class TestGatherParams:
 
 
 class TestPrecompactHookCommand:
-    def test_renders_params_into_additional_context(
+    def test_renders_params_into_system_message(
         self, tmp_path: Path, patch_config_paths: dict[str, Path]
     ) -> None:
         with (
@@ -173,10 +175,10 @@ class TestPrecompactHookCommand:
             result = runner.invoke(app, ["_precompact-hook"])
         assert result.exit_code == 0
         payload = json.loads(result.output.strip())
-        assert payload["hookSpecificOutput"]["hookEventName"] == "PreCompact"
-        assert payload["hookSpecificOutput"]["additionalContext"] == "Keep slice 157."
+        # PreCompact uses top-level systemMessage
+        assert payload == {"systemMessage": "Keep slice 157."}
 
-    def test_unexpected_error_yields_empty_context_exit_zero(
+    def test_unexpected_error_yields_empty_system_message_exit_zero(
         self, tmp_path: Path, patch_config_paths: dict[str, Path]
     ) -> None:
         with patch.object(
@@ -187,8 +189,7 @@ class TestPrecompactHookCommand:
             result = runner.invoke(app, ["_precompact-hook"])
         assert result.exit_code == 0
         payload = json.loads(result.output.strip())
-        assert payload["hookSpecificOutput"]["additionalContext"] == ""
-        assert payload["hookSpecificOutput"]["hookEventName"] == "PreCompact"
+        assert payload == {"systemMessage": ""}
 
     def test_output_is_single_line_json(
         self, tmp_path: Path, patch_config_paths: dict[str, Path]
@@ -217,4 +218,4 @@ class TestPrecompactHookCommand:
             precompact_hook(cwd=".")
         captured = capsys.readouterr()
         payload = json.loads(captured.out.strip())
-        assert payload["hookSpecificOutput"]["additionalContext"] == "x"
+        assert payload == {"systemMessage": "x"}
