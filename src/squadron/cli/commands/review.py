@@ -167,6 +167,22 @@ def _resolve_verbosity(verbose: int) -> int:
     return 0
 
 
+def _aggregate_verdicts(results: list[object]) -> Verdict:
+    """Return the worst verdict across a list of ReviewResults.
+
+    Ordering: FAIL > CONCERNS > PASS. An empty list returns PASS.
+    Used when a single review command produces multiple results
+    (e.g. split task files reviewed part-by-part).
+    """
+    worst = Verdict.PASS
+    rank = {Verdict.PASS: 0, Verdict.CONCERNS: 1, Verdict.FAIL: 2}
+    for result in results:
+        verdict = getattr(result, "verdict", Verdict.PASS)
+        if rank[verdict] > rank[worst]:
+            worst = verdict
+    return worst
+
+
 def _resolve_rules_content(rules_path: str | None) -> str | None:
     """Read rules file content if a path is provided."""
     if not rules_path:
@@ -592,8 +608,16 @@ def review_tasks(
         None, "--rules-dir", help="Rules directory override"
     ),
 ) -> None:
-    """Run a task plan review."""
+    """Run a task plan review.
+
+    When the slice's task breakdown is split across multiple files
+    (e.g. ``161-tasks.name-1.md`` / ``161-tasks.name-2.md``), each
+    file is reviewed separately against the same parent design and
+    persisted under its own ``part-N`` suffix. The command's exit
+    code reflects the worst verdict across all parts.
+    """
     slice_info: SliceInfo | None = None
+    task_file_paths: list[str] = []
     if input_file.isdigit():
         slice_info = _resolve_slice_number(input_file)
         if not slice_info["task_files"]:
@@ -602,8 +626,12 @@ def review_tasks(
         if not slice_info["design_file"]:
             rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
             raise typer.Exit(code=1)
-        input_file = f"project-documents/user/tasks/{slice_info['task_files'][0]}"
+        task_file_paths = [
+            f"project-documents/user/tasks/{f}" for f in slice_info["task_files"]
+        ]
         against = slice_info["design_file"]
+    else:
+        task_file_paths = [input_file]
 
     if not against:
         rprint("[red]Error: --against is required when not using a slice number.[/red]")
@@ -615,29 +643,46 @@ def review_tasks(
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
     resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
-    inputs = {
-        "input": input_file,
-        "against": against,
-        "cwd": resolved_cwd,
-    }
-    result = _run_review_command(
-        "tasks",
-        inputs,
-        output,
-        output_path,
-        verbosity,
-        model_flag=model,
-        profile_flag=profile,
-        rules_dir=resolved_rules_dir,
-    )
 
-    if slice_info and not no_save:
-        path = save_review_result(
-            result, "tasks", slice_info, as_json=use_json, input_file=input_file
+    results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
+    multi_part = len(task_file_paths) > 1
+    for part_idx, task_path in enumerate(task_file_paths, start=1):
+        if multi_part:
+            rprint(
+                f"[bold]Reviewing tasks part {part_idx} of "
+                f"{len(task_file_paths)}: {task_path}[/bold]"
+            )
+        inputs = {
+            "input": task_path,
+            "against": against,
+            "cwd": resolved_cwd,
+        }
+        result = _run_review_command(
+            "tasks",
+            inputs,
+            output,
+            output_path,
+            verbosity,
+            model_flag=model,
+            profile_flag=profile,
+            rules_dir=resolved_rules_dir,
         )
-        rprint(f"[green]Saved review to {path}[/green]")
+        results.append((task_path, result))
 
-    if result.verdict == Verdict.FAIL:
+        if slice_info and not no_save:
+            suffix = f"part-{part_idx}" if multi_part else None
+            path = save_review_result(
+                result,
+                "tasks",
+                slice_info,
+                as_json=use_json,
+                input_file=task_path,
+                name_suffix=suffix,
+            )
+            rprint(f"[green]Saved review to {path}[/green]")
+
+    worst = _aggregate_verdicts([r for _, r in results])
+    if worst == Verdict.FAIL:
         raise typer.Exit(code=2)
 
 

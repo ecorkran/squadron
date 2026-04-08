@@ -7,7 +7,7 @@ dependencies: [141-configuration-externalization]
 interfaces: [158-sdk-session-management-and-compaction]
 dateCreated: 20260407
 dateUpdated: 20260408
-status: superseded
+status: complete
 ---
 
 # Slice Design: PreCompact Hook for Interactive Claude Code

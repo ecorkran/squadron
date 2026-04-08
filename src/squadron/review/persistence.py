@@ -228,16 +228,26 @@ def save_review_result(
     as_json: bool = False,
     reviews_dir: Path | None = None,
     input_file: str | None = None,
+    name_suffix: str | None = None,
 ) -> Path:
     """Save a ReviewResult to the reviews directory (CLI compatibility).
 
     This preserves the interface used by ``cli/commands/review.py``.
     Returns the path of the saved file.
+
+    ``name_suffix`` is an optional dotted segment appended to the
+    file's base name before the extension, used when a single slice
+    produces multiple review outputs (e.g. split task files
+    ``-1.md`` / ``-2.md`` each get their own review). For example,
+    passing ``name_suffix="part-1"`` yields
+    ``161-review.tasks.summary-step.part-1.md``.
     """
     target = reviews_dir or _REVIEWS_DIR
     target.mkdir(parents=True, exist_ok=True)
 
     base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
+    if name_suffix:
+        base = f"{base}.{name_suffix}"
 
     if as_json:
         path = target / f"{base}.json"
