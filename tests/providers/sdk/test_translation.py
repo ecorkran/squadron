@@ -163,6 +163,19 @@ class TestResultMessage:
         assert result[0].metadata["sdk_type"] == "result"
         assert result[0].metadata["subtype"] == "success"
 
+    def test_success_captures_session_id(self) -> None:
+        msg = ResultMessage(
+            subtype="success",
+            result="ok",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-abc",
+        )
+        result = translate_sdk_message(msg, sender=SENDER)
+        assert result[0].metadata["session_id"] == "sess-abc"
+
     def test_error_subtype(self, _base_kwargs: dict) -> None:
         msg = ResultMessage(
             subtype="error",
@@ -177,6 +190,19 @@ class TestResultMessage:
         assert len(result) == 1
         assert result[0].message_type == MessageType.system
         assert result[0].metadata["subtype"] == "error"
+
+    def test_error_captures_session_id(self) -> None:
+        msg = ResultMessage(
+            subtype="error",
+            result="boom",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=True,
+            num_turns=0,
+            session_id="sess-err",
+        )
+        result = translate_sdk_message(msg, sender=SENDER)
+        assert result[0].metadata["session_id"] == "sess-err"
 
     def test_no_result_attribute(self, _base_kwargs: dict) -> None:
         msg = ResultMessage(subtype="success", **_base_kwargs)

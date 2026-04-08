@@ -78,18 +78,27 @@ def _translate_tool_result(block: ToolResultBlock, sender: str) -> Message:
 
 def _translate_result(msg: ResultMessage, sender: str) -> Message:
     content = getattr(msg, "result", None) or str(msg)
+    session_id = getattr(msg, "session_id", None)
     if msg.subtype == "success":
         return Message(
             sender=sender,
             recipients=["all"],
             content=content,
             message_type=MessageType.chat,
-            metadata={"sdk_type": SDK_RESULT_TYPE, "subtype": "success"},
+            metadata={
+                "sdk_type": SDK_RESULT_TYPE,
+                "subtype": "success",
+                "session_id": session_id,
+            },
         )
     return Message(
         sender=sender,
         recipients=["all"],
         content=content,
         message_type=MessageType.system,
-        metadata={"sdk_type": SDK_RESULT_TYPE, "subtype": msg.subtype},
+        metadata={
+            "sdk_type": SDK_RESULT_TYPE,
+            "subtype": msg.subtype,
+            "session_id": session_id,
+        },
     )

@@ -2,7 +2,7 @@
 docType: tasks
 slice: sdk-session-management-and-compaction
 project: squadron
-parent: 157-slice.sdk-session-management-and-compaction.md
+parent: 158-slice.sdk-session-management-and-compaction.md
 dependencies: [155-sdk-pipeline-executor, 156-pipeline-executor-hardening]
 projectState: Slice 156 complete (pipeline executor hardening); SDK mode working for pipelines without compact steps. Compact step currently stubbed via configure_compaction() which stores config but never applies it. RunState schema is v2.
 dateCreated: 20260406
@@ -14,14 +14,14 @@ status: not_started
 
 ## Context Summary
 
-- Working on slice 157 (SDK Session Management and Compaction)
+- Working on slice 158 (SDK Session Management and Compaction)
 - Replaces the unconnected `configure_compaction()` stub from slice 155 with working compaction via session rotation
 - Core flow: switch to cheap summarizer in current session → query with compact instructions → capture summary → disconnect → create new session → inject summary → restore model
 - Compact summaries persisted in `RunState.compact_summaries` (schema v3) so they survive checkpoint and resume
 - On resume, the executor seeds the new SDK session with the most recent applicable compact summary before running the next step
 - Agent SDK does not expose `context_management`, `compaction_control`, or compaction thresholds — session rotation is the only deterministic path
 - Adds optional `model` field to compact YAML for cost control
-- Keying scheme is forward-compatible with slice 158 (fan-out branches)
+- Keying scheme is forward-compatible with slice 159 (fan-out branches)
 
 **Files to change:**
 - `src/squadron/pipeline/state.py` — `CompactSummary` dataclass, schema v3 bump, `compact_summaries` field, helper, `record_compact_summary` method
@@ -32,7 +32,7 @@ status: not_started
 - `src/squadron/cli/commands/run.py` — pass options to session
 - `src/squadron/providers/sdk/translation.py` — capture `session_id` from `ResultMessage`
 
-**Next planned slice:** 158 (Pipeline Fan-Out / Fan-In Step Type)
+**Next planned slice:** 159 (Pipeline Fan-Out / Fan-In Step Type)
 
 ---
 
@@ -398,7 +398,7 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 - [ ] Run `uv run pyright src/squadron/pipeline/state.py src/squadron/pipeline/sdk_session.py src/squadron/pipeline/actions/compact.py src/squadron/pipeline/steps/compact.py src/squadron/pipeline/executor.py src/squadron/cli/commands/run.py src/squadron/providers/sdk/translation.py` — zero errors, zero warnings
 - [ ] Run `uv run pytest -q` — all tests pass
 
-**Commit:** `chore: lint and verify slice 157 session management and compaction`
+**Commit:** `chore: lint and verify slice 158 session management and compaction`
 
 ---
 
@@ -407,12 +407,12 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 - [ ] Mark all T1–T17 tasks complete in this file
 - [ ] Set `status: complete` and update `dateUpdated` in this task file's frontmatter
 - [ ] Set `status: complete` and update `dateUpdated` in `157-slice.sdk-session-management-and-compaction.md`
-- [ ] In `140-slices.pipeline-foundation.md`, check off slice 157 and update `dateUpdated`
+- [ ] In `140-slices.pipeline-foundation.md`, check off slice 158 and update `dateUpdated`
 - [ ] Add DEVLOG entry summarizing the implementation per `prompt.ai-project.system.md` Session State Summary format
 - [ ] Add CHANGELOG entries: `### Added` (session rotate compaction, persisted compact summaries, schema v3, executor resume injection, compact model field) and `### Removed` (`configure_compaction()` stub)
 - [ ] Final commit
 
-**Commit:** `docs: mark slice 157 SDK session management and compaction complete`
+**Commit:** `docs: mark slice 158 SDK session management and compaction complete`
 
 ---
 
@@ -422,4 +422,4 @@ The `PreCompact` hook for interactive Claude Code (VS Code extension, CLI Claude
 - **Executor callback wiring for T11**: Slice 156 already wired `make_step_callback` through `execute_pipeline` for state updates. T11 should reuse that path. If the callback signature doesn't naturally surface compact-specific persistence, extend it minimally (e.g., the callback could detect compact action type and dispatch accordingly), but avoid re-architecting the callback wiring.
 - **State manager reference in compact action**: The action does NOT call `state_manager` directly. The summary travels in `ActionResult.outputs`, and the executor's per-step handler builds the `CompactSummary` record and calls `record_compact_summary`. This keeps actions free of state-manager coupling and matches how prior outputs are already handled.
 - **Schema bump impact**: v2 → v3 means any v2 state files in the wild will fail to load with `SchemaVersionError`. This matches the v1 → v2 pattern from slice 156. Users who hit this should start fresh runs.
-- **Keying scheme alignment with slice 158**: Top-level compact summaries use `{step_index}:{step_name}`. Slice 158 will extend to branch-internal compactions with `{step_index}:{step_name}#branch{n}`. The storage shape (`dict[str, CompactSummary]`) does not change. The lookup helper will be extended in 158 to consider branch context.
+- **Keying scheme alignment with slice 159**: Top-level compact summaries use `{step_index}:{step_name}`. Slice 159 will extend to branch-internal compactions with `{step_index}:{step_name}#branch{n}`. The storage shape (`dict[str, CompactSummary]`) does not change. The lookup helper will be extended in 159 to consider branch context.
