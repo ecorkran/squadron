@@ -249,7 +249,7 @@ async def _run_pipeline_sdk(
         permission_mode="bypassPermissions",
     )
     client = claude_agent_sdk.ClaudeSDKClient(options=options)
-    session = SDKExecutionSession(client=client)
+    session = SDKExecutionSession(client=client, options=options)
 
     await session.connect()
     try:

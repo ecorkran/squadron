@@ -10,9 +10,10 @@ inside a Claude Code session). Reviews and non-SDK actions are unaffected.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from claude_agent_sdk import (
+    ClaudeAgentOptions,
     ClaudeSDKClient,
     ClaudeSDKError,
     CLIConnectionError,
@@ -43,17 +44,21 @@ class SDKExecutionSession:
     - Call ``connect()`` before the first dispatch.
     - Call ``set_model()`` before each dispatch to switch models.
     - Call ``dispatch()`` to send a prompt and collect the response.
-    - Call ``configure_compaction()`` before a compact step to set up
-      server-side compaction on the next query.
+    - Call ``compact()`` to perform session-rotate compaction.
+    - Call ``seed_context()`` after re-connecting a fresh session on resume
+      to re-inject a prior compact summary.
     - Call ``disconnect()`` after the pipeline finishes (or on checkpoint).
 
     The client is connected once and reused across all steps, enabling
     ``set_model()`` to switch models mid-session without spawning new processes.
+    ``options`` is retained so compaction can build a fresh client with the
+    same configuration when rotating sessions.
     """
 
     client: ClaudeSDKClient
+    options: ClaudeAgentOptions
     current_model: str | None = None
-    _compaction_config: dict[str, object] | None = field(default=None, repr=False)
+    session_id: str | None = None
 
     async def connect(self) -> None:
         """Connect the underlying SDK client.
@@ -115,6 +120,10 @@ class SDKExecutionSession:
                             sdk_msg, sender="pipeline"
                         ):
                             response_parts.append(translated.content)
+                            sid = translated.metadata.get("session_id")
+                            if isinstance(sid, str) and sid:
+                                self.session_id = sid
+                                _logger.debug("SDKExecutionSession: session_id=%s", sid)
                     break  # normal completion
                 except ClaudeSDKError as exc:
                     if (
@@ -139,29 +148,53 @@ class SDKExecutionSession:
         except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
             raise ProviderError(str(exc)) from exc
 
-    def configure_compaction(
+    async def compact(
         self,
         instructions: str,
-        trigger_tokens: int,
-        pause_after: bool,
-    ) -> None:
-        """Store compaction config to be applied on the next dispatch.
+        summary_model: str | None = None,
+        restore_model: str | None = None,
+    ) -> str:
+        """Perform session-rotate compaction. Returns the summary text.
 
-        The config is stored and consumed by the compact action pathway.
-        Actual compaction occurs at the API level when the next query fires.
+        Flow:
+          1. Optionally switch to a cheap summarization model.
+          2. Dispatch the compact instructions to the live session and
+             capture the response as the summary.
+          3. Disconnect the old client and create a fresh ``ClaudeSDKClient``
+             with the same options.
+          4. Re-connect and re-inject the summary as the opening message.
+          5. Optionally restore the prior model.
 
-        Args:
-            instructions: Rendered compaction instructions from the compact template.
-            trigger_tokens: Token threshold that triggers compaction.
-            pause_after: Whether to pause after compaction for state injection.
+        Exceptions are allowed to propagate; the compact action wraps them.
         """
-        self._compaction_config = {
-            "instructions": instructions,
-            "trigger_tokens": trigger_tokens,
-            "pause_after": pause_after,
-        }
-        _logger.debug(
-            "SDKExecutionSession: compaction configured (trigger=%d, pause=%s)",
-            trigger_tokens,
-            pause_after,
-        )
+        if summary_model is not None and summary_model != self.current_model:
+            await self.set_model(summary_model)
+        _logger.debug("SDKExecutionSession.compact: dispatching instructions")
+        summary = await self.dispatch(instructions)
+
+        _logger.debug("SDKExecutionSession.compact: disconnecting old client")
+        await self.disconnect()
+
+        _logger.debug("SDKExecutionSession.compact: creating new client")
+        self.client = ClaudeSDKClient(options=self.options)
+        self.current_model = None
+        self.session_id = None
+        await self.connect()
+
+        _logger.debug("SDKExecutionSession.compact: seeding new session with summary")
+        await self.dispatch(summary)
+
+        if restore_model is not None:
+            await self.set_model(restore_model)
+
+        return summary
+
+    async def seed_context(self, text: str) -> None:
+        """Seed a fresh session with prior compact summary on resume.
+
+        Thin wrapper around ``dispatch()`` that logs distinctly so verbose
+        output identifies seeding events vs. real step dispatches. The
+        model's acknowledgment response is discarded.
+        """
+        _logger.debug("SDKExecutionSession: seed_context (%d chars)", len(text))
+        await self.dispatch(text)
