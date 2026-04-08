@@ -241,7 +241,13 @@ async def _run_pipeline_sdk(
 
     import claude_agent_sdk
 
-    options = claude_agent_sdk.ClaudeAgentOptions(cwd=str(Path.cwd()))
+    # Permission mode must be set at session start; the SDK rejects runtime
+    # set_permission_mode("bypassPermissions") calls (since claude-agent-sdk
+    # ~Apr 2026). bypassPermissions matches the prior runtime behavior.
+    options = claude_agent_sdk.ClaudeAgentOptions(
+        cwd=str(Path.cwd()),
+        permission_mode="bypassPermissions",
+    )
     client = claude_agent_sdk.ClaudeSDKClient(options=options)
     session = SDKExecutionSession(client=client)
 

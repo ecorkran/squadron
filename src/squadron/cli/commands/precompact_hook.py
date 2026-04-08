@@ -104,11 +104,17 @@ def _gather_params(cwd: str) -> dict[str, object]:
 def precompact_hook(
     cwd: str = typer.Option(".", "--cwd", hidden=True),
 ) -> None:
-    """[hidden] Emit PreCompact hook output. Invoked by Claude Code."""
+    """[hidden] Emit PreCompact hook output. Invoked by Claude Code.
+
+    Output schema: Claude Code's PreCompact hook does NOT support
+    ``hookSpecificOutput.additionalContext`` (that's PostToolUse /
+    UserPromptSubmit). For PreCompact, the channel for injecting text
+    into the compaction prompt is the top-level ``systemMessage`` field.
+    """
     # Tight catch-all: the hook's contract is "never break the user's
-    # /compact". A bare Exception catch is justified here (and nowhere else
-    # in squadron) because any failure inside the render pipeline must
-    # degrade to an empty additionalContext, not a non-zero exit.
+    # /compact". A bare Exception catch is justified here (and nowhere
+    # else in squadron) because any failure inside the render pipeline
+    # must degrade to an empty systemMessage, not a non-zero exit.
     try:
         instructions = _resolve_instructions(cwd)
         params = _gather_params(cwd)
@@ -116,10 +122,5 @@ def precompact_hook(
     except Exception:  # noqa: BLE001 - see comment above
         rendered = ""
 
-    payload = {
-        "hookSpecificOutput": {
-            "hookEventName": "PreCompact",
-            "additionalContext": rendered,
-        }
-    }
+    payload = {"systemMessage": rendered}
     print(json.dumps(payload))
