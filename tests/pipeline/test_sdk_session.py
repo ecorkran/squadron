@@ -226,11 +226,23 @@ def _assistant_gen(text: str) -> MagicMock:
 
 
 def _result_message_gen(text: str, session_id: str | None = "sess-1") -> MagicMock:
-    """Yield only a ResultMessage so metadata (session_id) is captured
-    without duplicating content from an AssistantMessage."""
-    from claude_agent_sdk import ResultMessage
+    """Yield an AssistantMessage/TextBlock followed by a ResultMessage.
+
+    This mirrors real SDK behavior: the assistant text arrives in an
+    AssistantMessage, and a ResultMessage follows carrying metadata
+    (session_id, subtype, cost) whose `result` field duplicates the text.
+    `dispatch()` must collect content from the AssistantMessage only and
+    use the ResultMessage purely for metadata capture — otherwise the
+    response string is doubled.
+    """
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
     async def _gen():  # type: ignore[return]
+        msg = MagicMock(spec=AssistantMessage)
+        block = MagicMock(spec=TextBlock)
+        block.text = text
+        msg.content = [block]
+        yield msg
         result = ResultMessage(
             subtype="success",
             result=text,
@@ -245,6 +257,19 @@ def _result_message_gen(text: str, session_id: str | None = "sess-1") -> MagicMo
     gen_mock = MagicMock()
     gen_mock.__aiter__ = lambda self: _gen()
     return gen_mock
+
+
+@pytest.mark.asyncio
+async def test_dispatch_does_not_double_text_from_result_message() -> None:
+    """Regression: AssistantMessage text and ResultMessage.result carry the
+    same string — dispatch() must return it exactly once, not concatenated."""
+    client = _make_client()
+    client.receive_response.return_value = _result_message_gen(
+        "one and only", session_id="sess-x"
+    )
+    session = _make_session(client)
+    result = await session.dispatch("hi")
+    assert result == "one and only"
 
 
 @pytest.mark.asyncio

@@ -22,6 +22,7 @@ from claude_agent_sdk import (
     ProcessError,
 )
 
+from squadron.core.models import SDK_RESULT_TYPE
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -137,7 +138,13 @@ class SDKExecutionSession:
                         for translated in translate_sdk_message(
                             sdk_msg, sender="pipeline"
                         ):
-                            response_parts.append(translated.content)
+                            # ResultMessage duplicates the assistant text as
+                            # its `result` field — it's for metadata only,
+                            # not content. Assistant text already arrived via
+                            # AssistantMessage/TextBlock. Appending both
+                            # doubles the response string.
+                            if translated.metadata.get("sdk_type") != SDK_RESULT_TYPE:
+                                response_parts.append(translated.content)
                             sid = translated.metadata.get("session_id")
                             if isinstance(sid, str) and sid:
                                 self.session_id = sid
