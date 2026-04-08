@@ -59,8 +59,49 @@ class SummaryAction:
         return errors
 
     async def execute(self, context: ActionContext) -> ActionResult:
-        raise NotImplementedError(
-            "SummaryAction.execute() is wired to _execute_summary() in T9"
+        from squadron.pipeline.actions.compact import (
+            load_compaction_template,
+            render_instructions,
+        )
+
+        template_name = str(context.params.get("template", "default"))
+        try:
+            template = load_compaction_template(template_name)
+        except FileNotFoundError as exc:
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=str(exc),
+            )
+
+        instructions = render_instructions(
+            template,
+            keep=None,
+            summarize=False,
+            pipeline_params=context.params,
+        )
+
+        emit_raw = context.params.get("emit")
+        try:
+            emit_destinations = parse_emit_list(emit_raw)
+        except ValueError as exc:
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=str(exc),
+            )
+
+        model_raw = context.params.get("model")
+        summary_model_alias = model_raw if isinstance(model_raw, str) else None
+
+        return await _execute_summary(
+            context=context,
+            instructions=instructions,
+            summary_model_alias=summary_model_alias,
+            emit_destinations=emit_destinations,
+            action_type=self.action_type,
         )
 
 
