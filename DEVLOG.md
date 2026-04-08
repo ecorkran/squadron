@@ -2,13 +2,43 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260407
+dateUpdated: 20260408
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
+
+---
+
+## 20260408
+
+### Slice 161: Summary Step with Emit Destinations — Complete
+
+**Commits (8 slice commits):**
+- `877f1e6` chore: add pyperclip dependency for summary clipboard emit
+- `2bbbcb7` feat: add SDKExecutionSession.capture_summary() method
+- `1a953ae` feat: add summary= overload to SDKExecutionSession.compact()
+- `6f78e1e` feat: add emit destination registry and types
+- `76b0e65` feat: add SummaryAction with config validation
+- `9b043a7` feat: implement _execute_summary shared helper
+- `c613422` feat: wire SummaryAction.execute to shared helper
+- `7293394` feat: add SummaryStepType, register summary action+step, validate emit, update test-pipeline
+
+**Delivered:**
+- `SDKExecutionSession.capture_summary()` — captures summary without rotating session
+- `SDKExecutionSession.compact(summary=...)` — `summary=` overload skips capture phase for reuse
+- `emit.py` — `EmitKind` registry with stdout, file, clipboard (pyperclip), rotate destinations
+- `actions/summary.py` — `SummaryAction` + `_execute_summary()` shared helper; single capture, multi-destination dispatch; rotate failures fail the action, others log warning
+- `CompactAction` SDK path refactored to delegate into `_execute_summary()` with `emit=[rotate]`; `action_type` kept as `"compact"` — state persistence unaffected
+- `SummaryStepType` with `emit` validation and `checkpoint:` shorthand (expands to summary + checkpoint action pair)
+- `test-pipeline.yaml` updated to use `summary:emit:[rotate]` in place of `compact:`
+- 1429 tests passing; pyright clean; ruff clean
+
+**Pending / deferred:**
+- T15 manual smoke test (`sq run test-pipeline 154 -vv`) deferred — requires live Claude SDK session; no blockers
+- `clear` follow-up (rotate without seeding) not yet filed as a slice; design open question from 161 slice doc
 
 ---
 

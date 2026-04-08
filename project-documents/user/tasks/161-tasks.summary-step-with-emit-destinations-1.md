@@ -7,7 +7,7 @@ dependencies: [158-sdk-session-management-and-compaction]
 projectState: Slice 158 complete — SDK session-rotate compaction via SDKExecutionSession.compact() working end-to-end. compact action populates RunState.compact_summaries. claude_code system prompt preset wired in run.py. Response-text duplication bug fixed. PreCompact hook no longer installed by default. Test pipeline extended with tasks+post-compact-dispatch for smoke tests.
 dateCreated: 20260408
 dateUpdated: 20260408
-status: in_progress
+status: complete
 ---
 
 # Tasks: Summary Step with Emit Destinations (Part 1 of 2)
