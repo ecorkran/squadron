@@ -2257,7 +2257,7 @@ wheels = [
 
 [[package]]
 name = "squadron-ai"
-version = "0.3.4"
+version = "0.3.5"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
@@ -2312,7 +2312,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.7.0" },
     { name = "tomli-w", specifier = ">=1.0" },
-    { name = "typer", extras = ["all"], specifier = ">=0.12.0" },
+    { name = "typer", specifier = ">=0.12.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
 provides-extras = ["dev"]
