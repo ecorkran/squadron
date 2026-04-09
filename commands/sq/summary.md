@@ -24,21 +24,21 @@ If the command exits non-zero, show the error output to the user and **stop** �
 
 Using the instruction text from Step 1 as your guide, generate a summary of the **current conversation**.
 
-Follow the instructions exactly. Output **ONLY** the summary text — no preface, no explanation, no follow-up questions, no markdown fences around the summary.
-
-**Do NOT print the summary text into the chat.** Store it in a variable for the next step.
+Follow the instructions exactly. Output ONLY the summary text — no preface, no explanation, no follow-up questions, no markdown fences around the summary.
 
 ---
 
 ## Step 3: Copy to clipboard
 
-Pipe the summary text to the system clipboard via Bash:
+Pipe the summary text to the system clipboard via Bash. Use a heredoc to handle special characters:
 
 ```bash
-echo 'SUMMARY_TEXT' | pbcopy 2>/dev/null || echo 'SUMMARY_TEXT' | xclip -selection clipboard 2>/dev/null || echo 'SUMMARY_TEXT' | wl-copy 2>/dev/null || { echo "No clipboard tool found (install xclip or wl-clipboard on Linux)" >&2; exit 1; }
+cat << '__SQ_END__' | pbcopy 2>/dev/null || cat << '__SQ_END__' | xclip -selection clipboard 2>/dev/null || cat << '__SQ_END__' | wl-copy 2>/dev/null || { echo "No clipboard tool found (install xclip or wl-clipboard on Linux)" >&2; exit 1; }
+SUMMARY_TEXT
+__SQ_END__
 ```
 
-Replace `SUMMARY_TEXT` with the actual summary. Use appropriate quoting to handle special characters (prefer a heredoc or printf if the summary contains single quotes).
+Replace `SUMMARY_TEXT` with the actual summary.
 
 ---
 

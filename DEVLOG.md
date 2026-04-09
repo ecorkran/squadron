@@ -25,6 +25,7 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 - Reuses `compact.template` config key — no new config surface
 - Clipboard via shell chain: `pbcopy` → `xclip` → `wl-copy` (Windows deferred)
 - All 1400 tests pass, ruff clean, pyright clean
+- Post-implementation: removed misleading "do not print to chat" instruction from summary.md — summary appearing in chat is correct and lets user verify before `/clear`; bumped to v0.3.4
 
 ## 20260408 (session 2)
 
