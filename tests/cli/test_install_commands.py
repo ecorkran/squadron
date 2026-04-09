@@ -18,6 +18,7 @@ EXPECTED_FILES = {
     "run.md",
     "shutdown.md",
     "spawn.md",
+    "summary.md",
     "task.md",
 }
 
@@ -37,7 +38,7 @@ def _uninstall(runner_: CliRunner, target: Path) -> object:
 
 
 def test_install_copies_files(tmp_path: Path) -> None:
-    """Install copies all 7 command files to the target directory."""
+    """Install copies all 8 command files to the target directory."""
     result = _install(runner, tmp_path)
     assert result.exit_code == 0  # type: ignore[attr-defined]
 
@@ -53,7 +54,7 @@ def test_install_creates_directories(tmp_path: Path) -> None:
     result = _install(runner, deep_target)
     assert result.exit_code == 0  # type: ignore[attr-defined]
     assert (deep_target / "sq").is_dir()
-    assert len(list((deep_target / "sq").glob("*.md"))) == 7
+    assert len(list((deep_target / "sq").glob("*.md"))) == 8
 
 
 def test_install_overwrites_existing(tmp_path: Path) -> None:
@@ -110,7 +111,7 @@ def test_target_flag_overrides_default(tmp_path: Path) -> None:
     result = _install(runner, custom)
     assert result.exit_code == 0  # type: ignore[attr-defined]
     assert (custom / "sq").is_dir()
-    assert len(list((custom / "sq").glob("*.md"))) == 7
+    assert len(list((custom / "sq").glob("*.md"))) == 8
 
 
 def test_get_commands_source_returns_valid_dir() -> None:
@@ -118,7 +119,7 @@ def test_get_commands_source_returns_valid_dir() -> None:
     source = _get_commands_source()
     assert source.is_dir()
     assert (source / "sq").is_dir()
-    assert len(list((source / "sq").glob("*.md"))) == 7
+    assert len(list((source / "sq").glob("*.md"))) == 8
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +134,7 @@ EXPECTED_COMMANDS = {
     "review.md": "sq review",
     "auth.md": "sq auth",
     "run.md": "/sq:run",
+    "summary.md": "sq _summary-instructions",
 }
 
 
