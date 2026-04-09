@@ -1,8 +1,8 @@
 """Shared helpers for rendering compaction instructions with pipeline params.
 
-Both the ``compact`` pipeline action and the interactive PreCompact hook
-subcommand consume these helpers so that missing placeholders render as
-literal ``{name}`` text rather than raising ``KeyError``.
+Used by the ``compact`` pipeline action and the ``summary_render`` module
+so that missing placeholders render as literal ``{name}`` text rather than
+raising ``KeyError``.
 """
 
 from __future__ import annotations
