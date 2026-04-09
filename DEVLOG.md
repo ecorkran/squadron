@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260408
+dateUpdated: 20260409
 ---
 
 # Development Log
@@ -11,6 +11,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260409
+
+### Slice 162: /sq:summary — Clipboard Summary for Manual Context Reset
+
+**Phase 4 (design) + Phase 5 (task breakdown) complete.**
+
+- Motivated by unreliable `/compact [with instructions]` — user wants deterministic "clear with custom summary" using templates already built for pipeline compaction (slices 157/158)
+- Design: slash command `/sq:summary [template]` + hidden `sq _summary-instructions` CLI. Current CC session generates the summary inline; squadron supplies template instructions + clipboard sink.
+- Shared helper extraction from `precompact_hook.py` into `pipeline/summary_render.py` (pure refactor, no behavior change)
+- Reuses `compact.template` config key — no new config surface
+- Clipboard via shell chain: `pbcopy` → `xclip` → `wl-copy` (Windows deferred)
+- Added to slice plan as entry 22 in Feature Slices, linked design doc
+- 5 task groups (T1–T5), 152 lines; ready for Phase 6
 
 ## 20260408 (session 2)
 
