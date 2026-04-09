@@ -8,8 +8,6 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
-from squadron.cli.commands.install_settings import remove_precompact_hook
-
 
 def _get_commands_source() -> Path:
     """Locate the bundled commands directory.
@@ -41,17 +39,7 @@ def install_commands(
         help="Target directory for command files",
     ),
 ) -> None:
-    """Install squadron slash commands for Claude Code.
-
-    Note: the PreCompact hook is no longer installed by default. Claude
-    Code's PreCompact hook API has no documented way to override
-    compaction instructions — the hook's output fields (``systemMessage``
-    et al.) cannot authoritatively replace the default summarizer prompt,
-    and injection behavior is inconsistent across Claude Code versions.
-    Use ``sq run`` pipelines from a standard terminal for deterministic,
-    project-aware compaction (see slice 158). ``sq uninstall-commands``
-    will still remove a previously installed squadron PreCompact entry.
-    """
+    """Install squadron slash commands for Claude Code."""
     source = _get_commands_source()
     target_dir = Path(target).expanduser()
 
@@ -90,11 +78,6 @@ def uninstall_commands(
         "--target",
         help="Target directory to remove commands from",
     ),
-    hook_target: str = typer.Option(
-        "./.claude/settings.json",
-        "--hook-target",
-        help="Target settings.json to remove the PreCompact hook entry from",
-    ),
 ) -> None:
     """Remove squadron slash commands from Claude Code."""
     target_dir = Path(target).expanduser()
@@ -106,13 +89,3 @@ def uninstall_commands(
         files_removed = list(sq_dir.glob("*.md"))
         shutil.rmtree(sq_dir)
         rprint(f"[green]Removed {sq_dir} ({len(files_removed)} file(s)).[/green]")
-
-    # Remove the PreCompact hook entry from the project-local settings.json.
-    hook_path = Path(hook_target).expanduser()
-    try:
-        removed = remove_precompact_hook(hook_path)
-    except RuntimeError as exc:
-        rprint(f"[red]Error removing PreCompact hook: {exc}[/red]")
-        raise typer.Exit(code=1) from exc
-    if removed:
-        rprint(f"[green]Removed PreCompact hook from {hook_path}[/green]")

@@ -83,7 +83,7 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         type_=str,
         default="minimal",
         description=(
-            "Compaction template name for the interactive PreCompact hook. "
+            "Compaction template name for summary and compaction commands. "
             "Resolved against ~/.config/squadron/compaction/ then "
             "src/squadron/data/compaction/."
         ),
@@ -93,7 +93,7 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         type_=str,
         default=None,
         description=(
-            "Literal compaction instructions for the interactive PreCompact hook. "
+            "Literal compaction instructions for summary and compaction commands. "
             "If set, overrides compact.template. Param substitution still applies."
         ),
     ),

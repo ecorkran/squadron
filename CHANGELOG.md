@@ -10,6 +10,21 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 20260409
+
+### Added
+- `/sq:summary [template]` slash command — generates a summary of the current
+  conversation using a compaction template and copies it to the clipboard.
+  Designed for `/sq:summary` → `/clear` → paste workflow. Template resolves
+  via explicit arg, then `compact.template` config, then `"minimal"` default.
+  Clipboard via `pbcopy` (macOS) / `xclip` / `wl-copy` (Linux).
+- `sq _summary-instructions [template]` hidden CLI — prints rendered template
+  instructions to stdout. Used internally by `/sq:summary`.
+
+### Removed
+- `sq _precompact-hook` subcommand and all PreCompact hook install/uninstall
+  logic. Dead code since 0.3.3; useful parts salvaged into `summary_render.py`.
+
 ## [0.3.3] - 20260408
 
 ### Added
@@ -36,9 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK pipeline sessions now default to the Claude Code system prompt preset
   instead of the Agent SDK's minimal tool-only prompt.
 - `sq install-commands` no longer installs the `PreCompact` hook. The hook API
-  doesn't reliably override compaction instructions in practice. The underlying
-  `sq _precompact-hook` subcommand and config keys are retained for manual use;
-  `sq uninstall-commands` still cleans up any previously installed entry.
+  doesn't reliably override compaction instructions in practice.
 
 ### Fixed
 - CLI-formatted API errors (e.g. `API Error: 500 ...`) returned as assistant text

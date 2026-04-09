@@ -15,12 +15,12 @@ from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import list_agents
 from squadron.cli.commands.message import message
 from squadron.cli.commands.models import models_app
-from squadron.cli.commands.precompact_hook import precompact_hook
 from squadron.cli.commands.review import review_app
 from squadron.cli.commands.run import run as run_command
 from squadron.cli.commands.serve import serve
 from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.spawn import spawn
+from squadron.cli.commands.summary_instructions import summary_instructions
 from squadron.cli.commands.task import task
 
 load_dotenv(dotenv_path=Path.cwd() / ".env")
@@ -45,7 +45,7 @@ app.add_typer(auth_app, name="auth")
 app.command("run")(run_command)
 app.command("install-commands")(install_commands)
 app.command("uninstall-commands")(uninstall_commands)
-app.command("_precompact-hook", hidden=True)(precompact_hook)
+app.command("_summary-instructions", hidden=True)(summary_instructions)
 
 
 def version_callback(value: bool) -> None:

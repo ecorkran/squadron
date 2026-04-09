@@ -16,15 +16,16 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ### Slice 162: /sq:summary — Clipboard Summary for Manual Context Reset
 
-**Phase 4 (design) + Phase 5 (task breakdown) complete.**
+**Phase 4 (design) + Phase 5 (task breakdown) + Phase 6 (implementation) complete.**
 
 - Motivated by unreliable `/compact [with instructions]` — user wants deterministic "clear with custom summary" using templates already built for pipeline compaction (slices 157/158)
 - Design: slash command `/sq:summary [template]` + hidden `sq _summary-instructions` CLI. Current CC session generates the summary inline; squadron supplies template instructions + clipboard sink.
-- Shared helper extraction from `precompact_hook.py` into `pipeline/summary_render.py` (pure refactor, no behavior change)
+- Created `pipeline/summary_render.py` with `resolve_template_instructions()` and `gather_cf_params()` — logic salvaged from dead `precompact_hook.py`
+- Removed `precompact_hook.py`, `install_settings.py`, and all PreCompact hook install/uninstall logic (dead code since 0.3.3)
 - Reuses `compact.template` config key — no new config surface
 - Clipboard via shell chain: `pbcopy` → `xclip` → `wl-copy` (Windows deferred)
-- Added to slice plan as entry 22 in Feature Slices, linked design doc
-- 5 task groups (T1–T5), 152 lines; ready for Phase 6
+- All 1400 tests pass, ruff clean, pyright clean
+- Post-implementation: removed misleading "do not print to chat" instruction from summary.md — summary appearing in chat is correct and lets user verify before `/clear`; bumped to v0.3.4
 
 ## 20260408 (session 2)
 
