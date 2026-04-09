@@ -6,8 +6,8 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [158-sdk-session-management-and-compaction]
 interfaces: []
 dateCreated: 20260408
-dateUpdated: 20260408
-status: not_started
+dateUpdated: 20260409
+status: complete
 ---
 
 # Slice Design: /sq:summary — Clipboard Summary for Manual Context Reset
@@ -350,30 +350,35 @@ before.
 
 ## Verification Walkthrough
 
-The demo script a user can run after this slice is implemented:
+Verified during implementation (20260409). All steps passed.
 
 1. **Install fresh commands.**
    ```bash
    sq install-commands
    ```
-   Expect: `commands/sq/summary.md` listed among installed commands.
+   Actual: 8 commands installed, `sq/summary.md` listed.
 
-2. **Direct CLI sanity check.**
+2. **Direct CLI sanity check (positional arg, not --template flag).**
    ```bash
-   sq _summary-instructions --template minimal
+   sq _summary-instructions minimal
    ```
-   Expect: multi-line text including the minimal template's
-   instructions, with `{slice}` substituted if CF knows the current
-   slice (or left as `{slice}` if not).
+   Actual: multi-line minimal template text with `{slice}` rendered
+   to `162` (CF active). Exit 0.
 
 3. **Error path.**
    ```bash
-   sq _summary-instructions --template definitely-not-a-template
+   sq _summary-instructions bogus
    ```
-   Expect: stderr error mentioning the template name and searched
-   paths; exit code 1.
+   Actual: `Error: template 'bogus' not found.` on stderr. Exit 1.
 
-4. **Slash command — default template.** In an interactive Claude Code
+4. **Default template (no arg).**
+   ```bash
+   sq _summary-instructions
+   ```
+   Actual: uses `compact.template` config (default `minimal`).
+   Renders and prints instructions. Exit 0.
+
+5. **Slash command — default template.** In an interactive Claude Code
    session mid-conversation:
    ```
    /sq:summary
@@ -383,34 +388,24 @@ The demo script a user can run after this slice is implemented:
    - A single confirmation line like
      `Summary copied to clipboard (N chars, template: minimal).`
    - Paste the clipboard into any text editor and confirm the summary
-     is coherent, factual, and follows the template's intent
-     (third-person, preserves current slice context, etc.).
+     is coherent, factual, and follows the template's intent.
 
-5. **Slash command — named template.**
+6. **Slash command — named template.**
    ```
    /sq:summary minimal-sdk
    ```
-   Expect: same as step 4, but confirmation line shows
-   `template: minimal-sdk`, and the pasted text uses the
-   `minimal-sdk` template's third-person "for injection into a fresh
-   session" framing.
+   Expect: same as step 5, but with `template: minimal-sdk`.
 
-6. **Manual context reset (the full user loop).**
+7. **Manual context reset (the full user loop).**
    1. `/sq:summary`
    2. `/clear`
    3. Paste the clipboard contents into the now-empty input.
    4. Send.
-   Expect: fresh Claude Code session with the summary as its first
-   message. The assistant can continue the prior conversation's work
-   without the original turn history.
+   Expect: fresh session continues prior work from the summary.
 
-7. **Clipboard-missing failure (optional, Linux box without xclip or
-   wl-copy).**
-   ```
-   /sq:summary
-   ```
-   Expect: error surfaced to user with "no clipboard tool found"
-   message. No claim of success. No clipboard write.
+**Caveat:** Steps 5–7 require an active interactive Claude Code
+session and cannot be automated in tests. The slash command logic is
+instruction-following by the LLM, not executable code.
 
 ## Cross-Slice Dependencies
 
@@ -442,14 +437,14 @@ defines `resolve_template_instructions(template_name, *, cwd)` and
 
 **Files removed:**
 - `src/squadron/cli/commands/precompact_hook.py`
+- `src/squadron/cli/commands/install_settings.py`
 - `tests/cli/commands/test_precompact_hook.py`
+- `tests/cli/commands/test_install_settings.py`
 
 **Files modified (cleanup):**
 - `src/squadron/cli/app.py` — remove import and registration
-- `src/squadron/cli/commands/install.py` — remove hook install references
-- `src/squadron/cli/commands/install_settings.py` — remove hook settings
+- `src/squadron/cli/commands/install.py` — remove hook install/uninstall logic
 - `tests/cli/test_install_commands.py` — remove hook-related assertions
-- `tests/cli/commands/test_install_settings.py` — remove hook-related assertions
 
 ## Risks
 

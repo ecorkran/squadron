@@ -7,7 +7,7 @@ dependencies: [158-sdk-session-management-and-compaction]
 projectState: "Slices 158 and 161 complete (session compaction, summary step with emit destinations). Compaction template machinery, CF param gathering, and render_with_params all exist. PreCompact hook is dead code (no longer installed) and will be removed — useful logic salvaged into new shared helpers."
 dateCreated: 20260409
 dateUpdated: 20260409
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -25,127 +25,127 @@ status: not_started
 
 ### T1: Create branch and shared helper module
 
-- [ ] **T1.1: Create slice branch from main**
-  - [ ] Verify on `main`, create branch `162-slice.sq-summary-clipboard-summary-for-manual-context-reset`
-  - [ ] Success: on the new branch, clean working tree
+- [x] **T1.1: Create slice branch from main**
+  - [x] Verify on `main`, create branch `162-slice.sq-summary-clipboard-summary-for-manual-context-reset`
+  - [x] Success: on the new branch, clean working tree
 
-- [ ] **T1.2: Create `src/squadron/pipeline/summary_render.py` with helpers salvaged from `precompact_hook.py`**
-  - [ ] Create `src/squadron/pipeline/summary_render.py` with two public functions (logic taken from `precompact_hook.py`'s `_resolve_instructions` and `_gather_params`):
+- [x] **T1.2: Create `src/squadron/pipeline/summary_render.py` with helpers salvaged from `precompact_hook.py`**
+  - [x] Create `src/squadron/pipeline/summary_render.py` with two public functions (logic taken from `precompact_hook.py`'s `_resolve_instructions` and `_gather_params`):
     1. `resolve_template_instructions(template_name: str, *, cwd: str = ".") -> str` — loads template via `load_compaction_template()`, gathers CF params via `gather_cf_params()`, renders with `render_with_params()`. Raises `FileNotFoundError` on missing template.
     2. `gather_cf_params(cwd: str) -> dict[str, object]` — best-effort CF param gathering (project, slice, phase). Returns `{}` on any failure.
-  - [ ] `resolve_template_instructions` accepts the template name directly (not a config lookup — callers handle precedence)
-  - [ ] Uses existing imports: `load_compaction_template`, `render_with_params`, `ContextForgeClient`
-  - [ ] Success: module exists, imports cleanly, `ruff check` and `pyright` pass on the new file
+  - [x] `resolve_template_instructions` accepts the template name directly (not a config lookup — callers handle precedence)
+  - [x] Uses existing imports: `load_compaction_template`, `render_with_params`, `ContextForgeClient`
+  - [x] Success: module exists, imports cleanly, `ruff check` and `pyright` pass on the new file
 
-- [ ] **T1.3: Remove `precompact_hook.py` and all references**
-  - [ ] Delete `src/squadron/cli/commands/precompact_hook.py`
-  - [ ] Delete `tests/cli/commands/test_precompact_hook.py`
-  - [ ] Remove the `_precompact-hook` registration line from `src/squadron/cli/app.py` and its import
-  - [ ] Remove any precompact hook references from `src/squadron/cli/commands/install.py` and `install_settings.py` (hook install/uninstall logic, settings JSON generation)
-  - [ ] Check `tests/cli/test_install_commands.py` and `tests/cli/commands/test_install_settings.py` — remove or update any tests that reference the precompact hook
-  - [ ] Check `src/squadron/integrations/context_forge.py` for any precompact references — remove if dead
-  - [ ] Success: no remaining references to `precompact_hook` or `_precompact-hook` in the codebase, `ruff check` and `pyright` pass, all tests pass
+- [x] **T1.3: Remove `precompact_hook.py` and all references**
+  - [x] Delete `src/squadron/cli/commands/precompact_hook.py`
+  - [x] Delete `tests/cli/commands/test_precompact_hook.py`
+  - [x] Remove the `_precompact-hook` registration line from `src/squadron/cli/app.py` and its import
+  - [x] Remove any precompact hook references from `src/squadron/cli/commands/install.py` and `install_settings.py` (hook install/uninstall logic, settings JSON generation)
+  - [x] Check `tests/cli/test_install_commands.py` and `tests/cli/commands/test_install_settings.py` — remove or update any tests that reference the precompact hook
+  - [x] Check `src/squadron/integrations/context_forge.py` for any precompact references — remove if dead
+  - [x] Success: no remaining references to `precompact_hook` or `_precompact-hook` in the codebase, `ruff check` and `pyright` pass, all tests pass
 
-- [ ] **T1.4: Test shared helpers**
-  - [ ] Create `tests/pipeline/test_summary_render.py`
-  - [ ] Test `resolve_template_instructions()` with a known built-in template name (e.g. `"minimal"`) — returns non-empty string with rendered instructions
-  - [ ] Test `resolve_template_instructions()` with a non-existent template — raises `FileNotFoundError`
-  - [ ] Test `gather_cf_params()` — returns a dict (may be empty if no CF project; test should not require CF to be running)
-  - [ ] Test that `resolve_template_instructions()` renders `{slice}` placeholder when params include `slice` (mock CF or pass params directly)
-  - [ ] Success: all tests pass with `uv run pytest tests/pipeline/test_summary_render.py -v`
+- [x] **T1.4: Test shared helpers**
+  - [x] Create `tests/pipeline/test_summary_render.py`
+  - [x] Test `resolve_template_instructions()` with a known built-in template name (e.g. `"minimal"`) — returns non-empty string with rendered instructions
+  - [x] Test `resolve_template_instructions()` with a non-existent template — raises `FileNotFoundError`
+  - [x] Test `gather_cf_params()` — returns a dict (may be empty if no CF project; test should not require CF to be running)
+  - [x] Test that `resolve_template_instructions()` renders `{slice}` placeholder when params include `slice` (mock CF or pass params directly)
+  - [x] Success: all tests pass with `uv run pytest tests/pipeline/test_summary_render.py -v`
 
-- [ ] **T1.5: Commit**
-  - [ ] `ruff format`, then commit: `refactor: add summary_render helpers, remove dead precompact hook`
+- [x] **T1.5: Commit**
+  - [x] `ruff format`, then commit: `refactor: add summary_render helpers, remove dead precompact hook`
 
 ---
 
 ### T2: Hidden CLI command `sq _summary-instructions`
 
-- [ ] **T2.1: Create `src/squadron/cli/commands/summary_instructions.py`**
-  - [ ] Typer command function `summary_instructions(template: str | None, cwd: str)`
-  - [ ] `--template` optional argument (first positional or `--template` flag — match the pattern that makes sense for a hidden command)
-  - [ ] `--cwd` hidden option, defaults to `"."`
-  - [ ] Template name resolution precedence: (1) `--template` arg, (2) `get_config("compact.template", cwd=cwd)`, (3) `"minimal"`
-  - [ ] Calls `resolve_template_instructions(template_name, cwd=cwd)` from `summary_render`
-  - [ ] Prints rendered instructions to stdout (plain text, no JSON wrapper)
-  - [ ] On `FileNotFoundError`: prints error to stderr, exits with code 1 via `raise typer.Exit(code=1)`
-  - [ ] Success: module exists, imports cleanly, `ruff check` and `pyright` pass
+- [x] **T2.1: Create `src/squadron/cli/commands/summary_instructions.py`**
+  - [x] Typer command function `summary_instructions(template: str | None, cwd: str)`
+  - [x] `--template` optional argument (first positional or `--template` flag — match the pattern that makes sense for a hidden command)
+  - [x] `--cwd` hidden option, defaults to `"."`
+  - [x] Template name resolution precedence: (1) `--template` arg, (2) `get_config("compact.template", cwd=cwd)`, (3) `"minimal"`
+  - [x] Calls `resolve_template_instructions(template_name, cwd=cwd)` from `summary_render`
+  - [x] Prints rendered instructions to stdout (plain text, no JSON wrapper)
+  - [x] On `FileNotFoundError`: prints error to stderr, exits with code 1 via `raise typer.Exit(code=1)`
+  - [x] Success: module exists, imports cleanly, `ruff check` and `pyright` pass
 
-- [ ] **T2.2: Register in `src/squadron/cli/app.py`**
-  - [ ] Import `summary_instructions` from the new module
-  - [ ] Register as `app.command("_summary-instructions", hidden=True)(summary_instructions)`
-  - [ ] Success: `sq --help` does NOT show `_summary-instructions`; `sq _summary-instructions --help` works
+- [x] **T2.2: Register in `src/squadron/cli/app.py`**
+  - [x] Import `summary_instructions` from the new module
+  - [x] Register as `app.command("_summary-instructions", hidden=True)(summary_instructions)`
+  - [x] Success: `sq --help` does NOT show `_summary-instructions`; `sq _summary-instructions --help` works
 
-- [ ] **T2.3: Test `_summary-instructions` CLI**
-  - [ ] Create `tests/cli/test_summary_instructions.py`
-  - [ ] Test default path: invoke with no args, verify stdout contains rendered template text and exit code 0
-  - [ ] Test explicit template: invoke with `--template minimal-sdk`, verify stdout mentions content from `minimal-sdk.yaml` and exit code 0
-  - [ ] Test missing template: invoke with `--template nonexistent`, verify exit code 1 and stderr contains the template name
-  - [ ] Use `typer.testing.CliRunner` or subprocess invocation (match existing test patterns in the project)
-  - [ ] Success: all tests pass with `uv run pytest tests/cli/test_summary_instructions.py -v`
+- [x] **T2.3: Test `_summary-instructions` CLI**
+  - [x] Create `tests/cli/test_summary_instructions.py`
+  - [x] Test default path: invoke with no args, verify stdout contains rendered template text and exit code 0
+  - [x] Test explicit template: invoke with `--template minimal-sdk`, verify stdout mentions content from `minimal-sdk.yaml` and exit code 0
+  - [x] Test missing template: invoke with `--template nonexistent`, verify exit code 1 and stderr contains the template name
+  - [x] Use `typer.testing.CliRunner` or subprocess invocation (match existing test patterns in the project)
+  - [x] Success: all tests pass with `uv run pytest tests/cli/test_summary_instructions.py -v`
 
-- [ ] **T2.4: Commit**
-  - [ ] `ruff format`, then commit: `feat: add hidden sq _summary-instructions CLI command`
+- [x] **T2.4: Commit**
+  - [x] `ruff format`, then commit: `feat: add hidden sq _summary-instructions CLI command`
 
 ---
 
 ### T3: Slash command `commands/sq/summary.md`
 
-- [ ] **T3.1: Create `commands/sq/summary.md`**
-  - [ ] Follow the pattern in existing slash commands (e.g. `commands/sq/run.md`)
-  - [ ] Parse `$ARGUMENTS`: first word is optional template name. If empty, no `--template` flag passed to CLI.
-  - [ ] Instruct the assistant to:
+- [x] **T3.1: Create `commands/sq/summary.md`**
+  - [x] Follow the pattern in existing slash commands (e.g. `commands/sq/run.md`)
+  - [x] Parse `$ARGUMENTS`: first word is optional template name. If empty, no `--template` flag passed to CLI.
+  - [x] Instruct the assistant to:
     1. Run `sq _summary-instructions [--template X]` via Bash, capture stdout as the instruction text. If exit code non-zero, surface the error and stop.
     2. Generate a summary of the current conversation following those instructions. Output ONLY the summary text — no preface, no explanation, no questions.
     3. Pipe the summary text to clipboard via the shell chain: `pbcopy 2>/dev/null || xclip -selection clipboard 2>/dev/null || wl-copy 2>/dev/null || { echo "no clipboard tool found (install xclip or wl-clipboard)" >&2; exit 1; }`
     4. Print exactly one confirmation line: `Summary copied to clipboard (N chars, template: T).`
-  - [ ] Explicitly instruct: do NOT print the summary text into the chat. Clipboard only.
-  - [ ] Success: file exists at `commands/sq/summary.md`, follows the structure of other `commands/sq/*.md` files
+  - [x] Explicitly instruct: do NOT print the summary text into the chat. Clipboard only.
+  - [x] Success: file exists at `commands/sq/summary.md`, follows the structure of other `commands/sq/*.md` files
 
-- [ ] **T3.2: Verify `sq install-commands` picks up the new command**
-  - [ ] Run `sq install-commands` and confirm `summary.md` appears in the installed list
-  - [ ] Verify the file is copied to `~/.claude/commands/sq/summary.md`
-  - [ ] Success: `/sq:summary` is available as a slash command after install
+- [x] **T3.2: Verify `sq install-commands` picks up the new command**
+  - [x] Run `sq install-commands` and confirm `summary.md` appears in the installed list
+  - [x] Verify the file is copied to `~/.claude/commands/sq/summary.md`
+  - [x] Success: `/sq:summary` is available as a slash command after install
 
-- [ ] **T3.3: Commit**
-  - [ ] `ruff format`, then commit: `feat: add /sq:summary slash command for clipboard summary`
+- [x] **T3.3: Commit**
+  - [x] `ruff format`, then commit: `feat: add /sq:summary slash command for clipboard summary`
 
 ---
 
 ### T4: Build verification and full validation
 
-- [ ] **T4.1: Full test suite**
-  - [ ] Run `uv run pytest tests/ -v` — all tests pass (no regressions)
-  - [ ] Run `uv run ruff check src/` — clean
-  - [ ] Run `uv run pyright src/` — clean (or only pre-existing exclusions)
-  - [ ] Success: all checks pass
+- [x] **T4.1: Full test suite**
+  - [x] Run `uv run pytest tests/ -v` — all tests pass (no regressions)
+  - [x] Run `uv run ruff check src/` — clean
+  - [x] Run `uv run pyright src/` — clean (or only pre-existing exclusions)
+  - [x] Success: all checks pass
 
-- [ ] **T4.2: Manual CLI verification**
-  - [ ] `sq _summary-instructions` — prints rendered instructions, exit 0
-  - [ ] `sq _summary-instructions --template minimal-sdk` — prints minimal-sdk instructions, exit 0
-  - [ ] `sq _summary-instructions --template bogus` — prints error to stderr, exit 1
-  - [ ] Verify no remaining references to `precompact_hook` or `_precompact-hook` in codebase
-  - [ ] Success: all manual checks pass
+- [x] **T4.2: Manual CLI verification**
+  - [x] `sq _summary-instructions` — prints rendered instructions, exit 0
+  - [x] `sq _summary-instructions --template minimal-sdk` — prints minimal-sdk instructions, exit 0
+  - [x] `sq _summary-instructions --template bogus` — prints error to stderr, exit 1
+  - [x] Verify no remaining references to `precompact_hook` or `_precompact-hook` in codebase
+  - [x] Success: all manual checks pass
 
-- [ ] **T4.3: Commit any fixes**
-  - [ ] If any fixes were needed, `ruff format` and commit: `fix: address validation issues in slice 162`
+- [x] **T4.3: Commit any fixes**
+  - [x] If any fixes were needed, `ruff format` and commit: `fix: address validation issues in slice 162`
 
 ---
 
 ### T5: Documentation and wrap-up
 
-- [ ] **T5.1: Update DEVLOG**
-  - [ ] Add entry for session covering slice 162 implementation
-  - [ ] Include: what was built, key decisions, any deviations from design
+- [x] **T5.1: Update DEVLOG**
+  - [x] Add entry for session covering slice 162 implementation
+  - [x] Include: what was built, key decisions, any deviations from design
 
-- [ ] **T5.2: Update CHANGELOG**
-  - [ ] Add entry under `[Unreleased]` for the new `/sq:summary` command
-  - [ ] Concise, human-readable: what's added, what it does
+- [x] **T5.2: Update CHANGELOG**
+  - [x] Add entry under `[Unreleased]` for the new `/sq:summary` command
+  - [x] Concise, human-readable: what's added, what it does
 
-- [ ] **T5.3: Update slice status**
-  - [ ] Set slice design `status: complete` in `162-slice.sq-summary-clipboard-summary-for-manual-context-reset.md`
-  - [ ] Mark task file `status: complete`
-  - [ ] Check off slice 162 in the slice plan (`140-slices.pipeline-foundation.md`)
+- [x] **T5.3: Update slice status**
+  - [x] Set slice design `status: complete` in `162-slice.sq-summary-clipboard-summary-for-manual-context-reset.md`
+  - [x] Mark task file `status: complete`
+  - [x] Check off slice 162 in the slice plan (`140-slices.pipeline-foundation.md`)
 
-- [ ] **T5.4: Final commit**
-  - [ ] `ruff format`, then commit: `docs: update DEVLOG, CHANGELOG, and slice status for 162`
+- [x] **T5.4: Final commit**
+  - [x] `ruff format`, then commit: `docs: update DEVLOG, CHANGELOG, and slice status for 162`

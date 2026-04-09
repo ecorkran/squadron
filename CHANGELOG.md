@@ -10,6 +10,23 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `/sq:summary [template]` slash command — generates a deterministic,
+  template-driven summary of the current conversation and copies it to the
+  clipboard. Intended for `/sq:summary` → `/clear` → paste workflow.
+- `sq _summary-instructions [template]` hidden CLI command — renders
+  compaction template instructions to stdout. Used by `/sq:summary`.
+- `summary_render` shared helper module (`pipeline/summary_render.py`) —
+  `resolve_template_instructions()` and `gather_cf_params()`.
+
+### Removed
+- `sq _precompact-hook` subcommand, `install_settings.py`, and all PreCompact
+  hook install/uninstall logic. The hook was dead code (no longer installed
+  by `sq install-commands` since 0.3.3). Useful logic salvaged into
+  `summary_render.py`.
+
 ## [0.3.3] - 20260408
 
 ### Added
@@ -36,9 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK pipeline sessions now default to the Claude Code system prompt preset
   instead of the Agent SDK's minimal tool-only prompt.
 - `sq install-commands` no longer installs the `PreCompact` hook. The hook API
-  doesn't reliably override compaction instructions in practice. The underlying
-  `sq _precompact-hook` subcommand and config keys are retained for manual use;
-  `sq uninstall-commands` still cleans up any previously installed entry.
+  doesn't reliably override compaction instructions in practice.
 
 ### Fixed
 - CLI-formatted API errors (e.g. `API Error: 500 ...`) returned as assistant text
