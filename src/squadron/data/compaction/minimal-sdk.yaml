@@ -18,8 +18,8 @@ instructions: |
   - The text you output will be injected verbatim into a fresh session as
     historical reference. It must stand alone.
 
-  Behavior constraints:
-  - Do NOT take any action, run any tool, or write any code until the user
-    explicitly directs you to do so.
-  - Acknowledge the context restore with a brief summary of where things
-    stand, then wait.
+suffix: |
+  ---
+  Do not take any action, run any tool, or write any code until the user
+  explicitly directs you to do so. Acknowledge this context restore with a
+  brief summary of where things stand, then wait.

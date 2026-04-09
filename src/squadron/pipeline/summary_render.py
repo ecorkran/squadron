@@ -41,6 +41,24 @@ def resolve_template_instructions(
     return render_with_params(template.instructions, params)
 
 
+def resolve_template_suffix(
+    template_name: str,
+    *,
+    cwd: str = ".",
+) -> str:
+    """Return the rendered suffix for a compaction template, or empty string.
+
+    The suffix is appended verbatim to the clipboard content after the summary,
+    bypassing LLM generation.  Returns ``""`` if the template has no suffix.
+
+    Raises:
+        FileNotFoundError: If no template with the given name exists.
+    """
+    template = load_compaction_template(template_name)
+    params = gather_cf_params(cwd)
+    return render_with_params(template.suffix, params) if template.suffix else ""
+
+
 def gather_cf_params(cwd: str) -> dict[str, object]:
     """Return available render params from Context Forge (best-effort).
 

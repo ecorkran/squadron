@@ -6,17 +6,19 @@ The first word of `$ARGUMENTS` is an optional template name. If empty, no templa
 
 ---
 
-## Step 1: Get summary instructions
+## Step 1: Get summary instructions and suffix
 
-Run via Bash:
+Run both commands via Bash:
 
 ```bash
 sq _summary-instructions $ARGUMENTS
+sq _summary-instructions $ARGUMENTS --suffix
 ```
 
-Capture stdout as the **instruction text**.
+Capture the first command's stdout as the **instruction text**.
+Capture the second command's stdout as the **suffix text** (may be empty).
 
-If the command exits non-zero, show the error output to the user and **stop** — do not continue.
+If either command exits non-zero, show the error output to the user and **stop** — do not continue.
 
 ---
 
@@ -30,15 +32,16 @@ Follow the instructions exactly. Output ONLY the summary text — no preface, no
 
 ## Step 3: Copy to clipboard
 
-Pipe the summary text to the system clipboard via Bash. Use a heredoc to handle special characters:
+Pipe the summary text (followed by the suffix text, if any) to the system clipboard via Bash. Use a heredoc to handle special characters. If the suffix is non-empty, append it after the summary with a newline separator:
 
 ```bash
 cat << '__SQ_END__' | pbcopy 2>/dev/null || cat << '__SQ_END__' | xclip -selection clipboard 2>/dev/null || cat << '__SQ_END__' | wl-copy 2>/dev/null || { echo "No clipboard tool found (install xclip or wl-clipboard on Linux)" >&2; exit 1; }
 SUMMARY_TEXT
+SUFFIX_TEXT
 __SQ_END__
 ```
 
-Replace `SUMMARY_TEXT` with the actual summary.
+Replace `SUMMARY_TEXT` with the actual summary and `SUFFIX_TEXT` with the suffix (omit the suffix line entirely if it is empty).
 
 ---
 
@@ -50,4 +53,4 @@ Print exactly one line:
 Summary copied to clipboard (N chars, template: T).
 ```
 
-Where `N` is the character count of the summary and `T` is the template name used (from arguments or default).
+Where `N` is the character count of the full clipboard content (summary + suffix) and `T` is the template name used (from arguments or default).

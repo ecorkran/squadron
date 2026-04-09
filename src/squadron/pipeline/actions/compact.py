@@ -24,6 +24,7 @@ class CompactionTemplate:
     name: str
     description: str
     instructions: str
+    suffix: str = ""
 
 
 def load_compaction_template(
@@ -72,6 +73,7 @@ def _parse_template(path: Path) -> CompactionTemplate:
         name=str(data["name"]),
         description=str(data["description"]),
         instructions=str(data["instructions"]),
+        suffix=str(data["suffix"]) if "suffix" in data else "",
     )
 
 

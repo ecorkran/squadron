@@ -16,6 +16,7 @@ from squadron.pipeline import summary_render as mod
 from squadron.pipeline.summary_render import (
     gather_cf_params,
     resolve_template_instructions,
+    resolve_template_suffix,
 )
 
 # ---------------------------------------------------------------------------
@@ -120,3 +121,26 @@ class TestGatherCfParams:
         ):
             params = gather_cf_params(str(tmp_path))
         assert params == {"project": tmp_path.name}
+
+
+# ---------------------------------------------------------------------------
+# resolve_template_suffix
+# ---------------------------------------------------------------------------
+
+
+class TestResolveTemplateSuffix:
+    def test_minimal_sdk_returns_nonempty_suffix(self) -> None:
+        """minimal-sdk.yaml defines a suffix; it should be returned."""
+        result = resolve_template_suffix("minimal-sdk")
+        assert isinstance(result, str)
+        assert len(result.strip()) > 0
+        assert "Do not take any action" in result
+
+    def test_minimal_returns_empty_suffix(self) -> None:
+        """minimal.yaml has no suffix field; returns empty string."""
+        result = resolve_template_suffix("minimal")
+        assert result == ""
+
+    def test_nonexistent_template_raises_file_not_found(self) -> None:
+        with pytest.raises(FileNotFoundError, match="nonexistent"):
+            resolve_template_suffix("nonexistent")
