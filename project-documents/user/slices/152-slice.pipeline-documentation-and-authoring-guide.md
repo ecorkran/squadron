@@ -6,6 +6,7 @@ dateCreated: 20260410
 dateUpdated: 20260410
 status: complete
 index: 152
+slice: pipeline-documentation-and-authoring-guide
 ---
 
 # Slice 152: Pipeline Documentation and Authoring Guide

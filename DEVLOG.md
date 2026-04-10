@@ -14,6 +14,17 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260410
 
+
+**tasks: devlog-4**
+- cf-op-0: PASS
+- cf-op-1: PASS
+- cf-op-2: PASS
+- dispatch-3: PASS
+- review-4: PASS (verdict: UNKNOWN)
+- checkpoint-5: PASS
+- commit-6: PASS
+- compact-0: PASS
+
 ### Slice 152: Pipeline Documentation and Authoring Guide — Complete
 
 **Deliverables created:**
