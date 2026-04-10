@@ -12,6 +12,19 @@ Internal work log for squadron project development.
 
 ## 20260410
 
+### Slice 163: Pipeline Run Summary Persistence and Restore — Phase 5 Task Breakdown Complete
+
+**Completed:**
+- Created `user/tasks/163-tasks.pipeline-run-summary-persistence-and-restore.md` (158 lines, 14 tasks)
+- Tasks cover: source verification (T1), emit.py changes (T2–T4), _project threading (T5–T6), commit (T7), summary_instructions --restore (T8–T9), summary.md --restore branch (T10), run.md alignment (T11), commit (T12), verification (T13), slice completion (T14)
+- Test-with pattern: T4 follows T3, T6 follows T5, T9 follows T8
+- Review: PASS (minimax). One NOTE addressed: T11 updated to remove stale `_precompact-hook` reference (removed in slice 162); uses `cf status` for project name resolution instead
+
+**Status:**
+- Phase 5 complete. Ready for Phase 6 (implementation).
+
+---
+
 ### Slice 163: Pipeline Run Summary Persistence and Restore — Phase 4 Design Complete
 
 **Completed:**
