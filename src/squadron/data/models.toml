@@ -151,6 +151,18 @@ output = 1.50
 cache_read = 0.025
 cache_write = 0.25
 
+[aliases.gemma4]
+profile = "openrouter"
+model = "google/gemma-4-31b-it"
+private = true
+cost_tier = "cheap"
+
+[aliases.gemma4.pricing]
+input = 0.14
+output = 0.40
+cache_read = 0.14
+cache_write = 0.40
+
 # ---------------------------------------------------------------------------
 # OpenRouter — cost-effective, no retention/training
 # ---------------------------------------------------------------------------
@@ -192,18 +204,17 @@ output = 2.30
 cache_read = 0.72
 cache_write = 2.30
 
-[aliases.glm5-turbo]
+[aliases.glm51]
 profile = "openrouter"
-model = "z-ai/glm-5-turbo"
+model = "z-ai/glm-5.1"
 private = true
 cost_tier = "moderate"
-notes = "on sale"
 
-[aliases.glm5-turbo.pricing]
-input = 0.96
-output = 3.20
-cache_read = 0.192
-cache_write = 3.20
+[aliases.glm51.pricing]
+input = 0.95
+output = 3.15
+cache_read = 0.475
+cache_write = 3.15
 
 [aliases.mimo-omni]
 profile = "openrouter"
