@@ -457,7 +457,7 @@ Pipeline execution produces a state file that enables resume after interruption,
 
 ### Storage Location
 
-`~/.config/squadron/runs/` — one JSON file per active/recent run. Old runs can be pruned.
+`~/.config/squadron/runs/` — one JSON file per active/recent run. Old runs can be pruned. Summary steps with `emit: [file]` (no explicit path) write human-readable context snapshots to `~/.config/squadron/runs/summaries/{project}-{pipeline}.md` (latest-only, overwritten each run).
 
 ### Resume Modes
 
