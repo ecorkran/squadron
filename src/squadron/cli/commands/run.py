@@ -81,11 +81,15 @@ def _assemble_params(
 ) -> dict[str, object]:
     """Build the runtime params dict from CLI inputs.
 
+    - Starts with default parameters from the pipeline definition.
     - Binds the positional *target* to the first required pipeline param.
-    - Parses ``--param key=value`` entries from *param_list*.
+    - Parses ``--param key=value`` entries from *param_list* (overrides defaults).
     - Records *model* for state-file resume fidelity (not for model resolution).
     """
-    params: dict[str, object] = {}
+    # Start with pipeline defaults, excluding "required" markers
+    params: dict[str, object] = {
+        key: value for key, value in definition.params.items() if value != "required"
+    }
 
     binding = _resolve_target(definition, target)
     if binding is not None:

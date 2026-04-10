@@ -9,10 +9,10 @@ params:
 steps:
   - design:
       phase: 4
-      model: {model}
+      model: "{model}"
       review:
         template: slice
-        model: {review-model}
+        model: "{review-model}"
 
   - summary:
       template: minimal-sdk
