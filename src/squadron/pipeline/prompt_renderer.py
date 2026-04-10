@@ -350,8 +350,9 @@ def render_step_instructions(
     import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
     import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
     import squadron.pipeline.steps.review as _s_review  # noqa: F401
+    import squadron.pipeline.steps.summary as _s_summary  # noqa: F401
 
-    _ = (_s_compact, _s_devlog, _s_phase, _s_review)
+    _ = (_s_compact, _s_devlog, _s_phase, _s_review, _s_summary)
 
     step_type_impl = get_step_type(step.step_type)
     actions = step_type_impl.expand(step)
