@@ -80,7 +80,7 @@ class TestRestoreFlag:
     def test_restore_multiple_files_lists_options_on_stderr(
         self, tmp_path: Path
     ) -> None:
-        """Multiple files: selection info lists pipeline names and most recent choice."""
+        """Multiple files: lists pipeline names and selects most recent."""
         summaries = tmp_path / "summaries"
         summaries.mkdir()
         _write_summary(summaries, "myproject-P4.md", "old summary", 1000.0)
