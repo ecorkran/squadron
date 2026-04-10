@@ -312,10 +312,28 @@ sq shutdown my-agent
 
 CONCERNS returns exit code 0 — it's informational, not a failure. This makes `sq` usable in CI pipelines where you want to gate on FAIL but not on warnings.
 
+## Pipelines (`sq run`)
+
+Pipelines compose multi-step AI workflows into a single repeatable command:
+
+```bash
+sq run slice 152          # design → tasks → implement → devlog for slice 152
+sq run --list             # show all available pipelines
+```
+
+When running inside Claude Code (VS Code or terminal), use `--prompt-only` to get step-by-step instructions instead of direct LLM dispatch — or install the `/sq:run` slash command which wraps this automatically:
+
+```bash
+sq install-commands       # installs /sq:run and other slash commands
+```
+
+See **[docs/PIPELINES.md](docs/PIPELINES.md)** for the full authoring guide: YAML grammar, step types, model resolution, and how to write custom pipelines.
+
 ## Documentation
 
 - **[docs/COMMANDS.md](docs/COMMANDS.md)** — Full command reference with all options and arguments
 - **[docs/TEMPLATES.md](docs/TEMPLATES.md)** — How review templates work and how to create new ones
+- **[docs/PIPELINES.md](docs/PIPELINES.md)** — Pipeline authoring guide
 
 ## Development
 
