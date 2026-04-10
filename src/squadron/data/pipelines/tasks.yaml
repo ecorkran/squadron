@@ -13,7 +13,7 @@ steps:
       review: 
         template: tasks
         model: "{review-model}"
-      checkpoint: on-fail
+      checkpoint: on-concerns
 
   - compact:
       template: minimal
