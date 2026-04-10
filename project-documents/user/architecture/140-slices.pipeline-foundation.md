@@ -72,7 +72,7 @@ status: in_progress
 
 ## Integration Work
 
-16. [ ] **(152) Pipeline Documentation and Authoring Guide** — Pipeline authoring documentation: YAML grammar reference, action type catalog, step type catalog, model resolution rules and cascade precedence, built-in pipeline descriptions with annotated examples. Configuration surface guide: where built-in defaults live (shipped TOML and YAML), where user overrides live, how layering works. Example custom pipeline definition. README updates for `sq run`. Dependencies: [all prior slices]. Risk: Low. Effort: 1/5
+16. [x] **(152) Pipeline Documentation and Authoring Guide** — Pipeline authoring documentation: YAML grammar reference, action type catalog, step type catalog, model resolution rules and cascade precedence, built-in pipeline descriptions with annotated examples. Configuration surface guide: where built-in defaults live (shipped TOML and YAML), where user overrides live, how layering works. Example custom pipeline definition. README updates for `sq run`. Dependencies: [all prior slices]. Risk: Low. Effort: 1/5
 
 ---
 
