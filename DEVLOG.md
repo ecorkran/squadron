@@ -12,6 +12,24 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
 
+## 20260410
+
+### Slice 152: Pipeline Documentation and Authoring Guide — Complete
+
+**Deliverables created:**
+- `docs/PIPELINES.md` — authoritative pipeline authoring guide (Quick Start, YAML Grammar, Step Type Catalog, Action Type Catalog, Model Resolution, Configuration Surface, Built-in Pipelines, Custom Pipeline Walkthrough, Prompt-Only Mode)
+- `README.md` — added `## Pipelines (sq run)` section with quick-start and link to guide
+
+**Discrepancies found during T1 verification (documented, not propagated from slice design):**
+- `slice` pipeline has 2 params (`slice`, `review-model`); slice design table listed only `slice`
+- `tasks`, `P5`, `P6` each have 3 params including `model`; design table showed 2
+- `example.yaml` inline comment shows stale project path (`.squadron/pipelines/`); loader uses `project-documents/user/pipelines/` — guide uses loader path
+- `app.yaml` is a WIP pipeline (same description as design-batch, has TODO comment) — excluded from docs
+
+**Commits:**
+- `4056c7b` docs: add pipeline authoring guide
+- `5460177` docs: add sq run section to README
+
 ## 20260409
 
 ### Slice 162: /sq:summary — Clipboard Summary for Manual Context Reset

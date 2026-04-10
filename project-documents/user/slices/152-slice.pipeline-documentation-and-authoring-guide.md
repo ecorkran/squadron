@@ -4,7 +4,7 @@ project: squadron
 initiative: 140-slices.pipeline-foundation
 dateCreated: 20260410
 dateUpdated: 20260410
-status: tasks_complete
+status: complete
 index: 152
 ---
 
