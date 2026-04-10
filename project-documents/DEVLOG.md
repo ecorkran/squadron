@@ -10,6 +10,36 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260410
+
+### Slice 154: Prompt-Only Loops — Phase 5 Task Breakdown Complete
+
+**Completed:**
+- Created `user/tasks/154-tasks.prompt-only-loops.md` (260 lines, 19 tasks)
+- Tasks follow test-with pattern: each implementation task is immediately followed by its tests before the next implementation task
+- Commit checkpoints placed after coherent logical units (state model, state manager methods, render function, each CLI handler, integration test, closeout)
+- No schema version bump needed — `LoopContext` additive with `None` default on `RunState`
+- Key implementation sequence: `LoopContext` model → `StateManager` loop methods → `LoopInstructionContext` + `render_each_step_instructions()` → `executor.py` rename → `_handle_prompt_only_init` → `_handle_prompt_only_next` → `_handle_step_done` → integration test → verification walkthrough
+
+**Status:**
+- Phase 5 complete. Ready for Phase 6 (Slice Execution).
+
+---
+
+### Slice 154: Prompt-Only Loops — Design Complete (Refreshed)
+
+**Completed:**
+- Recreated slice design document at `user/slices/154-slice.prompt-only-loops.md` (previous version was deleted from working tree)
+- Design refreshed to reflect current codebase state: schema v3 (no version bump needed — `LoopContext` is additive with `None` default), existing `CompactSummary` pattern, `ExecutionMode` enum
+- Core design unchanged from original: flatten `each` loop iterations into prompt-only instruction stream via `LoopContext` state tracking
+- Key implementation points: `LoopContext` Pydantic model on `RunState`, `render_each_step_instructions()` in prompt renderer, loop-aware `--step-done` advancement, cached collection items in state for deterministic resume
+- Slice plan entry at `140-slices.pipeline-foundation.md` already has materialized index (154) and design-complete link
+
+**Status:**
+- Design complete. Ready for Phase 5 (Task Breakdown).
+
+---
+
 ## 20260407
 
 ### Slice 157: PreCompact Hook for Interactive Claude Code — Phase 6 Implementation Complete

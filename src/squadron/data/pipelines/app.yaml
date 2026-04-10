@@ -1,0 +1,57 @@
+name: app
+description: Run phase 4 design for every unfinished slice in a plan
+
+params:
+  plan: required
+  slice: required
+
+steps:
+  - design:
+      phase: 1
+      model: opus
+      review:
+        template: arch
+        model: glm5
+      checkpoint: always
+
+  - design:
+      phase: 2
+      model: opus
+      review:
+        template: arch
+        model: glm5
+      checkpoint: always
+
+  - compact:
+      template: minimal-sdk
+      model: minimax
+
+  - design:
+      phase: 3
+      model: opus
+      review:
+        template: arch
+        model: glm5
+      checkpoint: always
+
+# todo: fill in later this is work in progress.
+# if we could somehow get the created indices from each slice we could use it as input
+# and create a template to create an entire simple app.  It would require a lot of back and forth
+# or typing in terminal.  Could do it from VSCode but it would not switch models or compact.
+
+  - each:
+      source: cf.unfinished_slices("{plan}")
+      as: slice
+      steps:
+        - design:
+            phase: 4
+            slice: "{slice.index}"
+            review:
+              template: slice
+              model: minimax
+            checkpoint: never
+
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard]

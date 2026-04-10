@@ -194,13 +194,26 @@ def _resolve_rules_content(rules_path: str | None) -> str | None:
     return path.read_text()
 
 
-def _extract_diff_paths(diff_ref: str, cwd: str) -> list[str]:
-    """Run git diff and extract +++ b/ file paths."""
+def _extract_diff_paths(
+    diff_ref: str,
+    cwd: str,
+    exclude_patterns: list[str] | None = None,
+) -> list[str]:
+    """Run git diff --name-only and return changed file paths.
+
+    When *exclude_patterns* is provided, matching files are filtered out
+    via git pathspec exclusions.
+    """
     import subprocess
 
+    cmd = ["git", "diff", "--name-only", diff_ref]
+    if exclude_patterns:
+        cmd.append("--")
+        cmd.append(".")
+        cmd.extend(f":!{p}" for p in exclude_patterns)
     try:
         result = subprocess.run(
-            ["git", "diff", "--name-only", diff_ref],
+            cmd,
             capture_output=True,
             text=True,
             cwd=cwd,
@@ -731,6 +744,11 @@ def review_code(
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
 ) -> None:
     """Run a code review."""
+    # Load template early to access diff_exclude_patterns
+    load_all_templates()
+    code_template = get_template("code")
+    exclude_patterns = code_template.diff_exclude_patterns if code_template else None
+
     slice_info: SliceInfo | None = None
     if slice_number is not None and slice_number.isdigit():
         slice_info = _resolve_slice_number(slice_number)
@@ -759,7 +777,11 @@ def review_code(
         # Auto-detect language rules from diff or files input
         resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
         if resolved_rules_dir is not None:
-            file_paths = _extract_diff_paths(diff, resolved_cwd) if diff else []
+            file_paths = (
+                _extract_diff_paths(diff, resolved_cwd, exclude_patterns)
+                if diff
+                else []
+            )
             if not file_paths and files:
                 import glob as _glob
 
@@ -783,6 +805,8 @@ def review_code(
         inputs["files"] = files
     if diff:
         inputs["diff"] = diff
+    if exclude_patterns:
+        inputs["diff_exclude_patterns"] = ",".join(exclude_patterns)
     result = _run_review_command(
         "code",
         inputs,

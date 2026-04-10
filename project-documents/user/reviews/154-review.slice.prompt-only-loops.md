@@ -4,96 +4,84 @@ layer: project
 reviewType: slice
 slice: prompt-only-loops
 project: squadron
-verdict: PASS
+verdict: CONCERNS
 sourceDocument: project-documents/user/slices/154-slice.prompt-only-loops.md
-aiModel: minimax/minimax-m2.7
+aiModel: z-ai/glm-5
 status: complete
-dateCreated: 20260407
-dateUpdated: 20260407
+dateCreated: 20260410
+dateUpdated: 20260410
 findings:
   - id: F001
     severity: pass
-    category: uncategorized
-    summary: "Appropriate scope boundaries"
+    category: scope-alignment
+    summary: "Scope boundaries correctly respected"
   - id: F002
     severity: pass
-    category: uncategorized
-    summary: "Dependency structure is correct"
+    category: component-structure
+    summary: "Package structure alignment"
   - id: F003
     severity: pass
-    category: uncategorized
-    summary: "No new components introduced"
+    category: data-model
+    summary: "Backward-compatible state extension"
   - id: F004
     severity: pass
-    category: uncategorized
-    summary: "Loop transparency design is architecturally sound"
+    category: integration
+    summary: "Correct understanding of execution modes"
   - id: F005
     severity: pass
-    category: uncategorized
-    summary: "Backward compatibility handled appropriately"
+    category: integration
+    summary: "Reuse of existing patterns"
   - id: F006
-    severity: pass
-    category: uncategorized
-    summary: "Item binding follows architecture intent"
+    severity: concern
+    category: documentation
+    summary: "Incomplete dependency declaration"
+    location: frontmatter
   - id: F007
-    severity: note
-    category: uncategorized
-    summary: "Nested loops acknowledgment"
+    severity: concern
+    category: scope-creep
+    summary: "Binding mechanism implementation ambiguity"
+    location: Technical Scope > In Scope > 2
   - id: F008
-    severity: pass
-    category: uncategorized
-    summary: "Step naming convention is appropriate"
+    severity: note
+    category: documentation
+    summary: "Schema version reference"
 ---
 
 # Review: slice — slice 154
 
-**Verdict:** PASS
-**Model:** minimax/minimax-m2.7
+**Verdict:** CONCERNS
+**Model:** z-ai/glm-5
 
 ## Findings
 
-### [PASS] Appropriate scope boundaries
+### [PASS] Scope boundaries correctly respected
 
-The slice correctly identifies out-of-scope items that belong to initiative 160 (Pipeline Intelligence): convergence loop strategies (`loop.strategy`), model pools, and escalation behaviors. The architecture explicitly states that "140 defines the loop construct and strategy extension point. 160 fills in the strategies." This slice appropriately falls back to basic max-iteration behavior for convergence strategies rather than implementing them.
+The slice correctly defers convergence loop strategies to slice 160 ("loop.strategy remains slice 160 scope"), notes nested loops as out of scope for this slice, and limits collection sources to `cf.unfinished_slices()`. This aligns with the architecture's 140/160 boundary where 140 handles basic and collection loops while 160 adds convergence strategies.
 
-### [PASS] Dependency structure is correct
+### [PASS] Package structure alignment
 
-The slice depends on:
-- **Slice 153 (Prompt-Only Executor)** — extends `render_step_instructions()` as stated
-- **Slice 149 (Executor)** — references the loop implementation as the reference behavior
-- **Slice 150 (State Manager)** — uses the extended `RunState` schema
+The modifications to `executor.py`, `state.py`, `prompt_renderer.py`, and `run.py` follow the architecture's defined package structure under `src/squadron/pipeline/`. No new packages or components are introduced—only extensions to existing modules.
 
-The slice **provides to slice 155 (SDK Executor)** via shared `RunState` schema compatibility. This dependency direction is correct: SDK executor does not consume prompt-only mode code; they share data models.
+### [PASS] Backward-compatible state extension
 
-### [PASS] No new components introduced
+The addition of `loop_context: LoopContext | None = None` to `RunState` with a `None` default is appropriate for backward compatibility. The reasoning for not bumping schema version is technically sound—additive optional fields deserialize correctly with Pydantic defaults.
 
-The architecture shows a clean component structure with `prompt_renderer.py` as part of the existing pipeline module. The slice extends this file rather than introducing new components, which aligns with the architecture's package structure:
+### [PASS] Correct understanding of execution modes
 
-```
-src/squadron/pipeline/
-├── executor.py              # existing
-├── prompt_renderer.py       # extended (not new)
-├── models.py                # extended (not new)
-├── loader.py                # existing
-└── ...
-```
+The slice correctly distinguishes prompt-only mode (no persistent session, human is runtime, successive `--next` calls) from SDK execution mode (session persistence, automated dispatch). This aligns with the architecture's session persistence discussion.
 
-### [PASS] Loop transparency design is architecturally sound
+### [PASS] Reuse of existing patterns
 
-The design decision to flatten loop iterations into a linear instruction stream (rather than returning a "loop step" with all iterations) is consistent with the architecture's prompt-only mode philosophy. The slash command (`/sq:run`) receives step-by-step instructions without needing loop-aware logic, which matches the architecture's separation between "prompt-only mode" (human-in-the-loop) and "SDK mode" (autonomous execution).
+Reuse of `_SOURCE_REGISTRY`, `_parse_source`, CF client construction, and the existing `render_step_instructions()` function demonstrates proper integration with established architecture patterns rather than inventing new mechanisms.
 
-### [PASS] Backward compatibility handled appropriately
+### [CONCERN] Incomplete dependency declaration
 
-The schema versioning approach (`loop_context: null` for v1, populated only when in a loop for v2) and backward compatibility for resuming pre-loop state files is a sound migration strategy. The architecture's state file design in the "Pipeline State & Resume" section does not mandate a specific schema structure for future extensions, so this evolution is appropriate.
+The frontmatter lists only `[153-prompt-only-pipeline-executor]` in dependencies, but the Integration Points section explicitly consumes from slices 149 (Executor), 150 (State Manager), and 153. While slice 149 functionality appears to already exist (renaming `_unpack_inner_steps` to `unpack_inner_steps`), the formal dependency declaration should include all consumed slices for proper dependency tracking.
 
-### [PASS] Item binding follows architecture intent
+### [CONCERN] Binding mechanism implementation ambiguity
 
-The architecture defers the collection loop item binding mechanism to slice 149 ("Full semantics... are a 149 design decision"). The design uses `{slice.index}` syntax as the bound variable reference, which is consistent with the illustrative syntax shown in the architecture's `design-batch` example. This is not a violation.
+The architecture's Open Question 5 states "the binding mechanism is not implemented in 140" and defers full semantics to slice 149. However, this slice claims "Item variable resolution" as in-scope and implements `{slice.index}` binding. The implementation approach—passing the current item as params to `render_step_instructions()`—may not constitute a new binding mechanism (just parameter passing), but this should be clarified with the architecture owner. The architecture's statement that the `design-batch` example uses "illustrative syntax only" creates ambiguity about whether any binding implementation belongs in initiative 140.
 
-### [NOTE] Nested loops acknowledgment
+### [NOTE] Schema version reference
 
-The slice states nested loops (`each` inside `each`) are out of scope but the architecture should not "prevent" them. This is a reasonable conservative approach — the design doesn't preclude future extension but focuses on the primary use case (single-level iteration over slice plans). This is acceptable scope management rather than a violation.
-
-### [PASS] Step naming convention is appropriate
-
-The `{inner_step_name}-each-{item_index}` naming pattern (e.g., `design-each-0`) provides uniqueness and traceability within the instruction stream. This extends the architecture's general approach to step identification without introducing conflicts.
+The architecture document's state file example shows `schema_version: 1`, while the slice references "schema v3". This likely indicates schema evolution since the architecture was drafted. Not a blocking issue since the slice's backward-compatible approach is sound, but the architecture example should be updated for consistency.

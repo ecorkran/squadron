@@ -83,12 +83,14 @@ steps:
   #
   # Options:
   #   template:  compaction template name
+  #   model:     compaction template model
   #
   # Available compaction templates: default, minimal, minimal-sdk
   # -------------------------------------------------------------------------
 
   - compact:
       template: minimal
+      model: minimax
 
   # -------------------------------------------------------------------------
   # summary — generate a summary and emit to one or more destinations

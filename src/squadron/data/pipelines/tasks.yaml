@@ -3,6 +3,7 @@ description: Tasks lifecycle — task breakdown through implementation
 
 params:
   slice: required
+  review-model: minimax
 
 steps:
   - tasks:
@@ -10,7 +11,7 @@ steps:
       model: sonnet
       review: 
         template: tasks
-        model: minimax
+        model: {review-model}
       checkpoint: on-fail
 
   - compact:
@@ -21,10 +22,11 @@ steps:
       model: sonnet
       review:
         template: code
-        model: minimax
+        model: {review-model}
       checkpoint: on-fail
 
   - compact:
       template: minimal
+      model: minimax
 
   - devlog: auto

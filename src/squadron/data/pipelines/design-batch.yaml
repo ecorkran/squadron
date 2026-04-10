@@ -13,5 +13,7 @@ steps:
         - design:
             phase: 4
             slice: "{slice.index}"
-            review: arch
-            checkpoint: always
+            review:
+              template: slice
+              model: minimax
+            checkpoint: never

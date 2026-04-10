@@ -3,6 +3,7 @@ description: Implement slice (phase 6) with review
 
 params:
   slice: required
+  review-model: minimax
 
 steps:
   - implement:
@@ -10,10 +11,11 @@ steps:
       model: sonnet
       review:
         template: code
-        model: minimax
+        model: {review-model}
       checkpoint: on-fail
 
   - compact:
-      template: minimal
-
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard]
   - devlog: auto

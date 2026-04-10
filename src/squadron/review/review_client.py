@@ -80,7 +80,7 @@ async def run_review_with_profile(
 
     # Inject file contents only if the provider can't read files directly
     if not provider.capabilities.can_read_files:
-        prompt = _inject_file_contents(prompt, inputs)
+        prompt = _inject_file_contents(prompt, inputs, template.diff_exclude_patterns)
 
     resolved_model = model if model is not None else template.model
 
@@ -180,7 +180,11 @@ def _truncate(content: str, label: str) -> str:
     )
 
 
-def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
+def _inject_file_contents(
+    prompt: str,
+    inputs: dict[str, str],
+    exclude_patterns: list[str] | None = None,
+) -> str:
     """Inject file contents into the prompt for providers that can't read files.
 
     Iterates input values, checks if each is a real file path via
@@ -228,7 +232,7 @@ def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
     # Handle diff input — run git diff locally
     diff_ref = inputs.get("diff")
     if diff_ref is not None:
-        diff_content = _run_git_diff(diff_ref, inputs.get("cwd", "."))
+        diff_content = _run_git_diff(diff_ref, inputs.get("cwd", "."), exclude_patterns)
         if diff_content:
             _add_injection("Git Diff", diff_content)
 
@@ -245,11 +249,25 @@ def _inject_file_contents(prompt: str, inputs: dict[str, str]) -> str:
     return prompt + file_section
 
 
-def _run_git_diff(ref: str, cwd: str) -> str | None:
-    """Run git diff against a ref and return the output."""
+def _run_git_diff(
+    ref: str,
+    cwd: str,
+    exclude_patterns: list[str] | None = None,
+) -> str | None:
+    """Run git diff against a ref and return the output.
+
+    When *exclude_patterns* is provided, each pattern is passed as a
+    git pathspec exclusion (``':!pattern'``), filtering matching files
+    from the diff output.
+    """
+    cmd = ["git", "diff", ref]
+    if exclude_patterns:
+        cmd.append("--")
+        cmd.append(".")
+        cmd.extend(f":!{p}" for p in exclude_patterns)
     try:
         result = subprocess.run(
-            ["git", "diff", ref],
+            cmd,
             capture_output=True,
             text=True,
             cwd=cwd,

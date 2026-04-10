@@ -37,6 +37,7 @@ class ReviewTemplate:
     hooks: dict[str, object] | None = None
     model: str | None = None
     profile: str | None = None
+    diff_exclude_patterns: list[str] | None = None
 
     # Prompt construction — exactly one of these is set (validated at load time)
     prompt_template: str | None = None
@@ -136,6 +137,11 @@ def load_template(path: Path) -> ReviewTemplate:
         hooks=dict(hooks_raw) if isinstance(hooks_raw, dict) else None,  # type: ignore[arg-type]
         model=str(data["model"]) if "model" in data else None,
         profile=str(data["profile"]) if "profile" in data else None,
+        diff_exclude_patterns=(
+            [str(p) for p in data["diff_exclude_patterns"]]  # type: ignore[union-attr]
+            if "diff_exclude_patterns" in data
+            else None
+        ),
         prompt_template=(
             str(data["prompt_template"]) if "prompt_template" in data else None
         ),

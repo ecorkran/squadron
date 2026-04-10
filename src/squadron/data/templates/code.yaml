@@ -44,4 +44,22 @@ inputs:
     - name: diff
       description: "Git ref to diff against (reviews changed files)"
 
+# Exclude non-source files from git diff during code reviews.
+# These patterns are passed as git pathspec exclusions (':!pattern').
+# Override in ~/.config/squadron/templates/code.yaml to customize.
+diff_exclude_patterns:
+  - "*.md"
+  - "*.yaml"
+  - "*.yml"
+  - "*.toml"
+  - "*.json"
+  - "*.txt"
+  - "*.lock"
+  - "*.csv"
+  - "*.svg"
+  - "*.png"
+  - "*.jpg"
+  - "*.gif"
+  - "*.ico"
+
 prompt_builder: squadron.review.builders.code.code_review_prompt

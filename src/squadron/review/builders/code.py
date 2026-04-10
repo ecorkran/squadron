@@ -21,10 +21,18 @@ def code_review_prompt(inputs: dict[str, str]) -> str:
     ]
 
     if diff:
-        sections.append(
-            f"Run `git diff {diff}` to identify changed files, "
-            "then review those files for quality and correctness."
-        )
+        exclude_patterns = inputs.get("diff_exclude_patterns")
+        if exclude_patterns:
+            pathspecs = " ".join(f"':!{p}'" for p in exclude_patterns.split(","))
+            sections.append(
+                f"Run `git diff {diff} -- . {pathspecs}` to identify changed "
+                "source files, then review those files for quality and correctness."
+            )
+        else:
+            sections.append(
+                f"Run `git diff {diff}` to identify changed files, "
+                "then review those files for quality and correctness."
+            )
     if files:
         sections.append(f"Focus your review on files matching the pattern: {files}")
     if not diff and not files:

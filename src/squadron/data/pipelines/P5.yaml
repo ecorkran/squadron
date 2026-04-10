@@ -3,6 +3,7 @@ description: Break slice into tasks (phase 5) with review
 
 params:
   slice: required
+  review-model: minimax
 
 steps:
   - tasks:
@@ -10,8 +11,10 @@ steps:
       model: sonnet
       review:
         template: tasks
-        model: minimax
+        model: {review-model}
       checkpoint: on-fail
 
-  - compact:
-      template: minimal
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard]

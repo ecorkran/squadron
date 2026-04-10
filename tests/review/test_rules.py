@@ -75,9 +75,15 @@ class TestRulesFlag:
         cli_runner: CliRunner,
         mock_run_review: AsyncMock,
     ) -> None:
-        with patch(
-            "squadron.cli.commands.review.get_config",
-            return_value=None,
+        with (
+            patch(
+                "squadron.cli.commands.review.get_config",
+                return_value=None,
+            ),
+            patch(
+                "squadron.cli.commands.review.resolve_rules_dir",
+                return_value=None,
+            ),
         ):
             result = cli_runner.invoke(app, ["review", "code"])
             assert result.exit_code == 0
@@ -103,9 +109,15 @@ class TestRulesFlag:
                 return 0
             return None
 
-        with patch(
-            "squadron.cli.commands.review.get_config",
-            side_effect=mock_get_config,
+        with (
+            patch(
+                "squadron.cli.commands.review.get_config",
+                side_effect=mock_get_config,
+            ),
+            patch(
+                "squadron.cli.commands.review.resolve_rules_dir",
+                return_value=None,
+            ),
         ):
             result = cli_runner.invoke(
                 app, ["review", "code", "--rules", str(flag_rules)]
@@ -134,9 +146,15 @@ class TestConfigDefaultRules:
                 return 0
             return None
 
-        with patch(
-            "squadron.cli.commands.review.get_config",
-            side_effect=mock_get_config,
+        with (
+            patch(
+                "squadron.cli.commands.review.get_config",
+                side_effect=mock_get_config,
+            ),
+            patch(
+                "squadron.cli.commands.review.resolve_rules_dir",
+                return_value=None,
+            ),
         ):
             result = cli_runner.invoke(app, ["review", "code"])
             assert result.exit_code == 0

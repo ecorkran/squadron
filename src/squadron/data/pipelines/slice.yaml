@@ -19,7 +19,7 @@ steps:
       review: 
         template: tasks
         model: minimax
-      checkpoint: on-fail
+      checkpoint: always
 
   - compact:
       template: minimal

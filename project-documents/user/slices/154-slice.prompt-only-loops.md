@@ -6,7 +6,7 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [153-prompt-only-pipeline-executor]
 interfaces: [155-sdk-pipeline-executor]
 dateCreated: 20260405
-dateUpdated: 20260405
+dateUpdated: 20260410
 status: complete
 ---
 
@@ -14,62 +14,63 @@ status: complete
 
 ## Overview
 
-Extend the prompt-only pipeline executor (slice 153) to support collection loops (`each` step type) without requiring the caller to understand loop semantics. When a pipeline contains an `each` step, successive calls to `sq run --prompt-only --next` return successive iteration instructions as if the iterations were sequential steps. The loop state is tracked internally by the executor, making loops transparent to the prompt-only consumer (the `/sq:run` slash command or external callers).
+Extend the prompt-only pipeline executor (slice 153) to support collection loops (`each` step type) without requiring the caller to understand loop semantics. When a pipeline contains an `each` step, successive calls to `sq run --prompt-only --next` return successive iteration instructions as if the iterations were sequential steps. Loop state is tracked internally by the executor, making loops transparent to the prompt-only consumer (the `/sq:run` slash command or external callers).
 
 This enables design-batch pipelines and other multi-item workflows to run in interactive/prompt-only mode, using the same `--next` loop that works for sequential steps.
 
-## User Value
+## Value
 
-- **Batch operations in interactive mode**: Run `design-batch` to design multiple slices, with each iteration driven by human prompts (the `/sq:run` slash command), rather than requiring autonomous SDK-based dispatch.
+- **Batch operations in interactive mode**: Run `design-batch` to design multiple slices, with each iteration driven by human prompts via `/sq:run`, without requiring autonomous SDK dispatch.
 - **Transparent loop handling**: Callers don't need to know whether a pipeline contains loops. They call `--next` repeatedly and receive step instructions — loops are flattened into the instruction stream.
-- **Design validation**: Before committing to automated (SDK) execution, teams can validate that a batch pipeline produces the right instructions by running it interactively first.
+- **Design validation**: Before committing to automated SDK execution, teams can validate that a batch pipeline produces the right instructions by running it interactively first.
 
 ## Technical Scope
 
 ### In Scope
 
-1. **Loop iteration tracking in prompt-only mode** — The executor maintains the current loop context (which `each` block is active, which item is current, iteration index) across `--next` calls via the `RunState` object.
+1. **Loop iteration tracking in prompt-only mode** — The executor maintains the current loop context (which `each` block is active, which item is current, which inner step is current) across `--next` calls via the `RunState` object.
 
-2. **Step instruction generation for loop iterations** — When generating step instructions via `--next`, the executor expands inner steps within the current `each` iteration with the bound item variables resolved (e.g., `{slice.index}` → `152`).
+2. **Step instruction generation for loop iterations** — When generating step instructions via `--next`, the executor expands inner steps within the current `each` iteration with bound item variables resolved (e.g., `{slice.index}` → `152`).
 
-3. **Iteration-level step naming** — Inner steps within an `each` loop are named to reflect their position: `step-name-each-{item_key}` or similar, making it clear which item an instruction applies to.
+3. **Iteration-level step naming** — Inner steps within an `each` loop are named to reflect their position: `{inner_step_name}-each-{item_index}`, e.g., `design-each-0`, making it clear which item an instruction applies to.
 
-4. **Loop completion detection** — `--next` returns a completion marker when all items in all `each` blocks are exhausted, naturally concluding the instruction stream.
+4. **Loop completion detection** — `--next` returns a completion marker when all items in all `each` blocks are exhausted, concluding the instruction stream.
 
-5. **State persistence for loop progress** — The `RunState` JSON includes loop context (current item, iteration index, completed items) so that `--resume` can restart from the correct position within a loop.
+5. **State persistence for loop progress** — The `RunState` JSON includes `loop_context` (current item, iteration index, cached items) so that `--resume` can restart from the correct position within a loop.
 
-6. **Slash command compatibility** — The `/sq:run` command (which already consumes slice 153's prompt-only output) works transparently with loop iterations — it doesn't need modifications.
+6. **Slash command compatibility** — The `/sq:run` command (which already consumes slice 153's prompt-only output) works transparently with loop iterations — no modifications needed.
 
 ### Out of Scope
 
-- **Convergence loop strategies** — `loop.strategy` (weighted decay, etc.) remains as slice 160 scope. Prompt-only mode acknowledges the field but executes basic max-iteration fallback (inherited from slice 149).
-- **Nested loops** — Support for `each` inside `each` is not explicitly targeted in this slice. The architecture should not *prevent* it, but this slice focuses on single-level loops.
+- **Convergence loop strategies** — `loop.strategy` remains slice 160 scope. Prompt-only mode logs a warning and falls back to basic max-iteration behavior (inherited from slice 149).
+- **Nested loops** — `each` inside `each` is not explicitly targeted. The architecture should not prevent it, but this slice focuses on single-level loops.
 - **Dynamic loop sources** — Collection sources remain limited to `cf.unfinished_slices()`. New sources are slice 160+ scope.
-- **Automated model switching** — `/model` commands are manual only in prompt-only mode. Automated model switching via `client.set_model()` is slice 155 (SDK executor) scope.
-- **Loop convergence in prompt-only** — Convergence strategies that require observing all iteration outputs simultaneously are out of scope; that's SDK-executor territory.
+- **Automated model switching** — `/model` commands are informational only in prompt-only mode. The `model_switch` field appears in step instructions for user reference. Automated model switching via `client.set_model()` is slice 155 (SDK executor) scope.
 
 ## Architecture
 
 ### Component Structure
 
-No new components required. The prompt-only executor (slice 153's `prompt_renderer.py`) is extended with loop awareness. The pipeline executor (slice 149) already supports loops; prompt-only mode just needs to expose those iterations as instruction steps.
+No new components. The prompt-only handlers in `run.py` and the state model in `state.py` are extended with loop awareness. The pipeline executor (`executor.py`) already supports loops in SDK mode; prompt-only mode surfaces that behavior as an instruction stream.
 
 ```
 src/squadron/pipeline/
-├── executor.py                  # EXISTING: Executor with loop support
-├── prompt_renderer.py           # MODIFIED: Add loop iteration tracking
-├── models.py                    # EXISTING: ActionContext, ActionResult, RunState
-├── loader.py                    # EXISTING: Pipeline loader
+├── executor.py               # EXISTING: _unpack_inner_steps made importable
+├── prompt_renderer.py        # MODIFIED: render_each_step_instructions() added
+├── state.py                  # MODIFIED: LoopContext model, loop-aware step-done
+├── steps/collection.py       # EXISTING: EachStepType (unchanged)
 └── ...
+
+src/squadron/cli/commands/
+└── run.py                    # MODIFIED: loop-aware init/next/step-done handlers
 ```
 
 ### Data Flow
 
-**Scenario: A pipeline with an `each` step iterating over 3 slices**
+**Scenario: `design-batch` pipeline with 3 unfinished slices, 1 inner step (design)**
 
 ```
 Pipeline definition:
-- name: design-batch
   steps:
     - each:
         source: cf.unfinished_slices("{plan}")
@@ -78,96 +79,75 @@ Pipeline definition:
           - design:
               phase: 4
               slice: "{slice.index}"
-          - tasks:
-              phase: 5
-              slice: "{slice.index}"
 
 User interaction flow:
 ---
 1. sq run design-batch 100 --prompt-only
-   ↓
-   Executor init run, start traversal at step 0 (the "each" step)
-   ↓
-   Discover: "each" with 3 items (slices 151, 152, 153)
-   ↓
-   Expand inner steps for item 1 (slice 151):
-     - design-each-0 (design step, slice=151)
-     - tasks-each-0 (tasks step, slice=151)
-   ↓
-   Return instructions for "design-each-0" (first step)
-   Output: JSON with step_name="design-each-0", slice.index resolved to "151"
+   → Detect first step is "each"
+   → Query cf.unfinished_slices("100") → [slice-151, slice-152, slice-153]
+   → Create LoopContext: items=3, item_index=0, inner_step_index=0
+   → Unpack inner steps: [design]
+   → Bind slice-151 as {slice}
+   → Expand "design" step for slice-151
+   → Return StepInstructions for "design-each-0"
+   → Persist LoopContext to RunState
 
-2. sq run --step-done <run-id> [--verdict PASS]
-   ↓
-   Mark "design-each-0" complete, record verdict if any
+2. sq run --step-done <run-id> --verdict PASS
+   → Load LoopContext from state
+   → Record "design-each-0" in completed_steps
+   → Advance: inner_step_index → (past end) → item_index=1, inner_step_index=0
+   → Persist updated LoopContext
 
 3. sq run --prompt-only --next --resume <run-id>
-   ↓
-   Find next unfinished step in current iteration: "tasks-each-0"
-   ↓
-   Expand inner step with same item (slice 151) bound
-   ↓
-   Return instructions for "tasks-each-0"
+   → Load LoopContext: item_index=1
+   → Bind slice-152 as {slice}
+   → Expand "design" step for slice-152
+   → Return StepInstructions for "design-each-1"
 
-4. sq run --step-done <run-id>
-   ↓
-   Mark "tasks-each-0" complete
-   ↓
-   Both inner steps done for item 1
+... repeat for slice-153 (design-each-2) ...
+
+4. After final --step-done:
+   → item_index=3 (past end of items)
+   → Loop complete: clear LoopContext, mark "each" step as completed
+   → Persist
 
 5. sq run --prompt-only --next --resume <run-id>
-   ↓
-   Move to item 2 (slice 152)
-   ↓
-   Expand inner steps for item 2: design-each-1, tasks-each-1
-   ↓
-   Return instructions for "design-each-1"
-
-... repeat for item 2 and item 3 ...
-
-Final --next call after item 3's last step:
-   ↓
-   { "status": "completed", "message": "All steps complete" }
+   → first_unfinished_step() skips the completed "each" step
+   → No more steps → return CompletionResult
 ```
 
-### RunState Extensions for Loop Tracking
+### RunState Extension
 
-The existing `RunState` JSON schema (from slice 150) needs loop context fields:
+The existing `RunState` (Pydantic model in `state.py`, schema v3) gains an optional `loop_context` field:
 
 ```python
-@dataclass
-class LoopContext:
-    """Current position within a collection loop."""
-    step_name: str               # Name of the "each" step
-    item_index: int              # Which item (0-based)
-    item_key: str                # Identifier for this item (slice index, etc.)
-    completed_items: list[str]   # Item keys completed so far
-    total_items: int             # Total items in this source
+class LoopContext(BaseModel):
+    """Active loop state for prompt-only each-step execution."""
+    step_name: str                        # Name of the "each" step
+    as_name: str                          # Binding variable name (e.g., "slice")
+    items: list[dict[str, object]]        # Cached collection items
+    inner_steps: list[dict[str, object]]  # Raw inner step configs from YAML
+    current_item_index: int = 0           # 0-based position in items
+    current_inner_step_index: int = 0     # 0-based position in inner_steps
 
-@dataclass
-class RunState:
-    # EXISTING FIELDS
-    run_id: str
-    pipeline_name: str
-    params: dict[str, object]
-    completed_steps: list[StepResult]
-    status: str                  # "in_progress" | "completed" | "failed" | "paused"
-
-    # NEW IN SLICE 154
-    loop_context: LoopContext | None = None  # None if not in a loop
+class RunState(BaseModel):
+    # ... existing fields ...
+    loop_context: LoopContext | None = None  # NEW: None when not in a loop
 ```
 
-When not in a loop, `loop_context` is `None`. When inside an `each` block, `loop_context` tracks current position and allows resume to restore the exact iteration state.
+No schema version bump required. `loop_context: LoopContext | None = None` is backward compatible — existing v3 state files without the field deserialize with `None`. New state files with `loop_context` populated are still v3.
 
 ### Step Instruction Output for Loop Iterations
 
-When an instruction is for a loop iteration, the step name includes loop context:
+The `StepInstructions` dataclass gains an optional `loop_context` field in its JSON output:
 
 ```json
 {
-  "run_id": "run-20260405-batch-xyz",
+  "run_id": "run-20260410-design-batch-abc12345",
   "step_name": "design-each-0",
   "step_type": "design",
+  "step_index": 0,
+  "total_steps": 3,
   "loop_context": {
     "each_step": "batch-iterations-0",
     "item_index": 0,
@@ -175,24 +155,16 @@ When an instruction is for a loop iteration, the step name includes loop context
     "total_items": 3,
     "current_item": {
       "index": "151",
-      "name": "Feature: Database Optimization",
+      "name": "Feature Name",
       "status": "in_progress",
-      "design_file": "user/slices/151-slice.db-optimization.md"
+      "design_file": ""
     }
   },
-  "step_index": 0,
-  "total_steps": 6,  # 3 items × 2 inner steps each
   "actions": [
     {
       "action_type": "cf-op",
       "instruction": "Set phase to 4",
       "command": "cf set phase 4"
-    },
-    {
-      "action_type": "dispatch",
-      "instruction": "Design slice 151",
-      "model": "opus",
-      "model_switch": "/model opus"
     },
     ...
   ]
@@ -200,286 +172,314 @@ When an instruction is for a loop iteration, the step name includes loop context
 ```
 
 Key additions:
-- **`loop_context`** — Provides the bound item's data and loop position. The slash command can use this for logging ("Designing slice 151 of 3") or context.
-- **`step_name`** — Includes loop iteration index (e.g., `design-each-0` for the first item's design step).
-- **`total_steps`** — Reflects the total instruction count across all iterations, so progress bar / step display can show "Step 3 of 6" accurately.
-
-### State Persistence with Loop Context
-
-The `RunState` JSON includes loop context:
-
-```json
-{
-  "run_id": "run-20260405-batch-xyz",
-  "pipeline_name": "design-batch",
-  "params": { "plan": "100" },
-  "status": "in_progress",
-  "completed_steps": [
-    { "step_name": "design-each-0", "step_type": "design", "verdict": "PASS", ... }
-  ],
-  "loop_context": {
-    "step_name": "batch-iterations-0",
-    "item_index": 0,
-    "item_key": "151",
-    "completed_items": ["151"],
-    "total_items": 3
-  }
-}
-```
-
-When resuming with `--resume <run-id>`, the executor restores `loop_context` and continues from the next unfinished step within the current item (or the first step of the next item if the current item is done).
+- **`loop_context`** — Current item data and loop position. Callers can use this for progress display ("Designing slice 151, item 1 of 3").
+- **`step_name`** — Includes iteration index (`design-each-0`).
+- **`total_steps`** — Reflects the flattened count across all iterations (items × inner_steps), plus any non-loop steps before/after.
 
 ## Technical Decisions
 
 ### Loop Iterations Are Flattened into Instruction Stream
 
-Rather than returning a "loop step" instruction with all iterations at once, prompt-only mode returns successive iteration instructions as if they were sequential steps. This keeps the slash command logic unchanged — it calls `--next` repeatedly and executes instructions, unaware of loops.
+Rather than returning a "loop step" instruction with all iterations at once, prompt-only mode returns successive iteration instructions as if they were sequential steps. The slash command calls `--next` repeatedly and receives step instructions — unaware of loops.
 
-**Rationale:** Simplicity for the caller. The slash command doesn't need loop-aware logic; it just follows a linear instruction stream.
+**Rationale:** Simplicity for the caller. The slash command doesn't need loop-aware logic; it follows a linear instruction stream.
 
-### Item Binding Variables Are Available in Instruction Output
+### Collection Items Are Cached in State
 
-When a loop iteration is active, the bound item's fields are serialized in `loop_context.current_item` in the JSON output. This allows external consumers (dashboards, logging tools) to be loop-aware without parsing YAML or re-running the query.
+When the `each` step is first encountered, the source query (e.g., `cf.unfinished_slices()`) is executed once and the results are cached in `LoopContext.items`. Subsequent `--next` calls use the cached items rather than re-querying.
 
-**Rationale:** Better observability and debugging. Callers can log which slice is being designed without duplicating the query logic.
+**Rationale:** Deterministic behavior across resume. If slices are marked complete between `--next` calls, re-querying would change the iteration list mid-loop. Caching ensures the loop processes exactly the items it started with.
 
 ### Step Naming Includes Loop Index
 
-Inner steps within a loop are named `{inner_step_name}-each-{item_index}`, e.g., `design-each-0`, `tasks-each-1`. This ensures:
-- **Uniqueness:** Each iteration's steps have distinct names in the instruction stream.
-- **Traceability:** Step results and state can reference exactly which item and iteration a step belongs to.
-- **Clarity:** Logs show "design-each-2 completed" rather than "design completed" twice.
+Inner steps within a loop are named `{inner_step_name}-each-{item_index}`. This ensures uniqueness across iterations, traceability in state files and logs, and unambiguous resume.
 
 **Rationale:** Without unique names, resuming mid-loop would be ambiguous — which "design" step was paused?
 
-### RunState Loop Context Replaces Per-Step Loop Tracking
+### LoopContext Is a Top-Level RunState Field
 
-Rather than storing loop metadata in each `StepResult`, we track loop context as a top-level field in `RunState`. When `loop_context.item_index` advances, it implicitly applies to all subsequent steps until a new `each` block starts or the current one ends.
+Loop context lives on `RunState` directly (not nested inside step results). When `loop_context` is `None`, the run is not inside a loop. When populated, it governs the `--next` / `--step-done` behavior.
 
-**Rationale:** Simpler state schema. Loop context is a runtime concern, not an artifact of step execution. A paused checkpoint within a loop doesn't need loop metadata on the checkpoint `StepResult`; the `RunState` context is sufficient.
+**Rationale:** Simpler state schema. Loop context is a runtime positioning concern that spans multiple `--step-done` calls. It doesn't belong on individual step results.
 
-### Convergence Strategies Not Supported in Prompt-Only
+### No Schema Version Bump
 
-If a step has `loop.strategy`, prompt-only mode (like the base executor in slice 149) logs a warning and falls back to basic max-iteration behavior. Convergence strategies require observing all iteration results simultaneously and making intelligent routing decisions — not compatible with "return one instruction at a time."
+The `loop_context` field has a `None` default, making it backward compatible within schema v3. Existing state files deserialize correctly (field absent → `None`). New files include the field when a loop is active.
 
-**Rationale:** Convergence is an advanced feature requiring full pipeline autonomy. Prompt-only mode is for human-in-the-loop workflows where convergence doesn't apply.
+**Rationale:** Avoids the `SchemaVersionError` upgrade path for a purely additive field.
+
+### Source Resolution Requires CF Client
+
+The `_handle_prompt_only_init` and `_handle_prompt_only_next` handlers already have access to `ContextForgeClient` (via `_check_cf` in the execution path). For prompt-only mode, we construct a CF client to resolve the `each` source query. This is the same pattern used in the SDK executor's `_execute_each_step`.
+
+**Rationale:** Reuse existing source registry (`_SOURCE_REGISTRY`) and resolution logic (`_parse_source`). No new query mechanism needed.
 
 ## Implementation Details
 
-### Modified: `src/squadron/pipeline/prompt_renderer.py`
+### Modified: `src/squadron/pipeline/state.py`
 
-The `render_step_instructions()` function gains loop awareness:
+**Add `LoopContext` model:**
 
 ```python
-def render_step_instructions(
-    step: StepConfig,
-    *,
-    step_index: int,
-    total_steps: int,
-    params: dict[str, object],
-    resolver: ModelResolver,
-    run_id: str,
-    loop_context: LoopContext | None = None,  # NEW
-) -> StepInstructions:
-    """Render instructions for one step, with loop context if applicable."""
+class LoopContext(BaseModel):
+    """Active loop state for prompt-only each-step execution."""
+    step_name: str
+    as_name: str
+    items: list[dict[str, object]]
+    inner_steps: list[dict[str, object]]
+    current_item_index: int = 0
+    current_inner_step_index: int = 0
 ```
 
-If `step.step_type == "each"` and `loop_context is None` (not currently in a loop):
-- Resolve the source query (same as executor does)
-- Initialize `loop_context` with the first item
-- Expand inner steps for that item
-- Return instructions for the first inner step with `loop_context` attached
+**Extend `RunState`:**
 
-If `loop_context is not None` (already in a loop):
-- Check if current iteration is complete (all inner steps done)
-- If yes, advance to next item or finish if all items done
-- If no, return instructions for next unfinished inner step in current iteration
+```python
+class RunState(BaseModel):
+    # ... existing fields ...
+    loop_context: LoopContext | None = None
+```
 
-### Modified: `src/squadron/pipeline/models.py`
+**Add `StateManager.advance_loop` method:**
 
-Add `LoopContext` dataclass:
+```python
+def advance_loop(self, run_id: str) -> bool:
+    """Advance loop context to the next position. Returns True if loop completed."""
+    state = self.load(run_id)
+    ctx = state.loop_context
+    if ctx is None:
+        return True  # no loop active
+
+    ctx.current_inner_step_index += 1
+    if ctx.current_inner_step_index >= len(ctx.inner_steps):
+        ctx.current_inner_step_index = 0
+        ctx.current_item_index += 1
+
+    if ctx.current_item_index >= len(ctx.items):
+        state.loop_context = None  # loop finished
+        self._write_atomic(...)
+        return True
+
+    state.updated_at = now
+    self._write_atomic(...)
+    return False
+```
+
+**Add `StateManager.init_loop_context` method:**
+
+```python
+def init_loop_context(
+    self, run_id: str, step_name: str, as_name: str,
+    items: list[dict[str, object]], inner_steps: list[dict[str, object]],
+) -> None:
+    """Create and persist a LoopContext for an each step."""
+```
+
+### Modified: `src/squadron/pipeline/prompt_renderer.py`
+
+**Add `LoopInstructionContext` dataclass:**
 
 ```python
 @dataclass
-class LoopContext:
-    """Current position within a collection loop."""
-    step_name: str               # Name of the "each" step (e.g., "batch-0")
-    item_index: int              # Which item (0-based)
-    item_key: str                # Identifier for this item
-    current_item: dict[str, object]  # Full item dict with resolved fields
-    completed_items: list[str]   # Item keys completed so far
-    total_items: int             # Total items queried
+class LoopInstructionContext:
+    """Loop metadata included in StepInstructions JSON output."""
+    each_step: str
+    item_index: int
+    item_key: str
+    total_items: int
+    current_item: dict[str, object]
 ```
 
-Extend `RunState` with `loop_context: LoopContext | None = None`.
+**Extend `StepInstructions`:**
 
-Extend `StepInstructions` with `loop_context: LoopContext | None = None` so the JSON output includes it.
+```python
+@dataclass
+class StepInstructions:
+    # ... existing fields ...
+    loop_context: LoopInstructionContext | None = None
+```
+
+**Add `render_each_step_instructions` function:**
+
+New function that handles `each` step rendering. Given the cached items, current position, and inner step config, it:
+1. Unpacks the current inner step config (using `_unpack_inner_steps` from executor)
+2. Binds the current item as a param (`{as_name: item}`)
+3. Calls the existing `render_step_instructions()` on the inner step with bound params
+4. Attaches `LoopInstructionContext` to the result
+5. Overrides `step_name` with the iteration-indexed name
+
+```python
+def render_each_step_instructions(
+    *,
+    inner_step_raw: dict[str, object],
+    inner_step_index: int,
+    item: dict[str, object],
+    item_index: int,
+    total_items: int,
+    as_name: str,
+    each_step_name: str,
+    total_flattened_steps: int,
+    flattened_step_index: int,
+    params: dict[str, object],
+    resolver: ModelResolver,
+    run_id: str,
+) -> StepInstructions:
+```
+
+### Modified: `src/squadron/pipeline/executor.py`
+
+**Make `_unpack_inner_steps` importable:**
+
+Rename from `_unpack_inner_steps` to `unpack_inner_steps` (drop leading underscore) so `prompt_renderer.py` can import it. This function converts raw YAML step dicts to `StepConfig` objects.
 
 ### Modified: `src/squadron/cli/commands/run.py`
 
-The `--prompt-only` and `--next` paths use the extended `render_step_instructions()` signature. No major logic changes — the loop handling is delegated to `render_step_instructions()`.
+**`_handle_prompt_only_init`:**
 
-State manager integration: When `StateManager.record_step_done()` is called, check if the step name matches an iteration pattern (`*-each-*`). If yes, and if all inner steps for that iteration are done, update `loop_context.completed_items`.
+After loading the pipeline, check if the first step is `each`. If so:
+1. Construct a `ContextForgeClient`, run the source query via `_parse_source` and `_SOURCE_REGISTRY`
+2. Unpack inner steps from the `each` config
+3. Create `LoopContext` and persist to state
+4. Render the first inner step of the first item via `render_each_step_instructions()`
 
-### State File Schema Update (RunState)
+If the first step is not `each`, the existing behavior is unchanged.
 
-The JSON state file version increments (if versioned). Existing v1 state files have `loop_context: null`. New runs use v2 with `loop_context` populated only when inside a loop.
+**`_handle_prompt_only_next`:**
 
-For resume compatibility:
-- If resuming a v1 state file (pre-loop), behavior is unchanged.
-- If resuming a v2 state file with `loop_context`, the executor restores the loop context and continues.
+After loading state and finding the first unfinished step:
+1. If `state.loop_context` is not `None`, the current step is an active loop:
+   - Use `loop_context` to determine current item and inner step
+   - Render via `render_each_step_instructions()`
+2. If the step is `each` but `loop_context` is `None` (loop not yet initialized — happens when a non-loop step completes and the next step is `each`):
+   - Initialize loop context (query source, cache items, persist)
+   - Render first inner step of first item
+3. Otherwise: existing behavior (render the step directly)
+
+**`_handle_step_done`:**
+
+After loading state:
+1. If `state.loop_context` is not `None`:
+   - Generate the iteration step name: `{inner_step_name}-each-{item_index}`
+   - Record it via `record_step_done()` for traceability
+   - Call `advance_loop()` to move to next position
+   - If `advance_loop()` returns `True` (loop complete), also record the `each` step as completed
+2. Otherwise: existing behavior
 
 ## Integration Points
 
 ### Provides to Other Slices
 
-- **Slice 155 (SDK Executor):** No direct interaction; slice 155 uses the real executor (slice 149), not prompt-only. Both paths share the same `RunState` schema, so state files are compatible across modes.
+- **Slice 155 (SDK Executor):** Shared `RunState` schema. State files are compatible across execution modes. Slice 155 uses the real executor's `_execute_each_step` (not prompt-only rendering), but can inspect `loop_context` if resuming a run that was started in prompt-only mode.
 
 ### Consumes from Other Slices
 
-- **Slice 153 (Prompt-Only Executor):** Extends the `render_step_instructions()` function and state model.
-- **Slice 149 (Executor):** The loop implementation in the real executor is the reference for how loops work. Prompt-only mode mirrors that behavior in the instruction-generation layer.
-- **Slice 150 (State Manager):** Uses the extended `RunState` schema with `loop_context`.
+- **Slice 153 (Prompt-Only Executor):** Extends the prompt-only init/next/step-done handlers and `StepInstructions` output model.
+- **Slice 149 (Executor):** Reuses `_unpack_inner_steps` (renamed), `_parse_source`, and `_SOURCE_REGISTRY` for source resolution and inner step unpacking.
+- **Slice 150 (State Manager):** Extends `RunState` with `loop_context`.
 
 ## Success Criteria
 
-1. **Loop iteration detection:** When a pipeline contains an `each` step, `sq run <pipeline> --prompt-only` correctly identifies the items from the source query and initializes `loop_context` in the state.
+1. **Loop iteration detection:** When a pipeline contains an `each` step, `sq run <pipeline> --prompt-only` identifies the items from the source query and initializes `loop_context` in the state file.
 
-2. **Successive iteration instructions:** `--next` returns instructions for the first inner step of the first item. After `--step-done`, the next `--next` returns instructions for the next unfinished inner step in the same iteration or the first step of the next item if the current item is complete.
+2. **Successive iteration instructions:** `--next` returns instructions for the first inner step of the first item. After `--step-done`, the next `--next` returns the next unfinished inner step in the same iteration, or the first step of the next item if the current item's inner steps are complete.
 
-3. **Item variable resolution:** Bound item fields like `{slice.index}` resolve correctly in step configs, and the resolved value appears in the instruction output.
+3. **Item variable resolution:** Bound item fields like `{slice.index}` resolve correctly in step configs, and the resolved values appear in the instruction output (e.g., `cf set slice 151`).
 
-4. **Progress tracking:** The `total_steps` field in the instruction output reflects the cumulative count across all iterations, so a caller can display accurate progress (e.g., "Step 2 of 6").
+4. **Progress tracking:** The `total_steps` field reflects the cumulative flattened count across all iterations, so callers can display accurate progress (e.g., "Step 2 of 3").
 
-5. **Loop completion detection:** After the final inner step of the final item is marked done, `--next` returns a completion status.
+5. **Loop completion:** After the final inner step of the final item is marked done, `--next` returns a `CompletionResult` (or advances to the next non-loop step in the pipeline).
 
-6. **State persistence:** The `RunState` JSON includes `loop_context`, and resuming with `--resume <run-id>` correctly restores the loop position.
+6. **State persistence:** The `RunState` JSON includes `loop_context` while a loop is active, and clearing it when the loop completes. Resuming with `--resume` restores the loop position correctly.
 
-7. **Slash command compatibility:** The `/sq:run` slash command (which was updated in slice 153 and consumes prompt-only output) works transparently with loops. Running `/sq:run design-batch 100` iterates through all items and their steps without modification to the slash command logic.
+7. **Slash command compatibility:** `/sq:run design-batch 100` iterates through all items and their steps without modification to the slash command logic.
 
-8. **Loop naming clarity:** Step names in state and output follow the `{step_name}-each-{index}` pattern, making loop iterations unambiguous.
+8. **Step naming clarity:** Step names in state and output follow `{inner_step_name}-each-{item_index}`, making loop iterations unambiguous in logs and state files.
 
 ## Verification Walkthrough
 
-*This walkthrough assumes slice 149 (loops in the real executor) is complete and slice 153 (prompt-only output) is complete.*
+*Assumes slice 149 (executor loops) and slice 153 (prompt-only base) are complete. Uses `design-batch` pipeline with `cf.unfinished_slices()` returning 3 items.*
 
-### 1. Design-Batch Pipeline Initialization
+### 1. Initialize Design-Batch in Prompt-Only Mode
 
 ```bash
 sq run design-batch 100 --prompt-only
 ```
 
-**Expected Output:**
-- JSON with `step_name: "design-each-0"`, `loop_context: { item_index: 0, item_key: "151", total_items: 3, current_item: {...} }`
-- 6 total steps (3 items × 2 inner steps: design, tasks)
-- `step_index: 0` in the output
+**Expected output (stdout):** JSON with `step_name: "design-each-0"`, `step_type: "design"`, `loop_context` populated with `item_index: 0`, `total_items: 3`, `current_item` containing the first slice's data.
 
-### 2. Completion and Next Step
+**Expected stderr:** `run_id=run-20260410-design-batch-xxxxxxxx`
+
+**State file:** `~/.config/squadron/runs/run-...-design-batch-xxx.json` contains `loop_context` with cached items and `current_item_index: 0, current_inner_step_index: 0`.
+
+### 2. Mark First Step Done and Get Next
 
 ```bash
 sq run --step-done <run-id> --verdict PASS
 sq run --prompt-only --next --resume <run-id>
 ```
 
-**Expected Output (next step):**
-- JSON with `step_name: "tasks-each-0"`, same item (slice 151)
-- `step_index: 1`, `total_steps: 6`
+**Expected:** Since design-batch has 1 inner step per item (design), completing the first step advances to the next item. JSON output shows `step_name: "design-each-1"` with the second slice's data.
 
-### 3. Advance to Next Item
+### 3. Complete All Items
 
-After marking all steps for item 1 complete:
+Repeat `--step-done` + `--next` for all 3 items. After the third `--step-done`:
 
 ```bash
-sq run --step-done <run-id>
 sq run --prompt-only --next --resume <run-id>
 ```
 
-**Expected Output:**
-- JSON with `step_name: "design-each-1"`, new item (slice 152)
-- `loop_context.item_index: 1`
-- `step_index: 2`, `total_steps: 6`
+**Expected:** `CompletionResult` JSON: `{ "status": "completed", "message": "All steps complete" }`.
 
-### 4. Complete All Items
+### 4. Slash Command End-to-End
 
-After marking the final step complete:
-
-```bash
-sq run --step-done <run-id>
-sq run --prompt-only --next --resume <run-id>
 ```
-
-**Expected Output:**
-- Completion JSON: `{ "status": "completed", "message": "All iterations complete" }`
-
-### 5. Slash Command End-to-End
-
-```bash
 /sq:run design-batch 100
 ```
 
-**Expected Outcome:**
-- Slash command drives the loop via successive `--next` calls
-- All 3 items and 6 total steps are executed in sequence
-- Run state shows completed status with all steps recorded
-- No changes to the slash command implementation needed (it already consumes slice 153's output)
+**Expected:** The slash command drives the loop via successive `--next` calls. All 3 items are processed in sequence. Run state shows completed with 3 step records (`design-each-0`, `design-each-1`, `design-each-2`).
 
-### 6. Resume Mid-Iteration
+### 5. State File Inspection
 
-If a checkpoint pauses mid-loop:
+```bash
+cat ~/.config/squadron/runs/<run-id>.json | python -m json.tool
+```
+
+**Expected:** `loop_context` is `null` (cleared after loop completion). `completed_steps` contains entries with step names `design-each-0`, `design-each-1`, `design-each-2`, plus the `each` step itself.
+
+### 6. Resume Mid-Loop
+
+Interrupt after completing item 0 (kill the slash command or Ctrl-C). Then:
 
 ```bash
 sq run --prompt-only --next --resume <run-id>
 ```
 
-**Expected Output:**
-- Correct item and step context restored
-- Loop continues from the paused checkpoint
-
-### 7. State File Inspection
-
-```bash
-cat ~/.config/squadron/runs/design-batch-<run-id>.json
-```
-
-**Expected Content:**
-- `loop_context` field with `item_index`, `completed_items`, `total_items`
-- Completed steps list includes steps named `design-each-0`, `tasks-each-0`, `design-each-1`, etc.
+**Expected:** `loop_context` restored from state file. Returns instructions for `design-each-1` (the next unfinished iteration).
 
 ## Implementation Notes
 
 ### Development Approach
 
-1. **Extend `LoopContext` and `RunState`** — Add dataclass definitions with JSON serialization support.
-2. **Update `StepInstructions` output model** — Include `loop_context` in the JSON schema.
-3. **Modify `render_step_instructions()` for loop awareness** — Detect `each` steps, resolve source queries, expand inner steps, handle iteration progression.
-4. **Extend `StateManager.record_step_done()`** — Detect iteration-pattern step names and update `loop_context.completed_items`.
-5. **State file schema versioning** — Ensure v1 state files (pre-loop) are handled gracefully.
-6. **Unit tests** — Test `render_step_instructions()` with mock loop sources, test item binding variable resolution, test iteration progression.
-7. **Integration tests** — Load `design-batch` pipeline, simulate successive `--next` calls, verify step ordering and loop progression.
+1. Add `LoopContext` Pydantic model to `state.py`, extend `RunState`
+2. Add `LoopInstructionContext` and extend `StepInstructions` in `prompt_renderer.py`
+3. Add `render_each_step_instructions()` to `prompt_renderer.py`
+4. Rename `_unpack_inner_steps` to `unpack_inner_steps` in `executor.py`
+5. Modify `_handle_prompt_only_init` for `each` first-step detection
+6. Modify `_handle_prompt_only_next` for loop-aware rendering
+7. Modify `_handle_step_done` for loop advancement
+8. Add `StateManager.advance_loop()` and `init_loop_context()` methods
+9. Unit tests for loop context lifecycle, item binding, iteration advancement
+10. Integration tests with `design-batch` pipeline and mock CF client
 
 ### Testing Strategy
 
-- **Loop context tracking:** Mock CF client returning 3 test slices. Call `render_step_instructions()` 6 times (2 steps × 3 items). Verify `loop_context` advances correctly.
-- **Item variable resolution:** Test that `{slice.index}` in step config is replaced with the current item's index value. Test that non-matching placeholders are left as-is.
-- **State persistence:** Serialize and deserialize `RunState` with loop context. Verify JSON schema is valid.
-- **Step naming:** Verify iteration-pattern step names follow `{name}-each-{index}`.
-- **Completion detection:** After the final step's `--step-done`, verify `--next` returns completion status.
+- **Loop context tracking:** Mock CF client returning 3 test slices. Simulate `init → step-done → next → step-done → next → ...` cycle. Verify `loop_context` advances correctly and clears on completion.
+- **Item variable resolution:** Verify `{slice.index}` in inner step config resolves to the current item's index value in the rendered instructions.
+- **State persistence round-trip:** Serialize `RunState` with `LoopContext`, deserialize, verify fields survive.
+- **Backward compatibility:** Load an existing v3 state file (without `loop_context`). Verify it deserializes with `loop_context = None`.
+- **Step naming:** Verify iteration step names follow `{name}-each-{index}`.
+- **Completion detection:** After final `--step-done`, verify `--next` returns `CompletionResult`.
+- **Multi-inner-step loops:** Test with a pipeline that has 2+ inner steps per item (e.g., design + tasks). Verify inner step sequencing within each item.
 
 ### Effort
 
-2/5 — The changes are extensions to existing slice 153 code. Loop handling in the executor (slice 149) is already built; prompt-only mode just needs to expose it as an instruction stream. Main work is:
-- Updating the `RunState` schema with loop context
-- Extending `render_step_instructions()` for loop logic
-- Testing iteration progression
-
-### Dependencies and Risks
-
-- **Low risk:** Loops are already implemented in slice 149. Prompt-only mode is slicing that behavior into instructions. No fundamental new logic.
-- **State schema change:** Existing v1 state files will have `loop_context: null`, which is backward compatible. New v2 files include loop context. Migration path is implicit (null context = not in a loop).
-
-### Backward Compatibility
-
-- **Pipelines without loops** continue to work unchanged. `loop_context` is `None`, and instruction generation proceeds as in slice 153.
-- **Resuming pre-loop state files** works if they don't contain loop context. The executor treats absence of `loop_context` as "not in a loop."
-- **Slash command compatibility** is automatic — `/sq:run` doesn't need modifications because it already consumes the instruction JSON from slice 153.
-
+2/5 — Extensions to existing slice 153 code. Loop handling is already built in the executor (slice 149); prompt-only mode surfaces it as an instruction stream. Main work: state model extension, loop-aware handlers, test coverage.

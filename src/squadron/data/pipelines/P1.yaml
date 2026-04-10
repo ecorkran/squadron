@@ -1,0 +1,19 @@
+name: P1
+description: Define project vision and scope (phase 1)
+
+params:
+  slice: required
+
+steps:
+  - design:
+      phase: 1
+      model: opus
+      review:
+        template: arch
+        model: glm5
+      checkpoint: always
+
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard]

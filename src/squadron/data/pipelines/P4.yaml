@@ -3,12 +3,18 @@ description: Design a slice (phase 4) with review and human checkpoint
 
 params:
   slice: required
+  model: opus
+  review-model: minimax
 
 steps:
   - design:
       phase: 4
-      model: opus
+      model: {model}
       review:
         template: slice
-        model: glm5
-      checkpoint: always
+        model: {review-model}
+
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard]

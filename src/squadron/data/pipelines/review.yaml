@@ -9,4 +9,5 @@ params:
 steps:
   - review:
       template: "{template}"
+      model: "{model}"
       checkpoint: on-concerns

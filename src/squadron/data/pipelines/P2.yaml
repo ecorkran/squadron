@@ -11,4 +11,8 @@ steps:
       review:
         template: arch 
         model: glm5
-      checkpoint: always
+
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard]
