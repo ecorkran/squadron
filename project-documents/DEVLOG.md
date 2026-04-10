@@ -12,6 +12,24 @@ Internal work log for squadron project development.
 
 ## 20260410
 
+### Slice 152: Pipeline Documentation and Authoring Guide — Phase 5 Task Breakdown Complete
+
+**Completed:**
+- Created `user/tasks/152-tasks.pipeline-documentation-and-authoring-guide.md` (172 lines, 14 tasks)
+- Tasks cover: source artifact verification, `docs/PIPELINES.md` creation (Quick Start, YAML Grammar, Step Type Catalog, Action Type Catalog, Model Resolution, Configuration Surface, Built-in Pipelines, Custom Pipeline, Prompt-Only Mode), README.md update, final verification walkthrough, and DEVLOG
+- Verification tasks follow each major section (T1 verifies source before writing; T12 runs the full design walkthrough; T13 verifies README)
+- No code changes in this slice — documentation only
+
+**Key notes:**
+- T1 (source verification) must be completed before writing documentation — particularly to confirm ActionType enum, registered step types, and built-in pipeline file list match the slice design
+- The YAML quoting footgun for parameter placeholders must be prominent in the grammar section
+- `test-pipeline.yaml` and `app.yaml` in pipelines/ are not for user documentation; exclude from the built-in pipelines table
+
+**Status:**
+- Phase 5 complete. Ready for Phase 6 (Slice Execution).
+
+---
+
 ### Slice 154: Prompt-Only Loops — Phase 5 Task Breakdown Complete
 
 **Completed:**
