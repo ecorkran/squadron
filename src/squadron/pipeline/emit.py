@@ -15,12 +15,17 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from squadron.pipeline.models import ActionContext
 
 _logger = logging.getLogger(__name__)
+
+# Default directory for pipeline summary files written without an explicit path.
+# Convention: ~/.config/squadron/runs/summaries/{project}-{pipeline}.md
+_DEFAULT_SUMMARIES_DIR = Path.home() / ".config" / "squadron" / "runs" / "summaries"
 
 __all__ = [
     "EmitKind",
@@ -51,9 +56,9 @@ class EmitDestination:
     arg: str | None = None  # path for FILE; unused otherwise
 
     def display(self) -> str:
-        """Human-readable form: 'stdout', 'file:/tmp/x.md', etc."""
+        """Human-readable form: 'stdout', 'file:/tmp/x.md', 'file:(default)', etc."""
         if self.kind is EmitKind.FILE:
-            return f"file:{self.arg}"
+            return f"file:{self.arg}" if self.arg is not None else "file:(default)"
         return self.kind.value
 
 
@@ -104,14 +109,16 @@ async def _emit_stdout(
 async def _emit_file(
     text: str, dest: EmitDestination, ctx: ActionContext
 ) -> EmitResult:
-    from pathlib import Path
-
-    if not dest.arg:
-        return EmitResult(destination=dest.display(), ok=False, detail="no file path")
-
-    path = Path(dest.arg)
-    if not path.is_absolute():
-        path = Path(ctx.cwd) / path
+    if dest.arg is not None:
+        path = Path(dest.arg)
+        if not path.is_absolute():
+            path = Path(ctx.cwd) / path
+    else:
+        # No explicit path — write to the conventional summaries location.
+        project = str(ctx.params.get("_project") or "unknown")
+        pipeline = ctx.pipeline_name or "unknown"
+        _DEFAULT_SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
+        path = _DEFAULT_SUMMARIES_DIR / f"{project}-{pipeline}.md"
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -186,8 +193,7 @@ def parse_emit_entry(entry: object) -> EmitDestination:
             kind = EmitKind(entry)
         except ValueError:
             raise ValueError(f"unknown emit destination: {entry!r}")
-        if kind is EmitKind.FILE:
-            raise ValueError("'file' emit requires a path argument: use {file: <path>}")
+        # Bare "file" string → default path (no explicit arg).
         return EmitDestination(kind=kind)
 
     if isinstance(entry, dict):

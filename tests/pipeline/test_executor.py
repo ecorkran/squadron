@@ -1189,3 +1189,145 @@ class TestEachExecution:
                 cf_client=MagicMock(),
                 _action_registry={},
             )
+
+
+# ---------------------------------------------------------------------------
+# T6 — _project param injection
+# ---------------------------------------------------------------------------
+
+
+class TestProjectParamInjection:
+    @pytest.mark.asyncio
+    async def test_project_injected_from_cf(self, tmp_path: object) -> None:
+        """_project is set in ActionContext.params from gather_cf_params."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from squadron.pipeline.executor import execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        assert isinstance(tmp_path, Path)
+
+        captured_ctx: list[object] = []
+
+        async def capture_ctx(ctx: object) -> ActionResult:
+            captured_ctx.append(ctx)
+            return make_action_result(True, "dispatch")
+
+        action = MagicMock()
+        action.execute = capture_ctx
+        step = mock_step_type([("dispatch", {})])
+        register_step_type("_test_project_inject", step)
+
+        pipeline = make_pipeline([make_step_config("_test_project_inject", "s", {})])
+
+        with patch(
+            "squadron.pipeline.executor.gather_cf_params",
+            return_value={"project": "myproject"},
+        ):
+            await execute_pipeline(
+                pipeline,
+                {},
+                resolver=MagicMock(),
+                cf_client=MagicMock(),
+                cwd=str(tmp_path),
+                _action_registry={"dispatch": action},
+            )
+
+        assert len(captured_ctx) == 1
+        from squadron.pipeline.models import ActionContext
+
+        ctx = captured_ctx[0]
+        assert isinstance(ctx, ActionContext)
+        assert ctx.params["_project"] == "myproject"
+
+    @pytest.mark.asyncio
+    async def test_project_falls_back_to_unknown_when_cf_unavailable(
+        self, tmp_path: object
+    ) -> None:
+        """CF unavailable → _project is 'unknown', no exception."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from squadron.pipeline.executor import execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        assert isinstance(tmp_path, Path)
+
+        captured_ctx: list[object] = []
+
+        async def capture_ctx(ctx: object) -> ActionResult:
+            captured_ctx.append(ctx)
+            return make_action_result(True, "dispatch")
+
+        action = MagicMock()
+        action.execute = capture_ctx
+        step = mock_step_type([("dispatch", {})])
+        register_step_type("_test_project_fallback", step)
+
+        pipeline = make_pipeline([make_step_config("_test_project_fallback", "s", {})])
+
+        with patch(
+            "squadron.pipeline.executor.gather_cf_params",
+            return_value={},
+        ):
+            await execute_pipeline(
+                pipeline,
+                {},
+                resolver=MagicMock(),
+                cf_client=MagicMock(),
+                cwd=str(tmp_path),
+                _action_registry={"dispatch": action},
+            )
+
+        assert len(captured_ctx) == 1
+        from squadron.pipeline.models import ActionContext
+
+        ctx = captured_ctx[0]
+        assert isinstance(ctx, ActionContext)
+        assert ctx.params["_project"] == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_explicit_project_param_not_overwritten(
+        self, tmp_path: object
+    ) -> None:
+        """Caller-supplied _project in params takes precedence over CF."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from squadron.pipeline.executor import execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        assert isinstance(tmp_path, Path)
+
+        captured_ctx: list[object] = []
+
+        async def capture_ctx(ctx: object) -> ActionResult:
+            captured_ctx.append(ctx)
+            return make_action_result(True, "dispatch")
+
+        action = MagicMock()
+        action.execute = capture_ctx
+        step = mock_step_type([("dispatch", {})])
+        register_step_type("_test_project_override", step)
+
+        pipeline = make_pipeline([make_step_config("_test_project_override", "s", {})])
+
+        with patch(
+            "squadron.pipeline.executor.gather_cf_params",
+            return_value={"project": "cf-project"},
+        ):
+            await execute_pipeline(
+                pipeline,
+                {"_project": "explicit-override"},
+                resolver=MagicMock(),
+                cf_client=MagicMock(),
+                cwd=str(tmp_path),
+                _action_registry={"dispatch": action},
+            )
+
+        from squadron.pipeline.models import ActionContext
+
+        ctx = captured_ctx[0]
+        assert isinstance(ctx, ActionContext)
+        assert ctx.params["_project"] == "explicit-override"

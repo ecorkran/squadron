@@ -20,6 +20,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
+from squadron.pipeline.summary_render import gather_cf_params
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -445,6 +446,12 @@ async def execute_pipeline(
     for key, val in params.items():
         if key not in merged_params:
             merged_params[key] = val
+
+    # Inject _project (project name from CF) so emit destinations can key
+    # summary files by project. Only set if not already provided by the caller.
+    if "_project" not in merged_params:
+        cf_params = gather_cf_params(effective_cwd)
+        merged_params["_project"] = cf_params.get("project") or "unknown"
 
     # Validate start_from refers to an existing step
     if start_from is not None:

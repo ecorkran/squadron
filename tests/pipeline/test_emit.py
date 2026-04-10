@@ -268,3 +268,89 @@ async def test_emit_rotate_passes_summary_unchanged() -> None:
     await _emit_rotate("exact text", dest, ctx)
 
     assert session.compact.call_args.kwargs["summary"] == "exact text"
+
+
+# ---------------------------------------------------------------------------
+# T4 — _emit_file() default path behavior (no explicit arg)
+# ---------------------------------------------------------------------------
+
+
+def test_emit_destination_display_file_default() -> None:
+    """EmitDestination with arg=None displays as 'file:(default)'."""
+    dest = EmitDestination(kind=EmitKind.FILE, arg=None)
+    assert dest.display() == "file:(default)"
+
+
+def test_parse_emit_list_bare_file_produces_no_arg() -> None:
+    """Bare 'file' string in YAML produces EmitDestination with arg=None."""
+    result = parse_emit_list(["file"])
+    assert result == [EmitDestination(kind=EmitKind.FILE, arg=None)]
+
+
+@pytest.mark.asyncio
+async def test_emit_file_default_path_uses_project_and_pipeline(
+    tmp_path: object,
+) -> None:
+    """dest.arg=None writes to <summaries_dir>/{project}-{pipeline}.md."""
+    from pathlib import Path
+
+    from squadron.pipeline import emit as emit_module
+    from squadron.pipeline.emit import _emit_file
+
+    assert isinstance(tmp_path, Path)
+    summaries_dir = tmp_path / "summaries"
+
+    dest = EmitDestination(kind=EmitKind.FILE, arg=None)
+    ctx = _make_ctx(cwd=str(tmp_path))
+    ctx.params = {"_project": "myproject"}
+    ctx.pipeline_name = "P4"
+
+    with patch.object(emit_module, "_DEFAULT_SUMMARIES_DIR", summaries_dir):
+        result = await _emit_file("summary text", dest, ctx)
+
+    assert result.ok is True
+    assert "bytes" in result.detail
+    expected = summaries_dir / "myproject-P4.md"
+    assert expected.read_text() == "summary text"
+
+
+@pytest.mark.asyncio
+async def test_emit_file_default_path_no_project_falls_back_to_unknown(
+    tmp_path: object,
+) -> None:
+    """dest.arg=None with no _project uses 'unknown' in filename."""
+    from pathlib import Path
+
+    from squadron.pipeline import emit as emit_module
+    from squadron.pipeline.emit import _emit_file
+
+    assert isinstance(tmp_path, Path)
+    summaries_dir = tmp_path / "summaries"
+
+    dest = EmitDestination(kind=EmitKind.FILE, arg=None)
+    ctx = _make_ctx(cwd=str(tmp_path))
+    ctx.params = {}
+    ctx.pipeline_name = "P4"
+
+    with patch.object(emit_module, "_DEFAULT_SUMMARIES_DIR", summaries_dir):
+        result = await _emit_file("text", dest, ctx)
+
+    assert result.ok is True
+    assert (summaries_dir / "unknown-P4.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_emit_file_explicit_path_unchanged(tmp_path: object) -> None:
+    """Explicit dest.arg still resolves to explicit path (no regression)."""
+    from pathlib import Path
+
+    from squadron.pipeline.emit import _emit_file
+
+    assert isinstance(tmp_path, Path)
+    dest = EmitDestination(kind=EmitKind.FILE, arg=str(tmp_path / "out.md"))
+    ctx = _make_ctx(cwd=str(tmp_path))
+
+    result = await _emit_file("explicit content", dest, ctx)
+
+    assert result.ok is True
+    assert (tmp_path / "out.md").read_text() == "explicit content"
