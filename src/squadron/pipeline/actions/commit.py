@@ -64,7 +64,17 @@ class CommitAction:
         message = context.params.get("message")
         if not message:
             commit_type = context.params.get("type", "chore")
-            message = f"{commit_type}: {context.step_name} for {context.pipeline_name}"
+            prefix = context.params.get("message_prefix")
+            if prefix:
+                slice_param = context.params.get("slice")
+                if slice_param:
+                    message = f"{commit_type}: {prefix} slice {slice_param}"
+                else:
+                    message = f"{commit_type}: {prefix}"
+            else:
+                message = (
+                    f"{commit_type}: {context.step_name} for {context.pipeline_name}"
+                )
         message = str(message)
 
         # Commit

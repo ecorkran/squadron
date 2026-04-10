@@ -129,7 +129,7 @@ class PipelineResult:
 # Parameter resolution
 # ---------------------------------------------------------------------------
 
-_PLACEHOLDER_RE = re.compile(r"\{([\w.]+)\}")
+_PLACEHOLDER_RE = re.compile(r"\{([\w.\-]+)\}")
 
 
 def resolve_placeholders(
