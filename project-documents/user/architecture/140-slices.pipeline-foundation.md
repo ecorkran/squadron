@@ -70,6 +70,8 @@ status: in_progress
 
 23. [x] **(163) Pipeline Run Summary Persistence and Restore** — Default file destination for summary step `emit: [file]` when no explicit path is given: writes to `~/.config/squadron/runs/summaries/{project}-{pipeline}.md` (project name resolved from CF, pipeline name from run state). Overwrites on each run (latest-only). Extends `/sq:summary --restore` to read the most recent summary for the current project and emit it as a context-seeding block — no run-id required. Supporting hidden CLI subcommand resolves project name from CF via CWD, lists matching summary files, and returns content. Prompt-only `run.md` summary handler updated to write to the same conventional path via Bash. Closes the "run a pipeline in CLI terminal, restore context in VS Code" workflow gap. Dependencies: [161, 162]. Risk: Low. Effort: 1/5
 
+24. [ ] **(164) Profile-Aware Summary Model Routing** — Summary action currently routes all model requests through the SDK session's `set_model()`, which only works for Claude models. When the resolved model alias has a non-SDK profile (e.g. `minimax` → OpenRouter), the summary action should dispatch via the provider registry using a one-shot API call — the same pattern review already uses via `run_review_with_profile()`. Resolve the alias to `(model_id, profile)`, branch on profile: SDK profiles use existing `capture_summary()` path; all other profiles dispatch through the provider registry. Applies to both SDK and prompt-only execution modes. Prompt-only `_render_summary` updates `model_switch` only for SDK-profile models; non-SDK models emit a CLI command instead. Unblocks using cheap external models (minimax, gemini-flash) for pipeline summaries. Dependencies: [161]. Risk: Low. Effort: 2/5
+
 ---
 
 ## Integration Work
@@ -109,6 +111,7 @@ Feature:
   159. Pipeline Fan-Out / Fan-In Step Type                
   160. Interactive Checkpoint Resolution
   163. Pipeline Run Summary Persistence and Restore      (after 161, 162)
+  164. Profile-Aware Summary Model Routing                (after 161)
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
