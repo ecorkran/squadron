@@ -21,6 +21,7 @@ from squadron.pipeline.prompt_renderer import (
     _render_devlog,
     _render_dispatch,
     _render_review,
+    _render_summary,
     render_step_instructions,
 )
 
@@ -51,6 +52,7 @@ class TestActionInstruction:
         assert d["template"] is None
         assert d["trigger"] is None
         assert d["resolved_instructions"] is None
+        assert d["emit"] is None
 
     def test_all_fields_populated(self) -> None:
         ai = ActionInstruction(
@@ -246,6 +248,68 @@ class TestRenderDevlog:
     def test_default_mode(self) -> None:
         result = _render_devlog({}, {})
         assert "auto" in result.instruction
+
+
+class TestRenderSummary:
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_with_model_and_emit(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "Summarize recent work"
+        resolver = _make_resolver("minimax-resolved")
+
+        result = _render_summary(
+            {
+                "template": "minimal-sdk",
+                "model": "minimax",
+                "emit": ["stdout", "clipboard"],
+            },
+            {"slice": "165"},
+            resolver,
+        )
+
+        assert result.action_type == ActionType.SUMMARY
+        assert result.template == "minimal-sdk"
+        assert result.model == "minimax-resolved"
+        assert result.model_switch == "/model minimax"
+        assert result.resolved_instructions == "Summarize recent work"
+        assert result.emit == ["stdout", "clipboard"]
+        assert result.command is None  # no shell command
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_without_model_or_emit(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = _make_resolver()
+
+        result = _render_summary({}, {}, resolver)
+        assert result.model is None
+        assert result.model_switch is None
+        assert result.emit is None
+
+    def test_missing_template(self) -> None:
+        resolver = _make_resolver()
+        result = _render_summary({"template": "nonexistent_xyz"}, {}, resolver)
+        assert "not found" in result.resolved_instructions
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_emit_with_rotate(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = _make_resolver()
+
+        result = _render_summary(
+            {"template": "minimal-sdk", "emit": ["rotate"]}, {}, resolver
+        )
+        assert result.emit == ["rotate"]
 
 
 class TestFallbackUnknownAction:

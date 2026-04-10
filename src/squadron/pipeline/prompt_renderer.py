@@ -43,6 +43,7 @@ class ActionInstruction:
     template: str | None = None
     trigger: str | None = None
     resolved_instructions: str | None = None
+    emit: list[str] | None = None
 
 
 @dataclass
@@ -238,6 +239,47 @@ def _render_compact(
     )
 
 
+def _render_summary(
+    config: dict[str, object],
+    params: dict[str, object],
+    resolver: ModelResolver,
+) -> ActionInstruction:
+    """Build instruction for a summary action."""
+    template_name = str(config.get("template", "default"))
+    model_raw = config.get("model")
+    emit_raw = config.get("emit")
+
+    model_id: str | None = None
+    model_switch: str | None = None
+    if model_raw is not None:
+        alias = str(model_raw)
+        try:
+            model_id, _ = resolver.resolve(alias)
+        except Exception:
+            model_id = alias
+        model_switch = f"/model {alias}"
+
+    try:
+        template = load_compaction_template(template_name)
+        resolved = render_instructions(template, pipeline_params=params)
+    except FileNotFoundError:
+        resolved = f"(template '{template_name}' not found)"
+
+    emit_destinations: list[str] | None = None
+    if isinstance(emit_raw, list):
+        emit_destinations = [str(e) for e in emit_raw] or None
+
+    return ActionInstruction(
+        action_type=ActionType.SUMMARY,
+        instruction="Generate a session summary following the resolved instructions",
+        model=model_id,
+        model_switch=model_switch,
+        template=template_name,
+        resolved_instructions=resolved,
+        emit=emit_destinations,
+    )
+
+
 def _render_devlog(
     config: dict[str, object],
     params: dict[str, object],
@@ -258,6 +300,7 @@ _BUILDERS: dict[str, object] = {
     ActionType.CHECKPOINT: _render_checkpoint,
     ActionType.COMMIT: _render_commit,
     ActionType.COMPACT: _render_compact,
+    ActionType.SUMMARY: _render_summary,
     ActionType.DEVLOG: _render_devlog,
 }
 
@@ -277,7 +320,7 @@ def _build_action_instruction(
         )
 
     # Builders that need the resolver
-    if action_type in (ActionType.DISPATCH, ActionType.REVIEW):
+    if action_type in (ActionType.DISPATCH, ActionType.REVIEW, ActionType.SUMMARY):
         return builder(config, params, resolver)  # type: ignore[operator]
 
     return builder(config, params)  # type: ignore[operator]
