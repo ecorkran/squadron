@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
-dateUpdated: 20260408
+dateUpdated: 20260410
 status: in_progress
 ---
 
@@ -68,6 +68,8 @@ status: in_progress
 
 22. [x] **(162) /sq:summary — Clipboard Summary for Manual Context Reset** — New `/sq:summary [template]` slash command and supporting `sq summary-instructions` CLI that lets the user produce a custom, template-driven summary of the *current interactive Claude Code conversation* and copy it to the clipboard, so they can `/clear` and paste it into a fresh context. Addresses the unreliability of `/compact [with instructions]`, which is non-deterministic — sometimes honors custom instructions, sometimes ignores them. Reuses the existing compaction template machinery: `load_compaction_template`, `render_with_params`, CF best-effort param gathering (`slice`, `phase`, `project`), and the `compact.template` config key as the default. The slash command expands to a prompt that (1) shells out to `sq summary-instructions` to fetch rendered template instructions, (2) instructs the assistant to produce the summary inline following those instructions, and (3) pipes the result to clipboard via `pbcopy` (macOS) with `xclip`/`wl-copy` fallback (Linux). Clipboard-only output with a one-line confirmation — no chat dump. No new SDK session plumbing; the current Claude Code session is the summary target, and squadron only supplies instructions and a clipboard sink. Windows clipboard deferred. Dependencies: [158 for template/render machinery reuse]. Risk: Low. Effort: 1/5. **Design Complete: [162-slice.sq-summary-clipboard-summary-for-manual-context-reset.md](../slices/162-slice.sq-summary-clipboard-summary-for-manual-context-reset.md)**
 
+23. [ ] **(163) Pipeline Run Summary Persistence and Restore** — Default file destination for summary step `emit: [file]` when no explicit path is given: writes to `~/.config/squadron/runs/summaries/{project}-{pipeline}.md` (project name resolved from CF, pipeline name from run state). Overwrites on each run (latest-only). Extends `/sq:summary --restore` to read the most recent summary for the current project and emit it as a context-seeding block — no run-id required. Supporting hidden CLI subcommand resolves project name from CF via CWD, lists matching summary files, and returns content. Prompt-only `run.md` summary handler updated to write to the same conventional path via Bash. Closes the "run a pipeline in CLI terminal, restore context in VS Code" workflow gap. Dependencies: [161, 162]. Risk: Low. Effort: 1/5
+
 ---
 
 ## Integration Work
@@ -106,6 +108,7 @@ Feature:
   158. SDK Session Management and Compaction              ✓ complete
   159. Pipeline Fan-Out / Fan-In Step Type                
   160. Interactive Checkpoint Resolution
+  163. Pipeline Run Summary Persistence and Restore      (after 161, 162)
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
