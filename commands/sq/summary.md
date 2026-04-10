@@ -2,7 +2,39 @@ Generate a clipboard summary of this conversation for manual context reset.
 
 ## Input parsing
 
-The first word of `$ARGUMENTS` is an optional template name. If empty, no template argument is passed to the CLI (it will use the configured default).
+If `$ARGUMENTS` starts with `--restore`:
+- Run the restore flow (Steps R1–R2 below).
+- Skip the normal summary generation flow entirely.
+
+Otherwise: the first word of `$ARGUMENTS` is an optional template name. If empty, no template argument is passed to the CLI (it will use the configured default).
+
+---
+
+## Step R1: Get restore content
+
+Run via Bash:
+
+```bash
+sq _summary-instructions --restore
+```
+
+If the command exits non-zero, show the error output to the user and **stop** — do not continue.
+
+---
+
+## Step R2: Seed context
+
+Output the returned summary text directly as a context block for the conversation.
+
+**Do NOT copy to clipboard** — this is a context restore, not a clipboard operation.
+
+After outputting the context block, print exactly one line:
+
+```
+Context restored from {filename} (N chars).
+```
+
+Where `{filename}` is the name of the file that was used (from the stderr output of Step R1, e.g. `squadron-P4.md`), and `N` is the character count of the restored text.
 
 ---
 

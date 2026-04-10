@@ -97,6 +97,20 @@ Generate a summary of the current session following the `resolved_instructions`.
 - If `emit` includes `clipboard`: pipe the summary to the system clipboard via Bash using a heredoc (try `pbcopy`, then `xclip -selection clipboard`, then `wl-copy` — warn if none available). Confirm the character count to the user.
 - If `emit` includes `rotate`: note to the user that session rotation cannot be automated in prompt-only mode. Suggest they start a new Claude Code session and paste in the summary to seed context if needed.
 
+**Always write the summary to the conventional file path** via Bash, regardless of `emit` contents:
+
+```bash
+SUMM_DIR=~/.config/squadron/runs/summaries
+PIPELINE_NAME=<pipeline name from step JSON>
+PROJECT_NAME=$(cf status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('project','unknown'))" 2>/dev/null || echo "unknown")
+mkdir -p "$SUMM_DIR"
+cat << '__SQ_END__' > "$SUMM_DIR/${PROJECT_NAME}-${PIPELINE_NAME}.md"
+SUMMARY_TEXT
+__SQ_END__
+```
+
+Replace `PIPELINE_NAME` with the `step_name` or pipeline identifier from the run JSON, and `SUMMARY_TEXT` with the generated summary. This file enables `/sq:summary --restore` to seed context in a new session without a run-id.
+
 Do not attempt to start a new session or issue `/compact` — present the summary as text only.
 
 ### devlog
