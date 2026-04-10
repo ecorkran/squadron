@@ -1,0 +1,19 @@
+name: P6
+description: Implement slice (phase 6) with review
+
+params:
+  slice: required
+
+steps:
+  - implement:
+      phase: 6
+      model: sonnet
+      review:
+        template: code
+        model: minimax
+      checkpoint: on-fail
+
+  - compact:
+      template: minimal
+
+  - devlog: auto

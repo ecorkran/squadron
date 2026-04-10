@@ -21,7 +21,7 @@ def resolve_rules_dir(
 ) -> Path | None:
     """Resolve the rules directory.
 
-    Priority: CLI flag > config > {cwd}/rules/ > {cwd}/.claude/rules/ > None.
+    Priority: CLI flag > config > {cwd}/rules/ > {cwd}/.claude/rules/ > ~/.config/squadron/rules/ > None.
     """
     if cli_rules_dir is not None:
         p = Path(cli_rules_dir)
@@ -41,6 +41,10 @@ def resolve_rules_dir(
         p = cwd_path / candidate
         if p.is_dir():
             return p
+
+    user_rules = Path.home() / ".config" / "squadron" / "rules"
+    if user_rules.is_dir():
+        return user_rules
 
     return None
 

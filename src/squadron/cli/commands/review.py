@@ -247,8 +247,9 @@ def _resolve_slice_number(num: str) -> SliceInfo:
         return resolve_slice_info(client, int(num))
     except ContextForgeNotAvailable:
         rprint(
-            "[red]Error: 'cf' (Context-Forge CLI) is not installed"
-            " or not on PATH.[/red]"
+            "[red]Error: Context Forge (cf) is not installed or not on PATH.[/red]\n"
+            "Install it with: [bold]npm install -g @context-forge/cli[/bold]\n"
+            "Then run: [bold]sq install-commands[/bold]"
         )
         raise typer.Exit(code=1)
     except (ContextForgeError, ValueError) as exc:

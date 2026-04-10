@@ -1,0 +1,14 @@
+name: P4
+description: Design a slice (phase 4) with review and human checkpoint
+
+params:
+  slice: required
+
+steps:
+  - design:
+      phase: 4
+      model: opus
+      review:
+        template: slice
+        model: glm5
+      checkpoint: always

@@ -61,9 +61,35 @@ class TestResolveRulesDir:
             result = resolve_rules_dir(str(tmp_path), None, None)
         assert result == claude_rules
 
+    def test_user_rules_fallback(self, tmp_path: Path) -> None:
+        """Uses ~/.config/squadron/rules/ when project-level dirs are absent."""
+        project = tmp_path / "project"
+        project.mkdir()
+        user_rules = tmp_path / ".config" / "squadron" / "rules"
+        user_rules.mkdir(parents=True)
+
+        with (
+            patch("squadron.review.rules.get_config", return_value=None),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
+            result = resolve_rules_dir(str(project), None, None)
+        assert result == user_rules
+
+    def test_user_rules_fallback_creates_path(self, tmp_path: Path) -> None:
+        """User rules dir must exist to be returned."""
+        with (
+            patch("squadron.review.rules.get_config", return_value=None),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
+            result = resolve_rules_dir(str(tmp_path), None, None)
+        assert result is None
+
     def test_returns_none_when_none_exist(self, tmp_path: Path) -> None:
         """Returns None when no rules dir found."""
-        with patch("squadron.review.rules.get_config", return_value=None):
+        with (
+            patch("squadron.review.rules.get_config", return_value=None),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
             result = resolve_rules_dir(str(tmp_path), None, None)
         assert result is None
 

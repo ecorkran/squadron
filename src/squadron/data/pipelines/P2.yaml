@@ -1,0 +1,14 @@
+name: P2
+description: Design an architectural initiative (phase 2) with review and human checkpoint
+
+params:
+  slice: required
+
+steps:
+  - design:
+      phase: 2
+      model: opus
+      review:
+        template: arch 
+        model: glm5
+      checkpoint: always

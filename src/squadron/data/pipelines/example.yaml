@@ -1,0 +1,165 @@
+# ============================================================================
+# Example Pipeline — Reference for all available step types and options
+# ============================================================================
+# Usage:  sq run <pipeline-name> [first-required-param] [--param key=value ...]
+#         sq run example 165              # slice 165
+#         sq run example 165 --model opus  # override pipeline-level model
+#
+# Pipelines are loaded from (first match wins):
+#   1. .squadron/pipelines/<name>.yaml   (project-local)
+#   2. ~/.squadron/pipelines/<name>.yaml (user-global)
+#   3. built-in pipelines                (this directory)
+# ============================================================================
+
+name: example
+description: Annotated reference pipeline showing all available options
+
+# ---------------------------------------------------------------------------
+# params — declare parameters that steps can reference as {param_name}
+# ---------------------------------------------------------------------------
+# "required" means the caller must supply it; any other string is a default.
+params:
+  slice: required
+  # model: sonnet          # optional param with default value
+
+# ---------------------------------------------------------------------------
+# model — pipeline-level default model (overridden by step-level model)
+# ---------------------------------------------------------------------------
+# model: sonnet
+
+# ---------------------------------------------------------------------------
+# steps — executed sequentially; pipeline halts on first failure
+# ---------------------------------------------------------------------------
+steps:
+
+  # -------------------------------------------------------------------------
+  # Phase steps: design, tasks, implement
+  # -------------------------------------------------------------------------
+  # These expand to: cf-op(set_phase) -> cf-op(set_slice) -> cf-op(build) ->
+  # dispatch -> [review -> checkpoint] -> commit
+  #
+  # Options:
+  #   phase:      (required) integer phase number
+  #   model:      model for the dispatch (LLM generation) action
+  #   review:     string (template name) or dict with template + model
+  #   checkpoint: when to pause for human — see checkpoint options below
+  #
+  # Checkpoint triggers:
+  #   always       — always pause after review
+  #   on-concerns  — pause if review verdict is CONCERNS or FAIL
+  #   on-fail      — pause only if review verdict is FAIL
+  #   never        — never pause (default when review is present)
+  #
+  # Review can be a simple string or a dict:
+  #   review: slice                          # uses pipeline/step model
+  #   review:
+  #     template: slice                      # review template name
+  #     model: glm5                          # model for the review call
+  #
+  # Available review templates: arch, slice, tasks, code
+  # -------------------------------------------------------------------------
+
+  - design:
+      phase: 4
+      model: haiku
+      review:
+        template: slice
+        model: minimax
+      checkpoint: on-concerns
+
+  - tasks:
+      phase: 5
+      model: haiku
+      review:
+        template: tasks
+        model: minimax
+      checkpoint: on-fail
+
+  # -------------------------------------------------------------------------
+  # compact — context compaction (session rotate with summary)
+  # -------------------------------------------------------------------------
+  # Shorthand for summary with emit: [rotate].  Use when you just need to
+  # compress context between phases and don't care about other destinations.
+  #
+  # Options:
+  #   template:  compaction template name
+  #
+  # Available compaction templates: default, minimal, minimal-sdk
+  # -------------------------------------------------------------------------
+
+  - compact:
+      template: minimal
+
+  # -------------------------------------------------------------------------
+  # summary — generate a summary and emit to one or more destinations
+  # -------------------------------------------------------------------------
+  # More flexible than compact — controls where the summary goes.
+  #
+  # Options:
+  #   template:    compaction template name (ex:default, minimal, minimal-sdk)
+  #   model:       model for summary generation
+  #   emit:        list of destinations (see below)
+  #   checkpoint:  same triggers as phase steps
+  #
+  # Emit destinations:
+  #   stdout     — print to terminal
+  #   clipboard  — copy to system clipboard
+  #   rotate     — inject as compacted context and rotate the session
+  #   {file: path} — write to file (relative paths resolve from project root)
+  #
+  # Examples:
+  #   emit: [rotate]                         # equivalent to compact
+  #   emit: [clipboard]                      # copy to clipboard only
+  #   emit: [stdout, clipboard]              # print and copy
+  #   emit: [rotate, {file: summary.md}]     # rotate session + save to file
+  # -------------------------------------------------------------------------
+
+  # - summary:
+  #     template: minimal-sdk
+  #     model: haiku
+  #     emit: [rotate]
+
+  # -------------------------------------------------------------------------
+  # review — standalone review step (not attached to a phase)
+  # -------------------------------------------------------------------------
+  # Useful when you want to review without running a full phase build.
+  #
+  # Options:
+  #   template:  review template name (arch, slice, tasks, code)
+  #   model:     model for the review
+  # -------------------------------------------------------------------------
+
+  # - review:
+  #     template: code
+  #     model: minimax
+
+  # -------------------------------------------------------------------------
+  # devlog — generate a development log entry
+  # -------------------------------------------------------------------------
+  # Options:
+  #   mode: auto   (scalar shorthand: `- devlog: auto`)
+  # -------------------------------------------------------------------------
+
+  # - devlog: auto
+
+  # -------------------------------------------------------------------------
+  # each — iterate over a collection, running inner steps per item
+  # -------------------------------------------------------------------------
+  # Used for batch operations like designing all unfinished slices.
+  # See design-batch.yaml for a real-world example.
+  # -------------------------------------------------------------------------
+
+  # -------------------------------------------------------------------------
+  # Step naming — give a step an explicit name for resume support
+  # -------------------------------------------------------------------------
+  # Any step can include a `name:` field for use with --from-step:
+  #   sq run example 165 --from-step my-review
+  #
+  #   - review:
+  #       name: my-review
+  #       template: code
+  # -------------------------------------------------------------------------
+
+  - design:
+      phase: 4
+      model: haiku

@@ -136,7 +136,8 @@ def _check_cf(cf_client: ContextForgeClient) -> None:
     except ContextForgeNotAvailable:
         rprint(
             "[red]Error: Context Forge (cf) is not installed or not on PATH.[/red]\n"
-            "Install it with: [bold]sq install-commands[/bold]"
+            "Install it with: [bold]npm install -g @context-forge/cli[/bold]\n"
+            "Then run: [bold]sq install-commands[/bold]"
         )
         raise typer.Exit(1)
     except ContextForgeError as exc:

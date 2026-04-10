@@ -1,0 +1,17 @@
+name: P5
+description: Break slice into tasks (phase 5) with review
+
+params:
+  slice: required
+
+steps:
+  - tasks:
+      phase: 5
+      model: sonnet
+      review:
+        template: tasks
+        model: minimax
+      checkpoint: on-fail
+
+  - compact:
+      template: minimal
