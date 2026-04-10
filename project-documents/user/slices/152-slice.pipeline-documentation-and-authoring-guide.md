@@ -100,7 +100,7 @@ Each entry: purpose, expansion (what action sequence it expands into), YAML fiel
   - `source` (string): collection source — currently `cf.unfinished_slices("{plan}")` or `cf.slices("{plan}")`
   - `as` (string): loop variable name
   - `steps` (list): inner step definitions using `{as.field}` placeholders
-- Item fields accessible as `{variable.index}`, `{variable.title}`, etc. (sourced from CF query)
+- Item fields accessible as `{variable.index}`, `{variable.title}`, etc. (dotted binding, sourced from CF query — binding semantics established in slice 149)
 
 #### § Action Type Catalog
 
@@ -180,6 +180,8 @@ Built-in and user override files use **identical formats** — copy a block from
 | `example` | Annotated reference — all available options | `slice` |
 
 The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the primary authoring reference. It includes inline comments explaining every field and option. Read it before writing a custom pipeline.
+
+> **Note on naming:** The architecture document used placeholder names (`slice-lifecycle`, `review-only`, `implementation-only`). The shipped pipeline names (`slice`, `review`, `implement`) are the canonical user-facing names. The `P1`–`P6` shortcuts are an addition beyond the minimum specified in the architecture.
 
 #### § Writing a Custom Pipeline
 
