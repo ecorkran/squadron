@@ -3,6 +3,7 @@ description: Full slice lifecycle — design through implementation
 
 params:
   slice: required
+  review-model: minimax
 
 steps:
   - design:
@@ -10,7 +11,7 @@ steps:
       model: opus
       review: 
         template: slice
-        model: glm5
+        model: "{review-model}"
       checkpoint: on-concerns
 
   - tasks:
@@ -18,7 +19,7 @@ steps:
       model: sonnet
       review: 
         template: tasks
-        model: minimax
+        model: "{review-model}"
       checkpoint: always
 
   - compact:
@@ -29,7 +30,7 @@ steps:
       model: sonnet
       review:
         template: code
-        model: minimax
+        model: "{review-model}"
       checkpoint: on-fail
 
   - compact:
