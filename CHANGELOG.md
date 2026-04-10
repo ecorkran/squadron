@@ -10,6 +10,26 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 20260410
+
+### Added
+- `emit: [file]` (bare, no explicit path) in pipeline YAML now writes the
+  summary to `~/.config/squadron/runs/summaries/{project}-{pipeline}.md`
+  (latest-only overwrite). Project name resolved from CF via CWD; falls back
+  to `"unknown"`.
+- `_project` param automatically injected into `ActionContext.params` at
+  pipeline init via `gather_cf_params()`. Caller-supplied `_project` is not
+  overwritten.
+- `sq _summary-instructions --restore` hidden CLI flag — reads the most recent
+  summary file for the current CF project and prints it to stdout. Lists all
+  matching pipelines on stderr when multiple exist.
+- `/sq:summary --restore` skill branch — seeds the current conversation with
+  the latest pipeline summary; no clipboard write; prints a one-line
+  confirmation. No run-id needed.
+- `commands/sq/run.md` summary handler now writes the summary to the
+  conventional file path via Bash, enabling `/sq:summary --restore` after a
+  prompt-only pipeline run.
+
 ## [0.3.4] - 20260409
 
 ### Added

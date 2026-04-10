@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260409
+dateUpdated: 20260410
 ---
 
 # Development Log
@@ -13,6 +13,20 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 ---
 
 ## 20260410
+
+### Slice 163: Pipeline Run Summary Persistence and Restore — Complete
+
+**Phase 6 (implementation) complete.**
+
+- Closes the "run pipeline in CLI terminal, restore context in VS Code" workflow gap
+- Three implementation sites: `emit.py` (default file path), `executor.py` (_project injection), `summary_instructions.py` (--restore), `commands/sq/summary.md` (--restore branch), `commands/sq/run.md` (file-write step)
+- Key decision: bare `"file"` in `emit:` YAML list now produces `EmitDestination(kind=FILE, arg=None)` rather than raising; default path is `~/.config/squadron/runs/summaries/{project}-{pipeline}.md`
+- `_project` threaded into `ActionContext.params` via `gather_cf_params()` at pipeline init in `executor.py`; falls back to `"unknown"` when CF unavailable; caller-supplied `_project` not overwritten
+- 31 new tests added (28 in test_emit.py, 3 in test_executor.py, 5 in test_summary_instructions.py)
+
+**Commits:**
+- `51a3342` feat: add default summaries path to emit and thread _project into ActionContext
+- `1d6281f` feat: add --restore to /sq:summary and write summary to conventional path in run.md
 
 
 **tasks: devlog-4**
