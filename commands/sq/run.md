@@ -88,6 +88,18 @@ The `command` field contains a `/compact [...]` slash command. **Do not run this
 
 **IMPORTANT**: After outputting the `/compact` command, stop and wait. Context compaction will clear prior messages. The pipeline can be resumed afterward with `sq run --prompt-only --next --resume <run-id>`.
 
+Note: session rotation (starting a fresh session and seeding it with the summary) cannot be automated in prompt-only mode. `/compact` compacts the current session window only.
+
+### summary
+Generate a summary of the current session following the `resolved_instructions`.
+
+- Print the summary to stdout as a clearly-delimited block so the user can copy it.
+- If `model_switch` is present, note the recommended model — like dispatch, this cannot be automated.
+- If `emit` includes `clipboard`: note to the user that clipboard access cannot be automated; the printed block is intended for manual copy.
+- If `emit` includes `rotate`: note to the user that session rotation cannot be automated in prompt-only mode. Suggest they start a new Claude Code session and paste in the summary to seed context if needed.
+
+Do not attempt to start a new session or issue `/compact` — present the summary as text only.
+
 ### devlog
 Execute the work described in `instruction` — write a DEVLOG entry capturing the pipeline run state.
 
