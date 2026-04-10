@@ -12,6 +12,25 @@ Internal work log for squadron project development.
 
 ## 20260410
 
+### Slice 163: Pipeline Run Summary Persistence and Restore — Phase 4 Design Complete
+
+**Completed:**
+- Created slice design at `user/slices/163-slice.pipeline-run-summary-persistence-and-restore.md`
+- Added slice overview to `140-slices.pipeline-foundation.md` as entry 23 (index 163)
+- Fixed `run.md` clipboard bug: summary action handler now uses `pbcopy`/`xclip`/`wl-copy` via Bash instead of telling the user to copy manually
+
+**Design decisions:**
+- Default `emit: [file]` path: `~/.config/squadron/runs/summaries/{project}-{pipeline}.md` (latest-only overwrite)
+- Restore via `/sq:summary --restore` — reads most recent summary for current project, no run-id needed
+- Project name resolved from CF via `gather_cf_params()` (existing helper)
+- Prompt-only `run.md` handler writes to same conventional path via Bash
+- `_project` threaded as internal param through `ActionContext` during pipeline init
+
+**Status:**
+- Phase 4 complete. Ready for review, then Phase 5 (task breakdown).
+
+---
+
 ### Slice 152: Pipeline Documentation and Authoring Guide — Phase 5 Task Breakdown Complete
 
 **Completed:**
