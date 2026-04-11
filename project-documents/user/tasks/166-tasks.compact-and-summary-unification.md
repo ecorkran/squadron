@@ -7,7 +7,7 @@ dependencies: [161-summary-step-with-emit-destinations, 164-profile-aware-summar
 projectState: Slice 166 design complete. Slices 161 and 164 complete. SDK mode already treats compact as a summary alias (compact.py delegates to _execute_summary). Prompt-only compact is broken (emits stale `/compact [...]` slash command). Working tree has pending edits under project-documents/; no code changes in-flight.
 dateCreated: 20260411
 dateUpdated: 20260411
-status: not_started
+status: complete
 ---
 
 ## Context Summary

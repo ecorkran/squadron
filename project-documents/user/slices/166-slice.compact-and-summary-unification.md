@@ -7,7 +7,7 @@ dependencies: [161-summary-step-with-emit-destinations, 164-profile-aware-summar
 interfaces: [CompactStepType, SummaryAction, ActionType, RunState.compact_summaries]
 dateCreated: 20260411
 dateUpdated: 20260411
-status: design-complete
+status: complete
 ---
 
 # Slice Design: Compact and Summary Unification

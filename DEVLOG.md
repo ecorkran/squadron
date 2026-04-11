@@ -16,6 +16,31 @@ written from user perspective.
 
 ## 20260411
 
+### Slice 166: Compact and Summary Unification — Complete (Phase 6)
+
+Completed the runtime unification of `compact` and `summary`. Deleted
+`CompactAction`, `ActionType.COMPACT`, `_render_compact`, and both
+compact action test files (~780 lines net deleted). Moved template
+helpers (`CompactionTemplate`, `load_compaction_template`,
+`render_instructions`, `_parse_template`) from `actions/compact.py`
+into a new `src/squadron/pipeline/compaction_templates.py` module;
+updated all five consumers to import from the new home.
+
+Rewrote `CompactStepType.expand()` to return `("summary", {...,
+"emit": ["rotate"]})` instead of `("compact", ...)`. Rewrote
+`StateManager._maybe_record_compact_summaries` gate to fire on
+`action_type="summary"` with a successful rotate emit entry in
+`emit_results` — the one real risk in the slice. Removed the
+`### compact` section from `commands/sq/run.md` and refreshed the
+installed copy.
+
+Prompt-only smoke test confirmed: `compact-1` step in P6 now renders
+as `action_type="summary"`, `emit=["rotate"]`, no `/compact [` in
+any command field. All 1455 tests green, pyright clean, ruff clean.
+
+No surprises. Pipeline YAML files (P6, slice, tasks, app, example)
+all validate cleanly — `compact:` keyword still parses.
+
 ### Slice 166: Compact and Summary Unification — Task Breakdown Complete (Phase 5)
 
 Broke slice 166 into a single task file at
