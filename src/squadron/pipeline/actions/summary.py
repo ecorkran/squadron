@@ -7,6 +7,10 @@ import logging
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+from squadron.pipeline.summary_oneshot import (
+    capture_summary_via_profile,
+    is_sdk_profile,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -117,30 +121,66 @@ async def _execute_summary(
 
     Non-rotate emit failures log a warning but do not fail the action.
     A rotate emit failure halts the action with success=False.
+
+    Branches on profile:
+    - SDK profile (or None): uses sdk_session.capture_summary()
+    - Non-SDK profile: uses capture_summary_via_profile() via the provider registry
     """
-    if context.sdk_session is None:
+    # Resolve model alias and profile.
+    model_id: str | None = None
+    profile: str | None = None
+    if summary_model_alias:
+        model_id, profile = context.resolver.resolve(
+            action_model=summary_model_alias, step_model=None
+        )
+
+    # Validate: rotate emit is incompatible with non-SDK profiles.
+    has_rotate = any(d.kind is EmitKind.ROTATE for d in emit_destinations)
+    if has_rotate and not is_sdk_profile(profile):
         return ActionResult(
             success=False,
             action_type=action_type,
             outputs={},
-            error="summary action requires SDK execution mode",
+            error=(
+                f"rotate emit is incompatible with non-SDK summary profile {profile!r}"
+            ),
         )
 
-    # Resolve model alias if provided.
-    model_id: str | None = None
-    if summary_model_alias:
-        model_id, _ = context.resolver.resolve(
-            action_model=summary_model_alias, step_model=None
+    # Guard: SDK profile requires an active SDK session.
+    if is_sdk_profile(profile) and context.sdk_session is None:
+        return ActionResult(
+            success=False,
+            action_type=action_type,
+            outputs={},
+            error="summary action requires SDK execution mode for SDK-profile models",
         )
 
-    restore_model = context.sdk_session.current_model
+    # Guard: rotate emit also requires an SDK session (belt-and-suspenders —
+    # already blocked above for non-SDK, but also catches SDK + missing session).
+    if has_rotate and context.sdk_session is None:
+        return ActionResult(
+            success=False,
+            action_type=action_type,
+            outputs={},
+            error="rotate emit requires an SDK session",
+        )
 
     try:
-        summary = await context.sdk_session.capture_summary(
-            instructions=instructions,
-            summary_model=model_id,
-            restore_model=restore_model,
-        )
+        if is_sdk_profile(profile):
+            assert context.sdk_session is not None  # narrowed above
+            restore_model = context.sdk_session.current_model
+            summary = await context.sdk_session.capture_summary(
+                instructions=instructions,
+                summary_model=model_id,
+                restore_model=restore_model,
+            )
+        else:
+            assert profile is not None  # narrowed by is_sdk_profile False
+            summary = await capture_summary_via_profile(
+                instructions=instructions,
+                model_id=model_id,
+                profile=profile,
+            )
     except Exception as exc:
         return ActionResult(
             success=False,

@@ -311,6 +311,88 @@ class TestRenderSummary:
         )
         assert result.emit == ["rotate"]
 
+    # T12 — profile branching tests
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_sdk_profile_emits_model_switch(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        """SDK profile alias → model_switch set, command is None."""
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("haiku-model-id", "sdk")
+
+        result = _render_summary({"model": "haiku"}, {}, resolver)
+
+        assert result.model_switch == "/model haiku"
+        assert result.command is None
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_unannotated_alias_emits_model_switch(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        """profile=None (unannotated alias) is treated as SDK → model_switch."""
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("some-id", None)
+
+        result = _render_summary({"model": "some-alias"}, {}, resolver)
+
+        assert result.model_switch == "/model some-alias"
+        assert result.command is None
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_non_sdk_profile_emits_command(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        """Non-SDK profile → command set with sq _summary-run, model_switch is None."""
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+        result = _render_summary(
+            {"model": "minimax", "template": "minimal-sdk"}, {}, resolver
+        )
+
+        assert result.model_switch is None
+        assert result.command is not None
+        assert result.command.startswith("sq _summary-run")
+        assert "--template" in result.command
+        assert "--profile openrouter" in result.command
+        assert "--model minimax-01" in result.command
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_non_sdk_profile_quotes_params(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        """Shell-special param values are quoted so shlex.split recovers them."""
+        import shlex
+
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+        result = _render_summary(
+            {"model": "minimax"},
+            {"slice": "a slice with spaces"},
+            resolver,
+        )
+
+        assert result.command is not None
+        # shlex.split must recover the param value intact
+        parsed = shlex.split(result.command)
+        param_idx = parsed.index("--param")
+        kv = parsed[param_idx + 1]
+        assert kv == "slice=a slice with spaces"
+
 
 class TestFallbackUnknownAction:
     def test_unknown_type_returns_generic_instruction(self) -> None:

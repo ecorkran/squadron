@@ -152,10 +152,12 @@ async def test_execute_summary_multiple_emits_in_order() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_summary_no_sdk_session_returns_failure() -> None:
+async def test_execute_summary_sdk_profile_without_session_fails() -> None:
+    """SDK profile (alias=None → profile=None) without a session fails."""
     from squadron.pipeline.actions.summary import _execute_summary
 
     ctx = _make_context(sdk_session=None)
+    # alias=None means profile=None, which is_sdk_profile treats as SDK
     result = await _execute_summary(
         context=ctx,
         instructions="x",
@@ -438,3 +440,127 @@ async def test_execute_invalid_emit_param_returns_failure() -> None:
     assert result.success is False
     assert result.error is not None
     assert "banana" in result.error
+
+
+# ---------------------------------------------------------------------------
+# T7 (slice 164) — profile branching tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
+    """Non-SDK profile routes through capture_summary_via_profile, not sdk_session."""
+    from unittest.mock import patch
+
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile",
+        new=AsyncMock(return_value="ONESHOT SUMMARY"),
+    ) as mock_oneshot:
+        with patch(
+            "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
+        ):
+            result = await _execute_summary(
+                context=ctx,
+                instructions="summarize",
+                summary_model_alias="minimax",
+                emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+                action_type="summary",
+            )
+
+    assert result.success is True
+    assert result.outputs.get("summary") == "ONESHOT SUMMARY"
+    mock_oneshot.assert_called_once_with(
+        instructions="summarize",
+        model_id="minimax-01",
+        profile="openrouter",
+    )
+
+
+@pytest.mark.asyncio
+async def test_execute_summary_non_sdk_profile_with_rotate_fails() -> None:
+    """Rotate emit + non-SDK profile fails before any provider call."""
+    from unittest.mock import patch
+
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile",
+        new=AsyncMock(return_value="SHOULD NOT REACH"),
+    ) as mock_oneshot:
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
+            action_type="summary",
+        )
+
+    assert result.success is False
+    assert result.error is not None
+    assert "rotate" in result.error.lower()
+    assert "non-SDK" in result.error or "openrouter" in result.error
+    mock_oneshot.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_summary_sdk_profile_path_unchanged() -> None:
+    """SDK profile still calls sdk_session.capture_summary as before."""
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    session = AsyncMock()
+    session.current_model = "sonnet-id"
+    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    ctx = _make_context(sdk_session=session)
+    ctx.resolver.resolve.return_value = ("haiku-resolved", "sdk")
+
+    with patch(
+        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="haiku",
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    assert result.success is True
+    session.capture_summary.assert_called_once()
+    assert session.capture_summary.call_args.kwargs["summary_model"] == "haiku-resolved"
+
+
+@pytest.mark.asyncio
+async def test_execute_summary_unannotated_alias_uses_sdk_path() -> None:
+    """Resolver returning profile=None (unannotated alias) uses the SDK path."""
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    session = AsyncMock()
+    session.current_model = "sonnet-id"
+    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    ctx = _make_context(sdk_session=session)
+    ctx.resolver.resolve.return_value = ("some-resolved-id", None)
+
+    with patch(
+        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="some-alias",
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    assert result.success is True
+    session.capture_summary.assert_called_once()
+    assert (
+        session.capture_summary.call_args.kwargs["summary_model"] == "some-resolved-id"
+    )

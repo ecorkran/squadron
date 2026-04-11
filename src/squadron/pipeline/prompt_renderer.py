@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shlex
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, cast
 
@@ -19,6 +20,7 @@ from squadron.pipeline.actions.compact import (
 )
 from squadron.pipeline.executor import resolve_placeholders
 from squadron.pipeline.steps import get_step_type
+from squadron.pipeline.summary_oneshot import is_sdk_profile
 
 if TYPE_CHECKING:
     from squadron.pipeline.models import StepConfig
@@ -244,20 +246,46 @@ def _render_summary(
     params: dict[str, object],
     resolver: ModelResolver,
 ) -> ActionInstruction:
-    """Build instruction for a summary action."""
+    """Build instruction for a summary action.
+
+    SDK profiles (or no model alias) emit a ``model_switch`` directive.
+    Non-SDK profiles emit a ``command`` with a runnable ``sq _summary-run …``
+    invocation.  No path emits both.
+    """
     template_name = str(config.get("template", "default"))
     model_raw = config.get("model")
     emit_raw = config.get("emit")
 
     model_id: str | None = None
+    profile: str | None = None
     model_switch: str | None = None
+    command: str | None = None
+
     if model_raw is not None:
         alias = str(model_raw)
         try:
-            model_id, _ = resolver.resolve(alias)
+            model_id, profile = resolver.resolve(alias)
         except Exception:
             model_id = alias
-        model_switch = f"/model {alias}"
+            profile = None
+
+        if is_sdk_profile(profile):
+            model_switch = f"/model {alias}"
+        else:
+            # Non-SDK: build a runnable sq _summary-run command.
+            cmd_parts = [
+                "sq",
+                "_summary-run",
+                "--template",
+                template_name,
+                "--profile",
+                profile or "",
+                "--model",
+                model_id or alias,
+            ]
+            for key, value in params.items():
+                cmd_parts.extend(["--param", f"{key}={shlex.quote(str(value))}"])
+            command = " ".join(cmd_parts)
 
     try:
         template = load_compaction_template(template_name)
@@ -273,6 +301,7 @@ def _render_summary(
     return ActionInstruction(
         action_type=ActionType.SUMMARY,
         instruction="Generate a session summary following the resolved instructions",
+        command=command,
         model=model_id,
         model_switch=model_switch,
         template=template_name,

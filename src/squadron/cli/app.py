@@ -21,6 +21,7 @@ from squadron.cli.commands.serve import serve
 from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.spawn import spawn
 from squadron.cli.commands.summary_instructions import summary_instructions
+from squadron.cli.commands.summary_run import summary_run
 from squadron.cli.commands.task import task
 
 load_dotenv(dotenv_path=Path.cwd() / ".env")
@@ -46,6 +47,7 @@ app.command("run")(run_command)
 app.command("install-commands")(install_commands)
 app.command("uninstall-commands")(uninstall_commands)
 app.command("_summary-instructions", hidden=True)(summary_instructions)
+app.command("_summary-run", hidden=True)(summary_run)
 
 
 def version_callback(value: bool) -> None:

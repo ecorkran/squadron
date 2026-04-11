@@ -222,3 +222,84 @@ async def test_execute_missing_template(
 
     assert result.success is False
     assert "not found" in str(result.error)
+
+
+# ---------------------------------------------------------------------------
+# T13 (slice 164) — compact-via-summary inheritance
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compact_non_sdk_profile_non_rotate_emit_succeeds(
+    action: CompactAction,
+    mock_context: ActionContext,
+) -> None:
+    """Compact with SDK session + non-SDK model + non-rotate emit delegates to
+    _execute_summary which uses the non-SDK provider path — no compact-specific
+    code is needed."""
+    from unittest.mock import AsyncMock, patch
+
+    from squadron.pipeline.models import ActionResult
+
+    mock_context.sdk_session = MagicMock()  # type: ignore[attr-defined]
+    mock_context.params = {"model": "minimax"}
+
+    fake_result = ActionResult(
+        success=True,
+        action_type="compact",
+        outputs={"summary": "COMPACT SUMMARY"},
+    )
+
+    # compact imports _execute_summary from summary at call time — patch there
+    with patch(
+        "squadron.pipeline.actions.summary._execute_summary",
+        new=AsyncMock(return_value=fake_result),
+    ) as mock_execute:
+        result = await action.execute(mock_context)
+
+    assert result.success is True
+    mock_execute.assert_called_once()
+    # Confirm compact passes action_type="compact" (not "summary")
+    call_kwargs = mock_execute.call_args.kwargs
+    assert call_kwargs["action_type"] == "compact"
+
+
+@pytest.mark.asyncio
+async def test_compact_non_sdk_profile_with_rotate_fails(
+    action: CompactAction,
+    mock_context: ActionContext,
+) -> None:
+    """_execute_summary validation: non-SDK profile + ROTATE fails with 'rotate' error.
+
+    Compact always passes EmitKind.ROTATE to _execute_summary.  This test
+    calls _execute_summary directly (the shared helper) to verify the error
+    message shape when a non-SDK profile is paired with ROTATE.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.emit import EmitDestination, EmitKind
+
+    ctx = MagicMock()
+    ctx.sdk_session = MagicMock()
+    ctx.resolver = MagicMock()
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+    ctx.step_index = 0
+    ctx.step_name = "compact-step"
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile",
+        new=AsyncMock(return_value="SHOULD NOT REACH"),
+    ) as mock_oneshot:
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
+            action_type="compact",
+        )
+
+    assert result.success is False
+    assert result.error is not None
+    assert "rotate" in result.error.lower()
+    mock_oneshot.assert_not_called()
