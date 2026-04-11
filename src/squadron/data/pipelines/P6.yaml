@@ -18,5 +18,5 @@ steps:
   - compact:
       template: minimal-sdk
       model: minimax
-      emit: [stdout, clipboard]
+      emit: [stdout, clipboard, file]
   - devlog: auto

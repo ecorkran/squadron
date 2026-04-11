@@ -4,7 +4,7 @@ layer: project
 reviewType: slice
 slice: prompt-only-loops
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 sourceDocument: project-documents/user/slices/154-slice.prompt-only-loops.md
 aiModel: minimax/minimax-m2.7
 status: complete
@@ -12,104 +12,68 @@ dateCreated: 20260411
 dateUpdated: 20260411
 findings:
   - id: F001
-    severity: concern
-    category: separation-of-concerns
-    summary: "Potential duplication of loop expansion logic between prompt renderer and executor"
-    location: Technical Scope, Implementation Details
+    severity: pass
+    category: scope-boundary
+    summary: "Scope is correctly bounded within initiative 140"
   - id: F002
-    severity: concern
-    category: specification-clarity
-    summary: "Incomplete resolution of item binding mechanism"
-    location: Data Flow, Technical Decisions
+    severity: pass
+    category: architecture-pattern
+    summary: "Loop context tracking at RunState level is architecturally sound"
   - id: F003
-    severity: note
-    category: documentation
-    summary: "Schema versioning for RunState is described but version number not specified"
-    location: Implementation Details
+    severity: pass
+    category: integration-point
+    summary: "Interface boundary with slice 155 is correctly defined"
   - id: F004
     severity: pass
-    category: scope-management
-    summary: "Correct scoping of convergence-related features"
+    category: data-model
+    summary: "Step naming convention maintains traceability"
   - id: F005
     severity: pass
-    category: interface-stability
-    summary: "Slash command compatibility properly scoped"
+    category: architecture-pattern
+    summary: "Flattened iteration stream is architecturally appropriate"
   - id: F006
-    severity: pass
-    category: error-handling
-    summary: "State schema backward compatibility addressed"
-    location: Implementation Details
+    severity: note
+    category: documentation
+    summary: "Schema version reference"
+    location: 140-arch.pipeline-foundation.md
   - id: F007
-    severity: pass
-    category: architecture-alignment
-    summary: "Component structure aligns with architecture"
-    location: Component Structure
+    severity: note
+    category: data-model
+    summary: "Step indexing fields extend architecture schema"
+    location: 154-slice.prompt-only-loops.md
 ---
 
 # Review: slice — slice 154
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** minimax/minimax-m2.7
 
 ## Findings
 
-### [CONCERN] Potential duplication of loop expansion logic between prompt renderer and executor
+### [PASS] Scope is correctly bounded within initiative 140
 
-The document describes `render_step_instructions()` detecting `each` steps, resolving the collection source query, and expanding inner steps. This mirrors logic that the executor (slice 149, which already implements collection loops per the architecture) should own.
+The slice explicitly excludes convergence strategies (`loop.strategy` is acknowledged but falls back to basic max-iteration), nested loops, dynamic loop sources, and automated model switching. All of these are correctly placed in initiative 160 per the architecture's scope boundaries. This is consistent with the architecture's directive that "140 defines the loop construct and strategy extension point. 160 fills in the strategies."
 
-The architecture states: *"The pipeline executor (slice 149) already supports loops; prompt-only mode just needs to expose those iterations as instruction steps."* This suggests the executor should produce the flattened step sequence that the prompt renderer consumes. Instead, the document describes the prompt renderer reconstructing the loop iteration logic independently.
+### [PASS] Loop context tracking at RunState level is architecturally sound
 
-**Specific concern:** The flow shows `render_step_instructions()` calling *"Resolve the source query (same as executor does)"* — this "same as executor" phrasing implies duplicate logic rather than shared consumption of executor output.
+The decision to track `loop_context` as a top-level field in `RunState` rather than per `StepResult` is well-reasoned: "Loop context is a runtime concern, not an artifact of step execution." This aligns with the architecture's existing `RunState` schema where `checkpoint` is a top-level field containing runtime context.
 
-**Recommendation:** Clarify how the prompt renderer obtains its step sequence. Ideally, the executor produces a flattened sequence that the prompt renderer consumes. If the renderer must traverse the pipeline definition independently, document why this is necessary and ensure the two implementations stay consistent.
+### [PASS] Interface boundary with slice 155 is correctly defined
 
----
+The document correctly notes that slice 155 (SDK Executor) "uses the real executor (slice 149), not prompt-only" and therefore doesn't directly consume slice 154. Both paths share the same `RunState` schema, ensuring state file compatibility. This matches the architecture's distinction between SDK execution mode and prompt-only mode.
 
-### [CONCERN] Incomplete resolution of item binding mechanism
+### [PASS] Step naming convention maintains traceability
 
-The document uses `{slice.index}` syntax throughout for item binding within `each` loops. The architecture explicitly defers this to 149: *"Full semantics (item type/schema, field traversal, missing field behavior, read-only binding) are a 149 design decision."*
+The `{step_name}-each-{item_index}` naming pattern (e.g., `design-each-0`) ensures uniqueness and traceability across loop iterations. The rationale ("Without unique names, resuming mid-loop would be ambiguous") correctly addresses the architecture's requirement for resume capability.
 
-The slice 154 document uses this syntax without acknowledging the deferral or referencing how 149 has resolved it. If 149's design is complete, this should be cited. If the syntax is illustrative only, the document should state this explicitly.
+### [PASS] Flattened iteration stream is architecturally appropriate
 
----
+The design decision to flatten loop iterations into a linear instruction stream keeps the slash command logic unchanged. This aligns with the architecture's principle that "the slash command doesn't need loop-aware logic; it just follows a linear instruction stream." The slash command (updated in slice 153) is consumed as-is.
 
-### [NOTE] Schema versioning for RunState is described but version number not specified
+### [NOTE] Schema version reference
 
-The document states: *"The JSON state file version increments (if versioned)."* This hedging ("if versioned") is appropriate since the architecture's RunState example doesn't include an explicit version field, but the document should align with whatever versioning scheme 150 established.
+The architecture document shows `"schema_version": 1` in the state file example. The slice mentions "v2 with `loop_context` populated only when inside a loop." This may indicate either an implicit versioning convention or that the architecture example predates the loop feature. No action required if implicit v2 for loop-enhanced runs is the convention.
 
----
+### [NOTE] Step indexing fields extend architecture schema
 
-### [PASS] Correct scoping of convergence-related features
-
-The document correctly excludes:
-- `loop.strategy` (weighted decay, etc.) → marked as 160 scope
-- Convergence loop strategies in prompt-only mode → correctly identified as SDK-executor territory
-
-This aligns with the architecture's boundary between 140's loop construct (acknowledged but stub-executed) and 160's strategies.
-
----
-
-### [PASS] Slash command compatibility properly scoped
-
-The document correctly identifies that `/sq:run` (updated in slice 153) works transparently with loops and requires no modifications. The instruction-stream abstraction (loops flattened into sequential instructions) is the correct design for maintaining compatibility.
-
----
-
-### [PASS] State schema backward compatibility addressed
-
-The document correctly handles the transition from v1 state files (pre-loop) to v2 (with `loop_context`):
-- v1 files have `loop_context: null` → treated as "not in a loop"
-- v2 files have populated `loop_context` → restored on resume
-
-This is the correct backward-compatible approach.
-
----
-
-### [PASS] Component structure aligns with architecture
-
-The document specifies:
-- `prompt_renderer.py` is **modified** (not new)
-- No new components required
-- Integration with existing models, loader, and state manager
-
-This matches the architecture's treatment of prompt-only mode as a variant path through existing components.
+The architecture's state file example uses `current_step: "implement"` (a string), while this slice introduces `step_index` and `total_steps` (integers) in the `StepInstructions` output. These fields represent an extension beyond what the architecture specifies, providing iteration-relative progress tracking. This is a reasonable extension given the architecture's goal of "progress bar / step display" capability, but the architecture doesn't explicitly define these fields.
