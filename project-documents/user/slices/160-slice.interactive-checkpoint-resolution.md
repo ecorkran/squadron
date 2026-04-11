@@ -416,7 +416,7 @@ known to produce a CONCERNS verdict (use `review-only` on a file with mild issue
 
 **Step 1 — Trigger a checkpoint in SDK mode:**
 ```bash
-sq run review-only --slice 160 --model sonnet
+sq run review-only 160 --model sonnet
 ```
 Expect: the pipeline pauses, the interactive menu appears with the review verdict
 and any extracted findings.
@@ -441,15 +441,15 @@ Re-run. At the prompt, enter `e`. Expect:
 
 **Step 5 — Verify non-interactive guard:**
 ```bash
-echo "" | sq run review-only --slice 160   # piped stdin
+echo "" | sq run review-only 160   # piped stdin
 # OR
-SQUADRON_NO_INTERACTIVE=1 sq run review-only --slice 160
+SQUADRON_NO_INTERACTIVE=1 sq run review-only 160
 ```
 Expect: pipeline exits (same as choosing e) with a logged warning, no hang.
 
 **Step 6 — Verify prompt-only output:**
 ```bash
-sq run review-only --slice 160 --prompt-only --next
+sq run review-only 160 --prompt-only --next
 ```
 Expect: checkpoint `ActionInstruction.instruction` includes description of
 the three options.
