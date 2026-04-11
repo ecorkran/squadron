@@ -8,7 +8,9 @@ dateUpdated: 20260411
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
-Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
+Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).  This file differs from
+CHANGELOG.md, in that this file is written from implementor perspective where CHANGELOG.md is
+written from user perspective.
 
 ---
 
