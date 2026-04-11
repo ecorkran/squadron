@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260410
+dateUpdated: 20260411
 ---
 
 # Development Log
@@ -11,6 +11,39 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ---
+
+## 20260411
+
+### Slice 164 design + tasks; CI fix; phase pipelines now write summary files
+
+**v0.3.8 release.**
+
+- **Slice 164 (Profile-Aware Summary Model Routing)** — Phase 4 design
+  and Phase 5 task breakdown complete via `/sq:run P4 164` and
+  `/sq:run P5 164`. Both phases reviewed PASS by minimax-m2.7. Slice
+  routes the summary action through the provider registry for non-SDK
+  profiles, mirroring `run_review_with_profile()`. New module
+  `summary_oneshot.py` houses `capture_summary_via_profile()` and the
+  `is_sdk_profile()` predicate. 17 implementation tasks in
+  `164-tasks.profile-aware-summary-model-routing.md`. Implementation
+  deferred (Phase 6 not yet started).
+- **CI fix** — `prompt_renderer.py:270` had a `dict[str, object]`
+  narrow that pyright couldn't infer through; added
+  `cast(list[object], emit_raw)` after the `isinstance(list)` check.
+  Seven consecutive `main` builds had been red on this same error.
+- **Phase pipelines now write summary files** — after re-running
+  `sq install-commands` to refresh stale `summary.md` and `run.md`
+  skills, discovered that all five phase pipelines (P1, P2, P4, P5, P6)
+  emit only `[stdout, clipboard]` and never `[file]` — so slice 163's
+  default-file-path branch had nothing to write to. Added `file` to
+  every P*.yaml emit list. `/sq:summary --restore` now works
+  end-to-end after any phase pipeline run.
+
+**Commits:**
+- `5d7ab9d` docs: add slice 164 profile-aware summary model routing design
+- `32fc9e7` fix: cast emit list to satisfy pyright in _render_summary
+- `f8c887a` docs: add slice 164 task breakdown
+- (this commit) feat: emit pipeline summaries to file + bump to v0.3.8
 
 ## 20260410
 

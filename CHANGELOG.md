@@ -10,6 +10,20 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 20260411
+
+### Added
+- Phase pipelines (P1, P2, P4, P5, P6) now emit summaries to `file` in
+  addition to `stdout` and `clipboard`. After any phase pipeline run,
+  `/sq:summary --restore` will find the summary at
+  `~/.config/squadron/runs/summaries/squadron-{P}.md` without a run-id.
+
+### Fixed
+- `prompt_renderer._render_summary` pyright failure on
+  `dict[str, object]` narrowed via `isinstance(list)` — added
+  `cast(list[object], …)` after the narrow. Restores green CI after
+  several consecutive red builds on `main`.
+
 ## [0.3.5] - 20260410
 
 ### Added
