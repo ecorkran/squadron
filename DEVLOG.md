@@ -16,6 +16,19 @@ written from user perspective.
 
 ## 20260411
 
+### Slice 160: Interactive Checkpoint Resolution — Design Complete
+
+Created `project-documents/user/slices/160-slice.interactive-checkpoint-resolution.md`.
+
+Design confines the change to three files: `executor.py` (interactive handler +
+`CheckpointResolution`/`CheckpointDecision` types), `actions/dispatch.py` (pick up
+`override_instructions` from params), and `prompt_renderer.py` (enhanced checkpoint
+instruction text). The Accept/Override path injects instructions into `merged_params` and
+continues in-place; the Exit path is unchanged. No `RunState` schema bump required.
+Updated slice plan entry 18 with Design Complete pointer.
+
+---
+
 ### CHANGELOG rewrite — user perspective
 
 Rewrote all CHANGELOG entries to answer "what can I do / what bug is fixed"
