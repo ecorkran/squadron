@@ -5,7 +5,7 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20260404
+dateUpdated: 20260411
 status: complete
 ---
 
@@ -103,7 +103,7 @@ class Action(Protocol):
 |--------|---------------|------|
 | `dispatch` | Resolve model alias via the model resolver, create an agent via the agent provider registry, send assembled context through `agent.handle_message()`, capture output | Model resolution, agent lifecycle, output capture, token tracking |
 | `review` | Run a review template against an artifact | Verdict parsing, finding extraction, file persistence, output format (prose + structured JSON) |
-| `compact` | Issue parameterized compaction instructions | Instruction templates, context preservation rules |
+| `summary` | Generate a session summary and emit to destinations (`stdout`, `file`, `clipboard`, `rotate`) | Instruction rendering, summary capture, emit dispatch, session rotation |
 | `checkpoint` | Pause for human decision | State serialization, presentation, resume token |
 | `cf-op` | Context Forge operation (set phase, build, summarize, query) | CF client calls, response parsing |
 | `commit` | Git commit at a boundary | Message conventions, scope detection |
@@ -243,12 +243,12 @@ Step types are the bridge between the terse YAML and the action sequences that a
 cf-op(set phase N) → cf-op(build) → dispatch(model) → review(template) → checkpoint(trigger) → commit
 ```
 
-**`compact`**:
+**`compact`** / **`summary`**:
 ```
-compact(instructions translated from step params)
+summary(template, emit destinations)
 ```
 
-The compact *step type* translates high-level params (`keep: [design, tasks]`, `summarize: true`) into CF-compatible compaction instructions. The compact *action* sends those instructions to CF via `ContextForgeClient`. The step type is the policy layer (what to preserve); the action is the execution layer (how to invoke CF).
+`summary` is the single runtime action for generating and emitting session summaries. `compact` survives as a YAML step-type alias: `compact:` in pipeline YAML is parsed by `CompactStepType`, which expands to a summary action with `emit=[rotate]` hardcoded. The step-type layer is the policy surface (backward-compatible aliasing, future param translation); the action layer is unified under summary (instruction rendering, summary capture, emit dispatch, session rotation). Pipeline authors who don't want to think about emit destinations write `compact:`; authors who need explicit destinations write `summary: emit: [...]`.
 
 **`checkpoint`** (standalone):
 ```
@@ -511,7 +511,7 @@ Slice 125 (Conversation Persistence) remains deferred to initiative 160. That wo
 │                           │ expands to                        │
 │  ┌────────────────────────┼──────────────────────────────┐   │
 │  │              Action Registry                           │   │
-│  │  dispatch │ review │ compact │ checkpoint │ cf-op │ …  │   │
+│  │  dispatch │ review │ summary │ checkpoint │ cf-op │ …  │   │
 │  └────────────────────────┼──────────────────────────────┘   │
 │                           │                                   │
 │  ┌────────────────────────┼──────────────────────────────┐   │
@@ -546,7 +546,7 @@ src/squadron/pipeline/
 │   ├── protocol.py          # Action protocol definition
 │   ├── dispatch.py          # Send context to model
 │   ├── review.py            # Run review template
-│   ├── compact.py           # Parameterized compaction
+│   ├── summary.py           # Generate + emit session summaries
 │   ├── checkpoint.py        # Human pause point
 │   ├── cf_op.py             # Context Forge operations
 │   ├── commit.py            # Git commit

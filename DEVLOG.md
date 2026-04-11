@@ -16,6 +16,88 @@ written from user perspective.
 
 ## 20260411
 
+### Slice 166: Compact and Summary Unification — Task Breakdown Complete (Phase 5)
+
+Broke slice 166 into a single task file at
+`project-documents/user/tasks/166-tasks.compact-and-summary-unification.md`
+(26 tasks, 6 commit checkpoints, ~510 lines). Kept it as one file after
+weighing against the 450-line guideline — splitting added more friction
+than it solved for this size.
+
+Task groups follow the migration order from the slice doc's
+Implementation Notes: (1) survey call sites, (2) extract template
+helpers into a new `compaction_templates.py` module and update every
+import before touching runtime code, (3) rewrite
+`CompactStepType.expand()` and the `_maybe_record_compact_summaries`
+gate with paired tests, (4) delete `_render_compact` and add a
+prompt-only renderer smoke test, (5) delete `CompactAction`,
+`ActionType.COMPACT`, and compact-specific tests, (6) clean up
+`commands/sq/run.md`, (7) pipeline validation + E2E smoke tests in
+both prompt-only and SDK modes + grep verification + full quality
+gate, (8) arch doc verification and slice/DEVLOG wrapup.
+
+Test-with pairing honored throughout: each rewrite (step expand,
+state gate, `_render_compact` removal) has its tests as the immediate
+successor task. The state gate test specifically covers the slice's
+one real risk — summary action with rotate emit must still populate
+`RunState.compact_summaries` for resume-with-reinjection.
+
+Next: Phase 6 implementation.
+
+### Slice 166: Compact and Summary Unification — Review PASS (1 concern addressed)
+
+Review verdict PASS (glm5). Eight findings: seven pass, one note, one concern.
+
+Concern F004 (documentation-sync): `140-arch.pipeline-foundation.md` lists
+compact as a distinct action type in two places flagged by the reviewer, plus
+two additional locations I found when auditing: action registry table (line
+106), detailed compact-action subsection (lines ~246-251), action type diagram
+(line 514), and `actions/compact.py` package entry (line ~549). Addressed by
+adding a new §"Architecture Document Updates" section to the slice design with
+a concrete change checklist and explicit out-of-scope list (compaction as
+concept, `compact:` YAML examples, and step-type-layer references all stay).
+Arch doc updates land during Phase 6 implementation alongside the code changes,
+keeping doc and code in sync rather than drifting during the implementation
+window. New success criterion #11 verifies the arch doc is updated.
+
+Review: `project-documents/user/reviews/166-review.slice.compact-and-summary-unification.md`.
+
+### Slice 166: Compact and Summary Unification — Design Complete
+
+Added slice 166 to `140-slices.pipeline-foundation.md` and designed it at
+`project-documents/user/slices/166-slice.compact-and-summary-unification.md`.
+
+Finishes the abandoned refactor from slice 161. Today compact and summary are
+two half-merged code paths: SDK mode already delegates compact to summary
+internally, but prompt-only mode still renders a broken `/compact [...]` slash
+command string. This breaks P6 and every pipeline using `compact:`.
+
+Design: rewrite `CompactStepType.expand()` to emit a summary action with
+`emit=[rotate]` instead of a compact action. Delete `CompactAction`,
+`ActionType.COMPACT`, `_render_compact`, the compact test class, and the compact
+section of `commands/sq/run.md`. `compact:` YAML continues to parse — it becomes
+a pure two-word alias with no unique code below the step-expansion layer.
+
+One real risk: `state.py::_maybe_record_compact_summaries` is gated on
+`ar.action_type == "compact"`. After the refactor no action is compact-typed, so
+the gate must switch to "summary action whose emit includes rotate" to preserve
+resume-with-reinjection. Called out explicitly in the design with its own
+targeted integration test. No schema version bump — field names and shapes
+unchanged.
+
+Template helper functions (`load_compaction_template`, `render_instructions`)
+must be moved out of `actions/compact.py` before the file can be deleted, since
+the summary action imports them.
+
+Priority: implement before continuing 180-band work — P6 is currently broken in
+prompt-only mode.
+
+Marked slice plan 140 frontmatter `status: in_progress` (was `complete`). Slice
+plan entry numbering updated: 166 added as item 23, Integration Work item 152
+bumped from 23 to 24.
+
+---
+
 ### Slice 181: Pool Resolver Integration and CLI — Design Complete
 
 Created `project-documents/user/slices/181-slice.pool-resolver-integration-and-cli.md`.

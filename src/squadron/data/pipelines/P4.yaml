@@ -16,6 +16,6 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: haiku
+      model: minimax
       emit: [stdout, clipboard, file]
 

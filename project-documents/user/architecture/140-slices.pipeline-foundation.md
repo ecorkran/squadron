@@ -4,7 +4,7 @@ parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
 dateUpdated: 20260411
-status: complete
+status: in_progress
 ---
 
 # Slice Plan: Pipeline Foundation
@@ -68,11 +68,13 @@ status: complete
 
 22. [x] **(164) Profile-Aware Summary Model Routing** — Summary action currently routes all model requests through the SDK session's `set_model()`, which only works for Claude models. When the resolved model alias has a non-SDK profile (e.g. `minimax` → OpenRouter), the summary action should dispatch via the provider registry using a one-shot API call — the same pattern review already uses via `run_review_with_profile()`. Resolve the alias to `(model_id, profile)`, branch on profile: SDK profiles use existing `capture_summary()` path; all other profiles dispatch through the provider registry. Applies to both SDK and prompt-only execution modes. Prompt-only `_render_summary` updates `model_switch` only for SDK-profile models; non-SDK models emit a CLI command instead. Unblocks using cheap external models (minimax, gemini-flash) for pipeline summaries. Dependencies: [161]. Risk: Low. Effort: 2/5. **Design Complete: [164-slice.profile-aware-summary-model-routing.md](../slices/164-slice.profile-aware-summary-model-routing.md)**
 
+23. [ ] **(166) Compact and Summary Unification** — Finish the abandoned refactor from slice 161. Today `compact` and `summary` are two half-merged step types: in SDK mode `CompactAction` delegates internally to `_execute_summary` with `emit=[rotate]` (so the SDK path already treats compact as a summary alias), but in prompt-only mode `_render_compact` still emits a literal `/compact [...]` slash command string that does nothing — slash commands only trigger when typed by the user, so any prompt-only pipeline using `compact:` stalls. This breaks P6 and every other pipeline using `compact:` (slice, tasks, app, example). The fix is to finish the unification: rewrite `CompactStepType.expand()` to emit a summary action with `emit=[rotate]` instead of a compact action; delete `CompactAction`, `ActionType.COMPACT`, `_render_compact`, the compact test class, and the compact section in `commands/sq/run.md`. `compact:` in YAML remains as a valid step-type alias at the loader level — existing pipeline YAMLs do not change. The summary action becomes the single canonical code path for both step types in both SDK and prompt-only modes. **Priority:** implement before continuing 180-band work — P6 is currently broken in prompt-only mode. Dependencies: [161, 164]. Risk: Low (mostly deletion; SDK path already uses summary as the canonical target). Effort: 2/5. **Design Complete: [166-slice.compact-and-summary-unification.md](../slices/166-slice.compact-and-summary-unification.md)**
+
 ---
 
 ## Integration Work
 
-23. [x] **(152) Pipeline Documentation and Authoring Guide** — Pipeline authoring documentation: YAML grammar reference, action type catalog, step type catalog, model resolution rules and cascade precedence, built-in pipeline descriptions with annotated examples. Configuration surface guide: where built-in defaults live (shipped TOML and YAML), where user overrides live, how layering works. Example custom pipeline definition. README updates for `sq run`. Dependencies: [all prior slices]. Risk: Low. Effort: 1/5
+24. [x] **(152) Pipeline Documentation and Authoring Guide** — Pipeline authoring documentation: YAML grammar reference, action type catalog, step type catalog, model resolution rules and cascade precedence, built-in pipeline descriptions with annotated examples. Configuration surface guide: where built-in defaults live (shipped TOML and YAML), where user overrides live, how layering works. Example custom pipeline definition. README updates for `sq run`. Dependencies: [all prior slices]. Risk: Low. Effort: 1/5
 
 ---
 
