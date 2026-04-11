@@ -16,6 +16,23 @@ written from user perspective.
 
 ## 20260411
 
+### Slice 160: Interactive Checkpoint Resolution — Implementation Complete
+
+Phase 6 complete. Three files changed:
+
+- `executor.py`: Added `CheckpointResolution(StrEnum)`, `CheckpointDecision` dataclass,
+  `_is_interactive()`, `_prompt_checkpoint_interactive()`. Modified `_execute_step_once`
+  checkpoint detection block to call the handler; EXIT path returns PAUSED (unchanged),
+  Accept/Override inject `override_instructions` into `merged_params` and continue.
+- `actions/dispatch.py`: `_resolve_prompt` now reads `override_instructions` from
+  `context.params` and prepends a delimited block when present.
+- `prompt_renderer.py`: `_render_checkpoint` now describes all three options per trigger
+  type. `run_id` injected into `render_params` so the resume command is correct.
+
+All 1477 tests pass. `pyright` clean. No `RunState` schema change (stays v3).
+
+---
+
 ### Slice 160: Interactive Checkpoint Resolution — Design Complete
 
 Created `project-documents/user/slices/160-slice.interactive-checkpoint-resolution.md`.

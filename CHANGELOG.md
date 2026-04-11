@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Checkpoints now show an interactive menu instead of always exiting. When a
+  review checkpoint fires during an SDK pipeline run, you can choose:
+  - **[a] Accept** — use the review findings as instructions for the next step and
+    keep going without restarting.
+  - **[o] Override** — type custom instructions and continue in-place.
+  - **[e] Exit** — save state and exit (previous behavior, unchanged).
+- The resume command (`sq run --resume <run-id>`) is shown in the menu so you
+  always know how to pick up where you left off after an Exit.
+- Non-interactive environments (piped stdin, `SQUADRON_NO_INTERACTIVE=1`) default
+  to Exit silently so CI pipelines never hang.
+- Prompt-only checkpoint instructions now describe all three choices so a human
+  operator knows exactly what to do at each checkpoint.
+
 ## [0.3.9] - 20260411
 
 ### Added
