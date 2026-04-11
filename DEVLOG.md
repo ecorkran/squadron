@@ -16,6 +16,19 @@ written from user perspective.
 
 ## 20260411
 
+### Slice 181: Pool Resolver Integration and CLI — Design Complete
+
+Created `project-documents/user/slices/181-slice.pool-resolver-integration-and-cli.md`.
+
+Design extends `ModelResolver` with `pool_backend` and `on_pool_selection` callback params.
+`_resolve_pool()` delegates to `PoolBackend.select()` (slice 180), then resolves the returned
+alias through the existing alias registry — transparent to all action handlers. `RunState` gains
+`pool_selections: list[dict]` with schema version bump to 4 (backwards-compatible). New
+`sq pools` CLI (list / show / reset) follows the `sq models` pattern. Executor wires up
+`PoolLoader.load()` and the logging callback when building `ModelResolver`.
+
+---
+
 ### Slice 160: Interactive Checkpoint Resolution — Implementation Complete
 
 Phase 6 complete. Three files changed:
