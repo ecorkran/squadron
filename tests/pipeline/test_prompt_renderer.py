@@ -539,7 +539,9 @@ class TestRenderStepInstructions:
 
         assert len(result.actions) == 1
         compact = result.actions[0]
-        assert compact.action_type == "compact"
+        # Slice 166: compact step now expands to a summary action with rotate emit
+        assert compact.action_type == "summary"
+        assert compact.emit == ["rotate"]
         assert "152" in compact.resolved_instructions or mock_render.called
 
     def test_devlog_step(self) -> None:

@@ -230,10 +230,22 @@ class StateManager:
     ) -> None:
         """Inspect action results for compact summaries and persist them."""
         for ar in step_result.action_results:
-            if ar.action_type != "compact" or not ar.success:
+            if ar.action_type != "summary" or not ar.success:
                 continue
             outputs = ar.outputs
             if "summary" not in outputs or "source_step_index" not in outputs:
+                continue
+            # Only record when a successful rotate emit is present.
+            emit_results = outputs.get("emit_results")
+            if not isinstance(emit_results, list):
+                continue
+            has_rotate = any(
+                isinstance(e, dict)
+                and e.get("destination") == "rotate"
+                and e.get("ok") is True
+                for e in emit_results
+            )
+            if not has_rotate:
                 continue
             key = f"{outputs['source_step_index']}:{outputs['source_step_name']}"
             summary_model = outputs.get("summary_model")

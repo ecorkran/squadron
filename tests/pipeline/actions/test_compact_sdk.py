@@ -220,7 +220,7 @@ def test_state_callback_still_records_compact_summary_after_refactor(
 
     ar = ActionResult(
         success=True,
-        action_type="compact",  # stays "compact" after refactor
+        action_type="summary",  # slice 166: compact steps now produce summary-typed results
         outputs={
             "summary": "the summary text",
             "instructions": "compact this",

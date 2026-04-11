@@ -65,8 +65,9 @@ class CompactStepType:
         if "template" in cfg:
             action_config["template"] = cfg["template"]
         action_config["model"] = cfg.get("model")
+        action_config["emit"] = ["rotate"]
 
-        return [("compact", action_config)]
+        return [("summary", action_config)]
 
 
 register_step_type(StepTypeName.COMPACT, CompactStepType())

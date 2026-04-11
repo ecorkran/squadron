@@ -197,7 +197,7 @@ async def test_execute_custom_template(
     mock_context.params = {"template": "custom"}
     mock_context.cf_client._run = MagicMock(return_value="ok")  # type: ignore[union-attr]
 
-    # Patch the user dir to use our tmp_path (constant now lives in compaction_templates)
+    # Patch the user dir; constant now lives in compaction_templates
     import squadron.pipeline.compaction_templates as ct_mod
 
     original_dir = ct_mod._USER_COMPACTION_DIR

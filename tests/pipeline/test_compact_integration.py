@@ -49,15 +49,19 @@ def test_step_callback_records_compact_summary(tmp_path: Path) -> None:
     run_id = mgr.init_run("test-pipeline", {"slice": "154"})
     cb = mgr.make_step_callback(run_id)
 
+    # Slice 166: compact steps now produce summary-typed results with rotate emit
     ar = ActionResult(
         success=True,
-        action_type="compact",
+        action_type="summary",
         outputs={
             "summary": "the summary text",
             "instructions": "compact this",
             "source_step_index": 3,
             "source_step_name": "compact-mid",
             "summary_model": "haiku-id",
+            "emit_results": [
+                {"destination": "rotate", "ok": True, "detail": "session rotated"}
+            ],
         },
     )
     step_result = StepResult(
@@ -202,7 +206,7 @@ async def test_resume_seeds_from_compact_summary(tmp_path: Path) -> None:
             sdk_session=session,
             _action_registry={
                 "dispatch": noop,
-                "compact": noop,
+                "summary": noop,
             },
         )
     finally:

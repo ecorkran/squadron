@@ -47,7 +47,7 @@ def _success_registry() -> dict[str, object]:
         "review": _mock_action(success=True, verdict="PASS"),
         "checkpoint": _mock_action(success=True),
         "commit": action,
-        "compact": action,
+        "summary": action,
         "devlog": action,
     }
 
@@ -86,7 +86,7 @@ def _paused_checkpoint_registry(pause_on_step: int = 2) -> dict[str, object]:
         "review": review_action,
         "checkpoint": checkpoint_mock,
         "commit": normal_action,
-        "compact": normal_action,
+        "summary": normal_action,
         "devlog": normal_action,
     }
 

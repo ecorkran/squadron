@@ -178,19 +178,19 @@ class TestSummaryStep:
         assert "SDK" in action_error
 
     def test_compact_alias_state_callback_still_fires(self, tmp_path: Path) -> None:
-        """Regression: compact step (T10 refactor) still records compact_summaries.
+        """Regression: compact step (slice 166 refactor) still records compact_summaries.
 
         Exercises _maybe_record_compact_summaries() directly with an ActionResult
-        shaped exactly like what the refactored CompactAction produces.
+        shaped exactly like what SummaryAction produces for a compact step.
         """
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("test-pipeline", {"slice": "154"})
         cb = mgr.make_step_callback(run_id)
 
-        # Outputs produced by refactored CompactAction via _execute_summary
+        # Outputs produced by SummaryAction._execute_summary with emit=rotate
         ar = ActionResult(
             success=True,
-            action_type="compact",
+            action_type="summary",
             outputs={
                 "summary": "COMPACT SUMMARY",
                 "instructions": "compact instructions",
@@ -218,3 +218,99 @@ class TestSummaryStep:
         cs = state.compact_summaries["0:compact-step"]
         assert cs.text == "COMPACT SUMMARY"
         assert cs.summary_model == "haiku-id"
+
+    def test_summary_action_without_rotate_emit_does_not_record(
+        self, tmp_path: Path
+    ) -> None:
+        """Summary action with stdout-only emit must not populate compact_summaries."""
+        from squadron.pipeline.executor import ExecutionStatus, StepResult
+
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipeline", {"slice": "154"})
+        cb = mgr.make_step_callback(run_id)
+
+        ar = ActionResult(
+            success=True,
+            action_type="summary",
+            outputs={
+                "summary": "SOME SUMMARY",
+                "source_step_index": 0,
+                "source_step_name": "summary-step",
+                "emit_results": [{"destination": "stdout", "ok": True}],
+            },
+        )
+        cb(
+            StepResult(
+                step_name="summary-step",
+                step_type="summary",
+                status=ExecutionStatus.COMPLETED,
+                action_results=[ar],
+            )
+        )
+
+        state = mgr.load(run_id)
+        assert state.compact_summaries == {}
+
+    def test_summary_action_with_failed_rotate_does_not_record(
+        self, tmp_path: Path
+    ) -> None:
+        """A rotate emit with ok=False must not populate compact_summaries."""
+        from squadron.pipeline.executor import ExecutionStatus, StepResult
+
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipeline", {"slice": "154"})
+        cb = mgr.make_step_callback(run_id)
+
+        ar = ActionResult(
+            success=True,
+            action_type="summary",
+            outputs={
+                "summary": "SOME SUMMARY",
+                "source_step_index": 0,
+                "source_step_name": "summary-step",
+                "emit_results": [
+                    {"destination": "rotate", "ok": False, "detail": "failure"}
+                ],
+            },
+        )
+        cb(
+            StepResult(
+                step_name="summary-step",
+                step_type="summary",
+                status=ExecutionStatus.COMPLETED,
+                action_results=[ar],
+            )
+        )
+
+        state = mgr.load(run_id)
+        assert state.compact_summaries == {}
+
+    def test_non_summary_action_does_not_record(self, tmp_path: Path) -> None:
+        """Non-summary action type must never populate compact_summaries."""
+        from squadron.pipeline.executor import ExecutionStatus, StepResult
+
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipeline", {"slice": "154"})
+        cb = mgr.make_step_callback(run_id)
+
+        ar = ActionResult(
+            success=True,
+            action_type="dispatch",
+            outputs={
+                "summary": "SOME SUMMARY",
+                "source_step_index": 0,
+                "source_step_name": "dispatch-step",
+                "emit_results": [{"destination": "rotate", "ok": True}],
+            },
+        )
+        cb(
+            StepResult(
+                step_name="dispatch-step",
+                step_type="dispatch",
+                status=ExecutionStatus.COMPLETED,
+                action_results=[ar],
+            )
+        )
+
+        state = mgr.load(run_id)
+        assert state.compact_summaries == {}
