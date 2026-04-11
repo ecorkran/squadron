@@ -6,7 +6,7 @@ archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
 dateUpdated: 20260404
-status: draft
+status: complete
 ---
 
 # Architecture: Pipeline Foundation
