@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, cast
 
 from squadron.pipeline.actions import ActionType
-from squadron.pipeline.actions.compact import (
+from squadron.pipeline.compaction_templates import (
     load_compaction_template,
     render_instructions,
 )

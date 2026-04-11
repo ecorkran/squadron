@@ -63,7 +63,7 @@ class SummaryAction:
         return errors
 
     async def execute(self, context: ActionContext) -> ActionResult:
-        from squadron.pipeline.actions.compact import (
+        from squadron.pipeline.compaction_templates import (
             load_compaction_template,
             render_instructions,
         )

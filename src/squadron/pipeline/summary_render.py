@@ -15,8 +15,8 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
-from squadron.pipeline.actions.compact import load_compaction_template
 from squadron.pipeline.compact_render import render_with_params
+from squadron.pipeline.compaction_templates import load_compaction_template
 
 
 def resolve_template_instructions(

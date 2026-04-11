@@ -12,7 +12,7 @@ import sys
 
 import typer
 
-from squadron.pipeline.actions.compact import (
+from squadron.pipeline.compaction_templates import (
     load_compaction_template,
     render_instructions,
 )

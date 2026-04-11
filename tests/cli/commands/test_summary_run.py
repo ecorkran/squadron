@@ -31,7 +31,7 @@ class TestSummaryRunHappyPath:
                 return_value="rendered instructions",
             ),
         ):
-            from squadron.pipeline.actions.compact import CompactionTemplate
+            from squadron.pipeline.compaction_templates import CompactionTemplate
 
             mock_load.return_value = CompactionTemplate(
                 name="minimal",
@@ -71,7 +71,7 @@ class TestSummaryRunHappyPath:
                 side_effect=_fake_render,
             ),
         ):
-            from squadron.pipeline.actions.compact import CompactionTemplate
+            from squadron.pipeline.compaction_templates import CompactionTemplate
 
             mock_load.return_value = CompactionTemplate(
                 name="minimal",
@@ -143,7 +143,7 @@ class TestSummaryRunErrorCases:
                 return_value="rendered",
             ),
         ):
-            from squadron.pipeline.actions.compact import CompactionTemplate
+            from squadron.pipeline.compaction_templates import CompactionTemplate
 
             mock_load.return_value = CompactionTemplate(
                 name="minimal",

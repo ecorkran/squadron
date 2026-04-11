@@ -197,15 +197,15 @@ async def test_execute_custom_template(
     mock_context.params = {"template": "custom"}
     mock_context.cf_client._run = MagicMock(return_value="ok")  # type: ignore[union-attr]
 
-    # Patch the user dir to use our tmp_path
-    import squadron.pipeline.actions.compact as compact_mod
+    # Patch the user dir to use our tmp_path (constant now lives in compaction_templates)
+    import squadron.pipeline.compaction_templates as ct_mod
 
-    original_dir = compact_mod._USER_COMPACTION_DIR
-    compact_mod._USER_COMPACTION_DIR = custom_dir
+    original_dir = ct_mod._USER_COMPACTION_DIR
+    ct_mod._USER_COMPACTION_DIR = custom_dir
     try:
         result = await action.execute(mock_context)
     finally:
-        compact_mod._USER_COMPACTION_DIR = original_dir
+        ct_mod._USER_COMPACTION_DIR = original_dir
 
     assert result.success is True
     instructions = str(result.outputs["instructions"])
