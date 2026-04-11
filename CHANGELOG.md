@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 20260411
+
+### Fixed
+- `compact:` pipeline steps now work correctly in prompt-only mode. Previously,
+  every pipeline using `compact:` (P6, slice, tasks, app, example) would stall
+  because the prompt-only renderer emitted a literal `/compact [...]` string
+  that Claude Code never interpreted as a slash command. `compact:` now routes
+  through the same `summary` action as SDK mode, producing a proper summary
+  action with `emit: [rotate]`.
+
+### Changed
+- `compact:` in pipeline YAML is now a pure step-type alias. The runtime
+  `CompactAction`, `ActionType.COMPACT`, and `_render_compact` have been removed.
+  All summary/compaction logic is now unified under `SummaryAction`. Existing
+  pipeline YAML files using `compact:` require no changes.
+
 ## [0.3.11] - 20260411
 
 ### Added
