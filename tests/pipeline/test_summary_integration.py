@@ -178,7 +178,7 @@ class TestSummaryStep:
         assert "SDK" in action_error
 
     def test_compact_alias_state_callback_still_fires(self, tmp_path: Path) -> None:
-        """Regression: compact step (slice 166 refactor) still records compact_summaries.
+        """Regression: compact step (slice 166) still records compact_summaries.
 
         Exercises _maybe_record_compact_summaries() directly with an ActionResult
         shaped exactly like what SummaryAction produces for a compact step.

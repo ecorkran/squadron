@@ -17,7 +17,6 @@ from squadron.pipeline.prompt_renderer import (
     _render_cf_op,
     _render_checkpoint,
     _render_commit,
-    _render_compact,
     _render_devlog,
     _render_dispatch,
     _render_review,
@@ -244,31 +243,6 @@ class TestRenderCommit:
     def test_without_prefix(self) -> None:
         result = _render_commit({}, {})
         assert "chore" in result.command
-
-
-class TestRenderCompact:
-    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
-    @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_resolves_pipeline_params(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
-        mock_load.return_value = MagicMock()
-        mock_render.return_value = "Keep slice design for 152"
-
-        result = _render_compact({"template": "minimal"}, {"slice": "152"})
-        assert result.action_type == ActionType.COMPACT
-        assert result.template == "minimal"
-        assert result.resolved_instructions == "Keep slice design for 152"
-        assert "/compact [Keep slice design for 152]" == result.command
-
-        mock_render.assert_called_once()
-        call_kwargs = mock_render.call_args
-        assert call_kwargs.kwargs["pipeline_params"]["slice"] == "152"
-
-    def test_missing_template(self) -> None:
-        # Uses real loader — nonexistent template
-        result = _render_compact({"template": "nonexistent_xyz"}, {})
-        assert "not found" in result.resolved_instructions
 
 
 class TestRenderDevlog:
@@ -543,6 +517,41 @@ class TestRenderStepInstructions:
         assert compact.action_type == "summary"
         assert compact.emit == ["rotate"]
         assert "152" in compact.resolved_instructions or mock_render.called
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_compact_yaml_renders_as_summary_with_rotate(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        """compact: YAML step renders as a summary action with emit=rotate."""
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "compaction instructions"
+        resolver = _make_resolver()
+
+        step = StepConfig(
+            step_type="compact",
+            name="compact-step",
+            config={"template": "minimal"},
+        )
+
+        result = render_step_instructions(
+            step,
+            step_index=2,
+            total_steps=6,
+            params={"slice": "152"},
+            resolver=resolver,
+            run_id="run-test",
+        )
+
+        assert len(result.actions) == 1
+        action = result.actions[0]
+        assert action.action_type == "summary"
+        assert action.emit == ["rotate"]
+        # No action should have action_type == "compact"
+        assert all(a.action_type != "compact" for a in result.actions)
+        # No command should contain the legacy /compact [ literal
+        for a in result.actions:
+            assert a.command is None or "/compact [" not in a.command
 
     def test_devlog_step(self) -> None:
         """Devlog step with auto mode."""

@@ -18,7 +18,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel
 
@@ -239,12 +239,17 @@ class StateManager:
             emit_results = outputs.get("emit_results")
             if not isinstance(emit_results, list):
                 continue
-            has_rotate = any(
-                isinstance(e, dict)
-                and e.get("destination") == "rotate"
-                and e.get("ok") is True
-                for e in emit_results
-            )
+            has_rotate = False
+            for entry in cast(list[object], emit_results):
+                if not isinstance(entry, dict):
+                    continue
+                entry_dict = cast(dict[str, object], entry)
+                if (
+                    entry_dict.get("destination") == "rotate"
+                    and entry_dict.get("ok") is True
+                ):
+                    has_rotate = True
+                    break
             if not has_rotate:
                 continue
             key = f"{outputs['source_step_index']}:{outputs['source_step_name']}"

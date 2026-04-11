@@ -231,28 +231,6 @@ def _render_commit(
     )
 
 
-def _render_compact(
-    config: dict[str, object],
-    params: dict[str, object],
-) -> ActionInstruction:
-    """Build instruction for a compact action."""
-    template_name = str(config.get("template", "default"))
-
-    try:
-        template = load_compaction_template(template_name)
-        resolved = render_instructions(template, pipeline_params=params)
-    except FileNotFoundError:
-        resolved = f"(template '{template_name}' not found)"
-
-    return ActionInstruction(
-        action_type=ActionType.COMPACT,
-        instruction="Compact context to free space",
-        command=f"/compact [{resolved}]",
-        template=template_name,
-        resolved_instructions=resolved,
-    )
-
-
 def _render_summary(
     config: dict[str, object],
     params: dict[str, object],
@@ -341,7 +319,6 @@ _BUILDERS: dict[str, object] = {
     ActionType.REVIEW: _render_review,
     ActionType.CHECKPOINT: _render_checkpoint,
     ActionType.COMMIT: _render_commit,
-    ActionType.COMPACT: _render_compact,
     ActionType.SUMMARY: _render_summary,
     ActionType.DEVLOG: _render_devlog,
 }

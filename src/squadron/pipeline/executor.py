@@ -508,7 +508,6 @@ async def execute_pipeline(
     import squadron.pipeline.actions.cf_op as _a_cf_op  # noqa: F401
     import squadron.pipeline.actions.checkpoint as _a_ckpt  # noqa: F401
     import squadron.pipeline.actions.commit as _a_commit  # noqa: F401
-    import squadron.pipeline.actions.compact as _a_compact  # noqa: F401
     import squadron.pipeline.actions.devlog as _a_devlog  # noqa: F401
     import squadron.pipeline.actions.dispatch as _a_dispatch  # noqa: F401
     import squadron.pipeline.actions.review as _a_review  # noqa: F401
@@ -524,7 +523,6 @@ async def execute_pipeline(
         _a_cf_op,
         _a_ckpt,
         _a_commit,
-        _a_compact,
         _a_devlog,
         _a_dispatch,
         _a_review,
