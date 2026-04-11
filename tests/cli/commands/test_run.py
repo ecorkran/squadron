@@ -139,7 +139,8 @@ class TestAssembleParams:
     def test_no_target_no_model(self) -> None:
         defn = _make_definition(params={"model": "opus"})
         result = _assemble_params(defn, None, None, None)
-        assert result == {}
+        # Pipeline defaults (non-"required" values) are seeded into params
+        assert result == {"model": "opus"}
 
     def test_multiple_extra_params(self) -> None:
         defn = _make_definition(params={"slice": "required"})

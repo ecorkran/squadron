@@ -51,7 +51,12 @@ class TestRulesFlag:
         rules_file = tmp_path / "rules.md"
         rules_file.write_text("Always check for null pointers.")
 
-        result = cli_runner.invoke(app, ["review", "code", "--rules", str(rules_file)])
+        # Isolate from filesystem: suppress auto-template-rules resolution so
+        # we only test that the explicit --rules file content reaches the runner.
+        with patch("squadron.cli.commands.review.resolve_rules_dir", return_value=None):
+            result = cli_runner.invoke(
+                app, ["review", "code", "--rules", str(rules_file)]
+            )
         assert result.exit_code == 0
 
         # run_review was called with rules_content keyword
