@@ -7,6 +7,7 @@ dependencies: [156-pipeline-executor-hardening]
 interfaces: []
 dateCreated: 20260411
 dateUpdated: 20260411
+dateReviewed: 20260411
 status: not_started
 ---
 
@@ -66,9 +67,10 @@ checkpoint instruction is also enhanced to describe all three options clearly.
 
 ### Prerequisites
 
-- **Slice 156 (Pipeline Executor Hardening)** — `ExecutionMode` enum and
-  `RunState.execution_mode` field are required; the checkpoint interactive handler
+- **Slice 156 (Pipeline Executor Hardening)** — the checkpoint interactive handler
   reads the run_id from the executor context to display the correct resume command.
+  `ExecutionMode` itself is not directly referenced; interactive gating is handled
+  by `_is_interactive()` (stdin.isatty + `SQUADRON_NO_INTERACTIVE`).
 - All prior pipeline slices (executor, state, SDK session) are operational.
 
 ### Interfaces Required
@@ -173,7 +175,9 @@ the cost of a one-time human decision, not replacing loops.
 ### Suggestion Text Extracted from `ActionResult.findings`
 
 When the user chooses Accept, the suggestion text is assembled from the most
-recent `ActionResult` in `step_prior` that has a non-None `verdict`. Finding
+recent `ActionResult` in `action_results` (the results collected so far in the
+current step's action sequence) that has a non-None `verdict`, retrieved via the
+existing `_last_with_verdict(action_results)` helper. Finding
 dicts are formatted as:
 
 ```
@@ -288,8 +292,13 @@ Becomes:
 
 ```python
 if result.outputs.get("checkpoint") == "paused":
-    verdict = result.verdict
-    findings = [f for f in (result.findings or []) if isinstance(f, dict)]
+    # Findings come from the review action, not the checkpoint action.
+    # The checkpoint action only sets outputs["checkpoint"] = "paused";
+    # its verdict and findings fields are None/[]. Use _last_with_verdict
+    # to pull the review result from earlier in this step's action_results.
+    prior_review = _last_with_verdict(action_results)
+    verdict = prior_review.verdict if prior_review else None
+    findings = [f for f in (prior_review.findings or []) if isinstance(f, dict)] if prior_review else []
     decision = _prompt_checkpoint_interactive(
         verdict, findings, run_id, step.name
     )
