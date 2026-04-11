@@ -14,6 +14,52 @@ Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).
 
 ## 20260411
 
+### Slice 164 implementation complete: profile-aware summary model routing
+
+**Slice 164 — Phase 6 complete.**
+
+- **What changed:**
+  - New module `src/squadron/pipeline/summary_oneshot.py`:
+    `is_sdk_profile()` predicate and `capture_summary_via_profile()` —
+    near-copy of the ~40 relevant lines from `run_review_with_profile()`,
+    review-specific paths stripped.
+  - `_execute_summary()` now branches on resolved profile: SDK path
+    (profile `None` or `"sdk"`) keeps `sdk_session.capture_summary()`;
+    non-SDK path dispatches through the provider registry via
+    `capture_summary_via_profile()`.
+  - Rotation emit + non-SDK profile fails fast with a descriptive error
+    at execution time (resolver not available at schema-validation time).
+  - `_render_summary()` in `prompt_renderer.py` emits `model_switch` for
+    SDK profiles and `command` (runnable `sq _summary-run …`) for
+    non-SDK profiles.
+  - New hidden CLI subcommand `sq _summary-run` (registered alongside
+    `sq _summary-instructions`) as the CLI surface for prompt-only
+    non-SDK summary execution.
+  - `CompactAction` inherits the fix for free via the shared
+    `_execute_summary()` helper.
+  - 1452 tests pass; pyright and ruff clean.
+
+- **OQ1 resolved:** Option A — new hidden `sq _summary-run` subcommand,
+  matching the `_summary-instructions` naming convention. The subcommand
+  name uses leading underscore (`_summary-run`) per project convention.
+
+- **Surprises:**
+  - `compact.py` imports `_execute_summary` inside the method body
+    (deferred import), so tests must patch
+    `squadron.pipeline.actions.summary._execute_summary`, not
+    `squadron.pipeline.actions.compact._execute_summary`.
+  - `--validate` in `sq run` only calls schema-level `validate()` — the
+    rotate+non-SDK profile check fires at execution time, not validation
+    time (resolver is execution-time only). Slice doc updated with
+    caveat.
+
+- **Pipelines unblocked:** Any pipeline summary step can now use cheap
+  external models (minimax, gemini-flash, local) via their respective
+  profiles. The only restriction is `emit: [rotate]`, which remains
+  SDK-only.
+
+---
+
 ### Slice 164 design + tasks; CI fix; phase pipelines now write summary files
 
 **v0.3.8 release.**

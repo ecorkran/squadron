@@ -10,6 +10,25 @@ All notable changes to Squadron will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Slice 164: Profile-Aware Summary Model Routing**
+  - Summary and compact actions now route through the provider registry
+    for non-SDK profiles (openrouter, openai, gemini, local). SDK profiles
+    (`haiku`, `sonnet`, etc.) keep the existing `capture_summary()` path.
+  - New `summary_oneshot.py` module: `is_sdk_profile()` predicate and
+    `capture_summary_via_profile()` — mirrors the review client pattern.
+  - `_render_summary()` in `prompt_renderer.py` now emits `model_switch`
+    for SDK profiles and `command` (a runnable `sq _summary-run …` call)
+    for non-SDK profiles. Never emits both.
+  - New hidden `sq _summary-run` subcommand: CLI surface for executing
+    one-shot summaries via a non-SDK profile from prompt-only pipelines.
+  - Rotation emit (`emit: [rotate]`) with a non-SDK profile fails fast
+    with a descriptive error before any provider call.
+  - Cheap external models (minimax, gemini-flash, local) are now usable
+    as pipeline summary models.
+
 ## [0.3.8] - 20260411
 
 ### Added

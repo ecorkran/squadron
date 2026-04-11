@@ -6,8 +6,8 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [161-summary-step-with-emit-destinations]
 interfaces: []
 dateCreated: 20260410
-dateUpdated: 20260410
-status: draft
+dateUpdated: 20260411
+status: complete
 ---
 
 # Slice Design: Profile-Aware Summary Model Routing
@@ -385,6 +385,14 @@ both benefit; so does any future external harness.
 can be finalized at task-decomposition time. The SDK execution path
 stands on its own without OQ1 resolved.
 
+**RESOLVED (Phase 6, 20260411): Option A implemented.** New hidden
+subcommand `sq _summary-run` (matching the `_summary-instructions`
+naming convention for hidden commands) registered in `app.py`.
+Accepts `--template`, `--profile`, `--model`, and repeatable `--param
+key=value` flags. `_render_summary()` emits
+`command = "sq _summary-run --template <name> --profile <profile> --model <model_id>"` for non-SDK profiles, with `shlex.quote` applied
+to param values.
+
 ### OQ2 — Should the provider-path helper take `AgentConfig` overrides?
 
 `run_review_with_profile` passes `allowed_tools`, `permission_mode`,
@@ -464,8 +472,9 @@ in test restructuring, not production code.
 
 ## Verification Walkthrough
 
-This is the draft demo script the user will run after Phase 6. It will
-be refined when implementation lands.
+Updated 20260411 after Phase 6 implementation. Scenarios A/C/E require
+an active SDK session (`sq run` inside Claude Code). Scenarios B and D
+were verified headlessly. Scenario B note below.
 
 ### Setup
 
@@ -474,7 +483,9 @@ be refined when implementation lands.
 uv run python -c "
 from squadron.models.aliases import resolve_model_alias
 print(resolve_model_alias('minimax'))
-# Expect: ('<model_id>', 'openrouter') or similar
+# Actual output: ('minimax/minimax-m2.7', 'openrouter')
+print(resolve_model_alias('haiku'))
+# Actual output: ('claude-haiku-4-5-20251001', 'sdk')
 "
 
 # Confirm OpenRouter API key is available (profile needs it to run)
@@ -518,7 +529,12 @@ steps:
 EOF
 
 sq run /tmp/test-164-rotate.yaml --validate
-# Expect: validation error — "rotate emit requires SDK profile; got 'openrouter'"
+# Note: --validate runs schema-level checks only (resolver not available
+# at schema time). The rotate+non-SDK profile validation fires at
+# execution time inside _execute_summary(), not during --validate.
+# To see the error, run without --validate (requires SDK session):
+#   sq run /tmp/test-164-rotate.yaml
+#   Expect: "rotate emit is incompatible with non-SDK summary profile 'openrouter'"
 ```
 
 ### Scenario C — SDK summary unchanged
@@ -549,9 +565,9 @@ sq run /tmp/test-164-sdk.yaml --prompt-only
 
 # Non-SDK profile summary — should emit command, not model_switch
 sq run /tmp/test-164-summary.yaml --prompt-only
-# Expect in the summary step's actions:
-#   model_switch: null
-#   command: "sq summary-run …"   (exact shape per OQ1 resolution)
+# Actual output (20260411):
+#   "command": "sq _summary-run --template minimal --profile openrouter --model minimax/minimax-m2.7",
+#   "model_switch": null
 ```
 
 ### Scenario E — Compact-via-summary inherits the branch

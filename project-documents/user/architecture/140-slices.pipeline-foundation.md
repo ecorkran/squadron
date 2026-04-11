@@ -111,7 +111,7 @@ Feature:
   159. Pipeline Fan-Out / Fan-In Step Type                
   160. Interactive Checkpoint Resolution
   163. Pipeline Run Summary Persistence and Restore      (after 161, 162)
-  164. Profile-Aware Summary Model Routing                (after 161)
+  164. Profile-Aware Summary Model Routing                (after 161)  ✓ complete
 
 Integration:
   152. Pipeline Documentation and Authoring Guide       (after all prior)
