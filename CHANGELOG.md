@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 20260411
+
 ### Added
 - Summary and compact pipeline steps now accept any configured model alias,
   not just Claude models. You can use openrouter, gemini, or local models
