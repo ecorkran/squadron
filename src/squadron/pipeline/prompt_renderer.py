@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.compact import (
@@ -267,7 +267,8 @@ def _render_summary(
 
     emit_destinations: list[str] | None = None
     if isinstance(emit_raw, list):
-        emit_destinations = [str(e) for e in emit_raw] or None
+        emit_list = cast(list[object], emit_raw)
+        emit_destinations = [str(e) for e in emit_list] or None
 
     return ActionInstruction(
         action_type=ActionType.SUMMARY,
