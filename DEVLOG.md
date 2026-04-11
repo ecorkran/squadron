@@ -16,6 +16,16 @@ written from user perspective.
 
 ## 20260411
 
+### CHANGELOG rewrite — user perspective
+
+Rewrote all CHANGELOG entries to answer "what can I do / what bug is fixed"
+rather than listing internal class names, module paths, and slice refs.
+Net: 338 lines removed, changelog is now readable without source context.
+
+---
+
+## 20260411
+
 ### Slice 164 implementation complete: profile-aware summary model routing
 
 **Slice 164 — Phase 6 complete.**
