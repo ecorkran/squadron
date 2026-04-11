@@ -7,7 +7,7 @@ dependencies: [156-pipeline-executor-hardening]
 projectState: All 140-band slices complete except 160. SDK pipeline executor, session management, and compaction are operational. RunState is schema v3. Checkpoint action fires correctly and returns outputs["checkpoint"] = "paused"; executor detects this at _execute_step_once line ~670 and returns StepResult(status=PAUSED). _last_with_verdict() helper exists in executor.py. Review action populates ActionResult.verdict and ActionResult.findings.
 dateCreated: 20260411
 dateUpdated: 20260411
-status: not_started
+status: complete
 ---
 
 # Tasks: Interactive Checkpoint Resolution
@@ -33,10 +33,10 @@ status: not_started
 
 ### 1. New types and helpers in `executor.py`
 
-- [ ] **1.1** Add `CheckpointResolution(StrEnum)` with values `ACCEPT`, `OVERRIDE`, `EXIT` in `executor.py`. Place after existing enums near the top of the file.
+- [x] **1.1** Add `CheckpointResolution(StrEnum)` with values `ACCEPT`, `OVERRIDE`, `EXIT` in `executor.py`. Place after existing enums near the top of the file.
   - Success: `from squadron.pipeline.executor import CheckpointResolution` works; enum members accessible as `CheckpointResolution.ACCEPT` etc.
 
-- [ ] **1.2** Add `CheckpointDecision` dataclass in `executor.py`:
+- [x] **1.2** Add `CheckpointDecision` dataclass in `executor.py`:
   ```python
   @dataclass
   class CheckpointDecision:
@@ -45,7 +45,7 @@ status: not_started
   ```
   - Success: constructible; `CheckpointDecision(CheckpointResolution.EXIT, None)` works.
 
-- [ ] **1.3** Add `_is_interactive() -> bool` function:
+- [x] **1.3** Add `_is_interactive() -> bool` function:
   ```python
   def _is_interactive() -> bool:
       return sys.stdin.isatty() and not os.environ.get("SQUADRON_NO_INTERACTIVE")
@@ -53,14 +53,14 @@ status: not_started
   Add `import os` if not already present.
   - Success: returns `False` when `SQUADRON_NO_INTERACTIVE` is set; returns `True` in a normal terminal.
 
-- [ ] **1.4** Test `_is_interactive()`:
+- [x] **1.4** Test `_is_interactive()`:
   - `SQUADRON_NO_INTERACTIVE=1` → returns `False`
   - `sys.stdin` monkeypatched to non-tty → returns `False`
   - Both absent → returns `True` (requires tty mock)
 
 ### 2. `_prompt_checkpoint_interactive` function
 
-- [ ] **2.1** Implement `_prompt_checkpoint_interactive(verdict, findings, run_id, step_name) -> CheckpointDecision`:
+- [x] **2.1** Implement `_prompt_checkpoint_interactive(verdict, findings, run_id, step_name) -> CheckpointDecision`:
   - If not `_is_interactive()`: log warning `"checkpoint: non-interactive environment; defaulting to exit"` and return `CheckpointDecision(CheckpointResolution.EXIT, None)`.
   - Print the display block to stdout:
     ```
@@ -86,29 +86,29 @@ status: not_started
   - On `e`: return `CheckpointDecision(EXIT, None)`.
   - Truncate findings display to 10 items; include "… and N more" line if truncated.
 
-- [ ] **2.2** Test `_prompt_checkpoint_interactive` — non-interactive path:
+- [x] **2.2** Test `_prompt_checkpoint_interactive` — non-interactive path:
   - With `SQUADRON_NO_INTERACTIVE=1`: returns `CheckpointDecision(EXIT, None)` without printing.
 
-- [ ] **2.3** Test `_prompt_checkpoint_interactive` — Accept path:
+- [x] **2.3** Test `_prompt_checkpoint_interactive` — Accept path:
   - Monkeypatch stdin to yield `"a\n"`, tty=True.
   - Pass two findings dicts. Confirm returned `override_instructions` contains both formatted findings.
 
-- [ ] **2.4** Test `_prompt_checkpoint_interactive` — Override path:
+- [x] **2.4** Test `_prompt_checkpoint_interactive` — Override path:
   - Monkeypatch stdin to yield `"o\n"` then `"keep it under 50 lines\n"`.
   - Confirm returned `override_instructions == "keep it under 50 lines"`.
 
-- [ ] **2.5** Test `_prompt_checkpoint_interactive` — Exit path:
+- [x] **2.5** Test `_prompt_checkpoint_interactive` — Exit path:
   - Monkeypatch stdin to yield `"e\n"`. Confirm `resolution == EXIT`.
 
-- [ ] **2.6** Test `_prompt_checkpoint_interactive` — invalid input recovery:
+- [x] **2.6** Test `_prompt_checkpoint_interactive` — invalid input recovery:
   - Monkeypatch stdin to yield `"x\n"` then `"a\n"`. Confirm function retries and returns Accept.
 
-- [ ] **2.7** Test `_prompt_checkpoint_interactive` — finding truncation:
+- [x] **2.7** Test `_prompt_checkpoint_interactive` — finding truncation:
   - Pass 12 findings. Confirm only 10 displayed and "… and 2 more" appears in output.
 
 ### 3. Modify checkpoint detection in `_execute_step_once`
 
-- [ ] **3.1** In `_execute_step_once`, replace the checkpoint detection block (at the point where `result.outputs.get("checkpoint") == "paused"` is detected) with:
+- [x] **3.1** In `_execute_step_once`, replace the checkpoint detection block (at the point where `result.outputs.get("checkpoint") == "paused"` is detected) with:
   ```python
   if result.outputs.get("checkpoint") == "paused":
       prior_review = _last_with_verdict(action_results)
@@ -129,26 +129,26 @@ status: not_started
   ```
   Confirm `run_id` and `merged_params` are in scope at the call site.
 
-- [ ] **3.2** Test executor checkpoint detection — Exit path:
+- [x] **3.2** Test executor checkpoint detection — Exit path:
   - Mock `_prompt_checkpoint_interactive` to return `CheckpointDecision(EXIT, None)`.
   - Confirm `_execute_step_once` returns `StepResult(status=PAUSED)` — identical to pre-160 behavior.
 
-- [ ] **3.3** Test executor checkpoint detection — Accept path:
+- [x] **3.3** Test executor checkpoint detection — Accept path:
   - Mock `_prompt_checkpoint_interactive` to return `CheckpointDecision(ACCEPT, "fix error handling")`.
   - Confirm `merged_params["override_instructions"] == "fix error handling"`.
   - Confirm execution does NOT return `PAUSED` — continues to next action.
 
-- [ ] **3.4** Test executor checkpoint detection — Override path:
+- [x] **3.4** Test executor checkpoint detection — Override path:
   - Mock returns `CheckpointDecision(OVERRIDE, "keep under 50 lines")`.
   - Confirm `merged_params["override_instructions"] == "keep under 50 lines"` and execution continues.
 
-- [ ] **3.5** Test `override_instructions` replacement on second checkpoint:
+- [x] **3.5** Test `override_instructions` replacement on second checkpoint:
   - First checkpoint: Accept with `"fix A"` → `merged_params["override_instructions"] == "fix A"`.
   - Second checkpoint: Override with `"fix B"` → `merged_params["override_instructions"] == "fix B"` (old value replaced).
 
 ### 4. `override_instructions` injection in `actions/dispatch.py`
 
-- [ ] **4.1** In the dispatch action's `execute` method, before assembling the context message, read and prepend `override_instructions`:
+- [x] **4.1** In the dispatch action's `execute` method, before assembling the context message, read and prepend `override_instructions`:
   ```python
   override = str(context.params.get("override_instructions", "")).strip()
   if override:
@@ -162,18 +162,18 @@ status: not_started
   ```
   Prepend `prefix` to the assembled context string sent to the model.
 
-- [ ] **4.2** Test dispatch override injection — present:
+- [x] **4.2** Test dispatch override injection — present:
   - `context.params["override_instructions"] = "do X"`. Confirm assembled context starts with the delimited block.
 
-- [ ] **4.3** Test dispatch override injection — absent:
+- [x] **4.3** Test dispatch override injection — absent:
   - `context.params` has no `override_instructions` key. Confirm assembled context is unchanged (no prefix, no empty block).
 
-- [ ] **4.4** Test dispatch override injection — empty string:
+- [x] **4.4** Test dispatch override injection — empty string:
   - `context.params["override_instructions"] = ""`. Confirm no prefix is added (`.strip()` guard).
 
 ### 5. Enhance `_render_checkpoint` in `prompt_renderer.py`
 
-- [ ] **5.1** In `prompt_renderer.py`, update `_render_checkpoint` so `ActionInstruction.instruction` describes all three options. For trigger `on-concerns`:
+- [x] **5.1** In `prompt_renderer.py`, update `_render_checkpoint` so `ActionInstruction.instruction` describes all three options. For trigger `on-concerns`:
   ```
   If review verdict is CONCERNS or FAIL:
     [a] Accept   — proceed; review findings become instructions for next dispatch
@@ -183,26 +183,26 @@ status: not_started
   ```
   For `on-fail`, change the condition line to `"If review verdict is FAIL:"`. For `always`, remove the condition line. For `never`, keep existing "skip" text.
 
-- [ ] **5.2** Test `_render_checkpoint` — `on-concerns`:
+- [x] **5.2** Test `_render_checkpoint` — `on-concerns`:
   - Confirm instruction contains `"CONCERNS or FAIL"` and all three option labels.
 
-- [ ] **5.3** Test `_render_checkpoint` — `on-fail`:
+- [x] **5.3** Test `_render_checkpoint` — `on-fail`:
   - Confirm instruction contains `"FAIL"` but not `"CONCERNS"`.
 
-- [ ] **5.4** Test `_render_checkpoint` — `always`:
+- [x] **5.4** Test `_render_checkpoint` — `always`:
   - Confirm no conditional clause; all three options present.
 
-- [ ] **5.5** Test `_render_checkpoint` — `never`:
+- [x] **5.5** Test `_render_checkpoint` — `never`:
   - Confirm instruction indicates skip/no-pause (existing behavior unchanged).
 
 ### 6. Export and final validation
 
-- [ ] **6.1** Export `CheckpointResolution` and `CheckpointDecision` from `executor.py`'s public surface (add to `__all__` if it exists, or confirm they are importable from the module).
+- [x] **6.1** Export `CheckpointResolution` and `CheckpointDecision` from `executor.py`'s public surface (add to `__all__` if it exists, or confirm they are importable from the module).
 
-- [ ] **6.2** Run full test suite: `pytest tests/ -x -q`. All tests must pass. The Exit path must behave identically to pre-160 in integration tests that exercise checkpoints.
+- [x] **6.2** Run full test suite: `pytest tests/ -x -q`. All tests must pass. The Exit path must behave identically to pre-160 in integration tests that exercise checkpoints.
 
-- [ ] **6.3** Run `ruff format src/ tests/` and `pyright src/`. No errors.
+- [x] **6.3** Run `ruff format src/ tests/` and `pyright src/`. No errors.
 
-- [ ] **6.4** Verify `override_instructions` does not appear in any committed `RunState` JSON files (state schema version unchanged at 3).
+- [x] **6.4** Verify `override_instructions` does not appear in any committed `RunState` JSON files (state schema version unchanged at 3).
 
-- [ ] **6.5** Update slice status to `in_progress` in [160-slice.interactive-checkpoint-resolution.md](../slices/160-slice.interactive-checkpoint-resolution.md) at implementation start; to `complete` when all tasks pass.
+- [x] **6.5** Update slice status to `in_progress` in [160-slice.interactive-checkpoint-resolution.md](../slices/160-slice.interactive-checkpoint-resolution.md) at implementation start; to `complete` when all tasks pass.

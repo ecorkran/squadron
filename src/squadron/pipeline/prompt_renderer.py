@@ -188,14 +188,24 @@ def _render_checkpoint(
 ) -> ActionInstruction:
     """Build instruction for a checkpoint action."""
     trigger = str(config.get("trigger", "on-concerns"))
+    run_id = str(params.get("run_id", "{run_id}"))
 
-    instruction_map = {
-        "on-concerns": "Pause if review verdict is CONCERNS or worse",
-        "on-fail": "Pause if review verdict is FAIL",
-        "always": "Always pause for user decision",
-        "never": "Skip checkpoint (never pause)",
-    }
-    instruction = instruction_map.get(trigger, f"Checkpoint with trigger: {trigger}")
+    _OPTIONS = (
+        "  [a] Accept   — proceed; review findings become instructions for next dispatch\n"
+        "  [o] Override — enter custom instructions; proceed with those\n"
+        f"  [e] Exit     — stop pipeline; resume with: sq run --resume {run_id}\n"
+        "Note: in prompt-only mode, you are the executor. Choose an option and act accordingly."
+    )
+
+    if trigger == "never":
+        instruction = "Skip checkpoint (never pause)"
+    elif trigger == "always":
+        instruction = f"Always pause for user decision.\n{_OPTIONS}"
+    elif trigger == "on-fail":
+        instruction = f"If review verdict is FAIL:\n{_OPTIONS}"
+    else:
+        # on-concerns (default) and any unknown trigger
+        instruction = f"If review verdict is CONCERNS or FAIL:\n{_OPTIONS}"
 
     return ActionInstruction(
         action_type=ActionType.CHECKPOINT,
@@ -387,11 +397,14 @@ def render_step_instructions(
     step_type_impl = get_step_type(step.step_type)
     actions = step_type_impl.expand(step)
 
+    # Inject run_id into params so renderers (e.g. checkpoint) can reference it.
+    render_params = {**params, "run_id": run_id}
+
     instructions: list[ActionInstruction] = []
     for action_type, action_config in actions:
-        resolved_config = resolve_placeholders(action_config, params)
+        resolved_config = resolve_placeholders(action_config, render_params)
         instruction = _build_action_instruction(
-            action_type, resolved_config, params, resolver
+            action_type, resolved_config, render_params, resolver
         )
         instructions.append(instruction)
 

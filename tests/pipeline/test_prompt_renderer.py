@@ -201,6 +201,38 @@ class TestRenderCheckpoint:
         result = _render_checkpoint({}, {})
         assert result.trigger == "on-concerns"
 
+    def test_on_concerns_instruction_content(self) -> None:
+        result = _render_checkpoint({"trigger": "on-concerns"}, {"run_id": "run-abc"})
+        assert "CONCERNS or FAIL" in result.instruction
+        assert "[a] Accept" in result.instruction
+        assert "[o] Override" in result.instruction
+        assert "[e] Exit" in result.instruction
+        assert "run-abc" in result.instruction
+
+    def test_on_fail_instruction_content(self) -> None:
+        result = _render_checkpoint({"trigger": "on-fail"}, {"run_id": "run-abc"})
+        assert "FAIL" in result.instruction
+        assert "CONCERNS" not in result.instruction
+        assert "[a] Accept" in result.instruction
+        assert "[o] Override" in result.instruction
+        assert "[e] Exit" in result.instruction
+
+    def test_always_instruction_content(self) -> None:
+        result = _render_checkpoint({"trigger": "always"}, {"run_id": "run-abc"})
+        assert "[a] Accept" in result.instruction
+        assert "[o] Override" in result.instruction
+        assert "[e] Exit" in result.instruction
+        # No conditional clause
+        assert "verdict" not in result.instruction
+
+    def test_never_instruction_unchanged(self) -> None:
+        result = _render_checkpoint({"trigger": "never"}, {})
+        assert (
+            "skip" in result.instruction.lower()
+            or "never" in result.instruction.lower()
+        )
+        assert "[a] Accept" not in result.instruction
+
 
 class TestRenderCommit:
     def test_with_message_prefix(self) -> None:

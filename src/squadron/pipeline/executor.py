@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import sys
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -36,6 +37,8 @@ __all__ = [
     "LoopCondition",
     "ExhaustBehavior",
     "LoopConfig",
+    "CheckpointResolution",
+    "CheckpointDecision",
     "resolve_placeholders",
     "evaluate_condition",
     "execute_pipeline",
@@ -244,6 +247,113 @@ class LoopConfig:
     until: LoopCondition | None = None
     on_exhaust: ExhaustBehavior = ExhaustBehavior.FAIL
     strategy: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint resolution types
+# ---------------------------------------------------------------------------
+
+
+class CheckpointResolution(StrEnum):
+    """User's choice at an interactive checkpoint."""
+
+    ACCEPT = "accept"
+    OVERRIDE = "override"
+    EXIT = "exit"
+
+
+@dataclass
+class CheckpointDecision:
+    """Result of the interactive checkpoint prompt."""
+
+    resolution: CheckpointResolution
+    override_instructions: str | None  # None when resolution is EXIT
+
+
+def _is_interactive() -> bool:
+    """Return True if stdin is a TTY and SQUADRON_NO_INTERACTIVE is not set."""
+    return sys.stdin.isatty() and not os.environ.get("SQUADRON_NO_INTERACTIVE")
+
+
+_CHECKPOINT_RULE = "─" * 58
+
+
+def _format_findings_as_instructions(findings: list[dict[str, object]]) -> str:
+    """Format finding dicts as override instruction lines."""
+    lines: list[str] = []
+    for finding in findings:
+        severity = finding.get("severity", "")
+        summary = finding.get("summary", "")
+        location = finding.get("location", "")
+        line = f"[{severity}] {summary}"
+        if location:
+            line += f" — {location}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _prompt_checkpoint_interactive(
+    verdict: str | None,
+    findings: list[dict[str, object]],
+    run_id: str,
+    step_name: str,
+) -> CheckpointDecision:
+    """Display an interactive checkpoint menu and return the user's decision.
+
+    Falls back to EXIT silently in non-interactive environments.
+    """
+    if not _is_interactive():
+        _logger.warning(
+            "checkpoint: non-interactive environment; defaulting to exit"
+            " (set SQUADRON_NO_INTERACTIVE=0 to suppress)"
+        )
+        return CheckpointDecision(CheckpointResolution.EXIT, None)
+
+    _MAX_FINDINGS = 10
+    verdict_label = verdict or "N/A"
+
+    print(_CHECKPOINT_RULE)
+    print(f"Checkpoint — step '{step_name}' │ Review: {verdict_label}")
+    print(_CHECKPOINT_RULE)
+
+    if findings:
+        display = findings[:_MAX_FINDINGS]
+        extra = len(findings) - _MAX_FINDINGS
+        print("Findings:")
+        for finding in display:
+            severity = finding.get("severity", "")
+            summary = finding.get("summary", "")
+            location = finding.get("location", "")
+            print(f"  [{severity}] {summary}")
+            if location:
+                print(f"             {location}")
+        if extra > 0:
+            print(f"  … and {extra} more (see review file)")
+    else:
+        print(
+            "No structured findings. Choose Override to provide explicit instructions."
+        )
+
+    print()
+    print("Options:")
+    print("  [a] Accept   — continue; findings above become override instructions")
+    print("  [o] Override — enter custom instructions, then continue")
+    print(f"  [e] Exit     — save state; resume: sq run --resume {run_id}")
+    print(_CHECKPOINT_RULE)
+
+    while True:
+        choice = input("Choice [a/o/e]: ").strip().lower()
+        if choice == "a":
+            override_instructions = _format_findings_as_instructions(findings)
+            return CheckpointDecision(
+                CheckpointResolution.ACCEPT, override_instructions
+            )
+        if choice == "o":
+            user_text = input("Instructions: ").strip()
+            return CheckpointDecision(CheckpointResolution.OVERRIDE, user_text)
+        if choice == "e":
+            return CheckpointDecision(CheckpointResolution.EXIT, None)
+        # Invalid input: loop and re-prompt
 
 
 def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
@@ -668,13 +778,31 @@ async def _execute_step_once(
 
         # Checkpoint pause
         if result.outputs.get("checkpoint") == "paused":
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.PAUSED,
-                action_results=action_results,
-                iteration=iteration,
+            # Findings come from the review action, not the checkpoint action.
+            # The checkpoint action only sets outputs["checkpoint"] = "paused";
+            # its verdict and findings fields are None/[]. Use _last_with_verdict
+            # to pull the review result from earlier in this step's action_results.
+            prior_review = _last_with_verdict(action_results)
+            verdict = prior_review.verdict if prior_review else None
+            findings: list[dict[str, object]] = (
+                [f for f in (prior_review.findings or []) if isinstance(f, dict)]  # type: ignore[misc]
+                if prior_review
+                else []
             )
+            decision = _prompt_checkpoint_interactive(
+                verdict, findings, run_id, step.name
+            )
+            if decision.resolution == CheckpointResolution.EXIT:
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=ExecutionStatus.PAUSED,
+                    action_results=action_results,
+                    iteration=iteration,
+                )
+            # Accept or Override: inject instructions and continue to next action
+            if decision.override_instructions:
+                merged_params["override_instructions"] = decision.override_instructions
 
         # Action failure
         if not result.success:

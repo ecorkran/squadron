@@ -135,29 +135,46 @@ class DispatchAction:
         ``prior_outputs`` for the most recent ``build_context`` cf-op
         result and uses its ``stdout``.  This is the normal phase-step
         flow where cf-op(build_context) precedes dispatch.
+
+        If ``context.params["override_instructions"]`` is set (injected by
+        the interactive checkpoint handler), prepends a delimited block to
+        the resolved prompt so the model treats it as a directive.
         """
         explicit = context.params.get("prompt")
         if explicit is not None:
-            return str(explicit)
+            prompt = str(explicit)
+        else:
+            # Search prior outputs for a build_context cf-op result (reverse
+            # order so the most recent one wins).
+            prompt = None
+            for key in reversed(list(context.prior_outputs)):
+                result = context.prior_outputs[key]
+                if (
+                    result.action_type == "cf-op"
+                    and result.outputs.get("operation") == "build_context"
+                    and result.outputs.get("stdout") is not None
+                ):
+                    _logger.debug("dispatch: using build_context output as prompt")
+                    prompt = str(result.outputs["stdout"])
+                    break
 
-        # Search prior outputs for a build_context cf-op result (reverse
-        # order so the most recent one wins).
-        for key in reversed(list(context.prior_outputs)):
-            result = context.prior_outputs[key]
-            if (
-                result.action_type == "cf-op"
-                and result.outputs.get("operation") == "build_context"
-                and result.outputs.get("stdout") is not None
-            ):
-                _logger.debug("dispatch: using build_context output as prompt")
-                return str(result.outputs["stdout"])
+            if prompt is None:
+                msg = (
+                    "No 'prompt' param and no prior build_context output found. "
+                    "Dispatch requires a prompt — either pass one explicitly or "
+                    "include a cf-op(build_context) action before dispatch."
+                )
+                raise KeyError(msg)
 
-        msg = (
-            "No 'prompt' param and no prior build_context output found. "
-            "Dispatch requires a prompt — either pass one explicitly or "
-            "include a cf-op(build_context) action before dispatch."
-        )
-        raise KeyError(msg)
+        override = str(context.params.get("override_instructions", "")).strip()
+        if override:
+            prefix = (
+                f"--- Instructions from checkpoint resolution ---\n"
+                f"{override}\n"
+                f"--- End instructions ---\n\n"
+            )
+            return prefix + prompt
+        return prompt
 
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""

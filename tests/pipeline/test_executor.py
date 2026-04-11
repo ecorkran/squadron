@@ -1331,3 +1331,425 @@ class TestProjectParamInjection:
         ctx = captured_ctx[0]
         assert isinstance(ctx, ActionContext)
         assert ctx.params["_project"] == "explicit-override"
+
+
+# ---------------------------------------------------------------------------
+# T160-1 — CheckpointResolution, CheckpointDecision, _is_interactive
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpointResolution:
+    def test_values(self) -> None:
+        from squadron.pipeline.executor import CheckpointResolution
+
+        assert CheckpointResolution.ACCEPT.value == "accept"
+        assert CheckpointResolution.OVERRIDE.value == "override"
+        assert CheckpointResolution.EXIT.value == "exit"
+
+    def test_importable_from_all(self) -> None:
+        from squadron.pipeline import executor
+
+        assert "CheckpointResolution" in executor.__all__
+        assert "CheckpointDecision" in executor.__all__
+
+
+class TestCheckpointDecision:
+    def test_exit_construction(self) -> None:
+        from squadron.pipeline.executor import CheckpointDecision, CheckpointResolution
+
+        decision = CheckpointDecision(CheckpointResolution.EXIT, None)
+        assert decision.resolution == CheckpointResolution.EXIT
+        assert decision.override_instructions is None
+
+    def test_accept_construction(self) -> None:
+        from squadron.pipeline.executor import CheckpointDecision, CheckpointResolution
+
+        decision = CheckpointDecision(CheckpointResolution.ACCEPT, "fix error handling")
+        assert decision.resolution == CheckpointResolution.ACCEPT
+        assert decision.override_instructions == "fix error handling"
+
+
+class TestIsInteractive:
+    def test_no_interactive_env_var_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from squadron.pipeline.executor import _is_interactive
+
+        monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "1")
+        assert _is_interactive() is False
+
+    def test_non_tty_stdin(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import sys
+
+        from squadron.pipeline.executor import _is_interactive
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: False))
+        assert _is_interactive() is False
+
+    def test_tty_and_no_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import sys
+
+        from squadron.pipeline.executor import _is_interactive
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
+        assert _is_interactive() is True
+
+
+# ---------------------------------------------------------------------------
+# T160-2 — _prompt_checkpoint_interactive
+# ---------------------------------------------------------------------------
+
+
+class TestPromptCheckpointInteractive:
+    """Tests for _prompt_checkpoint_interactive using stdin/stdout monkeypatching."""
+
+    def _make_findings(self, count: int) -> list[dict[str, object]]:
+        return [
+            {
+                "severity": "concern",
+                "summary": f"Finding {i}",
+                "location": f"file.py:{i}",
+            }
+            for i in range(1, count + 1)
+        ]
+
+    def test_non_interactive_env_var_returns_exit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from squadron.pipeline.executor import (
+            CheckpointResolution,
+            _prompt_checkpoint_interactive,
+        )
+
+        monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "1")
+        decision = _prompt_checkpoint_interactive(
+            verdict="CONCERNS",
+            findings=[],
+            run_id="run-abc",
+            step_name="design",
+        )
+        assert decision.resolution == CheckpointResolution.EXIT
+        assert decision.override_instructions is None
+
+    def test_accept_returns_formatted_findings(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import sys
+
+        from squadron.pipeline.executor import (
+            CheckpointResolution,
+            _prompt_checkpoint_interactive,
+        )
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
+
+        findings = [
+            {
+                "severity": "concern",
+                "summary": "Bad error handling",
+                "location": "src/foo.py:10",
+            },
+            {
+                "severity": "note",
+                "summary": "Variable name unclear",
+                "location": "src/bar.py:5",
+            },
+        ]
+        inputs = iter(["a"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+        decision = _prompt_checkpoint_interactive(
+            verdict="CONCERNS",
+            findings=findings,
+            run_id="run-abc",
+            step_name="design",
+        )
+        assert decision.resolution == CheckpointResolution.ACCEPT
+        assert (
+            "[concern] Bad error handling — src/foo.py:10"
+            in decision.override_instructions
+        )
+        assert (
+            "[note] Variable name unclear — src/bar.py:5"
+            in decision.override_instructions
+        )
+
+    def test_override_returns_user_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import sys
+
+        from squadron.pipeline.executor import (
+            CheckpointResolution,
+            _prompt_checkpoint_interactive,
+        )
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
+
+        inputs = iter(["o", "keep it under 50 lines"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+        decision = _prompt_checkpoint_interactive(
+            verdict="CONCERNS",
+            findings=[],
+            run_id="run-abc",
+            step_name="design",
+        )
+        assert decision.resolution == CheckpointResolution.OVERRIDE
+        assert decision.override_instructions == "keep it under 50 lines"
+
+    def test_exit_returns_exit_decision(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import sys
+
+        from squadron.pipeline.executor import (
+            CheckpointResolution,
+            _prompt_checkpoint_interactive,
+        )
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
+        monkeypatch.setattr("builtins.input", lambda _: "e")
+
+        decision = _prompt_checkpoint_interactive(
+            verdict=None,
+            findings=[],
+            run_id="run-abc",
+            step_name="review",
+        )
+        assert decision.resolution == CheckpointResolution.EXIT
+        assert decision.override_instructions is None
+
+    def test_invalid_input_then_accept(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import sys
+
+        from squadron.pipeline.executor import (
+            CheckpointResolution,
+            _prompt_checkpoint_interactive,
+        )
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
+
+        inputs = iter(["x", "a"])
+        monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+        decision = _prompt_checkpoint_interactive(
+            verdict="CONCERNS",
+            findings=[],
+            run_id="run-abc",
+            step_name="design",
+        )
+        assert decision.resolution == CheckpointResolution.ACCEPT
+
+    def test_finding_truncation(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import sys
+
+        from squadron.pipeline.executor import _prompt_checkpoint_interactive
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
+        monkeypatch.setattr("builtins.input", lambda _: "e")
+
+        findings = self._make_findings(12)
+        _prompt_checkpoint_interactive(
+            verdict="CONCERNS",
+            findings=findings,
+            run_id="run-abc",
+            step_name="design",
+        )
+        captured = capsys.readouterr()
+        assert "… and 2 more (see review file)" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# T160-3 — Checkpoint detection in _execute_step_once (via execute_pipeline)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpointDetection:
+    """Tests for the modified checkpoint detection block in _execute_step_once."""
+
+    async def _run_checkpoint_pipeline(
+        self,
+        decision: object,
+        extra_actions: list[tuple[str, object]] | None = None,
+    ) -> tuple[object, dict[str, object]]:
+        """Helper: run a pipeline with a checkpoint action and a mocked decision.
+
+        Returns (pipeline_result, merged_params_snapshot).
+        The pipeline has: [review, checkpoint] then optionally extra_actions.
+        """
+        from unittest.mock import patch
+
+        from squadron.pipeline.executor import execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        captured_params: dict[str, object] = {}
+
+        async def checkpoint_exec(ctx: object) -> ActionResult:
+            return ActionResult(
+                success=True,
+                action_type="checkpoint",
+                outputs={"checkpoint": "paused"},
+            )
+
+        async def post_exec(ctx: object) -> ActionResult:
+            # Capture merged params at the point after checkpoint decision
+
+            captured_params.update(ctx.params)  # type: ignore[union-attr]
+            return ActionResult(success=True, action_type="commit", outputs={})
+
+        actions: list[tuple[str, dict[str, object]]] = [("checkpoint", {})]
+        action_registry: dict[str, object] = {}
+
+        checkpoint_action = MagicMock()
+        checkpoint_action.execute = checkpoint_exec
+        action_registry["checkpoint"] = checkpoint_action
+
+        if extra_actions:
+            for act_type, _ in extra_actions:
+                post_action = MagicMock()
+                post_action.execute = post_exec
+                action_registry[act_type] = post_action
+                actions.append((act_type, {}))
+
+        step_name = "_test_ckpt_detect"
+        step = mock_step_type(actions)
+        register_step_type(step_name, step)
+
+        pipeline = make_pipeline([make_step_config(step_name, "step-ckpt", {})])
+
+        with patch(
+            "squadron.pipeline.executor._prompt_checkpoint_interactive",
+            return_value=decision,
+        ):
+            result = await execute_pipeline(
+                pipeline,
+                {},
+                resolver=MagicMock(),
+                cf_client=MagicMock(),
+                _action_registry=action_registry,
+            )
+        return result, captured_params
+
+    @pytest.mark.asyncio
+    async def test_exit_returns_paused(self) -> None:
+        from squadron.pipeline.executor import (
+            CheckpointDecision,
+            CheckpointResolution,
+            ExecutionStatus,
+        )
+
+        decision = CheckpointDecision(CheckpointResolution.EXIT, None)
+        result, _ = await self._run_checkpoint_pipeline(decision)
+        assert result.status == ExecutionStatus.PAUSED
+
+    @pytest.mark.asyncio
+    async def test_accept_continues_and_injects_instructions(self) -> None:
+        from squadron.pipeline.executor import (
+            CheckpointDecision,
+            CheckpointResolution,
+            ExecutionStatus,
+        )
+
+        decision = CheckpointDecision(CheckpointResolution.ACCEPT, "fix error handling")
+        result, captured = await self._run_checkpoint_pipeline(
+            decision, extra_actions=[("commit", {})]
+        )
+        assert result.status == ExecutionStatus.COMPLETED
+        assert captured.get("override_instructions") == "fix error handling"
+
+    @pytest.mark.asyncio
+    async def test_override_continues_and_injects_instructions(self) -> None:
+        from squadron.pipeline.executor import (
+            CheckpointDecision,
+            CheckpointResolution,
+            ExecutionStatus,
+        )
+
+        decision = CheckpointDecision(
+            CheckpointResolution.OVERRIDE, "keep under 50 lines"
+        )
+        result, captured = await self._run_checkpoint_pipeline(
+            decision, extra_actions=[("commit", {})]
+        )
+        assert result.status == ExecutionStatus.COMPLETED
+        assert captured.get("override_instructions") == "keep under 50 lines"
+
+    @pytest.mark.asyncio
+    async def test_second_checkpoint_replaces_instructions(self) -> None:
+        """Second checkpoint decision replaces override_instructions from the first."""
+        from unittest.mock import patch
+
+        from squadron.pipeline.executor import (
+            CheckpointDecision,
+            CheckpointResolution,
+            ExecutionStatus,
+            execute_pipeline,
+        )
+        from squadron.pipeline.steps import register_step_type
+
+        captured_params: list[dict[str, object]] = []
+        call_count = 0
+
+        decisions = [
+            CheckpointDecision(CheckpointResolution.ACCEPT, "fix A"),
+            CheckpointDecision(CheckpointResolution.OVERRIDE, "fix B"),
+        ]
+
+        async def checkpoint_exec(ctx: object) -> ActionResult:
+            return ActionResult(
+                success=True,
+                action_type="checkpoint",
+                outputs={"checkpoint": "paused"},
+            )
+
+        async def commit_exec(ctx: object) -> ActionResult:
+            captured_params.append(dict(ctx.params))  # type: ignore[union-attr]
+            return ActionResult(success=True, action_type="commit", outputs={})
+
+        step_name = "_test_ckpt_replace"
+        # One step with: checkpoint, commit, checkpoint, commit
+        step = mock_step_type(
+            [("checkpoint", {}), ("commit", {}), ("checkpoint", {}), ("commit2", {})]
+        )
+        register_step_type(step_name, step)
+
+        ck_action = MagicMock()
+        ck_action.execute = checkpoint_exec
+        cm_action = MagicMock()
+        cm_action.execute = commit_exec
+        cm2_action = MagicMock()
+        cm2_action.execute = commit_exec
+
+        def decision_side_effect(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            d = decisions[call_count]
+            call_count += 1
+            return d
+
+        pipeline = make_pipeline([make_step_config(step_name, "step-replace", {})])
+
+        with patch(
+            "squadron.pipeline.executor._prompt_checkpoint_interactive",
+            side_effect=decision_side_effect,
+        ):
+            result = await execute_pipeline(
+                pipeline,
+                {},
+                resolver=MagicMock(),
+                cf_client=MagicMock(),
+                _action_registry={
+                    "checkpoint": ck_action,
+                    "commit": cm_action,
+                    "commit2": cm2_action,
+                },
+            )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        # Second commit should see "fix B"
+        assert len(captured_params) == 2
+        assert captured_params[0].get("override_instructions") == "fix A"
+        assert captured_params[1].get("override_instructions") == "fix B"
