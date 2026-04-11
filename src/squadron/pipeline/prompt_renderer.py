@@ -191,10 +191,12 @@ def _render_checkpoint(
     run_id = str(params.get("run_id", "{run_id}"))
 
     _OPTIONS = (
-        "  [a] Accept   — proceed; review findings become instructions for next dispatch\n"
+        "  [a] Accept   — proceed; review findings become instructions"
+        " for next dispatch\n"
         "  [o] Override — enter custom instructions; proceed with those\n"
         f"  [e] Exit     — stop pipeline; resume with: sq run --resume {run_id}\n"
-        "Note: in prompt-only mode, you are the executor. Choose an option and act accordingly."
+        "Note: in prompt-only mode, you are the executor."
+        " Choose an option and act accordingly."
     )
 
     if trigger == "never":
