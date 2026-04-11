@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11] - 20260411
+
+### Added
+- `/sq:summary` now writes the summary to disk (`{project}-interactive.md`) so
+  `/sq:summary --restore` can restore it in a new session, exactly like pipeline
+  summaries.
+
+## [0.3.10] - 20260411
+
 ### Added
 - Checkpoints now show an interactive menu instead of always exiting. When a
   review checkpoint fires during an SDK pipeline run, you can choose:
