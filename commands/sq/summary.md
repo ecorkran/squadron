@@ -38,19 +38,21 @@ Where `{filename}` is the name of the file that was used (from the stderr output
 
 ---
 
-## Step 1: Get summary instructions and suffix
+## Step 1: Get summary instructions, suffix, and project name
 
-Run both commands via Bash:
+Run all three commands via Bash:
 
 ```bash
 sq _summary-instructions $ARGUMENTS
 sq _summary-instructions $ARGUMENTS --suffix
+sq _summary-instructions --project
 ```
 
 Capture the first command's stdout as the **instruction text**.
 Capture the second command's stdout as the **suffix text** (may be empty).
+Capture the third command's stdout (trimmed) as the **project name** (may be empty if CF is not configured; non-fatal).
 
-If either command exits non-zero, show the error output to the user and **stop** — do not continue.
+If the first or second command exits non-zero, show the error output to the user and **stop** — do not continue. A non-zero exit from the third command is non-fatal; treat project name as empty.
 
 ---
 
@@ -77,7 +79,24 @@ Replace `SUMMARY_TEXT` with the actual summary and `SUFFIX_TEXT` with the suffix
 
 ---
 
-## Step 4: Confirm
+## Step 4: Write to file
+
+If the project name from Step 1 is non-empty, write the summary text (without suffix) to the conventional summaries location via Bash:
+
+```bash
+mkdir -p ~/.config/squadron/runs/summaries
+cat << '__SQ_END__' > ~/.config/squadron/runs/summaries/{project}-interactive.md
+SUMMARY_TEXT
+__SQ_END__
+```
+
+Replace `{project}` with the project name and `SUMMARY_TEXT` with the actual summary text.
+
+If the project name is empty, skip this step silently.
+
+---
+
+## Step 5: Confirm
 
 Print exactly one line:
 
@@ -86,3 +105,9 @@ Summary copied to clipboard (N chars, template: T).
 ```
 
 Where `N` is the character count of the full clipboard content (summary + suffix) and `T` is the template name used (from arguments or default).
+
+If Step 4 wrote a file, append the filename on the same line, separated by a space:
+
+```
+Summary copied to clipboard (N chars, template: T). Saved: {project}-interactive.md
+```

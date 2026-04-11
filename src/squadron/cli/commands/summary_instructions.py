@@ -30,8 +30,13 @@ def summary_instructions(
     cwd: str = typer.Option(".", "--cwd", hidden=True),
     suffix: bool = typer.Option(False, "--suffix", hidden=True),
     restore: bool = typer.Option(False, "--restore", hidden=True),
+    project: bool = typer.Option(False, "--project", hidden=True),
 ) -> None:
     """[hidden] Print rendered compaction template instructions (or suffix)."""
+    if project:
+        _handle_project(cwd)
+        return
+
     if restore:
         _handle_restore(cwd)
         return
@@ -53,6 +58,21 @@ def summary_instructions(
         raise typer.Exit(code=1)
 
     print(rendered)
+
+
+def _handle_project(cwd: str) -> None:
+    """Print the CF project name for the current working directory.
+
+    Exit codes:
+        0 — success; project name printed to stdout.
+        1 — project name could not be resolved.
+    """
+    params = gather_cf_params(cwd)
+    project = params.get("project")
+    if not project:
+        print("Error: cannot resolve project name from CWD.", file=sys.stderr)
+        raise typer.Exit(code=1)
+    print(project)
 
 
 def _handle_restore(cwd: str) -> None:
