@@ -41,14 +41,14 @@ Parse the JSON output. The structure is:
   "total_steps": 6,
   "actions": [
     {
-      "action_type": "cf-op|dispatch|review|checkpoint|commit|compact|devlog",
+      "action_type": "cf-op|dispatch|review|checkpoint|commit|summary|devlog",
       "instruction": "Human-readable description",
       "command": "shell command to run (if applicable)",
       "model": "model alias (if applicable)",
       "model_switch": "/model alias (if applicable)",
       "template": "template name (if applicable)",
       "trigger": "checkpoint trigger (if applicable)",
-      "resolved_instructions": "resolved compact instructions (if applicable)"
+      "resolved_instructions": "resolved instructions (if applicable)"
     }
   ]
 }
@@ -83,13 +83,6 @@ Wait for the user's response before proceeding. This is not optional.
 ### commit
 Run the `command` field via Bash. Example: `git add -A && git commit -m 'phase-4: ...'`.
 
-### compact
-The `command` field contains a `/compact [...]` slash command. **Do not run this via Bash.** Output the command as text so the system interprets it as a slash command. The `resolved_instructions` field contains the compaction instructions for reference.
-
-**IMPORTANT**: After outputting the `/compact` command, stop and wait. Context compaction will clear prior messages. The pipeline can be resumed afterward with `sq run --prompt-only --next --resume <run-id>`.
-
-Note: session rotation (starting a fresh session and seeding it with the summary) cannot be automated in prompt-only mode. `/compact` compacts the current session window only.
-
 ### summary
 Generate a summary of the current session following the `resolved_instructions`.
 
@@ -111,7 +104,7 @@ __SQ_END__
 
 Replace `PIPELINE_NAME` with the `step_name` or pipeline identifier from the run JSON, and `SUMMARY_TEXT` with the generated summary. This file enables `/sq:summary --restore` to seed context in a new session without a run-id.
 
-Do not attempt to start a new session or issue `/compact` — present the summary as text only.
+Do not attempt to start a new session — present the summary as text only.
 
 ### devlog
 Execute the work described in `instruction` — write a DEVLOG entry capturing the pipeline run state.
