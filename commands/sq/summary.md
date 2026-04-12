@@ -34,7 +34,7 @@ After outputting the context block, print exactly one line:
 Context restored from {filename} (N chars).
 ```
 
-Where `{filename}` is the name of the file that was used (from the stderr output of Step R1), and `N` is the character count of the restored text.
+Where `{filename}` is extracted from the stderr line prefixed with `Using: ` emitted by Step R1, and `N` is the character count of the restored text. If no such line is present, stop with an error.
 
 ---
 

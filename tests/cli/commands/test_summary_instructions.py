@@ -51,6 +51,7 @@ class TestRestoreFlag:
 
         assert result.exit_code == 0
         assert "summary content here" in result.output
+        assert "Using: myproject-P4.md" in result.output
 
     def test_restore_multiple_files_uses_most_recent(self, tmp_path: Path) -> None:
         """Multiple matching files: most recent contents on stdout, list on stderr."""
@@ -102,7 +103,7 @@ class TestRestoreFlag:
         assert result.exit_code == 0
         # CliRunner merges stderr/stdout by default — verify selection info present
         assert "Found 2 summaries" in result.output
-        assert "Using most recent" in result.output
+        assert "Using: myproject-P5.md" in result.output
         assert "new summary" in result.output
 
     def test_restore_no_files_exits_1(self, tmp_path: Path) -> None:

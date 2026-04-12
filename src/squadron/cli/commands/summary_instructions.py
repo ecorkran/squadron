@@ -111,6 +111,6 @@ def _handle_restore(cwd: str) -> None:
         for m in matches:
             pipeline = m.stem.removeprefix(f"{project}-")
             print(f"  {pipeline}  ({m.name})", file=sys.stderr)
-        print(f"Using most recent: {matches[0].name}", file=sys.stderr)
 
+    print(f"Using: {matches[0].name}", file=sys.stderr)
     print(matches[0].read_text(encoding="utf-8"), end="")

@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13] - 20260411
+
+### Fixed
+- `/sq:summary --restore` no longer reports wrong filename when restoring in a
+  project with a single summary file. The CLI now always emits the selected
+  filename on stderr, and the slash command parses it explicitly instead of
+  relying on a nearby example value.
+
+### Added
+- "Hallucination traps in prompts" rule added to CLAUDE.md — prevents placing
+  hardcoded example values near fill-in slots in model instructions.
+
 ## [0.3.12] - 20260411
 
 ### Fixed
