@@ -80,7 +80,7 @@ Multi-agent milestones (M2, M3) have been moved to `200-slices.multi-agent-commu
 
 ## Future Work
 
-2. [DEFERRED] **SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
+2. [ ] **(139) SDK Client Warm Pool** — Deferred during design. SDK architecture incompatible with original pool concept. To be revisited as a session cache. When revisited, it should be redesigned as a session cache with agent profile management.  See `104-slice.sdk-client-warm-pool.md`. Dependencies: [CLI Foundation]. Risk: Medium. Effort: 3/5
 
 ---
 
@@ -120,7 +120,6 @@ Post-M1:
 ### Parallelization Notes
 
 - **Slice 126 (Context Forge Integration Layer) is complete.** CF calls centralized behind `ContextForgeClient` in `src/squadron/integrations/context_forge.py`.
-- **Slice 104 (SDK Client Warm Pool) is deferred.** When revisited, it should be redesigned as a session cache with agent profile management.
 - Multi-agent slices (M2, M3) are now tracked in `200-slices.multi-agent-communication.md`.
 
 ---
