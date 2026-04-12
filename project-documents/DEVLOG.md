@@ -10,6 +10,27 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260412
+
+### Slice 191: Dispatch Summary Context Injection — Phase 4 Design Complete
+
+**Completed:**
+- Created `user/slices/191-slice.dispatch-summary-context-injection.md`
+- New module `pipeline/summary_context.py` with `assemble_dispatch_context()` — pure function that extracts content from `prior_outputs` by action type (dispatch responses, review findings, build_context text, prior summaries) and assembles a delimited context block
+- Integration point: `_execute_summary()` prepends context block to instructions for non-SDK profiles only; SDK path unchanged
+- Dependencies: slices 161 (summary step) and 164 (profile-aware routing), both complete
+
+**Design decisions:**
+- Context prepended to instructions (not a separate system message) — keeps `capture_summary_via_profile` interface unchanged across providers
+- Full artifact contents injected, not metadata summaries — the summary model's job is to summarize
+- No YAML configuration — context injection is unconditional for non-SDK profiles
+- `match/case` on `ActionType` enum for extraction dispatch, not string labels
+
+**Status:**
+- Phase 4 complete. Ready for Phase 5 (task breakdown).
+
+---
+
 ## 20260410
 
 ### Slice 163: Pipeline Run Summary Persistence and Restore — Phase 5 Task Breakdown Complete

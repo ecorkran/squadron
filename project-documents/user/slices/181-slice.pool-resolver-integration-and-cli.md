@@ -7,7 +7,7 @@ dependencies: [180-model-pool-infrastructure-and-strategies]
 interfaces: [ModelResolver, StateManager, PoolBackend]
 dateCreated: 20260411
 dateUpdated: 20260411
-status: design-complete
+status: not-started
 ---
 
 # Slice Design: Pool Resolver Integration and CLI
