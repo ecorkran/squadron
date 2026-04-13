@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260411
+dateUpdated: 20260412
 ---
 
 # Development Log
@@ -11,6 +11,34 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).  This file differs from
 CHANGELOG.md, in that this file is written from implementor perspective where CHANGELOG.md is
 written from user perspective.
+
+---
+
+## 20260412
+
+### Slice 191: Dispatch Summary Context Injection — Complete (Phase 6)
+
+Fixed the root cause of empty/hallucinated non-SDK summary output: one-shot
+models received only the compaction template instructions with zero pipeline
+context. Added `src/squadron/pipeline/summary_context.py` — a pure function
+`assemble_dispatch_context` that iterates `prior_outputs` and assembles prior
+dispatch responses, review verdicts/findings, and `build_context` stdout into
+a delimited context block prepended to non-SDK summary instructions. SDK path
+(has session history) is completely unmodified. 13 unit tests, 2 integration
+tests, all 623 pipeline tests green, ruff clean. Verified with a live minimax
+run: model correctly summarized the dispatch response and accurately reported
+it had no slice 191 content (the test pipeline used an unrelated prompt).
+
+Also added `dispatch` as a first-class YAML step type (previously only an
+internal `ActionType`). Accepts optional `prompt` and `model`; expands to a
+single dispatch action. Required to make Verification Walkthrough scenarios
+runnable directly. 8 new tests.
+
+Fixed a `/sq:summary --restore` hallucination bug (v0.3.13): CLI only emitted
+the selected filename to stderr in the multi-match case; single-match was
+silent, causing the model to use the nearby example value verbatim. Always emit
+`Using: {name}` to stderr; slash command now parses it explicitly and errors if
+absent. Added "Hallucination traps in prompts" rule to CLAUDE.md.
 
 ---
 
