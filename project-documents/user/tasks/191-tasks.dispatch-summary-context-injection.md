@@ -162,6 +162,32 @@ status: complete
   - [x] Success: all three scenarios produce the expected behavior described in the
     Verification Walkthrough
 
+- [ ] **T8 — Add `dispatch` step type for direct YAML use**
+  - [ ] Add `DISPATCH = "dispatch"` to `StepTypeName` enum in
+    `src/squadron/pipeline/steps/__init__.py`
+  - [ ] Create `src/squadron/pipeline/steps/dispatch.py` with `DispatchStepType`:
+    - Validates `prompt` (optional string) and `model` (optional string)
+    - `expand()` returns `[("dispatch", {"prompt": ..., "model": ...})]`
+      passing only keys that are present in config (do not inject `None` values
+      for absent keys — the dispatch action resolves missing prompt from
+      `build_context` output)
+    - Registers under `StepTypeName.DISPATCH`
+  - [ ] Add `from squadron.pipeline.steps import dispatch as _dispatch_step`  # noqa: F401
+    (or equivalent import) to ensure the module is loaded
+  - [ ] Write `tests/pipeline/steps/test_dispatch_step.py`:
+    - `test_expand_with_prompt_and_model` — both present → both in action config
+    - `test_expand_prompt_only` — no model → `model` key absent from action config
+    - `test_expand_empty_config` — no keys → empty action config
+    - `test_validate_prompt_non_string` → validation error on `prompt`
+    - `test_validate_model_non_string` → validation error on `model`
+    - `test_step_type_name` → `"dispatch"`
+  - [ ] Run: `uv run pytest tests/pipeline/steps/test_dispatch_step.py -v` — all pass
+  - [ ] Run: `uv run ruff format src/squadron/pipeline/steps/dispatch.py` and
+    `uv run ruff check src/squadron/pipeline/steps/dispatch.py` — clean
+  - [ ] Commit: `feat: add dispatch step type for direct YAML pipeline use`
+  - [ ] Success: `sq run /tmp/test-191.yaml -vv` no longer fails with
+    "Unknown step type 'dispatch'"
+
 - [x] **T7 — Mark slice complete**
   - [x] Update `user/slices/191-slice.dispatch-summary-context-injection.md` frontmatter:
     set `status: complete` and `dateUpdated: 20260412` (or today's date)

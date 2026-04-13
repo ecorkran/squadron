@@ -515,6 +515,7 @@ async def execute_pipeline(
     import squadron.pipeline.steps.collection as _s_collection  # noqa: F401
     import squadron.pipeline.steps.compact as _s_compact  # noqa: F401
     import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
+    import squadron.pipeline.steps.dispatch as _s_dispatch  # noqa: F401
     import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
     import squadron.pipeline.steps.review as _s_review  # noqa: F401
     import squadron.pipeline.steps.summary as _s_summary  # noqa: F401
@@ -530,6 +531,7 @@ async def execute_pipeline(
         _s_collection,
         _s_compact,
         _s_devlog,
+        _s_dispatch,
         _s_phase,
         _s_review,
         _s_summary,

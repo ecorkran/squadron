@@ -24,6 +24,7 @@ class StepTypeName(StrEnum):
     DESIGN = "design"
     TASKS = "tasks"
     IMPLEMENT = "implement"
+    DISPATCH = "dispatch"
     COMPACT = "compact"
     SUMMARY = "summary"
     REVIEW = "review"
