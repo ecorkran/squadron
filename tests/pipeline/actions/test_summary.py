@@ -21,6 +21,7 @@ def _make_context(
     cwd: str = "/tmp",
     step_index: int = 0,
     step_name: str = "test-step",
+    prior_outputs: dict | None = None,
 ) -> MagicMock:
     ctx = MagicMock(spec=ActionContext)
     ctx.params = params or {}
@@ -28,6 +29,7 @@ def _make_context(
     ctx.cwd = cwd
     ctx.step_index = step_index
     ctx.step_name = step_name
+    ctx.prior_outputs = prior_outputs if prior_outputs is not None else {}
     ctx.resolver = MagicMock()
     ctx.resolver.resolve.return_value = ("resolved-model-id", None)
     return ctx
@@ -564,3 +566,86 @@ async def test_execute_summary_unannotated_alias_uses_sdk_path() -> None:
     assert (
         session.capture_summary.call_args.kwargs["summary_model"] == "some-resolved-id"
     )
+
+
+# ---------------------------------------------------------------------------
+# T4 (slice 191) — context injection integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_non_sdk_summary_injects_prior_context() -> None:
+    """Non-SDK summary prepends assembled pipeline context to instructions."""
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.models import ActionResult
+
+    dispatch_result = ActionResult(
+        success=True,
+        action_type="dispatch",
+        outputs={"response": "The web server uses a layered architecture."},
+    )
+    ctx = _make_context(
+        sdk_session=None,
+        prior_outputs={"design": dispatch_result},
+    )
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile",
+        new=AsyncMock(return_value="SUMMARY WITH CONTEXT"),
+    ) as mock_oneshot:
+        with patch(
+            "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
+        ):
+            result = await _execute_summary(
+                context=ctx,
+                instructions="Please summarize.",
+                summary_model_alias="minimax",
+                emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+                action_type="summary",
+            )
+
+    assert result.success is True
+    mock_oneshot.assert_called_once()
+    injected_instructions = mock_oneshot.call_args.kwargs["instructions"]
+    assert "--- Pipeline Context" in injected_instructions
+    assert "The web server uses a layered architecture." in injected_instructions
+    assert "Please summarize." in injected_instructions
+
+
+@pytest.mark.asyncio
+async def test_sdk_summary_does_not_inject_context() -> None:
+    """SDK path does not prepend pipeline context — sdk_session has full history."""
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.models import ActionResult
+
+    dispatch_result = ActionResult(
+        success=True,
+        action_type="dispatch",
+        outputs={"response": "Should not appear in SDK instructions."},
+    )
+    session = AsyncMock()
+    session.current_model = "haiku-id"
+    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+
+    ctx = _make_context(
+        sdk_session=session,
+        prior_outputs={"design": dispatch_result},
+    )
+    ctx.resolver.resolve.return_value = ("haiku-resolved", None)
+
+    with patch(
+        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="Please summarize.",
+            summary_model_alias="haiku",
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    assert result.success is True
+    session.capture_summary.assert_called_once()
+    sdk_instructions = session.capture_summary.call_args.kwargs["instructions"]
+    assert "--- Pipeline Context" not in sdk_instructions

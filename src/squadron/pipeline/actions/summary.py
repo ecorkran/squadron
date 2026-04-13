@@ -176,8 +176,14 @@ async def _execute_summary(
             )
         else:
             assert profile is not None  # narrowed by is_sdk_profile False
+            from squadron.pipeline.summary_context import assemble_dispatch_context
+
+            context_block = assemble_dispatch_context(context.prior_outputs)
+            augmented_instructions = (
+                f"{context_block}\n\n{instructions}" if context_block else instructions
+            )
             summary = await capture_summary_via_profile(
-                instructions=instructions,
+                instructions=augmented_instructions,
                 model_id=model_id,
                 profile=profile,
             )
