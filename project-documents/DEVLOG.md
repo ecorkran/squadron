@@ -12,6 +12,21 @@ Internal work log for squadron project development.
 
 ## 20260412
 
+### Slice 191: Dispatch Summary Context Injection — Phase 5 Task Breakdown Complete
+
+**Completed:**
+- Created `user/tasks/191-tasks.dispatch-summary-context-injection.md` (171 lines, 7 tasks)
+- Tasks cover: new `summary_context.py` module (T1), unit tests for assembler (T2),
+  integration into `_execute_summary()` (T3), integration tests (T4), full verification
+  and commit (T5), end-to-end verification (T6), slice completion (T7)
+- Implementation note captured: `ActionType` has no `COMPACT` entry; compact steps
+  expand to `"summary"` action type — the `match/case` only needs `ActionType.SUMMARY`
+
+**Status:**
+- Phase 5 complete. Ready for Phase 6 (implementation).
+
+---
+
 ### Slice 191: Dispatch Summary Context Injection — Phase 4 Design Complete
 
 **Completed:**
