@@ -7,7 +7,7 @@ dependencies: [161-summary-step-with-emit-destinations, 164-profile-aware-summar
 interfaces: []
 dateCreated: 20260412
 dateUpdated: 20260412
-status: not-started
+status: complete
 ---
 
 # Slice Design: Dispatch Summary Context Injection
@@ -462,6 +462,11 @@ Integration test for context injection:
 
 ## Verification Walkthrough
 
+> **Environment note:** Scenarios 1–3 use `dispatch` steps which require
+> `ClaudeSDKClient` (the straight-CLI executor). They cannot run inside a
+> Claude Code session (IDE or Claude Code CLI). Run these from a standard
+> terminal using `sq run`. Scenario 4 (unit tests) runs anywhere.
+
 ### Setup
 
 ```bash
@@ -469,8 +474,8 @@ Integration test for context injection:
 uv run python -c "
 from squadron.models.aliases import resolve_model_alias
 print(resolve_model_alias('minimax'))
-# Expect: ('minimax/minimax-m2.7', 'openrouter')
 "
+# Actual output: ('minimax/minimax-m2.7', 'openrouter')
 
 # Confirm OpenRouter API key is available
 echo "OPENROUTER_API_KEY present: $([ -n \"$OPENROUTER_API_KEY\" ] && echo yes || echo no)"
@@ -478,15 +483,9 @@ echo "OPENROUTER_API_KEY present: $([ -n \"$OPENROUTER_API_KEY\" ] && echo yes |
 
 ### Scenario 1 — Non-SDK summary with pipeline context
 
-Run a pipeline that performs a dispatch step (generating content), then
-summarizes with a non-SDK model:
+Run from a standard terminal (not inside Claude Code):
 
 ```bash
-# Use a pipeline with at least one dispatch step before the summary.
-# The P4 pipeline is the real-world case — it runs design/tasks/implement
-# dispatches before a summary step.
-
-# Create a minimal test pipeline:
 cat > /tmp/test-191.yaml <<'EOF'
 name: test-191-context-injection
 params:
@@ -514,6 +513,8 @@ generic content unrelated to web server architecture.
 
 ### Scenario 2 — SDK summary unchanged
 
+Run from a standard terminal:
+
 ```bash
 cat > /tmp/test-191-sdk.yaml <<'EOF'
 name: test-191-sdk-path
@@ -539,6 +540,8 @@ context prefix. The summary still works because the SDK session has
 the full conversation history.
 
 ### Scenario 3 — Empty prior outputs
+
+Run from a standard terminal:
 
 ```bash
 cat > /tmp/test-191-empty.yaml <<'EOF'
@@ -569,6 +572,9 @@ uv run pytest tests/pipeline/actions/test_summary.py -v -k "context"
 ```
 
 **Expected:** All new tests pass. Existing summary tests are unaffected.
+
+**Actual result (20260412):** 13/13 unit tests pass; 2/2 integration tests
+pass; all 26 total summary action tests pass. 615/615 pipeline tests pass.
 
 ---
 

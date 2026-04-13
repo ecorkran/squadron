@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14] - 20260412
+
+### Fixed
+- Non-SDK summary models (e.g. minimax via openrouter) no longer produce empty
+  or hallucinated summaries. Prior pipeline step results (dispatch responses,
+  review findings, build_context output) are now assembled into a context block
+  and prepended to the instructions sent to one-shot summary models. SDK-session
+  summary paths are unaffected.
+
 ## [0.3.13] - 20260411
 
 ### Fixed
