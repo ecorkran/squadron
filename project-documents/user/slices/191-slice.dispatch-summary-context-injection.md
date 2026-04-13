@@ -158,8 +158,7 @@ execution order) and extracts content based on `action_type`:
 | `dispatch` | `outputs["response"]` — the full model response |
 | `review` | `verdict` + `findings` list (text of each finding) |
 | `cf-op` | `outputs["stdout"]` when `operation == "build_context"` |
-| `summary` | `outputs["summary"]` — a prior summary if one exists |
-| `compact` | `outputs["summary"]` — a prior compact summary |
+| `summary` | `outputs["summary"]` — covers both `summary` and `compact` steps; the compact step expands to a `summary` action so both appear with `action_type == "summary"` |
 | `checkpoint` | Skipped — no meaningful content |
 | `commit` | Skipped — git operation metadata, not summarizable |
 
@@ -328,7 +327,9 @@ def _extract_content(result: ActionResult) -> str:
             if result.outputs.get("operation") == "build_context":
                 return str(result.outputs.get("stdout", ""))
             return ""
-        case ActionType.SUMMARY | ActionType.COMPACT:
+        case ActionType.SUMMARY:
+            # Covers both summary and compact steps: the compact step expands
+            # to a summary action, so both appear with action_type "summary".
             return str(result.outputs.get("summary", ""))
         case _:
             return ""
