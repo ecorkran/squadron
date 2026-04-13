@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and prepended to the instructions sent to one-shot summary models. SDK-session
   summary paths are unaffected.
 
+### Added
+- `dispatch` is now a valid pipeline step type in YAML. Accepts optional `prompt`
+  and `model` fields. Enables direct dispatch steps without wrapping in a phase
+  step (design/tasks/implement).
+
 ## [0.3.13] - 20260411
 
 ### Fixed
