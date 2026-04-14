@@ -1,0 +1,26 @@
+# Built-in model pool definitions for squadron.
+# Format is identical to ~/.config/squadron/pools.toml — users can copy
+# entries directly between the two files.
+#
+# Fields:
+#   description  (required) — human-readable pool description
+#   strategy     (required) — selection strategy: "random", "round-robin",
+#                             "cheapest", or "weighted-random"
+#   models       (required) — non-empty list of alias names
+#   [pools.<name>.weights]  (optional, weighted-random only)
+#     <alias> = <float>     — per-member weight; absent members default to 1.0
+
+[pools.review]
+description = "Varied mid-tier models for review diversity"
+strategy = "round-robin"
+models = ["minimax", "glm5", "kimi25", "grok-fast"]
+
+[pools.high]
+description = "Strongest available models"
+strategy = "random"
+models = ["opus", "gpt54", "gemini"]
+
+[pools.cheap]
+description = "Lowest-cost models for bulk or low-stakes work"
+strategy = "cheapest"
+models = ["minimax", "glm5", "grok-fast", "flash3", "gemma4", "qwen36-free"]
