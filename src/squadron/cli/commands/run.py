@@ -23,6 +23,7 @@ from squadron.pipeline.executor import (
     PipelineResult,
     execute_pipeline,
 )
+from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.loader import (
     discover_pipelines,
     load_pipeline,
@@ -179,10 +180,6 @@ async def _run_pipeline(
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
-    resolver = ModelResolver(
-        cli_override=model_override,
-        pipeline_model=definition.model,
-    )
     cf_client = ContextForgeClient()
     _check_cf(cf_client)
 
@@ -191,6 +188,15 @@ async def _run_pipeline(
         run_id = state_mgr.init_run(
             pipeline_name, params, execution_mode=execution_mode
         )
+
+    _run_id = run_id  # capture for closure below
+    pool_backend = DefaultPoolBackend()
+    resolver = ModelResolver(
+        cli_override=model_override,
+        pipeline_model=definition.model,
+        pool_backend=pool_backend,
+        on_pool_selection=lambda sel: state_mgr.log_pool_selection(_run_id, sel),
+    )
 
     try:
         result = await execute_pipeline(
@@ -364,16 +370,19 @@ def _handle_prompt_only_init(
         raise typer.Exit(1)
 
     params = _assemble_params(definition, target, model_override, param_list)
-    resolver = ModelResolver(
-        cli_override=model_override,
-        pipeline_model=definition.model,
-    )
-
     state_mgr = StateManager()
     run_id = state_mgr.init_run(
         pipeline_name, params, execution_mode=ExecutionMode.PROMPT_ONLY
     )
     rprint(f"run_id={run_id}", file=sys.stderr)
+
+    pool_backend = DefaultPoolBackend()
+    resolver = ModelResolver(
+        cli_override=model_override,
+        pipeline_model=definition.model,
+        pool_backend=pool_backend,
+        on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
+    )
 
     # Render first step
     first_step = definition.steps[0]
@@ -457,9 +466,12 @@ def _handle_prompt_only_next(
         if state.params.get("model")
         else model_override
     )
+    pool_backend = DefaultPoolBackend()
     resolver = ModelResolver(
         cli_override=resume_model,
         pipeline_model=definition.model,
+        pool_backend=pool_backend,
+        on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
     )
     params = dict(state.params)
 
