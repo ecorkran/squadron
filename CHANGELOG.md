@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pool-based model selection (slice 181).** `pool:` is now a first-class model
+  specifier at every cascade level (`--model pool:<name>`, pipeline YAML, action config).
+  - `ModelResolver` transparently resolves `pool:<name>` → alias → `(model_id, profile)`
+  - Every pool resolution fires an `on_pool_selection` callback; run state files
+    record all selections under `pool_selections` (schema version 4)
+  - `StateManager.log_pool_selection()` appends selections atomically; schema v3 files
+    load without migration (Pydantic default)
+- **`sq pools` CLI command group.** Inspect and manage model pools:
+  - `sq pools list` — Rich table of all pools (Name, Strategy, Members, Source)
+  - `sq pools show <name>` — pool members with alias metadata + last 10 selections from run history
+  - `sq pools reset <name>` — clear round-robin state for a pool; errors clearly on unknown names
+  - `sq pools` (no subcommand) behaves like `sq pools list`
 - **Model pool infrastructure (slice 180).** Named groups of model aliases with
   selection strategies for review diversity and cost management.
   - Four strategies: `random`, `round-robin`, `cheapest`, `weighted-random`

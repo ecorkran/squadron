@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260413
+dateUpdated: 20260414
 ---
 
 # Development Log
@@ -11,6 +11,22 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).  This file differs from
 CHANGELOG.md, in that this file is written from implementor perspective where CHANGELOG.md is
 written from user perspective.
+
+---
+
+## 20260414
+
+### Slice 181: Pool Resolver Integration and CLI — Implementation Complete
+
+Wired the slice 180 pool infrastructure into the resolver, state, and CLI. Key implementation
+decisions: `PoolBackend` protocol and `DefaultPoolBackend` added to new `backend.py` (slice 180
+shipped only module-level functions); resolver construction sites are in `run.py` (not
+`executor.py`, which accepts a pre-built resolver as a param); `state.py` `_load_raw` uses a
+`_SUPPORTED_SCHEMA_VERSIONS = {3, 4}` set to accept both v3 (back-compat) and v4 (new). At
+SDK-mode call site, resolver must be built after `init_run` so `run_id` is in scope for the
+`on_pool_selection` closure. Pre-existing schema v1 run files produce harmless
+"Skipping unreadable state file" log warnings from `list_runs()` — expected, not a bug.
+1589 tests passing; 5 commits.
 
 ---
 
