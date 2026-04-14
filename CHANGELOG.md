@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Model pool infrastructure (slice 180).** Named groups of model aliases with
+  selection strategies for review diversity and cost management.
+  - Four strategies: `random`, `round-robin`, `cheapest`, `weighted-random`
+  - Round-robin state persists across runs in `~/.config/squadron/pool-state.toml`
+  - Three built-in pools ship in `src/squadron/data/pools.toml`:
+    `review` (round-robin, mid-tier), `high` (random, strongest), `cheap` (cheapest, lowest-cost)
+  - User overrides in `~/.config/squadron/pools.toml` layer on top of built-ins
+  - Pool entries validated against alias registry at load time
+  - Public API: `squadron.pipeline.intelligence.pools`
+
 ## [0.3.14] - 20260412
 
 ### Fixed

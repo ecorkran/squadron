@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260412
+dateUpdated: 20260413
 ---
 
 # Development Log
@@ -15,6 +15,16 @@ written from user perspective.
 ---
 
 ## 20260413
+
+### Slice 180: Model Pool Infrastructure and Strategies — Implementation Complete
+
+Implemented full pool infrastructure in `src/squadron/pipeline/intelligence/pools/`:
+5 source files (`models.py`, `protocol.py`, `strategies.py`, `loader.py`, `__init__.py`),
+`src/squadron/data/pools.toml` (3 built-in pools), 5 test files (71 new tests, all green).
+One bug found during implementation: `tomli_w.dumps()` returns `str` not `bytes` — fixed
+with `write_text()` instead of `write_bytes()`. No regressions in the 1478 existing tests.
+Patch order for `get_all_aliases` in tests: must patch `squadron.models.aliases.get_all_aliases`
+(the source) since loader imports it lazily inside functions.
 
 ### Slice 180: Model Pool Infrastructure and Strategies — Design Complete (Phase 5)
 
