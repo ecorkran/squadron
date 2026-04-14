@@ -14,6 +14,20 @@ written from user perspective.
 
 ---
 
+## 20260413
+
+### Slice 180: Model Pool Infrastructure and Strategies — Design Complete (Phase 5)
+
+Task breakdown complete at `project-documents/user/tasks/180-tasks.model-pool-infrastructure-and-strategies.md`
+(28 tasks, 420 lines). Covers: package scaffolding, test infrastructure, data models (`ModelPool`,
+`SelectionContext`, `PoolState`), `PoolStrategy` protocol, four built-in strategies (`random`,
+`round-robin`, `cheapest`, `weighted-random`), strategy registry, round-robin state persistence,
+built-in `pools.toml`, pool loader with alias validation, `select_from_pool` wrapper, and public
+API surface. Test-with pattern applied throughout; 5 intermediate commits defined.
+Implementation is slice 181's blocker for pool resolver integration.
+
+---
+
 ## 20260412
 
 ### Slice 191: Dispatch Summary Context Injection — Complete (Phase 6)
