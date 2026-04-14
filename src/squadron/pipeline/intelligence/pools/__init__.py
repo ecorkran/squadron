@@ -3,6 +3,7 @@
 All symbols importable directly from ``squadron.pipeline.intelligence.pools``.
 """
 
+from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend, PoolBackend
 from squadron.pipeline.intelligence.pools.loader import (
     clear_pool_state,
     get_all_pools,
@@ -16,6 +17,7 @@ from squadron.pipeline.intelligence.pools.loader import (
 from squadron.pipeline.intelligence.pools.models import (
     ModelPool,
     PoolNotFoundError,
+    PoolSelection,
     PoolState,
     PoolValidationError,
     SelectionContext,
@@ -30,9 +32,13 @@ from squadron.pipeline.intelligence.pools.strategies import (
 __all__ = [
     # Data model
     "ModelPool",
+    "PoolSelection",
     "SelectionContext",
     "PoolState",
     "PoolStrategy",
+    # Backend
+    "PoolBackend",
+    "DefaultPoolBackend",
     # Errors
     "PoolValidationError",
     "PoolNotFoundError",

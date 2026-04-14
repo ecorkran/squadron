@@ -3,12 +3,14 @@
 ``ModelPool`` — frozen dataclass representing a named pool of model aliases.
 ``SelectionContext`` — metadata passed to PoolStrategy.select().
 ``PoolState`` — persistent state for round-robin rotation.
+``PoolSelection`` — record of a single pool resolution event.
 Custom exceptions: PoolValidationError, PoolNotFoundError, StrategyNotFoundError.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -64,3 +66,20 @@ class SelectionContext:
     aliases: dict[str, ModelAlias] | None = None
     pool_state: PoolState | None = None
     task_description: str | None = None
+
+
+@dataclass(frozen=True)
+class PoolSelection:
+    """Record of a single pool resolution event.
+
+    Produced by ``ModelResolver._resolve_pool()`` each time a ``pool:``
+    candidate is resolved.  Passed to the ``on_pool_selection`` callback
+    and serialised into ``RunState.pool_selections``.
+    """
+
+    pool_name: str
+    selected_alias: str
+    strategy: str
+    step_name: str
+    action_type: str
+    timestamp: datetime
