@@ -199,8 +199,9 @@ status: not-started
   - [ ] If a call site does not have `run_id` at resolver build time
     (e.g. before `init_run`), pass a lazy callback that reads `run_id`
     from a closure cell set after init
-- [ ] Verify `squadron.pipeline.executor.execute_pipeline` still accepts
-  the same `resolver` parameter — no signature change required
+- [ ] Note: `squadron.pipeline.executor.execute_pipeline` accepts
+  `resolver: ModelResolver` as a parameter; it does not construct a resolver
+  internally. No changes to `executor.py` are required.
 - [ ] **Success criteria:** Full pipeline run with
   `sq run <name> --model pool:review` resolves to a member of the
   review pool; state file shows one `pool_selections` entry per

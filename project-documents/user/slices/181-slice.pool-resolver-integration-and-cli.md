@@ -43,7 +43,7 @@ resolution candidate at every level of the cascade.
 
 | Dependency | What 181 Needs |
 |---|---|
-| 180 — Model Pool Infrastructure | `PoolBackend` protocol, `ModelPool` model, `PoolStrategy` protocol, `SelectionContext`, `PoolLoader.load()` |
+| 180 — Model Pool Infrastructure | `ModelPool`, `PoolStrategy` protocol, `SelectionContext`, `PoolNotFoundError`, module-level functions: `select_from_pool`, `get_pool`, `get_all_pools`, `clear_pool_state` |
 | 142 — Pipeline Core Models / Action Protocol | `ActionContext` for executor integration |
 | 150 — Pipeline State | `RunState`, `StateManager` for pool selection logging |
 | 141 — Configuration Externalization | Config path conventions for `pool-state.toml` |
@@ -55,24 +55,29 @@ resolution candidate at every level of the cascade.
 ### Module Layout
 
 ```
-src/squadron/pools/           ← created by slice 180
+src/squadron/pipeline/intelligence/pools/   ← created by slice 180
   __init__.py
-  models.py                   ← ModelPool, PoolStrategy, SelectionContext (180)
-  strategies/                 ← built-in strategy implementations (180)
-  loader.py                   ← PoolLoader: loads pools.toml, implements PoolBackend (180)
-  backend.py                  ← PoolBackend protocol + PoolSelection (180, consumed by 181)
+  models.py      ← ModelPool, SelectionContext, PoolState, PoolNotFoundError (180)
+  protocol.py    ← PoolStrategy protocol (180)
+  strategies.py  ← built-in strategy implementations (180)
+  loader.py      ← select_from_pool(), get_pool(), get_all_pools(),
+                   load/save/clear_pool_state() (180)
+  backend.py     ← PoolBackend protocol + DefaultPoolBackend + PoolSelection (181)
 ```
 
-Slice 181 adds no new files to `src/squadron/pools/`. It modifies:
+Slice 181 adds `backend.py` to `src/squadron/pipeline/intelligence/pools/`. It also modifies:
 - `src/squadron/pipeline/resolver.py` — integrate `PoolBackend`
 - `src/squadron/pipeline/state.py` — add pool selection log to `RunState`
-- `src/squadron/pipeline/executor.py` — wire pool backend and logging callback
+- `src/squadron/cli/commands/run.py` — wire pool backend at resolver construction sites
 - `src/squadron/cli/commands/pools.py` — new `sq pools` command
 - `src/squadron/cli/app.py` — register `pools_app`
 
-### 1. `PoolBackend` Protocol (defined in slice 180, referenced here)
+### 1. `PoolBackend` Protocol (defined in slice 181, consumed by resolver)
 
-Slice 180 defines this in `src/squadron/pools/backend.py`:
+Slice 181 defines these in `src/squadron/pipeline/intelligence/pools/backend.py`.
+Slice 180 shipped module-level functions in `loader.py`; `PoolBackend` and
+`DefaultPoolBackend` are new in this slice. `DefaultPoolBackend` delegates to
+the existing `loader.py` functions — no logic is duplicated.
 
 ```python
 class PoolSelection:
@@ -91,9 +96,20 @@ class PoolBackend(Protocol):
     def get_pool(self, pool_name: str) -> ModelPool: ...
     def list_pools(self) -> dict[str, ModelPool]: ...
     def reset_pool_state(self, pool_name: str) -> None: ...
+
+class DefaultPoolBackend:
+    """Implements PoolBackend by delegating to loader.py functions."""
+    def select(self, pool_name: str, context: SelectionContext) -> str:
+        return select_from_pool(get_pool(pool_name))
+    def get_pool(self, pool_name: str) -> ModelPool:
+        return get_pool(pool_name)
+    def list_pools(self) -> dict[str, ModelPool]:
+        return get_all_pools()
+    def reset_pool_state(self, pool_name: str) -> None:
+        clear_pool_state(pool_name)
 ```
 
-`PoolNotFoundError` (also from 180) is raised when the named pool does
+`PoolNotFoundError` (from 180) is raised when the named pool does
 not exist in the loaded configuration.
 
 ### 2. `ModelResolver` Integration
@@ -231,27 +247,30 @@ logic is needed — Pydantic's default value handles it.
 
 ### 4. Executor Integration
 
-**File:** `src/squadron/pipeline/executor.py`
+**File:** `src/squadron/cli/commands/run.py`
 
-When `execute_pipeline()` builds the `ModelResolver`, it now also
-instantiates a `PoolLoader` and passes the backend and callback:
+`execute_pipeline()` in `executor.py` accepts `resolver: ModelResolver` as a
+parameter — it does not construct one. All three `ModelResolver(` construction
+sites are in `src/squadron/cli/commands/run.py` (around lines 182, 367, 460).
+Slice 181 modifies those three sites to pass `pool_backend` and
+`on_pool_selection`:
 
 ```python
-pool_backend = PoolLoader.load()   # returns PoolBackend implementation
+pool_backend = DefaultPoolBackend()
 resolver = ModelResolver(
     cli_override=cli_model,
     pipeline_model=definition.model,
     config_default=config_default,
     pool_backend=pool_backend,
-    on_pool_selection=lambda sel: state_manager.log_pool_selection(run_id, sel),
+    on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
 )
 ```
 
-`PoolLoader.load()` is provided by slice 180. If pools configuration is
-absent or empty, it returns a backend that raises `PoolNotFoundError` on
-any lookup (no silent empty pool). The `on_pool_selection` callback writes
-to the live state file on each selection event; it is safe to call from
-within action handlers because `StateManager.save()` is an atomic
+`DefaultPoolBackend` is defined in slice 181 (see §1). If pools configuration
+is absent or empty, `get_all_pools()` returns only built-in pools; unknown pool
+names raise `PoolNotFoundError` (no silent empty pool). The `on_pool_selection`
+callback writes to the live state file on each selection event; it is safe to
+call from within action handlers because `StateManager.save()` uses an atomic
 write-then-rename.
 
 The `ActionContext` dataclass does not change. The resolver already flows
@@ -303,11 +322,14 @@ app.add_typer(pools_app, name="pools")
 
 ### Consumed from slice 180
 
-- `PoolBackend` protocol and `PoolSelection` dataclass
-- `PoolLoader.load()` factory
-- `PoolNotFoundError` exception
-- `ModelPool.strategy` field (for logging)
+- `ModelPool` and `ModelPool.strategy` field (for logging)
 - `SelectionContext` dataclass
+- `PoolNotFoundError` exception
+- Module-level functions: `select_from_pool`, `get_pool`, `get_all_pools`,
+  `clear_pool_state` (all in `squadron.pipeline.intelligence.pools.loader`)
+
+`PoolBackend`, `DefaultPoolBackend`, and `PoolSelection` are defined in
+slice 181 (`backend.py`).
 
 ---
 
