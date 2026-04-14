@@ -28,6 +28,11 @@ SDK-mode call site, resolver must be built after `init_run` so `run_id` is in sc
 "Skipping unreadable state file" log warnings from `list_runs()` — expected, not a bug.
 1589 tests passing; 5 commits.
 
+Refactor: consolidated `sq pools show <name>` into `sq pools list [name]` — optional name arg
+produces detail view (members + recent selections). Pattern matches `sq models list`. 949 tests
+passing; 6 commits. Bump to 0.4.0 — start of significant new functionality (pool-based model
+selection).
+
 ---
 
 ## 20260413

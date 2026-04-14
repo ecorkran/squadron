@@ -15,28 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 20260414
+
 ### Added
-- **Pool-based model selection (slice 181).** `pool:` is now a first-class model
-  specifier at every cascade level (`--model pool:<name>`, pipeline YAML, action config).
-  - `ModelResolver` transparently resolves `pool:<name>` → alias → `(model_id, profile)`
-  - Every pool resolution fires an `on_pool_selection` callback; run state files
-    record all selections under `pool_selections` (schema version 4)
-  - `StateManager.log_pool_selection()` appends selections atomically; schema v3 files
-    load without migration (Pydantic default)
+- **Pool-based model selection.** `pool:` is now a first-class model specifier at every
+  cascade level (`--model pool:<name>`, pipeline YAML, action config). Squadron transparently
+  rotates through pool members per the pool's strategy; every selection is recorded in the
+  run state file.
 - **`sq pools` CLI command group.** Inspect and manage model pools:
-  - `sq pools list` — Rich table of all pools (Name, Strategy, Members, Source)
-  - `sq pools show <name>` — pool members with alias metadata + last 10 selections from run history
-  - `sq pools reset <name>` — clear round-robin state for a pool; errors clearly on unknown names
-  - `sq pools` (no subcommand) behaves like `sq pools list`
-- **Model pool infrastructure (slice 180).** Named groups of model aliases with
-  selection strategies for review diversity and cost management.
-  - Four strategies: `random`, `round-robin`, `cheapest`, `weighted-random`
-  - Round-robin state persists across runs in `~/.config/squadron/pool-state.toml`
-  - Three built-in pools ship in `src/squadron/data/pools.toml`:
-    `review` (round-robin, mid-tier), `high` (random, strongest), `cheap` (cheapest, lowest-cost)
-  - User overrides in `~/.config/squadron/pools.toml` layer on top of built-ins
-  - Pool entries validated against alias registry at load time
-  - Public API: `squadron.pipeline.intelligence.pools`
+  - `sq pools list` — Rich table of all configured pools (Name, Strategy, Members, Source)
+  - `sq pools list <name>` — detail view: pool metadata, members table, last 10 selections
+  - `sq pools reset <name>` — clear round-robin position for a named pool
+- **Built-in model pools.** Three pools ship out of the box in the alias registry:
+  `review` (round-robin, mid-tier), `high` (random, strongest), `cheap` (cheapest).
+  User overrides in `~/.config/squadron/pools.toml` layer on top.
+- **Four selection strategies:** `random`, `round-robin`, `cheapest`, `weighted-random`.
+  Round-robin position persists across runs in `~/.config/squadron/pool-state.toml`.
 
 ## [0.3.14] - 20260412
 
