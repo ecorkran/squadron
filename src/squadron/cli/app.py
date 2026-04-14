@@ -15,6 +15,7 @@ from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import list_agents
 from squadron.cli.commands.message import message
 from squadron.cli.commands.models import models_app
+from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.review import review_app
 from squadron.cli.commands.run import run as run_command
 from squadron.cli.commands.serve import serve
@@ -41,6 +42,7 @@ app.command("history")(history)
 app.command("shutdown")(shutdown)
 app.add_typer(review_app, name="review")
 app.add_typer(models_app, name="models")
+app.add_typer(pools_app, name="pools")
 app.add_typer(config_app, name="config")
 app.add_typer(auth_app, name="auth")
 app.command("run")(run_command)
