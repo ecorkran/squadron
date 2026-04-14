@@ -285,20 +285,20 @@ Follows the same structure as `src/squadron/cli/commands/models.py`.
 ```
 sq pools                     → list all pools (alias for sq pools list)
 sq pools list                → tabular list: Name | Strategy | Members | Source
-sq pools show <name>         → pool members + recent selections from run state files
+sq pools list <name>         → pool members + recent selections from run state files
 sq pools reset <name>        → clear round-robin state for a named pool
 ```
 
-**`sq pools list`:** Calls `PoolLoader.load().list_pools()`, renders a
-Rich table. Columns: Alias (pool name), Strategy, Members (count), Source
+**`sq pools list`** (no argument): Calls `PoolLoader.load().list_pools()`, renders a
+Rich table. Columns: Name, Strategy, Members (count), Source
 ("(user)" if from `~/.config/squadron/pools.toml`, empty if built-in).
 
-**`sq pools show <name>`:** Calls `PoolLoader.load().get_pool(name)`,
-displays full member list with alias metadata (model_id, cost_tier).
-Then scans the most recent 20 run state files in
-`~/.config/squadron/runs/` for `pool_selections` entries matching the
-pool name, shows last 10 with timestamp, step_name, and selected alias.
-If no recent selections exist, prints "(no recent selections)".
+**`sq pools list <name>`:** Calls `PoolLoader.load().get_pool(name)`,
+displays the pool description, then a Rich table of members with columns:
+Alias, Model ID, Cost Tier. Then scans the most recent 20 run state files
+in `~/.config/squadron/runs/` for `pool_selections` entries matching the
+pool name, shows last 10 with timestamp, step_name, and selected alias
+in a table. If no recent selections exist, prints "(no recent selections)".
 
 **`sq pools reset <name>`:** Calls `pool_backend.reset_pool_state(name)`,
 confirms with a message. Errors if the pool does not exist.
@@ -376,10 +376,10 @@ Verified 20260414 against implementation.
 sq pools list
 # Output: Rich table with cheap/high/review, strategies, member counts ✓
 
-# 2. Confirm pool detail works
-sq pools show review
-# Output: Members (minimax, glm5, kimi25, grok-fast) with alias metadata
-#         Recent selections: "(no recent selections)" if no pool runs yet ✓
+# 2. Confirm pool detail works (list with pool name)
+sq pools list review
+# Output: Pool description, then table of members (Alias | Model ID | Cost Tier)
+#         Then recent selections: "(no recent selections)" if no pool runs yet ✓
 # Note: legacy schema_version=1 run files produce "Skipping unreadable state file"
 #       log warnings — expected behavior, not an error.
 

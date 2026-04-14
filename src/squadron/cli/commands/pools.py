@@ -81,19 +81,20 @@ def pools_default(ctx: typer.Context) -> None:
 
 
 @pools_app.command("list")
-def pools_list() -> None:
-    """List all available model pools."""
-    _show_pools()
+def pools_list(
+    name: str | None = typer.Argument(None, help="Pool name to inspect (optional)."),
+) -> None:
+    """List all available model pools, or show detail for a specific pool."""
+    if name is None:
+        # No argument: show all pools
+        _show_pools()
+    else:
+        # With name: show pool detail
+        _show_pool_detail(name)
 
 
-# ---------------------------------------------------------------------------
-# sq pools show <name>
-# ---------------------------------------------------------------------------
-
-
-@pools_app.command("show")
-def pools_show(name: str = typer.Argument(..., help="Pool name to inspect.")) -> None:
-    """Show members and recent selections for a named pool."""
+def _show_pool_detail(name: str) -> None:
+    """Print members and recent selections for a named pool."""
     pool = _get_pool_or_exit(name)
 
     console = Console()
@@ -108,14 +109,21 @@ def pools_show(name: str = typer.Argument(..., help="Pool name to inspect.")) ->
     from squadron.models.aliases import get_all_aliases
 
     aliases = get_all_aliases()
+    member_table = Table(show_header=True, header_style="bold")
+    member_table.add_column("Alias", style="cyan")
+    member_table.add_column("Model ID")
+    member_table.add_column("Cost Tier", style="dim")
+
     for member in pool.models:  # type: ignore[union-attr]
         alias_info = aliases.get(member)
         if alias_info:
             model_id = alias_info.get("model", "")
             cost_tier = alias_info.get("cost_tier", "")
-            console.print(f"  {member}  ({model_id})  [{cost_tier}]")
+            member_table.add_row(member, str(model_id), str(cost_tier))
         else:
-            console.print(f"  {member}")
+            member_table.add_row(member, "", "")
+
+    console.print(member_table)
 
     # Recent selections from run state files
     console.print("\n[bold]Recent selections:[/bold]")
@@ -133,11 +141,19 @@ def pools_show(name: str = typer.Argument(..., help="Pool name to inspect.")) ->
     if not recent_selections:
         console.print("  (no recent selections)")
     else:
+        selections_table = Table(show_header=True, header_style="bold")
+        selections_table.add_column("Timestamp")
+        selections_table.add_column("Step")
+        selections_table.add_column("Selected Alias", style="cyan")
+
         for entry in recent_selections[-10:]:
-            console.print(
-                f"  {entry.get('timestamp')}  "
-                f"{entry.get('step_name')}  →  {entry.get('selected_alias')}"
+            selections_table.add_row(
+                str(entry.get("timestamp")),
+                str(entry.get("step_name")),
+                str(entry.get("selected_alias")),
             )
+
+        console.print(selections_table)
 
 
 # ---------------------------------------------------------------------------

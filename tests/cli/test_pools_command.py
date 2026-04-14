@@ -52,32 +52,34 @@ class TestPoolsList:
 
 
 # ---------------------------------------------------------------------------
-# sq pools show
+# sq pools list <name> (pool detail)
 # ---------------------------------------------------------------------------
 
 
 class TestPoolsShow:
-    def test_show_known_pool_exits_zero(self, cli_runner: CliRunner) -> None:
-        result = _invoke(cli_runner, "show", "review")
+    def test_list_known_pool_exits_zero(self, cli_runner: CliRunner) -> None:
+        result = _invoke(cli_runner, "list", "review")
         assert result.exit_code == 0
 
-    def test_show_contains_strategy(self, cli_runner: CliRunner) -> None:
-        result = _invoke(cli_runner, "show", "review")
+    def test_list_pool_contains_strategy(self, cli_runner: CliRunner) -> None:
+        result = _invoke(cli_runner, "list", "review")
         assert "round-robin" in result.output
 
-    def test_show_contains_at_least_one_member(self, cli_runner: CliRunner) -> None:
-        result = _invoke(cli_runner, "show", "review")
+    def test_list_pool_contains_at_least_one_member(
+        self, cli_runner: CliRunner
+    ) -> None:
+        result = _invoke(cli_runner, "list", "review")
         # At least one of the known review pool members must appear
         assert any(
             m in result.output for m in ["minimax", "glm5", "kimi25", "grok-fast"]
         )
 
-    def test_show_unknown_pool_exits_nonzero(self, cli_runner: CliRunner) -> None:
-        result = _invoke(cli_runner, "show", "nonexistent")
+    def test_list_unknown_pool_exits_nonzero(self, cli_runner: CliRunner) -> None:
+        result = _invoke(cli_runner, "list", "nonexistent")
         assert result.exit_code != 0
 
-    def test_show_unknown_pool_prints_error(self, cli_runner: CliRunner) -> None:
-        result = _invoke(cli_runner, "show", "nonexistent")
+    def test_list_unknown_pool_prints_error(self, cli_runner: CliRunner) -> None:
+        result = _invoke(cli_runner, "list", "nonexistent")
         assert "nonexistent" in result.output or "nonexistent" in (result.stdout or "")
 
 
