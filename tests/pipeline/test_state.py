@@ -938,3 +938,108 @@ class TestActiveCompactSummaryForResume:
         s5 = _make_summary(key="5:b", source_step_index=5, source_step_name="b")
         state = self._state_with([s2, s5])
         assert state.active_compact_summary_for_resume(4) == s2
+
+
+# ---------------------------------------------------------------------------
+# T-pools: Pool selection logging and schema migration (slice 181)
+# ---------------------------------------------------------------------------
+
+
+def _make_pool_selection() -> object:
+    """Return a PoolSelection with predictable field values."""
+    from datetime import UTC, datetime
+
+    from squadron.pipeline.intelligence.pools.models import PoolSelection
+
+    return PoolSelection(
+        pool_name="review",
+        selected_alias="minimax",
+        strategy="round-robin",
+        step_name="design-0",
+        action_type="dispatch",
+        timestamp=datetime(2026, 4, 14, 12, 0, 0, tzinfo=UTC),
+    )
+
+
+class TestPoolSelectionLogging:
+    """Tests for StateManager.log_pool_selection and RunState.pool_selections."""
+
+    def test_log_pool_selection_appends_entry(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipe", {})
+        sel = _make_pool_selection()
+        mgr.log_pool_selection(run_id, sel)
+
+        state = mgr.load(run_id)
+        assert len(state.pool_selections) == 1
+        entry = state.pool_selections[0]
+        assert entry["pool_name"] == "review"
+        assert entry["selected_alias"] == "minimax"
+        assert entry["strategy"] == "round-robin"
+        assert entry["step_name"] == "design-0"
+        assert entry["action_type"] == "dispatch"
+        assert entry["timestamp"] == "2026-04-14T12:00:00+00:00"
+
+    def test_log_pool_selection_appends_multiple(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipe", {})
+        sel = _make_pool_selection()
+        mgr.log_pool_selection(run_id, sel)
+        mgr.log_pool_selection(run_id, sel)
+
+        state = mgr.load(run_id)
+        assert len(state.pool_selections) == 2
+
+    def test_schema_v3_file_loads_with_empty_pool_selections(
+        self, tmp_path: Path
+    ) -> None:
+        """A schema_version=3 state file must load with pool_selections=[]."""
+        state_data = {
+            "schema_version": 3,
+            "run_id": "run-20260101-old-abc12345",
+            "pipeline": "old-pipe",
+            "params": {},
+            "execution_mode": "sdk",
+            "started_at": "2026-01-01T00:00:00+00:00",
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "status": "completed",
+            "current_step": None,
+            "completed_steps": [],
+            "checkpoint": None,
+            "compact_summaries": {},
+        }
+        path = tmp_path / "run-20260101-old-abc12345.json"
+        path.write_text(json.dumps(state_data), encoding="utf-8")
+
+        mgr = StateManager(runs_dir=tmp_path)
+        state = mgr.load("run-20260101-old-abc12345")
+        assert state.pool_selections == []
+
+    def test_schema_v4_round_trips(self, tmp_path: Path) -> None:
+        """State file written at v4 loads correctly."""
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("test-pipe", {})
+        mgr.log_pool_selection(run_id, _make_pool_selection())
+
+        state = mgr.load(run_id)
+        assert state.schema_version == 4
+        assert len(state.pool_selections) == 1
+
+    def test_unsupported_schema_raises(self, tmp_path: Path) -> None:
+        """Schema version 2 and 5 must raise SchemaVersionError."""
+        mgr = StateManager(runs_dir=tmp_path)
+        for bad_version in (2, 5):
+            state_data = {
+                "schema_version": bad_version,
+                "run_id": f"run-bad-{bad_version}",
+                "pipeline": "p",
+                "params": {},
+                "execution_mode": "sdk",
+                "started_at": "2026-01-01T00:00:00+00:00",
+                "updated_at": "2026-01-01T00:00:00+00:00",
+                "status": "completed",
+            }
+            path = tmp_path / f"run-bad-{bad_version}.json"
+            path.write_text(json.dumps(state_data), encoding="utf-8")
+            with pytest.raises(SchemaVersionError):
+                mgr.load(f"run-bad-{bad_version}")

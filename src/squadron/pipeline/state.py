@@ -40,7 +40,8 @@ __all__ = [
     "SchemaVersionError",
 ]
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
+_SUPPORTED_SCHEMA_VERSIONS = {3, 4}
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +127,8 @@ class RunState(BaseModel):
     checkpoint: CheckpointState | None = None
     compact_summaries: dict[str, CompactSummary] = {}
 
+    pool_selections: list[dict[str, object]] = []
+
     def active_compact_summary_for_resume(
         self, resume_step_index: int
     ) -> CompactSummary | None:
@@ -177,7 +180,7 @@ class StateManager:
         """Read, parse, and validate a state file. Raises on version mismatch."""
         raw = json.loads(path.read_text(encoding="utf-8"))
         version = raw.get("schema_version")
-        if version != _SCHEMA_VERSION:
+        if version not in _SUPPORTED_SCHEMA_VERSIONS:
             raise SchemaVersionError(version)
         return RunState.model_validate(raw)
 
@@ -323,6 +326,30 @@ class StateManager:
         """
         state = self.load(run_id)
         state.compact_summaries[summary.key] = summary
+        state.updated_at = datetime.now(UTC)
+        self._write_atomic(
+            self._state_path(run_id),
+            json.dumps(state.model_dump(mode="json"), indent=2),
+        )
+
+    def log_pool_selection(self, run_id: str, selection: object) -> None:
+        """Append a pool selection record to the run's state file.
+
+        ``selection`` must be a ``PoolSelection`` dataclass; the type is
+        declared as ``object`` to avoid a module-level import of the pools
+        package (which would create a circular dependency).
+        """
+        state = self.load(run_id)
+        # PoolSelection is a frozen dataclass — access attrs directly.
+        entry: dict[str, object] = {
+            "pool_name": selection.pool_name,  # type: ignore[union-attr]
+            "selected_alias": selection.selected_alias,  # type: ignore[union-attr]
+            "strategy": selection.strategy,  # type: ignore[union-attr]
+            "step_name": selection.step_name,  # type: ignore[union-attr]
+            "action_type": selection.action_type,  # type: ignore[union-attr]
+            "timestamp": selection.timestamp.isoformat(),  # type: ignore[union-attr]
+        }
+        state.pool_selections.append(entry)
         state.updated_at = datetime.now(UTC)
         self._write_atomic(
             self._state_path(run_id),
