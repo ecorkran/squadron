@@ -13,6 +13,7 @@ The module-level registry maps strategy name strings to singleton instances.
 from __future__ import annotations
 
 import random as _random
+from typing import Protocol, runtime_checkable
 
 from squadron.pipeline.intelligence.pools.models import (
     ModelPool,
@@ -20,6 +21,14 @@ from squadron.pipeline.intelligence.pools.models import (
     SelectionContext,
     StrategyNotFoundError,
 )
+
+
+@runtime_checkable
+class PoolStrategy(Protocol):
+    """Protocol for pool selection strategies."""
+
+    def select(self, pool: ModelPool, context: SelectionContext) -> str: ...
+
 
 # Single source of truth for cost tier ordering.  Lower rank = cheaper.
 COST_TIER_RANK: dict[str, int] = {
@@ -111,7 +120,7 @@ class WeightedRandomStrategy:
 # Strategy registry
 # ---------------------------------------------------------------------------
 
-_STRATEGY_REGISTRY: dict[str, object] = {
+_STRATEGY_REGISTRY: dict[str, PoolStrategy] = {
     "random": RandomStrategy(),
     "round-robin": RoundRobinStrategy(),
     "cheapest": CheapestStrategy(),
@@ -119,7 +128,7 @@ _STRATEGY_REGISTRY: dict[str, object] = {
 }
 
 
-def register_strategy(name: str, strategy: object) -> None:
+def register_strategy(name: str, strategy: PoolStrategy) -> None:
     """Register a named strategy in the module-level registry.
 
     Allows callers to add custom strategies beyond the four built-ins.
@@ -127,7 +136,7 @@ def register_strategy(name: str, strategy: object) -> None:
     _STRATEGY_REGISTRY[name] = strategy
 
 
-def get_strategy(name: str) -> object:
+def get_strategy(name: str) -> PoolStrategy:
     """Return the strategy registered under ``name``.
 
     Raises:

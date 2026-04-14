@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import tomli_w
 
@@ -159,9 +159,9 @@ def _parse_pools_from_toml(
             raise PoolValidationError(
                 f"Pool {pool_name!r} in {path} must be a TOML table"
             )
-        entry: dict[str, Any] = raw
+        entry: dict[str, Any] = cast(dict[str, Any], raw)
 
-        models_val = entry.get("models")
+        models_val: list[Any] | None = cast("list[Any] | None", entry.get("models"))
         if not isinstance(models_val, list) or len(models_val) == 0:
             raise PoolValidationError(
                 f"Pool {pool_name!r} in {path}: "
@@ -188,8 +188,9 @@ def _parse_pools_from_toml(
         weights: dict[str, float] | None = None
         weights_val = entry.get("weights")
         if isinstance(weights_val, dict):
-            _validate_weights(pool_name, weights_val, models, path)
-            weights = {k: float(v) for k, v in weights_val.items()}
+            weights_dict: dict[str, Any] = cast(dict[str, Any], weights_val)
+            _validate_weights(pool_name, weights_dict, models, path)
+            weights = {str(k): float(v) for k, v in weights_dict.items()}
 
         result[pool_name] = ModelPool(
             name=pool_name,
@@ -220,7 +221,7 @@ def _validate_weights(
 def _validate_pool_aliases(
     pool_name: str,
     pool: ModelPool,
-    valid_aliases: dict,
+    valid_aliases: dict[str, Any],
 ) -> None:
     """Validate that every model entry in pool is a known alias.
 
@@ -230,7 +231,7 @@ def _validate_pool_aliases(
     """
     for member in pool.models:
         if member not in valid_aliases:
-            sample = sorted(valid_aliases)[:20]
+            sample: list[str] = sorted(valid_aliases.keys())[:20]
             raise PoolValidationError(
                 f"Pool {pool_name!r}: unknown alias {member!r}. "
                 f"Known aliases (first 20): {sample}"
@@ -324,7 +325,7 @@ def select_from_pool(pool: ModelPool) -> str:
         pool_state=pool_state,
     )
     strategy = get_strategy(pool.strategy)
-    selected: str = strategy.select(pool, context)  # type: ignore[union-attr]
+    selected: str = strategy.select(pool, context)
 
     if pool.strategy == _ROUND_ROBIN_STRATEGY and context.pool_state is not None:
         save_pool_state(pool.name, context.pool_state)

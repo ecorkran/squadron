@@ -14,6 +14,7 @@ from squadron.pipeline.intelligence.pools import (
     get_all_pools,
     load_builtin_pools,
 )
+from squadron.pipeline.intelligence.pools.models import ModelPool
 from squadron.pipeline.state import SchemaVersionError, StateManager
 
 _logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ pools_app = typer.Typer(
 # ---------------------------------------------------------------------------
 
 
-def _get_pool_or_exit(name: str) -> object:
+def _get_pool_or_exit(name: str) -> ModelPool:
     """Return the named pool or print an error and exit 1."""
     backend = DefaultPoolBackend()
     try:
@@ -98,11 +99,11 @@ def _show_pool_detail(name: str) -> None:
     pool = _get_pool_or_exit(name)
 
     console = Console()
-    console.print(f"[bold cyan]{pool.name}[/bold cyan]")  # type: ignore[union-attr]
-    if pool.description:  # type: ignore[union-attr]
+    console.print(f"[bold cyan]{pool.name}[/bold cyan]")
+    if pool.description:
         console.print(f"  {pool.description}")
-    console.print(f"  Strategy: {pool.strategy}")  # type: ignore[union-attr]
-    if pool.weights:  # type: ignore[union-attr]
+    console.print(f"  Strategy: {pool.strategy}")
+    if pool.weights:
         console.print(f"  Weights: {pool.weights}")
 
     console.print("\n[bold]Members:[/bold]")
@@ -114,12 +115,12 @@ def _show_pool_detail(name: str) -> None:
     member_table.add_column("Model ID")
     member_table.add_column("Cost Tier", style="dim")
 
-    for member in pool.models:  # type: ignore[union-attr]
+    for member in pool.models:
         alias_info = aliases.get(member)
         if alias_info:
-            model_id = alias_info.get("model", "")
+            model_id = alias_info["model"]
             cost_tier = alias_info.get("cost_tier", "")
-            member_table.add_row(member, str(model_id), str(cost_tier))
+            member_table.add_row(member, model_id, cost_tier)
         else:
             member_table.add_row(member, "", "")
 
