@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Squadron stderr file
+sq_stderr.txt
+
 # C extensions
 *.so
 

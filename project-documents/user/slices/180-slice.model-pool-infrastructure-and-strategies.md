@@ -73,7 +73,7 @@ commands — that is slice 181.
 ### Out of Scope
 
 - **Model resolver integration** (`pool:` prefix handling) — slice 181.
-- **CLI commands** (`sq pools`, `sq pools show`, `sq pools reset`) —
+- **CLI commands** (`sq pools`, `sq pools list`, `sq pools reset`) —
   slice 181.
 - **Fan-out model lists from pools** — slice 182.
 - **Escalation target pools** — slice 185.
@@ -502,7 +502,7 @@ members = ["nonexistent-alias"]
 ### Scenario 5: Pool Listing (requires slice 181)
 
 ```bash
-sq pools
+sq pools list
 # Shows: review (round-robin, 4 members), high (random, 3 members), cheap (cheapest, 6 members)
 ```
 
