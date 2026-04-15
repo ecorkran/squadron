@@ -1,6 +1,3 @@
----
-description: Design principles for code reviews. Injected when running sq review code.
----
 
 ### Design Principles
 
