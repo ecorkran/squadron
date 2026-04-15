@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260414
+dateUpdated: 20260415
 ---
 
 # Development Log
@@ -11,6 +11,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).  This file differs from
 CHANGELOG.md, in that this file is written from implementor perspective where CHANGELOG.md is
 written from user perspective.
+
+---
+
+## 20260415
+
+### Slice 168: `sq review code` — Slice Implementation Review — Complete
+
+Added commit-message grep as step 3 in `resolve_slice_diff_range` (`src/squadron/review/git_utils.py`). `sq review code <N>` now resolves a useful diff range for slices merged directly to main with no surviving branch. Single-commit edge case handled via `{sha}^!` syntax. `--fan N` flag added to `sq review code` as a placeholder for slice 182 fan-out; warns and proceeds. 12 new tests (1598 total). All passing, pyright clean.
+
+**Commit:** `b5df568` feat: resolve slice impl diff via commit grep
 
 ---
 

@@ -6,8 +6,8 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [167-per-action-model-override-convention]
 interfaces: []
 dateCreated: 20260414
-dateUpdated: 20260414
-status: not_started
+dateUpdated: 20260415
+status: complete
 ---
 
 # Slice Design: `sq review code` — Slice Implementation Review
@@ -146,3 +146,58 @@ sq review code --diff main~5                # existing, unchanged
   no slice number) is unchanged.
 - Resolution path tests cover all four cases (branch, merge commit,
   commit grep, fallback).
+
+## Verification Walkthrough
+
+All commands run from the repo root. Nested Claude Code sessions cannot
+call `sq review code` end-to-end; the first two steps verify the diff
+resolution layer directly and the third verifies the CLI surface.
+
+**1. Confirm commit grep resolves slice 181's range:**
+
+```bash
+git log --oneline --all --grep='\b181\b'
+```
+
+Expected: several commits including `4284749 feat: slice 181 — pool resolver
+integration and CLI`. The oldest hash appears last, newest first.
+
+**2. Verify `_find_commit_range` returns the correct format:**
+
+```python
+python3 -c "
+from unittest.mock import patch, MagicMock
+from squadron.review.git_utils import _find_commit_range
+
+mock = MagicMock()
+mock.returncode = 0
+mock.stdout = 'd257859 feat: add pools CLI\n4284749 feat: slice 181\n'
+with patch('squadron.review.git_utils.subprocess.run', return_value=mock):
+    print(_find_commit_range(181, '.'))
+"
+```
+
+Expected output: `4284749^..d257859`
+
+**3. Confirm `--fan` flag is present and warns cleanly:**
+
+```bash
+uv run sq review code --help | grep fan
+```
+
+Expected output includes: `--fan  INTEGER  Fan-out width (reserved for slice 182; not yet functional)`
+
+**4. Confirm tests pass:**
+
+```bash
+uv run pytest tests/review/test_git_utils.py -q
+```
+
+Expected: 20 passed.
+
+**Notes from implementation:**
+- Single-commit case uses `{sha}^!` (not `{sha}^..{sha}` which is empty).
+- Commit grep will pick up false positives (e.g. docs mentioning "181");
+  `diff_exclude_patterns` on the code template strips `.md` and all non-code
+  files before the diff reaches the reviewer. This is acceptable in v1.
+- `--fan` warning uses Rich yellow formatting via `rprint`.

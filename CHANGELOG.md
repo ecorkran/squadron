@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq review code <N>` now resolves the correct diff for slices merged directly to main (no surviving branch) by grepping commit messages for the slice number.
+- `sq review code --fan N` flag accepted as a placeholder for future fan-out support (slice 182); currently warns and proceeds normally.
+
 ## [0.4.0] - 20260414
 
 ### Added
