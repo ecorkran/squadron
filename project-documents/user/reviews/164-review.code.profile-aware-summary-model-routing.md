@@ -13,48 +13,32 @@ dateUpdated: 20260415
 findings:
   - id: F001
     severity: pass
-    category: typing
-    summary: "Type safety and forward reference handling"
-    location: src/squadron/cli/commands/summary_run.py:1
+    category: code-quality
+    summary: "summary_oneshot.py - Clean implementation"
   - id: F002
     severity: pass
-    category: security
-    summary: "Shell parameter escaping"
-    location: src/squadron/pipeline/prompt_renderer.py:280
+    category: error-handling
+    summary: "summary_run.py - Proper CLI error handling"
   - id: F003
     severity: pass
-    category: error-handling
-    summary: "Specific exception handling"
-    location: src/squadron/cli/commands/summary_run.py:38-43
+    category: code-quality
+    summary: "summary.py - Clear validation and branching"
   - id: F004
     severity: pass
-    category: error-handling
-    summary: "Fail-fast validation for incompatible features"
-    location: src/squadron/pipeline/actions/summary.py:140-153
+    category: security
+    summary: "prompt_renderer.py - Proper shell escaping"
   - id: F005
     severity: pass
-    category: design
-    summary: "Open/Closed via profile branching"
-    location: src/squadron/pipeline/summary_oneshot.py:45-86
+    category: testing
+    summary: "Test coverage is comprehensive"
   - id: F006
-    severity: pass
-    category: testing
-    summary: "Comprehensive test coverage"
+    severity: note
+    category: typing
+    summary: "Minor type annotation imprecision"
   - id: F007
-    severity: pass
+    severity: note
     category: testing
-    summary: "Test isolation improvement"
-    location: tests/review/test_rules.py:54-58
-  - id: F008
-    severity: pass
-    category: error-handling
-    summary: "Async cleanup via try/finally"
-    location: src/squadron/pipeline/summary_oneshot.py:82-86
-  - id: F009
-    severity: pass
-    category: documentation
-    summary: "Docstring completeness"
-    location: src/squadron/pipeline/summary_oneshot.py:1-12, src/squadron/cli/commands/summary_run.py:1-7
+    summary: "test_rules.py fix is appropriate"
 ---
 
 # Review: code — slice 164
@@ -64,47 +48,49 @@ findings:
 
 ## Findings
 
-### [PASS] Type safety and forward reference handling
+### [PASS] summary_oneshot.py - Clean implementation
 
-The file correctly uses `from __future__ import annotations` for Python 3.12+ compatibility, ensuring clean forward reference resolution. Union types use the modern `str | None` syntax.
+New file `src/squadron/pipeline/summary_oneshot.py:1-91` provides a well-designed abstraction for one-shot summary execution. The `is_sdk_profile()` predicate is simple and correctly routes between SDK and non-SDK paths. The `capture_summary_via_profile()` async function properly handles agent lifecycle with `finally`-guarded shutdown, filters SDK_RESULT_TYPE messages, and logs execution details. The pattern mirrors `run_review_with_profile()` as documented.
 
-### [PASS] Shell parameter escaping
+### [PASS] summary_run.py - Proper CLI error handling
 
-The code correctly uses `shlex.quote(str(value))` when constructing the `_summary-run` command with user-provided pipeline parameters. This prevents shell injection vulnerabilities when values contain spaces or special characters. The corresponding test `test_non_sdk_profile_quotes_params` in `tests/pipeline/test_prompt_renderer.py` validates this behavior correctly.
+New file `src/squadron/cli/commands/summary_run.py:1-71` implements the hidden `_summary-run` command with excellent error handling:
+- Explicit validation for `--param` format (line 39-45)
+- Catches `FileNotFoundError` for missing templates (line 54-57)
+- Catches `KeyError` for unknown profiles (line 63-66)
+- Catches general exceptions for provider failures (line 67-70)
+- All errors print descriptive messages to stderr and exit with code 1
 
-### [PASS] Specific exception handling
+### [PASS] summary.py - Clear validation and branching
 
-The error handling in `summary_run` is well-structured:
-- `FileNotFoundError` is caught explicitly when loading templates
-- Parameter parsing validates format before use with a clear error message
-- Generic exception handling wraps provider failures with informative output
+File `src/squadron/pipeline/actions/summary.py:121-190` implements profile branching with clear validation order:
+1. Resolves model alias and profile upfront
+2. Validates rotate emit compatibility (line 133-140)
+3. Guards SDK session requirements (lines 142-150, 152-160)
+4. Branches to appropriate implementation (lines 162-176)
 
-### [PASS] Fail-fast validation for incompatible features
+The "belt-and-suspenders" comment on line 152-160 is appropriate—SDK profile + rotate requires SDK session even though it was already blocked for non-SDK profiles.
 
-The validation for ROTATE emit with non-SDK profiles follows the "fail fast" principle. Invalid state combinations are caught early at the boundary before any provider call, returning explicit `ActionResult` with descriptive errors rather than proceeding to a likely failure deeper in the call stack.
+### [PASS] prompt_renderer.py - Proper shell escaping
 
-### [PASS] Open/Closed via profile branching
+File `src/squadron/pipeline/prompt_renderer.py:277-286` correctly uses `shlex.quote()` to escape parameter values containing shell-special characters before embedding them in the generated command. The test at `test_prompt_renderer.py:335-350` verifies `shlex.split()` can recover the original value.
 
-The `capture_summary_via_profile()` function follows the existing pattern from `run_review_with_profile()` and provides a clean extension point for adding new provider profiles without modifying existing code. The `is_sdk_profile()` predicate acts as a proper abstraction boundary.
+### [PASS] Test coverage is comprehensive
 
-### [PASS] Comprehensive test coverage
+The changes include thorough test coverage:
+- `tests/cli/commands/test_summary_run.py:1-163` - CLI command tests with mocking
+- `tests/pipeline/test_summary_oneshot.py:1-200` - Unit tests for predicate and profile execution
+- `tests/pipeline/actions/test_summary.py:443-566` - Profile branching tests
+- `tests/pipeline/actions/test_compact.py:225-305` - Compact-via-summary integration
+- `tests/pipeline/test_prompt_renderer.py:314-350` - Rendering profile branching
 
-The test additions provide good coverage for the new functionality:
-- `tests/cli/commands/test_summary_run.py` covers CLI invocation, parameter parsing, error cases
-- `tests/pipeline/test_summary_oneshot.py` tests the core profile routing logic with parametrized tests
-- `tests/pipeline/actions/test_summary.py` validates the SDK vs non-SDK branching in the summary action
+### [NOTE] Minor type annotation imprecision
 
-### [PASS] Test isolation improvement
+File `src/squadron/cli/commands/summary_run.py:38` declares `params: dict[str, object]` but all values are `str` (from partition). This is acceptable for CLI parsing but technically imprecise. Not worth blocking as it doesn't cause issues in practice.
 
-The change to isolate the filesystem-dependent test by patching `resolve_rules_dir` demonstrates good testing discipline—tests should not depend on external state unless that's specifically what they're testing.
+### [NOTE] test_rules.py fix is appropriate
 
-### [PASS] Async cleanup via try/finally
-
-The `capture_summary_via_profile` function uses `try/finally` to ensure `agent.shutdown()` is called even when the provider raises an exception, preventing resource leaks. The corresponding test `test_capture_summary_shutdown_called_on_exception` validates this behavior.
-
-### [PASS] Docstring completeness
-
-Both new modules include module-level docstrings explaining their purpose and the architectural pattern they implement. The hidden command docstring correctly notes its use case for the prompt-only pipeline rendering scenario.
+File `tests/review/test_rules.py:55-60` uses `patch` to isolate the test from filesystem auto-template-rules resolution. This is the correct approach for unit testing CLI commands in isolation.
 
 ---
 
@@ -1398,11 +1384,11 @@ index 956432b..52d6784 100644
 ### CLAUDE.md (project conventions)
 
 ```
-# Project Guidelines for Claude
+### Project Guidelines for Claude
 
 [//]: # (context-forge:managed)
 
-## Core Principles
+#### Core Principles
 
 - Always resist adding complexity. Ensure it is truly necessary.
 - Never use silent fallback values. Fail explicitly with errors or obviously-placeholder values.
@@ -1410,7 +1396,7 @@ index 956432b..52d6784 100644
 - Never include credentials, API keys, or secrets in source code or comments. Load from environment variables; ensure .env is in .gitignore. Raise an issue if violations are found.
 - When debugging a failure, get the actual error message before attempting any fix. Never apply more than one speculative fix without first obtaining concrete evidence (logs, error text, stack trace) that diagnoses the root cause. If you cannot get the evidence yourself, ask the Project Manager for it.
 
-## Code Structure
+#### Code Structure
 
 - Keep source files to ~300 lines, functions to ~50 lines (excluding whitespace) where practical.
 - Program to interfaces (contracts).  Maintain clear separation between components.
@@ -1428,35 +1414,35 @@ index 956432b..52d6784 100644
 - NEVER use user-accessible labels as logical structure.  They are fragile.
 
 
-## Source Control and Builds
+#### Source Control and Builds
 - Keep commits semantic; build after all changes.
 - Git add and commit from project root at least once per task.
 - Confirm your current working directory before file/shell commands.
 
-## Parsing & Pattern Matching
+#### Parsing & Pattern Matching
 - Prefer lenient parsing over strict matching. A regex that silently fails on valid input (e.g. requiring exact whitespace counts or line-ending positions) is a bug. Parse the semantic content, not the formatting.
 - When parsing structured text (YAML, key-value pairs, etc.), handle common format variations (compact vs multi-line, varying indent levels, trailing whitespace) rather than requiring one exact layout.
 - When writing a parser, the test fixture must include the actual format that parser will consume in production.  A test that only passes on a format the real data never uses only provides false confidence.
 - If a parser returns empty/default on bad input, add at least one test using real-world input (e.g. the actual file it will parse) to catch silent failures.
   
-## Hallucination traps in prompts
+#### Hallucination traps in prompts
 If an instruction tells a reader to retrieve a value from some source, and
 that source might return empty, do not place a hardcoded example of an
 acceptable value nearby. When the source is empty, a model will reach for
 the nearest plausible token — and the example is it. This is a
 hallucination trap.
 
-### Bad
+##### Bad
 
     Print the filename (from stderr, e.g. `squadron-P4.md`).
 
-### Good
+##### Good
 
     Print the filename. The CLI emits it on a line prefixed with
     `Using: ` on stderr. If no such line is present, stop with an error.
 
 
-## Project Navigation
+#### Project Navigation
 - Follow `guide.ai-project.process` and its links for workflow.
 - Follow `file-naming-conventions` for all document naming and metadata.
 - Project guides: `project-documents/ai-project-guide/project-guides/`
@@ -1464,7 +1450,7 @@ hallucination trap.
 - Modular rules for specific technologies may exist in 
   `project-guides/rules/`.
 
-## Document Conventions
+#### Document Conventions
 
 - All markdown files must include YAML frontmatter as specified in `file-naming-conventions.md`
 - Use checklist format for all task files.  Each item and subitem should have a `[ ]` "checkbox".
@@ -1472,9 +1458,9 @@ hallucination trap.
   written — never modify or remove.
 - Keep success summaries concise and minimal.
 
-## Git Rules
+#### Git Rules
 
-### Branch Naming
+##### Branch Naming
 When working on a slice, use a branch named after the slice (without the `.md` extension but with the numeric index prefix).
 
 Before starting implementation work on a slice:
@@ -1484,7 +1470,7 @@ Before starting implementation work on a slice:
 4. Never start slice work from another slice's branch unless explicitly instructed
 5. If in doubt, STOP and ask the Project Manager
 
-### Commit Messages
+##### Commit Messages
 Use semantic commit prefixes. The goal is a readable `git log --oneline`.
 
 Format: `{type}: {short imperative summary}`
@@ -1507,13 +1493,13 @@ Actions (optional, use if applicable):
 - `extract`: primarily used in refactoring
 - `reduce`: if primary work involves reduction or streamlining
 
-### Guidelines:
+##### Guidelines:
 - Summary is imperative mood ("add X" not "added X" or "adds X")
 - Keep to ~72 characters
 - No period at end
 - Scope is optional but useful in monorepos: `feat(core): add template variable resolution`
 
-### Examples:
+##### Examples:
 feat: add context_build MCP tool
 fix: update to handle missing template directory gracefully
 refactor(core): extract service instantiation into shared helper
@@ -1631,68 +1617,60 @@ paths:
 
 ### Raw Response
 
-Let me review the code changes from this git diff against the project's conventions and language-specific best practices.
+I'll review the changed source files against the project conventions and Python best practices.
 
 ## Summary
-[overall assessment: PASS]
+[PASS]
 
 ## Findings
 
-### [PASS] Type safety and forward reference handling
-category: typing
-location: src/squadron/cli/commands/summary_run.py:1
+### [PASS] summary_oneshot.py - Clean implementation
+category: code-quality
 
-The file correctly uses `from __future__ import annotations` for Python 3.12+ compatibility, ensuring clean forward reference resolution. Union types use the modern `str | None` syntax.
+New file `src/squadron/pipeline/summary_oneshot.py:1-91` provides a well-designed abstraction for one-shot summary execution. The `is_sdk_profile()` predicate is simple and correctly routes between SDK and non-SDK paths. The `capture_summary_via_profile()` async function properly handles agent lifecycle with `finally`-guarded shutdown, filters SDK_RESULT_TYPE messages, and logs execution details. The pattern mirrors `run_review_with_profile()` as documented.
 
-### [PASS] Shell parameter escaping
+### [PASS] summary_run.py - Proper CLI error handling
+category: error-handling
+
+New file `src/squadron/cli/commands/summary_run.py:1-71` implements the hidden `_summary-run` command with excellent error handling:
+- Explicit validation for `--param` format (line 39-45)
+- Catches `FileNotFoundError` for missing templates (line 54-57)
+- Catches `KeyError` for unknown profiles (line 63-66)
+- Catches general exceptions for provider failures (line 67-70)
+- All errors print descriptive messages to stderr and exit with code 1
+
+### [PASS] summary.py - Clear validation and branching
+category: code-quality
+
+File `src/squadron/pipeline/actions/summary.py:121-190` implements profile branching with clear validation order:
+1. Resolves model alias and profile upfront
+2. Validates rotate emit compatibility (line 133-140)
+3. Guards SDK session requirements (lines 142-150, 152-160)
+4. Branches to appropriate implementation (lines 162-176)
+
+The "belt-and-suspenders" comment on line 152-160 is appropriate—SDK profile + rotate requires SDK session even though it was already blocked for non-SDK profiles.
+
+### [PASS] prompt_renderer.py - Proper shell escaping
 category: security
-location: src/squadron/pipeline/prompt_renderer.py:280
 
-The code correctly uses `shlex.quote(str(value))` when constructing the `_summary-run` command with user-provided pipeline parameters. This prevents shell injection vulnerabilities when values contain spaces or special characters. The corresponding test `test_non_sdk_profile_quotes_params` in `tests/pipeline/test_prompt_renderer.py` validates this behavior correctly.
+File `src/squadron/pipeline/prompt_renderer.py:277-286` correctly uses `shlex.quote()` to escape parameter values containing shell-special characters before embedding them in the generated command. The test at `test_prompt_renderer.py:335-350` verifies `shlex.split()` can recover the original value.
 
-### [PASS] Specific exception handling
-category: error-handling
-location: src/squadron/cli/commands/summary_run.py:38-43
-
-The error handling in `summary_run` is well-structured:
-- `FileNotFoundError` is caught explicitly when loading templates
-- Parameter parsing validates format before use with a clear error message
-- Generic exception handling wraps provider failures with informative output
-
-### [PASS] Fail-fast validation for incompatible features
-category: error-handling
-location: src/squadron/pipeline/actions/summary.py:140-153
-
-The validation for ROTATE emit with non-SDK profiles follows the "fail fast" principle. Invalid state combinations are caught early at the boundary before any provider call, returning explicit `ActionResult` with descriptive errors rather than proceeding to a likely failure deeper in the call stack.
-
-### [PASS] Open/Closed via profile branching
-category: design
-location: src/squadron/pipeline/summary_oneshot.py:45-86
-
-The `capture_summary_via_profile()` function follows the existing pattern from `run_review_with_profile()` and provides a clean extension point for adding new provider profiles without modifying existing code. The `is_sdk_profile()` predicate acts as a proper abstraction boundary.
-
-### [PASS] Comprehensive test coverage
+### [PASS] Test coverage is comprehensive
 category: testing
 
-The test additions provide good coverage for the new functionality:
-- `tests/cli/commands/test_summary_run.py` covers CLI invocation, parameter parsing, error cases
-- `tests/pipeline/test_summary_oneshot.py` tests the core profile routing logic with parametrized tests
-- `tests/pipeline/actions/test_summary.py` validates the SDK vs non-SDK branching in the summary action
+The changes include thorough test coverage:
+- `tests/cli/commands/test_summary_run.py:1-163` - CLI command tests with mocking
+- `tests/pipeline/test_summary_oneshot.py:1-200` - Unit tests for predicate and profile execution
+- `tests/pipeline/actions/test_summary.py:443-566` - Profile branching tests
+- `tests/pipeline/actions/test_compact.py:225-305` - Compact-via-summary integration
+- `tests/pipeline/test_prompt_renderer.py:314-350` - Rendering profile branching
 
-### [PASS] Test isolation improvement
+### [NOTE] Minor type annotation imprecision
+category: typing
+
+File `src/squadron/cli/commands/summary_run.py:38` declares `params: dict[str, object]` but all values are `str` (from partition). This is acceptable for CLI parsing but technically imprecise. Not worth blocking as it doesn't cause issues in practice.
+
+### [NOTE] test_rules.py fix is appropriate
 category: testing
-location: tests/review/test_rules.py:54-58
 
-The change to isolate the filesystem-dependent test by patching `resolve_rules_dir` demonstrates good testing discipline—tests should not depend on external state unless that's specifically what they're testing.
-
-### [PASS] Async cleanup via try/finally
-category: error-handling
-location: src/squadron/pipeline/summary_oneshot.py:82-86
-
-The `capture_summary_via_profile` function uses `try/finally` to ensure `agent.shutdown()` is called even when the provider raises an exception, preventing resource leaks. The corresponding test `test_capture_summary_shutdown_called_on_exception` validates this behavior.
-
-### [PASS] Docstring completeness
-category: documentation
-location: src/squadron/pipeline/summary_oneshot.py:1-12, src/squadron/cli/commands/summary_run.py:1-7
-
-Both new modules include module-level docstrings explaining their purpose and the architectural pattern they implement. The hidden command docstring correctly notes its use case for the prompt-only pipeline rendering scenario.
+File `tests/review/test_rules.py:55-60` uses `patch` to isolate the test from filesystem auto-template-rules resolution. This is the correct approach for unit testing CLI commands in isolation.
