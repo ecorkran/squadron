@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260414
 dateUpdated: 20260414
-status: complete
+status: not_started
 ---
 
 # Slice Design: Per-Action Model Override Convention
