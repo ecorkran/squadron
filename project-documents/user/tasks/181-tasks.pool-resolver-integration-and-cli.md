@@ -232,28 +232,28 @@ status: complete
 
 ### Task 10: Implement `sq pools list` (with optional pool name)
 
-- [ ] Create `src/squadron/cli/commands/pools.py` following the
+- [x] Create `src/squadron/cli/commands/pools.py` following the
   structure of `models.py`:
-  - [ ] `pools_app = typer.Typer(name="pools", help="Inspect and manage model pools.", invoke_without_command=True)`
-  - [ ] `@pools_app.callback()` invokes `list` when no subcommand
-  - [ ] `@pools_app.command("list")` function `_list_pools(name: str | None = None)`:
-    - [ ] **No name:** Calls `get_all_pools()` to fetch all pools; renders
+  - [x] `pools_app = typer.Typer(name="pools", help="Inspect and manage model pools.", invoke_without_command=True)`
+  - [x] `@pools_app.callback()` invokes `list` when no subcommand
+  - [x] `@pools_app.command("list")` function `_list_pools(name: str | None = None)`:
+    - [x] **No name:** Calls `get_all_pools()` to fetch all pools; renders
       a Rich table with columns Name, Strategy, Members (count), Source
       ("(user)" if from user config, empty if builtin)
-    - [ ] **With name:** Calls `get_pool(name)` — raises `PoolNotFoundError`
+    - [x] **With name:** Calls `get_pool(name)` — raises `PoolNotFoundError`
       if not found; CLI catches, prints clean error, exits non-zero
-      - [ ] Prints pool metadata: name, description, strategy
-      - [ ] Renders a Rich table of members with columns Alias, Model ID,
+      - [x] Prints pool metadata: name, description, strategy
+      - [x] Renders a Rich table of members with columns Alias, Model ID,
         Cost Tier (fetch metadata via `get_all_aliases()`)
-      - [ ] Scans most recent 20 run state files in `~/.config/squadron/runs/`
+      - [x] Scans most recent 20 run state files in `~/.config/squadron/runs/`
         for `pool_selections` entries where `pool_name == name`; renders a
         second table with last 10 selections (Timestamp, Step, Selected Alias)
-      - [ ] If no recent selections, prints `(no recent selections)`
-- [ ] Handle empty case: if no pools loaded, print a single informative
+      - [x] If no recent selections, prints `(no recent selections)`
+- [x] Handle empty case: if no pools loaded, print a single informative
   line and exit 0
-- [ ] Use `StateManager.list_runs()` to enumerate runs; tolerate
+- [x] Use `StateManager.list_runs()` to enumerate runs; tolerate
   schema errors on individual files (skip and continue)
-- [ ] **Success criteria:** `sq pools list` prints the three built-in
+- [x] **Success criteria:** `sq pools list` prints the three built-in
   pools as a table; `sq pools list review` prints pool detail with members
   and recent selections; `sq pools` (no subcommand) behaves like `list`
 
@@ -261,46 +261,46 @@ status: complete
 
 ### Task 11: Implement `sq pools reset <name>`
 
-- [ ] In `pools.py`, `@pools_app.command("reset")` takes required
+- [x] In `pools.py`, `@pools_app.command("reset")` takes required
   `name: str`:
-  - [ ] Calls `DefaultPoolBackend().reset_pool_state(name)` (which
+  - [x] Calls `DefaultPoolBackend().reset_pool_state(name)` (which
     delegates to `clear_pool_state`)
-  - [ ] First verify pool exists via `get_pool(name)` — if not, error
+  - [x] First verify pool exists via `get_pool(name)` — if not, error
     and exit non-zero before touching state
-  - [ ] On success, print `Reset round-robin state for pool '{name}'.`
-- [ ] **Success criteria:** After a round-robin advance, `sq pools reset
+  - [x] On success, print `Reset round-robin state for pool '{name}'.`
+- [x] **Success criteria:** After a round-robin advance, `sq pools reset
   review` clears state; `sq pools reset nope` exits non-zero
 
 ---
 
 ### Task 12: Register `pools_app` in the CLI
 
-- [ ] Edit `src/squadron/cli/app.py`:
-  - [ ] `from squadron.cli.commands.pools import pools_app`
-  - [ ] `app.add_typer(pools_app, name="pools")`
-- [ ] **Success criteria:** `sq pools --help` prints usage; `sq pools
+- [x] Edit `src/squadron/cli/app.py`:
+  - [x] `from squadron.cli.commands.pools import pools_app`
+  - [x] `app.add_typer(pools_app, name="pools")`
+- [x] **Success criteria:** `sq pools --help` prints usage; `sq pools
   list` runs
 
 ---
 
 ### Task 13: Test `sq pools` commands
 
-- [ ] Create `tests/cli/test_pools_command.py` following the pattern
+- [x] Create `tests/cli/test_pools_command.py` following the pattern
   used for `tests/cli/test_models_command.py`:
-  - [ ] Use Typer's `CliRunner` (or the existing project helper)
-  - [ ] Test `sq pools list` exits 0 and output contains `review`,
+  - [x] Use Typer's `CliRunner` (or the existing project helper)
+  - [x] Test `sq pools list` exits 0 and output contains `review`,
     `high`, `cheap`
-  - [ ] Test `sq pools list review` exits 0 and output contains
+  - [x] Test `sq pools list review` exits 0 and output contains
     `round-robin`, members table, and recent selections section
-  - [ ] Test `sq pools list nonexistent` exits non-zero with a
+  - [x] Test `sq pools list nonexistent` exits non-zero with a
     readable error
-  - [ ] Test `sq pools reset review` exits 0; subsequent
+  - [x] Test `sq pools reset review` exits 0; subsequent
     `load_pool_state("review").last_index == 0`
-  - [ ] Test `sq pools reset nonexistent` exits non-zero
-  - [ ] Test `sq pools` (no subcommand) behaves like `list`
-  - [ ] Use `tmp_path` + monkeypatched `_config_dir` for state
+  - [x] Test `sq pools reset nonexistent` exits non-zero
+  - [x] Test `sq pools` (no subcommand) behaves like `list`
+  - [x] Use `tmp_path` + monkeypatched `_config_dir` for state
     isolation
-- [ ] **Success criteria:** All CLI tests pass; no pollution of real
+- [x] **Success criteria:** All CLI tests pass; no pollution of real
   `~/.config/squadron/pool-state.toml`
 
 **Commit:** `feat: add sq pools list and reset CLI commands`
@@ -309,35 +309,35 @@ status: complete
 
 ### Task 14: Update docstring on `ModelPoolNotImplemented`
 
-- [ ] Edit `src/squadron/pipeline/resolver.py`:
-  - [ ] Change `ModelPoolNotImplemented` docstring from "reserved for
+- [x] Edit `src/squadron/pipeline/resolver.py`:
+  - [x] Change `ModelPoolNotImplemented` docstring from "reserved for
     slice 160" to "Raised when a `pool:` candidate is encountered and
     no `PoolBackend` is configured — typically a test context or a
     misconfigured runner."
-  - [ ] Update module-level docstring: replace the "reserved for slice
+  - [x] Update module-level docstring: replace the "reserved for slice
     160" line with a short description of pool support
-- [ ] **Success criteria:** Docstrings reflect real current behavior;
+- [x] **Success criteria:** Docstrings reflect real current behavior;
   no references to slice 160 remain in `resolver.py`
 
 ---
 
 ### Task 15: Final validation pass
 
-- [ ] Run `pytest tests/pipeline/intelligence/pools/` — all 180+181
+- [x] Run `pytest tests/pipeline/intelligence/pools/` — all 180+181
   tests pass
-- [ ] Run `pytest tests/pipeline/ tests/cli/` — no regressions
-- [ ] Run full `pytest` — entire suite green (expect 1478 + new tests
+- [x] Run `pytest tests/pipeline/ tests/cli/` — no regressions
+- [x] Run full `pytest` — entire suite green (expect 1478 + new tests
   from this slice)
-- [ ] Run `ruff check src/squadron/pipeline/ src/squadron/cli/commands/pools.py`
+- [x] Run `ruff check src/squadron/pipeline/ src/squadron/cli/commands/pools.py`
   — clean
-- [ ] Run `ruff format` before committing (per project feedback)
-- [ ] Manual smoke check:
-  - [ ] `sq pools list` prints table
-  - [ ] `sq pools list review` prints members and recent selections
-  - [ ] `sq pools reset review` confirms reset
-  - [ ] `sq run <some-pipeline> --model pool:review --prompt-only`
+- [x] Run `ruff format` before committing (per project feedback)
+- [x] Manual smoke check:
+  - [x] `sq pools list` prints table
+  - [x] `sq pools list review` prints members and recent selections
+  - [x] `sq pools reset review` confirms reset
+  - [x] `sq run <some-pipeline> --model pool:review --prompt-only`
     produces a run state file with a populated `pool_selections` list
-- [ ] **Success criteria:** Full suite green; all verification-walkthrough
+- [x] **Success criteria:** Full suite green; all verification-walkthrough
   steps in the slice design file complete without error
 
 **Commit:** `feat: slice 181 — pool resolver integration and CLI`
