@@ -772,6 +772,9 @@ def review_code(
 
     verbosity = _resolve_verbosity(verbose)
     resolved_cwd = _resolve_cwd(cwd)
+    # Code review runs git commands — use the git root so diff and rules work
+    # correctly even when config cwd points to a subdirectory.
+    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
 
     rules_content: str | None = None
     resolved_rules_dir: Path | None = None
@@ -785,8 +788,9 @@ def review_code(
                 rules_path = config_rules
         rules_content = _resolve_rules_content(rules_path)
 
-        # Auto-detect language rules from diff or files input
-        resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
+        # Auto-detect language rules from diff or files input.
+        # Rules live in the repo root (.claude/rules/), not the config cwd.
+        resolved_rules_dir = resolve_rules_dir(review_cwd, None, rules_dir_flag)
         if resolved_rules_dir is not None:
             file_paths = (
                 _extract_diff_paths(diff, resolved_cwd, exclude_patterns)
@@ -811,10 +815,6 @@ def review_code(
                         else f"{rules_content}\n\n---\n\n{auto_content}"
                     )
 
-    # Code review runs git commands — use the git root as cwd so diff works
-    # correctly even when the config cwd points to a subdirectory (e.g.
-    # project-documents/user). Fall back to resolved_cwd if not in a repo.
-    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
     inputs: dict[str, str] = {"cwd": review_cwd}
     if files:
         inputs["files"] = files
