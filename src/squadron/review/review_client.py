@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import glob as glob_mod
 import logging
+import re
 import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -168,6 +169,23 @@ _MAX_FILE_SIZE = 100_000  # 100KB per file
 _MAX_TOTAL_INJECTION = 500_000  # 500KB total
 _SKIP_KEYS = {"cwd", "diff", "files"}
 
+_HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
+
+
+def _demote_headings(content: str, levels: int = 2) -> str:
+    """Shift all markdown headings down by *levels* (e.g. H1→H3 when levels=2).
+
+    Headings that would exceed H6 are clamped to H6.
+    Lines that are not headings are returned unchanged.
+    """
+
+    def _shift(m: re.Match[str]) -> str:
+        hashes = m.group(1)
+        new_depth = min(len(hashes) + levels, 6)
+        return "#" * new_depth + " "
+
+    return _HEADING_RE.sub(_shift, content)
+
 
 def _truncate(content: str, label: str) -> str:
     """Truncate content exceeding _MAX_FILE_SIZE with a message."""
@@ -244,14 +262,15 @@ def _inject_file_contents(
 
     # Inject CLAUDE.md so the model can apply project conventions without
     # needing file-read tools (which one-shot API providers don't support).
+    # Headings are demoted (H1→H3, H2→H4, etc.) so they fit the same visual
+    # hierarchy as the injected rules content and don't dominate the prompt.
     cwd_for_claude = inputs.get("cwd", ".")
     for candidate in ("CLAUDE.md", ".claude/CLAUDE.md"):
         claude_path = Path(cwd_for_claude) / candidate
         if claude_path.is_file():
             try:
-                _add_injection(
-                    "CLAUDE.md (project conventions)", claude_path.read_text()
-                )
+                content = _demote_headings(claude_path.read_text(), levels=2)
+                _add_injection("CLAUDE.md (project conventions)", content)
             except OSError as exc:
                 _logger.warning("Failed to read %s: %s", claude_path, exc)
             break

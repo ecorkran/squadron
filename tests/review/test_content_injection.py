@@ -10,6 +10,7 @@ import pytest
 from squadron.review.review_client import (
     _MAX_FILE_SIZE,
     _MAX_TOTAL_INJECTION,
+    _demote_headings,
     _inject_file_contents,
 )
 
@@ -194,6 +195,46 @@ def test_diff_failure_is_skipped(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Heading demotion
+# ---------------------------------------------------------------------------
+
+
+def test_demote_headings_shifts_by_two() -> None:
+    """H1→H3, H2→H4, H3→H5 with default levels=2."""
+    content = "# Title\n## Section\n### Sub\nPlain text."
+    result = _demote_headings(content, levels=2)
+    assert result == "### Title\n#### Section\n##### Sub\nPlain text."
+
+
+def test_demote_headings_clamps_at_h6() -> None:
+    """Headings that would exceed H6 are clamped to H6."""
+    content = "##### Deep\n###### Already max"
+    result = _demote_headings(content, levels=2)
+    assert result == "###### Deep\n###### Already max"
+
+
+def test_demote_headings_leaves_non_headings_unchanged() -> None:
+    """Lines that are not headings pass through unmodified."""
+    content = "Normal line\n  # indented (not a heading)\n#NoSpace"
+    result = _demote_headings(content, levels=2)
+    # Only ATX headings at column 0 with a space after # are demoted
+    assert "Normal line" in result
+    assert "  # indented (not a heading)" in result
+    assert "#NoSpace" in result
+
+
+def test_demote_headings_empty_string() -> None:
+    """Empty input returns empty output without error."""
+    assert _demote_headings("", levels=2) == ""
+
+
+def test_demote_headings_levels_zero() -> None:
+    """levels=0 returns content unchanged."""
+    content = "# Title\n## Section"
+    assert _demote_headings(content, levels=0) == content
+
+
+# ---------------------------------------------------------------------------
 # CLAUDE.md injection
 # ---------------------------------------------------------------------------
 
@@ -209,6 +250,19 @@ def test_claude_md_injected_when_present(tmp_path: Path) -> None:
     result = _inject_file_contents(prompt, inputs)
     assert "CLAUDE.md (project conventions)" in result
     assert "No magic defaults." in result
+
+
+def test_claude_md_headings_are_demoted(tmp_path: Path) -> None:
+    """CLAUDE.md H1/H2 headings are demoted by 2 levels on injection."""
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text("# Core Principles\n## Code Style\n### Detail")
+
+    result = _inject_file_contents("Review", {"cwd": str(tmp_path)})
+    assert "### Core Principles" in result
+    assert "#### Code Style" in result
+    assert "##### Detail" in result
+    # Original H1 must not appear
+    assert "\n# Core Principles" not in result
 
 
 def test_claude_md_absent_is_silently_skipped(tmp_path: Path) -> None:
