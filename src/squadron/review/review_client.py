@@ -242,6 +242,20 @@ def _inject_file_contents(
         cwd = inputs.get("cwd", ".")
         _inject_glob_files(files_glob, cwd, _add_injection)
 
+    # Inject CLAUDE.md so the model can apply project conventions without
+    # needing file-read tools (which one-shot API providers don't support).
+    cwd_for_claude = inputs.get("cwd", ".")
+    for candidate in ("CLAUDE.md", ".claude/CLAUDE.md"):
+        claude_path = Path(cwd_for_claude) / candidate
+        if claude_path.is_file():
+            try:
+                _add_injection(
+                    "CLAUDE.md (project conventions)", claude_path.read_text()
+                )
+            except OSError as exc:
+                _logger.warning("Failed to read %s: %s", claude_path, exc)
+            break
+
     if not injections:
         return prompt
 

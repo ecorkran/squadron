@@ -46,10 +46,10 @@ def test_cwd_key_is_skipped(tmp_path: Path) -> None:
     assert "should not appear" not in result
 
 
-def test_nonexistent_file_is_skipped() -> None:
+def test_nonexistent_file_is_skipped(tmp_path: Path) -> None:
     """Non-existent file paths are skipped without error."""
     prompt = "Review this"
-    inputs = {"input": "/nonexistent/path/to/file.md", "cwd": "."}
+    inputs = {"input": "/nonexistent/path/to/file.md", "cwd": str(tmp_path)}
 
     result = _inject_file_contents(prompt, inputs)
     assert result == prompt
@@ -79,7 +79,7 @@ def test_large_file_is_truncated(tmp_path: Path) -> None:
     large_file.write_text(content)
 
     prompt = "Review this"
-    inputs = {"input": str(large_file)}
+    inputs = {"input": str(large_file), "cwd": str(tmp_path)}
 
     result = _inject_file_contents(prompt, inputs)
     assert "truncated" in result.lower()
@@ -166,10 +166,10 @@ def test_diff_output_in_prompt() -> None:
     assert "+added line" in result
 
 
-def test_large_diff_is_truncated() -> None:
+def test_large_diff_is_truncated(tmp_path: Path) -> None:
     """Large diffs are truncated at _MAX_FILE_SIZE."""
     prompt = "Review code"
-    inputs = {"diff": "main", "cwd": "."}
+    inputs = {"diff": "main", "cwd": str(tmp_path)}
 
     with patch("squadron.review.review_client.subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
@@ -179,10 +179,10 @@ def test_large_diff_is_truncated() -> None:
     assert "truncated" in result.lower()
 
 
-def test_diff_failure_is_skipped() -> None:
+def test_diff_failure_is_skipped(tmp_path: Path) -> None:
     """Failed git diff is silently skipped."""
     prompt = "Review code"
-    inputs = {"diff": "nonexistent-ref", "cwd": "."}
+    inputs = {"diff": "nonexistent-ref", "cwd": str(tmp_path)}
 
     with patch("squadron.review.review_client.subprocess.run") as mock_run:
         mock_run.return_value.returncode = 128
@@ -190,6 +190,33 @@ def test_diff_failure_is_skipped() -> None:
         mock_run.return_value.stdout = ""
         result = _inject_file_contents(prompt, inputs)
 
+    assert result == prompt
+
+
+# ---------------------------------------------------------------------------
+# CLAUDE.md injection
+# ---------------------------------------------------------------------------
+
+
+def test_claude_md_injected_when_present(tmp_path: Path) -> None:
+    """CLAUDE.md in cwd is injected so API-only models can read conventions."""
+    claude_md = tmp_path / "CLAUDE.md"
+    claude_md.write_text("# Project conventions\nNo magic defaults.")
+
+    prompt = "Review code"
+    inputs = {"cwd": str(tmp_path)}
+
+    result = _inject_file_contents(prompt, inputs)
+    assert "CLAUDE.md (project conventions)" in result
+    assert "No magic defaults." in result
+
+
+def test_claude_md_absent_is_silently_skipped(tmp_path: Path) -> None:
+    """No CLAUDE.md in cwd → no injection, no error."""
+    prompt = "Review code"
+    inputs = {"cwd": str(tmp_path)}
+
+    result = _inject_file_contents(prompt, inputs)
     assert result == prompt
 
 
