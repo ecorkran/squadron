@@ -59,6 +59,27 @@ def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
         return None
 
 
+def find_git_root(cwd: str) -> str | None:
+    """Return the root of the git repository containing ``cwd``.
+
+    Returns the absolute path string, or ``None`` if ``cwd`` is not inside
+    a git repository or git is unavailable.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (FileNotFoundError, OSError):
+        pass
+    return None
+
+
 def _find_commit_range(slice_number: int, cwd: str) -> str | None:
     """Find a diff range by grepping commit messages for the slice number.
 

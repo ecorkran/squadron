@@ -20,7 +20,7 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.models.aliases import resolve_model_alias
-from squadron.review.git_utils import resolve_slice_diff_range
+from squadron.review.git_utils import find_git_root, resolve_slice_diff_range
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.persistence import (
     SliceInfo,
@@ -811,7 +811,11 @@ def review_code(
                         else f"{rules_content}\n\n---\n\n{auto_content}"
                     )
 
-    inputs: dict[str, str] = {"cwd": resolved_cwd}
+    # Code review runs git commands — use the git root as cwd so diff works
+    # correctly even when the config cwd points to a subdirectory (e.g.
+    # project-documents/user). Fall back to resolved_cwd if not in a repo.
+    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+    inputs: dict[str, str] = {"cwd": review_cwd}
     if files:
         inputs["files"] = files
     if diff:

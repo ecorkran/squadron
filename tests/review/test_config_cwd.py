@@ -99,9 +99,15 @@ class TestConfigCwd:
                 return 0
             return None
 
-        with patch(
-            "squadron.cli.commands.review.get_config",
-            side_effect=mock_get_config,
+        with (
+            patch(
+                "squadron.cli.commands.review.get_config",
+                side_effect=mock_get_config,
+            ),
+            patch(
+                "squadron.cli.commands.review.find_git_root",
+                return_value=".",
+            ),
         ):
             result = cli_runner.invoke(app, ["review", "code"])
             assert result.exit_code == 0
