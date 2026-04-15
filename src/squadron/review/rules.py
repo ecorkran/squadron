@@ -71,7 +71,7 @@ def _parse_frontmatter_paths(content: str) -> list[str] | None:
     if block:
         raw = block.group(1)
         items = [
-            line.strip().lstrip("- ").strip()
+            line.strip().lstrip("- ").strip().strip("\"'")
             for line in raw.splitlines()
             if line.strip().startswith("-")
         ]
