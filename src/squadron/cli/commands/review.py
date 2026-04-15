@@ -793,14 +793,12 @@ def review_code(
         resolved_rules_dir = resolve_rules_dir(review_cwd, None, rules_dir_flag)
         if resolved_rules_dir is not None:
             file_paths = (
-                _extract_diff_paths(diff, resolved_cwd, exclude_patterns)
-                if diff
-                else []
+                _extract_diff_paths(diff, review_cwd, exclude_patterns) if diff else []
             )
             if not file_paths and files:
                 import glob as _glob
 
-                file_paths = _glob.glob(files, root_dir=resolved_cwd)
+                file_paths = _glob.glob(files, root_dir=review_cwd)
             if file_paths:
                 extensions = detect_languages_from_paths(file_paths)
                 frontmatter = load_rules_frontmatter(resolved_rules_dir)
