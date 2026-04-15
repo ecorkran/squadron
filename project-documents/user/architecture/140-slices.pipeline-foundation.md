@@ -78,6 +78,22 @@ status: complete
 
 ---
 
+## Future Work
+
+1. [ ] **Flexible `sq run` Param Syntax** — Reduce friction for pipelines with multiple required params. Two related improvements: (1) additional positional arguments — bind beyond the first positional target by position or `key=value` syntax (e.g. `sq run review-only 123 arch`); (2) implicit `--param` expansion — unknown `--foo bar` flags treated as `--param foo=bar`, with known options taking precedence. Dependencies: [151]. Effort: 1/5
+
+2. [ ] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 200-series MCP Server]. Effort: 2/5
+
+3. [ ] **Run State Lifecycle Management** — Prune unreadable/schema-obsolete state files that the current `prune()` skips (schema version mismatches, corrupt JSON); expose as `sq run --gc` or automatic cleanup on `init_run`. Add global TTL (e.g. 30-day max age) and optional total-file cap to prevent unbounded growth when many distinct pipelines have been run. Dependencies: [150, 156]. Effort: 1/5
+
+4. [ ] **(154) Prompt-Only Loops** — Extend prompt-only mode with `each`/collection loop support (executor returns successive iteration instructions via `--next`, caller doesn't need to know it's a loop). Deprioritized: the `/sq:summary --restore` workflow (slices 162-163) now covers the CLI↔IDE context handoff that prompt-only loops were meant to bridge. Design is complete if we revisit. Dependencies: [153]. Effort: 2/5. **Design preserved: [154-slice.prompt-only-loops.md](../slices/154-slice.prompt-only-loops.md)**
+
+5. [ ] **(165) Agent-Context Interactive Checkpoints** — Interactive checkpoint resolution is currently CLI-only; when a pipeline runs via `/sq:run` or any agent-turn executor, `_is_interactive()` returns false and the checkpoint falls through to immediate PAUSED. Requires a tool-call-based protocol: executor suspends, surfaces a structured decision request to the orchestrating agent turn, agent presents options to the user, and on reply injects `override_instructions` into the resumed run state via `--resume`. Distinct from stdin-based resolution — requires coordination between executor, run-state schema, and the `/sq:run` skill layer. Dependencies: [160, 151]. Effort: 3/5
+
+6. [ ] **`/sq:summary --restore` Improvements** — Two gaps: (a) **key selection** — `--restore` always picks most-recent when multiple summaries exist; needs `--key` flag on `sq _summary-instructions` and skill prompt threading; (b) **clipboard summaries not restorable** — interactive runs should also write to `~/.config/squadron/runs/summaries/{project}-{template}.md` so they are available to `--restore` in a new session. Tracked: [ecorkran/squadron#7](https://github.com/ecorkran/squadron/issues/7). Dependencies: [162, 163]. Effort: 1/5
+
+--- 
+
 ## Implementation Order
 
 ```
@@ -121,22 +137,6 @@ Integration:
 - **Slices 143, 144, and 145 can proceed in parallel** after 142 is complete. All three depend only on the pipeline core models.
 - **Slice 146 (Review and Checkpoint) is the convergence point** — it needs structured findings (143) and dispatch (145) before it can integrate.
 - **Slices 148-150 are sequential** — each builds on the prior. No useful parallelization within this chain.
-
----
-
-## Future Work
-
-1. [ ] **Flexible `sq run` Param Syntax** — Reduce friction for pipelines with multiple required params. Two related improvements: (1) additional positional arguments — bind beyond the first positional target by position or `key=value` syntax (e.g. `sq run review-only 123 arch`); (2) implicit `--param` expansion — unknown `--foo bar` flags treated as `--param foo=bar`, with known options taking precedence. Dependencies: [151]. Effort: 1/5
-
-2. [ ] **Context Forge as Agent Tools** — Expose CF commands as tools available to non-SDK agents during dispatch. Migrated from 100-band future work. Dependencies: [144, 200-series MCP Server]. Effort: 2/5
-
-3. [ ] **Run State Lifecycle Management** — Prune unreadable/schema-obsolete state files that the current `prune()` skips (schema version mismatches, corrupt JSON); expose as `sq run --gc` or automatic cleanup on `init_run`. Add global TTL (e.g. 30-day max age) and optional total-file cap to prevent unbounded growth when many distinct pipelines have been run. Dependencies: [150, 156]. Effort: 1/5
-
-4. [ ] **(154) Prompt-Only Loops** — Extend prompt-only mode with `each`/collection loop support (executor returns successive iteration instructions via `--next`, caller doesn't need to know it's a loop). Deprioritized: the `/sq:summary --restore` workflow (slices 162-163) now covers the CLI↔IDE context handoff that prompt-only loops were meant to bridge. Design is complete if we revisit. Dependencies: [153]. Effort: 2/5. **Design preserved: [154-slice.prompt-only-loops.md](../slices/154-slice.prompt-only-loops.md)**
-
-5. [ ] **(165) Agent-Context Interactive Checkpoints** — Interactive checkpoint resolution is currently CLI-only; when a pipeline runs via `/sq:run` or any agent-turn executor, `_is_interactive()` returns false and the checkpoint falls through to immediate PAUSED. Requires a tool-call-based protocol: executor suspends, surfaces a structured decision request to the orchestrating agent turn, agent presents options to the user, and on reply injects `override_instructions` into the resumed run state via `--resume`. Distinct from stdin-based resolution — requires coordination between executor, run-state schema, and the `/sq:run` skill layer. Dependencies: [160, 151]. Effort: 3/5
-
-6. [ ] **`/sq:summary --restore` Improvements** — Two gaps: (a) **key selection** — `--restore` always picks most-recent when multiple summaries exist; needs `--key` flag on `sq _summary-instructions` and skill prompt threading; (b) **clipboard summaries not restorable** — interactive runs should also write to `~/.config/squadron/runs/summaries/{project}-{template}.md` so they are available to `--restore` in a new session. Tracked: [ecorkran/squadron#7](https://github.com/ecorkran/squadron/issues/7). Dependencies: [162, 163]. Effort: 1/5
 
 ---
 

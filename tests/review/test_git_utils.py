@@ -6,6 +6,7 @@ from io import StringIO
 from unittest.mock import MagicMock, patch
 
 from squadron.review.git_utils import (
+    _find_commit_range,
     _find_merge_commit,
     _find_slice_branch,
     resolve_slice_diff_range,
@@ -177,3 +178,121 @@ class TestResolveSliceDiffRange:
         ):
             result = resolve_slice_diff_range(122, ".")
         assert result == "def5678^1..def5678^2"
+
+
+class TestFindCommitRange:
+    """Tests for _find_commit_range()."""
+
+    def test_multiple_commits(self) -> None:
+        """Multiple commits matched — return oldest^..newest."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        # git log outputs newest-first
+        mock_result.stdout = (
+            "aaa1111 feat: slice 181 thing\n"
+            "bbb2222 fix: resolve slice 181 edge case\n"
+            "ccc3333 docs: add slice 181 task file\n"
+        )
+        with patch(
+            "squadron.review.git_utils.subprocess.run", return_value=mock_result
+        ):
+            result = _find_commit_range(181, ".")
+        assert result == "ccc3333^..aaa1111"
+
+    def test_single_commit(self) -> None:
+        """Exactly one commit matched — return {sha}^! syntax."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "abc1234 feat: implement slice 181\n"
+        with patch(
+            "squadron.review.git_utils.subprocess.run", return_value=mock_result
+        ):
+            result = _find_commit_range(181, ".")
+        assert result == "abc1234^!"
+
+    def test_no_commits(self) -> None:
+        """No commits matched — return None."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        with patch(
+            "squadron.review.git_utils.subprocess.run", return_value=mock_result
+        ):
+            result = _find_commit_range(999, ".")
+        assert result is None
+
+    def test_subprocess_error(self) -> None:
+        """Git failure — return None."""
+        with patch(
+            "squadron.review.git_utils.subprocess.run",
+            side_effect=FileNotFoundError("git not found"),
+        ):
+            result = _find_commit_range(181, ".")
+        assert result is None
+
+    def test_nonzero_returncode(self) -> None:
+        """Non-zero exit — return None."""
+        mock_result = MagicMock()
+        mock_result.returncode = 128
+        mock_result.stdout = ""
+        with patch(
+            "squadron.review.git_utils.subprocess.run", return_value=mock_result
+        ):
+            result = _find_commit_range(181, ".")
+        assert result is None
+
+
+class TestResolveSliceDiffRangeWithCommitGrep:
+    """Tests for resolve_slice_diff_range() step-3 commit-grep path."""
+
+    def test_commit_grep_used_when_branch_and_merge_missing(self) -> None:
+        """No branch, no merge commit → commit grep resolves range."""
+        with (
+            patch("squadron.review.git_utils._find_slice_branch", return_value=None),
+            patch("squadron.review.git_utils._find_merge_commit", return_value=None),
+            patch(
+                "squadron.review.git_utils._find_commit_range",
+                return_value="ccc3333^..aaa1111",
+            ),
+        ):
+            result = resolve_slice_diff_range(181, ".")
+        assert result == "ccc3333^..aaa1111"
+
+    def test_commit_grep_single_commit(self) -> None:
+        """Single matched commit → {sha}^! range returned."""
+        with (
+            patch("squadron.review.git_utils._find_slice_branch", return_value=None),
+            patch("squadron.review.git_utils._find_merge_commit", return_value=None),
+            patch(
+                "squadron.review.git_utils._find_commit_range",
+                return_value="abc1234^!",
+            ),
+        ):
+            result = resolve_slice_diff_range(181, ".")
+        assert result == "abc1234^!"
+
+    def test_commit_grep_not_tried_when_merge_commit_found(self) -> None:
+        """Merge commit found → commit grep is never called."""
+        with (
+            patch("squadron.review.git_utils._find_slice_branch", return_value=None),
+            patch(
+                "squadron.review.git_utils._find_merge_commit",
+                return_value="merge999",
+            ),
+            patch("squadron.review.git_utils._find_commit_range") as mock_grep,
+        ):
+            result = resolve_slice_diff_range(181, ".")
+        assert result == "merge999^1..merge999^2"
+        mock_grep.assert_not_called()
+
+    def test_fallback_fires_when_all_three_fail(self) -> None:
+        """All three resolution paths fail → warning + 'main'."""
+        with (
+            patch("squadron.review.git_utils._find_slice_branch", return_value=None),
+            patch("squadron.review.git_utils._find_merge_commit", return_value=None),
+            patch("squadron.review.git_utils._find_commit_range", return_value=None),
+            patch("sys.stderr", new_callable=StringIO) as mock_stderr,
+        ):
+            result = resolve_slice_diff_range(999, ".")
+        assert result == "main"
+        assert "WARNING" in mock_stderr.getvalue()

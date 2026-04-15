@@ -59,6 +59,46 @@ def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
         return None
 
 
+def _find_commit_range(slice_number: int, cwd: str) -> str | None:
+    """Find a diff range by grepping commit messages for the slice number.
+
+    Runs ``git log --oneline --all --grep=r"\\b{N}\\b"`` and collects all
+    matching commit hashes.  Returns:
+
+    - ``"{oldest}^!"``: if exactly one commit matched (single-commit diff)
+    - ``"{oldest}^..{newest}"``: if two or more commits matched
+    - ``None``: if no commits matched or git failed
+    """
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "log",
+                "--oneline",
+                "--all",
+                f"--grep=\\b{slice_number}\\b",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None
+        hashes = [
+            line.split()[0] for line in result.stdout.splitlines() if line.strip()
+        ]
+        if not hashes:
+            return None
+        if len(hashes) == 1:
+            return f"{hashes[0]}^!"
+        # git log outputs newest-first; oldest is last
+        newest, oldest = hashes[0], hashes[-1]
+        return f"{oldest}^..{newest}"
+    except (FileNotFoundError, OSError):
+        return None
+
+
 def _resolve_rev(ref: str, cwd: str) -> str | None:
     """Resolve a git ref to its full SHA. Returns None on failure."""
     try:
@@ -82,7 +122,8 @@ def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
     Precedence:
     1. Local branch exists → merge-base three-dot diff
     2. Merge commit found on main → parent diff of merge
-    3. Fallback → 'main' with warning
+    3. Commit-message grep → oldest-to-newest range across matched commits
+    4. Fallback → 'main' with warning
 
     Returns a diff range string suitable for ``git diff <range>``.
     """
@@ -112,6 +153,10 @@ def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
     merge_commit = _find_merge_commit(slice_number, cwd)
     if merge_commit is not None:
         return f"{merge_commit}^1..{merge_commit}^2"
+
+    commit_range = _find_commit_range(slice_number, cwd)
+    if commit_range is not None:
+        return commit_range
 
     print(
         f"[WARNING] Could not resolve diff range for slice {slice_number}. "

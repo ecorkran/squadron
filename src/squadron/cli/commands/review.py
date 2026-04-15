@@ -742,8 +742,19 @@ def review_code(
         False, "--json", help="Output and save as JSON instead of markdown"
     ),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
+    fan: int | None = typer.Option(
+        None,
+        "--fan",
+        help="Fan-out width (reserved for slice 182; not yet functional)",
+    ),
 ) -> None:
     """Run a code review."""
+    if fan is not None:
+        rprint(
+            "[yellow]--fan is reserved for future fan-out support "
+            "(slice 182); ignored.[/yellow]"
+        )
+
     # Load template early to access diff_exclude_patterns
     load_all_templates()
     code_template = get_template("code")
