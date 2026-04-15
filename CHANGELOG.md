@@ -15,9 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 20260415
+
 ### Added
 - `sq review code <N>` now resolves the correct diff for slices merged directly to main (no surviving branch) by grepping commit messages for the slice number.
 - `sq review code --fan N` flag accepted as a placeholder for future fan-out support (slice 182); currently warns and proceeds normally.
+
+### Fixed
+- `sq review code` was running `git diff` from the config `cwd` (e.g. `project-documents/user`) instead of the git root, causing empty diffs and UNKNOWN verdicts.
+- Language-specific rules files (e.g. `python.md`) were not injected because quoted paths in block-list YAML frontmatter (`"**/*.py"`) were not stripped of quotes during parsing.
+- `CLAUDE.md` is now injected into review prompts for API-only providers (e.g. OpenRouter) that cannot read files directly; headings are demoted to match the rules hierarchy.
 
 ## [0.4.0] - 20260414
 
