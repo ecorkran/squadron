@@ -4,7 +4,7 @@ parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
 dateUpdated: 20260415
-status: complete
+status: in-progress
 ---
 
 # Slice Plan: Pipeline Foundation
