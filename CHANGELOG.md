@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `fan_out` step type: run the same inner step concurrently against N models and reduce results via a configurable `fan_in` reducer (`collect` or `first_pass`).
+- Pool-based fan-out: set `models: pool:<name>` with `n: N` to draw N models from a named pool and run them in parallel.
+- `FanInReducer` protocol for registering custom reducers at import time (used by slice 189 for ensemble review).
+
 ## [0.4.1] - 20260415
 
 ### Added

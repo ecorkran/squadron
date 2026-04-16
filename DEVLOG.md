@@ -16,6 +16,20 @@ written from user perspective.
 
 ## 20260415
 
+### Slice 182: Fan-Out / Fan-In Step Type — Implementation Complete
+
+Implemented `fan_out` step type end-to-end. New files: `src/squadron/pipeline/steps/fan_out.py`,
+`src/squadron/pipeline/intelligence/fan_in/{__init__,protocol,reducers}.py`. Executor changes:
+`_execute_fan_out_step` added to `executor.py`, dispatch branch wired after `each` in
+`execute_pipeline`, import triggers added for `fan_out` module and `fan_in.reducers`.
+29 new tests (15 step/integration + 14 reducer); 1635 total passing. Pyright and ruff clean.
+SDK-session guard wording matches user-facing contract exactly. Slice 189 can register
+`merge_findings` reducer at import time with no fan-out infra changes.
+
+**Commits:** `1e138a7` (reducers), `25fff72` (FanOutStepType), `fc60e7b` (executor), `812f2a2` (cleanup)
+
+---
+
 ### Slice 182: Fan-Out / Fan-In Step Type — Design + Tasks Complete
 
 Created slice design `user/slices/182-slice.fan-out-fan-in-step-type.md` and task file
