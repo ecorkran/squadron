@@ -21,6 +21,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
+from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.summary_render import gather_cf_params
 
 if TYPE_CHECKING:
@@ -512,10 +513,12 @@ async def execute_pipeline(
     import squadron.pipeline.actions.dispatch as _a_dispatch  # noqa: F401
     import squadron.pipeline.actions.review as _a_review  # noqa: F401
     import squadron.pipeline.actions.summary as _a_summary  # noqa: F401
+    import squadron.pipeline.intelligence.fan_in.reducers as _fan_in_reducers  # noqa: F401
     import squadron.pipeline.steps.collection as _s_collection  # noqa: F401
     import squadron.pipeline.steps.compact as _s_compact  # noqa: F401
     import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
     import squadron.pipeline.steps.dispatch as _s_dispatch  # noqa: F401
+    import squadron.pipeline.steps.fan_out as _s_fan_out  # noqa: F401
     import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
     import squadron.pipeline.steps.review as _s_review  # noqa: F401
     import squadron.pipeline.steps.summary as _s_summary  # noqa: F401
@@ -528,10 +531,12 @@ async def execute_pipeline(
         _a_dispatch,
         _a_review,
         _a_summary,
+        _fan_in_reducers,
         _s_collection,
         _s_compact,
         _s_devlog,
         _s_dispatch,
+        _s_fan_out,
         _s_phase,
         _s_review,
         _s_summary,
@@ -615,6 +620,24 @@ async def execute_pipeline(
         # Detect each step type
         if step.step_type == "each":
             step_result = await _execute_each_step(
+                step=step,
+                resolved_config=resolved_config,
+                step_index=step_index,
+                merged_params=merged_params,
+                prior_outputs=prior_outputs,
+                pipeline_name=definition.name,
+                run_id=effective_run_id,
+                cwd=effective_cwd,
+                resolver=resolver,
+                cf_client=cf_client,
+                sdk_session=sdk_session,
+                get_step_type_fn=get_step_type,
+                get_action_fn=_action_registry.__getitem__
+                if _action_registry
+                else get_action,
+            )
+        elif step.step_type == StepTypeName.FAN_OUT:
+            step_result = await _execute_fan_out_step(
                 step=step,
                 resolved_config=resolved_config,
                 step_index=step_index,
@@ -1029,4 +1052,142 @@ async def _execute_each_step(
         step_type=step.step_type,
         status=ExecutionStatus.COMPLETED,
         action_results=all_action_results,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fan-out step executor
+# ---------------------------------------------------------------------------
+
+_POOL_PREFIX = "pool:"
+
+
+async def _execute_fan_out_step(
+    *,
+    step: Any,
+    resolved_config: dict[str, object],
+    step_index: int,
+    merged_params: dict[str, object],
+    prior_outputs: dict[str, ActionResult],
+    pipeline_name: str,
+    run_id: str,
+    cwd: str,
+    resolver: Any,
+    cf_client: Any,
+    sdk_session: SDKExecutionSession | None = None,
+    get_step_type_fn: Any,
+    get_action_fn: Any,
+) -> StepResult:
+    """Execute a ``fan_out`` step: dispatch N branches concurrently, then reduce.
+
+    Guard: raises an explicit FAILED result when sdk_session is active, because
+    concurrent branches would interleave messages on the stateful CLI process.
+    """
+    import asyncio
+
+    from squadron.pipeline.intelligence.fan_in.reducers import get_reducer
+
+    # SDK session guard — fan_out requires independent (non-session) dispatch.
+    if sdk_session is not None:
+        return StepResult(
+            step_name=step.name,
+            step_type=step.step_type,
+            status=ExecutionStatus.FAILED,
+            action_results=[],
+            error=(
+                "fan_out is not supported inside an SDK session step; "
+                "use profile-based dispatch"
+            ),
+        )
+
+    models_raw = resolved_config["models"]
+    fan_in_name = str(resolved_config.get("fan_in", "collect"))
+    inner_raw = resolved_config["inner"]
+
+    # 1. Build model list — call resolver.resolve() once per branch.
+    try:
+        if isinstance(models_raw, str) and models_raw.startswith(_POOL_PREFIX):
+            n = int(resolved_config.get("n", 1))
+            pool_ref = models_raw  # e.g. "pool:review"
+            model_list = [resolver.resolve(pool_ref)[0] for _ in range(n)]
+        else:
+            model_list = [resolver.resolve(str(m))[0] for m in models_raw]
+    except Exception as exc:
+        return StepResult(
+            step_name=step.name,
+            step_type=step.step_type,
+            status=ExecutionStatus.FAILED,
+            action_results=[],
+            error=str(exc),
+        )
+
+    # 2. Parse inner step (single-key dict format).
+    from typing import cast
+
+    inner_list: list[dict[str, object]] = [cast(dict[str, object], inner_raw)]
+    inner_steps = _unpack_inner_steps(inner_list)
+    if not inner_steps:
+        raise ValueError(f"fan_out step '{step.name}': invalid inner step")
+    inner_step = inner_steps[0]
+
+    # 3. Build branch coroutines.
+    async def _run_branch(idx: int, model_id: str) -> StepResult:
+        branch_params: dict[str, object] = {
+            **merged_params,
+            "_fan_out_branch_index": idx,
+            "_fan_out_model": model_id,
+            "model": model_id,
+        }
+        inner_resolved = resolve_placeholders(inner_step.config, branch_params)
+        return await _execute_step_once(
+            step=inner_step,
+            resolved_config=inner_resolved,
+            step_index=step_index,
+            merged_params=branch_params,
+            prior_outputs=prior_outputs,
+            pipeline_name=pipeline_name,
+            run_id=run_id,
+            cwd=cwd,
+            resolver=resolver,
+            cf_client=cf_client,
+            sdk_session=None,  # never propagate session into branches
+            get_step_type_fn=get_step_type_fn,
+            get_action_fn=get_action_fn,
+        )
+
+    # 4. Gather branches — return_exceptions=False for fast-fail on exception.
+    try:
+        branch_results: list[StepResult] = list(
+            await asyncio.gather(*(_run_branch(i, m) for i, m in enumerate(model_list)))
+        )
+    except Exception as exc:
+        return StepResult(
+            step_name=step.name,
+            step_type=step.step_type,
+            status=ExecutionStatus.FAILED,
+            action_results=[],
+            error=str(exc),
+        )
+
+    # 5. Fail fast if any branch returned FAILED.
+    failed = [r for r in branch_results if r.status == ExecutionStatus.FAILED]
+    if failed:
+        error_msgs = "; ".join(r.error or "branch failed" for r in failed)
+        return StepResult(
+            step_name=step.name,
+            step_type=step.step_type,
+            status=ExecutionStatus.FAILED,
+            action_results=[],
+            error=error_msgs,
+        )
+
+    # 6. Reduce.
+    reducer = get_reducer(fan_in_name)
+    action_result = reducer.reduce(branch_results, resolved_config)
+
+    return StepResult(
+        step_name=step.name,
+        step_type=step.step_type,
+        status=ExecutionStatus.COMPLETED,
+        action_results=[action_result],
     )
