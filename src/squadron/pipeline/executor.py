@@ -1107,11 +1107,11 @@ async def _execute_fan_out_step(
     # 1. Build model list — call resolver.resolve() once per branch.
     try:
         if isinstance(models_raw, str) and models_raw.startswith(_POOL_PREFIX):
-            n = int(resolved_config.get("n", 1))
+            n = int(resolved_config.get("n", 1))  # type: ignore[arg-type]
             pool_ref = models_raw  # e.g. "pool:review"
             model_list = [resolver.resolve(pool_ref)[0] for _ in range(n)]
         else:
-            model_list = [resolver.resolve(str(m))[0] for m in models_raw]
+            model_list = [resolver.resolve(str(m))[0] for m in models_raw]  # type: ignore[union-attr]
     except Exception as exc:
         return StepResult(
             step_name=step.name,

@@ -45,7 +45,7 @@ class FanOutStepType:
                     action_type=step_type,
                 )
             )
-        elif not isinstance(inner_raw, dict) or len(inner_raw) != 1:
+        elif not isinstance(inner_raw, dict) or len(inner_raw) != 1:  # type: ignore[arg-type]
             errors.append(
                 ValidationError(
                     field="inner",
@@ -57,7 +57,7 @@ class FanOutStepType:
             )
         else:
             # 3. Inner step type must not be fan_out (no nesting)
-            inner_type = str(next(iter(inner_raw)))
+            inner_type = str(next(iter(inner_raw)))  # type: ignore[arg-type]
             if inner_type == StepTypeName.FAN_OUT:
                 errors.append(
                     ValidationError(
