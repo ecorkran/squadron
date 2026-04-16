@@ -16,6 +16,18 @@ written from user perspective.
 
 ## 20260415
 
+### Slice 182: Fan-Out / Fan-In Step Type — Design + Tasks Complete
+
+Created slice design `user/slices/182-slice.fan-out-fan-in-step-type.md` and task file
+`user/tasks/182-tasks.fan-out-fan-in-step-type.md` (14 tasks, 202 lines). Design covers
+`FanOutStepType`, `_execute_fan_out_step` in executor, `FanInReducer` protocol, and
+`collect`/`first_pass` built-in reducers. Key decisions: reuse `resolver.resolve()` N times
+for pool multi-select (no new `PoolBackend` method needed), explicit SDK-session guard (raise
+error rather than silently interleave), failure fast-fail before reducer. Unblocks slice 189
+(Ensemble Review). Ready for Phase 6 (Implementation).
+
+---
+
 ### Slice 168: `sq review code` — Slice Implementation Review — Complete
 
 Added commit-message grep as step 3 in `resolve_slice_diff_range` (`src/squadron/review/git_utils.py`). `sq review code <N>` now resolves a useful diff range for slices merged directly to main with no surviving branch. Single-commit edge case handled via `{sha}^!` syntax. `--fan N` flag added to `sq review code` as a placeholder for slice 182 fan-out; warns and proceeds. 12 new tests (1598 total). All passing, pyright clean.

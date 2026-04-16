@@ -29,6 +29,7 @@ class StepTypeName(StrEnum):
     SUMMARY = "summary"
     REVIEW = "review"
     EACH = "each"
+    FAN_OUT = "fan_out"
     DEVLOG = "devlog"
 
 

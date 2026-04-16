@@ -253,3 +253,15 @@ input = 0.00
 output = 0.00
 cache_read = 0.00
 cache_write = 0.00
+
+[aliases.trinity]
+profile = "openrouter"
+model = "arcee-ai/trinity-large-thinking"
+private = true
+cost_tier = "cheap"
+
+[aliases.trinity.pricing]
+input = 0.22
+output = 0.85
+cache_read = 0.06
+cache_write = 0.00
