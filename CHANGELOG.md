@@ -15,10 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 20260417
+
 ### Added
 - `fan_out` step type: run the same inner step concurrently against N models and reduce results via a configurable `fan_in` reducer (`collect` or `first_pass`).
 - Pool-based fan-out: set `models: pool:<name>` with `n: N` to draw N models from a named pool and run them in parallel.
 - `FanInReducer` protocol for registering custom reducers at import time (used by slice 189 for ensemble review).
+
+### Fixed
+- `fan_out` steps now execute correctly in SDK pipeline runs (the session guard was over-broad; branches always run without a session).
+- OpenRouter and other non-SDK models in `fan_out` now route to the correct provider; previously the resolved profile was dropped on a second alias lookup, causing all branches to fall back to the Claude SDK provider.
+- Concurrent `fan_out` branches with the same inner step name no longer collide in the agent registry; each branch gets a unique agent name suffixed with its branch index.
+- `sdk_query` (one-shot agent dispatch) now retries on `rate_limit_event` instead of failing; mirrors the existing retry logic in client/session mode.
 
 ## [0.4.1] - 20260415
 
