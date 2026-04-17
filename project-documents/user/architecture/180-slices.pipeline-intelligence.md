@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 180-arch.pipeline-intelligence.md
 project: squadron
 dateCreated: 20260411
-dateUpdated: 20260412
+dateUpdated: 20260415
 status: not_started
 ---
 
@@ -52,11 +52,13 @@ The initiative follows its own dependency graph — model pools and fan-out deli
 
 11. [ ] **(189) Ensemble Review and Unanimous Convergence** — Multi-model review via fan-out: run a review template against N models in parallel, merge findings through `FindingMatcher` (the same identity system used for iteration matching), and apply the `unanimous` convergence strategy — continue only if all models agree on PASS, boost weight for findings flagged by multiple models. Ensemble configuration in pipeline YAML (`review.ensemble.models`, `review.ensemble.agreement`, `review.ensemble.boost`). Reuses the findings ledger from slice 183 as merge infrastructure. Dependencies: [182, 183, 184]. Risk: High. Effort: 3/5
 
+12. [ ] **(192) Prompt-Only Dispatch for Non-SDK Profiles** — Prompt-only mode currently renders every dispatch action as `model_switch: "/model <alias>"`, which the executing Claude Code agent rejects when the alias resolves to a non-SDK profile (OpenRouter models like minimax2, glm-4.5). `_render_summary` and `_render_review` already branch on `is_sdk_profile()` and emit a runnable `sq` command for non-SDK profiles; dispatch is the last action type missing this. Adds a `sq _dispatch-run` CLI (parallel to `_summary-run`) that executes a one-shot prompt through the resolved provider profile and returns the result, then branches `_render_dispatch` to emit `command` instead of `model_switch` when the profile is non-SDK. Also unblocks prompt-only fan-out with OpenRouter models (each branch expands to a dispatch action). SDK-session mode is unaffected. Dependencies: [182]. Risk: Low. Effort: 2/5
+
 ---
 
 ## Integration Work
 
-12. [ ] **(190) Pipeline Intelligence Documentation and Examples** — Authoring guide covering model pools, fan-out, convergence strategies, escalation, finding triage, conversation persistence, and ensemble review. Example pipelines in `examples/`: weighted-decay review loop, pool-based model selection, escalation + convergence combined, ensemble review with fan-out. Configuration reference (`pools.toml` schema, convergence parameter matrix, escalation config). Observability and tuning notes: how to read the ledger, how to calibrate decay/threshold from logged data, how to debug pool selections. Dependencies: [all feature slices]. Risk: Low. Effort: 2/5
+13. [ ] **(190) Pipeline Intelligence Documentation and Examples** — Authoring guide covering model pools, fan-out, convergence strategies, escalation, finding triage, conversation persistence, and ensemble review. Example pipelines in `examples/`: weighted-decay review loop, pool-based model selection, escalation + convergence combined, ensemble review with fan-out. Configuration reference (`pools.toml` schema, convergence parameter matrix, escalation config). Observability and tuning notes: how to read the ledger, how to calibrate decay/threshold from logged data, how to debug pool selections. Dependencies: [all feature slices]. Risk: Low. Effort: 2/5
 
 ---
 
@@ -77,6 +79,7 @@ Feature Slices:
   187. ConversationStore Protocol and SQLite Backend  (just before 188; no earlier consumer)
   188. Conversation Persistence in Convergence Loop  (after 187, 184)
   189. Ensemble Review and Unanimous Convergence     (after 182, 183, 184)
+  192. Prompt-Only Dispatch for Non-SDK Profiles      (after 182; independent of convergence track)
 
 Integration:
   190. Pipeline Intelligence Documentation           (after all prior)

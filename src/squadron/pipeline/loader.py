@@ -168,6 +168,7 @@ def validate_pipeline(
     import squadron.pipeline.steps.compact as _compact  # noqa: F401
     import squadron.pipeline.steps.devlog as _devlog  # noqa: F401
     import squadron.pipeline.steps.dispatch as _dispatch  # noqa: F401
+    import squadron.pipeline.steps.fan_out as _fan_out  # noqa: F401
     import squadron.pipeline.steps.phase as _phase  # noqa: F401
     import squadron.pipeline.steps.review as _review  # noqa: F401
     import squadron.pipeline.steps.summary as _summary  # noqa: F401
@@ -177,6 +178,7 @@ def validate_pipeline(
         _compact,
         _devlog,
         _dispatch,
+        _fan_out,
         _phase,
         _review,
         _summary,
