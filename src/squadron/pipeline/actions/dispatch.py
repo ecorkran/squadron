@@ -200,8 +200,10 @@ class DispatchAction:
         profile = get_profile(profile_name)
         ensure_provider_loaded(profile.provider)
 
+        branch_idx = context.params.get("_fan_out_branch_index")
+        branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
         config = AgentConfig(
-            name=f"dispatch-{context.step_name}-{context.run_id[:8]}",
+            name=f"dispatch-{context.step_name}{branch_suffix}-{context.run_id[:8]}",
             agent_type=profile.provider,
             provider=profile.provider,
             model=model_id,

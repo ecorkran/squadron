@@ -1,0 +1,11 @@
+name: test-fanout
+description: Pipeline for testing pipelines.
+
+steps:
+  - fan_out:
+      name: multi-dispatch
+      models: [minimax, glm5]
+      inner:
+        dispatch:
+          prompt: "Respond with: branch {_fan_out_branch_index}"
+      fan_in: collect

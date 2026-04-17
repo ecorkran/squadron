@@ -71,26 +71,42 @@ class ClaudeSDKAgent:
                 yield msg
 
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:
-        """One-shot execution via ``sdk_query``."""
+        """One-shot execution via ``sdk_query``.
+
+        Retries the full query when a ``rate_limit_event`` surfaces as a
+        ``ClaudeSDKError`` — the CLI handles the backoff delay, so retrying
+        the query is safe.
+        """
         self._state = AgentState.processing
-        try:
-            async for sdk_msg in sdk_query(
-                prompt=message.content, options=self._options
-            ):
-                for translated in translate_sdk_message(sdk_msg, sender=self._name):
-                    yield translated
-            self._state = AgentState.idle
-        except CLINotFoundError as exc:
-            self._state = AgentState.failed
-            raise ProviderAuthError(str(exc)) from exc
-        except ProcessError as exc:
-            self._state = AgentState.failed
-            raise ProviderAPIError(
-                str(exc), status_code=getattr(exc, "exit_code", None)
-            ) from exc
-        except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
-            self._state = AgentState.failed
-            raise ProviderError(str(exc)) from exc
+        retries = 0
+        while True:
+            try:
+                async for sdk_msg in sdk_query(
+                    prompt=message.content, options=self._options
+                ):
+                    for translated in translate_sdk_message(sdk_msg, sender=self._name):
+                        yield translated
+                self._state = AgentState.idle
+                return
+            except CLINotFoundError as exc:
+                self._state = AgentState.failed
+                raise ProviderAuthError(str(exc)) from exc
+            except ProcessError as exc:
+                self._state = AgentState.failed
+                raise ProviderAPIError(
+                    str(exc), status_code=getattr(exc, "exit_code", None)
+                ) from exc
+            except ClaudeSDKError as exc:
+                if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
+                    retries += 1
+                    self._log.debug(
+                        "Rate limit event %d/%d (retrying query)",
+                        retries,
+                        _MAX_RATE_LIMIT_RETRIES,
+                    )
+                    continue
+                self._state = AgentState.failed
+                raise ProviderError(str(exc)) from exc
 
     async def _handle_client_mode(self, message: Message) -> AsyncIterator[Message]:
         """Multi-turn execution via ``ClaudeSDKClient``.

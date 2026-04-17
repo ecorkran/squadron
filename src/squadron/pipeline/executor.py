@@ -1087,31 +1087,20 @@ async def _execute_fan_out_step(
 
     from squadron.pipeline.intelligence.fan_in.reducers import get_reducer
 
-    # SDK session guard — fan_out requires independent (non-session) dispatch.
-    if sdk_session is not None:
-        return StepResult(
-            step_name=step.name,
-            step_type=step.step_type,
-            status=ExecutionStatus.FAILED,
-            action_results=[],
-            error=(
-                "fan_out is not supported inside an SDK session step; "
-                "use profile-based dispatch"
-            ),
-        )
-
     models_raw = resolved_config["models"]
     fan_in_name = str(resolved_config.get("fan_in", "collect"))
     inner_raw = resolved_config["inner"]
 
-    # 1. Build model list — call resolver.resolve() once per branch.
+    # 1. Build model list — call resolver.resolve() once per branch, keep profile.
     try:
         if isinstance(models_raw, str) and models_raw.startswith(_POOL_PREFIX):
             n = int(resolved_config.get("n", 1))  # type: ignore[arg-type]
             pool_ref = models_raw  # e.g. "pool:review"
-            model_list = [resolver.resolve(pool_ref)[0] for _ in range(n)]
+            branch_models: list[tuple[str, str | None]] = [
+                resolver.resolve(pool_ref) for _ in range(n)
+            ]
         else:
-            model_list = [resolver.resolve(str(m))[0] for m in models_raw]  # type: ignore[union-attr]
+            branch_models = [resolver.resolve(str(m)) for m in models_raw]  # type: ignore[union-attr]
     except Exception as exc:
         return StepResult(
             step_name=step.name,
@@ -1131,13 +1120,15 @@ async def _execute_fan_out_step(
     inner_step = inner_steps[0]
 
     # 3. Build branch coroutines.
-    async def _run_branch(idx: int, model_id: str) -> StepResult:
+    async def _run_branch(idx: int, model_id: str, profile: str | None) -> StepResult:
         branch_params: dict[str, object] = {
             **merged_params,
             "_fan_out_branch_index": idx,
             "_fan_out_model": model_id,
             "model": model_id,
         }
+        if profile is not None:
+            branch_params["profile"] = profile
         inner_resolved = resolve_placeholders(inner_step.config, branch_params)
         return await _execute_step_once(
             step=inner_step,
@@ -1158,7 +1149,9 @@ async def _execute_fan_out_step(
     # 4. Gather branches — return_exceptions=False for fast-fail on exception.
     try:
         branch_results: list[StepResult] = list(
-            await asyncio.gather(*(_run_branch(i, m) for i, m in enumerate(model_list)))
+            await asyncio.gather(
+                *(_run_branch(i, m, p) for i, (m, p) in enumerate(branch_models))
+            )
         )
     except Exception as exc:
         return StepResult(

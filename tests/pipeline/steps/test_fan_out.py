@@ -301,8 +301,10 @@ async def test_first_pass_with_pass_branch_returns_pass_result() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sdk_session_returns_failed_with_guard_message() -> None:
-    """sdk_session not None → FAILED with exact guard message."""
+async def test_sdk_session_does_not_block_fan_out() -> None:
+    """sdk_session on outer call → branches still run with sdk_session=None."""
+    dispatch_result = _make_action_result(success=True)
+    action = _mock_action(dispatch_result)
     step = _make_fan_out_step()
 
     result = await _execute_fan_out_step(
@@ -316,16 +318,12 @@ async def test_sdk_session_returns_failed_with_guard_message() -> None:
         cwd="/tmp",
         resolver=_mock_resolver(),
         cf_client=MagicMock(),
-        sdk_session=MagicMock(),  # non-None triggers guard
+        sdk_session=MagicMock(),  # outer session — must NOT block fan_out
         get_step_type_fn=lambda _: _dispatch_step_type(),
-        get_action_fn=lambda _: MagicMock(),
+        get_action_fn=lambda _: action,
     )
 
-    assert result.status == ExecutionStatus.FAILED
-    assert result.error == (
-        "fan_out is not supported inside an SDK session step; "
-        "use profile-based dispatch"
-    )
+    assert result.status == ExecutionStatus.COMPLETED
 
 
 @pytest.mark.asyncio
