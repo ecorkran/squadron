@@ -15,6 +15,9 @@ system_prompt: |
   - Flag tasks that are too large (should be split) or too granular (should be merged)
   - Check that test tasks immediately follow their implementation tasks (test-with pattern)
   - Verify commit checkpoints are distributed throughout, not batched at end
+  - If the parent slice restates an NFR, a load test task exists in `tests/load/` covering that NFR (or this task breakdown adds one)
+  - If a load test task exists, a CI wiring task exists to gate on it; CI gating is not left implicit
+
 
   CRITICAL: Your verdict and findings MUST be consistent.
   - If verdict is CONCERNS or FAIL, include at least one finding with that severity.

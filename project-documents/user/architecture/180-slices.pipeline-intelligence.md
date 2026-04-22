@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 180-arch.pipeline-intelligence.md
 project: squadron
 dateCreated: 20260411
-dateUpdated: 20260415
+dateUpdated: 20260418
 status: not_started
 ---
 
@@ -53,6 +53,8 @@ The initiative follows its own dependency graph — model pools and fan-out deli
 11. [ ] **(189) Ensemble Review and Unanimous Convergence** — Multi-model review via fan-out: run a review template against N models in parallel, merge findings through `FindingMatcher` (the same identity system used for iteration matching), and apply the `unanimous` convergence strategy — continue only if all models agree on PASS, boost weight for findings flagged by multiple models. Ensemble configuration in pipeline YAML (`review.ensemble.models`, `review.ensemble.agreement`, `review.ensemble.boost`). Reuses the findings ledger from slice 183 as merge infrastructure. Dependencies: [182, 183, 184]. Risk: High. Effort: 3/5
 
 12. [ ] **(192) Prompt-Only Dispatch for Non-SDK Profiles** — Prompt-only mode currently renders every dispatch action as `model_switch: "/model <alias>"`, which the executing Claude Code agent rejects when the alias resolves to a non-SDK profile (OpenRouter models like minimax2, glm-4.5). `_render_summary` and `_render_review` already branch on `is_sdk_profile()` and emit a runnable `sq` command for non-SDK profiles; dispatch is the last action type missing this. Adds a `sq _dispatch-run` CLI (parallel to `_summary-run`) that executes a one-shot prompt through the resolved provider profile and returns the result, then branches `_render_dispatch` to emit `command` instead of `model_switch` when the profile is non-SDK. Also unblocks prompt-only fan-out with OpenRouter models (each branch expands to a dispatch action). SDK-session mode is unaffected. Dependencies: [182]. Risk: Low. Effort: 2/5
+
+13. [ ] **(193) Rotation Strategy Control (Compact vs. Summarize+New-Session)** — Session lifetime management for long-running pipelines across all execution environments. The Claude Agent SDK now supports `/compact` as an assistant-issued prompt (emits `SystemMessage` with `subtype="compact_boundary"` + `pre_tokens`/`trigger` metadata), which removes the prior prompt-only limitation where compact was user-only. `/clear` remains user-only and is not automatable. Introduces a `rotate_strategy` pipeline/step config field with values `compact` (in-session compaction via `/compact`; preserves recent turns verbatim, cheap, fast — best when working state matters), `summarize_new_session` (existing summarize-then-restart path; hard reset, best across logical phase boundaries or when conversation drift would only be compressed by compact, not discarded), and `auto` (heuristic: compact under a token threshold without explicit artifact-preservation, else summarize+rotate). Implements `/compact` invocation + `compact_boundary` listener in the prompt-only executor, logs `pre_tokens`/`trigger` per rotation, and keeps the existing summarize path selectable. Accounts for compact's known tendency to follow instructions loosely — compact is not default when specific artifacts must be preserved. Also updates the prompt-only execution-environment documentation to reflect the new capability. Dependencies: [149 executor; 161/164 summary path]. Risk: Medium. Effort: 3/5
 
 ---
 

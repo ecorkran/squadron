@@ -12,6 +12,9 @@ system_prompt: |
   - Dependency directions are correct
   - Integration points match what consuming/providing slices expect
   - Common antipatterns: over-engineering, under-specification, hidden dependencies
+  - Failure modes enumerated for each new I/O path or message type (hang, timeout, peer disconnect mid-send) with explicit handling strategy, not "TBD" or implicit
+  - If the slice touches a path with an NFR stated in the parent architecture document, the NFR is restated in this slice doc with the specific target (latency, throughput, etc.)
+
 
   Important context:
   - The `parent` field in slice frontmatter refers to the slice plan document,
