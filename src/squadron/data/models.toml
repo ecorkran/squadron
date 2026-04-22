@@ -180,6 +180,19 @@ output = 2.83
 cache_read = 0.189
 cache_write = 2.83
 
+[aliases.kimi26]
+profile = "openrouter"
+model = "moonshotai/kimi-k2.6"
+private = true
+cost_tier = "cheap"
+notes = "1M context"
+
+[aliases.kimi26.pricing]
+input = 0.95
+output = 4.00
+cache_read = 0.20
+cache_write = 4.00
+
 [aliases.minimax]
 profile = "openrouter"
 model = "minimax/minimax-m2.7"
