@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fnmatch
 import re
+import subprocess
 from pathlib import Path
 
 from squadron.config.manager import get_config
@@ -185,3 +186,78 @@ def get_template_rules(template_name: str, rules_dir: Path) -> str | None:
             except OSError:
                 pass
     return "\n\n---\n\n".join(parts) if parts else None
+
+
+def extract_diff_paths(
+    diff_ref: str,
+    cwd: str,
+    exclude_patterns: list[str] | None = None,
+) -> list[str]:
+    """Run ``git diff --name-only`` and return changed file paths.
+
+    When *exclude_patterns* is provided, matching files are filtered out
+    via git pathspec exclusions. Returns an empty list on git failure.
+    """
+    cmd = ["git", "diff", "--name-only", diff_ref]
+    if exclude_patterns:
+        cmd.append("--")
+        cmd.append(".")
+        cmd.extend(f":!{p}" for p in exclude_patterns)
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode == 0:
+            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    except (FileNotFoundError, OSError):
+        pass
+    return []
+
+
+def load_review_rules(
+    template_name: str,
+    rules_dir: Path | None,
+    file_paths: list[str] | None = None,
+    manual_rules_content: str | None = None,
+) -> str | None:
+    """Assemble review rules from all sources, in CLI-equivalent order.
+
+    Combines, in order:
+      1. Template rules (``review.md`` and ``review-{template_name}.md``)
+      2. Manual override rules supplied by caller
+      3. Language-auto-detected rules matched against *file_paths*
+
+    Returns the concatenated content, or ``None`` if no source produced
+    anything. Single source of truth for both CLI and pipeline review
+    paths — keeps the two in lockstep.
+    """
+    # Template-specific rules (prepended to manual content, per CLI order)
+    rules_content: str | None = manual_rules_content
+    if rules_dir is not None:
+        template_rules = get_template_rules(template_name, rules_dir)
+        if template_rules:
+            rules_content = (
+                template_rules
+                if rules_content is None
+                else f"{template_rules}\n\n---\n\n{rules_content}"
+            )
+
+    # Language auto-detection from changed/target files
+    if rules_dir is not None and file_paths:
+        extensions = detect_languages_from_paths(file_paths)
+        if extensions:
+            frontmatter = load_rules_frontmatter(rules_dir)
+            auto_files = match_rules_files(extensions, rules_dir, frontmatter)
+            auto_content = load_rules_content(auto_files)
+            if auto_content:
+                rules_content = (
+                    auto_content
+                    if rules_content is None
+                    else f"{rules_content}\n\n---\n\n{auto_content}"
+                )
+
+    return rules_content

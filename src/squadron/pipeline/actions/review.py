@@ -17,11 +17,22 @@ from squadron.review.persistence import (
     save_review_result,
 )
 from squadron.review.review_client import run_review_with_profile
+from squadron.review.rules import (
+    extract_diff_paths,
+    load_review_rules,
+    resolve_rules_dir,
+)
 from squadron.review.templates import get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
 
-_INPUT_PASSTHROUGH_KEYS = ("diff", "files", "against", "input")
+_INPUT_PASSTHROUGH_KEYS = (
+    "diff",
+    "diff_exclude_patterns",
+    "files",
+    "against",
+    "input",
+)
 
 
 class ReviewAction:
@@ -123,10 +134,35 @@ class ReviewAction:
                 f"created the expected file."
             )
 
-        # Rules content
-        rules_content: str | None = None
-        if "rules_content" in context.params:
-            rules_content = str(context.params["rules_content"])
+        # Rules content — mirror CLI: template rules + language auto-detection,
+        # layered on any explicit rules_content passed in via params.
+        manual_rules = (
+            str(context.params["rules_content"])
+            if "rules_content" in context.params
+            else None
+        )
+        rules_dir = resolve_rules_dir(cwd, None, None)
+        file_paths: list[str] = []
+        if rules_dir is not None:
+            diff_ref = inputs.get("diff")
+            if diff_ref:
+                exclude_raw = inputs.get("diff_exclude_patterns")
+                exclude_patterns = (
+                    [p.strip() for p in exclude_raw.split(",") if p.strip()]
+                    if exclude_raw
+                    else None
+                )
+                file_paths = extract_diff_paths(diff_ref, cwd, exclude_patterns)
+            if not file_paths and inputs.get("files"):
+                import glob as _glob
+
+                file_paths = _glob.glob(inputs["files"], root_dir=cwd)
+        rules_content = load_review_rules(
+            template_name,
+            rules_dir,
+            file_paths=file_paths,
+            manual_rules_content=manual_rules,
+        )
 
         # Execute review
         result = await run_review_with_profile(

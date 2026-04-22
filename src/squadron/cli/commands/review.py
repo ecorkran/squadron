@@ -29,11 +29,8 @@ from squadron.review.persistence import (
 )
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
-    detect_languages_from_paths,
-    get_template_rules,
-    load_rules_content,
-    load_rules_frontmatter,
-    match_rules_files,
+    extract_diff_paths,
+    load_review_rules,
     resolve_rules_dir,
 )
 from squadron.review.templates import (
@@ -194,38 +191,6 @@ def _resolve_rules_content(rules_path: str | None) -> str | None:
     return path.read_text()
 
 
-def _extract_diff_paths(
-    diff_ref: str,
-    cwd: str,
-    exclude_patterns: list[str] | None = None,
-) -> list[str]:
-    """Run git diff --name-only and return changed file paths.
-
-    When *exclude_patterns* is provided, matching files are filtered out
-    via git pathspec exclusions.
-    """
-    import subprocess
-
-    cmd = ["git", "diff", "--name-only", diff_ref]
-    if exclude_patterns:
-        cmd.append("--")
-        cmd.append(".")
-        cmd.extend(f":!{p}" for p in exclude_patterns)
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-            check=False,
-        )
-        if result.returncode == 0:
-            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    except (FileNotFoundError, OSError):
-        pass
-    return []
-
-
 def _resolve_arch_file(num: str) -> str:
     """Resolve an initiative index to an architecture document path.
 
@@ -352,15 +317,16 @@ def _run_review_command(
             )
             raise typer.Exit(code=1)
 
-    # Prepend template-specific rules (review.md / review-{template}.md)
+    # Prepend template-specific rules (review.md / review-{template}.md).
+    # Language auto-detection is handled by the caller (review_code) where
+    # file paths are known; _run_review_command only sees the template.
     if rules_dir is not None:
-        template_rules = get_template_rules(template_name, rules_dir)
-        if template_rules:
-            rules_content = (
-                template_rules
-                if rules_content is None
-                else f"{template_rules}\n\n---\n\n{rules_content}"
-            )
+        rules_content = load_review_rules(
+            template_name,
+            rules_dir,
+            file_paths=None,
+            manual_rules_content=rules_content,
+        )
 
     # Resolve model from flag → per-template config → config → template default
     raw_model = _resolve_model(model_flag, template, template_name)
@@ -786,32 +752,27 @@ def review_code(
             config_rules = get_config("default_rules")
             if isinstance(config_rules, str):
                 rules_path = config_rules
-        rules_content = _resolve_rules_content(rules_path)
+        manual_content = _resolve_rules_content(rules_path)
 
-        # Auto-detect language rules from diff or files input.
+        # Resolve rules dir and changed-file paths for language auto-detection.
         # Rules live in the repo root (.claude/rules/), not the config cwd.
         resolved_rules_dir = resolve_rules_dir(review_cwd, None, rules_dir_flag)
+        file_paths: list[str] = []
         if resolved_rules_dir is not None:
             file_paths = (
-                _extract_diff_paths(diff, review_cwd, exclude_patterns) if diff else []
+                extract_diff_paths(diff, review_cwd, exclude_patterns) if diff else []
             )
             if not file_paths and files:
                 import glob as _glob
 
                 file_paths = _glob.glob(files, root_dir=review_cwd)
-            if file_paths:
-                extensions = detect_languages_from_paths(file_paths)
-                frontmatter = load_rules_frontmatter(resolved_rules_dir)
-                auto_files = match_rules_files(
-                    extensions, resolved_rules_dir, frontmatter
-                )
-                auto_content = load_rules_content(auto_files)
-                if auto_content:
-                    rules_content = (
-                        auto_content
-                        if rules_content is None
-                        else f"{rules_content}\n\n---\n\n{auto_content}"
-                    )
+
+        rules_content = load_review_rules(
+            "code",
+            resolved_rules_dir,
+            file_paths=file_paths,
+            manual_rules_content=manual_content,
+        )
 
     inputs: dict[str, str] = {"cwd": review_cwd}
     if files:

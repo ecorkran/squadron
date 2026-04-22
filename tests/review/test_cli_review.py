@@ -313,7 +313,7 @@ class TestRulesWiring:
 
         # Patch git diff to return a .py file
         with patch(
-            "squadron.cli.commands.review._extract_diff_paths",
+            "squadron.cli.commands.review.extract_diff_paths",
             return_value=["src/foo.py"],
         ):
             result = cli_runner.invoke(

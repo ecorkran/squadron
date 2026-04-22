@@ -491,3 +491,155 @@ class TestReviewMetadata:
         assert result.metadata["model"] == "claude-sonnet-4-20250514"
         assert result.metadata["template"] == "code"
         assert "profile" in result.metadata
+
+
+# ---------------------------------------------------------------------------
+# Rules wiring — parity with CLI (get_template_rules + language auto-detection)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewActionRulesWiring:
+    """The pipeline review action must load template rules and auto-detected
+    language rules in the same way `sq review code` does. Guards against the
+    divergence that existed before these were routed through load_review_rules.
+    """
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_template_rules_loaded_from_rules_dir(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """`review-code.md` in cwd/.claude/rules is injected into rules_content."""
+        rules_dir = tmp_path / ".claude" / "rules"
+        rules_dir.mkdir(parents=True)
+        (rules_dir / "review-code.md").write_text("Code review principles.")
+
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(
+            cwd=str(tmp_path),
+            params={"template": "code"},
+        )
+        await ReviewAction().execute(ctx)
+
+        kwargs = mock_run_review.call_args.kwargs
+        rc = kwargs["rules_content"]
+        assert rc is not None
+        assert "Code review principles." in rc
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.extract_diff_paths", return_value=["src/foo.py"])
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_language_auto_detection_from_diff(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+        mock_diff: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A .py file in the diff triggers python.md auto-detection."""
+        rules_dir = tmp_path / ".claude" / "rules"
+        rules_dir.mkdir(parents=True)
+        (rules_dir / "python.md").write_text(
+            "---\npaths: [**/*.py]\n---\nPython auto rules."
+        )
+
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(
+            cwd=str(tmp_path),
+            params={"template": "code", "diff": "main"},
+        )
+        await ReviewAction().execute(ctx)
+
+        kwargs = mock_run_review.call_args.kwargs
+        rc = kwargs["rules_content"]
+        assert rc is not None
+        assert "Python auto rules." in rc
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_explicit_rules_content_preserved_and_combined(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Explicit rules_content param is preserved alongside template rules."""
+        rules_dir = tmp_path / ".claude" / "rules"
+        rules_dir.mkdir(parents=True)
+        (rules_dir / "review-code.md").write_text("Template code rules.")
+
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(
+            cwd=str(tmp_path),
+            params={
+                "template": "code",
+                "rules_content": "Caller-supplied rules.",
+            },
+        )
+        await ReviewAction().execute(ctx)
+
+        kwargs = mock_run_review.call_args.kwargs
+        rc = kwargs["rules_content"]
+        assert rc is not None
+        assert "Template code rules." in rc
+        assert "Caller-supplied rules." in rc
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_no_rules_dir_yields_none_rules_content(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """When no rules_dir resolves, rules_content is None (no crash)."""
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        # Force resolve_rules_dir to return None regardless of dev environment
+        with patch(f"{_P}.resolve_rules_dir", return_value=None):
+            ctx = _make_context(
+                cwd=str(tmp_path),
+                params={"template": "code"},
+            )
+            await ReviewAction().execute(ctx)
+
+        kwargs = mock_run_review.call_args.kwargs
+        assert kwargs["rules_content"] is None
