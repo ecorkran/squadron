@@ -649,3 +649,134 @@ async def test_sdk_summary_does_not_inject_context() -> None:
     session.capture_summary.assert_called_once()
     sdk_instructions = session.capture_summary.call_args.kwargs["instructions"]
     assert "--- Pipeline Context" not in sdk_instructions
+
+
+# ---------------------------------------------------------------------------
+# T8 — restore mode
+# ---------------------------------------------------------------------------
+
+
+def _make_prior_summary_result() -> object:
+    from squadron.pipeline.models import ActionResult
+
+    return ActionResult(
+        success=True,
+        action_type="summary",
+        outputs={
+            "summary": "the prior session summary text",
+            "instructions": "compact",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_restore_injects_prior_summary_via_sdk_session() -> None:
+
+    prior = _make_prior_summary_result()
+    session = MagicMock()
+    session.seed_context = AsyncMock()
+
+    ctx = _make_context(
+        params={"restore": True},
+        sdk_session=session,
+        prior_outputs={"summary-0": prior},
+    )
+
+    result = await _make_action().execute(ctx)
+
+    assert result.success is True
+    assert result.outputs.get("restored") is True
+    assert result.outputs.get("summary") == "the prior session summary text"
+    session.seed_context.assert_awaited_once()
+    # Confirm framed text was passed to seed_context
+    seeded = session.seed_context.call_args.args[0]
+    assert "the prior session summary text" in seeded
+
+
+@pytest.mark.asyncio
+async def test_restore_no_prior_summary_returns_error() -> None:
+    ctx = _make_context(params={"restore": True}, prior_outputs={})
+
+    result = await _make_action().execute(ctx)
+
+    assert result.success is False
+    assert "no prior summary" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_restore_prompt_only_no_sdk_session_returns_success() -> None:
+    """In prompt-only mode (no sdk_session), restore succeeds with summary in outputs."""
+    prior = _make_prior_summary_result()
+    ctx = _make_context(
+        params={"restore": True},
+        sdk_session=None,
+        prior_outputs={"summary-0": prior},
+    )
+
+    result = await _make_action().execute(ctx)
+
+    assert result.success is True
+    assert result.outputs.get("restored") is True
+    assert result.outputs.get("summary") == "the prior session summary text"
+
+
+@pytest.mark.asyncio
+async def test_restore_uses_most_recent_prior_summary() -> None:
+    """When multiple prior summary results exist, the most recent wins."""
+    from squadron.pipeline.models import ActionResult
+
+    old = ActionResult(
+        success=True,
+        action_type="summary",
+        outputs={"summary": "old summary"},
+    )
+    new = ActionResult(
+        success=True,
+        action_type="summary",
+        outputs={"summary": "new summary"},
+    )
+    session = MagicMock()
+    session.seed_context = AsyncMock()
+    ctx = _make_context(
+        params={"restore": True},
+        sdk_session=session,
+        prior_outputs={"summary-0": old, "summary-1": new},
+    )
+
+    result = await _make_action().execute(ctx)
+
+    assert result.outputs["summary"] == "new summary"
+
+
+@pytest.mark.asyncio
+async def test_normal_summarize_does_not_enter_restore_path() -> None:
+    """Without restore:true, seed_context is never called."""
+    prior = _make_prior_summary_result()
+    session = MagicMock()
+    session.seed_context = AsyncMock()
+
+    ctx = _make_context(
+        params={},  # no restore param
+        sdk_session=session,
+        prior_outputs={"summary-0": prior},
+    )
+
+    # We don't care if the normal summarize path succeeds or fails in this test;
+    # we only care that seed_context (restore path) was NOT called.
+    with patch(
+        "squadron.pipeline.actions.summary._execute_summary", new_callable=AsyncMock
+    ):
+        await _make_action().execute(ctx)
+
+    session.seed_context.assert_not_awaited()
+
+
+def test_validate_restore_bool() -> None:
+    errors = _make_action().validate({"restore": True})
+    assert errors == []
+
+
+def test_validate_restore_non_bool() -> None:
+    errors = _make_action().validate({"restore": "yes"})
+    assert len(errors) == 1
+    assert errors[0].field == "restore"
