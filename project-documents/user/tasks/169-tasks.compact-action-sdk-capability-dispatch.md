@@ -68,7 +68,7 @@ status: not_started
 
 ### T3 — Capability probe in the SDK executor
 
-- [ ] **Probe SDK init message in the pipeline executor**
+- [ ] **Probe SDK init message in the pipeline executor — true CLI**
   - [ ] Locate where `SDKExecutionSession` / `ClaudeSDKClient` is initialized
     in the executor (see `src/squadron/cli/commands/run.py` and
     `src/squadron/pipeline/executor.py` or equivalent)
@@ -78,16 +78,29 @@ status: not_started
     subsequent steps; probe fires once per session, result is cached
   - [ ] If init message not received before first step, populate with empty
     frozenset (do not block indefinitely — log a WARNING)
-  - [ ] For prompt-only executor (no persistent session), capabilities remain
-    `None`; `CompactAction` will handle the None case explicitly
 
-- [ ] **Tests for capability probe**
+- [ ] **Probe SDK init message in the prompt-only executor**
+  - [ ] In the prompt-only executor, the SDK client is also present (the
+    current Claude Code session); on first step dispatch read the init
+    message from the same `ClaudeSDKClient.query()` stream
+  - [ ] Extract `slash_commands` and store as `SessionCapabilities` on
+    `ActionContext` — same shape as true CLI path
+  - [ ] If no init message arrives before the first step needing capabilities,
+    populate with empty frozenset and log a WARNING
+  - [ ] `capabilities` must be non-None in both executors after probe;
+    `None` only means "probe not yet run", which should not reach `CompactAction`
+
+- [ ] **Tests for capability probe — true CLI**
   - [ ] Mock `ClaudeSDKClient` to emit a synthetic init message with
     `slash_commands: ["/compact", "/cost"]`
   - [ ] Assert resulting `ActionContext.capabilities.slash_commands` equals
     `frozenset({"/compact", "/cost"})`
   - [ ] Assert probe fires exactly once even if multiple steps run
-  - [ ] Assert empty frozenset on missing init message
+  - [ ] Assert empty frozenset (not None) when init message has no slash_commands
+
+- [ ] **Tests for capability probe — prompt-only**
+  - [ ] Same assertions as true CLI; confirm `capabilities` is populated
+    before the first step executes in the prompt-only executor
 
 - [ ] **Commit: capability discovery**
   - [ ] `git add` models.py, executor change, tests → commit
@@ -143,9 +156,12 @@ status: not_started
       - Dispatch `"/compact"` (plus `instructions` if provided) via
         `ClaudeSDKClient.query()` on the current client
       - Await `SystemMessage(subtype="compact_boundary")` before returning
-      - Extract and log `pre_tokens` and `trigger` from
-        `message.data["compact_metadata"]`
-      - Return `ActionResult(success=True, outputs={"pre_tokens": ..., "trigger": ...})`
+      - Extract `pre_tokens` and `trigger` from
+        `message.data["compact_metadata"]`; log at DEBUG
+      - Include `pre_tokens`, `trigger`, and current timestamp in
+        `ActionResult.outputs` so the pipeline executor writes them to
+        run state alongside other per-step metadata
+      - Return `ActionResult(success=True, outputs={"pre_tokens": ..., "trigger": ..., "compacted_at": ...})`
     - Else (capabilities None or `/compact` not listed):
       - Log an INFO message: "compact not available in this environment"
       - Return `ActionResult(success=True, outputs={}, note="compact not available")`
@@ -172,6 +188,11 @@ status: not_started
 - [ ] **Test: compact_boundary await blocks until message received**
   - [ ] Mock `query()` to delay the `compact_boundary` message by 2 iterations
   - [ ] Assert action does not return until boundary arrives
+
+- [ ] **Test: compact_boundary timeout raises TimeoutError**
+  - [ ] Mock `query()` to never emit a `compact_boundary` message
+  - [ ] Set a short timeout (e.g. 1s) for the test
+  - [ ] Assert `TimeoutError` (or equivalent) is raised within the bound
 
 - [ ] **Commit: CompactAction**
   - [ ] `git add` actions/compact.py, tests → commit
@@ -285,6 +306,15 @@ status: not_started
   - [ ] Assert all five steps complete in order; assert final dispatch runs
     with the restored summary in context
 
+- [ ] **Integration test: true CLI compose**
+  - [ ] Add an integration test that runs `test-compact-compose.yaml` through
+    the true CLI executor with a mocked `SDKExecutionSession`
+  - [ ] Mock: `sdk_session.compact()` succeeds; `summarize` writes a file;
+    `summarize restore:true` injects the file content
+  - [ ] Assert all five steps complete in order in the true CLI path
+  - [ ] This satisfies success criterion #6 ("runs to completion in at least
+    one prompt-only environment **and** in true CLI")
+
 - [ ] **Regression test: no dead slash-command text**
   - [ ] Assert that a `compact:` step in a prompt-only pipeline does NOT
     produce output containing the literal string `/compact` as plain text
@@ -319,7 +349,7 @@ status: not_started
 
 - [ ] **Commit: documentation**
   - [ ] `git add` updated docs → commit `docs: update compact/summarize authoring
-    guide for slice 193 behavior`
+    guide for slice 169 behavior`
 
 ---
 
@@ -334,7 +364,7 @@ status: not_started
 - [ ] **Verify true-CLI regression**
   - [ ] Run an existing compact-using pipeline end-to-end via `sq run`
   - [ ] Confirm second dispatch runs in a fresh SDK session with summary
-    seeded (behavioral parity with pre-193 main)
+    seeded (behavioral parity with pre-169 main)
 
 - [ ] **Verify capability probe recorded in DEVLOG**
   - [ ] DEVLOG contains the `slash_commands` table from T4
