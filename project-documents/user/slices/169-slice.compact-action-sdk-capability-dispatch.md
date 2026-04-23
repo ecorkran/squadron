@@ -1,16 +1,16 @@
 ---
 docType: slice-design
-slice: rotation-strategy-control-compact-vs-summarize-new-session
+slice: compact-action-sdk-capability-dispatch
 project: squadron
-parent: 180-slices.pipeline-intelligence.md
+parent: 140-slices.pipeline-foundation.md
 dependencies: [149-pipeline-executor-and-loops, 161-summary-step-with-emit-destinations, 164-profile-aware-summary-model-routing, 166-compact-and-summary-unification]
-interfaces: [CompactStepType, SummaryAction, SDKExecutionSession, PromptOnlyExecutor]
+interfaces: [CompactStepType, CompactAction, SessionCapabilities, SDKExecutionSession, PromptOnlyExecutor]
 dateCreated: 20260418
-dateUpdated: 20260418
+dateUpdated: 20260422
 status: not_started
 ---
 
-# Slice Design: Rotation Strategy Control (Compact vs. Summarize+New-Session)
+# Slice Design: Compact Action — SDK Capability Dispatch
 
 ## Overview
 
