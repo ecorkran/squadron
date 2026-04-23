@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import cast
-
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
@@ -19,29 +17,6 @@ class CompactStepType:
         errors: list[ValidationError] = []
         cfg = config.config
 
-        keep = cfg.get("keep")
-        if keep is not None and (
-            not isinstance(keep, list)
-            or not all(isinstance(item, str) for item in cast(list[object], keep))
-        ):
-            errors.append(
-                ValidationError(
-                    field="keep",
-                    message="'keep' must be a list of strings",
-                    action_type=self.step_type,
-                )
-            )
-
-        summarize = cfg.get("summarize")
-        if summarize is not None and not isinstance(summarize, bool):
-            errors.append(
-                ValidationError(
-                    field="summarize",
-                    message="'summarize' must be a boolean",
-                    action_type=self.step_type,
-                )
-            )
-
         model = cfg.get("model")
         if model is not None and not isinstance(model, str):
             errors.append(
@@ -52,22 +27,28 @@ class CompactStepType:
                 )
             )
 
+        instructions = cfg.get("instructions")
+        if instructions is not None and not isinstance(instructions, str):
+            errors.append(
+                ValidationError(
+                    field="instructions",
+                    message="'instructions' must be a string",
+                    action_type=self.step_type,
+                )
+            )
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
         action_config: dict[str, object] = {}
 
-        if "keep" in cfg:
-            action_config["keep"] = cfg["keep"]
-        if "summarize" in cfg:
-            action_config["summarize"] = cfg["summarize"]
-        if "template" in cfg:
-            action_config["template"] = cfg["template"]
-        action_config["model"] = cfg.get("model")
-        action_config["emit"] = ["rotate"]
+        if "model" in cfg:
+            action_config["model"] = cfg["model"]
+        if "instructions" in cfg:
+            action_config["instructions"] = cfg["instructions"]
 
-        return [("summary", action_config)]
+        return [("compact", action_config)]
 
 
 register_step_type(StepTypeName.COMPACT, CompactStepType())

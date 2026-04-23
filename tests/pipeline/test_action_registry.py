@@ -38,6 +38,7 @@ def _clear_registry(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_action_type_values() -> None:
     assert ActionType.DISPATCH == "dispatch"
     assert ActionType.CF_OP == "cf-op"
+    assert ActionType.COMPACT == "compact"
 
 
 def test_register_and_get_action() -> None:
