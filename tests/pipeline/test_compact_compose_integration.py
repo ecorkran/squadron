@@ -113,7 +113,7 @@ async def test_compact_compose_prompt_only_steps_use_real_compact_action() -> No
 
 @pytest.mark.asyncio
 async def test_compact_compose_no_dead_slash_command_text() -> None:
-    """Regression: prompt-only compact must not return literal '/compact' as response text."""
+    """Regression: prompt-only compact must not emit literal '/compact' as response."""
     definition = _no_project_pipeline("test-compact-compose")
     from squadron.pipeline.actions.compact import CompactAction
 
@@ -178,7 +178,7 @@ async def test_compact_compose_no_dead_slash_command_text() -> None:
 
 @pytest.mark.asyncio
 async def test_compact_compose_true_cli_all_steps_complete() -> None:
-    """True CLI: CompactAction delegates to sdk_session.compact(), all 5 steps complete."""
+    """True CLI: CompactAction delegates to sdk_session.compact(); 5 steps complete."""
     definition = _no_project_pipeline("test-compact-compose")
     from squadron.pipeline.actions.compact import CompactAction
 

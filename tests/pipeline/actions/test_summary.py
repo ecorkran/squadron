@@ -705,7 +705,7 @@ async def test_restore_no_prior_summary_returns_error() -> None:
 
 @pytest.mark.asyncio
 async def test_restore_prompt_only_no_sdk_session_returns_success() -> None:
-    """In prompt-only mode (no sdk_session), restore succeeds with summary in outputs."""
+    """Prompt-only mode (no sdk_session): restore succeeds with summary in outputs."""
     prior = _make_prior_summary_result()
     ctx = _make_context(
         params={"restore": True},
