@@ -47,6 +47,7 @@ def _success_registry() -> dict[str, object]:
         "review": _mock_action(success=True, verdict="PASS"),
         "checkpoint": _mock_action(success=True),
         "commit": action,
+        "compact": action,
         "summary": action,
         "devlog": action,
     }

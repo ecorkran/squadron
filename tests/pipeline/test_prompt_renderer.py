@@ -488,18 +488,14 @@ class TestRenderStepInstructions:
         checkpoint = result.actions[5]
         assert checkpoint.trigger == "on-concerns"
 
-    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
-    @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_compact_step(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
-        """Compact step with template and resolved params."""
-        mock_load.return_value = MagicMock()
-        mock_render.return_value = "Keep design for slice 152"
+    def test_compact_step(self) -> None:
+        """Compact step renders as a compact action with /compact trigger."""
         resolver = _make_resolver()
 
         step = StepConfig(
             step_type="compact",
             name="compact-2",
-            config={"template": "minimal"},
+            config={},
         )
 
         result = render_step_instructions(
@@ -513,25 +509,42 @@ class TestRenderStepInstructions:
 
         assert len(result.actions) == 1
         compact = result.actions[0]
-        # Slice 166: compact step now expands to a summary action with rotate emit
-        assert compact.action_type == "summary"
-        assert compact.emit == ["rotate"]
-        assert "152" in compact.resolved_instructions or mock_render.called
+        assert compact.action_type == "compact"
+        assert compact.trigger == "/compact"
 
-    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
-    @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_compact_yaml_renders_as_summary_with_rotate(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
-        """compact: YAML step renders as a summary action with emit=rotate."""
-        mock_load.return_value = MagicMock()
-        mock_render.return_value = "compaction instructions"
+    def test_compact_step_with_instructions(self) -> None:
+        """Compact step with instructions appends them to the trigger."""
+        resolver = _make_resolver()
+
+        step = StepConfig(
+            step_type="compact",
+            name="compact-2",
+            config={"instructions": "keep recent work verbatim"},
+        )
+
+        result = render_step_instructions(
+            step,
+            step_index=2,
+            total_steps=6,
+            params={},
+            resolver=resolver,
+            run_id="run-test",
+        )
+
+        assert len(result.actions) == 1
+        compact = result.actions[0]
+        assert compact.action_type == "compact"
+        assert compact.trigger is not None
+        assert "keep recent work verbatim" in compact.trigger
+
+    def test_compact_yaml_emits_compact_not_summary(self) -> None:
+        """Slice 169: compact: YAML step now renders as compact action, not summary."""
         resolver = _make_resolver()
 
         step = StepConfig(
             step_type="compact",
             name="compact-step",
-            config={"template": "minimal"},
+            config={},
         )
 
         result = render_step_instructions(
@@ -545,13 +558,10 @@ class TestRenderStepInstructions:
 
         assert len(result.actions) == 1
         action = result.actions[0]
-        assert action.action_type == "summary"
-        assert action.emit == ["rotate"]
-        # No action should have action_type == "compact"
-        assert all(a.action_type != "compact" for a in result.actions)
-        # No command should contain the legacy /compact [ literal
-        for a in result.actions:
-            assert a.command is None or "/compact [" not in a.command
+        assert action.action_type == "compact"
+        # Must not render as summary or include rotate emit
+        assert action.action_type != "summary"
+        assert action.emit is None or "rotate" not in action.emit
 
     def test_devlog_step(self) -> None:
         """Devlog step with auto mode."""
