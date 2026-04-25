@@ -16,6 +16,15 @@ written from user perspective.
 
 ## 20260425
 
+### Slice 901: Pipeline Code-Review Diff Injection — Task Breakdown Complete
+
+Task file created at `user/tasks/901-tasks.pipeline-code-review-diff-injection.md`
+(13 tasks, test-with pattern, 4 commits). Covers three coordinated fixes for
+issue #11: UNKNOWN fails closed in checkpoint thresholds; `slice` forwarded
+explicitly through `PhaseStepType.expand()` and `ReviewStepType.expand()`; and
+the per-template `match` in `_resolve_slice_inputs` replaced by a declarative
+`TEMPLATE_INPUTS` registry that auto-injects `inputs["diff"]` for the `code`
+template via `resolve_slice_diff_range`.
 
 **P6: devlog-2**
 - cf-op-0: PASS

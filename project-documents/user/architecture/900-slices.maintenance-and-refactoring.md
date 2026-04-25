@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260325
+dateUpdated: 20260425
 status: in_progress
 ---
 
@@ -21,4 +21,19 @@ status: in_progress
 
 ## Maintenance Slices
 
-_(None yet — add slices as maintenance items are identified.)_
+### (901) Pipeline Code-Review Diff Injection and UNKNOWN-Fails-Closed
+
+Fixes [issue #11](https://github.com/ecorkran/squadron/issues/11): pipeline
+code reviews silently produce UNKNOWN/no-findings because the diff is never
+injected into the review prompt. Three coordinated changes:
+
+1. Forward `slice` explicitly from phase / review step `expand()` into the
+   review action config (deterministic key, not merged-params side channel).
+2. Replace per-template `match` in `_resolve_slice_inputs` with a declarative
+   template-input registry, so any template that declares it consumes a
+   diff gets one resolved automatically.
+3. Treat verdict `UNKNOWN` as `FAIL` for `on-fail` checkpoint triggers (fail
+   closed) so dead reviewers and parser misses can't silently wave through.
+
+**Status:** not-started · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [149]
+
