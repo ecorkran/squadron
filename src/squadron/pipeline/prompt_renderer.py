@@ -312,6 +312,20 @@ def _render_devlog(
     )
 
 
+def _render_compact(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a compact action in prompt-only mode."""
+    instructions = config.get("instructions")
+    trigger = f"/compact {instructions}" if instructions else "/compact"
+    return ActionInstruction(
+        action_type=ActionType.COMPACT,
+        instruction="Compact the current session context",
+        trigger=trigger,
+    )
+
+
 # Map action type -> builder function signature
 _BUILDERS: dict[str, object] = {
     ActionType.CF_OP: _render_cf_op,
@@ -319,6 +333,7 @@ _BUILDERS: dict[str, object] = {
     ActionType.REVIEW: _render_review,
     ActionType.CHECKPOINT: _render_checkpoint,
     ActionType.COMMIT: _render_commit,
+    ActionType.COMPACT: _render_compact,
     ActionType.SUMMARY: _render_summary,
     ActionType.DEVLOG: _render_devlog,
 }

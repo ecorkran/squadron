@@ -10,6 +10,71 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260424
+
+### Slice 167: Per-Action Model Override Convention — Design Complete
+
+**Completed:**
+- Created `user/slices/167-slice.per-action-model-override-convention.md`
+- Enhanced existing stub with full design: data flow, cascade position, code
+  change, YAML/params interaction (no loader change required), test list,
+  verification walkthrough, and documentation target
+- Key technical decision: `params["review_model"]` is a separate params channel
+  from `params["model"]`; step-level `review.model: X` wires into `params["model"]`
+  (unchanged), while `--param review_model=Y` writes to the new key — no conflict
+- `docs/PIPELINES.md` Model Resolution section is the documentation target
+- First adopter: `ReviewAction` only; future actions adopt independently
+
+**Design decisions recorded:**
+- `review_model` (underscore) is the canonical convention key matching Python dict
+  and `--param` syntax; existing `review-model` (hyphen) YAML param continues to
+  work via step-level wiring unchanged
+- No loader change needed — the two channels are naturally separate by how params
+  merge in the executor
+
+**Status:**
+- Phase 4 complete. Ready for Phase 5 (task breakdown).
+
+---
+
+### Slice 154: Prompt-Only Loops — Design Complete
+
+**Completed:**
+- Verified `user/slices/154-slice.prompt-only-loops.md` against current codebase — all technical assumptions confirmed accurate
+- Codebase verification: all 5 executor functions to be reused (`_parse_source`, `_SOURCE_REGISTRY`, `resolve_placeholders`, `_unpack_inner_steps`, `_resolve_str`) exist and are module-level; all 3 CLI handlers exist; `ExecutionMode` enum, `EachStepType`, `StepTypeName.EACH` in place
+- Schema v4 confirmed current; design's v4→v5 bump plan is correct
+- Implementation targets confirmed absent (as expected): `LoopContext` model, `loop_context` field on `RunState` and `StepInstructions`
+- Updated frontmatter status from `not_started` to `in_progress`
+- Note: Phase 5 task file (`154-tasks.prompt-only-loops.md`) was created in a prior session (20260410) but reverted (`39c575d`) — Phase 5 needs to be re-executed
+
+**Status:**
+- Phase 4 complete. Design verified and current. Ready for Phase 5 (task breakdown).
+
+---
+
+### Slice 154: Prompt-Only Loops — Phase 4 Design Refreshed
+
+**Completed:**
+- Refreshed `user/slices/154-slice.prompt-only-loops.md` against current codebase state (post slices 153–169)
+- Updated data models to use Pydantic `BaseModel` (matching `RunState` pattern, was dataclass)
+- Schema version bump: v4 → v5 (was v1 → v2 in original design; actual codebase is now at v4)
+- Clarified `StateManager` interaction: `first_unfinished_step` remains loop-unaware; loop logic lives in CLI handlers (`_handle_prompt_only_init`, `_handle_prompt_only_next`, `_handle_step_done`)
+- Added `LoopContext` model with cached `items` list for deterministic resume
+- Documented reuse of executor internals: `_SOURCE_REGISTRY`, `_parse_source`, `resolve_placeholders`, `_unpack_inner_steps`
+- Updated out-of-scope references to reflect completed slices (160 checkpoints, 169 compact dispatch)
+- Updated slice plan entry from "Design preserved" to "Design Complete"
+
+**Design decisions (unchanged from original, validated against current code):**
+- Loop iterations flattened into instruction stream — callers are loop-unaware
+- Step names follow `{inner_step_name}-each-{item_index}` pattern
+- Flattened step names go into `completed_steps`; parent `each` step recorded on loop completion
+- Source items cached in LoopContext for deterministic resume
+
+**Status:**
+- Phase 4 complete. Ready for Phase 5 (task breakdown).
+
+---
+
 ## 20260412
 
 ### Slice 191: Dispatch Summary Context Injection — Phase 5 Task Breakdown Complete

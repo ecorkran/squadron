@@ -1,0 +1,21 @@
+name: test-compact-compose
+description: >
+  Integration test pipeline for slice 169: summarize → compact → restore compose pattern.
+  Tests that the three actions are independent and compose correctly.
+
+params: {}
+
+steps:
+  - dispatch:
+      prompt: "Describe three key facts about async Python programming."
+
+  - summary:
+      emit: [file]
+
+  - compact:
+
+  - summary:
+      restore: true
+
+  - dispatch:
+      prompt: "What were the key facts from the earlier step?"

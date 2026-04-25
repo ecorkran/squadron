@@ -27,6 +27,16 @@ class SummaryAction:
     def validate(self, config: dict[str, object]) -> list[ValidationError]:
         errors: list[ValidationError] = []
 
+        restore = config.get("restore")
+        if restore is not None and not isinstance(restore, bool):
+            errors.append(
+                ValidationError(
+                    field="restore",
+                    message="'restore' must be a boolean",
+                    action_type=self.action_type,
+                )
+            )
+
         template = config.get("template")
         if template is not None and not isinstance(template, str):
             errors.append(
@@ -63,6 +73,9 @@ class SummaryAction:
         return errors
 
     async def execute(self, context: ActionContext) -> ActionResult:
+        if context.params.get("restore") is True:
+            return await self._execute_restore(context)
+
         from squadron.pipeline.compaction_templates import (
             load_compaction_template,
             render_instructions,
@@ -106,6 +119,63 @@ class SummaryAction:
             summary_model_alias=summary_model_alias,
             emit_destinations=emit_destinations,
             action_type=self.action_type,
+        )
+
+    async def _execute_restore(self, context: ActionContext) -> ActionResult:
+        """Re-inject a previously captured summary into the current session.
+
+        Searches prior_outputs (reverse order) for the most recent summary
+        action result containing a ``summary`` key. Injects via
+        sdk_session.seed_context() when available, or dispatches the framed
+        text via sdk_session.dispatch() as a fallback for prompt seeding.
+        """
+        summary: str | None = None
+        for result in reversed(list(context.prior_outputs.values())):
+            if result.action_type == ActionType.SUMMARY and isinstance(
+                result.outputs.get("summary"), str
+            ):
+                summary = str(result.outputs["summary"])
+                break
+
+        if summary is None:
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=(
+                    "summarize restore: no prior summary found in prior_outputs; "
+                    "add an explicit summarize step before this one"
+                ),
+            )
+
+        if context.sdk_session is not None:
+            from squadron.pipeline.sdk_session import frame_summary_for_seed
+
+            try:
+                await context.sdk_session.seed_context(frame_summary_for_seed(summary))
+            except Exception as exc:
+                _logger.exception(
+                    "SummaryAction restore: seed_context failed in step %s",
+                    context.step_name,
+                )
+                return ActionResult(
+                    success=False,
+                    action_type=self.action_type,
+                    outputs={},
+                    error=str(exc),
+                )
+        else:
+            # Prompt-only: no SDK session available; log the summary so it
+            # appears in the conversation context for the next dispatch.
+            _logger.info(
+                "SummaryAction restore (prompt-only): no sdk_session; "
+                "summary available in outputs for downstream steps"
+            )
+
+        return ActionResult(
+            success=True,
+            action_type=self.action_type,
+            outputs={"summary": summary, "restored": True},
         )
 
 

@@ -24,6 +24,7 @@ class ActionType(StrEnum):
     DISPATCH = "dispatch"
     REVIEW = "review"
     SUMMARY = "summary"
+    COMPACT = "compact"
     CHECKPOINT = "checkpoint"
     CF_OP = "cf-op"
     COMMIT = "commit"

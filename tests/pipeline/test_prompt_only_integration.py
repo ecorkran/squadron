@@ -166,12 +166,9 @@ class TestPromptOnlyFullCycle:
 
         assert len(instructions.actions) == 1
         compact = instructions.actions[0]
-        # Slice 166: compact step now expands to a summary action with rotate emit
-        assert compact.action_type == "summary"
-        assert compact.emit == ["rotate"]
-        assert compact.template == "minimal"
-        assert compact.resolved_instructions is not None
-        assert "152" in compact.resolved_instructions
+        # Slice 169: compact step now renders as a dedicated compact action
+        assert compact.action_type == "compact"
+        assert compact.trigger == "/compact"
 
     def test_completion_result_json(self) -> None:
         """Verify CompletionResult serializes as expected."""

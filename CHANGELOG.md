@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 20260424
+
+### Added
+- `compact:` step now works in all execution environments. In `sq run` (true CLI), the existing session-rotate flow is preserved. In IDE/Claude Code CLI (prompt-only), `/compact` is dispatched automatically via `claude_agent_sdk.query()` and the pipeline awaits `compact_boundary` before continuing.
+- `summary: restore: true` mode: re-inject a previously captured summary into the current session. Use after `compact:` to preserve a summary artifact across context reduction.
+- `CompactAction` registered in the action registry as `ActionType.COMPACT`.
+
+### Changed
+- `compact:` step no longer implicitly captures a summary artifact. Pipelines that relied on `compact:` producing a summary must add an explicit `summary: emit: [file]` step before `compact:`. See PIPELINES.md for the recommended compose pattern.
+- `compact:` YAML fields: `template`, `keep`, and `summarize` are no longer meaningful (silently ignored). Use `model` and `instructions` instead.
+
 ## [0.4.2] - 20260417
 
 ### Added

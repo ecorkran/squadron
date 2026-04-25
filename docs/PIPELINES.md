@@ -118,41 +118,64 @@ steps:
 
 ### `compact`
 
-**Purpose:** Compress the context window at a step boundary using a compaction template.
+**Purpose:** Reduce the current session's context. Dispatches the best available mechanism per environment — no configuration required.
+
+| Environment | Mechanism |
+|---|---|
+| `sq run` (true CLI) | Session-rotate: capture summary → disconnect → new session → restore |
+| IDE / Claude Code CLI (prompt-only) | Dispatches `/compact` via `claude_agent_sdk.query()`, awaits `compact_boundary` |
 
 **Fields:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `template` | string | yes | Compaction template name (e.g. `minimal`, `default`, `minimal-sdk`) |
-| `model` | string | no | Model alias for compaction |
-| `keep` | list of strings | no | Items to explicitly preserve in the compacted context |
-| `summarize` | bool | no | Whether to update the Context Forge project summary |
+| `model` | string | no | Model alias used for summary capture in the true-CLI rotate path |
+| `instructions` | string | no | Passed to `/compact` as prompt body (prompt-only) or summary instructions (true CLI) |
+
+**Note:** `compact:` no longer implicitly captures a summary artifact. If you need a summary artifact around a compaction, use the explicit compose pattern:
+
+```yaml
+- summary:
+    emit: [file]       # capture artifact before compacting
+
+- compact:             # reduce context in place
+
+- summary:
+    restore: true      # re-inject the captured summary
+```
+
+**Migration:** pipelines that relied on `compact:` producing a summary (via the old `emit: [rotate]` expansion) must add an explicit `summary:` step before `compact:`.
 
 **Example:**
 
 ```yaml
 - compact:
-    template: minimal
     model: minimax
+    instructions: Keep the most recent branch results verbatim; drop tool-use details.
 ```
-
-The built-in pipelines use `template` + `model`. `keep` and `summarize` are available for fine-grained control.
 
 ---
 
 ### `summary`
 
-**Purpose:** Generate a session summary and route it to one or more destinations.
+**Purpose:** Generate a session summary and route it to one or more destinations; or re-inject a previously captured summary (`restore: true`).
 
 **Fields:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `template` | string | yes | Compaction template name |
+| `template` | string | no | Compaction template name (default: `default`) |
 | `model` | string | no | Model alias for summary generation |
-| `emit` | list | yes | Destination list — see options below |
+| `emit` | list | no | Destination list — see options below |
+| `restore` | bool | no | If `true`, re-inject the most recent prior summary instead of generating a new one |
 | `checkpoint` | string | no | Same triggers as phase steps |
+
+**Restore mode:** `restore: true` reads the most recent `summary` result from prior steps and seeds it back into the session via `sdk_session.seed_context()`. Use after `compact:` to preserve a summary artifact across context reduction.
+
+```yaml
+- summary:
+    restore: true
+```
 
 **Emit destinations:**
 
@@ -261,7 +284,7 @@ Actions are the internal execution units that step types expand into. Pipeline a
 | `review` | phase steps, standalone review step | Runs `sq review <template>` and captures verdict and findings |
 | `checkpoint` | phase steps (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
 | `commit` | phase steps | Runs `git add -A && git commit` |
-| `compact` | compact step | Issues compaction instruction (session rotate) |
+| `compact` | compact step | Reduces context (session-rotate in true CLI; `/compact` dispatch in prompt-only) |
 | `summary` | summary step | Generates summary text and routes to emit destinations |
 | `devlog` | devlog step | Writes a DEVLOG entry |
 

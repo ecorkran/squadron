@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260415
+dateUpdated: 20260422
 ---
 
 # Development Log
@@ -11,6 +11,49 @@ A lightweight, append-only record of development activity. Newest entries first.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).  This file differs from
 CHANGELOG.md, in that this file is written from implementor perspective where CHANGELOG.md is
 written from user perspective.
+
+---
+
+## 20260422
+
+### Slice 169: Compact Action — SDK Capability Dispatch — Implementation Complete
+
+Implemented `CompactAction` end-to-end as a dedicated pipeline action (separate from `SummaryAction`).
+`CompactStepType.expand()` now emits `("compact", ...)` instead of `("summary", emit=[rotate])`.
+Two execution branches: when `context.sdk_session is not None`, delegates to existing
+`SDKExecutionSession.compact()` rotate flow (unchanged); when None, dispatches `/compact` via
+`claude_agent_sdk.query()` and awaits `SystemMessage(subtype="compact_boundary")`, logging
+`pre_tokens`/`trigger`/`compacted_at` to `ActionResult.outputs`. Default 120s timeout.
+`SummaryAction` gained `restore: true` mode — reads most recent prior `summary` result from
+`prior_outputs` and seeds it into the SDK session via `seed_context()`.
+
+**Design simplification during implementation:** T2 (SessionCapabilities), T3 (capability probe),
+and T4 (/model investigation) were dropped after PM discussion. The original design called for
+reading `slash_commands` from the SDK init message and branching on capability presence. Simplified
+to: assume `/compact` is available (SDK v0.0.20+ guarantees it); branch on `sdk_session` presence
+instead. `SessionCapabilities` dataclass and `ActionContext.capabilities` field were not added.
+
+**Added:** `src/squadron/pipeline/actions/compact.py` (CompactAction, ~165 lines);
+`src/squadron/data/pipelines/test-compact-compose.yaml`; `_render_compact` builder in
+`prompt_renderer.py` (emits `trigger: "/compact"` for prompt-only). **Modified:**
+`CompactStepType` (new config surface: `model`, `instructions`); `SummaryAction._execute_restore`;
+`ActionType` enum (added `COMPACT`); executor imports `actions.compact` to trigger registration;
+existing integration test registries gained `"compact": action` entries.
+
+**Tests:** 16 new in `test_compact.py` (action unit); 12 rewritten in `steps/test_compact.py`
+(StepType); 3 new in `test_compact_compose_integration.py` (prompt-only + true-CLI compose,
+dead-slash-text regression); 6 new restore-mode tests in `test_summary.py`; 1 new registry
+integration assertion. **Total: 1665 passing, pyright clean, ruff clean.**
+
+**Docs:** `docs/PIPELINES.md` — compact step section rewritten with environment matrix and
+compose pattern; summary section documents `restore: true`; actions table updated.
+`CHANGELOG.md` — `[Unreleased]` section describes added capability, restore mode, and
+migration note for pipelines that relied on compact's implicit summary. No existing pipeline
+YAMLs required migration (audit in T9 found all `compact:` uses were pure context-reduction,
+not summary-capture dependencies).
+
+**Commits:** `126a0bf` (CompactAction + step wiring), `e988261` (summary restore mode),
+`b5ac797` (compose integration tests + pipeline YAML), `6293ff0` (docs).
 
 ---
 

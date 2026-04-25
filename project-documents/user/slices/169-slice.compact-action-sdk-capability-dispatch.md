@@ -7,7 +7,7 @@ dependencies: [149-pipeline-executor-and-loops, 161-summary-step-with-emit-desti
 interfaces: [CompactStepType, CompactAction, SessionCapabilities, SDKExecutionSession, PromptOnlyExecutor]
 dateCreated: 20260418
 dateUpdated: 20260422
-status: not_started
+status: complete
 ---
 
 # Slice Design: Compact Action — SDK Capability Dispatch
@@ -257,71 +257,86 @@ context.session.capabilities = capabilities
 
 ### Verification Walkthrough
 
-This is the demo script. Each step is runnable once the slice is complete.
+Each step is runnable against the implemented slice. Caveat: the capability-probe step originally specified here was **dropped during implementation** — `/compact` is assumed available going forward; the `CompactAction` branches on `sdk_session` presence instead of probing `slash_commands`. `SessionCapabilities` and `ActionContext.capabilities` are not present in the final code.
 
-**1. Capability probe — confirm the new discovery mechanism works.**
-
-Author a tiny harness pipeline that runs a single `capabilities-probe` debug step (or add a `--print-capabilities` flag to `sq run`) that prints the `slash_commands` set from the init message.
+**1. Unit + integration test suite — confirm implementation is wired end-to-end.**
 
 ```bash
-sq run --print-capabilities pipelines/noop.yaml
-# Expected (true CLI): {/compact, /cost, /context, ...}  — exact set depends on SDK
+uv run pytest tests/pipeline/actions/test_compact.py -q
+# Expected: 16 passed (validate, true-CLI rotate, prompt-only /compact dispatch,
+# boundary await, timeout)
+
+uv run pytest tests/pipeline/steps/test_compact.py -q
+# Expected: 12 passed (CompactStepType emits compact action, not summary+rotate)
+
+uv run pytest tests/pipeline/test_compact_compose_integration.py -q
+# Expected: 3 passed (prompt-only + true-CLI compose pipelines, dead-slash regression)
+
+uv run pytest tests/pipeline/actions/test_summary.py -q
+# Expected: 33 passed (including 6 new restore-mode tests)
+
+uv run pytest -q
+# Expected: 1665 passed
 ```
 
-Run the same probe via slash command in the Claude Code CLI and IDE extension. Record results in the slice's DEVLOG — this is the table that drives documentation updates.
-
-**2. True CLI compact — confirm no regression.**
+**2. Static checks.**
 
 ```bash
-sq run pipelines/test-compact.yaml
-# test-compact.yaml has: dispatch → compact → dispatch
-# Expected: second dispatch runs in a fresh SDK session with the framed summary seeded
-# Run state shows compact boundary metadata
+uv run pyright src/       # 0 errors, 0 warnings, 0 informations
+uv run ruff check src/    # All checks passed!
+uv run ruff format src/   # 124 files left unchanged
 ```
 
-Diff against a `main`-branch run of the same pipeline — no behavioral drift.
+**3. True CLI compact — confirm no regression.**
 
-**3. Prompt-only compact — confirm new capability.**
+Use any existing compact-using pipeline (e.g. `tasks`, `slice`, `P6`).
 
-In the IDE extension (or Claude Code CLI), invoke:
+```bash
+sq run P6 --slice 169
+# Expected: compact steps execute via the session-rotate flow (summary
+# captured, client disconnected/reconnected, summary re-injected). The
+# ActionResult.success=True, outputs={}. Behavior is bit-for-bit identical to
+# pre-169 main for these pipelines because the rotate flow in sdk_session.compact()
+# is unchanged — only the dispatch surface (CompactAction) is new.
+```
+
+**4. Prompt-only compact — automatable for the first time.**
+
+In the IDE extension or Claude Code CLI:
 
 ```
-/sq:run pipelines/test-compact.yaml
+/sq:run test-compact-compose
 ```
 
-The pipeline executor sees `compact:` and dispatches `/compact` via `query()`. The user observes the session's context reducing (confirmable via `/context` or equivalent), the pipeline continues past the compact step, and the post-compact `dispatch:` runs with reduced context.
+The pipeline steps are rendered as JSON instructions. The `compact-2` step's instruction carries `action_type: "compact"` with `trigger: "/compact"`. The agent invokes `/compact`, Claude reduces context, and subsequent steps proceed. Before slice 169 this trigger was either absent (pre-166) or rendered as a dead slash-command string; post-169 it is real capability.
 
-**4. Explicit summary composition — confirm separation of concerns.**
+**5. Explicit summary composition — separation of concerns.**
+
+The `test-compact-compose.yaml` pipeline (added in T10) exercises:
 
 ```yaml
-# pipelines/test-summary-compose.yaml
 steps:
-  - action: dispatch
-    prompt: "Produce three paragraphs about X."
-  - action: summarize
-    emit: [file]
-    model: sonnet
-  - action: compact
-  - action: summarize
-    restore: true
-  - action: dispatch
-    prompt: "What was produced in the earlier step?"
+  - dispatch: {prompt: "Describe three key facts about async Python programming."}
+  - summary: {emit: [file]}            # capture artifact
+  - compact: {}                        # reduce in place
+  - summary: {restore: true}           # re-inject captured summary
+  - dispatch: {prompt: "What were the key facts from the earlier step?"}
 ```
 
-Run in prompt-only:
-- `summarize` writes a summary file.
-- `compact` reduces in-place via `/compact`.
-- `summarize restore:true` injects the captured file contents.
-- Final `dispatch` can reference the summarized earlier content.
+The prompt-only compose integration test asserts all five steps complete in order. The true-CLI compose integration test asserts `sdk_session.compact()` is called exactly once (rotate flow) and all five steps complete.
 
-Confirms the three actions compose and each does only its one job.
+**6. Action registry.**
 
-**5. Documentation check.**
+```bash
+uv run python -c "from squadron.pipeline.actions import list_actions; print(list_actions())"
+# Expected output includes 'compact': ['dispatch', 'review', 'summary', 'compact',
+# 'checkpoint', 'cf-op', 'commit', 'devlog']
+```
 
-Pipeline authoring guide (the documentation artifact produced in slice 190 will formalize this) includes:
-- compact capability matrix by environment
-- note on compact's instruction-following reliability
-- migration note for pipelines that relied on compact's implicit summary
+**7. Documentation.**
+
+- `docs/PIPELINES.md` — `compact` step section documents the new environment matrix; `summary` section documents `restore: true` mode; actions table updated.
+- `CHANGELOG.md` — `[Unreleased]` section documents the added `compact` portability, added `restore: true`, and the migration note for pipelines that relied on implicit summary capture.
 
 ## Risk Assessment
 
