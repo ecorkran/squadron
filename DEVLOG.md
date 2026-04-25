@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260422
+dateUpdated: 20260424
 ---
 
 # Development Log
@@ -13,6 +13,16 @@ CHANGELOG.md, in that this file is written from implementor perspective where CH
 written from user perspective.
 
 ---
+
+## 20260424
+
+### Slice 194: Loop Step Type for Multi-Step Bodies — Phase 4 Slice Design Complete
+
+Added new slice 194 to `180-slices.pipeline-intelligence.md` (Feature Slices) and authored slice design at `project-documents/user/slices/194-slice.loop-step-type-for-multi-step-bodies.md`. Top-level `loop:` step type with a `steps:` body, symmetric with `each:`. Reuses existing `LoopConfig` / `LoopCondition` / `evaluate_condition` / `ExhaustBehavior` from slice 149's executor — no new loop semantics. v1 bans both nested-loop forms (sub-field on inner step, and inner `loop:` step type) at validation time. Existing single-step `loop:` sub-field unchanged; inline `review:` sub-field on phase steps stays as phase-only sugar. Prerequisite for slice 184 to drive realistic dispatch-then-review convergence rather than re-asking the same review against an unchanged artifact. Effort 2/5. Status: not-started, ready for Phase 5 (task design).
+
+### Slice 194: Loop Step Type for Multi-Step Bodies — Phase 5 Task Breakdown Complete
+
+Authored `project-documents/user/tasks/194-tasks.loop-step-type-for-multi-step-bodies.md` (275 lines, 21 tasks). Tasks follow the test-with pattern — each implementation task is paired with its test task before moving on. Sequence: enum addition → test stub → `LoopStepType` (validate + expand) → validation tests → expand/registration tests → `_execute_loop_body` executor branch → dispatch wiring → registration import → six integration tests covering pass-on-iteration-1, retry-to-PASS-on-N, three exhaustion modes, transient inner failure, checkpoint short-circuit, nested-loop ban (both forms) → regression check on existing single-step loop suite → authoring example in `example.yaml` → schema/loader smoke test → final lint/types/test gate → slice completion + DEVLOG entry. Slice review (verdict FAIL from kimi-k2.6) addressed: F001 rejected on slice-182 precedent (same registry-mediated step-type addition pattern, shipped in same 180 plan); F002 accepted via new "Deferred Interactions with 184/185/188" section that punts multi-step convergence/escalation/persistence cross-product to those downstream slices. Status: in-review, ready for Phase 6 implementation.
 
 ## 20260422
 
