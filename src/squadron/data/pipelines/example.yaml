@@ -76,50 +76,71 @@ steps:
       checkpoint: on-fail
 
   # -------------------------------------------------------------------------
-  # compact — context compaction (session rotate with summary)
+  # compact — reduce context (session rotate in true CLI)
   # -------------------------------------------------------------------------
-  # Shorthand for summary with emit: [rotate].  Use when you just need to
-  # compress context between phases and don't care about other destinations.
+  # In `sq run` (true CLI), this performs the session-rotate flow: capture a
+  # summary of the live session, disconnect the SDK client, start a fresh
+  # client, and re-seed the new session with the summary. Result: a clean
+  # session that "remembers" the prior work.
   #
-  # Options:
-  #   template:  compaction template name
-  #   model:     compaction template model
+  # Options (all optional):
+  #   instructions: passed to the summary capture as the prompt body
+  #   model:        model alias used for the summary capture
   #
-  # Available compaction templates: default, minimal, minimal-sdk
+  # No fields are required — `- compact:` on its own is valid.
+  #
+  # IMPORTANT: compact: no longer implicitly captures a reusable summary
+  # artifact. If you want a summary preserved across the rotation, use the
+  # summarize → compact → restore compose pattern (see the next section).
   # -------------------------------------------------------------------------
 
   - compact:
-      template: minimal
-      model: minimax
 
   # -------------------------------------------------------------------------
-  # summary — generate a summary and emit to one or more destinations
+  # summary — generate a summary and emit it; or restore a prior summary
   # -------------------------------------------------------------------------
-  # More flexible than compact — controls where the summary goes.
+  # Two modes:
   #
-  # Options:
-  #   template:    compaction template name (ex:default, minimal, minimal-sdk)
-  #   model:       model for summary generation
-  #   emit:        list of destinations (see below)
-  #   checkpoint:  same triggers as phase steps
+  # (a) Generation mode (default): produce a summary and route it to one or
+  #     more emit destinations.
   #
-  # Emit destinations:
-  #   stdout     — print to terminal
-  #   clipboard  — copy to system clipboard
-  #   rotate     — inject as compacted context and rotate the session
-  #   {file: path} — write to file (relative paths resolve from project root)
+  #   Options:
+  #     template:    compaction template (default, minimal, minimal-sdk)
+  #     model:       model alias for summary generation
+  #     emit:        list of destinations (see below)
+  #     checkpoint:  same triggers as phase steps
   #
-  # Examples:
-  #   emit: [rotate]                         # equivalent to compact
-  #   emit: [clipboard]                      # copy to clipboard only
-  #   emit: [stdout, clipboard]              # print and copy
-  #   emit: [rotate, {file: summary.md}]     # rotate session + save to file
+  #   Emit destinations:
+  #     stdout       — print to terminal
+  #     clipboard    — copy to system clipboard
+  #     file         — write to ~/.config/squadron/runs/summaries/<project>-<pipeline>.md
+  #     {file: path} — write to a specific file path
+  #
+  # (b) Restore mode (restore: true): re-inject the most recent prior
+  #     summary step's output into the current session via seed_context().
+  #     Other fields (template, model, emit) are ignored in this mode.
+  #     Fails if no prior summary exists in the run.
+  #
+  # Compose pattern: artifact-preserving compact
+  #
+  #   - summary:                    # (a) capture artifact
+  #       template: minimal-sdk
+  #       model: minimax
+  #       emit: [file]
+  #
+  #   - compact:                    # rotate the session
+  #
+  #   - summary:                    # (b) inject the captured summary into
+  #       restore: true             #     the freshly rotated session
   # -------------------------------------------------------------------------
 
   # - summary:
   #     template: minimal-sdk
   #     model: haiku
-  #     emit: [rotate]
+  #     emit: [file]
+  #
+  # - summary:
+  #     restore: true
 
   # -------------------------------------------------------------------------
   # review — standalone review step (not attached to a phase)

@@ -22,9 +22,15 @@ steps:
         model: glm5
       checkpoint: always
 
-  - compact:
+  - summary:
       template: minimal-sdk
       model: minimax
+      emit: [stdout, clipboard, file]
+
+  - compact:
+
+  - summary:
+      restore: true
 
   - design:
       phase: 3

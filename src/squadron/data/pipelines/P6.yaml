@@ -15,7 +15,7 @@ steps:
         model: "{review-model}"
       checkpoint: on-fail
 
-  - compact:
+  - summary:
       template: minimal-sdk
       model: minimax
       emit: [stdout, clipboard, file]

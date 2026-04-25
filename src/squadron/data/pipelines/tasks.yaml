@@ -15,8 +15,15 @@ steps:
         model: "{review-model}"
       checkpoint: on-concerns
 
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [file]
+
   - compact:
-      template: minimal
+
+  - summary:
+      restore: true
 
   - implement:
       phase: 6
@@ -26,8 +33,14 @@ steps:
         model: "{review-model}"
       checkpoint: on-fail
 
-  - compact:
-      template: minimal
+  - summary:
+      template: minimal-sdk
       model: minimax
+      emit: [file]
+
+  - compact:
+
+  - summary:
+      restore: true
 
   - devlog: auto
