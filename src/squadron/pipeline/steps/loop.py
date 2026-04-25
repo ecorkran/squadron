@@ -23,9 +23,11 @@ class LoopStepType:
 
     @property
     def step_type(self) -> str:
+        """Return the registered step-type name (``"loop"``)."""
         return StepTypeName.LOOP
 
     def validate(self, config: StepConfig) -> list[ValidationError]:  # noqa: C901
+        """Validate the loop step config and return any errors found."""
         errors: list[ValidationError] = []
         cfg = config.config
         step_type = self.step_type

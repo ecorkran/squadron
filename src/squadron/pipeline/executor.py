@@ -18,7 +18,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.steps import StepTypeName
@@ -868,6 +868,34 @@ async def _execute_step_once(
     )
 
 
+def _loop_exhaust_result(
+    *,
+    step: Any,
+    on_exhaust: ExhaustBehavior,
+    action_results: list[ActionResult],
+    max_iter: int,
+) -> StepResult:
+    """Build the exhaustion StepResult for the configured ``on_exhaust`` mode.
+
+    Shared by ``_execute_loop_step`` (single-step body) and
+    ``_execute_loop_body`` (multi-step body).
+    """
+    match on_exhaust:
+        case ExhaustBehavior.FAIL:
+            status = ExecutionStatus.FAILED
+        case ExhaustBehavior.CHECKPOINT:
+            status = ExecutionStatus.PAUSED
+        case ExhaustBehavior.SKIP:
+            status = ExecutionStatus.SKIPPED
+    return StepResult(
+        step_name=step.name,
+        step_type=step.step_type,
+        status=status,
+        action_results=action_results,
+        iteration=max_iter,
+    )
+
+
 async def _execute_loop_step(
     *,
     step: Any,
@@ -945,31 +973,12 @@ async def _execute_loop_step(
 
     # Max iterations exhausted
     final_results = last_result.action_results if last_result else []
-    match loop_config.on_exhaust:
-        case ExhaustBehavior.FAIL:
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.FAILED,
-                action_results=final_results,
-                iteration=loop_config.max,
-            )
-        case ExhaustBehavior.CHECKPOINT:
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.PAUSED,
-                action_results=final_results,
-                iteration=loop_config.max,
-            )
-        case ExhaustBehavior.SKIP:
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.SKIPPED,
-                action_results=final_results,
-                iteration=loop_config.max,
-            )
+    return _loop_exhaust_result(
+        step=step,
+        on_exhaust=loop_config.on_exhaust,
+        action_results=final_results,
+        max_iter=loop_config.max,
+    )
 
 
 async def _execute_loop_body(
@@ -1003,8 +1012,6 @@ async def _execute_loop_body(
             loop_config.strategy,
         )
 
-    from typing import cast
-
     inner_steps_raw = resolved_config.get("steps", [])
     if isinstance(inner_steps_raw, list):
         raw_list: list[dict[str, object]] = [
@@ -1016,6 +1023,8 @@ async def _execute_loop_body(
         raw_list = []
     inner_steps = _unpack_inner_steps(raw_list)
 
+    # Bound across the loop so the exhaustion path can return the latest
+    # iteration's results.  Reassigned at the start of each iteration.
     iteration_action_results: list[ActionResult] = []
 
     for iteration in range(1, loop_config.max + 1):
@@ -1073,31 +1082,12 @@ async def _execute_loop_body(
             )
 
     # Max iterations exhausted
-    match loop_config.on_exhaust:
-        case ExhaustBehavior.FAIL:
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.FAILED,
-                action_results=iteration_action_results,
-                iteration=loop_config.max,
-            )
-        case ExhaustBehavior.CHECKPOINT:
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.PAUSED,
-                action_results=iteration_action_results,
-                iteration=loop_config.max,
-            )
-        case ExhaustBehavior.SKIP:
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=ExecutionStatus.SKIPPED,
-                action_results=iteration_action_results,
-                iteration=loop_config.max,
-            )
+    return _loop_exhaust_result(
+        step=step,
+        on_exhaust=loop_config.on_exhaust,
+        action_results=iteration_action_results,
+        max_iter=loop_config.max,
+    )
 
 
 def _unpack_inner_steps(raw_steps: list[dict[str, object]]) -> list[Any]:

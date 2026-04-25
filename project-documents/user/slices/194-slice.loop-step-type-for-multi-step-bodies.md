@@ -8,6 +8,15 @@ interfaces: [184, 189]
 dateCreated: 20260424
 dateUpdated: 20260425
 status: complete
+reviewResponses:
+  - reviewType: slice
+    date: 20260424
+    reviewVerdict: FAIL
+    response: F001 rejected (slice-182 precedent), F002 accepted (deferred-interactions section added), F003 acknowledged
+  - reviewType: code
+    date: 20260425
+    reviewVerdict: CONCERNS
+    response: F001-F003 addressed (docstrings, DRY exhaust helper, module-level cast import); F004 partially addressed (comment added, reviewer's rewrite rejected on type-safety grounds); F005-F008 acknowledged
 ---
 
 # Slice Design: Loop Step Type for Multi-Step Bodies
@@ -473,3 +482,74 @@ convergence loops behave exactly as those slices' authors intend.
 ### F003 — ACKNOWLEDGED
 
 PASS finding noted; no action required.
+
+## Code Review Response — 20260425
+
+Code review at
+`project-documents/user/reviews/194-review.code.loop-step-type-for-multi-step-bodies.md`
+(model: minimax/minimax-m2.7) returned verdict CONCERNS with four CONCERN
+findings and four PASS findings. Response by finding:
+
+### F001 — ADDRESSED (with caveat)
+
+Finding flags missing docstrings on `LoopStepType.validate`, `expand`, and
+`_validate_inner_steps`. The finding's rationale ("Other step types in this
+codebase, e.g. `ReviewStepType`, include method-level docstrings") is
+incorrect — `ReviewStepType` has only a class-level docstring, matching
+`LoopStepType`'s prior shape. So `LoopStepType` was already in line with the
+sibling step types' actual convention.
+
+That said, one-line method docstrings are a cheap, harmless improvement.
+Added docstrings to `step_type` and `validate`; `expand` and
+`_validate_inner_steps` already had them.
+
+### F002 — ADDRESSED
+
+Finding correctly identifies DRY violation between the `match
+loop_config.on_exhaust` blocks in `_execute_loop_step` and
+`_execute_loop_body`. Extracted `_loop_exhaust_result(step, on_exhaust,
+action_results, max_iter) -> StepResult` as a shared helper; both call
+sites now delegate to it. Single source of truth for FAIL/CHECKPOINT/SKIP
+status mapping.
+
+### F003 — ADDRESSED
+
+Finding flags `from typing import cast` placed inside `_execute_loop_body`
+rather than at module top. Moved the import to the module-level imports at
+the top of `executor.py`. The pre-existing in-function import in
+`_execute_loop_step` is no longer needed and was naturally subsumed by the
+module-level import.
+
+### F004 — ADDRESSED (partial — reviewer's suggested rewrite rejected)
+
+Finding flags the `iteration_action_results: list[ActionResult] = []`
+binding before the `for iteration in range(...)` loop as confusing because
+it is reassigned inside the loop on the first line.
+
+The reviewer's suggested rewrite (drop the pre-loop binding, declare only
+inside the loop) **does not work**: the exhaustion path after the loop
+references `iteration_action_results` to build the final `StepResult`, so
+the variable must be bound before the loop or pyright in strict mode flags
+it as possibly unbound. (`loop_config.max >= 1` does guarantee the loop
+body runs, but the type checker can't see through that constraint.)
+
+Substance of the concern (intent unclear) addressed by adding a comment
+above the binding explaining that it's bound across the loop so the
+exhaustion path can return the latest iteration's results. The rewrite
+itself is rejected on type-safety grounds.
+
+### F005 — F008 — ACKNOWLEDGED
+
+PASS findings noted; no action required.
+
+### Verification
+
+All gates green after changes:
+
+- `uv run pytest tests/pipeline/steps/test_loop.py
+  tests/pipeline/test_executor_loop_body.py
+  tests/pipeline/test_loop_validation.py tests/pipeline/test_executor.py`
+  — 97 passed
+- `uv run pytest` (full suite) — 1690 passed
+- `uv run ruff check` / `ruff format --check` — clean
+- `uv run pyright` — 0 errors, 0 warnings
