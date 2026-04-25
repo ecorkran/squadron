@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 20260424
+
 ### Added
 - `compact:` step now works in all execution environments. In `sq run` (true CLI), the existing session-rotate flow is preserved. In IDE/Claude Code CLI (prompt-only), `/compact` is dispatched automatically via `claude_agent_sdk.query()` and the pipeline awaits `compact_boundary` before continuing.
 - `summary: restore: true` mode: re-inject a previously captured summary into the current session. Use after `compact:` to preserve a summary artifact across context reduction.
