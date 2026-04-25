@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `loop:` step type with a `steps:` body. Enables multi-step loops where an entire sequence (e.g., `dispatch:` then `review:`) is re-run per iteration, with `until`, `on_exhaust`, and `max` semantics inherited unchanged from the existing single-step `loop:` sub-field. Nested loops are not supported in v1. Prerequisite for weighted-decay convergence (slice 184).
+
 ## [0.5.0] - 20260424
 
 ### Added

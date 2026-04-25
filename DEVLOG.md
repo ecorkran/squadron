@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260424
+dateUpdated: 20260425
 ---
 
 # Development Log
@@ -13,6 +13,12 @@ CHANGELOG.md, in that this file is written from implementor perspective where CH
 written from user perspective.
 
 ---
+
+## 20260425
+
+### Slice 194: Loop Step Type for Multi-Step Bodies — Implementation Complete
+
+Shipped `LoopStepType` in `src/squadron/pipeline/steps/loop.py` with full `validate()` (7 rules, nested-loop ban on both sub-field and step-type forms) and `expand()` returning `[]`. Added `_execute_loop_body` to `executor.py` and wired it as the `StepTypeName.LOOP` dispatch branch (ahead of the existing `loop:` sub-field else branch). Reused all slice-149 machinery unchanged: `_parse_loop_config`, `LoopCondition`, `ExhaustBehavior`, `evaluate_condition`, `_unpack_inner_steps`, `_execute_step_once`. Strategy field parsed but stubbed with same warning as the single-step path — slice 184 will implement convergence strategies for both forms simultaneously. Added 25 new tests across three test files; fixed 11 pre-existing integration-test failures caused by `slice.yaml` having grown from 6 to 10 steps in a prior commit. All 1690 tests pass, pyright zero errors.
 
 ## 20260424
 
