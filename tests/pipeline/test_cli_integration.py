@@ -117,14 +117,14 @@ class TestCliIntegration:
             )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 6
+        assert len(result.step_results) == 10
 
         # State file should be loadable
         mgr = StateManager(runs_dir=tmp_path)
         runs = mgr.list_runs()
         assert len(runs) == 1
         assert runs[0].status == "completed"
-        assert len(runs[0].completed_steps) == 6
+        assert len(runs[0].completed_steps) == 10
 
     @pytest.mark.asyncio
     async def test_state_file_loadable_after_run(self, tmp_path: Path) -> None:
@@ -187,7 +187,7 @@ class TestCliIntegration:
 
         final = mgr.load(run_id)
         assert final.status == "completed"
-        assert len(final.completed_steps) == 6
+        assert len(final.completed_steps) == 10
 
     # -------------------------------------------------------------------
     # T18: --from mid-process adoption
@@ -195,22 +195,21 @@ class TestCliIntegration:
 
     @pytest.mark.asyncio
     async def test_from_step_skips_earlier_steps(self, tmp_path: Path) -> None:
-        """Starting from 'implement-3' skips design/tasks/compact."""
+        """Starting from 'implement-5' skips design/tasks/summary/compact/summary."""
         with patch("squadron.cli.commands.run._check_cf"):
             result = await _run_pipeline(
                 "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
-                from_step="implement-3",
+                from_step="implement-5",
                 _action_registry=_success_registry(),
             )
 
         assert result.status == ExecutionStatus.COMPLETED
         completed_names = [sr.step_name for sr in result.step_results]
-        # Only implement-3 and devlog-4 should be in results
         assert "design-0" not in completed_names
         assert "tasks-1" not in completed_names
-        assert "implement-3" in completed_names
+        assert "implement-5" in completed_names
 
     # -------------------------------------------------------------------
     # T19: Dry-run produces no state file

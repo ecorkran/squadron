@@ -49,14 +49,18 @@ class TestBuiltInPipelineStructure:
             project_dir=_NONEXISTENT,
             user_dir=_NONEXISTENT,
         )
-        assert len(defn.steps) == 6
+        assert len(defn.steps) == 10
         step_types = [s.step_type for s in defn.steps]
         assert step_types == [
             "design",
             "tasks",
+            "summary",
             "compact",
+            "summary",
             "implement",
+            "summary",
             "compact",
+            "summary",
             "devlog",
         ]
 

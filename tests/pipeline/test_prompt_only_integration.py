@@ -76,7 +76,7 @@ class TestPromptOnlyFullCycle:
             )
 
         # ---- Verify all steps were visited ----
-        assert len(step_names) == 6
+        assert len(step_names) == 10
 
         # ---- Verify next step returns None (all done) ----
         next_step = state_mgr.first_unfinished_step(run_id, definition)
@@ -84,16 +84,20 @@ class TestPromptOnlyFullCycle:
 
         # ---- Verify state file ----
         state = state_mgr.load(run_id)
-        assert len(state.completed_steps) == 6
+        assert len(state.completed_steps) == 10
 
         # Verify step types are in expected order
         step_types = [s.step_type for s in state.completed_steps]
         assert step_types == [
             "design",
             "tasks",
+            "summary",
             "compact",
+            "summary",
             "implement",
+            "summary",
             "compact",
+            "summary",
             "devlog",
         ]
 
@@ -151,14 +155,14 @@ class TestPromptOnlyFullCycle:
         resolver = ModelResolver(pipeline_model="sonnet")
         params: dict[str, object] = {"slice": "152"}
 
-        # compact is step index 2
-        compact_step = definition.steps[2]
+        # compact is step index 3 (preceded by design, tasks, summary)
+        compact_step = definition.steps[3]
         assert compact_step.step_type == "compact"
 
         instructions = render_step_instructions(
             compact_step,
-            step_index=2,
-            total_steps=6,
+            step_index=3,
+            total_steps=10,
             params=params,
             resolver=resolver,
             run_id="run-test",

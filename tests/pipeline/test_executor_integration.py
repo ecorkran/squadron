@@ -68,7 +68,7 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 6
+        assert len(result.step_results) == 10
         assert all(sr.status == ExecutionStatus.COMPLETED for sr in result.step_results)
 
     @pytest.mark.asyncio
@@ -86,9 +86,8 @@ class TestSliceLifecycleIntegration:
             _action_registry=registry,
         )
 
-        assert len(received) == 6
+        assert len(received) == 10
         step_names = [sr.step_name for sr in received]
-        # All 5 lifecycle steps should appear in order
         assert step_names[0].startswith("design")
         assert step_names[-1].startswith("devlog")
 
@@ -97,20 +96,21 @@ class TestSliceLifecycleIntegration:
         definition = _no_project_pipeline("slice")
         registry = _success_registry()
 
-        # compact-2 is the third step (0-indexed)
+        # compact-3 is the fourth step (0-indexed)
         result = await execute_pipeline(
             definition,
             {"slice": "149"},
             resolver=MagicMock(),
             cf_client=MagicMock(),
-            start_from="compact-2",
+            start_from="compact-3",
             _action_registry=registry,
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        # Should only have 4 steps: compact, implement, compact, devlog
-        assert len(result.step_results) == 4
-        assert result.step_results[0].step_name == "compact-2"
+        # Should have 7 steps: compact-3, summary-4, implement-5, summary-6,
+        # compact-7, summary-8, devlog-9
+        assert len(result.step_results) == 7
+        assert result.step_results[0].step_name == "compact-3"
 
     @pytest.mark.asyncio
     async def test_missing_required_param_slice(self) -> None:

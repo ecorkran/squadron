@@ -520,6 +520,7 @@ async def execute_pipeline(
     import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
     import squadron.pipeline.steps.dispatch as _s_dispatch  # noqa: F401
     import squadron.pipeline.steps.fan_out as _s_fan_out  # noqa: F401
+    import squadron.pipeline.steps.loop as _s_loop  # noqa: F401
     import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
     import squadron.pipeline.steps.review as _s_review  # noqa: F401
     import squadron.pipeline.steps.summary as _s_summary  # noqa: F401
@@ -539,6 +540,7 @@ async def execute_pipeline(
         _s_devlog,
         _s_dispatch,
         _s_fan_out,
+        _s_loop,
         _s_phase,
         _s_review,
         _s_summary,
@@ -640,6 +642,24 @@ async def execute_pipeline(
             )
         elif step.step_type == StepTypeName.FAN_OUT:
             step_result = await _execute_fan_out_step(
+                step=step,
+                resolved_config=resolved_config,
+                step_index=step_index,
+                merged_params=merged_params,
+                prior_outputs=prior_outputs,
+                pipeline_name=definition.name,
+                run_id=effective_run_id,
+                cwd=effective_cwd,
+                resolver=resolver,
+                cf_client=cf_client,
+                sdk_session=sdk_session,
+                get_step_type_fn=get_step_type,
+                get_action_fn=_action_registry.__getitem__
+                if _action_registry
+                else get_action,
+            )
+        elif step.step_type == StepTypeName.LOOP:
+            step_result = await _execute_loop_body(
                 step=step,
                 resolved_config=resolved_config,
                 step_index=step_index,
@@ -948,6 +968,134 @@ async def _execute_loop_step(
                 step_type=step.step_type,
                 status=ExecutionStatus.SKIPPED,
                 action_results=final_results,
+                iteration=loop_config.max,
+            )
+
+
+async def _execute_loop_body(
+    *,
+    step: Any,
+    resolved_config: dict[str, object],
+    step_index: int,
+    merged_params: dict[str, object],
+    prior_outputs: dict[str, ActionResult],
+    pipeline_name: str,
+    run_id: str,
+    cwd: str,
+    resolver: Any,
+    cf_client: Any,
+    sdk_session: SDKExecutionSession | None = None,
+    get_step_type_fn: Any,
+    get_action_fn: Any,
+) -> StepResult:
+    """Execute a ``loop:`` step type with a multi-step body.
+
+    Mirrors ``_execute_loop_step`` semantics but iterates over a ``steps:``
+    body rather than a single action.  ``_parse_loop_config`` ignores the
+    ``steps`` key, so ``resolved_config`` is passed through unchanged.
+    """
+    loop_config = _parse_loop_config(resolved_config)
+
+    if loop_config.strategy is not None:
+        _logger.warning(
+            "Loop strategy '%s' not implemented, "
+            "falling back to basic max-iteration loop",
+            loop_config.strategy,
+        )
+
+    from typing import cast
+
+    inner_steps_raw = resolved_config.get("steps", [])
+    if isinstance(inner_steps_raw, list):
+        raw_list: list[dict[str, object]] = [
+            cast(dict[str, object], s)
+            for s in inner_steps_raw  # type: ignore[union-attr]
+            if isinstance(s, dict)
+        ]
+    else:
+        raw_list = []
+    inner_steps = _unpack_inner_steps(raw_list)
+
+    iteration_action_results: list[ActionResult] = []
+
+    for iteration in range(1, loop_config.max + 1):
+        iteration_action_results = []
+
+        for inner_step in inner_steps:
+            inner_resolved = resolve_placeholders(inner_step.config, merged_params)
+            inner_result = await _execute_step_once(
+                step=inner_step,
+                resolved_config=inner_resolved,
+                step_index=step_index,
+                merged_params=merged_params,
+                prior_outputs=prior_outputs,
+                pipeline_name=pipeline_name,
+                run_id=run_id,
+                cwd=cwd,
+                resolver=resolver,
+                cf_client=cf_client,
+                sdk_session=sdk_session,
+                get_step_type_fn=get_step_type_fn,
+                get_action_fn=get_action_fn,
+                iteration=iteration,
+            )
+            iteration_action_results.extend(inner_result.action_results)
+
+            # Checkpoint pause short-circuits the loop immediately
+            if inner_result.status == ExecutionStatus.PAUSED:
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=ExecutionStatus.PAUSED,
+                    action_results=iteration_action_results,
+                    iteration=iteration,
+                )
+            # FAILED is transient — continue executing remaining inner steps
+
+        # Evaluate until condition after all inner steps complete
+        if loop_config.until is not None:
+            if evaluate_condition(loop_config.until, iteration_action_results):
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=ExecutionStatus.COMPLETED,
+                    action_results=iteration_action_results,
+                    iteration=iteration,
+                )
+        else:
+            # No until condition — complete after first full iteration
+            return StepResult(
+                step_name=step.name,
+                step_type=step.step_type,
+                status=ExecutionStatus.COMPLETED,
+                action_results=iteration_action_results,
+                iteration=iteration,
+            )
+
+    # Max iterations exhausted
+    match loop_config.on_exhaust:
+        case ExhaustBehavior.FAIL:
+            return StepResult(
+                step_name=step.name,
+                step_type=step.step_type,
+                status=ExecutionStatus.FAILED,
+                action_results=iteration_action_results,
+                iteration=loop_config.max,
+            )
+        case ExhaustBehavior.CHECKPOINT:
+            return StepResult(
+                step_name=step.name,
+                step_type=step.step_type,
+                status=ExecutionStatus.PAUSED,
+                action_results=iteration_action_results,
+                iteration=loop_config.max,
+            )
+        case ExhaustBehavior.SKIP:
+            return StepResult(
+                step_name=step.name,
+                step_type=step.step_type,
+                status=ExecutionStatus.SKIPPED,
+                action_results=iteration_action_results,
                 iteration=loop_config.max,
             )
 

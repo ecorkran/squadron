@@ -173,6 +173,40 @@ steps:
   # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------
+  # loop — multi-step loop body with configurable retry semantics (slice 194)
+  # -------------------------------------------------------------------------
+  # The `loop:` step type is the multi-step counterpart to the single-step
+  # `loop:` sub-field.  Instead of re-running one step, it re-runs an entire
+  # sequence of inner steps per iteration.
+  #
+  # Options:
+  #   max:          (required) maximum number of iterations
+  #   until:        exit condition — review.pass | review.concerns_or_better |
+  #                 action.success  (omit to run exactly one iteration)
+  #   on_exhaust:   what to do if max is reached without satisfying until —
+  #                 fail (default) | checkpoint | skip
+  #   strategy:     convergence strategy name (reserved for slice 184)
+  #   steps:        (required) list of inner steps to run per iteration
+  #
+  # Nested loops (a loop: step inside another loop: body) are not supported
+  # in v1.  See the slice 194 design for the rationale.
+  #
+  # Example: dispatch-then-review loop (typical dispatch+review convergence)
+  #
+  # - loop:
+  #     max: 5
+  #     until: review.pass
+  #     on_exhaust: checkpoint
+  #     steps:
+  #       - dispatch:
+  #           prompt: "Implement the feature described in {slice}"
+  #           model: sonnet
+  #       - review:
+  #           template: code
+  #           model: minimax
+  # -------------------------------------------------------------------------
+
+  # -------------------------------------------------------------------------
   # Step naming — give a step an explicit name for resume support
   # -------------------------------------------------------------------------
   # Any step can include a `name:` field for use with --from-step:
