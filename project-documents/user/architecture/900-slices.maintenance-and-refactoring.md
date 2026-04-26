@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260425
+dateUpdated: 20260426
 status: complete
 ---
 
@@ -35,4 +35,25 @@ injected into the review prompt. Three coordinated changes:
    closed) so dead reviewers and parser misses can't silently wave through.
 
 **Status:** complete · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [149]
+
+2. [ ] **(902) Pipeline Verbosity Passthrough (`-v`/`-vv`)**
+Fixes [issue #9](https://github.com/ecorkran/squadron/issues/9): pipeline review
+commands hard-code `-v`, and `/sq:run` swallows trailing flags into the target
+string. Two coordinated changes:
+
+1. Thread the existing `sq run -v/-vv` count into `PromptRenderer` and replace
+   the hard-coded `cmd_parts.append("-v")` in `_render_review`
+   ([prompt_renderer.py:174](src/squadron/pipeline/prompt_renderer.py#L174))
+   with conditional emission based on runtime verbosity. Default 0 (no flag);
+   `-v` and `-vv` opt in. This is a deliberate behavior change — current runs
+   always emit `-v` to sub-reviews; new default is silent.
+2. Update `/sq:run` slash command to peel trailing `-v`/`-vv`/`--verbose`
+   tokens off `$ARGUMENTS` before splitting pipeline/target, and pass them
+   through to `sq run`.
+
+**Slice design:** `user/slices/902-slice.pipeline-verbosity-passthrough-v-vv.md`
+Branch: `902-pipeline-verbosity-passthrough`, close issue on merge.
+
+**Status:** design complete · **Risk:** Low · **Effort:** 1/5 · **Dependencies:** none
+
 

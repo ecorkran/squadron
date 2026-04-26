@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260425
+dateUpdated: 20260426
 ---
 
 # Development Log
@@ -13,6 +13,13 @@ CHANGELOG.md, in that this file is written from implementor perspective where CH
 written from user perspective.
 
 ---
+
+## 20260426
+
+### Slice 902: Pipeline Verbosity Passthrough — Design Complete
+- Created slice design for issue #9: pipeline review commands hard-code `-v`, `/sq:run` swallows trailing flags.
+- Two changes: thread `verbosity` param through `render_step_instructions` → `_render_review` (replacing hard-coded `-v`), and update `/sq:run` slash command to peel `-v`/`-vv` from `$ARGUMENTS`.
+- Default changes from implicit `-v` to silent (0); `-v`/`-vv` opt in explicitly.
 
 ## 20260425
 
