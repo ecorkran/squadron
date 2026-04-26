@@ -22,6 +22,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
+from squadron.review.template_inputs import resolve_template_inputs
 from squadron.review.templates import get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
@@ -234,8 +235,7 @@ class ReviewAction:
     ) -> SliceInfo | None:
         """Auto-resolve review inputs from slice number via CF.
 
-        Maps slice index to template-specific input/against values,
-        matching the behavior of CLI commands like ``sq review slice 154``.
+        Delegates to ``resolve_template_inputs`` using the declarative registry.
         Returns the resolved SliceInfo for use in file persistence naming.
         """
         try:
@@ -244,26 +244,7 @@ class ReviewAction:
             _logger.warning("review: could not resolve slice %d: %s", slice_index, exc)
             return None
 
-        match template_name:
-            case "slice":
-                if info["design_file"]:
-                    inputs["input"] = info["design_file"]
-                inputs["against"] = info["arch_file"]
-            case "tasks":
-                if info["task_files"]:
-                    inputs["input"] = (
-                        f"project-documents/user/tasks/{info['task_files'][0]}"
-                    )
-                if info["design_file"]:
-                    inputs["against"] = info["design_file"]
-            case "arch":
-                inputs["input"] = info["arch_file"]
-            case _:
-                _logger.debug(
-                    "review: no auto-resolution for template '%s'",
-                    template_name,
-                )
-
+        resolve_template_inputs(template_name, info, inputs.get("cwd", ""), inputs)
         return info
 
 
