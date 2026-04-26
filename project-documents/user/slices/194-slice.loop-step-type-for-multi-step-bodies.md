@@ -133,7 +133,7 @@ needed.
     max: 3
     until: review.pass
     steps:
-      - dispatch: { template: implement-task, model: sonnet }
+      - dispatch: { prompt: "Implement task X", model: sonnet }
       - review:   { template: code, model: opus }
 ```
 
@@ -210,7 +210,7 @@ evaluate_condition      — reused unchanged
     strategy: weighted-decay      # optional; stubbed until 184
     steps:
       - dispatch:
-          template: implement-task
+          prompt: "Implement the next task in the slice"
           model: sonnet
       - review:
           template: code
@@ -334,8 +334,8 @@ steps:
       on_exhaust: fail
       steps:
         - dispatch:
-            template: implement-task
-            model: sonnet
+            prompt: "Write a one-line haiku about pipelines."
+            model: haiku
         - review:
             template: code
             model: opus
