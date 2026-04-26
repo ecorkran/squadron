@@ -6,7 +6,7 @@ lldReference: user/slices/901-slice.pipeline-code-review-diff-injection.md
 dependencies: [149]
 dateCreated: 20260425
 dateUpdated: 20260425
-status: not_started
+status: complete
 ---
 
 # Tasks: Pipeline Code-Review Diff Injection and UNKNOWN-Fails-Closed
@@ -44,24 +44,24 @@ Key files:
 
 ### 1. UNKNOWN fails closed in checkpoint thresholds
 
-- [ ] In `checkpoint.py`, add `"UNKNOWN"` to both threshold sets:
+- [x] In `checkpoint.py`, add `"UNKNOWN"` to both threshold sets:
   ```python
   CheckpointTrigger.ON_CONCERNS: {"CONCERNS", "FAIL", "UNKNOWN"},
   CheckpointTrigger.ON_FAIL:     {"FAIL", "UNKNOWN"},
   ```
-- [ ] Confirm `_should_fire` still returns `False` when `verdict is None`
+- [x] Confirm `_should_fire` still returns `False` when `verdict is None`
   (no review in prior outputs) — this case must remain distinct from UNKNOWN.
 
 ### 2. Tests: checkpoint UNKNOWN behavior
 
-- [ ] `_should_fire(ON_FAIL, "UNKNOWN")` → `True`
-- [ ] `_should_fire(ON_CONCERNS, "UNKNOWN")` → `True`
-- [ ] `_should_fire(ON_FAIL, None)` → `False` (regression — no review)
-- [ ] `_should_fire(ON_CONCERNS, None)` → `False` (regression — no review)
-- [ ] `_should_fire(ON_FAIL, "FAIL")` → `True` (regression)
-- [ ] `_should_fire(ON_FAIL, "PASS")` → `False` (regression)
-- [ ] `_should_fire(NEVER, "UNKNOWN")` → `False`
-- [ ] `_should_fire(ALWAYS, "UNKNOWN")` → `True`
+- [x] `_should_fire(ON_FAIL, "UNKNOWN")` → `True`
+- [x] `_should_fire(ON_CONCERNS, "UNKNOWN")` → `True`
+- [x] `_should_fire(ON_FAIL, None)` → `False` (regression — no review)
+- [x] `_should_fire(ON_CONCERNS, None)` → `False` (regression — no review)
+- [x] `_should_fire(ON_FAIL, "FAIL")` → `True` (regression)
+- [x] `_should_fire(ON_FAIL, "PASS")` → `False` (regression)
+- [x] `_should_fire(NEVER, "UNKNOWN")` → `False`
+- [x] `_should_fire(ALWAYS, "UNKNOWN")` → `True`
 
 **Commit:** `fix(pipeline): treat UNKNOWN verdict as FAIL for on-fail/on-concerns checkpoints`
 
@@ -69,32 +69,32 @@ Key files:
 
 ### 3. Forward `slice` from `PhaseStepType.expand()`
 
-- [ ] In `phase.py` `expand()`, when emitting the `("review", {...})` action
+- [x] In `phase.py` `expand()`, when emitting the `("review", {...})` action
   tuple, include `"slice": "{slice}"` (the same placeholder format already
   used for `set_slice`) in the review action dict.
-- [ ] Only add `"slice"` when a `review:` sub-field is present (the guard
+- [x] Only add `"slice"` when a `review:` sub-field is present (the guard
   already exists at line 108).
 
 ### 4. Tests: phase step forwards `slice`
 
-- [ ] Expand a phase step config that includes `review: code`; assert the
+- [x] Expand a phase step config that includes `review: code`; assert the
   emitted review action tuple contains `"slice"` as a key.
-- [ ] Expand a phase step config with no `review:` sub-field; assert the
+- [x] Expand a phase step config with no `review:` sub-field; assert the
   actions list contains no review action (regression — existing behavior).
 
 ---
 
 ### 5. Forward `slice` from `ReviewStepType.expand()`
 
-- [ ] In `review.py` `expand()`, include `"slice": cfg.get("slice")` in the
+- [x] In `review.py` `expand()`, include `"slice": cfg.get("slice")` in the
   emitted `("review", {...})` action dict when `"slice"` is present in `cfg`.
   Use `cfg.get` so steps without an explicit `slice` key are unaffected.
 
 ### 6. Tests: review step forwards `slice`
 
-- [ ] Expand a `review:` step config that includes `slice: 194`; assert the
+- [x] Expand a `review:` step config that includes `slice: 194`; assert the
   emitted review action tuple contains `"slice": 194`.
-- [ ] Expand a `review:` step config without a `slice` key; assert `"slice"`
+- [x] Expand a `review:` step config without a `slice` key; assert `"slice"`
   is absent from the emitted action dict (not set to None).
 
 **Commit:** `fix(pipeline): forward slice param through phase and review step expand()`
@@ -103,11 +103,11 @@ Key files:
 
 ### 7. Create template-input registry
 
-- [ ] Create `src/squadron/review/template_inputs.py`.
-- [ ] Define a frozen `TemplateInputSpec` dataclass:
+- [x] Create `src/squadron/review/template_inputs.py`.
+- [x] Define a frozen `TemplateInputSpec` dataclass:
   - `key: str` — the `inputs[key]` this spec populates
   - `source: Callable[[SliceInfo, str], str | None]` — `(slice_info, cwd) -> value`
-- [ ] Define `TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]]` with
+- [x] Define `TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]]` with
   entries for `"slice"`, `"tasks"`, `"arch"`, and `"code"` that reproduce
   the exact same inputs the current per-template `match` produces, plus the
   new `code` entry:
@@ -117,54 +117,54 @@ Key files:
   - `"arch"` → `input` from `info["arch_file"]`
   - `"code"` → `diff` from `resolve_slice_diff_range(info["index"], cwd)`
     (import from `squadron.review.git_utils`)
-- [ ] `SliceInfo` must be imported from `squadron.review.persistence`.
+- [x] `SliceInfo` must be imported from `squadron.review.persistence`.
   `resolve_slice_diff_range` from `squadron.review.git_utils`. No other new
   imports in the module.
-- [ ] Export a helper `resolve_template_inputs(template_name, info, cwd,
+- [x] Export a helper `resolve_template_inputs(template_name, info, cwd,
   inputs)` that iterates `TEMPLATE_INPUTS.get(template_name, [])` and
   populates `inputs[spec.key] = value` when `source` returns non-None.
 
 ### 8. Tests: template-input registry
 
-- [ ] For each of the four templates (`slice`, `tasks`, `arch`, `code`),
+- [x] For each of the four templates (`slice`, `tasks`, `arch`, `code`),
   assert that `resolve_template_inputs` populates the expected keys from a
   `SliceInfo` fixture.
-- [ ] Assert that a template name not in the registry produces no key/value
+- [x] Assert that a template name not in the registry produces no key/value
   changes to `inputs` (no KeyError, no crash).
-- [ ] For `"code"` entry, use a monkeypatched `resolve_slice_diff_range` that
+- [x] For `"code"` entry, use a monkeypatched `resolve_slice_diff_range` that
   returns a deterministic string; assert `inputs["diff"]` is set to it.
-- [ ] Assert that a `source` returning `None` does not set the key (i.e.
+- [x] Assert that a `source` returning `None` does not set the key (i.e.
   `task_files` being empty for `tasks` template does not set `input` to None).
 
 ---
 
 ### 9. Rewrite `_resolve_slice_inputs` to use the registry
 
-- [ ] In `review.py` action, replace the body of `_resolve_slice_inputs`
+- [x] In `review.py` action, replace the body of `_resolve_slice_inputs`
   (lines 247-265) with a call to `resolve_template_inputs(template_name,
   info, cwd, inputs)` from `template_inputs.py`.
-- [ ] Remove the per-template `match` block entirely.
-- [ ] The existing guard (`if slice_param is not None and "input" not in
+- [x] Remove the per-template `match` block entirely.
+- [x] The existing guard (`if slice_param is not None and "input" not in
   inputs`) at line 120 is the entry point for `_resolve_slice_inputs`. For
   the `code` template, `"input"` is never in inputs, so the guard passes —
   confirm this behavior is preserved. Do not add a second guard; rely on the
   existing one.
-- [ ] The `_resolve_slice_inputs` debug-log line for unrecognised templates
+- [x] The `_resolve_slice_inputs` debug-log line for unrecognised templates
   can be removed — unknown templates are handled gracefully by the registry's
   empty list fallback.
-- [ ] Preserve the return of `SliceInfo | None` — needed for file persistence
+- [x] Preserve the return of `SliceInfo | None` — needed for file persistence
   naming downstream (lines 182-188).
-- [ ] Import `resolve_template_inputs` and `TEMPLATE_INPUTS` from
+- [x] Import `resolve_template_inputs` and `TEMPLATE_INPUTS` from
   `squadron.review.template_inputs`.
 
 ### 10. Tests: `_resolve_slice_inputs` regression
 
-- [ ] For `slice`, `tasks`, `arch` templates: assert `_resolve_slice_inputs`
+- [x] For `slice`, `tasks`, `arch` templates: assert `_resolve_slice_inputs`
   produces identical `inputs` dicts before and after the rewrite. Use the
   same `SliceInfo` fixture as Task 8; mock `resolve_slice_info` to return it.
-- [ ] For `code` template: assert `inputs["diff"]` is now set to the
+- [x] For `code` template: assert `inputs["diff"]` is now set to the
   monkeypatched diff range (was previously not set — this is the fix).
-- [ ] For an unknown template name: assert `inputs` is unchanged and no
+- [x] For an unknown template name: assert `inputs` is unchanged and no
   exception is raised.
 
 **Commit:** `fix(pipeline): declarative template-input registry, inject diff for code reviews`
@@ -173,7 +173,7 @@ Key files:
 
 ### 11. Integration test: end-to-end pipeline review with `code` template
 
-- [ ] Write a test in `tests/pipeline/actions/test_review_action.py` (or a
+- [x] Write a test in `tests/pipeline/actions/test_review_action.py` (or a
   new `test_review_action_integration.py`) that:
   1. Constructs an `ActionContext` where `context.params` contains
      `template: code`, `slice: 194`, and a valid `cwd`.
@@ -184,16 +184,16 @@ Key files:
   4. Asserts the mock `run_review_with_profile` was called with a prompt
      that **contains** the diff range string (confirming the diff was injected).
   5. Asserts the returned `ActionResult.verdict == "CONCERNS"`.
-- [ ] Write a parallel test where `slice` is absent from `context.params`;
+- [x] Write a parallel test where `slice` is absent from `context.params`;
   assert `inputs["diff"]` is not set (no crash, no side effects).
 
 ### 12. Regression: full test suite and lint
 
-- [ ] `uv run pytest tests/pipeline/actions/ tests/pipeline/steps/ -q` —
+- [x] `uv run pytest tests/pipeline/actions/ tests/pipeline/steps/ -q` —
   all pass.
-- [ ] `uv run pytest -q` — full suite passes.
-- [ ] `uv run ruff check && uv run ruff format --check` — clean.
-- [ ] `uv run pyright` — 0 errors.
+- [x] `uv run pytest -q` — full suite passes.
+- [x] `uv run ruff check && uv run ruff format --check` — clean.
+- [x] `uv run pyright` — 0 errors.
 
 **Commit:** `test(pipeline): add integration tests for code-review diff injection`
 
@@ -201,12 +201,12 @@ Key files:
 
 ### 13. Mark slice complete and update DEVLOG
 
-- [ ] Update `dateUpdated` in slice frontmatter to today's date.
-- [ ] Update `status` in slice frontmatter to `complete`.
-- [ ] Update `900-slices.maintenance-and-refactoring.md` — change slice 901
+- [x] Update `dateUpdated` in slice frontmatter to today's date.
+- [x] Update `status` in slice frontmatter to `complete`.
+- [x] Update `900-slices.maintenance-and-refactoring.md` — change slice 901
   status line to `complete`.
-- [ ] Update `CHANGELOG.md` — add entry under current version.
-- [ ] Write DEVLOG entry summarising what shipped (the three changes, files
+- [x] Update `CHANGELOG.md` — add entry under current version.
+- [x] Write DEVLOG entry summarising what shipped (the three changes, files
   touched, test count, gates passed).
 
 **Commit:** `docs: mark slice 901 complete; update DEVLOG and CHANGELOG`

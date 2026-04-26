@@ -35,5 +35,5 @@ injected into the review prompt. Three coordinated changes:
 3. Treat verdict `UNKNOWN` as `FAIL` for `on-fail` checkpoint triggers (fail
    closed) so dead reviewers and parser misses can't silently wave through.
 
-**Status:** not-started · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [149]
+**Status:** complete · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [149]
 

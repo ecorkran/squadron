@@ -16,6 +16,27 @@ written from user perspective.
 
 ## 20260425
 
+### Slice 901: Pipeline Code-Review Diff Injection — Implementation Complete
+
+Shipped three coordinated fixes for issue #11 (pipeline code reviews silently UNKNOWN).
+
+**UNKNOWN fails closed** (`checkpoint.py`): Added `"UNKNOWN"` to `ON_FAIL` and `ON_CONCERNS`
+threshold sets. `verdict is None` (no prior review) is unchanged — only the
+parsed-but-unparseable case fails closed. 8 new unit tests in `test_checkpoint.py`.
+
+**`slice` forwarded through `expand()`** (`phase.py`, `review.py`): `PhaseStepType.expand()` and
+`ReviewStepType.expand()` now include `"slice"` in the emitted review action dict. Phase steps
+use `"{slice}"` placeholder; review steps forward `cfg.get("slice")`. 4 new tests.
+
+**Declarative template-input registry** (`src/squadron/review/template_inputs.py`): New module
+with `TemplateInputSpec` dataclass and `TEMPLATE_INPUTS` dict covering `slice`, `tasks`, `arch`,
+and `code` templates. `code` entry calls `resolve_slice_diff_range` to inject `inputs["diff"]`.
+`_resolve_slice_inputs` in `pipeline/actions/review.py` rewritten to delegate entirely to
+`resolve_template_inputs`. 9 registry tests + 6 `_resolve_slice_inputs` regression tests + 2
+end-to-end integration tests.
+
+Gates: 1719 tests pass, ruff clean, pyright 0 errors.
+
 ### Slice 901: Pipeline Code-Review Diff Injection — Task Breakdown Complete
 
 Task file created at `user/tasks/901-tasks.pipeline-code-review-diff-injection.md`

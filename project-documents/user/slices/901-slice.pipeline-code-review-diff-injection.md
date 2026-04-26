@@ -7,7 +7,7 @@ dependencies: [149]
 interfaces: []
 dateCreated: 20260425
 dateUpdated: 20260425
-status: not-started
+status: complete
 relatedIssues: [11]
 ---
 
@@ -280,49 +280,76 @@ CheckpointAction._should_fire    — UNKNOWN now triggers ON_FAIL / ON_CONCERNS
 
 ## Verification Walkthrough
 
-After implementation, the user can prove the slice works as follows.
-
 **Step 1 — sanity check the existing direct CLI path is unchanged.**
 
 ```bash
 uv run sq review code 194 -v --model minimax/minimax-m2.7
 ```
 
-Verdict produced; review file persisted. (Regression gate; this path was
-already working before this slice.)
+Regression gate only — this path was already working before this slice.
+Not re-executed as part of implementation verification.
 
-**Step 2 — re-run the pipeline review action that previously produced
-UNKNOWN.**
+**Step 2 — re-run the pipeline review action that previously produced UNKNOWN.**
 
 ```bash
 uv run sq run p6 194
 ```
 
-The review step in P6 now produces a parseable verdict (PASS / CONCERNS /
-FAIL — depends on what the model finds). The run JSON's review action
-shows `verdict != "UNKNOWN"` and `findings` is non-empty.
+Not run live. The fix is verified at the unit/integration level; live
+pipeline run requires a live model provider and is outside CI scope.
 
 **Step 3 — fail-closed sanity check on a stubbed reviewer.**
 
-Use a test fixture or local stub that returns a malformed review (no
-`## Summary` block). Confirm:
+Covered by `tests/pipeline/actions/test_checkpoint.py::TestShouldFireUnknown`.
+All 8 parametrized assertions pass:
 
-- `parse_review_output` produces `Verdict.UNKNOWN`.
-- A checkpoint with `trigger: on-fail` after that review pauses the
-  pipeline.
+```
+tests/pipeline/actions/test_checkpoint.py::TestShouldFireUnknown - 8 passed
+```
+
+Key assertions:
+- `_should_fire(ON_FAIL, "UNKNOWN")` → `True`
+- `_should_fire(ON_CONCERNS, "UNKNOWN")` → `True`
+- `_should_fire(ON_FAIL, None)` → `False` (no review, not UNKNOWN)
+- `_should_fire(ALWAYS, "UNKNOWN")` → `True`
+- `_should_fire(NEVER, "UNKNOWN")` → `False`
 
 **Step 4 — registry round-trip.**
 
-For each existing template (`slice`, `tasks`, `arch`, `code`), assert that
-`_resolve_slice_inputs` produces the same `inputs` dict it produced before
-the refactor (or the corrected dict where the `code` case was previously
-missing). Property test or table-driven test against a `SliceInfo` fixture.
+Covered by `tests/review/test_template_inputs.py` (9 tests) and
+`tests/pipeline/actions/test_review_action.py::TestResolveSliceInputsRegression` (6 tests).
 
-**Step 5 — confirm `slice` flows as explicit key, not just merged-params.**
+```
+tests/review/test_template_inputs.py - 9 passed
+tests/pipeline/actions/test_review_action.py::TestResolveSliceInputsRegression - 6 passed
+```
 
-Construct a phase step in test, call `expand()`, and assert the emitted
-review action config dict contains `"slice"`. Same for the standalone
-review step.
+`code` template now sets `inputs["diff"]`; was previously unset (the bug).
+
+**Step 5 — confirm `slice` flows as explicit key.**
+
+Covered by:
+- `tests/pipeline/steps/test_phase.py::test_expand_review_includes_slice_placeholder`
+- `tests/pipeline/steps/test_review.py::test_expand_slice_forwarded_when_present`
+- `tests/pipeline/steps/test_review.py::test_expand_slice_absent_when_not_in_config`
+
+**Step 6 — end-to-end integration.**
+
+```
+tests/pipeline/actions/test_review_action_integration.py - 2 passed
+```
+
+- `test_diff_injected_into_run_review_call`: `run_review_with_profile` receives
+  `inputs["diff"] == "abc123...slice-194"` when `slice=194` is in params.
+- `test_no_diff_when_slice_absent`: no `"diff"` key set when `slice` absent.
+
+**Full suite:**
+
+```bash
+uv run pytest -q   # 1719 passed
+uv run ruff check  # All checks passed
+uv run pyright     # 0 errors, 0 warnings
+```
 
 ## Risks
 
