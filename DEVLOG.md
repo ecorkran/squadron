@@ -16,6 +16,10 @@ written from user perspective.
 
 ## 20260426
 
+### Slice 902: Pipeline Verbosity Passthrough — Task Breakdown Complete
+- Created `902-tasks.pipeline-verbosity-passthrough-v-vv.md` (12 tasks, 105 lines).
+- Tasks cover: `_render_review` verbosity param + conditional emit, test update + new parametrized tests, `_build_action_instruction` forwarding, `render_step_instructions` param, two `run.py` call sites, slash command peel in `run.md`, two commits, final gate.
+
 ### Slice 902: Pipeline Verbosity Passthrough — Design Complete
 - Created slice design for issue #9: pipeline review commands hard-code `-v`, `/sq:run` swallows trailing flags.
 - Two changes: thread `verbosity` param through `render_step_instructions` → `_render_review` (replacing hard-coded `-v`), and update `/sq:run` slash command to peel `-v`/`-vv` from `$ARGUMENTS`.
