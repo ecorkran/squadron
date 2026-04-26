@@ -3,11 +3,10 @@ description: Run a review against existing artifacts
 
 params:
   slice: required
-  template: required
   model: sonnet
 
 steps:
   - review:
-      template: "{template}"
+      template: code
       model: "{model}"
       checkpoint: on-concerns
