@@ -10,11 +10,11 @@ Three-phase analysis pipeline:
 Usage:
   python codebase-probe.py /path/to/repo
   python codebase-probe.py /path/to/repo --output probe-results.json
-  python codebase-probe.py /path/to/repo --all                # all analyzers
-  python codebase-probe.py /path/to/repo --all --repomix      # analyzers + code packing
-  python codebase-probe.py /path/to/repo --repomix --repomix-compress  # pack with compression
+  python codebase-probe.py /path/to/repo --all              # all analyzers
+  python codebase-probe.py /path/to/repo --all --repomix    # analyzers + code packing
+  python codebase-probe.py /path/to/repo --repomix --repomix-compress  # compressed pack
   python codebase-probe.py /path/to/repo --repomix --repomix-style markdown
-  python codebase-probe.py /path/to/repo --depgraph           # dependency graph extraction
+  python codebase-probe.py /path/to/repo --depgraph         # dependency graph
 
 Output: JSON to stdout (or --output file) containing structured codebase metadata.
         Repomix output written to <repo>-repomix.<style> alongside probe results.
@@ -657,9 +657,7 @@ def detect_architecture_signals(repo: Path) -> dict:
         if path.exists():
             content = read_file_safe(path)
             if content:
-                # Count services (rough)
-                service_count = content.count("\n  ") - content.count("\n    ")
-                # Extract service names (lines with exactly 2-space indent followed by name:)
+                # Extract service names (lines with 2-space indent followed by name:)
                 services = re.findall(r"^  (\w[\w-]*):", content, re.MULTILINE)
                 if services:
                     signals["docker_compose_services"] = services
@@ -1015,7 +1013,9 @@ def run_repomix(repo: Path, options: dict) -> dict:
                 "estimated_tokens": est_tokens,
                 "style": style,
                 "compressed": compress,
-                "note": "Feed this file to the analysis prompt alongside probe-results.json",
+                "note": (
+                    "Feed this file to the analysis prompt alongside probe-results.json"
+                ),
             }
         else:
             return {
@@ -1317,7 +1317,10 @@ def probe(repo_path: str, options: dict) -> dict:
     elif not repomix_detection["available"]:
         results["repomix"] = {
             "status": "not_requested",
-            "note": "Use --repomix to pack codebase for LLM context. Install: npm install -g repomix",
+            "note": (
+                "Use --repomix to pack codebase for LLM context. "
+                "Install: npm install -g repomix"
+            ),
         }
 
     return results
@@ -1428,8 +1431,11 @@ def main():
         )
     if depgraph_info:
         imp = depgraph_info.get("import_analysis", {})
+        files_mapped = imp.get(
+            "files_with_internal_imports", imp.get("files_with_imports", "?")
+        )
         print(
-            f"  Import graph: {imp.get('files_with_internal_imports', imp.get('files_with_imports', '?'))} files mapped",
+            f"  Import graph: {files_mapped} files mapped",
             file=sys.stderr,
         )
     print(f"{'=' * 60}", file=sys.stderr)
