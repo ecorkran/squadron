@@ -546,6 +546,99 @@ class TestExecutePipelineErrorHandling:
         assert result.status == ExecutionStatus.PAUSED
         assert result.paused_at == "step-pause"
 
+    @pytest.mark.asyncio
+    async def test_checkpoint_pause_displays_review_findings(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: checkpoint pause must surface findings from the review
+        action, not the (empty) findings list on the checkpoint result itself.
+
+        The checkpoint action copies the prior verdict into its own ActionResult
+        so downstream code can see it. _last_with_verdict() walking action_results
+        in reverse would otherwise hit the checkpoint result first (verdict set,
+        findings empty) and report "no structured findings" even when the review
+        produced a full list. See issue #12.
+        """
+        from squadron.pipeline import executor as executor_module
+        from squadron.pipeline.executor import (
+            CheckpointDecision,
+            CheckpointResolution,
+            ExecutionStatus,
+            execute_pipeline,
+        )
+        from squadron.pipeline.steps import register_step_type
+
+        captured: dict[str, object] = {}
+
+        def fake_prompt(
+            verdict: str | None,
+            findings: list[dict[str, object]],
+            run_id: str,
+            step_name: str,
+        ) -> CheckpointDecision:
+            captured["verdict"] = verdict
+            captured["findings"] = findings
+            return CheckpointDecision(CheckpointResolution.EXIT, None)
+
+        monkeypatch.setattr(
+            executor_module, "_prompt_checkpoint_interactive", fake_prompt
+        )
+
+        review_findings = [
+            {
+                "id": "F001",
+                "severity": "concern",
+                "summary": "Bad",
+                "location": "x.py:1",
+            },
+            {
+                "id": "F002",
+                "severity": "concern",
+                "summary": "Worse",
+                "location": "y.py:2",
+            },
+        ]
+        review_result = ActionResult(
+            success=True,
+            action_type="review",
+            outputs={"response": "..."},
+            verdict="CONCERNS",
+            findings=review_findings,
+        )
+        # Checkpoint result mirrors what CheckpointAction produces: paused with
+        # verdict copied from prior review, but no findings of its own.
+        checkpoint_result = ActionResult(
+            success=True,
+            action_type="checkpoint",
+            outputs={"checkpoint": "paused"},
+            verdict="CONCERNS",
+        )
+
+        review_action = mock_action([review_result])
+        checkpoint_action = mock_action([checkpoint_result])
+
+        step = mock_step_type([("review", {}), ("checkpoint", {})])
+        register_step_type("_test_findings_pause", step)
+
+        pipeline = make_pipeline(
+            [make_step_config("_test_findings_pause", "step-x", {})]
+        )
+
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={
+                "review": review_action,
+                "checkpoint": checkpoint_action,
+            },
+        )
+
+        assert result.status == ExecutionStatus.PAUSED
+        assert captured["verdict"] == "CONCERNS"
+        assert captured["findings"] == review_findings
+
 
 # ---------------------------------------------------------------------------
 # T6 — Retry loop execution

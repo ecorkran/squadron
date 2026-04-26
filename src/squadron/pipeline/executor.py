@@ -824,10 +824,13 @@ async def _execute_step_once(
         # Checkpoint pause
         if result.outputs.get("checkpoint") == "paused":
             # Findings come from the review action, not the checkpoint action.
-            # The checkpoint action only sets outputs["checkpoint"] = "paused";
-            # its verdict and findings fields are None/[]. Use _last_with_verdict
-            # to pull the review result from earlier in this step's action_results.
-            prior_review = _last_with_verdict(action_results)
+            # The checkpoint action sets outputs["checkpoint"] = "paused" AND
+            # copies verdict from the prior review for downstream use — so
+            # _last_with_verdict walking action_results would return the
+            # checkpoint result (which has verdict but empty findings) before
+            # the review. Skip the just-appended checkpoint result and search
+            # the prior actions only.
+            prior_review = _last_with_verdict(action_results[:-1])
             verdict = prior_review.verdict if prior_review else None
             findings: list[dict[str, object]] = (
                 [f for f in (prior_review.findings or []) if isinstance(f, dict)]  # type: ignore[misc]
