@@ -6,7 +6,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from squadron.pipeline.actions.checkpoint import CheckpointAction, CheckpointTrigger
+from squadron.pipeline.actions.checkpoint import (
+    CheckpointAction,
+    CheckpointTrigger,
+    _should_fire,
+)
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.models import ActionContext, ActionResult
 
@@ -229,3 +233,34 @@ class TestCheckpointExecute:
         assert result.success is False
         assert "concerns" in result.outputs["error"]
         assert "on-concerns" in result.outputs["error"]
+
+
+# ---------------------------------------------------------------------------
+# _should_fire — UNKNOWN verdict handling
+# ---------------------------------------------------------------------------
+
+
+class TestShouldFireUnknown:
+    def test_on_fail_unknown_fires(self) -> None:
+        assert _should_fire(CheckpointTrigger.ON_FAIL, "UNKNOWN") is True
+
+    def test_on_concerns_unknown_fires(self) -> None:
+        assert _should_fire(CheckpointTrigger.ON_CONCERNS, "UNKNOWN") is True
+
+    def test_on_fail_none_skips(self) -> None:
+        assert _should_fire(CheckpointTrigger.ON_FAIL, None) is False
+
+    def test_on_concerns_none_skips(self) -> None:
+        assert _should_fire(CheckpointTrigger.ON_CONCERNS, None) is False
+
+    def test_on_fail_fail_fires(self) -> None:
+        assert _should_fire(CheckpointTrigger.ON_FAIL, "FAIL") is True
+
+    def test_on_fail_pass_skips(self) -> None:
+        assert _should_fire(CheckpointTrigger.ON_FAIL, "PASS") is False
+
+    def test_never_unknown_skips(self) -> None:
+        assert _should_fire(CheckpointTrigger.NEVER, "UNKNOWN") is False
+
+    def test_always_unknown_fires(self) -> None:
+        assert _should_fire(CheckpointTrigger.ALWAYS, "UNKNOWN") is True

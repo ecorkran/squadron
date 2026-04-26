@@ -19,8 +19,8 @@ class CheckpointTrigger(StrEnum):
 
 _TRIGGER_THRESHOLDS: dict[CheckpointTrigger, set[str]] = {
     CheckpointTrigger.ALWAYS: set(),  # fires regardless
-    CheckpointTrigger.ON_CONCERNS: {"CONCERNS", "FAIL"},
-    CheckpointTrigger.ON_FAIL: {"FAIL"},
+    CheckpointTrigger.ON_CONCERNS: {"CONCERNS", "FAIL", "UNKNOWN"},
+    CheckpointTrigger.ON_FAIL: {"FAIL", "UNKNOWN"},
     CheckpointTrigger.NEVER: set(),  # never fires
 }
 
