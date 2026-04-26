@@ -1,0 +1,14 @@
+name: test-loop
+description: attempt to test the new loop functions
+steps:
+  - loop:
+      max: 3
+      until: review.pass
+      on_exhaust: fail
+      steps:
+        - dispatch:
+            prompt: "Write a one-line haiku about pipelines."
+            model: haiku
+        - review:
+            template: code
+            model: minimax
