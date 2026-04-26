@@ -83,6 +83,7 @@ class StepState(BaseModel):
     verdict: str | None = None
     outputs: dict[str, object] = {}
     action_results: list[dict[str, object]] = []
+    iteration: int = 0
     completed_at: datetime
 
 
@@ -298,6 +299,7 @@ class StateManager:
             verdict=verdict,
             outputs=outputs,
             action_results=action_results_dicts,
+            iteration=step_result.iteration,
             completed_at=now,
         )
         state.completed_steps.append(step_state)
