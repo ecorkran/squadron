@@ -108,7 +108,9 @@ class PhaseStepType:
         review = cfg.get("review")
         if review is not None:
             if isinstance(review, str):
-                actions.append(("review", {"template": review, "model": None}))
+                actions.append(
+                    ("review", {"template": review, "model": None, "slice": "{slice}"})
+                )
             elif isinstance(review, dict):
                 review_dict = cast(dict[str, object], review)
                 actions.append(
@@ -117,6 +119,7 @@ class PhaseStepType:
                         {
                             "template": review_dict["template"],
                             "model": review_dict.get("model"),
+                            "slice": "{slice}",
                         },
                     )
                 )

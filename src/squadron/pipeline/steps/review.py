@@ -57,8 +57,15 @@ class ReviewStepType:
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
 
+        review_dict: dict[str, object] = {
+            "template": cfg["template"],
+            "model": cfg.get("model"),
+        }
+        if "slice" in cfg:
+            review_dict["slice"] = cfg["slice"]
+
         actions: list[tuple[str, dict[str, object]]] = [
-            ("review", {"template": cfg["template"], "model": cfg.get("model")}),
+            ("review", review_dict),
         ]
 
         if "checkpoint" in cfg:

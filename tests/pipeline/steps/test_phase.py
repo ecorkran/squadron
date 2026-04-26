@@ -124,7 +124,10 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
     assert actions[1] == ("cf-op", {"operation": "set_slice", "slice": "{slice}"})
     assert actions[2] == ("cf-op", {"operation": "build_context"})
     assert actions[3] == ("dispatch", {"model": "opus"})
-    assert actions[4] == ("review", {"template": "slice", "model": None})
+    assert actions[4] == (
+        "review",
+        {"template": "slice", "model": None, "slice": "{slice}"},
+    )
     assert actions[5] == ("checkpoint", {"trigger": "on-concerns"})
     assert actions[6] == ("commit", {"message_prefix": "phase-4"})
 
@@ -143,7 +146,7 @@ def test_expand_review_as_dict(design_step: PhaseStepType) -> None:
     review_action = actions[4]
     assert review_action == (
         "review",
-        {"template": "code", "model": "minimax2.7"},
+        {"template": "code", "model": "minimax2.7", "slice": "{slice}"},
     )
 
 
@@ -182,3 +185,18 @@ def test_expand_commit_prefix_includes_phase(design_step: PhaseStepType) -> None
     actions = design_step.expand(_make_config({"phase": 7}))
     commit = actions[-1]
     assert commit == ("commit", {"message_prefix": "phase-7"})
+
+
+def test_expand_review_includes_slice_placeholder(design_step: PhaseStepType) -> None:
+    """Review action tuple includes 'slice' placeholder when review is configured."""
+    actions = design_step.expand(_make_config({"phase": 4, "review": "code"}))
+    review_action = next(a for a in actions if a[0] == "review")
+    assert "slice" in review_action[1]
+    assert review_action[1]["slice"] == "{slice}"
+
+
+def test_expand_no_review_has_no_review_action(design_step: PhaseStepType) -> None:
+    """No review sub-field means no review action in the output."""
+    actions = design_step.expand(_make_config({"phase": 4}))
+    action_types = [a[0] for a in actions]
+    assert "review" not in action_types

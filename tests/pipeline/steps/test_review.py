@@ -73,3 +73,17 @@ def test_expand_model_none_when_not_in_config() -> None:
     actions = ReviewStepType().expand(_make_config({"template": "slice"}))
     review = actions[0]
     assert review[1]["model"] is None
+
+
+def test_expand_slice_forwarded_when_present() -> None:
+    """'slice' key in config is forwarded to the review action dict."""
+    actions = ReviewStepType().expand(_make_config({"template": "code", "slice": 194}))
+    review = actions[0]
+    assert review[1]["slice"] == 194
+
+
+def test_expand_slice_absent_when_not_in_config() -> None:
+    """'slice' key is not emitted when absent from config (not set to None)."""
+    actions = ReviewStepType().expand(_make_config({"template": "code"}))
+    review = actions[0]
+    assert "slice" not in review[1]
