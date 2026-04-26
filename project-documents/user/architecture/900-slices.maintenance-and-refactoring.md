@@ -21,8 +21,7 @@ status: in_progress
 
 ## Maintenance Slices
 
-### (901) Pipeline Code-Review Diff Injection and UNKNOWN-Fails-Closed
-
+1. [x] **(901) Pipeline Code-Review Diff Injection and UNKNOWN-Fails-Closed**
 Fixes [issue #11](https://github.com/ecorkran/squadron/issues/11): pipeline
 code reviews silently produce UNKNOWN/no-findings because the diff is never
 injected into the review prompt. Three coordinated changes:
