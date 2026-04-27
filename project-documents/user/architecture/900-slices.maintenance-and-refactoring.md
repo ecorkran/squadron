@@ -62,4 +62,29 @@ triple-registration across executor / loader / prompt_renderer, and close the
 prompt_renderer gap (missing `loop`/`collection`/`fan_out`) as a one-line
 consequence. Tracked as T14–T17 in the 902 task file.
 
+3. [ ] **(904) Review-Finding Location Required**
+Fixes [issue #10](https://github.com/ecorkran/squadron/issues/10): review
+findings inconsistently cite a code location, and PASS findings almost never
+do. Load-bearing for ensemble review (slices 182, 189) where merged-finding
+deduplication keys on location. Three coordinated changes:
+
+1. Update all four review-template prompts ([code.yaml](src/squadron/data/templates/code.yaml),
+   [slice.yaml](src/squadron/data/templates/slice.yaml),
+   [arch.yaml](src/squadron/data/templates/arch.yaml),
+   [tasks.yaml](src/squadron/data/templates/tasks.yaml)) to require
+   `location:` on every finding (PASS included), with per-template
+   precedence guidance.
+2. Soft-fail in [parsers.py](src/squadron/review/parsers.py): missing
+   `location:` becomes `-` with a WARNING log and a `missing-location` tag.
+3. Diff-membership WARNING for code reviews (cited path must appear in the
+   diff); WARNING-only, do not reject.
+
+`task_ref:` field deferred to future slice (likely under 189 ensemble
+review).
+
+**Slice design:** `user/slices/904-slice.review-finding-location-required.md`
+Branch: `904-review-finding-location-required`, close issue on merge.
+
+**Status:** design complete · **Risk:** Low–Medium · **Effort:** 2/5 · **Dependencies:** none
+
 
