@@ -16,6 +16,18 @@ written from user perspective.
 
 ## 20260426
 
+
+**slice: devlog-9**
+- cf-op-0: PASS
+- cf-op-1: PASS
+- cf-op-2: PASS
+- dispatch-3: PASS
+- review-4: PASS (verdict: PASS)
+- checkpoint-5: PASS
+- commit-6: PASS
+- summary-0: PASS
+- compact-0: PASS
+
 ### Slice 902: Pipeline Verbosity Passthrough — Complete
 - Commits: `69aefbf` fix(pipeline): thread verbosity through render_step_instructions; `4c1c011` fix(sq:run): peel -v/-vv flags from arguments, pass to sq run.
 - `_render_review` now accepts `verbosity: int = 0` (keyword-only). Hard-coded `-v` replaced with conditional: nothing at 0, `-v` at 1, `-vv` at ≥2.
