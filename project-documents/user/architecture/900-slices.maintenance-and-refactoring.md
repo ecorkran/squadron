@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260426
+dateUpdated: 20260427
 status: in-progress
 ---
 
@@ -36,7 +36,7 @@ injected into the review prompt. Three coordinated changes:
 
 **Status:** complete · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [149]
 
-2. [x] **(902) Pipeline Verbosity Passthrough (`-v`/`-vv`)**
+2. [x] **(902) Pipeline Verbosity Passthrough (`-v`/`-vv`) + Step-Type Registration Bootstrap**
 Fixes [issue #9](https://github.com/ecorkran/squadron/issues/9): pipeline review
 commands hard-code `-v`, and `/sq:run` swallows trailing flags into the target
 string. Two coordinated changes:
@@ -54,6 +54,12 @@ string. Two coordinated changes:
 **Slice design:** `user/slices/902-slice.pipeline-verbosity-passthrough-v-vv.md`
 Branch: `902-pipeline-verbosity-passthrough`, close issue on merge.
 
-**Status:** design complete · **Risk:** Low · **Effort:** 1/5 · **Dependencies:** none
+**Status:** complete · **Risk:** Low · **Effort:** 1/5 · **Dependencies:** none
+
+**Follow-up (20260427):** extract `bootstrap_step_types()` into
+[steps/__init__.py](src/squadron/pipeline/steps/__init__.py) to eliminate
+triple-registration across executor / loader / prompt_renderer, and close the
+prompt_renderer gap (missing `loop`/`collection`/`fan_out`) as a one-line
+consequence. Tracked as T14–T17 in the 902 task file.
 
 

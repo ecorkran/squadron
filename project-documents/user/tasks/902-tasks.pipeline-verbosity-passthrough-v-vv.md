@@ -6,7 +6,7 @@ lld: user/slices/902-slice.pipeline-verbosity-passthrough-v-vv.md
 dependencies: []
 projectState: Slice 901 complete (diff injection + UNKNOWN-fails-closed). Branch 902-pipeline-verbosity-passthrough.
 dateCreated: 20260426
-dateUpdated: 20260426
+dateUpdated: 20260427
 status: complete
 ---
 
@@ -109,3 +109,40 @@ status: complete
   - Verify slice design document walkthrough section matches implementation.
   - Commit with message: `docs(slice-902): add verification walkthrough and changelog updates`
   - Success: all changes committed; slice marked complete in slice plan.
+
+---
+
+## Follow-up: Step-Type Registration Bootstrap (reopened 20260427)
+
+**Context.** Three sites maintain hand-edited step-module import lists:
+[executor.py:518-526](src/squadron/pipeline/executor.py#L518-L526) (9 modules),
+[loader.py:167-175](src/squadron/pipeline/loader.py#L167-L175) (9 modules),
+and [prompt_renderer.py:394-400](src/squadron/pipeline/prompt_renderer.py#L394-L400)
+(6 modules — missing `collection`, `fan_out`, `loop`). The drift is real:
+prompt-only mode raises `KeyError` for those three step types. Folded into 902
+because both items are pipeline-runner cleanup and 902 already has tracker
+entries.
+
+- [x] **T14. Add `bootstrap_step_types()` to `steps/__init__.py`**
+  - Idempotent module-level function that imports all nine step modules
+    (`collection`, `compact`, `devlog`, `dispatch`, `fan_out`, `loop`,
+    `phase`, `review`, `summary`).
+  - Guard with a module-level `_BOOTSTRAPPED` flag so repeat calls are no-ops.
+  - Export from `__all__`.
+
+- [x] **T15. Replace hand-edited blocks with `bootstrap_step_types()`**
+  - [executor.py:518-526](src/squadron/pipeline/executor.py#L518-L526)
+  - [loader.py:167-175](src/squadron/pipeline/loader.py#L167-L175)
+  - [prompt_renderer.py:394-400](src/squadron/pipeline/prompt_renderer.py#L394-L400) — also closes the `loop`/`collection`/`fan_out` registration gap.
+
+- [x] **T16. Tests**
+  - Unit: after `bootstrap_step_types()`, `list_step_types()` contains all
+    nine names from `StepTypeName`.
+  - Regression: rendering a prompt-only step of type `loop` (and
+    `collection`, `fan_out`) does not raise `KeyError`.
+
+- [x] **T17. Gate and commit**
+  - Full gate: `uv run pytest -q && uv run ruff check && uv run ruff format --check && uv run pyright`.
+  - CHANGELOG entry under 902 follow-up.
+  - Commit: `refactor(pipeline): extract bootstrap_step_types to eliminate triple-registration`.
+  - Mark this task file `status: complete` and bump `dateUpdated` when green.

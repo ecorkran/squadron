@@ -515,15 +515,6 @@ async def execute_pipeline(
     import squadron.pipeline.actions.review as _a_review  # noqa: F401
     import squadron.pipeline.actions.summary as _a_summary  # noqa: F401
     import squadron.pipeline.intelligence.fan_in.reducers as _fan_in_reducers  # noqa: F401
-    import squadron.pipeline.steps.collection as _s_collection  # noqa: F401
-    import squadron.pipeline.steps.compact as _s_compact  # noqa: F401
-    import squadron.pipeline.steps.devlog as _s_devlog  # noqa: F401
-    import squadron.pipeline.steps.dispatch as _s_dispatch  # noqa: F401
-    import squadron.pipeline.steps.fan_out as _s_fan_out  # noqa: F401
-    import squadron.pipeline.steps.loop as _s_loop  # noqa: F401
-    import squadron.pipeline.steps.phase as _s_phase  # noqa: F401
-    import squadron.pipeline.steps.review as _s_review  # noqa: F401
-    import squadron.pipeline.steps.summary as _s_summary  # noqa: F401
 
     _ = (
         _a_cf_op,
@@ -535,19 +526,12 @@ async def execute_pipeline(
         _a_review,
         _a_summary,
         _fan_in_reducers,
-        _s_collection,
-        _s_compact,
-        _s_devlog,
-        _s_dispatch,
-        _s_fan_out,
-        _s_loop,
-        _s_phase,
-        _s_review,
-        _s_summary,
     )
 
     from squadron.pipeline.actions import get_action
-    from squadron.pipeline.steps import get_step_type
+    from squadron.pipeline.steps import bootstrap_step_types, get_step_type
+
+    bootstrap_step_types()
 
     effective_cwd = cwd or os.getcwd()
     effective_run_id = run_id or uuid.uuid4().hex[:12]

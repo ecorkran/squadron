@@ -163,31 +163,14 @@ def validate_pipeline(
     - Review template names exist
     - Param placeholders in step configs reference declared params
     """
-    # Trigger step type registration by importing step modules
-    import squadron.pipeline.steps.collection as _collection  # noqa: F401
-    import squadron.pipeline.steps.compact as _compact  # noqa: F401
-    import squadron.pipeline.steps.devlog as _devlog  # noqa: F401
-    import squadron.pipeline.steps.dispatch as _dispatch  # noqa: F401
-    import squadron.pipeline.steps.fan_out as _fan_out  # noqa: F401
-    import squadron.pipeline.steps.loop as _loop  # noqa: F401
-    import squadron.pipeline.steps.phase as _phase  # noqa: F401
-    import squadron.pipeline.steps.review as _review  # noqa: F401
-    import squadron.pipeline.steps.summary as _summary  # noqa: F401
-
-    _ = (
-        _collection,
-        _compact,
-        _devlog,
-        _dispatch,
-        _fan_out,
-        _loop,
-        _phase,
-        _review,
-        _summary,
-    )  # satisfy unused-import checks
-
     from squadron.models.aliases import resolve_model_alias
-    from squadron.pipeline.steps import get_step_type, list_step_types
+    from squadron.pipeline.steps import (
+        bootstrap_step_types,
+        get_step_type,
+        list_step_types,
+    )
+
+    bootstrap_step_types()
     from squadron.review.templates import (
         get_template,
         list_templates,

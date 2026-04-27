@@ -12,6 +12,7 @@ from squadron.pipeline.steps.protocol import StepType
 __all__ = [
     "StepType",
     "StepTypeName",
+    "bootstrap_step_types",
     "get_step_type",
     "list_step_types",
     "register_step_type",
@@ -61,3 +62,31 @@ def get_step_type(step_type: str) -> StepType:
 def list_step_types() -> list[str]:
     """Return the list of registered step type names."""
     return list(_REGISTRY.keys())
+
+
+_bootstrapped = False
+
+
+def bootstrap_step_types() -> None:
+    """Import every step module so its `register_step_type` call runs.
+
+    Single source of truth for step-type registration. Idempotent: repeat
+    calls are cheap no-ops. Call sites that need the registry populated
+    (executor, loader, prompt_renderer) invoke this instead of maintaining
+    their own import lists.
+    """
+    global _bootstrapped
+    if _bootstrapped:
+        return
+    # Import for side effect: each module calls register_step_type on import.
+    import squadron.pipeline.steps.collection  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.compact  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.devlog  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.dispatch  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.fan_out  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.loop  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.phase  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.review  # noqa: F401  # pyright: ignore[reportUnusedImport]
+    import squadron.pipeline.steps.summary  # noqa: F401  # pyright: ignore[reportUnusedImport]
+
+    _bootstrapped = True

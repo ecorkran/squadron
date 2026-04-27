@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Pipeline prompt-only mode no longer raises `KeyError` for `loop`, `each`, or `fan_out` step types. Step-type registration is now centralized in a single `bootstrap_step_types()` consumed by executor, loader, and prompt_renderer — eliminating triple-registration drift that left the prompt_renderer site missing those three types.
 - Pipeline review commands no longer hard-code `-v`. Default verbosity is now 0 (silent). Pass `-v` or `-vv` to `sq run` to opt in to verbose review output.
 - `/sq:run` slash command now correctly peels `-v`, `-vv`, and `--verbose` from the argument string before splitting pipeline and target, and forwards them to the `sq run` invocation.
 - Pipeline `code`-template reviews no longer silently produce `UNKNOWN` verdict with no findings. The diff range is now assembled and injected into the review prompt automatically when `slice:` is set on the review step.
