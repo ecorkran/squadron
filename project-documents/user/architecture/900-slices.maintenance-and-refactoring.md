@@ -4,7 +4,7 @@ parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
 dateUpdated: 20260426
-status: complete
+status: in-progress
 ---
 
 # Slice Plan: Maintenance and Refactoring
@@ -36,7 +36,7 @@ injected into the review prompt. Three coordinated changes:
 
 **Status:** complete · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [149]
 
-2. [ ] **(902) Pipeline Verbosity Passthrough (`-v`/`-vv`)**
+2. [x] **(902) Pipeline Verbosity Passthrough (`-v`/`-vv`)**
 Fixes [issue #9](https://github.com/ecorkran/squadron/issues/9): pipeline review
 commands hard-code `-v`, and `/sq:run` swallows trailing flags into the target
 string. Two coordinated changes:

@@ -23,7 +23,7 @@ Variable gaps based on initiative scope. Working range 100-799 for feature initi
 3. [ ] **(180) Pipeline Intelligence** — Weighted review convergence strategies (decay-based finding dismissal), model pools with selection strategies, escalation behaviors (auto-retry with stronger model), conversation persistence across retries, findings ledger with cross-iteration identity matching. Layers sophistication onto 140's foundation. Dependencies: [100, 140]. Status: draft
 4. [ ] **(200) Multi-Agent Communication** — Shared message bus, configurable routing topologies, supervisor with health monitoring and restart strategies, multi-provider agent coordination, human-in-the-loop participation. Dependencies: [100]. Status: not_started
 5. [ ] **(220) Simulation Runtime** — Persistent agent entities with identity and emergent behavior in shared environments. Future work. Dependencies: [100, 200]. Status: future_work
-5. [ ] **(900) Maintenance and Refactoring** — Cross-cutting maintenance, tech debt, refactoring, and operational improvements that span initiative boundaries. Dependencies: None. Status: not_started
+5. [x] **(900) Maintenance and Refactoring** — Cross-cutting maintenance, tech debt, refactoring, and operational improvements that span initiative boundaries. Dependencies: None. Status: not_started
 
 ## Cross-Initiative Dependencies
 - 140 depends on 100: needs stable agent dispatch, review system, model aliases, CF integration layer, and CLI interfaces

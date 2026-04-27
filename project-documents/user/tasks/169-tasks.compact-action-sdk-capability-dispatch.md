@@ -14,8 +14,8 @@ projectState: >
   No CompactAction exists; ActionType has no COMPACT entry. SummaryAction
   has no restore: true field. SessionCapabilities does not exist.
 dateCreated: 20260422
-dateUpdated: 20260422
-status: in_progress
+dateUpdated: 20260426
+status: complete
 ---
 
 ## Context Summary
@@ -49,77 +49,77 @@ status: in_progress
 
 ### T2 — Capability discovery: `SessionCapabilities` dataclass [dropped]
 
-- [ ] **Add `SessionCapabilities` to `src/squadron/pipeline/models.py`** [dropped — design simplification]
-  - [ ] Add dataclass `SessionCapabilities` with field
+- [x] **Add `SessionCapabilities` to `src/squadron/pipeline/models.py`** [dropped — design simplification]
+  - [x] Add dataclass `SessionCapabilities` with field
     `slash_commands: frozenset[str]`
-  - [ ] Add optional field `capabilities: SessionCapabilities | None = None`
+  - [x] Add optional field `capabilities: SessionCapabilities | None = None`
     to `ActionContext`
-  - [ ] `SessionCapabilities` is a plain frozen dataclass — no external deps
-  - [ ] Success: `ActionContext(... capabilities=None)` type-checks clean;
+  - [x] `SessionCapabilities` is a plain frozen dataclass — no external deps
+  - [x] Success: `ActionContext(... capabilities=None)` type-checks clean;
     `SessionCapabilities(slash_commands=frozenset({"/compact"}))` instantiates
 
-- [ ] **Tests for `SessionCapabilities`** [dropped]
-  - [ ] Add unit tests in `tests/pipeline/test_models.py` (or nearest models
+- [x] **Tests for `SessionCapabilities`** [dropped]
+  - [x] Add unit tests in `tests/pipeline/test_models.py` (or nearest models
     test file): verify `ActionContext.capabilities` defaults to `None`;
     verify `SessionCapabilities.slash_commands` is `frozenset`
-  - [ ] pyright clean on models.py
+  - [x] pyright clean on models.py
 
 ---
 
 ### T3 — Capability probe in the SDK executor [dropped]
 
-- [ ] **Probe SDK init message in the pipeline executor — true CLI** [dropped — design simplification]
-  - [ ] Locate where `SDKExecutionSession` / `ClaudeSDKClient` is initialized
+- [x] **Probe SDK init message in the pipeline executor — true CLI** [dropped — design simplification]
+  - [x] Locate where `SDKExecutionSession` / `ClaudeSDKClient` is initialized
     in the executor (see `src/squadron/cli/commands/run.py` and
     `src/squadron/pipeline/executor.py` or equivalent)
-  - [ ] After session start, read the first `SystemMessage(subtype="init")`
+  - [x] After session start, read the first `SystemMessage(subtype="init")`
     and extract `data.get("slash_commands", [])` into a `frozenset`
-  - [ ] Store as `SessionCapabilities` on the `ActionContext` passed to all
+  - [x] Store as `SessionCapabilities` on the `ActionContext` passed to all
     subsequent steps; probe fires once per session, result is cached
-  - [ ] If init message not received before first step, populate with empty
+  - [x] If init message not received before first step, populate with empty
     frozenset (do not block indefinitely — log a WARNING)
 
-- [ ] **Probe SDK init message in the prompt-only executor** [dropped]
-  - [ ] In the prompt-only executor, the SDK client is also present (the
+- [x] **Probe SDK init message in the prompt-only executor** [dropped]
+  - [x] In the prompt-only executor, the SDK client is also present (the
     current Claude Code session); on first step dispatch read the init
     message from the same `ClaudeSDKClient.query()` stream
-  - [ ] Extract `slash_commands` and store as `SessionCapabilities` on
+  - [x] Extract `slash_commands` and store as `SessionCapabilities` on
     `ActionContext` — same shape as true CLI path
-  - [ ] If no init message arrives before the first step needing capabilities,
+  - [x] If no init message arrives before the first step needing capabilities,
     populate with empty frozenset and log a WARNING
-  - [ ] `capabilities` must be non-None in both executors after probe;
+  - [x] `capabilities` must be non-None in both executors after probe;
     `None` only means "probe not yet run", which should not reach `CompactAction`
 
-- [ ] **Tests for capability probe — true CLI** [dropped]
-  - [ ] Mock `ClaudeSDKClient` to emit a synthetic init message with
+- [x] **Tests for capability probe — true CLI** [dropped]
+  - [x] Mock `ClaudeSDKClient` to emit a synthetic init message with
     `slash_commands: ["/compact", "/cost"]`
-  - [ ] Assert resulting `ActionContext.capabilities.slash_commands` equals
+  - [x] Assert resulting `ActionContext.capabilities.slash_commands` equals
     `frozenset({"/compact", "/cost"})`
-  - [ ] Assert probe fires exactly once even if multiple steps run
-  - [ ] Assert empty frozenset (not None) when init message has no slash_commands
+  - [x] Assert probe fires exactly once even if multiple steps run
+  - [x] Assert empty frozenset (not None) when init message has no slash_commands
 
-- [ ] **Tests for capability probe — prompt-only** [dropped]
-  - [ ] Same assertions as true CLI; confirm `capabilities` is populated
+- [x] **Tests for capability probe — prompt-only** [dropped]
+  - [x] Same assertions as true CLI; confirm `capabilities` is populated
     before the first step executes in the prompt-only executor
 
-- [ ] **Commit: capability discovery** [dropped]
-  - [ ] `git add` models.py, executor change, tests → commit
+- [x] **Commit: capability discovery** [dropped]
+  - [x] `git add` models.py, executor change, tests → commit
     `feat: add SessionCapabilities and SDK init probe for slash command discovery`
 
 ---
 
 ### T4 — Investigation: `/model` in `slash_commands` [dropped]
 
-- [ ] **Run capability probe in each environment; record results** [dropped — design simplification]
-  - [ ] Add a temporary `--print-capabilities` debug flag to `sq run` (or
+- [x] **Run capability probe in each environment; record results** [dropped — design simplification]
+  - [x] Add a temporary `--print-capabilities` debug flag to `sq run` (or
     author a minimal `noop.yaml` pipeline with a debug step) that prints
     `context.capabilities.slash_commands` after the probe
-  - [ ] Run in true CLI (`sq run`), Claude Code CLI, IDE extension
-  - [ ] Record which commands appear in `slash_commands` in each environment
-  - [ ] Write findings as a table in the slice DEVLOG
-  - [ ] Determine: is `/model` present? If yes, note it for T8; if no,
+  - [x] Run in true CLI (`sq run`), Claude Code CLI, IDE extension
+  - [x] Record which commands appear in `slash_commands` in each environment
+  - [x] Write findings as a table in the slice DEVLOG
+  - [x] Determine: is `/model` present? If yes, note it for T8; if no,
     confirm existing "suggested model" printout path stays unchanged
-  - [ ] This task produces documentation only — no code change required
+  - [x] This task produces documentation only — no code change required
     unless `/model` is confirmed dispatchable (addressed in T8)
 
 ---

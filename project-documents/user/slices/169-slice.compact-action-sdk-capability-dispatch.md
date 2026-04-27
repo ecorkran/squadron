@@ -7,7 +7,7 @@ dependencies: [149-pipeline-executor-and-loops, 161-summary-step-with-emit-desti
 interfaces: [CompactStepType, CompactAction, SessionCapabilities, SDKExecutionSession, PromptOnlyExecutor]
 dateCreated: 20260418
 dateUpdated: 20260422
-status: in-progress
+status: complete
 ---
 
 # Slice Design: Compact Action — SDK Capability Dispatch
