@@ -183,7 +183,27 @@ class TestRenderReview:
         assert "--model glm5" in result.command
         assert "--model glm5-resolved" not in result.command
         assert "152" in result.command
-        assert result.command == "sq review slice 152 --model glm5 -v"
+        assert result.command == "sq review slice 152 --model glm5"
+
+
+class TestRenderReviewVerbosity:
+    @pytest.mark.parametrize(
+        "verbosity,check",
+        [
+            (0, lambda cmd: "-v" not in cmd.split()),
+            (1, lambda cmd: cmd.endswith("-v")),
+            (2, lambda cmd: cmd.endswith("-vv")),
+        ],
+    )
+    def test_verbosity_levels(self, verbosity: int, check: object) -> None:
+        resolver = _make_resolver("glm5-resolved")
+        result = _render_review(
+            {"template": "slice", "model": "glm5"},
+            {"slice": "152"},
+            resolver,
+            verbosity=verbosity,
+        )
+        assert check(result.command), f"verbosity={verbosity} failed: {result.command}"
 
 
 class TestRenderCheckpoint:

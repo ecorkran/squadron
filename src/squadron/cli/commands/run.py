@@ -348,6 +348,7 @@ def _handle_prompt_only_init(
     target: str | None,
     model_override: str | None,
     param_list: list[str] | None,
+    verbosity: int = 0,
 ) -> None:
     """Initialize a prompt-only run and emit the first step's JSON."""
     try:
@@ -393,6 +394,7 @@ def _handle_prompt_only_init(
         params=params,
         resolver=resolver,
         run_id=run_id,
+        verbosity=verbosity,
     )
     print(instructions.to_json())
 
@@ -400,6 +402,7 @@ def _handle_prompt_only_init(
 def _handle_prompt_only_next(
     run_id: str,
     model_override: str | None,
+    verbosity: int = 0,
 ) -> None:
     """Emit the next unfinished step's JSON for an existing run."""
     state_mgr = StateManager()
@@ -482,6 +485,7 @@ def _handle_prompt_only_next(
         params=params,
         resolver=resolver,
         run_id=run_id,
+        verbosity=verbosity,
     )
     print(instructions.to_json())
 
@@ -660,7 +664,7 @@ def run(
 
     # ---- --prompt-only --next --resume ----
     if prompt_only and next_step and resume is not None:
-        _handle_prompt_only_next(resume, model)
+        _handle_prompt_only_next(resume, model, verbosity=verbose)
         raise typer.Exit(0)
 
     # ---- --prompt-only (init) ----
@@ -668,7 +672,9 @@ def run(
         if pipeline is None:
             rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
             raise typer.Exit(1)
-        _handle_prompt_only_init(pipeline.lower(), target, model, param)
+        _handle_prompt_only_init(
+            pipeline.lower(), target, model, param, verbosity=verbose
+        )
         raise typer.Exit(0)
 
     # ---- --list ----

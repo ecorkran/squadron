@@ -149,6 +149,8 @@ def _render_review(
     config: dict[str, object],
     params: dict[str, object],
     resolver: ModelResolver,
+    *,
+    verbosity: int = 0,
 ) -> ActionInstruction:
     """Build instruction for a review action."""
     template_name = str(config.get("template", ""))
@@ -171,7 +173,11 @@ def _render_review(
         cmd_parts.append(target)
     if alias_str:
         cmd_parts.extend(["--model", alias_str])
-    cmd_parts.append("-v")
+    # Emit verbosity flag only when requested
+    if verbosity == 1:
+        cmd_parts.append("-v")
+    elif verbosity >= 2:
+        cmd_parts.append("-vv")
 
     return ActionInstruction(
         action_type=ActionType.REVIEW,
@@ -344,6 +350,8 @@ def _build_action_instruction(
     config: dict[str, object],
     params: dict[str, object],
     resolver: ModelResolver,
+    *,
+    verbosity: int = 0,
 ) -> ActionInstruction:
     """Dispatch to the appropriate builder for an action type."""
     builder = _BUILDERS.get(action_type)
@@ -354,7 +362,10 @@ def _build_action_instruction(
         )
 
     # Builders that need the resolver
-    if action_type in (ActionType.DISPATCH, ActionType.REVIEW, ActionType.SUMMARY):
+    if action_type == ActionType.REVIEW:
+        return builder(config, params, resolver, verbosity=verbosity)  # type: ignore[operator]
+
+    if action_type in (ActionType.DISPATCH, ActionType.SUMMARY):
         return builder(config, params, resolver)  # type: ignore[operator]
 
     return builder(config, params)  # type: ignore[operator]
@@ -373,6 +384,7 @@ def render_step_instructions(
     params: dict[str, object],
     resolver: ModelResolver,
     run_id: str,
+    verbosity: int = 0,
 ) -> StepInstructions:
     """Expand a step into executable instruction objects.
 
@@ -399,7 +411,7 @@ def render_step_instructions(
     for action_type, action_config in actions:
         resolved_config = resolve_placeholders(action_config, render_params)
         instruction = _build_action_instruction(
-            action_type, resolved_config, render_params, resolver
+            action_type, resolved_config, render_params, resolver, verbosity=verbosity
         )
         instructions.append(instruction)
 
