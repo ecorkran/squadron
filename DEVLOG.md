@@ -16,6 +16,14 @@ written from user perspective.
 
 ## 20260426
 
+### Slice 902: Pipeline Verbosity Passthrough — Complete
+- Commits: `69aefbf` fix(pipeline): thread verbosity through render_step_instructions; `4c1c011` fix(sq:run): peel -v/-vv flags from arguments, pass to sq run.
+- `_render_review` now accepts `verbosity: int = 0` (keyword-only). Hard-coded `-v` replaced with conditional: nothing at 0, `-v` at 1, `-vv` at ≥2.
+- `_build_action_instruction` and `render_step_instructions` forward `verbosity`. Both `_handle_prompt_only_init` and `_handle_prompt_only_next` in `run.py` pass `verbose` count from typer option.
+- `/sq:run` slash command updated: three-step peel (scan → capture → remove) for `-v`/`-vv`/`--verbose`; Step 0 template includes `<verbose_flags>`.
+- Tests: existing assertion updated (no `-v` at default); 3 new parametrized verbosity tests added. Full gate: 1723 passed, ruff+pyright clean.
+- Verification walkthrough updated with actual output and `command: null` gotcha (use `a.get('command') or ''`).
+
 ### Slice 902: Pipeline Verbosity Passthrough — Task Breakdown Complete
 - Created `902-tasks.pipeline-verbosity-passthrough-v-vv.md` (12 tasks, 105 lines).
 - Tasks cover: `_render_review` verbosity param + conditional emit, test update + new parametrized tests, `_build_action_instruction` forwarding, `render_step_instructions` param, two `run.py` call sites, slash command peel in `run.md`, two commits, final gate.

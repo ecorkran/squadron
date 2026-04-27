@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Pipeline review commands no longer hard-code `-v`. Default verbosity is now 0 (silent). Pass `-v` or `-vv` to `sq run` to opt in to verbose review output.
+- `/sq:run` slash command now correctly peels `-v`, `-vv`, and `--verbose` from the argument string before splitting pipeline and target, and forwards them to the `sq run` invocation.
 - Pipeline `code`-template reviews no longer silently produce `UNKNOWN` verdict with no findings. The diff range is now assembled and injected into the review prompt automatically when `slice:` is set on the review step.
 - `UNKNOWN` checkpoint verdict now fails closed: `on-fail` and `on-concerns` checkpoints treat `UNKNOWN` as a trigger condition. A missing review (`verdict is None`) continues to pass through unchanged.
 - `slice` parameter is now forwarded explicitly through `phase:` and `review:` step `expand()` into the emitted review action config, ensuring the value is always available to `_resolve_slice_inputs`.

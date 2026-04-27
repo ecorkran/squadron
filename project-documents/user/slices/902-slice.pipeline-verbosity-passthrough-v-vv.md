@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260426
 dateUpdated: 20260426
-status: not_started
+status: complete
 relatedIssues: [9]
 ---
 
@@ -288,14 +288,23 @@ uv run sq run slice 152 --prompt-only 2>/dev/null | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for a in data.get('actions', []):
-    cmd = a.get('command', '')
+    cmd = a.get('command') or ''
     if cmd:
         assert '-v' not in cmd.split(), f'Unexpected -v in: {cmd}'
         print(f'OK: {cmd}')
 "
 ```
 
-Expected: review commands contain no `-v` or `-vv`.
+Expected output (actual, verified 20260426):
+```
+OK: cf set phase 4
+OK: cf set slice 152
+OK: cf build
+OK: sq review slice 152 --model minimax
+OK: git add -A && git commit -m 'phase-4: pipeline step'
+```
+
+Note: use `a.get('command') or ''` instead of `a.get('command', '')` — some actions have `command: null` which would cause a `TypeError` with `in` operator.
 
 **Step 2 — Explicit `-v`.**
 
@@ -304,14 +313,17 @@ uv run sq run slice 152 -v --prompt-only 2>/dev/null | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for a in data.get('actions', []):
-    cmd = a.get('command', '')
+    cmd = a.get('command') or ''
     if 'review' in cmd:
         assert cmd.endswith('-v'), f'Expected -v at end: {cmd}'
         print(f'OK: {cmd}')
 "
 ```
 
-Expected: review commands end with `-v`.
+Expected output (actual, verified 20260426):
+```
+OK: sq review slice 152 --model minimax -v
+```
 
 **Step 3 — Explicit `-vv`.**
 
@@ -320,14 +332,17 @@ uv run sq run slice 152 -vv --prompt-only 2>/dev/null | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for a in data.get('actions', []):
-    cmd = a.get('command', '')
+    cmd = a.get('command') or ''
     if 'review' in cmd:
         assert cmd.endswith('-vv'), f'Expected -vv at end: {cmd}'
         print(f'OK: {cmd}')
 "
 ```
 
-Expected: review commands end with `-vv`.
+Expected output (actual, verified 20260426):
+```
+OK: sq review slice 152 --model minimax -vv
+```
 
 **Step 4 — Test suite.**
 
