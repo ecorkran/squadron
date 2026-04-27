@@ -2,13 +2,17 @@ Run a squadron pipeline via the prompt-only executor.
 
 ## Input parsing
 
-The first word of `$ARGUMENTS` is the pipeline name. The remainder is the target argument passed to the pipeline.
+Parse `$ARGUMENTS` using this three-step procedure:
 
-If the pipeline name is missing, show the usage below and stop.
+1. **Scan** the argument string for known verbosity tokens at the tail end: `-v`, `-vv`, or `--verbose`.
+2. **Capture** any matched tokens as `<verbose_flags>` (e.g., `-v` or `-vv`). If none are present, `<verbose_flags>` is an empty string.
+3. **Remove** the matched tokens from the argument string. The remaining text is split: the first word becomes `<pipeline>`, the rest becomes `<target>`.
+
+If the pipeline name is missing after stripping verbosity tokens, show the usage below and stop.
 
 **Usage:**
 ```
-/sq:run <pipeline> [target]    — run a pipeline (e.g., /sq:run slice 152)
+/sq:run <pipeline> [target] [-v|-vv]  — run a pipeline (e.g., /sq:run slice 152 -v)
 ```
 
 ---
@@ -17,7 +21,7 @@ If the pipeline name is missing, show the usage below and stop.
 
 Run:
 ```bash
-sq run <pipeline> <target> --prompt-only
+sq run <pipeline> <target> <verbose_flags> --prompt-only
 ```
 
 This initializes the pipeline run and outputs the first step's instructions as JSON. Capture:
