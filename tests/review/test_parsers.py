@@ -509,10 +509,13 @@ class TestLocationExtraction:
         result = parse_review_output(text, "code", {})
         assert "location:" not in result.findings[0].description
 
-    def test_no_location_returns_none(self) -> None:
+    def test_no_location_normalized_to_unverified(self) -> None:
+        # Slice 904: missing location: tag is soft-failed to "unverified"
+        # rather than left as None, so downstream tooling sees one
+        # consistent sentinel.
         text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nSome detail.\n"
         result = parse_review_output(text, "code", {})
-        assert result.findings[0].location is None
+        assert result.findings[0].location == "unverified"
 
     def test_both_category_and_location(self) -> None:
         text = (
@@ -539,6 +542,96 @@ class TestLocationExtraction:
         f = result.findings[0]
         assert f.file_ref == "src/handler.py:42"
         assert f.location == "src/handler.py:42"
+
+
+class TestLocationSoftFail:
+    """Slice 904: missing/placeholder location: values are normalized to
+    "unverified" with a WARNING."""
+
+    def test_missing_location_normalized_and_warned(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Title here\nSome detail.\n"
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            result = parse_review_output(text, "code", {})
+        assert result.findings[0].location == "unverified"
+        # WARNING names the finding ID, title, template, and verdict.
+        records = [r for r in caplog.records if r.name == "squadron.review.parsers"]
+        assert len(records) == 1
+        message = records[0].getMessage()
+        assert "F001" in message
+        assert "Title here" in message
+        assert "code" in message
+        assert "CONCERNS" in message
+        assert "unverified" in message
+
+    def test_cited_location_produces_no_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Regression: a fully-cited finding must not trigger the soft-fail warning.
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "location: src/foo.py:45\n"
+            "Some detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            result = parse_review_output(text, "code", {})
+        assert result.findings[0].location == "src/foo.py:45"
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
+
+    def test_arch_style_doc_path_parses_unchanged(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Non-code safety: arch/slice/tasks reviews cite documents, not code.
+        # Any non-empty, non-placeholder location must be accepted as-is.
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Missing failure-mode coverage\n"
+            "category: completeness\n"
+            "location: docs/foo.md#bar\n"
+            "Detail here.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            result = parse_review_output(text, "arch", {})
+        assert result.findings[0].location == "docs/foo.md#bar"
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
+
+    @pytest.mark.parametrize(
+        "raw",
+        ["-", "global", "GLOBAL", " ", "", "n/a", "None"],
+    )
+    def test_placeholder_values_normalized_to_unverified(
+        self, raw: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            f"### [CONCERN] Bug\nlocation: {raw}\nSome detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            result = parse_review_output(text, "code", {})
+        assert result.findings[0].location == "unverified"
+        assert any(
+            "unverified" in r.getMessage()
+            for r in caplog.records
+            if r.name == "squadron.review.parsers"
+        )
+
+    def test_unverified_passed_through_without_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Model emitted the explicit "I don't know" token — no warning.
+        text = (
+            "## Summary\nPASS\n\n"
+            "### [PASS] Cross-cutting check passes\n"
+            "category: completeness\n"
+            "location: unverified\n"
+            "Cannot pin to a single document.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            result = parse_review_output(text, "arch", {})
+        assert result.findings[0].location == "unverified"
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
 
 
 class TestExistingFormatsRegression:

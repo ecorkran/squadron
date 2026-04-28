@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sys
 from datetime import UTC, datetime
@@ -14,6 +15,16 @@ from squadron.review.models import (
     Severity,
     Verdict,
 )
+
+logger = logging.getLogger(__name__)
+
+# Sentinel for findings whose location cannot be determined or
+# is reported as a non-specific placeholder by the model.
+UNVERIFIED_LOCATION = "unverified"
+
+# Values from model output that should be normalized to UNVERIFIED_LOCATION.
+# Stored lowercased for case-insensitive comparison.
+_PLACEHOLDER_LOCATIONS: frozenset[str] = frozenset({"", "-", "global", "n/a", "none"})
 
 _VERDICT_MAP: dict[str, Verdict] = {
     "PASS": Verdict.PASS,
@@ -68,8 +79,11 @@ _LENIENT_RE = re.compile(
 )
 
 # Structured tag patterns for category/location extraction from finding bodies
-_CATEGORY_RE = re.compile(r"^category:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
-_LOCATION_RE = re.compile(r"^location:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+# [ \t]* (not \s*) so the value capture cannot bleed across a blank
+# value line into the next line of the body (e.g. an empty `location:`
+# tag would otherwise pick up "Some detail." on the following line).
+_CATEGORY_RE = re.compile(r"^category:[ \t]*(.*)$", re.IGNORECASE | re.MULTILINE)
+_LOCATION_RE = re.compile(r"^location:[ \t]*(.*)$", re.IGNORECASE | re.MULTILINE)
 # Existing file_ref pattern: -> path/to/file.py:123
 _FILE_REF_RE = re.compile(r"^->\s*(.+)$", re.MULTILINE)
 
@@ -86,14 +100,51 @@ def _extract_verdict(text: str) -> Verdict:
     return _VERDICT_MAP.get(keyword, Verdict.UNKNOWN)
 
 
-def _extract_findings(text: str) -> list[ReviewFinding]:
+def _normalize_location(
+    location: str | None,
+    *,
+    finding_id: str,
+    finding_title: str,
+    verdict: Verdict,
+    template_name: str,
+) -> str:
+    """Normalize a parsed location value, soft-failing missing/placeholder values.
+
+    Returns UNVERIFIED_LOCATION (and logs a WARNING) when the model omitted
+    the location entirely or wrote a non-specific placeholder ('-', 'global',
+    'n/a', 'none', empty). Any other value is returned stripped, unchanged.
+    """
+    if location is None or location.strip().lower() in _PLACEHOLDER_LOCATIONS:
+        logger.warning(
+            "Finding %s (%r) in %s review (verdict=%s) is missing a "
+            "specific location; normalized to %r.",
+            finding_id,
+            finding_title,
+            template_name,
+            verdict.value,
+            UNVERIFIED_LOCATION,
+        )
+        return UNVERIFIED_LOCATION
+    return location.strip()
+
+
+def _extract_findings(
+    text: str,
+    *,
+    verdict: Verdict = Verdict.UNKNOWN,
+    template_name: str = "",
+) -> list[ReviewFinding]:
     """Parse finding blocks into ReviewFinding list.
 
     Supports five formats: ### [SEV] Title, ### SEV Title, ### SEV: Title,
     **[SEV]** Title, and - [SEV] Title.
+
+    Soft-fails on missing/placeholder ``location:`` values: the field is
+    normalized to ``"unverified"`` and a WARNING is logged. ``verdict`` and
+    ``template_name`` are included in the warning for triage context.
     """
     findings: list[ReviewFinding] = []
-    for match in _FINDING_RE.finditer(text):
+    for index, match in enumerate(_FINDING_RE.finditer(text), start=1):
         # Groups: (g1,g2) heading, (g3,g4) bold, (g5,g6) bullet
         sev_raw = match.group(1) or match.group(3) or match.group(5) or ""
         severity_str = sev_raw.upper()
@@ -114,10 +165,10 @@ def _extract_findings(text: str) -> list[ReviewFinding]:
             body = _CATEGORY_RE.sub("", body).strip()
 
         # Extract location tag and strip from description
-        location: str | None = None
+        raw_location: str | None = None
         loc_match = _LOCATION_RE.search(body)
         if loc_match:
-            location = loc_match.group(1).strip()
+            raw_location = loc_match.group(1).strip()
             body = _LOCATION_RE.sub("", body).strip()
 
         # Extract file_ref from -> pattern
@@ -125,9 +176,20 @@ def _extract_findings(text: str) -> list[ReviewFinding]:
         ref_match = _FILE_REF_RE.search(body)
         if ref_match:
             file_ref = ref_match.group(1).strip()
-            # Use file_ref as location fallback
-            if location is None:
-                location = file_ref
+            # Use file_ref as location fallback when no explicit location: tag
+            if raw_location is None:
+                raw_location = file_ref
+
+        # Soft-fail: normalize missing/placeholder values to UNVERIFIED_LOCATION.
+        # ID matches the F### scheme assigned by ReviewResult.structured_findings.
+        finding_id = f"F{index:03d}"
+        location = _normalize_location(
+            raw_location,
+            finding_id=finding_id,
+            finding_title=title,
+            verdict=verdict,
+            template_name=template_name,
+        )
 
         findings.append(
             ReviewFinding(
@@ -142,10 +204,12 @@ def _extract_findings(text: str) -> list[ReviewFinding]:
     return findings
 
 
-def _lenient_extract_findings(text: str, verdict: Verdict) -> list[ReviewFinding]:
+def _lenient_extract_findings(
+    text: str, verdict: Verdict, template_name: str = ""
+) -> list[ReviewFinding]:
     """Attempt lenient extraction: scan for severity keywords in paragraph context."""
     findings: list[ReviewFinding] = []
-    for match in _LENIENT_RE.finditer(text):
+    for index, match in enumerate(_LENIENT_RE.finditer(text), start=1):
         header_line = match.group(1).strip()
         body = match.group(3).strip()
         # Determine severity from the header line
@@ -158,17 +222,31 @@ def _lenient_extract_findings(text: str, verdict: Verdict) -> list[ReviewFinding
             severity = Severity.NOTE
         else:
             continue
+        title = header_line[:120]
+        # Lenient extraction never surfaces a structured location:
+        # always normalize (which will warn) so downstream sees the
+        # consistent UNVERIFIED_LOCATION sentinel.
+        location = _normalize_location(
+            None,
+            finding_id=f"F{index:03d}",
+            finding_title=title,
+            verdict=verdict,
+            template_name=template_name,
+        )
         findings.append(
             ReviewFinding(
                 severity=severity,
-                title=header_line[:120],
+                title=title,
                 description=body,
+                location=location,
             )
         )
     return findings
 
 
-def _synthesize_fallback_finding(text: str, verdict: Verdict) -> ReviewFinding:
+def _synthesize_fallback_finding(
+    text: str, verdict: Verdict, template_name: str = ""
+) -> ReviewFinding:
     """Create a single synthesized finding from summary text."""
     # Extract text between ## Summary and next ## heading (or end)
     summary_match = re.search(
@@ -180,10 +258,19 @@ def _synthesize_fallback_finding(text: str, verdict: Verdict) -> ReviewFinding:
         description = text.strip()[:500]
 
     severity = Severity.FAIL if verdict == Verdict.FAIL else Severity.CONCERN
+    title = "Unparsed review findings"
+    location = _normalize_location(
+        None,
+        finding_id="F001",
+        finding_title=title,
+        verdict=verdict,
+        template_name=template_name,
+    )
     return ReviewFinding(
         severity=severity,
-        title="Unparsed review findings",
+        title=title,
         description=description,
+        location=location,
     )
 
 
@@ -227,7 +314,9 @@ def parse_review_output(
     attempts lenient extraction then synthesizes a finding from summary text.
     """
     verdict = _extract_verdict(raw_output)
-    findings = _extract_findings(raw_output)
+    findings = _extract_findings(
+        raw_output, verdict=verdict, template_name=template_name
+    )
     fallback_used = False
 
     mismatch = verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings
@@ -241,10 +330,12 @@ def parse_review_output(
             raw_output=raw_output,
         )
         # Try lenient extraction first
-        findings = _lenient_extract_findings(raw_output, verdict)
+        findings = _lenient_extract_findings(raw_output, verdict, template_name)
         if not findings:
             # Synthesize a single finding from the summary text
-            findings = [_synthesize_fallback_finding(raw_output, verdict)]
+            findings = [
+                _synthesize_fallback_finding(raw_output, verdict, template_name)
+            ]
         fallback_used = True
         _write_debug_log(
             template=template_name,
