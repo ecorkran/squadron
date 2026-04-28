@@ -74,9 +74,26 @@ system_prompt: |
   - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
   - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
   - Every finding MUST use the exact format: ### [SEVERITY] Title
-  - Every finding MUST include a `category` tag on its own line immediately after 
-    the title, using one of: consistency, completeness, feasibility, technology, 
+  - Every finding MUST include a `category` tag on its own line immediately after
+    the title, using one of: consistency, completeness, feasibility, technology,
     abstraction, extension-points, dependencies, antipattern, other
+  - Every finding MUST include a `location:` tag on its own line immediately
+    after the `category:` tag. This applies to PASS findings too.
+
+  Choose the `location:` value (most specific form you can verify) from
+  the architecture document under review:
+  1. `path` — preferred for whole-document findings (typical for arch
+     reviews).
+  2. `path#section-heading` — when the finding is at a named section.
+  3. `path:line` or `path:start-end` — when a precise line range applies.
+  4. `unverified` — the explicit "I don't know" token. Use this for
+     cross-cutting findings (e.g. "missing coverage of X across the
+     document") and pair with prose justification — this is **expected
+     and acceptable** for arch reviews. Also use when you cannot pin
+     the finding to a path you are certain exists. **A hallucinated path
+     is worse than `unverified`** because it looks authoritative; the
+     parser will normalize missing/blank/`-`/`global` to `unverified`
+     automatically.
 
   Report format:
 
@@ -87,6 +104,7 @@ system_prompt: |
 
   ### [PASS|CONCERN|FAIL] Finding title
   category: {category-tag}
+  location: <path | path#section-heading | path:line | path:start-end | unverified>
   Description with specific references to document sections.
 
 allowed_tools: [Read, Glob, Grep]
