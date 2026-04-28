@@ -26,6 +26,13 @@ UNVERIFIED_LOCATION = "unverified"
 # Stored lowercased for case-insensitive comparison.
 _PLACEHOLDER_LOCATIONS: frozenset[str] = frozenset({"", "-", "global", "n/a", "none"})
 
+# Captures the path portion of a location value: everything up to (but not
+# including) the first ':', '#', or end of string. Used by diff-membership
+# and path-existence checks. Returns None for UNVERIFIED_LOCATION callers
+# (handled by guard at the call site) and for any value that does not
+# look like a path (e.g. starts with '<' from leftover prompt examples).
+_LOCATION_PATH_RE = re.compile(r"^([^:#<>\s][^:#]*)")
+
 _VERDICT_MAP: dict[str, Verdict] = {
     "PASS": Verdict.PASS,
     "CONCERNS": Verdict.CONCERNS,
@@ -126,6 +133,81 @@ def _normalize_location(
         )
         return UNVERIFIED_LOCATION
     return location.strip()
+
+
+def _location_path(location: str) -> str | None:
+    """Extract the path portion of a finding's location string.
+
+    Returns the substring before the first ':' or '#' (e.g. 'src/foo.py'
+    from 'src/foo.py:42' or 'src/foo.py#sym'). Returns None for the
+    UNVERIFIED_LOCATION sentinel and for values that do not begin with a
+    plausible path character.
+    """
+    if location == UNVERIFIED_LOCATION:
+        return None
+    match = _LOCATION_PATH_RE.match(location)
+    if match is None:
+        return None
+    return match.group(1).strip() or None
+
+
+def _check_diff_membership(
+    findings: list[ReviewFinding],
+    diff_files: set[str],
+    *,
+    template_name: str,
+) -> None:
+    """For each finding citing a path, WARN if the path is not in *diff_files*.
+
+    Only meaningful for code reviews (the only template type with a diff).
+    UNVERIFIED_LOCATION findings and findings whose location cannot be
+    interpreted as a path are skipped silently.
+    """
+    for index, finding in enumerate(findings, start=1):
+        if finding.location is None:
+            continue
+        path = _location_path(finding.location)
+        if path is None:
+            continue
+        if path not in diff_files:
+            logger.warning(
+                "Finding F%03d (%r) in %s review cites %r which is not "
+                "among the files in the diff under review.",
+                index,
+                finding.title,
+                template_name,
+                path,
+            )
+
+
+def _check_path_existence(
+    findings: list[ReviewFinding],
+    cwd: Path,
+    *,
+    template_name: str,
+) -> None:
+    """For each finding citing a path, WARN if the path does not exist on disk.
+
+    Cheap defense against hallucinated filenames across all template types.
+    Paths are resolved relative to *cwd*. UNVERIFIED_LOCATION findings and
+    findings whose location cannot be interpreted as a path are skipped.
+    """
+    for index, finding in enumerate(findings, start=1):
+        if finding.location is None:
+            continue
+        path = _location_path(finding.location)
+        if path is None:
+            continue
+        if not (cwd / path).exists():
+            logger.warning(
+                "Finding F%03d (%r) in %s review cites %r which does not "
+                "exist on disk (relative to %s).",
+                index,
+                finding.title,
+                template_name,
+                path,
+                cwd,
+            )
 
 
 def _extract_findings(
@@ -306,12 +388,22 @@ def parse_review_output(
     template_name: str,
     input_files: dict[str, str],
     model: str | None = None,
+    *,
+    diff_files: set[str] | None = None,
+    cwd: Path | None = None,
 ) -> ReviewResult:
     """Parse agent markdown output into a structured ReviewResult.
 
     Falls back to UNKNOWN verdict if the output doesn't follow expected format.
     When verdict is CONCERNS/FAIL but structured parsing finds zero findings,
     attempts lenient extraction then synthesizes a finding from summary text.
+
+    When *diff_files* is provided (typically only for code-template reviews),
+    each finding whose ``location`` cites a path is checked against the diff
+    file set; misses log a WARNING. When *cwd* is provided, each finding
+    whose ``location`` cites a path is checked for existence on disk; misses
+    log a WARNING. Findings with ``location == UNVERIFIED_LOCATION`` are
+    skipped by both checks.
     """
     verdict = _extract_verdict(raw_output)
     findings = _extract_findings(
@@ -345,6 +437,16 @@ def parse_review_output(
             fallback_used=True,
             raw_output=raw_output,
         )
+
+    # Post-extraction location validation (slice 904).
+    # Diff-membership applies only when a diff file set is supplied
+    # (typically code-template reviews). Path-existence applies whenever
+    # a cwd is supplied — the cheap defense against hallucinated filenames
+    # across all template types.
+    if diff_files is not None:
+        _check_diff_membership(findings, diff_files, template_name=template_name)
+    if cwd is not None:
+        _check_path_existence(findings, cwd, template_name=template_name)
 
     return ReviewResult(
         verdict=verdict,

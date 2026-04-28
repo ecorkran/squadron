@@ -634,6 +634,140 @@ class TestLocationSoftFail:
         assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
 
 
+class TestLocationDiffMembershipAndPathExistence:
+    """Slice 904: diff-membership and path-existence WARNINGs.
+
+    Both checks are WARNING-only — findings are never modified, only flagged.
+    UNVERIFIED_LOCATION is exempt from both checks.
+    """
+
+    def test_diff_member_and_existing_passes_silently(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # File exists in tmp_path AND is in the diff set: no warnings.
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "foo.py").write_text("# foo\n")
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "location: src/foo.py:42\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(
+                text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path
+            )
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
+
+    def test_nonexistent_path_warns_for_both_checks(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Cited path is neither in the diff nor on disk — both checks warn.
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "location: src/nonexistent.py:42\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(
+                text,
+                "code",
+                {},
+                diff_files={"src/squadron/foo.py"},
+                cwd=tmp_path,
+            )
+        messages = [
+            r.getMessage()
+            for r in caplog.records
+            if r.name == "squadron.review.parsers"
+        ]
+        # One warning from diff-membership, one from path-existence.
+        assert sum("not among the files in the diff" in m for m in messages) == 1
+        assert sum("does not exist on disk" in m for m in messages) == 1
+
+    def test_existing_file_not_in_diff_warns_membership_only(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # File exists on disk but is NOT in the diff: T8 warns, T9 silent.
+        (tmp_path / "src" / "squadron").mkdir(parents=True)
+        (tmp_path / "src" / "squadron" / "bar.py").write_text("# bar\n")
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Bug\n"
+            "location: src/squadron/bar.py:10\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(
+                text,
+                "code",
+                {},
+                diff_files={"src/squadron/foo.py"},
+                cwd=tmp_path,
+            )
+        messages = [
+            r.getMessage()
+            for r in caplog.records
+            if r.name == "squadron.review.parsers"
+        ]
+        assert any("not among the files in the diff" in m for m in messages)
+        assert not any("does not exist on disk" in m for m in messages)
+
+    def test_arch_review_nonexistent_doc_warns_path_existence(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Arch reviews have no diff, so only path-existence (T9) fires.
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Missing coverage\n"
+            "category: completeness\n"
+            "location: project-documents/nonexistent.md\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(text, "arch", {}, cwd=tmp_path)
+        messages = [
+            r.getMessage()
+            for r in caplog.records
+            if r.name == "squadron.review.parsers"
+        ]
+        assert any("does not exist on disk" in m for m in messages)
+
+    def test_arch_review_existing_doc_passes_silently(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "arch.md").write_text("# Arch\n")
+        text = (
+            "## Summary\nPASS\n\n"
+            "### [PASS] Layered cleanly\n"
+            "category: abstraction\n"
+            "location: docs/arch.md#layers\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(text, "arch", {}, cwd=tmp_path)
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
+
+    def test_unverified_skips_both_checks(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # An explicitly-`unverified` location must not trigger either check.
+        text = (
+            "## Summary\nPASS\n\n"
+            "### [PASS] Cross-cutting\n"
+            "category: completeness\n"
+            "location: unverified\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(
+                text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path
+            )
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
+
+
 class TestExistingFormatsRegression:
     """Ensure existing PASS, CONCERN, FAIL formats still work after NOTE addition."""
 
