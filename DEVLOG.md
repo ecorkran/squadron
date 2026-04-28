@@ -16,6 +16,10 @@ written from user perspective.
 
 ## 20260427
 
+### Slice 170: Profile-Aware Dispatch Model Routing — Phase 4 Design
+
+Drafted slice design at [170-slice.profile-aware-dispatch-model-routing.md](project-documents/user/slices/170-slice.profile-aware-dispatch-model-routing.md). Mirrors slice 164's profile-aware fix on the dispatch axis: `_render_dispatch` will branch on resolved profile and emit a runnable `sq dispatch …` command for non-SDK profiles (currently emits "in-session work" regardless of profile, so `/sq:run … --param model=minimax` from inside Claude Code silently runs the dispatch in the IDE session instead of routing to minimax). New `sq dispatch` CLI surface factored from `_dispatch_via_agent`. Independent in-scope fix: `_dispatch_via_session` will surface SDK `is_error=True` messages as `ProviderAPIError` instead of returning the error JSON as response text. Slice plan entry added to [140-slices.pipeline-foundation.md](project-documents/user/architecture/140-slices.pipeline-foundation.md) at index 170 (Feature Slices, after 166); plan `dateUpdated` bumped.
+
 ### Slice 904: Review-Finding Location Required — Complete
 
 Resolves [issue #10](https://github.com/ecorkran/squadron/issues/10): review findings inconsistently cite a `location:` field, especially on PASS findings. The field is the dedup key for upcoming ensemble review (slices 182, 189), so it has to land first.

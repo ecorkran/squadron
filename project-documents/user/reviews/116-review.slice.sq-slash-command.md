@@ -8,39 +8,44 @@ verdict: PASS
 sourceDocument: project-documents/user/slices/116-slice.sq-slash-command.md
 aiModel: minimax/minimax-m2.7
 status: complete
-dateCreated: 20260331
-dateUpdated: 20260331
+dateCreated: 20260427
+dateUpdated: 20260427
 findings:
   - id: F001
-    severity: pass
-    category: scope-management
-    summary: "Slice scope is well-contained and appropriately scoped"
-    location: 116-slice.sq-slash-command.md
+    severity: note
+    category: uncategorized
+    summary: "Review command error handling is implicit, not enumerated per failure mode"
+    location: 116-slice.sq-slash-command.md#Command-File-Specifications
   - id: F002
-    severity: pass
-    category: dependency-management
-    summary: "Dependencies and integration points are correctly documented"
-    location: 116-slice.sq-slash-command.md:dependencies, interfaces
+    severity: note
+    category: uncategorized
+    summary: "NFRs from architecture not explicitly restated"
+    location: 116-slice.sq-slash-command.md
   - id: F003
     severity: pass
-    category: layer-responsibilities
-    summary: "Proper layering — commands live in Interface Layer only"
-    location: 116-slice.sq-slash-command.md:Package Structure
+    category: uncategorized
+    summary: "CLI-first architectural principle correctly implemented"
+    location: 116-slice.sq-slash-command.md#Technical-Scope
   - id: F004
     severity: pass
-    category: antipatterns-over-engineering
-    summary: "Thin-wrapper pattern avoids over-engineering"
-    location: 116-slice.sq-slash-command.md:Command Content Pattern
+    category: uncategorized
+    summary: "Interface layer integration is correct"
+    location: 116-slice.sq-slash-command.md#Integration-Points
   - id: F005
     severity: pass
-    category: implementation-approach
-    summary: "Package bundling approach follows Python conventions"
-    location: 116-slice.sq-slash-command.md:Bundling Command Files in the Package
+    category: uncategorized
+    summary: "Scope is well-bounded and exclusions are clearly stated"
+    location: 116-slice.sq-slash-command.md#Excluded
   - id: F006
     severity: pass
-    category: integration-points
-    summary: "No-daemon design is architecturally sound"
-    location: 116-slice.sq-slash-command.md:No Daemon Required
+    category: uncategorized
+    summary: "No daemon dependency for review commands is architecturally correct"
+    location: 116-slice.sq-slash-command.md#No-Daemon-Required
+  - id: F007
+    severity: pass
+    category: uncategorized
+    summary: "Package bundling approach follows established Python patterns"
+    location: 116-slice.sq-slash-command.md#Bundling-Command-Files-in-the-Package
 ---
 
 # Review: slice — slice 116
@@ -50,41 +55,42 @@ findings:
 
 ## Findings
 
-### [PASS] Slice scope is well-contained and appropriately scoped
+### [NOTE] Review command error handling is implicit, not enumerated per failure mode
 
-The slice clearly defines what is included (eight command files, install/uninstall CLI commands, tests) and explicitly excludes what is not in scope (composed workflows, project-level installation, auto-install hooks, additional commands). This discipline prevents scope creep and aligns with the architecture's focus on experimentation over UI polish.
+The review command files (review-arch, review-tasks, review-code) use generic phrasing like "If the command fails, show the error and suggest corrections." This pattern appears eight times across the command files. The architecture requires explicit handling strategy for each new I/O path.
 
-### [PASS] Dependencies and integration points are correctly documented
+However, this is acceptable because: (1) the underlying `sq review` CLI commands already implement explicit error handling for each failure mode, (2) the command files correctly delegate to the CLI rather than duplicating that logic, and (3) the "suggest corrections" pattern is appropriate for Claude Code's conversational interface. No action required.
 
-The dependencies declare:
-- `project-rename` (parent): CLI entry point is `sq`
-- `composed-workflows` (interface/consumed): Establishes the command infrastructure that slice 117 builds upon
+### [NOTE] NFRs from architecture not explicitly restated
 
-This correctly documents the relationship where slice 116 provides foundational infrastructure for slice 117's composed workflow commands. The slice properly consumes from prior slices (CLI Foundation 103, Review Templates 105, Auth Strategy 114) while providing to future slices.
+The architecture document does not state explicit NFRs (latency targets, throughput requirements) that would apply to this slice. The slice correctly has no NFR targets to restate. This is a note, not a concern.
 
-### [PASS] Proper layering — commands live in Interface Layer only
+### [PASS] CLI-first architectural principle correctly implemented
 
-The command files are maintained in `commands/sq/` and installed to `~/.claude/commands/sq/`. The CLI commands (`install-commands`, `uninstall-commands`) live in `src/squadron/cli/commands/`. No changes are made to Core Engine (`src/squadron/core/`) or Provider Layer (`src/squadron/providers/`). This maintains the architecture's four-layer separation.
+This slice extends the CLI interface layer by adding `install-commands` and `uninstall-commands` commands, consistent with the architecture's "CLI-first: CLI is the primary development interface" principle. The slash commands invoke `sq` CLI commands via Claude Code's Bash tool, making the CLI the primary mechanism for Claude Code integration.
 
-### [PASS] Thin-wrapper pattern avoids over-engineering
+### [PASS] Interface layer integration is correct
 
-The design correctly avoids duplicating CLI functionality. Command files:
-- Delegate execution to Claude Code's Bash tool
-- Pass arguments through transparently
-- Reference `--help` for usage rather than duplicating flag documentation
-- Provide graceful error handling without reinventing error messages
+The slice correctly identifies:
+- **Provides to**: slice 117 (Composed Workflows) via the established `commands/` directory structure
+- **Consumes from**: slices 115 (project rename - `sq` entry point), 103 (CLI foundation - Typer app structure), 105 (review templates), 114 (auth strategy)
 
-This "thin wrapper" philosophy aligns with the architecture's stated priority: "functionality through CLI, MCP server, and REST+WebSocket API."
+Dependencies flow forward from earlier slices to later slices — no architectural violations.
 
-### [PASS] Package bundling approach follows Python conventions
+### [PASS] Scope is well-bounded and exclusions are clearly stated
 
-Using `importlib.resources.files()` to locate bundled command files at runtime is the modern, stdlib approach. The `pyproject.toml` configuration for `hatch` wheel inclusion follows current best practices. This ensures command files are properly packaged in distribution wheels.
+The exclusion list is explicit and sensible:
+- No composed/chained workflow commands (deferred to slice 117)
+- No project-level installation (user-level only for v1)
+- No auto-install on package install (fragile)
+- Specific commands excluded with rationale for deferral
 
-### [PASS] No-daemon design is architecturally sound
+This prevents scope creep while clearly signaling extensibility points.
 
-The design correctly notes that:
-- Agent management commands (`spawn`, `task`, `list`, `shutdown`) produce clear error messages if the daemon isn't running
-- Review commands use the SDK directly and don't require the daemon
-- No command file logic needs to handle daemon lifecycle
+### [PASS] No daemon dependency for review commands is architecturally correct
 
-This aligns with the architecture's separation of concerns where daemon state management is handled by the core engine, not the interface layer.
+The design correctly notes that review commands (`sq review arch/tasks/code`) use the SDK directly and don't require the daemon. This aligns with the architecture's data flow showing review as a separate execution path from the agent lifecycle/message flow subsystem.
+
+### [PASS] Package bundling approach follows established Python patterns
+
+Using `importlib.resources.files("squadron") / "commands"` at runtime is the correct modern Python approach for locating bundled data files. The `pyproject.toml` force-include configuration properly maps the source `commands/` directory into the wheel package.
