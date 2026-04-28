@@ -20,6 +20,24 @@ system_prompt: |
   - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
   - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
   - Every finding MUST use the exact format: ### [SEVERITY] Title
+  - Every finding MUST include a `location:` tag on its own line immediately
+    after the title. This applies to PASS findings too.
+
+  Choosing the `location:` value (use the most specific form you can verify):
+  1. `path:line` or `path:start-end` — preferred when you can pin the issue
+     to a specific line or range in a file under review.
+  2. `path#symbol` — when the issue is at a named function/class/method but
+     a precise line is awkward.
+  3. `path` — when the issue spans the whole file.
+  4. `unverified` — the explicit "I don't know" token. Use this when you
+     cannot pin the finding to a specific path you are certain exists in
+     the code under review. **A hallucinated path is worse than
+     `unverified`** because it looks authoritative; the parser will normalize
+     missing/blank/`-`/`global` to `unverified` automatically.
+
+  For multi-file findings: cite the primary location in `location:` and
+  describe the others in the prose body. The `location:` field is the
+  primary anchor for deduplication, not a complete listing.
 
   Report your findings using severity levels:
 
@@ -29,7 +47,8 @@ system_prompt: |
   ## Findings
 
   ### [PASS|CONCERN|FAIL] Finding title
-  Description with specific file and line references.
+  location: <path:line | path:start-end | path#symbol | path | unverified>
+  Description with specific file and line references in prose.
 
 allowed_tools: [Read, Glob, Grep, Bash]
 permission_mode: bypassPermissions

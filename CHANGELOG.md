@@ -15,7 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Review templates (`code`, `slice`, `arch`, `tasks`) now require a `location:` field on every finding (PASS included), with a per-template precedence ladder and an explicit `unverified` "I don't know" token to discourage hallucinated paths. The `location:` value is the primary deduplication anchor used by ensemble review.
+
 ### Fixed
+- Review parser no longer leaves `ReviewFinding.location = None` when the model omits or supplies a placeholder (`-`, `global`, `n/a`, `none`, empty). All such cases are normalized to the explicit sentinel `"unverified"` and a WARNING is logged with the finding id, title, template, and verdict for triage. Resolves [#10](https://github.com/ecorkran/squadron/issues/10).
+- Review parser now WARNS on hallucinated finding locations: code reviews emit a WARNING when a cited path is not in the diff under review (diff-membership check), and reviews of any template type emit a WARNING when a cited path does not exist on disk (path-existence check). Both checks are observation-only and never modify findings.
 - Pipeline prompt-only mode no longer raises `KeyError` for `loop`, `each`, or `fan_out` step types. Step-type registration is now centralized in a single `bootstrap_step_types()` consumed by executor, loader, and prompt_renderer — eliminating triple-registration drift that left the prompt_renderer site missing those three types.
 - Pipeline review commands no longer hard-code `-v`. Default verbosity is now 0 (silent). Pass `-v` or `-vv` to `sq run` to opt in to verbose review output.
 - `/sq:run` slash command now correctly peels `-v`, `-vv`, and `--verbose` from the argument string before splitting pipeline and target, and forwards them to the `sq run` invocation.

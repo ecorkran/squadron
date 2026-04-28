@@ -8,37 +8,49 @@ verdict: PASS
 sourceDocument: project-documents/user/slices/902-slice.pipeline-verbosity-passthrough-v-vv.md
 aiModel: minimax/minimax-m2.7
 status: complete
-dateCreated: 20260426
-dateUpdated: 20260426
+dateCreated: 20260427
+dateUpdated: 20260427
 findings:
   - id: F001
     severity: pass
     category: uncategorized
-    summary: "Type safety with keyword-only parameters"
-    location: src/squadron/pipeline/prompt_renderer.py:151
+    summary: "Refactored step type bootstrap to single centralized function"
+    location: src/squadron/pipeline/steps/__init__.py:62-92
   - id: F002
     severity: pass
     category: uncategorized
-    summary: "Behavior change correctly reflected in tests"
-    location: tests/pipeline/test_prompt_renderer.py:186
+    summary: "Consistent placeholder location normalization"
+    location: src/squadron/review/parsers.py:30-32
   - id: F003
     severity: pass
     category: uncategorized
-    summary: "Comprehensive verbosity test coverage"
-    location: tests/pipeline/test_prompt_renderer.py:188-205
+    summary: "Regex patterns handle edge cases correctly"
+    location: src/squadron/review/parsers.py:95-98
   - id: F004
-    severity: note
+    severity: pass
     category: uncategorized
-    summary: "Consistent parameter naming"
-    location: src/squadron/cli/commands/run.py:485, 672
+    summary: "Location validation functions with proper guards"
+    location: src/squadron/review/parsers.py:120-195
   - id: F005
     severity: pass
     category: uncategorized
-    summary: "No security concerns"
+    summary: "Graceful error handling in git operations"
+    location: src/squadron/review/review_client.py:297-328
   - id: F006
     severity: pass
     category: uncategorized
-    summary: "No hardcoded secrets or magic values"
+    summary: "Non-blocking subprocess call placement"
+    location: src/squadron/review/review_client.py:155-162
+  - id: F007
+    severity: pass
+    category: uncategorized
+    summary: "Comprehensive test coverage for slice 904"
+    location: tests/review/test_parsers.py:570-773
+  - id: F008
+    severity: pass
+    category: uncategorized
+    summary: "Integration test guards against StepTypeName drift"
+    location: tests/pipeline/steps/test_registry_integration.py:71-92
 ---
 
 # Review: code — slice 902
@@ -48,31 +60,50 @@ findings:
 
 ## Findings
 
-### [PASS] Type safety with keyword-only parameters
+### [PASS] Refactored step type bootstrap to single centralized function
 
-The `_render_review` function uses `*,` to force keyword-only arguments for `verbosity`, ensuring explicit parameter passing. This is a good practice that prevents positional argument mistakes.
+The new `bootstrap_step_types()` function cleanly consolidates step type registration:
+- Uses a module-level `_bootstrapped` flag for idempotency
+- Imports all 9 step modules for side-effect registration
+- Properly ignores unused import warnings with `# noqa: F401  # pyright: ignore[reportUnusedImport]`
+- Replaces scattered duplicate import lists across executor.py, loader.py, and prompt_renderer.py
 
-### [PASS] Behavior change correctly reflected in tests
+### [PASS] Consistent placeholder location normalization
 
-The existing test assertion was correctly updated from expecting `"sq review slice 152 --model glm5 -v"` (always verbose) to `"sq review slice 152 --model glm5"` (verbose only when requested). This documents the intentional behavior change.
+The `_PLACEHOLDER_LOCATIONS` frozenset with case-insensitive comparison correctly identifies placeholder values (`""`, `"-"`, `"global"`, `"n/a"`, `"none"`). The normalization flow through `_normalize_location()` to `UNVERIFIED_LOCATION` sentinel ensures downstream tooling sees one consistent value.
 
-### [PASS] Comprehensive verbosity test coverage
+### [PASS] Regex patterns handle edge cases correctly
 
-The new `TestRenderReviewVerbosity` class provides excellent coverage with parametrize testing all three levels:
-- `verbosity=0`: no flags
-- `verbosity=1`: `-v`
-- `verbosity=2`: `-vv`
+The `[ \t]*` pattern (instead of `\s*`) for `_CATEGORY_RE` and `_LOCATION_RE` correctly prevents value bleed across blank lines. The `_LOCATION_PATH_RE` regex properly extracts path portions while handling fragment identifiers (`#`) and line anchors (`<`).
 
-The lambda-based assertion approach is functional though could benefit from clearer naming (e.g., a descriptive helper function), but this is a minor style preference.
+### [PASS] Location validation functions with proper guards
 
-### [NOTE] Consistent parameter naming
+Both `_check_diff_membership()` and `_check_path_existence()`:
+- Check for `None` path from `_location_path()` before processing
+- Skip `UNVERIFIED_LOCATION` findings silently
+- Log WARNINGs with full context (finding ID, title, template name, path)
+- Use `enumerate(findings, start=1)` for consistent F### numbering
 
-The CLI parameter `verbose` is passed through as `verbosity` in the pipeline functions. While this is internally consistent, consider whether future CLI additions should use a unified naming convention to avoid confusion.
+### [PASS] Graceful error handling in git operations
 
-### [PASS] No security concerns
+`_run_git_diff_filenames()` handles failures gracefully:
+- Catches `FileNotFoundError` (git not installed) and `OSError` (other subprocess failures)
+- Returns empty set on failure (not an exception)
+- Logs WARNING with stderr content for diagnostics
 
-The changes only affect command-line flag construction for local CLI calls. There are no file I/O, credential handling, or SQL operations introduced.
+### [PASS] Non-blocking subprocess call placement
 
-### [PASS] No hardcoded secrets or magic values
+The `subprocess.run()` call happens after `await agent.shutdown()`, ensuring it does not block the asyncio event loop. This is correctly placed outside the async context.
 
-The verbosity logic uses the actual integer values (0, 1, 2) directly in the conditional checks, which aligns with the command-line behavior. This is appropriate for this use case.
+### [PASS] Comprehensive test coverage for slice 904
+
+The new test classes `TestLocationSoftFail` and `TestLocationDiffMembershipAndPathExistence` provide thorough coverage:
+- Parametrized placeholder value testing
+- UNVERIFIED_LOCATION sentinel passthrough
+- Cross-check behavior (diff membership vs. path existence)
+- Arch reviews (no diff) path validation
+- Silent pass for valid paths
+
+### [PASS] Integration test guards against StepTypeName drift
+
+`test_bootstrap_step_types_registers_every_canonical_name()` verifies the bootstrap list stays in sync with `StepTypeName` enum, preventing future registration gaps.

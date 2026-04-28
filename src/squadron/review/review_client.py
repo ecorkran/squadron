@@ -149,11 +149,23 @@ async def run_review_with_profile(
     finally:
         await agent.shutdown()
 
+    # Resolve diff-file set (code-template path-membership check, slice 904)
+    # and cwd (path-existence check, all template types).
+    cwd_for_checks = Path(inputs.get("cwd", "."))
+    diff_files: set[str] | None = None
+    diff_ref = inputs.get("diff")
+    if diff_ref is not None:
+        diff_files = _run_git_diff_filenames(
+            diff_ref, str(cwd_for_checks), template.diff_exclude_patterns
+        )
+
     result = parse_review_output(
         raw_output=raw_output,
         template_name=template.name,
         input_files=inputs,
         model=resolved_model,
+        diff_files=diff_files,
+        cwd=cwd_for_checks,
     )
 
     # Populate prompt capture fields at verbosity >= 2
@@ -280,6 +292,41 @@ def _inject_file_contents(
 
     file_section = "\n\n## File Contents\n\n" + "\n\n".join(injections)
     return prompt + file_section
+
+
+def _run_git_diff_filenames(
+    ref: str,
+    cwd: str,
+    exclude_patterns: list[str] | None = None,
+) -> set[str]:
+    """Run `git diff --name-only` against *ref* and return filenames as a set.
+
+    Returns an empty set if git fails or the diff is empty. Same exclusion
+    handling as :func:`_run_git_diff`. Used by the parser's diff-membership
+    location check (slice 904) — we need the file list separately from the
+    diff body so the parser can verify finding locations without re-parsing
+    the diff text.
+    """
+    cmd = ["git", "diff", "--name-only", ref]
+    if exclude_patterns:
+        cmd.append("--")
+        cmd.append(".")
+        cmd.extend(f":!{p}" for p in exclude_patterns)
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+        if result.returncode != 0:
+            _logger.warning("git diff --name-only failed: %s", result.stderr.strip())
+            return set()
+        return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    except (FileNotFoundError, OSError) as exc:
+        _logger.warning("Failed to run git diff --name-only: %s", exc)
+        return set()
 
 
 def _run_git_diff(
