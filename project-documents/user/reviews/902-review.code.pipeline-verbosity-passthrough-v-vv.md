@@ -8,37 +8,49 @@ verdict: PASS
 sourceDocument: project-documents/user/slices/902-slice.pipeline-verbosity-passthrough-v-vv.md
 aiModel: minimax/minimax-m2.7
 status: complete
-dateCreated: 20260426
-dateUpdated: 20260426
+dateCreated: 20260427
+dateUpdated: 20260427
 findings:
   - id: F001
     severity: pass
     category: uncategorized
-    summary: "Type safety with keyword-only parameters"
-    location: src/squadron/pipeline/prompt_renderer.py:151
+    summary: "Bootstrap step types refactoring"
+    location: src/squadron/pipeline/steps/__init__.py:65-92
   - id: F002
     severity: pass
     category: uncategorized
-    summary: "Behavior change correctly reflected in tests"
-    location: tests/pipeline/test_prompt_renderer.py:186
+    summary: "Location normalization with soft-fail"
+    location: src/squadron/review/parsers.py:107-131
   - id: F003
     severity: pass
     category: uncategorized
-    summary: "Comprehensive verbosity test coverage"
-    location: tests/pipeline/test_prompt_renderer.py:188-205
+    summary: "Diff-membership and path-existence validation"
+    location: src/squadron/review/parsers.py:133-185
   - id: F004
-    severity: note
+    severity: pass
     category: uncategorized
-    summary: "Consistent parameter naming"
-    location: src/squadron/cli/commands/run.py:485, 672
+    summary: "Git diff filename extraction"
+    location: src/squadron/review/review_client.py:297-328
   - id: F005
     severity: pass
     category: uncategorized
-    summary: "No security concerns"
+    summary: "Updated call sites pass through validation context"
+    location: src/squadron/review/review_client.py:164-175
   - id: F006
     severity: pass
     category: uncategorized
-    summary: "No hardcoded secrets or magic values"
+    summary: "Updated regex patterns handle edge cases"
+    location: src/squadron/review/parsers.py:97-100
+  - id: F007
+    severity: pass
+    category: uncategorized
+    summary: "Comprehensive test coverage"
+    location: tests/review/test_parsers.py
+  - id: F008
+    severity: pass
+    category: uncategorized
+    summary: "Test registry integration tests"
+    location: tests/pipeline/steps/test_registry_integration.py:71-91
 ---
 
 # Review: code — slice 902
@@ -48,31 +60,61 @@ findings:
 
 ## Findings
 
-### [PASS] Type safety with keyword-only parameters
+### [PASS] Bootstrap step types refactoring
 
-The `_render_review` function uses `*,` to force keyword-only arguments for `verbosity`, ensuring explicit parameter passing. This is a good practice that prevents positional argument mistakes.
+The introduction of `bootstrap_step_types()` centralizes step-type registration into a single idempotent function. This is a solid DRY improvement: previously, three separate call sites (`executor.py`, `loader.py`, `prompt_renderer.py`) maintained identical import lists — adding a new step type required editing all three. Now there's one source of truth.
 
-### [PASS] Behavior change correctly reflected in tests
+The implementation is correct:
+- The `_bootstrapped` guard makes it idempotent (multiple calls are cheap no-ops)
+- Each import is annotated with `# noqa: F401 pyright: ignore[reportUnusedImport]` to suppress false positives from linters
+- The function is properly exported in `__all__`
 
-The existing test assertion was correctly updated from expecting `"sq review slice 152 --model glm5 -v"` (always verbose) to `"sq review slice 152 --model glm5"` (verbose only when requested). This documents the intentional behavior change.
+### [PASS] Location normalization with soft-fail
 
-### [PASS] Comprehensive verbosity test coverage
+The `_normalize_location()` function implements the project's "Never use silent fallback values" principle well. Missing or placeholder locations (`""`, `"-"`, `"global"`, `"n/a"`, `"none"`) are normalized to the explicit sentinel `"unverified"` rather than silently passed as `None` or empty strings. A WARNING is logged with enough context (finding ID, title, template name, verdict) for downstream triage.
 
-The new `TestRenderReviewVerbosity` class provides excellent coverage with parametrize testing all three levels:
-- `verbosity=0`: no flags
-- `verbosity=1`: `-v`
-- `verbosity=2`: `-vv`
+The test coverage is thorough:
+- `test_missing_location_normalized_and_warned` verifies the warning fires with correct details
+- `test_placeholder_values_normalized_to_unverified` parameterizes across all placeholder variants
+- `test_unverified_passed_through_without_warning` confirms the explicit sentinel doesn't re-trigger
 
-The lambda-based assertion approach is functional though could benefit from clearer naming (e.g., a descriptive helper function), but this is a minor style preference.
+### [PASS] Diff-membership and path-existence validation
 
-### [NOTE] Consistent parameter naming
+Two post-extraction validation functions were added:
 
-The CLI parameter `verbose` is passed through as `verbosity` in the pipeline functions. While this is internally consistent, consider whether future CLI additions should use a unified naming convention to avoid confusion.
+1. `_check_diff_membership()` - When a diff file set is provided (code-template reviews), each finding's location is checked against the diff. Files not in the diff log a WARNING.
 
-### [PASS] No security concerns
+2. `_check_path_existence()` - When a `cwd` is provided, each finding's location is checked for disk existence. Non-existent paths log a WARNING.
 
-The changes only affect command-line flag construction for local CLI calls. There are no file I/O, credential handling, or SQL operations introduced.
+Both checks skip `UNVERIFIED_LOCATION` findings, and `_location_path()` handles path extraction cleanly with a regex that guards against malformed input (values starting with `<` from prompt examples).
 
-### [PASS] No hardcoded secrets or magic values
+### [PASS] Git diff filename extraction
 
-The verbosity logic uses the actual integer values (0, 1, 2) directly in the conditional checks, which aligns with the command-line behavior. This is appropriate for this use case.
+The `_run_git_diff_filenames()` function extracts the list of changed files for the parser's diff-membership check. Error handling follows project conventions:
+- Uses `subprocess.run` with `check=False` and explicit return code handling
+- Logs a WARNING on failure and returns an empty set (soft-fail rather than crash)
+- Catches `FileNotFoundError` and `OSError` specifically (not bare `except:`)
+
+### [PASS] Updated call sites pass through validation context
+
+The `run_review_with_profile()` function now resolves `diff_files` and `cwd` from inputs and passes them to `parse_review_output()`. This wires the validation checks end-to-end.
+
+### [PASS] Updated regex patterns handle edge cases
+
+The regex patterns for extracting `category:` and `location:` tags were updated to use `[ \t]*` instead of `\s*` in the value capture group. This prevents value bleed across empty lines (e.g., an empty `location:` tag would not incorrectly capture the next line's content).
+
+### [PASS] Comprehensive test coverage
+
+The test suite for slice 904 (location validation) is well-structured:
+- `TestLocationSoftFail` - covers normalization and warning behavior
+- `TestLocationDiffMembershipAndPathExistence` - covers all combinations (in diff + exists, in diff + missing, out of diff + exists, out of diff + missing, arch review paths)
+- Tests use `caplog.at_level("WARNING")` to assert log output
+- Tests use `tmp_path` fixture for filesystem isolation
+
+### [PASS] Test registry integration tests
+
+Two regression tests added:
+- `test_bootstrap_step_types_registers_every_canonical_name` - Guards against drift between `StepTypeName` enum and the bootstrap import list
+- `test_bootstrap_resolves_loop_collection_fan_out` - Specifically guards the three step types that were missing from the prompt-only path
+
+Both tests will fail if someone adds a new step type without updating `bootstrap_step_types()`.

@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260427
 dateUpdated: 20260427
-status: design complete
+status: complete
 relatedIssues: [10]
 ---
 
@@ -109,28 +109,91 @@ is the *primary* anchor for dedup, not a complete listing.
 
 ## Verification walkthrough
 
-Run after implementation; fill outputs into this section before closing
-the slice.
+Reproduces the slice's behavior end-to-end. All steps verified on
+20260427 against branch `904-review-finding-location-required`.
 
-1. **Schema validation.** Loading each of the four templates does not
-   fail. (`uv run pytest tests/review/test_templates.py -v`)
-2. **Parser soft-fail.** Feed a synthetic review body with a finding
-   missing `location:`; assert `ReviewFinding.location == "unverified"`
-   and a WARNING log message names the finding ID.
-3. **Normalization.** Findings with `location: -`, `location: global`,
-   or empty all normalize to `unverified` with WARNING.
-4. **Diff-membership WARNING (code).** Feed a synthetic code review
-   where one finding cites `src/nonexistent.py:42` and the diff covers
-   only `src/squadron/foo.py`. Assert WARNING logged, finding parsed.
-5. **Path-existence WARNING (arch).** Feed a synthetic arch review
-   citing `project-documents/nonexistent.md`. Assert WARNING logged.
-6. **`unverified` skips checks.** Findings with
-   `location: unverified` produce no diff-membership or path-existence
-   WARNING.
-7. **End-to-end (code).** `uv run sq review code <slice>` produces a
-   review where every finding has a `location:` field. Note the
-   `unverified` count and any hallucinated paths flagged by T8/T9.
-8. **End-to-end (arch).** `uv run sq review arch <slice>` produces a
-   review where every finding has a `location:` field; cross-cutting
-   findings use `unverified` with prose justification.
-9. **Full gate.** `uv run pytest -q && uv run ruff check && uv run pyright`.
+### Automated (steps 1–6)
+
+Run with the full review test suite:
+
+```bash
+uv run pytest tests/review/ -q
+```
+
+Expected: `315 passed`. The new behavior is covered by:
+
+- `tests/review/test_parsers.py::TestLocationSoftFail` — 11 tests:
+  missing-location warning, no-warning regression on cited locations,
+  non-code template safety (arch-style doc paths pass through
+  unchanged), placeholder normalization (parametrized over
+  `'-'`/`'global'`/`'GLOBAL'`/`' '`/`''`/`'n/a'`/`'None'`), and explicit
+  `unverified` passthrough without warning.
+- `tests/review/test_parsers.py::TestLocationDiffMembershipAndPathExistence` —
+  6 tests: diff-member-and-existing passes silently, nonexistent path
+  fires both WARNINGs, existing-but-not-in-diff fires diff-membership
+  only, arch nonexistent fires path-existence, arch existing passes
+  silently, `unverified` skips both checks.
+- Template schema (step 1): `uv run pytest tests/review/test_templates.py -v`
+  → `20 passed` (covers all four updated templates).
+
+### Manual end-to-end (step 7 — code template)
+
+Command (uses any reachable provider profile + a fast model; the
+default `sdk` profile cannot run inside Claude Code, use `openrouter`):
+
+```bash
+uv run sq review code 902 --diff a4679b6^ \
+  --model minimax/minimax-m2.7 --profile openrouter -v
+```
+
+Expected: review emits `## Summary` + per-finding `### [SEVERITY] Title`
+blocks with a `location:` line on each finding (PASS included). The
+saved file [project-documents/user/reviews/902-review.code.pipeline-verbosity-passthrough-v-vv.md](../reviews/902-review.code.pipeline-verbosity-passthrough-v-vv.md)
+should have a `findings:` array in frontmatter where every entry has a
+non-null `location` value.
+
+Recorded outcome (20260427):
+
+- 8 PASS findings, 8/8 with `location:` populated as real
+  `path:start-end` values (e.g. `src/squadron/pipeline/steps/__init__.py:65-92`).
+- 0 `unverified` (the model never reached for the escape token because
+  every finding could be pinned).
+- 0 parser WARNINGs (no soft-fail, no diff-miss, no path-miss).
+- Note: `category:` is not requested by the code prompt, so all
+  findings fall back to `category: uncategorized` in structured output.
+  Pre-existing behavior, unchanged by slice 904.
+
+### Manual end-to-end (step 8 — arch template)
+
+Command:
+
+```bash
+uv run sq review arch \
+  project-documents/user/architecture/900-arch.maintenance-and-refactoring.md \
+  --model minimax/minimax-m2.7 --profile openrouter -v
+```
+
+Expected: review emits findings with `location:` populated; if the model
+elides directory prefixes the path-existence check WARNs to stderr.
+
+Recorded outcome (20260427):
+
+- 5 findings (3 CONCERN, 2 NOTE), 5/5 with `location:` populated.
+- Each WARNING line on stderr was of the form
+  `Finding F### (...) in arch review cites '<path>' which does not
+  exist on disk (relative to project-documents/user).` — the model
+  emitted bare filenames (`900-arch.maintenance-and-refactoring.md`)
+  without the `project-documents/user/architecture/` directory prefix.
+  This is the slice's intended surfacing: the path-existence check
+  does its job; tightening the arch prompt to require project-relative
+  paths is a follow-up if the false-positive rate proves useful.
+
+### Step 9 — full gate
+
+```bash
+uv run pytest -q && uv run ruff check && uv run ruff format --check && uv run pyright
+```
+
+Expected (verified 20260427): `1742 passed`, `All checks passed!` (ruff
+check), `5 files would be left unchanged` (ruff format --check), and
+`0 errors, 0 warnings, 0 informations` (pyright).

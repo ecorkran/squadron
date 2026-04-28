@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260426
+dateUpdated: 20260427
 ---
 
 # Development Log
@@ -13,6 +13,32 @@ CHANGELOG.md, in that this file is written from implementor perspective where CH
 written from user perspective.
 
 ---
+
+## 20260427
+
+### Slice 904: Review-Finding Location Required — Complete
+
+Resolves [issue #10](https://github.com/ecorkran/squadron/issues/10): review findings inconsistently cite a `location:` field, especially on PASS findings. The field is the dedup key for upcoming ensemble review (slices 182, 189), so it has to land first.
+
+**Four coordinated changes:**
+
+1. **Template prompts** (`src/squadron/data/templates/{code,slice,arch,tasks}.yaml`). All four review templates now require `location:` on every finding (PASS included), with a per-template precedence ladder (e.g. code: `path:line` → `path:start-end` → `path#symbol` → `path` → `unverified`). The explicit `unverified` token is the "I don't know" escape hatch — the prompt tells the model that hallucinated paths are worse than `unverified`. Commit `88bf32e`.
+
+2. **Soft-fail parser normalization** (`src/squadron/review/parsers.py`). New `_normalize_location()` helper: missing locations and placeholder values (`-`, `global`, `n/a`, `none`, empty) become `"unverified"` with a WARNING that names the finding ID, title, template, and verdict. Tightened `_CATEGORY_RE` and `_LOCATION_RE` to `[ \t]*` (was `\s*`) so an empty value tag cannot bleed onto the next body line. Threaded `verdict` and `template_name` through `_extract_findings`, `_lenient_extract_findings`, and the synthesized fallback for consistent triage signals. Commit `059818a`.
+
+3. **Diff-membership check** (code reviews only). `_check_diff_membership()` runs after extraction; for each finding citing a path, WARN if the path is not in the diff under review. Skips `UNVERIFIED_LOCATION` findings. Wired up in `review_client.py` via a new `_run_git_diff_filenames()` helper that calls `git diff --name-only` with the same exclude-pattern handling as `_run_git_diff()`. Commit `846a8a1`.
+
+4. **Path-existence check** (all template types). `_check_path_existence()` runs after extraction; for each finding citing a path and a `cwd`, WARN if `(cwd / path).exists()` is false. Cheap defense against hallucinated filenames in arch/slice/tasks reviews where there's no diff. Same commit as (3).
+
+**Hallucination defense, three layers, all WARNING-only:** prompt-side `unverified` token (self-documenting in rendered review); path-existence (catches made-up filenames everywhere); diff-membership (stricter check where we have an authoritative file set). Hard-rejection deferred until real-world false-positive data is available.
+
+**Tests:** 11 new soft-fail tests (`TestLocationSoftFail`) + 6 diff/path tests (`TestLocationDiffMembershipAndPathExistence`). One existing test (`test_no_location_returns_none`) renamed/updated — the old `None` behavior is now `"unverified"` by design. Full review suite: 315 passing. Full project: 1742 passing.
+
+**T11/T12 manual verification with `minimax/minimax-m2.7`:**
+- T11 code review against the slice 902 diff (commit `a4679b6`): 8 PASS findings, 8/8 had `location:` populated with real `path:line-range` values. Zero `unverified`, zero hallucinations, zero parser WARNINGs. Saved to [902-review.code.pipeline-verbosity-passthrough-v-vv.md](project-documents/user/reviews/902-review.code.pipeline-verbosity-passthrough-v-vv.md).
+- T12 arch review against `900-arch.maintenance-and-refactoring.md`: 5 findings (3 CONCERN, 2 NOTE), 5/5 had `location:` populated. **All 5 fired path-existence WARNINGs** because the model emitted bare filenames (`900-arch.maintenance-and-refactoring.md`) without the `project-documents/user/architecture/` prefix. The check did exactly its job — the cited paths really don't exist relative to `cwd`. The arch prompt could be tightened later to require project-relative paths; for slice 904 the WARNING is the correct surfacing.
+
+**Caveat captured:** the code prompt does not require `category:` (only arch.yaml does), so code-review findings still fall back to `category: uncategorized` in structured output. Pre-existing, not a 904 regression. If/when ensemble review needs category-based dedup, that's a follow-up.
 
 ## 20260426
 

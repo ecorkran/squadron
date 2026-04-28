@@ -62,7 +62,7 @@ triple-registration across executor / loader / prompt_renderer, and close the
 prompt_renderer gap (missing `loop`/`collection`/`fan_out`) as a one-line
 consequence. Tracked as T14–T17 in the 902 task file.
 
-3. [ ] **(904) Review-Finding Location Required**
+3. [x] **(904) Review-Finding Location Required**
 Fixes [issue #10](https://github.com/ecorkran/squadron/issues/10): review
 findings inconsistently cite a code location, and PASS findings almost never
 do. Load-bearing for ensemble review (slices 182, 189) where merged-finding
@@ -89,6 +89,6 @@ review).
 **Slice design:** `user/slices/904-slice.review-finding-location-required.md`
 Branch: `904-review-finding-location-required`, close issue on merge.
 
-**Status:** design complete · **Risk:** Low–Medium · **Effort:** 2.5/5 · **Dependencies:** none
+**Status:** complete (20260427) · **Risk:** Low–Medium · **Effort:** 2.5/5 · **Dependencies:** none
 
 
