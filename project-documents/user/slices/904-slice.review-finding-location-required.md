@@ -22,25 +22,54 @@ a location. This is felt at response time (re-discovering what the reviewer
 was looking at) and is load-bearing for upcoming ensemble-review work
 (slices 182, 189) where deduplication relies on location as the key.
 
-Three coordinated changes:
+Four coordinated changes:
 
 1. **Update all four review-template prompts** ([code.yaml](src/squadron/data/templates/code.yaml),
    [slice.yaml](src/squadron/data/templates/slice.yaml),
    [arch.yaml](src/squadron/data/templates/arch.yaml),
    [tasks.yaml](src/squadron/data/templates/tasks.yaml))
    to require `location:` on **every** finding (PASS included), with a
-   precedence ladder per template type.
+   precedence ladder per template type. **`unverified` is the explicit
+   "I don't know" token** — instruct the model to use it rather than
+   guess. Hallucinated locations are worse than `unverified` because
+   they look authoritative.
 
 2. **Soft-fail validation in the parser**
    ([parsers.py](src/squadron/review/parsers.py)). Findings missing
-   `location` get `location: -` auto-filled, tagged `missing-location`,
-   and a WARNING is logged. Counts surface in the structured output
-   so downstream tooling can flag low-quality reviews.
+   `location` get `location: unverified` auto-filled and a WARNING is
+   logged. The parser also normalizes `-`, `global`, and empty values
+   to `unverified` so downstream tooling sees one consistent token.
 
-3. **Path-membership check (code reviews only)**. When the finding's
+3. **Diff-membership check (code reviews only)**. When the finding's
    `location` cites a `path:...` and the review has a diff, verify the
-   path appears in the diff. WARNING-only — do not reject. Skipped for
-   arch/slice/tasks reviews (no diff).
+   path appears in the diff. WARNING-only. Skipped for arch/slice/tasks
+   reviews (no diff).
+
+4. **Path-existence check (all template types)**. When the finding's
+   `location` cites a path and is not `unverified`, verify the path
+   exists in the repo via `Path.exists()`. WARNING-only. This is the
+   primary defense against hallucinated filenames in arch/slice/tasks
+   reviews where there is no diff to check against. Cheap: one
+   `Path.exists()` per finding.
+
+## Hallucination defense
+
+The risk: model interprets the new requirement and starts hallucinating
+fake locations to satisfy it — worse than no location, because they look
+authoritative.
+
+Three layers of mitigation:
+
+- **Prompt (`unverified` token)**: explicit "I don't know" escape hatch
+  that's self-documenting in the rendered review. Humans see
+  `location: unverified` and know the model couldn't pin it down.
+- **Path-existence check (all templates)**: catches the most common
+  hallucination — made-up filenames — across every template type.
+- **Diff-membership check (code only)**: stricter check for code
+  reviews, where we have an authoritative set of files under review.
+
+All three are WARNING-only. Hard-rejection deferred until we have
+real-world false-positive data.
 
 ## Open questions (resolved)
 
@@ -59,10 +88,10 @@ shifts by template type because the artifact under review differs.
 
 | Template | Preferred form           | Fallback        | Last resort |
 |----------|--------------------------|-----------------|-------------|
-| code     | `path:line` / `path:start-end` | `path#symbol`, `path` | `-` / `global` (justify) |
-| slice    | `path:line` (slice doc) or code `path:line` | `path#section`, `path` | `-` / `global` (justify) |
-| arch     | `path` (whole-doc), `path#section-heading` | `path:line` | `-` / `global` (justify, common for missing-coverage findings) |
-| tasks    | code `path:line` (where the issue lives) | `path#symbol`, `path` | `-` / `global` (justify) |
+| code     | `path:line` / `path:start-end` | `path#symbol`, `path` | `unverified` |
+| slice    | `path:line` (slice doc)  | `path#section-heading`, `path` | `unverified` |
+| arch     | `path` (whole-doc), `path#section-heading` | `path:line` | `unverified` (common for missing-coverage findings) |
+| tasks    | code `path:line` (where the issue lives) | `path#symbol`, `path` | `unverified` |
 
 For **multi-file** findings: cite a single primary location in
 `location:`, mention the others in the prose body. The location field
@@ -86,14 +115,22 @@ the slice.
 1. **Schema validation.** Loading each of the four templates does not
    fail. (`uv run pytest tests/review/test_templates.py -v`)
 2. **Parser soft-fail.** Feed a synthetic review body with a finding
-   missing `location:`; assert `ReviewFinding.location == "-"` and a
-   WARNING log message names the finding ID.
-3. **Path-membership WARNING.** Feed a synthetic code review where one
-   finding cites `src/nonexistent.py:42` and the diff covers only
-   `src/squadron/foo.py`. Assert WARNING logged, finding still parsed.
-4. **End-to-end (code).** `uv run sq review code <slice>` produces a
-   review where every finding has a non-`-` `location:` field.
-5. **End-to-end (arch).** `uv run sq review arch <slice>` produces a
+   missing `location:`; assert `ReviewFinding.location == "unverified"`
+   and a WARNING log message names the finding ID.
+3. **Normalization.** Findings with `location: -`, `location: global`,
+   or empty all normalize to `unverified` with WARNING.
+4. **Diff-membership WARNING (code).** Feed a synthetic code review
+   where one finding cites `src/nonexistent.py:42` and the diff covers
+   only `src/squadron/foo.py`. Assert WARNING logged, finding parsed.
+5. **Path-existence WARNING (arch).** Feed a synthetic arch review
+   citing `project-documents/nonexistent.md`. Assert WARNING logged.
+6. **`unverified` skips checks.** Findings with
+   `location: unverified` produce no diff-membership or path-existence
+   WARNING.
+7. **End-to-end (code).** `uv run sq review code <slice>` produces a
+   review where every finding has a `location:` field. Note the
+   `unverified` count and any hallucinated paths flagged by T8/T9.
+8. **End-to-end (arch).** `uv run sq review arch <slice>` produces a
    review where every finding has a `location:` field; cross-cutting
-   findings use `-` with prose justification.
-6. **Full gate.** `uv run pytest -q && uv run ruff check && uv run pyright`.
+   findings use `unverified` with prose justification.
+9. **Full gate.** `uv run pytest -q && uv run ruff check && uv run pyright`.

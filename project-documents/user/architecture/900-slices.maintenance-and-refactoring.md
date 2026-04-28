@@ -66,18 +66,22 @@ consequence. Tracked as T14–T17 in the 902 task file.
 Fixes [issue #10](https://github.com/ecorkran/squadron/issues/10): review
 findings inconsistently cite a code location, and PASS findings almost never
 do. Load-bearing for ensemble review (slices 182, 189) where merged-finding
-deduplication keys on location. Three coordinated changes:
+deduplication keys on location. Four coordinated changes:
 
 1. Update all four review-template prompts ([code.yaml](src/squadron/data/templates/code.yaml),
    [slice.yaml](src/squadron/data/templates/slice.yaml),
    [arch.yaml](src/squadron/data/templates/arch.yaml),
    [tasks.yaml](src/squadron/data/templates/tasks.yaml)) to require
-   `location:` on every finding (PASS included), with per-template
-   precedence guidance.
+   `location:` on every finding (PASS included), with `unverified` as
+   the explicit "I don't know" token.
 2. Soft-fail in [parsers.py](src/squadron/review/parsers.py): missing
-   `location:` becomes `-` with a WARNING log and a `missing-location` tag.
-3. Diff-membership WARNING for code reviews (cited path must appear in the
-   diff); WARNING-only, do not reject.
+   `location:` becomes `unverified` with a WARNING log; existing `-`,
+   `global`, and empty values are normalized to `unverified`.
+3. Diff-membership WARNING for code reviews (cited path must appear in
+   the diff); WARNING-only.
+4. Path-existence WARNING for all template types (cheap `Path.exists()`
+   per finding); primary defense against hallucinated filenames in
+   non-code reviews.
 
 `task_ref:` field deferred to future slice (likely under 189 ensemble
 review).
@@ -85,6 +89,6 @@ review).
 **Slice design:** `user/slices/904-slice.review-finding-location-required.md`
 Branch: `904-review-finding-location-required`, close issue on merge.
 
-**Status:** design complete · **Risk:** Low–Medium · **Effort:** 2/5 · **Dependencies:** none
+**Status:** design complete · **Risk:** Low–Medium · **Effort:** 2.5/5 · **Dependencies:** none
 
 
