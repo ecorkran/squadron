@@ -15,23 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Review templates (`code`, `slice`, `arch`, `tasks`) now require a `location:` field on every finding (PASS included), with a per-template precedence ladder and an explicit `unverified` "I don't know" token to discourage hallucinated paths. The `location:` value is the primary deduplication anchor used by ensemble review.
-
-### Fixed
-- Review parser no longer leaves `ReviewFinding.location = None` when the model omits or supplies a placeholder (`-`, `global`, `n/a`, `none`, empty). All such cases are normalized to the explicit sentinel `"unverified"` and a WARNING is logged with the finding id, title, template, and verdict for triage. Resolves [#10](https://github.com/ecorkran/squadron/issues/10).
-- Review parser now WARNS on hallucinated finding locations: code reviews emit a WARNING when a cited path is not in the diff under review (diff-membership check), and reviews of any template type emit a WARNING when a cited path does not exist on disk (path-existence check). Both checks are observation-only and never modify findings.
-- Pipeline prompt-only mode no longer raises `KeyError` for `loop`, `each`, or `fan_out` step types. Step-type registration is now centralized in a single `bootstrap_step_types()` consumed by executor, loader, and prompt_renderer — eliminating triple-registration drift that left the prompt_renderer site missing those three types.
-- Pipeline review commands no longer hard-code `-v`. Default verbosity is now 0 (silent). Pass `-v` or `-vv` to `sq run` to opt in to verbose review output.
-- `/sq:run` slash command now correctly peels `-v`, `-vv`, and `--verbose` from the argument string before splitting pipeline and target, and forwards them to the `sq run` invocation.
-- Pipeline `code`-template reviews no longer silently produce `UNKNOWN` verdict with no findings. The diff range is now assembled and injected into the review prompt automatically when `slice:` is set on the review step.
-- `UNKNOWN` checkpoint verdict now fails closed: `on-fail` and `on-concerns` checkpoints treat `UNKNOWN` as a trigger condition. A missing review (`verdict is None`) continues to pass through unchanged.
-- `slice` parameter is now forwarded explicitly through `phase:` and `review:` step `expand()` into the emitted review action config, ensuring the value is always available to `_resolve_slice_inputs`.
+## [0.5.1] - 20260427
 
 ### Added
-- Declarative template-input registry (`src/squadron/review/template_inputs.py`). Each review template declares the `inputs` keys it requires and how to resolve them from `SliceInfo`. Adding a new template no longer requires editing `_resolve_slice_inputs`.
+- Multi-step loop bodies: `loop:` can now wrap a `steps:` sequence (e.g. `dispatch:` then `review:`) and re-run the whole block per iteration, with the same `until` / `on_exhaust` / `max` semantics as the single-step form.
+- Loop iteration count is now reported on completed step state in run JSON (you can see how many times the loop actually ran).
+- Every review finding (PASS included) now carries a `location:` field, so review output is consistent and findings can be deduplicated cleanly across multiple reviewers.
 
-- `loop:` step type with a `steps:` body. Enables multi-step loops where an entire sequence (e.g., `dispatch:` then `review:`) is re-run per iteration, with `until`, `on_exhaust`, and `max` semantics inherited unchanged from the existing single-step `loop:` sub-field. Nested loops are not supported in v1. Prerequisite for weighted-decay convergence (slice 184).
+### Changed
+- Pipeline reviews are silent by default. Pass `-v` or `-vv` to `sq run` (or `/sq:run`) to opt in to verbose review output; previously `-v` was hard-coded.
+- `review.yaml` no longer takes a `template` param — the pipeline is purpose-built for code reviews. **Breaking** for callers that passed `--param template=...`.
+
+### Fixed
+- Top-level `loop:` steps now actually run instead of failing validation with `Unknown step type loop`.
+- `loop`, `each`, and `fan_out` step types now load correctly in prompt-only mode (previously raised `KeyError`).
+- Checkpoint pause now shows the review's findings instead of "No structured findings". Closes [#12](https://github.com/ecorkran/squadron/issues/12).
+- Pipeline code reviews no longer silently produce `UNKNOWN` with no findings; the diff is now assembled and injected automatically when the review step has a `slice:` set.
+- Checkpoints now stop on `UNKNOWN` verdicts (treated like `FAIL` / `CONCERNS`); a missing review still passes through unchanged.
+- Review findings missing or with placeholder locations (`-`, `global`, `n/a`, `none`, empty) are normalized to the explicit `unverified` token, and a WARNING is logged. Resolves [#10](https://github.com/ecorkran/squadron/issues/10).
+- Review parser warns on suspect finding locations: a WARNING fires when a cited path isn't in the diff (code reviews) or doesn't exist on disk (any template). Both are observational; findings are never modified.
 
 ## [0.5.0] - 20260424
 
