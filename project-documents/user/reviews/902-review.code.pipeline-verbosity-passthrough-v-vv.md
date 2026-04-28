@@ -14,43 +14,43 @@ findings:
   - id: F001
     severity: pass
     category: uncategorized
-    summary: "Bootstrap step types refactoring"
-    location: src/squadron/pipeline/steps/__init__.py:65-92
+    summary: "Refactored step type bootstrap to single centralized function"
+    location: src/squadron/pipeline/steps/__init__.py:62-92
   - id: F002
     severity: pass
     category: uncategorized
-    summary: "Location normalization with soft-fail"
-    location: src/squadron/review/parsers.py:107-131
+    summary: "Consistent placeholder location normalization"
+    location: src/squadron/review/parsers.py:30-32
   - id: F003
     severity: pass
     category: uncategorized
-    summary: "Diff-membership and path-existence validation"
-    location: src/squadron/review/parsers.py:133-185
+    summary: "Regex patterns handle edge cases correctly"
+    location: src/squadron/review/parsers.py:95-98
   - id: F004
     severity: pass
     category: uncategorized
-    summary: "Git diff filename extraction"
-    location: src/squadron/review/review_client.py:297-328
+    summary: "Location validation functions with proper guards"
+    location: src/squadron/review/parsers.py:120-195
   - id: F005
     severity: pass
     category: uncategorized
-    summary: "Updated call sites pass through validation context"
-    location: src/squadron/review/review_client.py:164-175
+    summary: "Graceful error handling in git operations"
+    location: src/squadron/review/review_client.py:297-328
   - id: F006
     severity: pass
     category: uncategorized
-    summary: "Updated regex patterns handle edge cases"
-    location: src/squadron/review/parsers.py:97-100
+    summary: "Non-blocking subprocess call placement"
+    location: src/squadron/review/review_client.py:155-162
   - id: F007
     severity: pass
     category: uncategorized
-    summary: "Comprehensive test coverage"
-    location: tests/review/test_parsers.py
+    summary: "Comprehensive test coverage for slice 904"
+    location: tests/review/test_parsers.py:570-773
   - id: F008
     severity: pass
     category: uncategorized
-    summary: "Test registry integration tests"
-    location: tests/pipeline/steps/test_registry_integration.py:71-91
+    summary: "Integration test guards against StepTypeName drift"
+    location: tests/pipeline/steps/test_registry_integration.py:71-92
 ---
 
 # Review: code — slice 902
@@ -60,61 +60,50 @@ findings:
 
 ## Findings
 
-### [PASS] Bootstrap step types refactoring
+### [PASS] Refactored step type bootstrap to single centralized function
 
-The introduction of `bootstrap_step_types()` centralizes step-type registration into a single idempotent function. This is a solid DRY improvement: previously, three separate call sites (`executor.py`, `loader.py`, `prompt_renderer.py`) maintained identical import lists — adding a new step type required editing all three. Now there's one source of truth.
+The new `bootstrap_step_types()` function cleanly consolidates step type registration:
+- Uses a module-level `_bootstrapped` flag for idempotency
+- Imports all 9 step modules for side-effect registration
+- Properly ignores unused import warnings with `# noqa: F401  # pyright: ignore[reportUnusedImport]`
+- Replaces scattered duplicate import lists across executor.py, loader.py, and prompt_renderer.py
 
-The implementation is correct:
-- The `_bootstrapped` guard makes it idempotent (multiple calls are cheap no-ops)
-- Each import is annotated with `# noqa: F401 pyright: ignore[reportUnusedImport]` to suppress false positives from linters
-- The function is properly exported in `__all__`
+### [PASS] Consistent placeholder location normalization
 
-### [PASS] Location normalization with soft-fail
+The `_PLACEHOLDER_LOCATIONS` frozenset with case-insensitive comparison correctly identifies placeholder values (`""`, `"-"`, `"global"`, `"n/a"`, `"none"`). The normalization flow through `_normalize_location()` to `UNVERIFIED_LOCATION` sentinel ensures downstream tooling sees one consistent value.
 
-The `_normalize_location()` function implements the project's "Never use silent fallback values" principle well. Missing or placeholder locations (`""`, `"-"`, `"global"`, `"n/a"`, `"none"`) are normalized to the explicit sentinel `"unverified"` rather than silently passed as `None` or empty strings. A WARNING is logged with enough context (finding ID, title, template name, verdict) for downstream triage.
+### [PASS] Regex patterns handle edge cases correctly
 
-The test coverage is thorough:
-- `test_missing_location_normalized_and_warned` verifies the warning fires with correct details
-- `test_placeholder_values_normalized_to_unverified` parameterizes across all placeholder variants
-- `test_unverified_passed_through_without_warning` confirms the explicit sentinel doesn't re-trigger
+The `[ \t]*` pattern (instead of `\s*`) for `_CATEGORY_RE` and `_LOCATION_RE` correctly prevents value bleed across blank lines. The `_LOCATION_PATH_RE` regex properly extracts path portions while handling fragment identifiers (`#`) and line anchors (`<`).
 
-### [PASS] Diff-membership and path-existence validation
+### [PASS] Location validation functions with proper guards
 
-Two post-extraction validation functions were added:
+Both `_check_diff_membership()` and `_check_path_existence()`:
+- Check for `None` path from `_location_path()` before processing
+- Skip `UNVERIFIED_LOCATION` findings silently
+- Log WARNINGs with full context (finding ID, title, template name, path)
+- Use `enumerate(findings, start=1)` for consistent F### numbering
 
-1. `_check_diff_membership()` - When a diff file set is provided (code-template reviews), each finding's location is checked against the diff. Files not in the diff log a WARNING.
+### [PASS] Graceful error handling in git operations
 
-2. `_check_path_existence()` - When a `cwd` is provided, each finding's location is checked for disk existence. Non-existent paths log a WARNING.
+`_run_git_diff_filenames()` handles failures gracefully:
+- Catches `FileNotFoundError` (git not installed) and `OSError` (other subprocess failures)
+- Returns empty set on failure (not an exception)
+- Logs WARNING with stderr content for diagnostics
 
-Both checks skip `UNVERIFIED_LOCATION` findings, and `_location_path()` handles path extraction cleanly with a regex that guards against malformed input (values starting with `<` from prompt examples).
+### [PASS] Non-blocking subprocess call placement
 
-### [PASS] Git diff filename extraction
+The `subprocess.run()` call happens after `await agent.shutdown()`, ensuring it does not block the asyncio event loop. This is correctly placed outside the async context.
 
-The `_run_git_diff_filenames()` function extracts the list of changed files for the parser's diff-membership check. Error handling follows project conventions:
-- Uses `subprocess.run` with `check=False` and explicit return code handling
-- Logs a WARNING on failure and returns an empty set (soft-fail rather than crash)
-- Catches `FileNotFoundError` and `OSError` specifically (not bare `except:`)
+### [PASS] Comprehensive test coverage for slice 904
 
-### [PASS] Updated call sites pass through validation context
+The new test classes `TestLocationSoftFail` and `TestLocationDiffMembershipAndPathExistence` provide thorough coverage:
+- Parametrized placeholder value testing
+- UNVERIFIED_LOCATION sentinel passthrough
+- Cross-check behavior (diff membership vs. path existence)
+- Arch reviews (no diff) path validation
+- Silent pass for valid paths
 
-The `run_review_with_profile()` function now resolves `diff_files` and `cwd` from inputs and passes them to `parse_review_output()`. This wires the validation checks end-to-end.
+### [PASS] Integration test guards against StepTypeName drift
 
-### [PASS] Updated regex patterns handle edge cases
-
-The regex patterns for extracting `category:` and `location:` tags were updated to use `[ \t]*` instead of `\s*` in the value capture group. This prevents value bleed across empty lines (e.g., an empty `location:` tag would not incorrectly capture the next line's content).
-
-### [PASS] Comprehensive test coverage
-
-The test suite for slice 904 (location validation) is well-structured:
-- `TestLocationSoftFail` - covers normalization and warning behavior
-- `TestLocationDiffMembershipAndPathExistence` - covers all combinations (in diff + exists, in diff + missing, out of diff + exists, out of diff + missing, arch review paths)
-- Tests use `caplog.at_level("WARNING")` to assert log output
-- Tests use `tmp_path` fixture for filesystem isolation
-
-### [PASS] Test registry integration tests
-
-Two regression tests added:
-- `test_bootstrap_step_types_registers_every_canonical_name` - Guards against drift between `StepTypeName` enum and the bootstrap import list
-- `test_bootstrap_resolves_loop_collection_fan_out` - Specifically guards the three step types that were missing from the prompt-only path
-
-Both tests will fail if someone adds a new step type without updating `bootstrap_step_types()`.
+`test_bootstrap_step_types_registers_every_canonical_name()` verifies the bootstrap list stays in sync with `StepTypeName` enum, preventing future registration gaps.
