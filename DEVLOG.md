@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260427
+dateUpdated: 20260428
 ---
 
 # Development Log
@@ -13,6 +13,16 @@ CHANGELOG.md, in that this file is written from implementor perspective where CH
 written from user perspective.
 
 ---
+
+## 20260428
+
+### Initiative 240: Pipeline Auth-Boundary Flexibility — Phase 2 Architecture (review iteration 2)
+
+Reviewed via slice-style review at [240-review.arch.pipeline-auth-boundary-flexibility.md](project-documents/user/reviews/240-review.arch.pipeline-auth-boundary-flexibility.md) (verdict CONCERNS, 6 concerns + 1 note). All addressed in arch doc revision: classification split into two distinct properties (`needs_persistent_session` vs `needs_one_shot_claude`) so review-only-with-SDK-reviews pipelines no longer pay persistent-session connect cost (F001); mid-run lazy-connect mechanism sketched in Envisioned State step 5a after verifying `ActionContext` is constructed per-action in `pipeline/executor.py:785` (F002); pre-scan pool handling clarified as static structural query against pool's alias list with no 180 API dependency (F003); pre-scan resolver instance must match runtime cascade including `--param` overrides (F004); resolver side-effect-freedom verified by inspection of `models/aliases.py:resolve_model_alias` and stated as documented contract (F005); `is_sdk_profile()` ownership promoted to `providers/profiles.py` with explicit contract (F006); resume policy under changed pipeline definitions stated explicitly — current resolution wins (F007).
+
+### Initiative 240: Pipeline Auth-Boundary Flexibility — Phase 2 Architecture
+
+Drafted [240-arch.pipeline-auth-boundary-flexibility.md](project-documents/user/architecture/240-arch.pipeline-auth-boundary-flexibility.md). Promoted from in-flight slice-170 work after recognising the actual scope: today's pipeline executor unconditionally constructs a `ClaudeSDKClient` at startup regardless of pipeline content, and the dispatch router has no profile branch — together these mean (a) any `sq run` from pure CLI requires Claude auth, (b) `sq run … --param model=<non-sdk>` for a dispatch step silently fails. Architecture names two distinct SDK-touching paths (persistent `SDKExecutionSession` vs. registry-spawned one-shot `ClaudeSDKAgent`) and treats them as separate auth surfaces, both intentional. Initiative owns: per-step auth classification via resolution pre-scan, conditional persistent-session construction, profile-aware dispatch routing in pure-CLI mode, pool-resolution classification policy (conservative-vs-lazy), and diagnostic CLI surface. Explicit non-goals: until-loop convergence, fan-out/fan-in aggregation, intra-loop compaction policy, conversation-vs-override-instruction routing for findings — all 180-band. One-shot Claude subprocess pooling documented as known cost, not optimised. Anticipated 6–10 slices. Initiative entry added to [001-initiative-plan.squadron.md](project-documents/user/project-guides/001-initiative-plan.squadron.md) at index 240; cross-initiative dependency line added.
 
 ## 20260427
 

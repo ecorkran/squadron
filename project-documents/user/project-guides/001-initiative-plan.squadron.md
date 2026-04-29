@@ -4,7 +4,7 @@ layer: project
 project: squadron
 source: user/project-guides/001-concept.squadron.md
 dateCreated: 20260325
-dateUpdated: 20260327
+dateUpdated: 20260428
 status: in_progress
 ---
 
@@ -23,13 +23,15 @@ Variable gaps based on initiative scope. Working range 100-799 for feature initi
 3. [ ] **(180) Pipeline Intelligence** — Weighted review convergence strategies (decay-based finding dismissal), model pools with selection strategies, escalation behaviors (auto-retry with stronger model), conversation persistence across retries, findings ledger with cross-iteration identity matching. Layers sophistication onto 140's foundation. Dependencies: [100, 140]. Status: draft
 4. [ ] **(200) Multi-Agent Communication** — Shared message bus, configurable routing topologies, supervisor with health monitoring and restart strategies, multi-provider agent coordination, human-in-the-loop participation. Dependencies: [100]. Status: not_started
 5. [ ] **(220) Simulation Runtime** — Persistent agent entities with identity and emergent behavior in shared environments. Future work. Dependencies: [100, 200]. Status: future_work
-5. [x] **(900) Maintenance and Refactoring** — Cross-cutting maintenance, tech debt, refactoring, and operational improvements that span initiative boundaries. Dependencies: None. Status: not_started
+6. [ ] **(240) Pipeline Auth-Boundary Flexibility** — Decouple pipeline execution from unconditional Claude SDK auth. Two SDK-touching paths (persistent `SDKExecutionSession` for cross-step Claude dispatches; one-shot `ClaudeSDKAgent` spawned by the provider registry for review/dispatch when a Claude profile is resolved) become independently controlled. Per-step auth classification via pre-scan of resolved models, conditional persistent-session creation (connect iff some step actually needs it), profile-aware dispatch routing in pure-CLI executor mode, and clear error semantics when pool resolution mid-run conflicts with the upfront classification. Goal: pipelines composed entirely of non-Claude profiles run end-to-end without Claude auth, login, or account; mixed pipelines pay Claude cost only where actually used; persistent-session lifetime guarantees (compact/rotate-only termination) preserved for SDK-profile dispatch chains. Explicit non-goals: until-loop convergence intelligence, fan-out/fan-in aggregation semantics, intra-loop compaction policy, conversation-vs-override-instruction routing for review findings — all 180-band. One-shot Claude subprocess pooling/reuse documented as known cost, not optimised here. Dependencies: [100, 140]. Status: not_started.
+7. [x] **(900) Maintenance and Refactoring** — Cross-cutting maintenance, tech debt, refactoring, and operational improvements that span initiative boundaries. Dependencies: None. Status: not_started
 
 ## Cross-Initiative Dependencies
 - 140 depends on 100: needs stable agent dispatch, review system, model aliases, CF integration layer, and CLI interfaces
 - 180 depends on 100, 140: builds on 140's action protocol, pipeline executor, model resolver, and structured review findings
 - 200 depends on 100: builds on agent registry, provider protocols, and daemon infrastructure
 - 220 depends on 100, 200: requires both core engine and multi-agent communication layer
+- 240 depends on 100, 140: builds on agent registry / provider-profile resolution (100), the pipeline executor and model resolver (140), and the persistent `SDKExecutionSession` lifecycle established in 140. Coordinates with 180 at the auth-classification ↔ pool-resolution boundary but does not depend on 180.
 - 900 is independent: maintenance work applies across all initiatives as needed
 
 ## Notes
