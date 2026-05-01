@@ -14,6 +14,19 @@ written from user perspective.
 
 ---
 
+## 20260501
+
+### Slice 170: Profile-Aware Dispatch Model Routing — Phase 5 Task Breakdown
+
+Task file created at `user/tasks/170-tasks.profile-aware-dispatch-model-routing.md` (15 tasks, 360 lines).
+Tasks cover: `_one_shot_dispatch` extraction from `_dispatch_via_agent`, `_render_dispatch` profile
+branch fix, new hidden `sq _dispatch-run` subcommand, `commands/sq/run.md` dispatch-section update,
+SDK `is_error` synthetic-error detection fix, full suite + type-check, verification walkthrough, and
+slice closeout. Inline `--prompt` intentionally omitted from `_dispatch-run`; file-only via
+`--prompt-file` matching the established convention for multi-KB assembled context.
+
+---
+
 ## 20260428
 
 ### Initiative 240: Pipeline Auth-Boundary Flexibility — Phase 2 Architecture (review iteration 2)
