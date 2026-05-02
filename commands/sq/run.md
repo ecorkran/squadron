@@ -64,8 +64,14 @@ For each action in the step's `actions` list, execute based on `action_type`:
 Run the `command` field via Bash. Example: `cf set phase 4`, `cf build`.
 
 ### dispatch
-This is in-session work — you perform the task described in `instruction`.
-If `model_switch` is present (e.g., `/model opus`), note the recommended model for the user. Model switching cannot be automated — only the user can issue `/model` commands. State which model is recommended so the user can switch if desired.
+If the `command` field is present:
+  Write the assembled context prompt to a temp file via Bash (`mktemp`).
+  Replace `{tmp_path}` in the `command` field with the temp file path.
+  Run the command via Bash. Capture stdout as the dispatch response.
+  Remove the temp file after capture (`rm -f <path>`).
+Else:
+  This is in-session work — you perform the task described in `instruction`.
+  If `model_switch` is present (e.g., `/model opus`), note the recommended model for the user. Model switching cannot be automated — only the user can issue `/model` commands. State which model is recommended so the user can switch if desired.
 
 ### review
 Run the `command` field via Bash. Example: `sq review slice 152 --model glm5 -v`.
