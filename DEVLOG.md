@@ -13,6 +13,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260501
 
+### Slice 241: is_sdk_profile Predicate Re-Homing — Phase 4 Slice Design
+
+Drafted slice design at [241-slice.is-sdk-profile-predicate-re-homing.md](project-documents/user/slices/241-slice.is-sdk-profile-predicate-re-homing.md). Foundation slice for the 240-band initiative: promotes `is_sdk_profile()` from [pipeline/summary_oneshot.py:19-24](src/squadron/pipeline/summary_oneshot.py#L19-L24) to [providers/profiles.py](src/squadron/providers/profiles.py) with an explicit contract (returns `True` for `None` or `"sdk"`, `False` for every other registered profile and unknown strings; no I/O, no auth probe, pure read of the profile-name enum). Investigation found only **2 production importers** (not 3 as the slice plan estimated) — slice 170 added the predicate to the dispatch *renderer* but not the dispatch *router* (router branch is slice 242's work). 6-file mechanical refactor: new definition + new test file + 2 caller import updates + old definition removal + old test removal. No re-export shim — all callers update in the same PR. Slice plan entry updated with design-complete pointer.
+
+### Initiative 240: Pipeline Auth-Boundary Flexibility — Phase 3 Slice Plan
+
+Drafted slice plan at [240-slices.pipeline-auth-boundary-flexibility.md](project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md). 8 slices in two groups: 1 foundation (241 predicate re-homing) + 7 features (242 dispatch router pure-CLI fix, 243 resolution pre-scan, 244 conditional persistent session construction, 245 pool-resolution policy + mid-run construction, 246 `sq run --explain` diagnostics CLI, 247 documentation, 248 adversarial test matrix). Each slice maps directly to addressed-CONCERN territory from the iteration-2 arch review: 241 → F006 ownership, 243 → F003/F004/F005 pre-scan correctness, 244 → F001 split classification + F007 resume policy, 245 → F002 mid-run mechanism. Conservative shipping order: 241 → 242 → 243 → 244 → 245 → 246 → 248 → 247. Aggressive parallel order with {242, 243} and {244, 246} as parallelizable groups also documented.
+
 ### Slice 170: Profile-Aware Dispatch Model Routing — Phase 6 Implementation Complete
 
 All 15 tasks (T1–T15) implemented and committed. 1763 tests passing, zero ruff/pyright errors.

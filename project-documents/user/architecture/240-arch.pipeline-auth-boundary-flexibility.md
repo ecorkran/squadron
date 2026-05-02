@@ -5,8 +5,8 @@ project: squadron
 archIndex: 240
 component: pipeline-auth-boundary-flexibility
 dateCreated: 20260428
-dateUpdated: 20260428
-reviewIteration: 2
+dateUpdated: 20260501
+reviewIteration: 3
 status: draft
 ---
 
@@ -454,12 +454,27 @@ What changes is **whether** it is constructed.
   > `is_sdk_profile(profile_name: str | None) -> bool` returns
   > `True` iff the profile name routes through the `ClaudeSDKAgent`
   > provider — i.e., the provider whose `provider` field is `"sdk"`
-  > in the profiles registry. Returns `False` for any other
-  > registered provider (`openai-compatible`, `openrouter`, etc.)
-  > and for `None` (which means "no profile resolved yet — treat
-  > as non-SDK for routing decisions"). The predicate does not
-  > probe the Claude CLI, does not check auth, does not read config.
-  > It is a pure function of the profiles registry.
+  > in the profiles registry. Returns `True` for `None` (which means
+  > "no profile specified — fall back to the SDK session's default
+  > model"; this is the sentinel existing call sites in the renderer
+  > and summary action use today and the predicate preserves that
+  > semantics). Returns `False` for any other registered provider
+  > (`openai-compatible`, `openrouter`, etc.) and for unknown
+  > profile strings. The predicate does not probe the Claude CLI,
+  > does not check auth, does not read config. It is a pure function
+  > of the profiles registry.
+
+  **Classification-layer note.** The pre-scan slice (243) operates
+  on resolved profiles produced by `ModelResolver.resolve()` for
+  configured pipeline steps. Pipelines whose steps have no model
+  configuration are misconfigured — the classification layer fails
+  fast in that case rather than calling the predicate with `None`.
+  Raw-literal-model-id input (e.g. `--param model=gpt-4o` with no
+  alias) is not a supported workflow; squadron's model surface is
+  alias-driven, and unaliased literals are treated as configuration
+  errors at the classification boundary. This means the predicate's
+  `None` → `True` semantics serve only the existing renderer /
+  summary call sites and never the pre-scan.
 
   Existing callers (`summary_oneshot.py`, the slice-170 dispatch
   renderer, and the new pre-scan) import from the canonical home;

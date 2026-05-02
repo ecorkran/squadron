@@ -1,0 +1,79 @@
+---
+docType: slice-plan
+parent: 240-arch.pipeline-auth-boundary-flexibility.md
+project: squadron
+dateCreated: 20260501
+dateUpdated: 20260501
+status: not_started
+---
+
+# Slice Plan: Pipeline Auth-Boundary Flexibility
+
+## Parent Document
+`240-arch.pipeline-auth-boundary-flexibility.md` — Architecture: Pipeline Auth-Boundary Flexibility
+
+---
+
+## Overview
+
+This initiative decouples Claude SDK authentication from the pipeline executor, making auth a per-step property derived from each step's resolved profile rather than a precondition of `sq run`. The work splits along four natural axes that map to four sequenced groups of slices:
+
+1. **The immediate dispatch defect** (one small slice) — fixes `sq run --param model=<non-sdk>` silently failing in pure-CLI mode by branching `DispatchAction._dispatch` on resolved profile. Standalone value, ships first, no architectural dependencies.
+
+2. **Shared predicate re-homing** (one small slice) — promotes `is_sdk_profile()` from its slice-164 birthplace (`pipeline/summary_oneshot.py`) to a canonical home in `providers/profiles.py` with a documented contract. Required by every subsequent slice; cheap to land independently.
+
+3. **Pre-scan and conditional session construction** (three slices) — builds the resolution pre-scan, applies it to gate persistent-session construction, and adds the pool-uncertainty policy. This is the load-bearing work — it changes when `SDKExecutionSession` is constructed and introduces the three pipeline shapes (Claude-required persistent, Claude-required one-shot only, Claude-free).
+
+4. **Diagnostics, mid-run failure semantics, docs, and adversarial test matrix** (four slices) — surfaces the classification to users via `sq run --explain`, tightens mid-run auth-failure UX for lazy pool resolution, updates the pipeline authoring guide, and asserts the matrix end-to-end with process-level checks (no Claude subprocess spawned for Claude-free runs).
+
+Slice 170 (already complete) is the IDE / `/sq:run` axis of the same dispatch problem and is not in scope here. This initiative is the pure-CLI / SDK-executor axis.
+
+---
+
+## Foundation Work
+
+1. [ ] **(241) is_sdk_profile Predicate Re-Homing** — Promote `is_sdk_profile()` from its current location in `pipeline/summary_oneshot.py` to a canonical home in `providers/profiles.py` (alongside `get_profile`, where profile semantics already live). Documented contract: `is_sdk_profile(profile_name: str | None) -> bool` returns `True` iff the profile name routes through the `ClaudeSDKAgent` provider (`provider == "sdk"` in the profiles registry); `False` for any other registered provider and for `None`. Pure function of the profiles registry — does not probe the Claude CLI, does not check auth, does not read config. Update existing callers (slice 164 summary, slice 170 dispatch renderer, slice 170 dispatch action) to import from the canonical home; delete the old definition. Mechanical refactor; lands first because every subsequent slice depends on a single, owned predicate. Dependencies: [164, 170]. Risk: Low. Effort: 1/5. **Design Complete: [241-slice.is-sdk-profile-predicate-re-homing.md](../slices/241-slice.is-sdk-profile-predicate-re-homing.md)**
+
+---
+
+## Feature Slices (in implementation order)
+
+2. [ ] **(242) Profile-Aware Dispatch Router (pure CLI)** — Minimal fix for the motivating defect. `DispatchAction._dispatch` checks `is_sdk_profile(profile)` on the resolved model and routes non-SDK profiles to `_dispatch_via_agent` even when `context.sdk_session is not None`. Closes the immediate `sq run … --param model=<non-sdk>` defect for the SDK executor (pure-CLI invocation). No session-construction changes; the persistent session still connects at startup as today. Tests: dispatch with `--param model=minimax` from pure-CLI routes through `_dispatch_via_agent`, not `session.set_model`; dispatch with default Claude model continues to use the persistent session unchanged; mixed pipelines correctly route per-step. Standalone user value — the broken pure-CLI flow becomes correct without any other 240-band work. Dependencies: [241]. Risk: Low. Effort: 2/5
+
+3. [ ] **(243) Resolution Pre-Scan** — Pipeline-walking pass that produces a per-step classification report: for each model-dispatching step (dispatch, review, summary, compact), call the model resolver with the same cascade the action would use at runtime, yielding `(model_id, profile)` and a per-step classification of `SDK-required`, `non-SDK`, or `pool-uncertain`. Pool steps use a "classify, don't select" path: walk the pool definition's static alias set and apply `is_sdk_profile` to each member — no pool selection, no strategy invocation, no 180-band runtime API. The pre-scan reuses the *same* `ModelResolver` instance the executor will use at runtime (same `cli_override` including `--param model=…`, same `pipeline_model` default, same `config_default`) so CLI overrides are honored. Output is a structured report consumable by both the conditional-connect slice (244) and the diagnostic CLI surface (246). Includes documenting the pre-scan's reliance on alias-resolution side-effect freedom (verified by inspection of `models/aliases.py:resolve_model_alias` and `pipeline/resolver.py:ModelResolver.resolve` — pure dict lookup, no telemetry, no cache mutation). Dependencies: [241]. Risk: Low. Effort: 2/5
+
+4. [ ] **(244) Conditional Persistent Session Construction** — Apply the pre-scan to gate `SDKExecutionSession` construction. Compute two pipeline-level properties from per-step classifications: `needs_persistent_session` (true iff at least one dispatch / summary / compact step resolves to an SDK profile) and `needs_one_shot_claude` (true iff at least one step routes through the provider registry's `ClaudeSDKAgent` path — informational, does not gate startup). Yields three observable shapes: Claude-required (persistent), Claude-required (one-shot only), Claude-free. `_run_pipeline_sdk` constructs and connects the persistent session **iff** `needs_persistent_session` is true; otherwise `ActionContext` carries `sdk_session=None`. Critical: review-only pipelines whose reviews resolve to `sonnet` are *not* `needs_persistent_session` and pay no persistent-session cost; review subprocesses spawn lazily via the existing one-shot path, unchanged. Pool-uncertain steps default to conservative-pessimistic (treat as SDK-required) — lazy mode is opt-in, layered in slice 245. Run-state schema unchanged (classification is derived, not durable); resume re-classifies from current YAML and current alias mappings (the new classification wins, preserving user intent on alias remaps). Dependencies: [242, 243]. Risk: Medium (lifecycle correctness across resume, ActionContext propagation). Effort: 3/5
+
+5. [ ] **(245) Pool-Resolution Classification Policy and Mid-Run Session Construction** — Define and implement conservative-vs-lazy handling for pool-uncertain steps. CLI flag or pipeline-config key to opt into lazy mode. Implement the mid-run construction mechanism described in arch §5a: the executor holds an `Optional[SDKExecutionSession]` field on its run loop; before each action's `ActionContext` is built, if the action's resolved profile is SDK and the field is `None`, the executor constructs and connects a session, stores it on the field, and the new `ActionContext` carries that reference. Connect blocks the triggering action (one-time cost on first SDK-resolved step). No retroactive mutation of prior `ActionContext`s. From this point forward, the session lives until pipeline end or compact/rotate, identical to the eager-connect case. Defines and tests the auth-failure UX for the mid-run path (when lazy mode hits a pool selection that yields SDK and Claude auth is unavailable): clear error, recoverable run-state shape, documented resume behavior. Dependencies: [244]. Risk: Medium (mid-run state machine transition, auth-failure surface area). Effort: 3/5
+
+6. [ ] **(246) Auth-Classification Diagnostics CLI** — `sq run --explain <pipeline>` (or equivalent flag — exact name pinned during slice design) prints a pipeline's classification and per-step rationale without executing. Output shows: pipeline shape (Claude-required persistent / Claude-required one-shot only / Claude-free), per-step `(step_name, action, resolved_alias, resolved_model_id, profile, classification)`, and any pool-uncertain steps with the policy that will apply (conservative or lazy). Useful for users debugging "why does this pipeline want Claude auth?" and for documentation examples. Reuses the pre-scan from slice 243 — no new resolver code. Dependencies: [243]. Risk: Low. Effort: 2/5
+
+7. [ ] **(247) Documentation and Pipeline Authoring Guide Updates** — Arch-level documentation surface: cross-reference the two SDK-touching paths (persistent session vs. one-shot `ClaudeSDKAgent`) in the pipeline authoring guide; document the three pipeline shapes with examples (Claude-free pipeline, mixed pipeline, review-only pipeline with SDK reviews); troubleshooting section for common auth surprises (the `--param model=<sdk-alias>` case, the review-template-defaults-to-sonnet case, the pool-uncertain mid-run case); document the persona / system-prompt asymmetry that becomes more visible when switching dispatch from SDK to non-SDK profile. No code changes. Dependencies: [244, 245, 246]. Risk: Low. Effort: 1/5
+
+8. [ ] **(248) Adversarial Test Matrix** — End-to-end tests exercising the full classification matrix with assertions on the *observable* effects of correct classification, not just the classification report. Pipelines: pure-Claude (persistent), pure-non-SDK (Claude-free), mixed dispatch + review, review-only with SDK reviews (Claude-required one-shot only), pool-uncertain conservative, pool-uncertain lazy with mid-run SDK selection, pool-uncertain lazy with mid-run non-SDK selection. Per-pipeline assertions: persistent session is constructed iff expected; **no Claude CLI subprocess is spawned for Claude-free runs** (process-level check via subprocess monitoring or mock at the Claude CLI invocation boundary); resume preserves classification correctness across pipeline edits and alias remaps; mid-run auth failure produces the documented error and recoverable state. Asserts the failure modes named in the arch's "Failure-Mode Enumeration" review principle are observable (logged at WARNING+ or test-visible). Dependencies: [244, 245]. Risk: Medium (test infrastructure for process-level Claude CLI spawn detection). Effort: 3/5
+
+---
+
+## Slice Sequencing Notes
+
+- **Slice 241** must land first; every subsequent slice imports the predicate from its canonical home.
+- **Slice 242** is independently shippable after 241 — closes the immediate user-visible defect with no architectural changes. Can ship in parallel with 243 (pre-scan).
+- **Slice 243** (pre-scan) is the only blocker for both 244 (conditional session) and 246 (diagnostics CLI). The two consumers can develop in parallel once 243 is merged.
+- **Slice 244** is the load-bearing change — once merged, the executor's behavior fundamentally changes for non-Claude pipelines.
+- **Slice 245** layers the pool-uncertainty policy and mid-run mechanism on top of 244. Required for full pool-resolution correctness; not required for the simple cases (pure-Claude, pure-non-SDK, statically-resolved mixed).
+- **Slices 246, 247, 248** are user-facing finishing work; 246 needs only 243, 247 needs the design surface stable through 245, 248 closes out with adversarial coverage.
+
+Conservative shipping order: 241 → 242 → 243 → 244 → 245 → 246 → 248 → 247.
+
+Aggressive parallel order: 241 → {242, 243} → {244, 246} → 245 → 248 → 247.
+
+---
+
+## Related Work
+
+- **Slice 170 — Profile-Aware Dispatch Model Routing** (140-band, complete): IDE / `/sq:run` axis of the dispatch routing problem. This initiative addresses the pure-CLI / SDK-executor axis. Both ship independently; together they close the dispatch routing surface across all execution environments.
+- **Slice 164 — Profile-Aware Summary Model Routing** (140-band, complete): birthplace of `is_sdk_profile()`; slice 241 re-homes the predicate.
+- **Slice 155 — SDK Pipeline Executor** (140-band, complete): defines `_run_pipeline_sdk` and the persistent-session construction this initiative makes conditional.
+- **Slice 158 — SDK Session Management and Compaction** (140-band, complete): defines compact/rotate semantics that this initiative preserves.
+- **Initiative 180 — Pipeline Intelligence** (in progress): pool-resolution mechanics. The "classify, don't select" pre-scan path stays inside the alias / pool-definition layer (structural data) and does not invoke 180's selection strategies.
+- **`140-arch.pipeline-foundation.md`**: action protocol, resolver cascade, executor shape, state machine — all unchanged by this initiative.
