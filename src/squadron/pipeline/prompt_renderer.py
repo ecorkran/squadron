@@ -120,28 +120,72 @@ def _render_cf_op(
     )
 
 
+_DISPATCH_INTERNAL_PARAM_KEYS = frozenset(
+    {
+        "_fan_out_branch_index",
+        "prompt",
+        "system_prompt",
+        "model",
+        "step_model",
+        "profile",
+    }
+)
+
+
 def _render_dispatch(
     config: dict[str, object],
     params: dict[str, object],
     resolver: ModelResolver,
 ) -> ActionInstruction:
-    """Build instruction for a dispatch action (in-session work)."""
-    action_model = str(config["model"]) if config.get("model") else None
-    model_id: str | None = None
-    model_switch: str | None = None
+    """Build instruction for a dispatch action.
 
-    if action_model is not None:
-        try:
-            model_id, _ = resolver.resolve(action_model)
-        except Exception:
-            model_id = action_model
-        model_switch = f"/model {action_model}"
+    SDK profiles: in-session path (model_switch, no command).
+    Non-SDK profiles: emits a ``sq _dispatch-run`` command for the harness.
+    """
+    action_model = str(config["model"]) if config.get("model") else None
+
+    if action_model is None:
+        return ActionInstruction(
+            action_type=ActionType.DISPATCH,
+            instruction="Execute the work using the assembled context",
+        )
+
+    try:
+        model_id, profile = resolver.resolve(action_model)
+    except Exception:
+        model_id = action_model
+        profile = None
+
+    if is_sdk_profile(profile):
+        return ActionInstruction(
+            action_type=ActionType.DISPATCH,
+            instruction="Execute the work using the assembled context",
+            model=model_id,
+            model_switch=f"/model {action_model}",
+        )
+
+    # Non-SDK: emit a command for the harness to run externally.
+    extra_params = [
+        f"--param {shlex.quote(f'{k}={v}')}"
+        for k, v in params.items()
+        if k not in _DISPATCH_INTERNAL_PARAM_KEYS
+    ]
+    param_str = (" " + " ".join(extra_params)) if extra_params else ""
+    command = (
+        f"sq _dispatch-run"
+        f" --prompt-file {{tmp_path}}"
+        f" --model {shlex.quote(model_id)}"
+        f" --profile {shlex.quote(profile or '')}"
+        f"{param_str}"
+    )
 
     return ActionInstruction(
         action_type=ActionType.DISPATCH,
-        instruction="Execute the work using the assembled context",
-        model=model_id or action_model,
-        model_switch=model_switch,
+        instruction=(
+            "Run the 'command' field via Bash. Capture stdout as the dispatch response."
+        ),
+        model=model_id,
+        command=command,
     )
 
 
