@@ -36,7 +36,7 @@ def _check_cli_error(response_text: str) -> ActionResult | None:
     return None
 
 
-async def _one_shot_dispatch(
+async def one_shot_dispatch(
     *,
     prompt: str,
     model_id: str,
@@ -241,7 +241,7 @@ class DispatchAction:
             else alias_profile or ProfileName.SDK
         )
 
-        response_text = await _one_shot_dispatch(
+        response_text = await one_shot_dispatch(
             prompt=self._resolve_prompt(context),
             model_id=model_id,
             profile_name=profile_name,

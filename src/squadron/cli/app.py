@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from squadron.cli.commands.auth import auth_app
 from squadron.cli.commands.config import config_app
+from squadron.cli.commands.dispatch_run import dispatch_run
 from squadron.cli.commands.history import history
 from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import list_agents
@@ -50,6 +51,7 @@ app.command("install-commands")(install_commands)
 app.command("uninstall-commands")(uninstall_commands)
 app.command("_summary-instructions", hidden=True)(summary_instructions)
 app.command("_summary-run", hidden=True)(summary_run)
+app.command("_dispatch-run", hidden=True)(dispatch_run)
 
 
 def version_callback(value: bool) -> None:
