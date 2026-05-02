@@ -260,7 +260,7 @@ async def test_execute_sdk_dedup(action: DispatchAction) -> None:
 
 @pytest.mark.asyncio
 async def test_execute_token_metadata(action: DispatchAction) -> None:
-    """Token counts extracted from response metadata."""
+    """Token metadata from agent responses is not propagated (unused downstream)."""
     ctx = _make_context()
     token_meta = {
         "prompt_tokens": 10,
@@ -277,9 +277,9 @@ async def test_execute_token_metadata(action: DispatchAction) -> None:
     ):
         result = await action.execute(ctx)
 
-    assert result.metadata["prompt_tokens"] == 10
-    assert result.metadata["completion_tokens"] == 20
-    assert result.metadata["total_tokens"] == 30
+    assert result.success is True
+    assert "prompt_tokens" not in result.metadata
+    assert result.metadata.get("model") is not None
 
 
 @pytest.mark.asyncio
