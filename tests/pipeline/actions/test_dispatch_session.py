@@ -192,3 +192,49 @@ async def test_session_dispatch_cli_error_response_returns_failure(
     assert result.success is False
     assert result.error == error_text
     assert result.outputs["response"] == error_text
+
+
+# ---------------------------------------------------------------------------
+# SDK is_error path (T11)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sdk_session_is_error_message_fails_action(
+    action: DispatchAction,
+) -> None:
+    """SDKExecutionSession.dispatch raising ProviderAPIError returns success=False."""
+    from squadron.providers.errors import ProviderAPIError
+
+    session = _make_session()
+    session.dispatch.side_effect = ProviderAPIError(
+        "SDK reported is_error=True: error_during_generation"
+    )
+    ctx = _make_context(session=session)
+
+    result = await action.execute(ctx)
+
+    assert result.success is False
+    assert result.error is not None
+    assert "is_error" in result.error or "error_during_generation" in result.error
+
+
+@pytest.mark.asyncio
+async def test_no_artifact_written_on_sdk_error(
+    action: DispatchAction,
+) -> None:
+    """On SDK error, outputs is empty and error is set — no artifact written."""
+    from squadron.providers.errors import ProviderAPIError
+
+    session = _make_session()
+    session.dispatch.side_effect = ProviderAPIError(
+        "SDK reported is_error=True: error_during_generation"
+    )
+    ctx = _make_context(session=session)
+
+    result = await action.execute(ctx)
+
+    assert result.success is False
+    assert result.error is not None
+    # outputs should be empty dict (no artifact written)
+    assert result.outputs == {}

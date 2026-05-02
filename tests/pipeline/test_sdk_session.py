@@ -301,6 +301,83 @@ async def test_dispatch_session_id_latest_wins() -> None:
 
 
 # ---------------------------------------------------------------------------
+# SDK is_error path (T11)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_raises_provider_api_error_on_result_is_error() -> None:
+    """When ResultMessage.is_error is True, dispatch raises ProviderAPIError."""
+    from claude_agent_sdk import ResultMessage
+
+    from squadron.providers.errors import ProviderAPIError
+
+    client = _make_client()
+    session = _make_session(client)
+
+    async def _gen():  # type: ignore[return]
+        result = ResultMessage(
+            subtype="error_during_generation",
+            result=None,
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=True,
+            num_turns=1,
+            session_id="sess-err",
+        )
+        yield result
+
+    gen_mock = MagicMock()
+    gen_mock.__aiter__ = lambda self: _gen()
+    client.receive_response.return_value = gen_mock
+
+    with pytest.raises(ProviderAPIError, match="is_error=True"):
+        await session.dispatch("fail me")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_no_content_appended_before_is_error_raise() -> None:
+    """is_error check fires before any content is appended to response_parts."""
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
+
+    from squadron.providers.errors import ProviderAPIError
+
+    client = _make_client()
+    session = _make_session(client)
+    collected: list[str] = []
+
+    async def _gen():  # type: ignore[return]
+        # AssistantMessage arrives first — but the is_error ResultMessage
+        # should abort before the assistant text reaches callers.
+        msg = MagicMock(spec=AssistantMessage)
+        block = MagicMock(spec=TextBlock)
+        block.text = "partial text"
+        msg.content = [block]
+        yield msg
+        result = ResultMessage(
+            subtype="error_during_generation",
+            result=None,
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=True,
+            num_turns=1,
+            session_id="sess-err",
+        )
+        yield result
+
+    gen_mock = MagicMock()
+    gen_mock.__aiter__ = lambda self: _gen()
+    client.receive_response.return_value = gen_mock
+
+    with pytest.raises(ProviderAPIError):
+        await session.dispatch("fail me")
+
+    # The returned exception confirms no clean string was returned.
+    # collected is empty since dispatch raised before returning.
+    assert collected == []
+
+
+# ---------------------------------------------------------------------------
 # compact (session rotate)
 # ---------------------------------------------------------------------------
 

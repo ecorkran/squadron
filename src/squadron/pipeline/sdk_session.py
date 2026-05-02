@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     CLIJSONDecodeError,
     CLINotFoundError,
     ProcessError,
+    ResultMessage,
 )
 
 from squadron.core.models import SDK_RESULT_TYPE
@@ -135,6 +136,13 @@ class SDKExecutionSession:
             while True:
                 try:
                     async for sdk_msg in self.client.receive_response():
+                        # Raise before appending any content so no partial
+                        # error text reaches the caller or _check_cli_error.
+                        if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
+                            raise ProviderAPIError(
+                                f"SDK reported is_error=True: "
+                                f"{sdk_msg.result or sdk_msg.subtype}"
+                            )
                         for translated in translate_sdk_message(
                             sdk_msg, sender="pipeline"
                         ):
