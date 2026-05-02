@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Non-SDK models (e.g. `minimax`, `gemini-flash`) now work correctly in prompt-only/IDE mode (`/sq:run`). The dispatch renderer emits a `sq _dispatch-run` command for non-SDK profiles; the IDE harness runs it via Bash instead of silently using the calling session.
+- New hidden subcommand `sq _dispatch-run` for pipeline-internal use: accepts `--prompt-file`, `--model`, `--profile`, `--param` flags and invokes a one-shot non-SDK dispatch.
+
+### Fixed
+- SDK synthetic errors (`ResultMessage.is_error=True`) are now caught and surfaced as `ProviderAPIError` before any response text is returned, preventing silent writes of error text into design artifacts.
+
 ## [0.5.1] - 20260427
 
 ### Added

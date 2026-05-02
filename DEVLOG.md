@@ -2,12 +2,36 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260428
+dateUpdated: 20260501
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260501
+
+### Slice 170: Profile-Aware Dispatch Model Routing — Phase 6 Implementation Complete
+
+All 15 tasks (T1–T15) implemented and committed. 1763 tests passing, zero ruff/pyright errors.
+
+**What changed:**
+
+- **`_render_dispatch` branches on resolved profile** (`prompt_renderer.py`): SDK/None profiles keep the current in-session path (`model_switch`, no command). Non-SDK profiles emit a `sq _dispatch-run` command with `--prompt-file {tmp_path}`, `--model`, `--profile`, and any non-internal params forwarded as `--param` flags. `model_switch` and `command` are mutually exclusive.
+- **`one_shot_dispatch` helper extracted** (`dispatch.py`): Factored the agent-spawn sequence out of `_dispatch_via_agent` into a public module-level async function. `_dispatch_via_agent` becomes a thin caller. Token metadata was not consumed downstream and was dropped in the refactor.
+- **`sq _dispatch-run` hidden subcommand added** (`cli/commands/dispatch_run.py`, `app.py`): Reads prompt from `--prompt-file`, resolves profile via `ModelResolver` if `--profile` omitted, calls `one_shot_dispatch`, prints to stdout. Errors always go to stderr before exit 1. Hidden from `sq --help`.
+- **`commands/sq/run.md` dispatch section updated**: Branched on `command` field presence — non-SDK path writes temp file, replaces `{tmp_path}`, runs via Bash, cleans up. SDK/in-session path is the else branch (unchanged wording).
+- **SDK synthetic-error fix** (`sdk_session.py`): In `SDKExecutionSession.dispatch`, after `translate_sdk_message`, checks `isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error` before appending content. Raises `ProviderAPIError("SDK reported is_error=True: ...")` on the error path. Existing `_CLI_ERROR_PREFIX` text check in `_check_cli_error` preserved as backstop.
+
+**Key decision:** `_one_shot_dispatch` renamed to `one_shot_dispatch` (no leading underscore) because pyright strict mode treats leading-underscore module-level names as private and the function is intentionally cross-module.
+
+**Commits:** `9942161` refactor, `6000c42` feat renderer, `062191e` feat subcommand, `7545a7e` feat run.md, `32bc7f6` fix sdk error
+
+**Issues logged:** None.
+
+**Next:** Initiative 240 slice plan (pipeline auth-boundary flexibility), or Phase 6 on any pending slice.
 Format: `## YYYYMMDD` followed by brief notes (1-3 lines per session).  This file differs from
 CHANGELOG.md, in that this file is written from implementor perspective where CHANGELOG.md is
 written from user perspective.
