@@ -8,36 +8,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squadron.core.models import SDK_RESULT_TYPE, Message
-from squadron.pipeline.summary_oneshot import (
-    capture_summary_via_profile,
-    is_sdk_profile,
-)
+from squadron.pipeline.summary_oneshot import capture_summary_via_profile
 from squadron.providers.base import AgentProvider, ProviderCapabilities
 
 # ---------------------------------------------------------------------------
-# T3 — is_sdk_profile predicate
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "profile,expected",
-    [
-        (None, True),
-        ("sdk", True),
-        ("openrouter", False),
-        ("openai", False),
-        ("gemini", False),
-        ("local", False),
-        ("openai-oauth", False),
-        ("unknown-future", False),
-    ],
-)
-def test_is_sdk_profile(profile: str | None, expected: bool) -> None:
-    assert is_sdk_profile(profile) is expected
-
-
-# ---------------------------------------------------------------------------
-# T5 — capture_summary_via_profile with stub provider
+# capture_summary_via_profile with stub provider
 # ---------------------------------------------------------------------------
 
 _FAKE_PROFILE = "fake-oneshot"

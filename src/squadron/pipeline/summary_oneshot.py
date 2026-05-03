@@ -1,27 +1,18 @@
 """One-shot summary execution for non-SDK provider profiles.
 
 Provides `capture_summary_via_profile()` (mirrors the pattern from
-`run_review_with_profile()`) and the `is_sdk_profile()` predicate used
-to route summary actions at execution time.
+`run_review_with_profile()`) used to dispatch summary actions through
+non-SDK providers. Profile-routing predicates live in
+`squadron.providers.profiles`.
 """
 
 from __future__ import annotations
 
 import logging
 
-from squadron.providers.base import ProfileName
-
 _logger = logging.getLogger(__name__)
 
-__all__ = ["is_sdk_profile", "capture_summary_via_profile"]
-
-
-def is_sdk_profile(profile: str | None) -> bool:
-    """Return True when the profile routes through the Claude Code SDK session.
-
-    None and 'sdk' both route through the SDK session.
-    """
-    return profile is None or profile == ProfileName.SDK
+__all__ = ["capture_summary_via_profile"]
 
 
 async def capture_summary_via_profile(

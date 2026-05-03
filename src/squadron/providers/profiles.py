@@ -8,6 +8,16 @@ from pathlib import Path
 
 from squadron.providers.base import AuthType, ProfileName, ProviderType
 
+__all__ = [
+    "BUILT_IN_PROFILES",
+    "ProviderProfile",
+    "get_all_profiles",
+    "get_profile",
+    "is_sdk_profile",
+    "load_user_profiles",
+    "providers_toml_path",
+]
+
 
 @dataclass(frozen=True)
 class ProviderProfile:
@@ -125,3 +135,21 @@ def get_profile(name: str) -> ProviderProfile:
         available = ", ".join(sorted(profiles))
         raise KeyError(f"Profile {name!r} not found. Available profiles: {available}")
     return profiles[name]
+
+
+def is_sdk_profile(profile: str | None) -> bool:
+    """Return True iff the profile routes through the Claude Code SDK session.
+
+    Pure function of the profiles registry. Returns True for the 'sdk'
+    profile name and for None (sentinel meaning "no profile specified —
+    fall back to the SDK session's default model"; preserves the
+    existing renderer / summary semantics). Returns False for every
+    other registered profile (openrouter, openai, gemini, local,
+    openai_oauth) and for unknown profile strings.
+
+    Does not probe the Claude CLI, check authentication, or read
+    config. Callers needing auth checks must do so separately. The
+    classification layer (slice 243 pre-scan) operates only on
+    resolved profiles and does not pass None to this predicate.
+    """
+    return profile is None or profile == ProfileName.SDK

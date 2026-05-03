@@ -12,6 +12,7 @@ from squadron.providers.profiles import (
     ProviderProfile,
     get_all_profiles,
     get_profile,
+    is_sdk_profile,
     load_user_profiles,
 )
 
@@ -151,3 +152,24 @@ def test_user_profile_without_auth_type_defaults(
     )
     result = load_user_profiles()
     assert result["myprofile"].auth_type == "api_key"
+
+
+# --- is_sdk_profile tests ---
+
+
+@pytest.mark.parametrize(
+    "profile,expected",
+    [
+        (None, True),
+        ("sdk", True),
+        ("openrouter", False),
+        ("openai", False),
+        ("openai_oauth", False),
+        ("gemini", False),
+        ("local", False),
+        ("unknown-profile", False),
+        ("", False),
+    ],
+)
+def test_is_sdk_profile(profile: str | None, expected: bool) -> None:
+    assert is_sdk_profile(profile) is expected

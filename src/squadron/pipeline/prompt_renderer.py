@@ -20,7 +20,7 @@ from squadron.pipeline.compaction_templates import (
 )
 from squadron.pipeline.executor import resolve_placeholders
 from squadron.pipeline.steps import get_step_type
-from squadron.pipeline.summary_oneshot import is_sdk_profile
+from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
     from squadron.pipeline.models import StepConfig

@@ -7,10 +7,8 @@ import logging
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.summary_oneshot import (
-    capture_summary_via_profile,
-    is_sdk_profile,
-)
+from squadron.pipeline.summary_oneshot import capture_summary_via_profile
+from squadron.providers.profiles import is_sdk_profile
 
 _logger = logging.getLogger(__name__)
 
