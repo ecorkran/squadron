@@ -4,64 +4,63 @@ layer: project
 reviewType: slice
 slice: is-sdk-profile-predicate-re-homing
 project: squadron
-verdict: FAIL
+verdict: PASS
 sourceDocument: project-documents/user/slices/241-slice.is-sdk-profile-predicate-re-homing.md
 aiModel: z-ai/glm-5.1
 status: complete
-dateCreated: 20260501
-dateUpdated: 20260501
+dateCreated: 20260502
+dateUpdated: 20260502
 findings:
   - id: F001
-    severity: fail
-    category: contract-violation
-    summary: "`None` contract contradicts architecture specification"
-    location: 241-slice.is-sdk-profile-predicate-re-homing.md#Design
+    severity: pass
+    category: alignment
+    summary: "Predicate contract matches architecture specification exactly"
+    location: 241-slice.is-sdk-profile-predicate-re-homing.md#contract-matches-arch-§is_sdk_profile-predicate-iteration-3
   - id: F002
-    severity: concern
-    category: scope-accuracy
-    summary: "\"No behavior change\" scope claim is inconsistent with architecture contract"
-    location: 241-slice.is-sdk-profile-predicate-re-homing.md#Scope
+    severity: pass
+    category: dependency-direction
+    summary: "Dependency direction correct — pipeline imports from providers, not reverse"
+    location: 241-slice.is-sdk-profile-predicate-re-homing.md#canonical-home-providersprofiles.py
   - id: F003
-    severity: note
-    category: architectural-boundary
-    summary: "Dependency direction is correct"
-    location: 241-slice.is-sdk-profile-predicate-re-homing.md#Canonical-Home:-providers/profiles.py
+    severity: pass
+    category: scope
+    summary: "Scope tightly bounded — no behavior change, no new callers, no scope creep"
+    location: 241-slice.is-sdk-profile-predicate-re-homing.md#scope
   - id: F004
+    severity: pass
+    category: error-handling
+    summary: "Pure function — no I/O paths, no failure mode enumeration required"
+    location: 241-slice.is-sdk-profile-predicate-re-homing.md#canonical-home-providersprofiles.py
+  - id: F005
     severity: note
-    category: quality
-    summary: "Migration plan and verification are thorough"
-    location: 241-slice.is-sdk-profile-predicate-re-homing.md#Migration-Plan
+    category: sequencing
+    summary: "Architecture suggested re-homing might land in pre-scan slice; dedicated slice is cleaner"
+    location: 241-slice.is-sdk-profile-predicate-re-homing.md
 ---
 
 # Review: slice — slice 241
 
-**Verdict:** FAIL
+**Verdict:** PASS
 **Model:** z-ai/glm-5.1
 
 ## Findings
 
-### [FAIL] `None` contract contradicts architecture specification
+### [PASS] Predicate contract matches architecture specification exactly
 
-The slice defines `is_sdk_profile(None)` → `True`, but the architecture document explicitly specifies the opposite. From the architecture (§`is_sdk_profile()` predicate — ownership and contract):
+The slice's contract table (None→True, "sdk"→True, all other registered profiles→False, unknown strings→False) is a verbatim restatement of the architecture document's §`is_sdk_profile()` predicate — ownership and contract (iteration 3). The classification-layer note about `None`→`True` semantics serving only renderer/summary call sites (not pre-scan) is also carried forward correctly. No drift.
 
-> Returns `False` for any other registered provider (`openai-compatible`, `openrouter`, etc.) and for `None` (which means "no profile resolved yet — treat as non-SDK for routing decisions").
+### [PASS] Dependency direction correct — pipeline imports from providers, not reverse
 
-The slice's contract table and implementation both say `None` → `True`, with rationale "defaults to SDK for routing decisions, matching today's behavior." The architecture's rationale is also clear: treating `None` as non-SDK is essential to the initiative's core design goal that **Claude-free pipelines run Claude-free**. If an unresolved profile defaults to SDK, any step whose profile hasn't been resolved yet would trigger Claude auth — directly undermining the per-step classification model the architecture mandates. The "matching today's behavior" argument is insufficient; the 240 initiative exists precisely to change the problematic current behavior. The slice must implement the architecture's contract, or the architecture must be amended via a separate design change — the slice cannot silently contradict it.
+Before the slice, the predicate lives in `pipeline/summary_oneshot.py` with same-layer imports from other `pipeline` modules. After the slice, `pipeline/prompt_renderer.py` and `pipeline/actions/summary.py` import from `providers.profiles` — a lower layer. This is the correct dependency direction per the architecture, which explicitly states the canonical home is `providers/profiles.py` alongside `get_profile()`. No circular or upward dependency introduced.
 
----
+### [PASS] Scope tightly bounded — no behavior change, no new callers, no scope creep
 
-### [CONCERN] "No behavior change" scope claim is inconsistent with architecture contract
+The slice explicitly marks behavior change, new callers, changes to `capture_summary_via_profile()`, and changes to existing branch logic as out of scope. The migration plan is mechanical across 6 files with atomic single-PR delivery. The "no re-export shim" decision is deliberate and justified (all 3 existing callers update in one PR; a shim would only delay cleanup). This aligns with the architecture's characterization of re-homing as "mechanical."
 
-The scope section states: "No behavior change. The predicate's return value for any given input is identical before and after." If the architecture's `None` → `False` contract is followed, then the predicate's return value for `None` *does* change, which means existing callers that currently rely on `is_sdk_profile(None) == True` would receive different behavior. This would expand the slice's scope beyond a mechanical refactor: caller impact analysis would be required for every site that passes `None` or an unresolved profile. The scope statement should be updated to accurately reflect whether behavior is preserved or corrected, and if corrected, the caller-impact analysis should be included.
+### [PASS] Pure function — no I/O paths, no failure mode enumeration required
 
----
+The predicate is explicitly side-effect free: no logging, no config reads, no CLI probes, no I/O. The architecture mandates this ("The predicate does not probe the Claude CLI, does not check auth, does not read config. It is a pure function of the profiles registry.") and the slice faithfully preserves it. Since there are no I/O paths, failure-mode enumeration for hangs/timeouts/peer-disconnect is not applicable. The only risk (stale import paths) is documented in the Risks section.
 
-### [NOTE] Dependency direction is correct
+### [NOTE] Architecture suggested re-homing might land in pre-scan slice; dedicated slice is cleaner
 
-Moving `is_sdk_profile()` from `pipeline/summary_oneshot.py` to `providers/profiles.py` is consistent with the architecture's direction: `providers` is a foundational layer that defines profile semantics (`get_profile`, `get_all_profiles`), and `pipeline` is a consumer. Having `pipeline` import from `providers` is the correct dependency direction. The component interaction diagram correctly shows this reorientation.
-
----
-
-### [NOTE] Migration plan and verification are thorough
-
-The migration plan is well-structured with an explicit step ordering, a `grep`-based verification checklist, and a verification walkthrough. The decision not to leave a re-export shim is justified and aligned with the atomic-PR approach. No issues here.
+The architecture states re-homing "lands in the first slice that needs it (likely the pre-scan slice; slice 170 can also adopt the new home if it ships afterward)." This slice instead creates a dedicated slice (241) for the re-homing, which is arguably better than bundling it into slice 243 or 170 — it keeps the mechanical refactor isolated and makes the 6 downstream slices' dependency on 241 explicit. This is a minor sequencing deviation from the architecture's suggestion but is an improvement in clarity, not a violation.

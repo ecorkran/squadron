@@ -11,6 +11,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260502
+
+### Slice 241: is_sdk_profile Predicate Re-Homing — Phase 5 Task Breakdown
+
+Task file created at `user/tasks/241-tasks.is-sdk-profile-predicate-re-homing.md` (10 tasks, 158 lines). Sequenced as: T1 add predicate to `providers/profiles.py` → T2 add parametric test at new home → T3 update `prompt_renderer.py` import → T4 update `actions/summary.py` import → T5 remove predicate from `test_summary_oneshot.py` → T6 delete old definition from `summary_oneshot.py` → T7 grep sentinel verification → T8 quality gates → T9 commit → T10 slice closeout. Investigation confirmed `tests/providers/test_profiles.py` already exists (no `is_sdk_profile` tests yet) and `tests/providers/` directory is present — no `__init__.py` creation needed.
+
+---
+
 ## 20260501
 
 ### Slice 241: is_sdk_profile Predicate Re-Homing — Phase 4 Slice Design
