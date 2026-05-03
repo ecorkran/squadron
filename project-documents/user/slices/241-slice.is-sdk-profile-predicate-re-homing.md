@@ -5,8 +5,8 @@ project: squadron
 sliceIndex: 241
 slice: is-sdk-profile-predicate-re-homing
 dateCreated: 20260501
-dateUpdated: 20260501
-status: not_started
+dateUpdated: 20260503
+status: complete
 ---
 
 # Slice 241: `is_sdk_profile` Predicate Re-Homing
@@ -229,6 +229,8 @@ Coordination note: any 240-band slice that imports the predicate must wait for t
 ## Verification Walkthrough
 
 This is the demo script — what a reviewer can run after the slice lands to prove it delivers what it claims.
+
+> **Verified 20260503 against commit 393af52** (`refactor: promote is_sdk_profile predicate to providers/profiles`). All commands below were executed; observed output matches the documented expectations.
 
 ### Step 1: Confirm the new home
 

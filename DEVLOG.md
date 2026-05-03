@@ -2,12 +2,20 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260501
+dateUpdated: 20260503
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260503
+
+### Slice 241: is_sdk_profile Predicate Re-Homing — Phase 6 Implementation Complete
+
+Mechanical refactor landed in commit 393af52: `is_sdk_profile()` now lives in `src/squadron/providers/profiles.py` (alongside `get_profile()`), with `__all__` updated to export it. Two production callers (`pipeline/prompt_renderer.py:23`, `pipeline/actions/summary.py:11`) and one test (`tests/providers/test_profiles.py`) import from the new home; the old definition and its predicate-test are deleted from `pipeline/summary_oneshot.py` and `tests/pipeline/test_summary_oneshot.py`. The 9-case parametric test (None, "sdk", 5 registered non-SDK profiles, "unknown-profile", "") covers the documented contract; `None` → `True` semantics preserved per arch iteration 3 (renderer/summary call sites depend on this; pre-scan layer in slice 243 will operate only on resolved profiles and never pass `None`). All 4 grep sentinels green: zero hits for the old import path, zero residual references in `summary_oneshot.py`, expected hits at the new home. Quality gates: ruff format clean, ruff check clean, pyright zero errors, full suite 1764 passed (one net-new test). Verification walkthrough re-run end-to-end against the landed commit; observed output matches documented expectations across steps 1–5 and 7. Foundation in place for slices 242–248. Note: the slice-plan summary line at `240-slices.pipeline-auth-boundary-flexibility.md:35` still narrates the original `None` → `False` contract; appended a pointer to the arch iteration-3 contract rather than rewriting the plan body.
 
 ---
 
