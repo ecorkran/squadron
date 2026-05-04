@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New hidden subcommand `sq _dispatch-run` for pipeline-internal use: accepts `--prompt-file`, `--model`, `--profile`, `--param` flags and invokes a one-shot non-SDK dispatch.
 
 ### Fixed
+- `sq run … --param model=<non-sdk>` (pure-CLI mode) now correctly dispatches to the non-SDK provider instead of silently routing the prompt through the persistent Claude session. Mixed pipelines (some steps Claude, some non-SDK) route per-step correctly; `metadata.profile` in run state now accurately reflects which path executed.
+
+### Fixed
 - SDK synthetic errors (`ResultMessage.is_error=True`) are now caught and surfaced as `ProviderAPIError` before any response text is returned, preventing silent writes of error text into design artifacts.
 
 ## [0.5.1] - 20260427

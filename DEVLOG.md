@@ -13,6 +13,19 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260503
 
+### Slice 242: Profile-Aware Dispatch Router (pure CLI) — Phase 6 Implementation Complete
+
+Commit `0dbe41a`. Changed files: `src/squadron/pipeline/actions/dispatch.py`, `tests/pipeline/actions/test_dispatch_routing.py`, `tests/pipeline/actions/test_dispatch_session.py`.
+
+**What changed:**
+- `dispatch.py`: Added `is_sdk_profile` import from `squadron.providers.profiles`. Added `_resolve_model(context)` helper that extracts the `action_model / step_model / resolver.resolve(...)` cascade. Rewrote `_dispatch` with three-branch profile-aware routing: no session → agent path; session + non-SDK profile → agent path; session + SDK or None profile → session path. `_dispatch_via_session` and `_dispatch_via_agent` retain their own inline resolve cascade unchanged.
+- `test_dispatch_routing.py` (new): Five routing tests (T5a–T5e): session+non-SDK→agent, session+None→session, session+sdk→session, no-session→agent, mixed-pipeline-per-step. All pass.
+- `test_dispatch_session.py`: Updated one assertion from `assert_called_once_with` to `assert_any_call` to reflect the documented double-resolve (routing call in `_dispatch`, then branch call in `_dispatch_via_session`).
+
+**T10 verification walkthrough:** Unit tests T5a–T5e verify routing logic in isolation. Live end-to-end steps (Step 1 minimax via pure-CLI, Step 2 default Claude regression, Step 3 mixed pipeline) require a configured minimax alias and Claude auth; these are environment-dependent and were not executed in this session. Steps should be run manually before tagging a release. Step 4 (IDE axis unchanged) is covered by existing slice-170 tests.
+
+**Quality gates:** ruff format clean, ruff check clean, pyright 0 errors. Full suite: 1769 passed (baseline 1764 + 5 new).
+
 ### Slice 242: Profile-Aware Dispatch Router (pure CLI) — Phase 5 Task Breakdown Complete
 
 Created [242-tasks.profile-aware-dispatch-router-pure-cli.md](project-documents/user/tasks/242-tasks.profile-aware-dispatch-router-pure-cli.md) (222 lines, 10 tasks). Three implementation tasks: T1 adds the `is_sdk_profile` import, T2 extracts the `_resolve_model` helper, T3 rewrites `_dispatch` with the profile-aware three-branch routing. T4 verifies existing tests stay green. T5 creates a new dedicated `tests/pipeline/actions/test_dispatch_routing.py` with five routing cases (session+non-SDK→agent, session+None-profile→session, session+explicit-sdk→session, no-session→agent, mixed-pipeline per-step); `test_dispatch.py` at 412 lines would be too large for 5 additional tests. T6–T8 are quality gates (targeted test run, ruff+pyright, full suite expecting 1769+ passed). T9 commits; T10 closes out the slice. No open questions; design is unambiguous.
