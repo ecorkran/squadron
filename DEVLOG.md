@@ -14,6 +14,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260504
 
+### Slice 243: Resolution Pre-Scan — Phase 6 Implementation Complete
+
+Commit `e838898`. Changed files: `src/squadron/pipeline/classification.py` (new, 235 lines), `src/squadron/pipeline/resolver.py` (added `cascade_candidates()`; refactored `resolve()` to consume it), `tests/pipeline/test_classification.py` (new, 28 tests).
+
+**`ModelResolver.cascade_candidates(action_model, step_model) -> tuple[str | None, ...]`** — returns the ordered cascade inputs (cli_override, action_model, step_model, pipeline_model, config_default) with no alias resolution and no pool selection. `resolve()` now iterates `cascade_candidates()` internally, making cascade ordering single-source. Existing 11 resolver tests pass unchanged.
+
+**`classification.py`** — `classify_pipeline(definition, resolver, pool_backend) -> PipelineClassification`. Walks `definition.steps`; for each model-dispatching step (`dispatch`, `review`, `summary`, `compact`), calls `resolver.cascade_candidates()`, picks first non-None, then dispatches: non-pool candidate → `resolve_model_alias()` + `is_sdk_profile()` → `SDK_REQUIRED` or `NON_SDK`; pool candidate → walks `pool.models` statically → all-SDK collapses to `SDK_REQUIRED`, all-non-SDK to `NON_SDK`, mixed → `POOL_UNCERTAIN`. Non-model steps skipped; `step_index` preserves original pipeline position. Two failure modes raise `ClassificationError` explicitly: empty cascade and pool candidate without backend. `PipelineClassification` derives `needs_persistent_session` (dispatch/summary/compact SDK or pool-uncertain), `needs_one_shot_claude` (review SDK or pool-uncertain), and `shape` (`claude_required_persistent`, `claude_required_one_shot`, `claude_free`).
+
+**Test coverage (28 tests):** spy-backend verification (T1), cascade ordering and resolve-consumes-candidates patch guard (T3), all 7 property isolation tests (T5), 9 non-pool path tests including step-index and F002 regression guards (T7), 5 pool path tests with zero-select assertions (T9), idempotency/side-effect-freeness regression (T10). ruff/pyright clean; full suite +28 new passing tests.
+
+No executor changes. Pre-existing 2 failures in `test_compact_compose_integration` are unrelated and pre-date this slice.
+
 ### Slice 243: Resolution Pre-Scan — Phase 5 Task Breakdown Complete
 
 Created [243-tasks.resolution-pre-scan.md](project-documents/user/tasks/243-tasks.resolution-pre-scan.md) (267 lines, 12 tasks). Task sequence: T1 creates test infrastructure (`SpyPoolBackend`, definition/resolver builders) before any implementation. T2 adds `ModelResolver.cascade_candidates()` and refactors `resolve()` to consume it (single-source cascade, resolves review F001). T3 tests `cascade_candidates` and the resolver refactor. T4 defines the dataclasses (`StepClass`, `PipelineShape`, `ClassificationError`, `StepClassification`, `PipelineClassification`) with the three `@property` methods. T5 tests the properties in isolation — includes direct F002 regression guard (`test_needs_one_shot_claude_false_for_sdk_dispatch_only`). T6–T7 implement and test the non-pool path. T8–T9 implement and test the pool path (pool-collapsing logic + `SpyPoolBackend` zero-select assertions). T10 adds the idempotency/side-effect-freeness regression test. T11 is the quality-gate and commit task. T12 closes the slice. No open questions; design is unambiguous.
