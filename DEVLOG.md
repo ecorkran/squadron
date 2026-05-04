@@ -2,7 +2,8 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260503
+dateUpdated: 20260504
+
 ---
 
 # Development Log
@@ -11,7 +12,33 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260504
+
+### Slice 243: Resolution Pre-Scan — Phase 6 Implementation Complete
+
+Commit `e838898`. Changed files: `src/squadron/pipeline/classification.py` (new, 235 lines), `src/squadron/pipeline/resolver.py` (added `cascade_candidates()`; refactored `resolve()` to consume it), `tests/pipeline/test_classification.py` (new, 28 tests).
+
+**`ModelResolver.cascade_candidates(action_model, step_model) -> tuple[str | None, ...]`** — returns the ordered cascade inputs (cli_override, action_model, step_model, pipeline_model, config_default) with no alias resolution and no pool selection. `resolve()` now iterates `cascade_candidates()` internally, making cascade ordering single-source. Existing 11 resolver tests pass unchanged.
+
+**`classification.py`** — `classify_pipeline(definition, resolver, pool_backend) -> PipelineClassification`. Walks `definition.steps`; for each model-dispatching step (`dispatch`, `review`, `summary`, `compact`), calls `resolver.cascade_candidates()`, picks first non-None, then dispatches: non-pool candidate → `resolve_model_alias()` + `is_sdk_profile()` → `SDK_REQUIRED` or `NON_SDK`; pool candidate → walks `pool.models` statically → all-SDK collapses to `SDK_REQUIRED`, all-non-SDK to `NON_SDK`, mixed → `POOL_UNCERTAIN`. Non-model steps skipped; `step_index` preserves original pipeline position. Two failure modes raise `ClassificationError` explicitly: empty cascade and pool candidate without backend. `PipelineClassification` derives `needs_persistent_session` (dispatch/summary/compact SDK or pool-uncertain), `needs_one_shot_claude` (review SDK or pool-uncertain), and `shape` (`claude_required_persistent`, `claude_required_one_shot`, `claude_free`).
+
+**Test coverage (28 tests):** spy-backend verification (T1), cascade ordering and resolve-consumes-candidates patch guard (T3), all 7 property isolation tests (T5), 9 non-pool path tests including step-index and F002 regression guards (T7), 5 pool path tests with zero-select assertions (T9), idempotency/side-effect-freeness regression (T10). ruff/pyright clean; full suite +28 new passing tests.
+
+No executor changes. Pre-existing 2 failures in `test_compact_compose_integration` are unrelated and pre-date this slice.
+
+### Slice 243: Resolution Pre-Scan — Phase 5 Task Breakdown Complete
+
+Created [243-tasks.resolution-pre-scan.md](project-documents/user/tasks/243-tasks.resolution-pre-scan.md) (267 lines, 12 tasks). Task sequence: T1 creates test infrastructure (`SpyPoolBackend`, definition/resolver builders) before any implementation. T2 adds `ModelResolver.cascade_candidates()` and refactors `resolve()` to consume it (single-source cascade, resolves review F001). T3 tests `cascade_candidates` and the resolver refactor. T4 defines the dataclasses (`StepClass`, `PipelineShape`, `ClassificationError`, `StepClassification`, `PipelineClassification`) with the three `@property` methods. T5 tests the properties in isolation — includes direct F002 regression guard (`test_needs_one_shot_claude_false_for_sdk_dispatch_only`). T6–T7 implement and test the non-pool path. T8–T9 implement and test the pool path (pool-collapsing logic + `SpyPoolBackend` zero-select assertions). T10 adds the idempotency/side-effect-freeness regression test. T11 is the quality-gate and commit task. T12 closes the slice. No open questions; design is unambiguous.
+
+### Slice 243: Resolution Pre-Scan — Phase 4 Slice Design Revision (review CONCERNS addressed)
+
+Slice review at [243-review.slice.resolution-pre-scan.md](project-documents/user/reviews/243-review.slice.resolution-pre-scan.md) returned `CONCERNS` with two findings; both addressed in-place in the slice design (frontmatter `reviewIteration: 2`, `dateUpdated: 20260504`). **F001 (cascade duplication):** earlier draft proposed three read-only properties (`cli_override`, `pipeline_model`, `config_default`) on `ModelResolver` and reproduced the cascade ordering inside the classifier — leaving cascade logic in two places with a known divergence risk. Replaced with a single `ModelResolver.cascade_candidates(action_model, step_model) -> tuple[str | None, ...]` method returning the ordered cascade *inputs* (no alias resolution, no pool selection). `resolve()` is refactored in the same change to consume the new method internally so the two paths cannot drift; added `test_cascade_candidates_returns_ordered_inputs` and `test_resolve_consumes_cascade_candidates` regression guards. The "Resolver attribute coupling" risk is dropped (resolved by design). Non-goal updated: "no new *selection-performing* resolver entrypoint" (the side-effect-free accessor is permitted; selection is the prohibition). **F002 (`needs_one_shot_claude` semantics drift):** earlier draft defined the predicate as "any SDK-resolved or pool-uncertain step" — broader than arch §Envisioned State point 2, which scopes it to steps that route through the provider registry's one-shot ClaudeSDKAgent path. Tightened to: SDK-resolved review steps ∪ SDK-resolved dispatch-via-agent steps (the second set is empty in practice post-slice-242, included for arch-correctness). Added two new tests — `test_one_shot_excludes_persistent_session_steps` (dispatch+summary all Claude → `needs_one_shot_claude=False`, the direct F002 regression guard) and `test_one_shot_excludes_non_sdk_review`. Success criterion #4 expanded with explicit mixed-pipeline rows. Test count moved from ~14 to ~16. Five PASS findings (side-effect contract documentation, conservative pool default, failure-mode enumeration, scope discipline, 180-band boundary) acknowledged; no design changes for those.
+
 ## 20260503
+
+### Slice 243: Resolution Pre-Scan — Phase 4 Slice Design Complete
+
+Authored design at [243-slice.resolution-pre-scan.md](project-documents/user/slices/243-slice.resolution-pre-scan.md). Slice introduces a new `src/squadron/pipeline/classification.py` module exposing `classify_pipeline(definition, resolver, pool_backend) -> PipelineClassification`. The classifier walks `PipelineDefinition.steps`, reproduces the resolver's five-tier cascade in read-only form (so it can inspect candidates *before* selection commits), and emits a `StepClassification` per model-dispatching step (`dispatch`, `review`, `summary`, `compact`). Non-pool candidates resolve via `resolve_model_alias` (pure dict lookup); pool candidates classify structurally by walking `ModelPool.models` and applying `is_sdk_profile` to each — never invokes `pool_backend.select()`, never advances 180-band selection state. Two pipeline-level booleans derived per arch §Envisioned State point 2: `needs_persistent_session` (union over `dispatch`/`summary`/`compact` SDK-resolved steps, *excluding* reviews — they route through one-shot ClaudeSDKAgent), and `needs_one_shot_claude` (informational, any-step union). Three pipeline shapes surface: claude_required_persistent, claude_required_one_shot, claude_free. Conservative pool-uncertain default hard-coded for this slice; lazy policy is slice 245's job. Adds three read-only properties on `ModelResolver` (`cli_override`, `pipeline_model`, `config_default`) so the classifier reads via clean public surface, not name-mangled attrs. Failure modes: misconfigured step (cascade yields no candidate) raises `ClassificationError` at planning time; pool candidate without backend likewise. Side-effect-freeness contract documented and asserted by a spy-backend test (zero `select()` calls for double classification). Slice ships the classifier and 14 unit tests only — no executor wiring; slice 244 will gate `SDKExecutionSession` construction on `classification.needs_persistent_session`. Slice-plan entry now carries the design pointer; slice plan `status` advanced to `in_progress`. Risk: Low; Effort: 2/5.
 
 ### Slice 242: Profile-Aware Dispatch Router (pure CLI) — Phase 6 Implementation Complete
 
