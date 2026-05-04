@@ -10,6 +10,52 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260504
+
+### Slice 244: Conditional Persistent Session Construction — Task Breakdown Complete
+
+**Completed:**
+- Created `user/tasks/244-tasks.conditional-persistent-session-construction.md` (11 tasks, 192 lines)
+
+**Task structure:**
+- T1: Branch setup
+- T2: Add optional `resolver`/`pool_backend` params to `_run_pipeline` (backward-compatible)
+- T3: Test fallback path (no params supplied)
+- T4: Lift `pool_backend`/`resolver` construction into `_run_pipeline_sdk`; wire `on_pool_selection`
+- T5: Add `classify_pipeline` call and session gate in `_run_pipeline_sdk`
+- T6: Tests for classification gate (T1–T5, T8 from design — non-SDK, SDK, pool-uncertain, ClassificationError, connect failure)
+- T7: Tests for resume path (T6, T7 from design)
+- T8: Intermediate commit (ruff + pyright + pytest gate)
+- T9: Audit `sdk_session=None` correctness for summary/compact (belt-and-suspenders verification)
+- T10: Final validation and commit
+- T11: Documentation and slice closeout
+
+**Key design note in tasks:** `on_pool_selection` callback depends on `state_mgr`/`_run_id`, which are initialized inside `_run_pipeline`. T4 explicitly flags that the callback must be attached after `state_mgr` is known — implementer must set `resolver._on_pool_selection` inside `_run_pipeline` when `resolver is not None`, or add a setter. Classification never fires pool selection (side-effect-free), so the callback is safe to attach late.
+
+**Status:**
+- Task breakdown complete and ready for Phase 6 (Implementation).
+
+---
+
+### Slice 244: Conditional Persistent Session Construction — Design Complete
+
+**Completed:**
+- Created `user/slices/244-slice.conditional-persistent-session-construction.md`
+- Updated slice plan entry 244 in `240-slices.pipeline-auth-boundary-flexibility.md` with design link
+
+**Key design decisions:**
+- Classification runs inside `_run_pipeline_sdk` after `definition` is loaded and `resolver` is constructed — before any session work.
+- `pool_backend` and `resolver` are constructed in `_run_pipeline_sdk` and threaded into `_run_pipeline` as optional params; `_run_pipeline`'s internal fallback construction is preserved for callers that don't supply them.
+- `POOL_UNCERTAIN` steps take the conservative-pessimistic path (session constructed); lazy opt-in is slice 245.
+- `ClassificationError` → `typer.Exit(1)` with a clear message; not an unhandled exception.
+- Resume re-classifies from current YAML + alias state; seeding path unchanged (runs only when `sdk_session is not None`).
+- Three observable shapes fully established: `claude_required_persistent`, `claude_required_one_shot`, `claude_free`.
+
+**Status:**
+- Design ready for Phase 5 (Task Breakdown).
+
+---
+
 ## 20260424
 
 ### Slice 167: Per-Action Model Override Convention — Design Complete
