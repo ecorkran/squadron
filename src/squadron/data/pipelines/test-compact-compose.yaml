@@ -3,16 +3,18 @@ description: >
   Integration test pipeline for slice 169: summarize → compact → restore compose pattern.
   Tests that the three actions are independent and compose correctly.
 
-params: {}
+params: {
+    model: minimax
+}
 
 steps:
   - dispatch:
+      model: "{model}"
       prompt: "Describe three key facts about async Python programming."
 
   - summary:
-      emit: [file]
-
-  - compact:
+      model: minimax
+      emit: [file, rotate]
 
   - summary:
       restore: true
