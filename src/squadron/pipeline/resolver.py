@@ -58,6 +58,32 @@ class ModelResolver:
         self._pool_backend = pool_backend
         self._on_pool_selection = on_pool_selection
 
+    def cascade_candidates(
+        self,
+        action_model: str | None = None,
+        step_model: str | None = None,
+    ) -> tuple[str | None, ...]:
+        """Return the cascade inputs in priority order.
+
+        Mirrors the candidate ordering used by ``resolve()`` but performs
+        no alias resolution and no pool selection. Pure read of the
+        resolver's configuration plus the two per-call inputs.
+
+        Used by the classification pre-scan (slice 243) to inspect which
+        tier wins *before* deciding whether to invoke pool selection.
+        Keeping this in the resolver makes the cascade ordering a single
+        source of truth: if a future tier is added, ``resolve()`` and
+        ``cascade_candidates()`` see it together and the classifier cannot
+        silently miss it.
+        """
+        return (
+            self._cli_override,
+            action_model,
+            step_model,
+            self._pipeline_model,
+            self._config_default,
+        )
+
     def resolve(
         self,
         action_model: str | None = None,
@@ -82,14 +108,7 @@ class ModelResolver:
                 ``pool:`` and no ``PoolBackend`` is configured.
             ModelResolutionError: If all levels are None.
         """
-        candidates = (
-            self._cli_override,
-            action_model,
-            step_model,
-            self._pipeline_model,
-            self._config_default,
-        )
-        for candidate in candidates:
+        for candidate in self.cascade_candidates(action_model, step_model):
             if candidate is None:
                 continue
             if candidate.startswith(_POOL_PREFIX):
