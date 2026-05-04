@@ -12,7 +12,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
 from squadron.providers.loader import ensure_provider_loaded
-from squadron.providers.profiles import get_profile
+from squadron.providers.profiles import get_profile, is_sdk_profile
 
 if TYPE_CHECKING:
     from squadron.pipeline.sdk_session import SDKExecutionSession
@@ -130,10 +130,22 @@ class DispatchAction:
             )
 
     async def _dispatch(self, context: ActionContext) -> ActionResult:
-        """Route to session or agent dispatch path."""
-        if context.sdk_session is not None:
-            return await self._dispatch_via_session(context, context.sdk_session)
-        return await self._dispatch_via_agent(context)
+        """Route to session or agent dispatch path based on resolved profile.
+
+        Precedence:
+        1. No persistent session → agent path.
+        2. Session present but resolved profile is non-SDK → agent path.
+        3. Session present and SDK profile (or None, per is_sdk_profile
+           contract) → session path.
+        """
+        if context.sdk_session is None:
+            return await self._dispatch_via_agent(context)
+
+        _, alias_profile = self._resolve_model(context)
+        if not is_sdk_profile(alias_profile):
+            return await self._dispatch_via_agent(context)
+
+        return await self._dispatch_via_session(context, context.sdk_session)
 
     async def _dispatch_via_session(
         self,
@@ -222,6 +234,18 @@ class DispatchAction:
             )
             return prefix + prompt
         return prompt
+
+    def _resolve_model(self, context: ActionContext) -> tuple[str, str | None]:
+        """Return (model_id, alias_profile) from the context param cascade."""
+        action_model = (
+            str(context.params["model"]) if "model" in context.params else None
+        )
+        step_model = (
+            str(context.params["step_model"])
+            if "step_model" in context.params
+            else None
+        )
+        return context.resolver.resolve(action_model, step_model)
 
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""

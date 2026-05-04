@@ -154,7 +154,9 @@ async def test_session_dispatch_uses_model_and_step_model_params(
         sdk_session=session,
     )
     await action.execute(ctx)
-    resolver.resolve.assert_called_once_with("opus", "haiku")
+    # _dispatch calls resolver once for routing; _dispatch_via_session calls it
+    # again for the model switch — both with the same args.
+    resolver.resolve.assert_any_call("opus", "haiku")
     session.set_model.assert_called_once_with("claude-opus-4-6")
 
 
