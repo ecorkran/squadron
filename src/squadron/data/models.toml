@@ -184,7 +184,7 @@ cache_write = 2.83
 profile = "openrouter"
 model = "moonshotai/kimi-k2.6"
 private = true
-cost_tier = "cheap"
+cost_tier = "moderate"
 notes = "1M context"
 
 [aliases.kimi26.pricing]
@@ -228,6 +228,19 @@ input = 0.95
 output = 3.15
 cache_read = 0.475
 cache_write = 3.15
+
+[aliases.deepseek4]
+profile = "openrouter"
+model = "deepseek/deepseek-v4-pro"
+private = true
+cost_tier = "cheap"
+
+[aliases.deepseek4.pricing]
+input = 1.30
+output = 2.78
+cache_read = 0.116
+cache_write = 2.78
+
 
 [aliases.mimo-omni]
 profile = "openrouter"

@@ -16,18 +16,18 @@ Internal work log for squadron project development.
 
 **Completed:** Phase 4 slice design.
 
-**Documents created:**
+**Documents created/updated:**
 - `project-documents/user/slices/245-slice.pool-resolution-classification-policy-and-mid-run-session-construction.md` — slice design
-- `project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md` — slice plan entry 5 updated with design link
+- `project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md` — slice plan entry 5 updated with design link and revised policy framing
 
 **Design summary:**
-- Introduces `PoolClassificationPolicy` enum (`conservative` / `lazy`) in `pipeline/classification.py`.
-- `classify_pipeline` gains optional `policy` parameter; `PipelineClassification` stores the policy used.
-- `needs_persistent_session` evaluates `POOL_UNCERTAIN` steps relative to stored policy: conservative treats them as SDK-required (unchanged default); lazy excludes them.
-- Mid-run session construction (arch §5a): `execute_pipeline` gains `pool_policy` parameter; lazy hook fires before each step's `ActionContext` is built, constructing and connecting a session on first confirmed-SDK step.
-- Two opt-in surfaces: `--lazy-auth` CLI flag and `auth_policy: lazy` pipeline config key.
-- Auth-failure UX: connect failure → `failed` run state + clear message; runtime pool selects SDK with no session → `FAILED` step result with remediation hint.
-- 12 new tests planned across `test_run_pipeline_lazy.py` and `test_classification.py`.
+- **Lazy is the default.** Session not constructed at startup for pool-uncertain pipelines. `--strict` CLI flag (and `auth_policy: strict` pipeline config key) opts into eager upfront connection.
+- `PoolClassificationPolicy` enum (`lazy` / `strict`) in `pipeline/classification.py`; default is `LAZY`.
+- `classify_pipeline` gains optional `policy` parameter (default `LAZY`); `PipelineClassification` stores the policy used.
+- `needs_persistent_session`: under `LAZY`, `POOL_UNCERTAIN` does not force session construction; only statically-confirmed `SDK_REQUIRED` steps do.
+- Mid-run hook in `execute_pipeline` (arch §5a): fires on first confirmed-SDK step when `sdk_session is None`; all subsequent steps reuse the same session. Hook is policy-agnostic (dead path under strict mode since session is pre-constructed).
+- Auth-failure UX: connect failure mid-run → `failed` run state + clear message; runtime pool selects SDK with no session → `FAILED` step result with `--strict` remediation hint.
+- 12 new tests planned across `test_run_pipeline_lazy.py` and `test_classification.py`. Existing pool-uncertain tests need policy annotation update.
 
 **Pending:** Phase 5 (task breakdown) and Phase 6 (implementation). No open questions; design is self-contained.
 
