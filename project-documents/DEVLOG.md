@@ -12,6 +12,23 @@ Internal work log for squadron project development.
 
 ## 20260504
 
+### Slice 245: Pool-Resolution Classification Policy and Mid-Run Session Construction — Task Breakdown Complete
+
+**Completed:** Phase 5 task breakdown.
+
+**Documents created:**
+- `project-documents/user/tasks/245-tasks.pool-resolution-classification-policy-and-mid-run-session-construction.md` — 19 tasks across: enum addition, `PipelineClassification` policy field, `classify_pipeline` default change, `auth_policy` YAML field (`PipelineSchema` + `PipelineDefinition`), `execute_pipeline` mid-run hook + helpers, connect-failure UX, `--strict` CLI flag, policy resolution, existing test audit, build/format, and closeout.
+
+**Key task notes:**
+- T7: `PipelineSchema` has `extra="forbid"` — `auth_policy` must be added as a declared field; validator rejects anything other than `None`/`"lazy"`/`"strict"`.
+- T9: `_step_needs_sdk` ignores pool candidates (returns `False`) — hook fires only on statically confirmed SDK steps.
+- T11: connect failure → run state `failed` + re-raise → `_run_pipeline_sdk` catches and prints red message.
+- T15: existing pool-uncertain tests relied on the old conservative default; they need `policy=STRICT` annotations or assertion updates.
+
+**Pending:** Phase 6 (implementation). No open questions.
+
+---
+
 ### Slice 245: Pool-Resolution Classification Policy and Mid-Run Session Construction — Design Complete
 
 **Completed:** Phase 4 slice design.
