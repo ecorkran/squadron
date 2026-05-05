@@ -1,0 +1,21 @@
+name: P4
+description: Design a slice (phase 4) with review and human checkpoint
+
+params:
+  slice: required
+  model: kimi26
+  review-model: minimax
+
+steps:
+  - design:
+      phase: 4
+      model: "{model}"
+      review:
+        template: slice
+        model: "{review-model}"
+
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [stdout, clipboard, file]
+
