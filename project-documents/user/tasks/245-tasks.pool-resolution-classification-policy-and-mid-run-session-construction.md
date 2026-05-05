@@ -173,8 +173,34 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 - [ ] `test_step_needs_sdk_returns_true_for_sdk_alias` — unit test `_step_needs_sdk` directly with a static SDK alias.
 - [ ] `test_step_needs_sdk_returns_false_for_non_sdk_alias` — non-SDK alias.
 - [ ] `test_step_needs_sdk_returns_false_for_pool_candidate` — pool-prefixed candidate.
+- [ ] `test_lazy_pool_uncertain_only_no_session_at_startup` — integration-level: call `_run_pipeline_sdk` with a pipeline whose only dispatch step is pool-uncertain; mock `SDKExecutionSession` constructor; assert constructor is never called (session construction skipped entirely).
 
-**Success:** All six tests pass.
+**Success:** All seven tests pass.
+
+---
+
+### T10b — Implement dispatch-action guard: pool selects SDK, no session
+
+- [ ] In `src/squadron/pipeline/actions/dispatch.py`, locate the `_dispatch` method's session routing branch.
+- [ ] Add a guard: if the resolved profile `is_sdk_profile(profile)` and `context.sdk_session is None`, return a `FAILED` `ActionResult` with message:
+  ```
+  Step '{step_name}' resolved to an SDK profile at runtime but no persistent
+  session is available. Re-run with --strict to connect at startup, or ensure
+  this pool's runtime selection does not yield an SDK alias.
+  ```
+- [ ] The guard fires only when `sdk_session is None` and the profile is SDK — it does not affect runs where the session was constructed (eager or lazy).
+
+**Success:** When a dispatch step resolves to an SDK profile and `sdk_session` is `None`, the action returns `FAILED` with a message containing `--strict`.
+
+---
+
+### T10c — Test: dispatch-action guard
+
+- [ ] In `tests/pipeline/test_run_pipeline_lazy.py` (or `tests/pipeline/actions/test_dispatch.py`):
+  - [ ] `test_dispatch_sdk_profile_no_session_returns_failed` — construct a `DispatchAction`, call `execute` with `ActionContext(sdk_session=None)` where the resolved profile is SDK; assert result is `FAILED` and message contains `"--strict"`.
+  - [ ] `test_dispatch_sdk_profile_with_session_proceeds` — same but `sdk_session` is a mock session; assert result is not `FAILED` from the guard.
+
+**Success:** Both tests pass.
 
 ---
 
@@ -240,8 +266,9 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 - [ ] For each such test, add `policy=PoolClassificationPolicy.STRICT` to the `classify_pipeline` call, or update the assertion to match the new default.
 - [ ] In `tests/cli/commands/test_run_pipeline_sdk.py`, identify any tests that expected session construction for pool-uncertain pipelines without a `--strict` flag.
 - [ ] Update those tests to pass `strict=True` or to assert `session=None` under the new default.
+- [ ] In `tests/pipeline/test_sdk_wiring.py`, check for any tests that depend on pool-uncertain classification defaulting to `needs_persistent_session=True`. Update any such tests with `policy=STRICT` or adjust assertions to match new lazy default.
 
-**Success:** `pytest tests/pipeline/test_classification.py tests/cli/commands/test_run_pipeline_sdk.py` passes with zero failures.
+**Success:** `pytest tests/pipeline/test_classification.py tests/cli/commands/test_run_pipeline_sdk.py tests/pipeline/test_sdk_wiring.py` passes with zero failures.
 
 ---
 
