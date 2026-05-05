@@ -277,6 +277,9 @@ def _is_interactive() -> bool:
 
 
 _CHECKPOINT_RULE = "─" * 58
+_CHECKPOINT_KEY_ACCEPT = "a"
+_CHECKPOINT_KEY_OVERRIDE = "o"
+_CHECKPOINT_KEY_EXIT = "x"
 
 
 def _format_findings_as_instructions(findings: list[dict[str, object]]) -> str:
@@ -337,22 +340,34 @@ def _prompt_checkpoint_interactive(
 
     print()
     print("Options:")
-    print("  [a] Accept   — continue; findings above become override instructions")
-    print("  [o] Override — enter custom instructions, then continue")
-    print(f"  [e] Exit     — save state; resume: sq run --resume {run_id}")
+    print(
+        f"  [{_CHECKPOINT_KEY_ACCEPT}] Accept   — continue; findings above become override instructions"
+    )
+    print(
+        f"  [{_CHECKPOINT_KEY_OVERRIDE}] Override — enter custom instructions, then continue"
+    )
+    print(
+        f"  [{_CHECKPOINT_KEY_EXIT}] Exit     — save state; resume: sq run --resume {run_id}"
+    )
     print(_CHECKPOINT_RULE)
 
     while True:
-        choice = input("Choice [a/o/e]: ").strip().lower()
-        if choice == "a":
+        choice = (
+            input(
+                f"Choice [{_CHECKPOINT_KEY_ACCEPT}/{_CHECKPOINT_KEY_OVERRIDE}/{_CHECKPOINT_KEY_EXIT}]: "
+            )
+            .strip()
+            .lower()
+        )
+        if choice == _CHECKPOINT_KEY_ACCEPT:
             override_instructions = _format_findings_as_instructions(findings)
             return CheckpointDecision(
                 CheckpointResolution.ACCEPT, override_instructions
             )
-        if choice == "o":
+        if choice == _CHECKPOINT_KEY_OVERRIDE:
             user_text = input("Instructions: ").strip()
             return CheckpointDecision(CheckpointResolution.OVERRIDE, user_text)
-        if choice == "e":
+        if choice == _CHECKPOINT_KEY_EXIT:
             return CheckpointDecision(CheckpointResolution.EXIT, None)
         # Invalid input: loop and re-prompt
 

@@ -1601,7 +1601,7 @@ class TestPromptCheckpointInteractive:
 
         monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
         monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
-        monkeypatch.setattr("builtins.input", lambda _: "e")
+        monkeypatch.setattr("builtins.input", lambda _: "x")
 
         decision = _prompt_checkpoint_interactive(
             verdict=None,
@@ -1623,7 +1623,7 @@ class TestPromptCheckpointInteractive:
         monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
         monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
 
-        inputs = iter(["x", "a"])
+        inputs = iter(["z", "a"])
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
         decision = _prompt_checkpoint_interactive(
@@ -1643,7 +1643,7 @@ class TestPromptCheckpointInteractive:
 
         monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
         monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: True))
-        monkeypatch.setattr("builtins.input", lambda _: "e")
+        monkeypatch.setattr("builtins.input", lambda _: "x")
 
         findings = self._make_findings(12)
         _prompt_checkpoint_interactive(

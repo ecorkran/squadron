@@ -225,7 +225,7 @@ class TestRenderCheckpoint:
         assert "CONCERNS or FAIL" in result.instruction
         assert "[a] Accept" in result.instruction
         assert "[o] Override" in result.instruction
-        assert "[e] Exit" in result.instruction
+        assert "[x] Exit" in result.instruction
         assert "run-abc" in result.instruction
 
     def test_on_fail_instruction_content(self) -> None:
@@ -234,13 +234,13 @@ class TestRenderCheckpoint:
         assert "CONCERNS" not in result.instruction
         assert "[a] Accept" in result.instruction
         assert "[o] Override" in result.instruction
-        assert "[e] Exit" in result.instruction
+        assert "[x] Exit" in result.instruction
 
     def test_always_instruction_content(self) -> None:
         result = _render_checkpoint({"trigger": "always"}, {"run_id": "run-abc"})
         assert "[a] Accept" in result.instruction
         assert "[o] Override" in result.instruction
-        assert "[e] Exit" in result.instruction
+        assert "[x] Exit" in result.instruction
         # No conditional clause
         assert "verdict" not in result.instruction
 

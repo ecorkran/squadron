@@ -18,7 +18,12 @@ from squadron.pipeline.compaction_templates import (
     load_compaction_template,
     render_instructions,
 )
-from squadron.pipeline.executor import resolve_placeholders
+from squadron.pipeline.executor import (
+    _CHECKPOINT_KEY_ACCEPT,
+    _CHECKPOINT_KEY_EXIT,
+    _CHECKPOINT_KEY_OVERRIDE,
+    resolve_placeholders,
+)
 from squadron.pipeline.steps import get_step_type
 from squadron.providers.profiles import is_sdk_profile
 
@@ -241,10 +246,10 @@ def _render_checkpoint(
     run_id = str(params.get("run_id", "{run_id}"))
 
     _OPTIONS = (
-        "  [a] Accept   — proceed; review findings become instructions"
+        f"  [{_CHECKPOINT_KEY_ACCEPT}] Accept   — proceed; review findings become instructions"
         " for next dispatch\n"
-        "  [o] Override — enter custom instructions; proceed with those\n"
-        f"  [e] Exit     — stop pipeline; resume with: sq run --resume {run_id}\n"
+        f"  [{_CHECKPOINT_KEY_OVERRIDE}] Override — enter custom instructions; proceed with those\n"
+        f"  [{_CHECKPOINT_KEY_EXIT}] Exit     — stop pipeline; resume with: sq run --resume {run_id}\n"
         "Note: in prompt-only mode, you are the executor."
         " Choose an option and act accordingly."
     )
