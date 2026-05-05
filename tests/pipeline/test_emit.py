@@ -215,9 +215,7 @@ async def test_emit_clipboard_failure_returns_ok_false() -> None:
     dest = EmitDestination(kind=EmitKind.CLIPBOARD)
     ctx = _make_ctx()
 
-    with patch(
-        "pyperclip.copy", side_effect=pyperclip.PyperclipException("no clipboard")
-    ):
+    with patch("pyperclip.copy", side_effect=pyperclip.PyperclipException("no clipboard")):
         result = await _emit_clipboard("x", dest, ctx)
 
     assert result.ok is False

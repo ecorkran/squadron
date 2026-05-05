@@ -13,9 +13,7 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
-def test_auth_login_valid_key(
-    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_auth_login_valid_key(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     """When env var is set, output shows ✓ and source."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-abcdef1234567890")
     result = runner.invoke(app, ["auth", "login", "openai"])
@@ -25,9 +23,7 @@ def test_auth_login_valid_key(
     assert "OPENAI_API_KEY" in result.output
 
 
-def test_auth_login_missing_key(
-    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_auth_login_missing_key(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     """When env var is not set, output shows ✗ and setup hint."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     result = runner.invoke(app, ["auth", "login", "openai"])
@@ -52,9 +48,7 @@ def test_auth_login_unknown_profile(runner: CliRunner) -> None:
     assert "nonexistent-profile" in result.output or "Error" in result.output
 
 
-def test_auth_status_shows_all_profiles(
-    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_auth_status_shows_all_profiles(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     """Status output contains all built-in profile names."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -69,9 +63,7 @@ def test_auth_status_shows_all_profiles(
     assert "sdk" in result.output
 
 
-def test_auth_status_valid_and_missing(
-    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_auth_status_valid_and_missing(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     """Status shows ✓ for set keys and ✗ for missing keys."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-testkey")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
@@ -82,9 +74,7 @@ def test_auth_status_valid_and_missing(
     assert "authenticated" in result.output
 
 
-def test_auth_status_no_string_dispatch(
-    runner: CliRunner, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_auth_status_no_string_dispatch(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
     """Auth status output includes openai-oauth profile correctly."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     result = runner.invoke(app, ["auth", "status"])

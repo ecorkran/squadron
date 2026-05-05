@@ -68,7 +68,7 @@ packages = ["src/squadron"]
 "commands" = "squadron/commands"
 
 [tool.ruff]
-line-length = 88
+line-length = 104
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

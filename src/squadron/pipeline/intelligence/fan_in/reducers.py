@@ -30,10 +30,7 @@ def get_reducer(name: str) -> FanInReducer:
     """
     if name not in _REDUCER_REGISTRY:
         registered = list(_REDUCER_REGISTRY.keys())
-        raise KeyError(
-            f"Fan-in reducer '{name}' is not registered. "
-            f"Available reducers: {registered}"
-        )
+        raise KeyError(f"Fan-in reducer '{name}' is not registered. Available reducers: {registered}")
     return _REDUCER_REGISTRY[name]
 
 

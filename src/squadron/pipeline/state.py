@@ -130,9 +130,7 @@ class RunState(BaseModel):
 
     pool_selections: list[dict[str, object]] = []
 
-    def active_compact_summary_for_resume(
-        self, resume_step_index: int
-    ) -> CompactSummary | None:
+    def active_compact_summary_for_resume(self, resume_step_index: int) -> CompactSummary | None:
         """Return the most recent applicable compact summary for resume.
 
         Returns the summary whose ``source_step_index`` is the highest value
@@ -140,9 +138,7 @@ class RunState(BaseModel):
         summary exists.
         """
         applicable = [
-            s
-            for s in self.compact_summaries.values()
-            if s.source_step_index < resume_step_index
+            s for s in self.compact_summaries.values() if s.source_step_index < resume_step_index
         ]
         if not applicable:
             return None
@@ -229,9 +225,7 @@ class StateManager:
 
         return _callback
 
-    def _maybe_record_compact_summaries(
-        self, run_id: str, step_result: StepResult
-    ) -> None:
+    def _maybe_record_compact_summaries(self, run_id: str, step_result: StepResult) -> None:
         """Inspect action results for compact summaries and persist them."""
         for ar in step_result.action_results:
             if ar.action_type != "summary" or not ar.success:
@@ -248,10 +242,7 @@ class StateManager:
                 if not isinstance(entry, dict):
                     continue
                 entry_dict = cast(dict[str, object], entry)
-                if (
-                    entry_dict.get("destination") == "rotate"
-                    and entry_dict.get("ok") is True
-                ):
+                if entry_dict.get("destination") == "rotate" and entry_dict.get("ok") is True:
                     has_rotate = True
                     break
             if not has_rotate:
@@ -261,9 +252,7 @@ class StateManager:
             summary = CompactSummary(
                 key=key,
                 text=str(outputs["summary"]),
-                summary_model=(
-                    str(summary_model) if isinstance(summary_model, str) else None
-                ),
+                summary_model=(str(summary_model) if isinstance(summary_model, str) else None),
                 source_step_index=int(outputs["source_step_index"]),  # type: ignore[arg-type]
                 source_step_name=str(outputs["source_step_name"]),
                 created_at=datetime.now(UTC),
@@ -288,9 +277,7 @@ class StateManager:
             outputs = step_result.action_results[-1].outputs
 
         # Serialize action_results as plain dicts
-        action_results_dicts = [
-            dataclasses.asdict(ar) for ar in step_result.action_results
-        ]
+        action_results_dicts = [dataclasses.asdict(ar) for ar in step_result.action_results]
 
         step_state = StepState(
             step_name=step_result.step_name,
@@ -436,9 +423,7 @@ class StateManager:
                 prior[key] = action_result
         return prior
 
-    def first_unfinished_step(
-        self, run_id: str, definition: PipelineDefinition
-    ) -> str | None:
+    def first_unfinished_step(self, run_id: str, definition: PipelineDefinition) -> str | None:
         """Return name of the first step in definition not in completed_steps."""
         state = self.load(run_id)
         completed = {s.step_name for s in state.completed_steps}
@@ -490,9 +475,7 @@ class StateManager:
             ExecutionStatus.FAILED.value,
         }
         candidates = [
-            r
-            for r in self.list_runs(pipeline=pipeline_name)
-            if r.status in terminal_statuses
+            r for r in self.list_runs(pipeline=pipeline_name) if r.status in terminal_statuses
         ]
         # list_runs returns desc; reverse to get oldest-first
         candidates.sort(key=lambda r: r.started_at)

@@ -140,18 +140,14 @@ class TestLoadRulesFrontmatter:
 
     def test_frontmatter_inline_paths(self, tmp_path: Path) -> None:
         """Parses inline-list paths from frontmatter."""
-        (tmp_path / "python.md").write_text(
-            "---\npaths: [**/*.py, **/*.pyi]\n---\nPython rules.\n"
-        )
+        (tmp_path / "python.md").write_text("---\npaths: [**/*.py, **/*.pyi]\n---\nPython rules.\n")
         result = load_rules_frontmatter(tmp_path)
         assert "python.md" in result
         assert "**/*.py" in result["python.md"]
 
     def test_frontmatter_block_paths(self, tmp_path: Path) -> None:
         """Parses block-list paths from frontmatter."""
-        (tmp_path / "ts.md").write_text(
-            "---\npaths:\n  - **/*.ts\n  - **/*.tsx\n---\nTS rules.\n"
-        )
+        (tmp_path / "ts.md").write_text("---\npaths:\n  - **/*.ts\n  - **/*.tsx\n---\nTS rules.\n")
         result = load_rules_frontmatter(tmp_path)
         assert "ts.md" in result
         assert "**/*.ts" in result["ts.md"]

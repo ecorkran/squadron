@@ -198,9 +198,7 @@ async def _execute_summary(
     model_id: str | None = None
     profile: str | None = None
     if summary_model_alias:
-        model_id, profile = context.resolver.resolve(
-            action_model=summary_model_alias, step_model=None
-        )
+        model_id, profile = context.resolver.resolve(action_model=summary_model_alias, step_model=None)
 
     # Validate: rotate emit is incompatible with non-SDK profiles.
     has_rotate = any(d.kind is EmitKind.ROTATE for d in emit_destinations)
@@ -209,9 +207,7 @@ async def _execute_summary(
             success=False,
             action_type=action_type,
             outputs={},
-            error=(
-                f"rotate emit is incompatible with non-SDK summary profile {profile!r}"
-            ),
+            error=(f"rotate emit is incompatible with non-SDK summary profile {profile!r}"),
         )
 
     # Guard: SDK profile requires an active SDK session.
@@ -271,9 +267,7 @@ async def _execute_summary(
         result = await emit_fn(summary, dest, context)
         emit_results.append(result)
         if not result.ok and dest.kind is not EmitKind.ROTATE:
-            _logger.warning(
-                "emit to %s failed (non-fatal): %s", dest.display(), result.detail
-            )
+            _logger.warning("emit to %s failed (non-fatal): %s", dest.display(), result.detail)
 
     # Check for rotate failures — these fail the action.
     for dest, res in zip(emit_destinations, emit_results):
@@ -297,8 +291,7 @@ async def _execute_summary(
             "summary": summary,
             "instructions": instructions,
             "emit_results": [
-                {"destination": r.destination, "ok": r.ok, "detail": r.detail}
-                for r in emit_results
+                {"destination": r.destination, "ok": r.ok, "detail": r.detail} for r in emit_results
             ],
             "source_step_index": context.step_index,
             "source_step_name": context.step_name,

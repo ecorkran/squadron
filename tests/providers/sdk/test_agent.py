@@ -223,9 +223,7 @@ class TestQueryModeErrors:
             assert query_agent.state == AgentState.failed
 
     @pytest.mark.asyncio
-    async def test_json_decode_error(
-        self, query_agent: ClaudeSDKAgent, input_message: Message
-    ) -> None:
+    async def test_json_decode_error(self, query_agent: ClaudeSDKAgent, input_message: Message) -> None:
         gen = _make_error_gen(CLIJSONDecodeError("bad json", ValueError("oops")))
         with patch(_QUERY, side_effect=gen):
             with pytest.raises(ProviderError):
@@ -233,9 +231,7 @@ class TestQueryModeErrors:
             assert query_agent.state == AgentState.failed
 
     @pytest.mark.asyncio
-    async def test_base_sdk_error(
-        self, query_agent: ClaudeSDKAgent, input_message: Message
-    ) -> None:
+    async def test_base_sdk_error(self, query_agent: ClaudeSDKAgent, input_message: Message) -> None:
         gen = _make_error_gen(ClaudeSDKError("unknown"))
         with patch(_QUERY, side_effect=gen):
             with pytest.raises(ProviderError):
@@ -405,8 +401,6 @@ class TestClientShutdown:
             assert client_agent._client is None  # noqa: SLF001
 
     @pytest.mark.asyncio
-    async def test_shutdown_without_client_is_safe(
-        self, client_agent: ClaudeSDKAgent
-    ) -> None:
+    async def test_shutdown_without_client_is_safe(self, client_agent: ClaudeSDKAgent) -> None:
         await client_agent.shutdown()
         assert client_agent.state == AgentState.terminated

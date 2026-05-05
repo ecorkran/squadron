@@ -99,9 +99,7 @@ class ContextForgeClient:
         try:
             return json.loads(stdout)
         except json.JSONDecodeError as exc:
-            raise ContextForgeError(
-                f"cf {' '.join(args)}: invalid JSON output: {exc}"
-            ) from exc
+            raise ContextForgeError(f"cf {' '.join(args)}: invalid JSON output: {exc}") from exc
 
     def is_available(self) -> bool:
         """Return True if ``cf`` is installed and responsive."""

@@ -69,13 +69,9 @@ def test_resolve_valid_slice() -> None:
         info = _resolve_slice_number("118")
         assert info["index"] == 118
         assert info["slice_name"] == "composed-workflows"
-        assert info["design_file"] == (
-            "project-documents/user/slices/118-slice.composed-workflows.md"
-        )
+        assert info["design_file"] == ("project-documents/user/slices/118-slice.composed-workflows.md")
         assert info["task_files"] == ["118-tasks.composed-workflows.md"]
-        assert info["arch_file"] == (
-            "project-documents/user/architecture/100-arch.orchestration-v2.md"
-        )
+        assert info["arch_file"] == ("project-documents/user/architecture/100-arch.orchestration-v2.md")
 
 
 def test_resolve_slice_no_design_file() -> None:
@@ -99,9 +95,7 @@ def test_resolve_slice_cf_not_installed() -> None:
     with patch(
         "squadron.cli.commands.review.ContextForgeClient",
     ) as mock_cls:
-        mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable(
-            "cf not found"
-        )
+        mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable("cf not found")
         with pytest.raises((SystemExit, click.exceptions.Exit)):
             _resolve_slice_number("118")
 
@@ -164,8 +158,7 @@ def test_review_tasks_split_files_reviews_each_part(
             index=161,
             name="Summary Step with Emit Destinations",
             design_file=(
-                "project-documents/user/slices/"
-                "161-slice.summary-step-with-emit-destinations.md"
+                "project-documents/user/slices/161-slice.summary-step-with-emit-destinations.md"
             ),
             status="not_started",
         ),
@@ -190,9 +183,7 @@ def test_review_tasks_split_files_reviews_each_part(
     assert "161-tasks.summary-step-with-emit-destinations-1.md" in first_inputs["input"]
     # Second call: part 2's path.
     second_inputs = mock_review.call_args_list[1][0][1]  # type: ignore[union-attr]
-    assert (
-        "161-tasks.summary-step-with-emit-destinations-2.md" in second_inputs["input"]
-    )
+    assert "161-tasks.summary-step-with-emit-destinations-2.md" in second_inputs["input"]
     # Both saves carry a part-N suffix.
     assert mock_save.call_count == 2  # type: ignore[union-attr]
     first_save_kwargs = mock_save.call_args_list[0][1]  # type: ignore[union-attr]
@@ -261,8 +252,7 @@ def test_review_tasks_split_files_aggregates_verdict(
             index=161,
             name="Summary Step with Emit Destinations",
             design_file=(
-                "project-documents/user/slices/"
-                "161-slice.summary-step-with-emit-destinations.md"
+                "project-documents/user/slices/161-slice.summary-step-with-emit-destinations.md"
             ),
             status="not_started",
         ),
@@ -295,9 +285,7 @@ def test_aggregate_verdicts_ordering() -> None:
     assert _aggregate_verdicts([]) == Verdict.PASS
     assert _aggregate_verdicts([MagicMock(verdict=Verdict.PASS)]) == Verdict.PASS
     assert (
-        _aggregate_verdicts(
-            [MagicMock(verdict=Verdict.PASS), MagicMock(verdict=Verdict.CONCERNS)]
-        )
+        _aggregate_verdicts([MagicMock(verdict=Verdict.PASS), MagicMock(verdict=Verdict.CONCERNS)])
         == Verdict.CONCERNS
     )
     assert (

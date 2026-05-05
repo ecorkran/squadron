@@ -26,9 +26,7 @@ config_app = typer.Typer(
 def config_set(
     key: str = typer.Argument(help="Config key to set"),
     value: str = typer.Argument(help="Value to set"),
-    project: bool = typer.Option(
-        False, "--project", help="Write to project-level config"
-    ),
+    project: bool = typer.Option(False, "--project", help="Write to project-level config"),
     cwd: str = typer.Option(".", "--cwd", help="Working directory"),
 ) -> None:
     """Set a config value."""
@@ -45,9 +43,7 @@ def config_set(
 @config_app.command("unset")
 def config_unset(
     key: str = typer.Argument(help="Config key to remove"),
-    project: bool = typer.Option(
-        False, "--project", help="Remove from project-level config"
-    ),
+    project: bool = typer.Option(False, "--project", help="Remove from project-level config"),
     cwd: str = typer.Option(".", "--cwd", help="Working directory"),
 ) -> None:
     """Remove a config key, reverting to its default value."""

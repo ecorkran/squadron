@@ -50,9 +50,7 @@ class ClaudeSDKProvider:
             kwargs["setting_sources"] = config.setting_sources
 
         kwargs["permission_mode"] = (
-            config.permission_mode
-            if config.permission_mode is not None
-            else _DEFAULT_PERMISSION_MODE
+            config.permission_mode if config.permission_mode is not None else _DEFAULT_PERMISSION_MODE
         )
 
         hooks = config.credentials.get("hooks")

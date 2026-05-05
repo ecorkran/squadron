@@ -201,16 +201,10 @@ def _resolve_arch_file(num: str) -> str:
     pattern = f"{num}-arch.*.md"
     matches = sorted(arch_dir.glob(pattern))
     if not matches:
-        rprint(
-            f"[red]Error: No architecture document matching"
-            f" '{pattern}' in {arch_dir}/[/red]"
-        )
+        rprint(f"[red]Error: No architecture document matching '{pattern}' in {arch_dir}/[/red]")
         raise typer.Exit(code=1)
     if len(matches) > 1:
-        rprint(
-            f"[yellow]Warning: Multiple arch docs for index {num},"
-            f" using {matches[0].name}[/yellow]"
-        )
+        rprint(f"[yellow]Warning: Multiple arch docs for index {num}, using {matches[0].name}[/yellow]")
     return str(matches[0])
 
 
@@ -302,18 +296,14 @@ def _run_review_command(
     template = get_template(template_name)
     if template is None:
         available = [t.name for t in list_templates()]
-        rprint(
-            f"[red]Error: Unknown template '{template_name}'."
-            f" Available: {available}[/red]"
-        )
+        rprint(f"[red]Error: Unknown template '{template_name}'. Available: {available}[/red]")
         raise typer.Exit(code=1)
 
     # Validate required inputs
     for req in template.required_inputs:
         if req.name not in inputs:
             rprint(
-                f"[red]Error: Missing required input '{req.name}'"
-                f" for template '{template_name}'.[/red]"
+                f"[red]Error: Missing required input '{req.name}' for template '{template_name}'.[/red]"
             )
             raise typer.Exit(code=1)
 
@@ -350,10 +340,7 @@ def _run_review_command(
             )
         )
     except RateLimitError as exc:
-        rprint(
-            "[red]Error: Rate limited by the API. "
-            "Please wait a moment and try again.[/red]"
-        )
+        rprint("[red]Error: Rate limited by the API. Please wait a moment and try again.[/red]")
         raise typer.Exit(code=1) from exc
     except Exception as exc:
         rprint(f"[red]Error: Review failed — {exc}[/red]")
@@ -394,33 +381,19 @@ def review_slice(
     against: str | None = typer.Option(
         None, "--against", help="Architecture document to review against"
     ),
-    cwd: str | None = typer.Option(
-        None, "--cwd", help="Working directory (default: config or .)"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", help="Model override (e.g. opus, sonnet)"
-    ),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
+    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
     profile: str | None = typer.Option(
         None,
         "--profile",
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
-    verbose: int = typer.Option(
-        0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
-    ),
-    output: str = typer.Option(
-        "terminal", "--output", help="Output format: terminal, json, file"
-    ),
-    output_path: str | None = typer.Option(
-        None, "--output-path", help="File path for --output file"
-    ),
-    use_json: bool = typer.Option(
-        False, "--json", help="Output and save as JSON instead of markdown"
-    ),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
+    output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
+    use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
-    rules_dir_flag: str | None = typer.Option(
-        None, "--rules-dir", help="Rules directory override"
-    ),
+    rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
 ) -> None:
     """Run a slice design review."""
     slice_info: SliceInfo | None = None
@@ -459,9 +432,7 @@ def review_slice(
     )
 
     if slice_info and not no_save:
-        path = save_review_result(
-            result, "slice", slice_info, as_json=use_json, input_file=input_file
-        )
+        path = save_review_result(result, "slice", slice_info, as_json=use_json, input_file=input_file)
         rprint(f"[green]Saved review to {path}[/green]")
 
     if result.verdict == Verdict.FAIL:
@@ -470,36 +441,20 @@ def review_slice(
 
 @review_app.command("arch")
 def review_arch(
-    input_file: str = typer.Argument(
-        help="Architecture document to review (path or initiative index)"
-    ),
-    cwd: str | None = typer.Option(
-        None, "--cwd", help="Working directory (default: config or .)"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", help="Model override (e.g. opus, sonnet)"
-    ),
+    input_file: str = typer.Argument(help="Architecture document to review (path or initiative index)"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
+    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
     profile: str | None = typer.Option(
         None,
         "--profile",
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
-    verbose: int = typer.Option(
-        0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
-    ),
-    output: str = typer.Option(
-        "terminal", "--output", help="Output format: terminal, json, file"
-    ),
-    output_path: str | None = typer.Option(
-        None, "--output-path", help="File path for --output file"
-    ),
-    use_json: bool = typer.Option(
-        False, "--json", help="Output and save as JSON instead of markdown"
-    ),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
+    output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
+    use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
-    rules_dir_flag: str | None = typer.Option(
-        None, "--rules-dir", help="Rules directory override"
-    ),
+    rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
 ) -> None:
     """Review an architecture document on its own merits."""
     arch_index: int | None = None
@@ -554,39 +509,21 @@ def review_arch(
 
 @review_app.command("tasks")
 def review_tasks(
-    input_file: str = typer.Argument(
-        help="Task breakdown file to review (or slice number)"
-    ),
-    against: str | None = typer.Option(
-        None, "--against", help="Parent slice design to review against"
-    ),
-    cwd: str | None = typer.Option(
-        None, "--cwd", help="Working directory (default: config or .)"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", help="Model override (e.g. opus, sonnet)"
-    ),
+    input_file: str = typer.Argument(help="Task breakdown file to review (or slice number)"),
+    against: str | None = typer.Option(None, "--against", help="Parent slice design to review against"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
+    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
     profile: str | None = typer.Option(
         None,
         "--profile",
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
-    verbose: int = typer.Option(
-        0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
-    ),
-    output: str = typer.Option(
-        "terminal", "--output", help="Output format: terminal, json, file"
-    ),
-    output_path: str | None = typer.Option(
-        None, "--output-path", help="File path for --output file"
-    ),
-    use_json: bool = typer.Option(
-        False, "--json", help="Output and save as JSON instead of markdown"
-    ),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
+    output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
+    use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
-    rules_dir_flag: str | None = typer.Option(
-        None, "--rules-dir", help="Rules directory override"
-    ),
+    rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
 ) -> None:
     """Run a task plan review.
 
@@ -606,9 +543,7 @@ def review_tasks(
         if not slice_info["design_file"]:
             rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
             raise typer.Exit(code=1)
-        task_file_paths = [
-            f"project-documents/user/tasks/{f}" for f in slice_info["task_files"]
-        ]
+        task_file_paths = [f"project-documents/user/tasks/{f}" for f in slice_info["task_files"]]
         against = slice_info["design_file"]
     else:
         task_file_paths = [input_file]
@@ -629,8 +564,7 @@ def review_tasks(
     for part_idx, task_path in enumerate(task_file_paths, start=1):
         if multi_part:
             rprint(
-                f"[bold]Reviewing tasks part {part_idx} of "
-                f"{len(task_file_paths)}: {task_path}[/bold]"
+                f"[bold]Reviewing tasks part {part_idx} of {len(task_file_paths)}: {task_path}[/bold]"
             )
         inputs = {
             "input": task_path,
@@ -671,42 +605,22 @@ def review_code(
     slice_number: str | None = typer.Argument(
         None, help="Optional slice number for context (e.g. 118)"
     ),
-    cwd: str | None = typer.Option(
-        None, "--cwd", help="Project directory (default: config or .)"
-    ),
-    files: str | None = typer.Option(
-        None, "--files", help="Glob pattern to scope the review"
-    ),
+    cwd: str | None = typer.Option(None, "--cwd", help="Project directory (default: config or .)"),
+    files: str | None = typer.Option(None, "--files", help="Glob pattern to scope the review"),
     diff: str | None = typer.Option(None, "--diff", help="Git ref to diff against"),
-    rules: str | None = typer.Option(
-        None, "--rules", help="Path to additional rules file"
-    ),
-    rules_dir_flag: str | None = typer.Option(
-        None, "--rules-dir", help="Rules directory override"
-    ),
-    no_rules: bool = typer.Option(
-        False, "--no-rules", help="Suppress all rule injection"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", help="Model override (e.g. opus, sonnet)"
-    ),
+    rules: str | None = typer.Option(None, "--rules", help="Path to additional rules file"),
+    rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
+    no_rules: bool = typer.Option(False, "--no-rules", help="Suppress all rule injection"),
+    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
     profile: str | None = typer.Option(
         None,
         "--profile",
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
-    verbose: int = typer.Option(
-        0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"
-    ),
-    output: str = typer.Option(
-        "terminal", "--output", help="Output format: terminal, json, file"
-    ),
-    output_path: str | None = typer.Option(
-        None, "--output-path", help="File path for --output file"
-    ),
-    use_json: bool = typer.Option(
-        False, "--json", help="Output and save as JSON instead of markdown"
-    ),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
+    output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
+    use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
     fan: int | None = typer.Option(
         None,
@@ -716,10 +630,7 @@ def review_code(
 ) -> None:
     """Run a code review."""
     if fan is not None:
-        rprint(
-            "[yellow]--fan is reserved for future fan-out support "
-            "(slice 182); ignored.[/yellow]"
-        )
+        rprint("[yellow]--fan is reserved for future fan-out support (slice 182); ignored.[/yellow]")
 
     # Load template early to access diff_exclude_patterns
     load_all_templates()
@@ -759,9 +670,7 @@ def review_code(
         resolved_rules_dir = resolve_rules_dir(review_cwd, None, rules_dir_flag)
         file_paths: list[str] = []
         if resolved_rules_dir is not None:
-            file_paths = (
-                extract_diff_paths(diff, review_cwd, exclude_patterns) if diff else []
-            )
+            file_paths = extract_diff_paths(diff, review_cwd, exclude_patterns) if diff else []
             if not file_paths and files:
                 import glob as _glob
 

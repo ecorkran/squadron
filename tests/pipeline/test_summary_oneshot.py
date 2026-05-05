@@ -26,9 +26,7 @@ def _make_fake_message(content: str, sdk_type: str | None = None) -> Message:
     return msg
 
 
-def _make_fake_agent(
-    messages: list[Message], *, raises: Exception | None = None
-) -> MagicMock:
+def _make_fake_agent(messages: list[Message], *, raises: Exception | None = None) -> MagicMock:
     """Return a fake Agent that yields *messages* from handle_message()."""
 
     async def _handle(message: Message) -> AsyncIterator[Message]:

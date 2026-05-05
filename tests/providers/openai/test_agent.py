@@ -33,9 +33,7 @@ def _make_agent(
         client = MagicMock()
         client.chat.completions.create = AsyncMock()
         client.close = AsyncMock()
-    return OpenAICompatibleAgent(
-        name=name, client=client, model=model, system_prompt=system_prompt
-    )
+    return OpenAICompatibleAgent(name=name, client=client, model=model, system_prompt=system_prompt)
 
 
 def _async_stream(*chunks: Any) -> AsyncMock:
@@ -76,9 +74,7 @@ class TestHandleMessage:
     @pytest.mark.asyncio
     async def test_handle_message_appends_user_entry(self) -> None:
         client = MagicMock()
-        client.chat.completions.create = AsyncMock(
-            return_value=_async_stream(text_chunk("hi"))
-        )
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("hi")))
         client.close = AsyncMock()
         agent = _make_agent(client=client)
         await _collect(agent, _USER_MSG)
@@ -90,9 +86,7 @@ class TestHandleMessage:
     @pytest.mark.asyncio
     async def test_handle_message_appends_assistant_entry(self) -> None:
         client = MagicMock()
-        client.chat.completions.create = AsyncMock(
-            return_value=_async_stream(text_chunk("I'm fine"))
-        )
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("I'm fine")))
         client.close = AsyncMock()
         agent = _make_agent(client=client)
         await _collect(agent, _USER_MSG)
@@ -104,9 +98,7 @@ class TestHandleMessage:
     @pytest.mark.asyncio
     async def test_handle_message_yields_chat_message(self) -> None:
         client = MagicMock()
-        client.chat.completions.create = AsyncMock(
-            return_value=_async_stream(text_chunk("Hello!"))
-        )
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("Hello!")))
         client.close = AsyncMock()
         agent = _make_agent(client=client)
         msgs = await _collect(agent, _USER_MSG)
@@ -117,9 +109,7 @@ class TestHandleMessage:
     @pytest.mark.asyncio
     async def test_handle_message_multi_turn_history_grows(self) -> None:
         client = MagicMock()
-        client.chat.completions.create = AsyncMock(
-            return_value=_async_stream(text_chunk("resp"))
-        )
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("resp")))
         client.close = AsyncMock()
         agent = _make_agent(client=client)
         await _collect(agent, _USER_MSG)
@@ -143,9 +133,7 @@ class TestHandleMessage:
     @pytest.mark.asyncio
     async def test_state_is_idle_after_success(self) -> None:
         client = MagicMock()
-        client.chat.completions.create = AsyncMock(
-            return_value=_async_stream(text_chunk("ok"))
-        )
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("ok")))
         client.close = AsyncMock()
         agent = _make_agent(client=client)
         await _collect(agent, _USER_MSG)
@@ -158,17 +146,13 @@ class TestHandleMessage:
 
 
 def _mock_response(status_code: int = 401) -> httpx.Response:
-    return httpx.Response(
-        status_code=status_code, request=httpx.Request("GET", "http://test")
-    )
+    return httpx.Response(status_code=status_code, request=httpx.Request("GET", "http://test"))
 
 
 class TestErrorMapping:
     @pytest.mark.asyncio
     async def test_error_auth(self) -> None:
-        exc = openai.AuthenticationError(
-            "bad key", response=_mock_response(401), body=None
-        )
+        exc = openai.AuthenticationError("bad key", response=_mock_response(401), body=None)
         client = MagicMock()
         client.chat.completions.create = AsyncMock(side_effect=exc)
         client.close = AsyncMock()
@@ -179,9 +163,7 @@ class TestErrorMapping:
 
     @pytest.mark.asyncio
     async def test_error_rate_limit(self) -> None:
-        exc = openai.RateLimitError(
-            "rate limited", response=_mock_response(429), body=None
-        )
+        exc = openai.RateLimitError("rate limited", response=_mock_response(429), body=None)
         client = MagicMock()
         client.chat.completions.create = AsyncMock(side_effect=exc)
         client.close = AsyncMock()
@@ -192,9 +174,7 @@ class TestErrorMapping:
 
     @pytest.mark.asyncio
     async def test_error_api_status(self) -> None:
-        exc = openai.InternalServerError(
-            "server error", response=_mock_response(503), body=None
-        )
+        exc = openai.InternalServerError("server error", response=_mock_response(503), body=None)
         client = MagicMock()
         client.chat.completions.create = AsyncMock(side_effect=exc)
         client.close = AsyncMock()

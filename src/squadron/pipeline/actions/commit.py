@@ -72,9 +72,7 @@ class CommitAction:
                 else:
                     message = f"{commit_type}: {prefix}"
             else:
-                message = (
-                    f"{commit_type}: {context.step_name} for {context.pipeline_name}"
-                )
+                message = f"{commit_type}: {context.step_name} for {context.pipeline_name}"
         message = str(message)
 
         # Commit

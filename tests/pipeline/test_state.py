@@ -186,15 +186,11 @@ class TestAtomicWrite:
 
 
 class TestInitRun:
-    def test_creates_json_file(
-        self, state_manager: StateManager, tmp_path: Path
-    ) -> None:
+    def test_creates_json_file(self, state_manager: StateManager, tmp_path: Path) -> None:
         run_id = state_manager.init_run("my-pipeline", {"slice": "1"})
         assert (tmp_path / f"{run_id}.json").exists()
 
-    def test_file_deserializes_to_valid_run_state(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_file_deserializes_to_valid_run_state(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("my-pipeline", {"slice": "1"})
         state = state_manager.load(run_id)
         assert state.status == "running"
@@ -202,9 +198,7 @@ class TestInitRun:
         assert state.params == {"slice": "1"}
         assert state.completed_steps == []
 
-    def test_caller_supplied_run_id_used_verbatim(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_caller_supplied_run_id_used_verbatim(self, state_manager: StateManager) -> None:
         custom_id = "run-custom-id"
         returned = state_manager.init_run("pipeline", {}, run_id=custom_id)
         assert returned == custom_id
@@ -216,18 +210,12 @@ class TestInitRun:
         assert run_id.startswith("run-")
         assert "slice" in run_id
 
-    def test_init_run_stores_execution_mode_prompt_only(
-        self, state_manager: StateManager
-    ) -> None:
-        run_id = state_manager.init_run(
-            "pipe", {}, execution_mode=ExecutionMode.PROMPT_ONLY
-        )
+    def test_init_run_stores_execution_mode_prompt_only(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {}, execution_mode=ExecutionMode.PROMPT_ONLY)
         state = state_manager.load(run_id)
         assert state.execution_mode == ExecutionMode.PROMPT_ONLY
 
-    def test_init_run_normalises_pipeline_name_to_lowercase(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_init_run_normalises_pipeline_name_to_lowercase(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("Test-Pipeline", {})
         state = state_manager.load(run_id)
         assert state.pipeline == "test-pipeline"
@@ -292,9 +280,7 @@ class TestStepCallback:
         state = state_manager.load(run_id)
         assert state.completed_steps[0].outputs == {"key": "value"}
 
-    def test_two_callbacks_produce_two_entries(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_two_callbacks_produce_two_entries(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         cb = state_manager.make_step_callback(run_id)
         cb(_make_step_result(step_name="design"))
@@ -302,9 +288,7 @@ class TestStepCallback:
         state = state_manager.load(run_id)
         assert len(state.completed_steps) == 2
 
-    def test_paused_step_sets_status_and_checkpoint(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_paused_step_sets_status_and_checkpoint(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         cb = state_manager.make_step_callback(run_id)
         paused_step = _make_step_result(
@@ -362,27 +346,19 @@ class TestFinalize:
 
 
 class TestLoad:
-    def test_load_after_init_run_has_correct_fields(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_load_after_init_run_has_correct_fields(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("my-pipe", {"k": "v"})
         state = state_manager.load(run_id)
         assert state.pipeline == "my-pipe"
         assert state.params == {"k": "v"}
 
-    def test_load_nonexistent_raises_file_not_found(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_load_nonexistent_raises_file_not_found(self, state_manager: StateManager) -> None:
         with pytest.raises(FileNotFoundError):
             state_manager.load("run-does-not-exist")
 
-    def test_load_schema_version_99_raises(
-        self, state_manager: StateManager, tmp_path: Path
-    ) -> None:
+    def test_load_schema_version_99_raises(self, state_manager: StateManager, tmp_path: Path) -> None:
         bad = tmp_path / "run-bad.json"
-        bad.write_text(
-            json.dumps({"schema_version": 99, "run_id": "run-bad"}), encoding="utf-8"
-        )
+        bad.write_text(json.dumps({"schema_version": 99, "run_id": "run-bad"}), encoding="utf-8")
         with pytest.raises(SchemaVersionError):
             state_manager.load("run-bad")
 
@@ -390,21 +366,13 @@ class TestLoad:
         self, state_manager: StateManager, tmp_path: Path
     ) -> None:
         bad = tmp_path / "run-v1.json"
-        bad.write_text(
-            json.dumps({"schema_version": 1, "run_id": "run-v1"}), encoding="utf-8"
-        )
-        with pytest.raises(
-            SchemaVersionError, match="Unsupported state file schema_version"
-        ):
+        bad.write_text(json.dumps({"schema_version": 1, "run_id": "run-v1"}), encoding="utf-8")
+        with pytest.raises(SchemaVersionError, match="Unsupported state file schema_version"):
             state_manager.load("run-v1")
 
-    def test_load_schema_version_0_raises(
-        self, state_manager: StateManager, tmp_path: Path
-    ) -> None:
+    def test_load_schema_version_0_raises(self, state_manager: StateManager, tmp_path: Path) -> None:
         bad = tmp_path / "run-zero.json"
-        bad.write_text(
-            json.dumps({"schema_version": 0, "run_id": "run-zero"}), encoding="utf-8"
-        )
+        bad.write_text(json.dumps({"schema_version": 0, "run_id": "run-zero"}), encoding="utf-8")
         with pytest.raises(SchemaVersionError):
             state_manager.load("run-zero")
 
@@ -448,9 +416,7 @@ class TestLoadPriorOutputs:
         assert len(prior) == 2
         assert all(isinstance(v, ActionResult) for v in prior.values())
 
-    def test_returns_empty_for_run_with_no_action_results(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_returns_empty_for_run_with_no_action_results(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         # Manually write a completed step with no action_results
         state = state_manager.load(run_id)
@@ -471,9 +437,7 @@ class TestLoadPriorOutputs:
         prior = state_manager.load_prior_outputs(run_id)
         assert prior == {}
 
-    def test_unknown_fields_in_stored_dict_dont_crash(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_unknown_fields_in_stored_dict_dont_crash(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         state = state_manager.load(run_id)
         now = datetime.now(UTC)
@@ -512,24 +476,18 @@ def _make_definition(step_names: list[str]) -> PipelineDefinition:
         name="test-pipe",
         description="",
         params={},
-        steps=[
-            StepConfig(step_type="phase", name=name, config={}) for name in step_names
-        ],
+        steps=[StepConfig(step_type="phase", name=name, config={}) for name in step_names],
     )
 
 
 class TestFirstUnfinishedStep:
-    def test_no_completed_steps_returns_first(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_no_completed_steps_returns_first(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         defn = _make_definition(["design", "tasks", "implement"])
         result = state_manager.first_unfinished_step(run_id, defn)
         assert result == "design"
 
-    def test_first_two_completed_returns_third(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_first_two_completed_returns_third(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         cb = state_manager.make_step_callback(run_id)
         cb(_make_step_result(step_name="design"))
@@ -600,9 +558,7 @@ class TestListRuns:
         assert runs[0].run_id == rid2
         assert runs[1].run_id == rid1
 
-    def test_corrupt_json_file_skipped(
-        self, state_manager: StateManager, tmp_path: Path
-    ) -> None:
+    def test_corrupt_json_file_skipped(self, state_manager: StateManager, tmp_path: Path) -> None:
         (tmp_path / "corrupt.json").write_text("NOT JSON{{{{", encoding="utf-8")
         self._create_run(state_manager, "pipe")
         runs = state_manager.list_runs()
@@ -632,31 +588,21 @@ class TestFindMatchingRun:
 
     def test_finds_paused_run_by_params(self, state_manager: StateManager) -> None:
         self._create_paused_run(state_manager, "slice", {"slice": "191"})
-        match = state_manager.find_matching_run(
-            "slice", {"slice": "191"}, status="paused"
-        )
+        match = state_manager.find_matching_run("slice", {"slice": "191"}, status="paused")
         assert match is not None
         assert match.params["slice"] == "191"
 
     def test_returns_none_when_params_differ(self, state_manager: StateManager) -> None:
         self._create_paused_run(state_manager, "slice", {"slice": "191"})
-        match = state_manager.find_matching_run(
-            "slice", {"slice": "192"}, status="paused"
-        )
+        match = state_manager.find_matching_run("slice", {"slice": "192"}, status="paused")
         assert match is None
 
-    def test_returns_none_when_status_doesnt_match(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_returns_none_when_status_doesnt_match(self, state_manager: StateManager) -> None:
         state_manager.init_run("slice", {"slice": "191"})
-        match = state_manager.find_matching_run(
-            "slice", {"slice": "191"}, status="paused"
-        )
+        match = state_manager.find_matching_run("slice", {"slice": "191"}, status="paused")
         assert match is None
 
-    def test_returns_most_recent_when_multiple_matches(
-        self, state_manager: StateManager
-    ) -> None:
+    def test_returns_most_recent_when_multiple_matches(self, state_manager: StateManager) -> None:
         self._create_paused_run(state_manager, "pipe", {"s": "1"})
         time.sleep(0.01)
         rid2 = self._create_paused_run(state_manager, "pipe", {"s": "1"})
@@ -691,9 +637,7 @@ class TestPrune:
         )
         return run_id
 
-    def test_deletes_oldest_beyond_keep(
-        self, state_manager: StateManager, tmp_path: Path
-    ) -> None:
+    def test_deletes_oldest_beyond_keep(self, state_manager: StateManager, tmp_path: Path) -> None:
         # Create 12 completed runs without triggering auto-prune on init_run.
         # Use a custom pipeline name per run to avoid auto-prune interference.
         mgr = StateManager(runs_dir=tmp_path)
@@ -850,15 +794,11 @@ class TestCompactSummary:
     def test_load_v2_file_raises_schema_version_error(self, tmp_path: Path) -> None:
         mgr = StateManager(runs_dir=tmp_path)
         bad = tmp_path / "run-v2.json"
-        bad.write_text(
-            json.dumps({"schema_version": 2, "run_id": "run-v2"}), encoding="utf-8"
-        )
+        bad.write_text(json.dumps({"schema_version": 2, "run_id": "run-v2"}), encoding="utf-8")
         with pytest.raises(SchemaVersionError):
             mgr.load("run-v2")
 
-    def test_load_v3_file_without_compact_summaries_defaults_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_load_v3_file_without_compact_summaries_defaults_empty(self, tmp_path: Path) -> None:
         mgr = StateManager(runs_dir=tmp_path)
         now = datetime.now(UTC)
         path = tmp_path / "run-v3.json"
@@ -990,9 +930,7 @@ class TestPoolSelectionLogging:
         state = mgr.load(run_id)
         assert len(state.pool_selections) == 2
 
-    def test_schema_v3_file_loads_with_empty_pool_selections(
-        self, tmp_path: Path
-    ) -> None:
+    def test_schema_v3_file_loads_with_empty_pool_selections(self, tmp_path: Path) -> None:
         """A schema_version=3 state file must load with pool_selections=[]."""
         state_data = {
             "schema_version": 3,

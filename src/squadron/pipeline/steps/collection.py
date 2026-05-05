@@ -40,8 +40,7 @@ class EachStepType:
                     ValidationError(
                         field="source",
                         message=(
-                            f"'source' must match pattern namespace.function(...), "
-                            f"got: {source!r}"
+                            f"'source' must match pattern namespace.function(...), got: {source!r}"
                         ),
                         action_type=StepTypeName.EACH,
                     )

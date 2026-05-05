@@ -44,9 +44,7 @@ def summary_instructions(
     # Template name resolution: explicit arg > config > "minimal"
     if not template:
         config_val = get_config("compact.template", cwd=cwd)
-        template = (
-            config_val if isinstance(config_val, str) and config_val else "minimal"
-        )
+        template = config_val if isinstance(config_val, str) and config_val else "minimal"
 
     try:
         if suffix:

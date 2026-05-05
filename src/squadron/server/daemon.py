@@ -99,9 +99,7 @@ async def start_server(engine: SquadronEngine, config: DaemonConfig) -> None:
     Path(config.socket_path).parent.mkdir(parents=True, exist_ok=True)
 
     uds_config = uvicorn.Config(app, uds=config.socket_path, log_level="info")
-    http_config = uvicorn.Config(
-        app, host="127.0.0.1", port=config.port, log_level="info"
-    )
+    http_config = uvicorn.Config(app, host="127.0.0.1", port=config.port, log_level="info")
 
     uds_server = uvicorn.Server(uds_config)
     http_server = uvicorn.Server(http_config)

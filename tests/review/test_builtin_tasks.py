@@ -35,8 +35,6 @@ class TestTasksTemplate:
 
     def test_build_prompt_with_required_inputs(self) -> None:
         t = load_template(_tasks_yaml())
-        prompt = t.build_prompt(
-            {"input": "tasks/105-tasks.md", "against": "slices/105-slice.md"}
-        )
+        prompt = t.build_prompt({"input": "tasks/105-tasks.md", "against": "slices/105-slice.md"})
         assert "tasks/105-tasks.md" in prompt
         assert "slices/105-slice.md" in prompt

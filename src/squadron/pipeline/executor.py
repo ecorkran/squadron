@@ -334,21 +334,15 @@ def _prompt_checkpoint_interactive(
         if extra > 0:
             print(f"  … and {extra} more (see review file)")
     else:
-        print(
-            "No structured findings. Choose Override to provide explicit instructions."
-        )
+        print("No structured findings. Choose Override to provide explicit instructions.")
 
     print()
     print("Options:")
     print(
         f"  [{_CHECKPOINT_KEY_ACCEPT}] Accept   — continue; findings above become override instructions"
     )
-    print(
-        f"  [{_CHECKPOINT_KEY_OVERRIDE}] Override — enter custom instructions, then continue"
-    )
-    print(
-        f"  [{_CHECKPOINT_KEY_EXIT}] Exit     — save state; resume: sq run --resume {run_id}"
-    )
+    print(f"  [{_CHECKPOINT_KEY_OVERRIDE}] Override — enter custom instructions, then continue")
+    print(f"  [{_CHECKPOINT_KEY_EXIT}] Exit     — save state; resume: sq run --resume {run_id}")
     print(_CHECKPOINT_RULE)
 
     while True:
@@ -361,9 +355,7 @@ def _prompt_checkpoint_interactive(
         )
         if choice == _CHECKPOINT_KEY_ACCEPT:
             override_instructions = _format_findings_as_instructions(findings)
-            return CheckpointDecision(
-                CheckpointResolution.ACCEPT, override_instructions
-            )
+            return CheckpointDecision(CheckpointResolution.ACCEPT, override_instructions)
         if choice == _CHECKPOINT_KEY_OVERRIDE:
             user_text = input("Instructions: ").strip()
             return CheckpointDecision(CheckpointResolution.OVERRIDE, user_text)
@@ -388,18 +380,14 @@ def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
             until = LoopCondition(until_raw)
         except ValueError:
             valid = [c.value for c in LoopCondition]
-            raise ValueError(
-                f"Invalid loop.until value {until_raw!r}. Valid: {valid}"
-            ) from None
+            raise ValueError(f"Invalid loop.until value {until_raw!r}. Valid: {valid}") from None
 
     on_exhaust_raw = loop_dict.get("on_exhaust", ExhaustBehavior.FAIL.value)
     try:
         on_exhaust = ExhaustBehavior(on_exhaust_raw)
     except ValueError:
         valid_ex = [b.value for b in ExhaustBehavior]
-        raise ValueError(
-            f"Invalid on_exhaust value {on_exhaust_raw!r}. Valid: {valid_ex}"
-        ) from None
+        raise ValueError(f"Invalid on_exhaust value {on_exhaust_raw!r}. Valid: {valid_ex}") from None
 
     strategy = loop_dict.get("strategy")
 
@@ -458,23 +446,17 @@ def _parse_source(
     match = _SOURCE_RE.fullmatch(source_str.strip())
     if not match:
         raise ValueError(
-            f"Invalid source string {source_str!r}. "
-            "Expected format: namespace.function(args)"
+            f"Invalid source string {source_str!r}. Expected format: namespace.function(args)"
         )
     namespace = match.group(1)
     function = match.group(2)
     args_raw = match.group(3).strip()
-    args = (
-        [a.strip().strip("\"'") for a in args_raw.split(",") if a.strip()]
-        if args_raw
-        else []
-    )
+    args = [a.strip().strip("\"'") for a in args_raw.split(",") if a.strip()] if args_raw else []
 
     key = (namespace, function)
     if key not in _SOURCE_REGISTRY:
         raise ValueError(
-            f"Unknown source '{namespace}.{function}'. "
-            f"Registered sources: {list(_SOURCE_REGISTRY)}"
+            f"Unknown source '{namespace}.{function}'. Registered sources: {list(_SOURCE_REGISTRY)}"
         )
     return namespace, function, args
 
@@ -601,8 +583,7 @@ async def execute_pipeline(
                 _active = _run_state.active_compact_summary_for_resume(_start_idx)
                 if _active is not None:
                     _logger.info(
-                        "executor: resuming at step %d; seeding session from "
-                        "compact summary %s",
+                        "executor: resuming at step %d; seeding session from compact summary %s",
                         _start_idx,
                         _active.key,
                     )
@@ -635,9 +616,7 @@ async def execute_pipeline(
                 cf_client=cf_client,
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
-                get_action_fn=_action_registry.__getitem__
-                if _action_registry
-                else get_action,
+                get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
             )
         elif step.step_type == StepTypeName.FAN_OUT:
             step_result = await _execute_fan_out_step(
@@ -653,9 +632,7 @@ async def execute_pipeline(
                 cf_client=cf_client,
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
-                get_action_fn=_action_registry.__getitem__
-                if _action_registry
-                else get_action,
+                get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
             )
         elif step.step_type == StepTypeName.LOOP:
             step_result = await _execute_loop_body(
@@ -671,9 +648,7 @@ async def execute_pipeline(
                 cf_client=cf_client,
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
-                get_action_fn=_action_registry.__getitem__
-                if _action_registry
-                else get_action,
+                get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
             )
         else:
             # Check for loop config
@@ -682,9 +657,7 @@ async def execute_pipeline(
                 typed_loop: dict[str, object] = loop_raw  # type: ignore[assignment]
                 loop_config = _parse_loop_config(typed_loop)
                 # Remove loop key from config before passing to step type
-                action_config = {
-                    k: v for k, v in resolved_config.items() if k != "loop"
-                }
+                action_config = {k: v for k, v in resolved_config.items() if k != "loop"}
                 step_result = await _execute_loop_step(
                     step=step,
                     action_config=action_config,
@@ -699,9 +672,7 @@ async def execute_pipeline(
                     cf_client=cf_client,
                     sdk_session=sdk_session,
                     get_step_type_fn=get_step_type,
-                    get_action_fn=_action_registry.__getitem__
-                    if _action_registry
-                    else get_action,
+                    get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
                 )
             else:
                 step_result = await _execute_step_once(
@@ -717,9 +688,7 @@ async def execute_pipeline(
                     cf_client=cf_client,
                     sdk_session=sdk_session,
                     get_step_type_fn=get_step_type,
-                    get_action_fn=_action_registry.__getitem__
-                    if _action_registry
-                    else get_action,
+                    get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
                 )
 
         step_results.append(step_result)
@@ -836,9 +805,7 @@ async def _execute_step_once(
                 if prior_review
                 else []
             )
-            decision = _prompt_checkpoint_interactive(
-                verdict, findings, run_id, step.name
-            )
+            decision = _prompt_checkpoint_interactive(verdict, findings, run_id, step.name)
             if decision.resolution == CheckpointResolution.EXIT:
                 return StepResult(
                     step_name=step.name,
@@ -918,8 +885,7 @@ async def _execute_loop_step(
     """Execute a step with loop configuration."""
     if loop_config.strategy is not None:
         _logger.warning(
-            "Loop strategy '%s' not implemented, "
-            "falling back to basic max-iteration loop",
+            "Loop strategy '%s' not implemented, falling back to basic max-iteration loop",
             loop_config.strategy,
         )
 
@@ -1009,8 +975,7 @@ async def _execute_loop_body(
 
     if loop_config.strategy is not None:
         _logger.warning(
-            "Loop strategy '%s' not implemented, "
-            "falling back to basic max-iteration loop",
+            "Loop strategy '%s' not implemented, falling back to basic max-iteration loop",
             loop_config.strategy,
         )
 
@@ -1238,9 +1203,7 @@ async def _execute_fan_out_step(
         if isinstance(models_raw, str) and models_raw.startswith(_POOL_PREFIX):
             n = int(resolved_config.get("n", 1))  # type: ignore[arg-type]
             pool_ref = models_raw  # e.g. "pool:review"
-            branch_models: list[tuple[str, str | None]] = [
-                resolver.resolve(pool_ref) for _ in range(n)
-            ]
+            branch_models: list[tuple[str, str | None]] = [resolver.resolve(pool_ref) for _ in range(n)]
         else:
             branch_models = [resolver.resolve(str(m)) for m in models_raw]  # type: ignore[union-attr]
     except Exception as exc:
@@ -1291,9 +1254,7 @@ async def _execute_fan_out_step(
     # 4. Gather branches — return_exceptions=False for fast-fail on exception.
     try:
         branch_results: list[StepResult] = list(
-            await asyncio.gather(
-                *(_run_branch(i, m, p) for i, (m, p) in enumerate(branch_models))
-            )
+            await asyncio.gather(*(_run_branch(i, m, p) for i, (m, p) in enumerate(branch_models)))
         )
     except Exception as exc:
         return StepResult(

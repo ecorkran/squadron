@@ -92,9 +92,7 @@ def _resolver_with_backend(
 
 
 @pytest.mark.asyncio
-async def test_cli_pool_override_resolves_and_logs(
-    tmp_path: Path, tmp_state_file: Path
-) -> None:
+async def test_cli_pool_override_resolves_and_logs(tmp_path: Path, tmp_state_file: Path) -> None:
     """CLI pool: override resolves; resolver callback fires and state is logged."""
     selections: list[PoolSelection] = []
     state_mgr = StateManager(runs_dir=tmp_path)
@@ -135,9 +133,7 @@ async def test_cli_pool_override_resolves_and_logs(
 
 
 @pytest.mark.asyncio
-async def test_pipeline_level_pool_resolves(
-    tmp_path: Path, tmp_state_file: Path
-) -> None:
+async def test_pipeline_level_pool_resolves(tmp_path: Path, tmp_state_file: Path) -> None:
     """pool: at pipeline level resolves via backend; callback fires on resolve()."""
     selections: list[PoolSelection] = []
     resolver = _resolver_with_backend(
@@ -163,9 +159,7 @@ async def test_pipeline_level_pool_resolves(
 
 
 @pytest.mark.asyncio
-async def test_action_alias_overrides_pipeline_pool(
-    tmp_path: Path, tmp_state_file: Path
-) -> None:
+async def test_action_alias_overrides_pipeline_pool(tmp_path: Path, tmp_state_file: Path) -> None:
     """Explicit alias at action level bypasses pipeline-level pool — cascade intact."""
     selections: list[PoolSelection] = []
 

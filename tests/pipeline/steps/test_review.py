@@ -32,9 +32,7 @@ def test_validate_valid_full_config() -> None:
 
 
 def test_validate_invalid_checkpoint() -> None:
-    errors = ReviewStepType().validate(
-        _make_config({"template": "code", "checkpoint": "invalid"})
-    )
+    errors = ReviewStepType().validate(_make_config({"template": "code", "checkpoint": "invalid"}))
     assert len(errors) == 1
     assert errors[0].field == "checkpoint"
 
@@ -51,9 +49,7 @@ def test_validate_invalid_model() -> None:
 def test_expand_with_checkpoint() -> None:
     """Template + model + checkpoint produces 2-action sequence."""
     actions = ReviewStepType().expand(
-        _make_config(
-            {"template": "code", "model": "minimax2.7", "checkpoint": "on-fail"}
-        )
+        _make_config({"template": "code", "model": "minimax2.7", "checkpoint": "on-fail"})
     )
 
     assert len(actions) == 2

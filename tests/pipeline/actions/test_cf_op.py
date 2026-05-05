@@ -89,9 +89,7 @@ def test_validate_valid_summarize(action: CfOpAction) -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_set_phase(
-    action: CfOpAction, mock_context: ActionContext
-) -> None:
+async def test_execute_set_phase(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {
         "operation": CfOperation.SET_PHASE,
         "phase": "4",
@@ -107,9 +105,7 @@ async def test_execute_set_phase(
 
 
 @pytest.mark.asyncio
-async def test_execute_build_context(
-    action: CfOpAction, mock_context: ActionContext
-) -> None:
+async def test_execute_build_context(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
     mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
         return_value={"context": "Context built"},
@@ -124,9 +120,7 @@ async def test_execute_build_context(
 
 
 @pytest.mark.asyncio
-async def test_execute_summarize(
-    action: CfOpAction, mock_context: ActionContext
-) -> None:
+async def test_execute_summarize(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.SUMMARIZE}
     mock_context.cf_client._run = MagicMock(return_value="Summary done")  # type: ignore[union-attr]
 
@@ -138,9 +132,7 @@ async def test_execute_summarize(
 
 
 @pytest.mark.asyncio
-async def test_execute_success_outputs(
-    action: CfOpAction, mock_context: ActionContext
-) -> None:
+async def test_execute_success_outputs(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
     mock_context.cf_client._run = MagicMock(return_value="ok")  # type: ignore[union-attr]
 
@@ -153,9 +145,7 @@ async def test_execute_success_outputs(
 
 
 @pytest.mark.asyncio
-async def test_execute_cf_error(
-    action: CfOpAction, mock_context: ActionContext
-) -> None:
+async def test_execute_cf_error(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
     mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
         side_effect=ContextForgeError("cf build failed")

@@ -193,9 +193,7 @@ class TestFindCommitRange:
             "bbb2222 fix: resolve slice 181 edge case\n"
             "ccc3333 docs: add slice 181 task file\n"
         )
-        with patch(
-            "squadron.review.git_utils.subprocess.run", return_value=mock_result
-        ):
+        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
             result = _find_commit_range(181, ".")
         assert result == "ccc3333^..aaa1111"
 
@@ -204,9 +202,7 @@ class TestFindCommitRange:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = "abc1234 feat: implement slice 181\n"
-        with patch(
-            "squadron.review.git_utils.subprocess.run", return_value=mock_result
-        ):
+        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
             result = _find_commit_range(181, ".")
         assert result == "abc1234^!"
 
@@ -215,9 +211,7 @@ class TestFindCommitRange:
         mock_result = MagicMock()
         mock_result.returncode = 0
         mock_result.stdout = ""
-        with patch(
-            "squadron.review.git_utils.subprocess.run", return_value=mock_result
-        ):
+        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
             result = _find_commit_range(999, ".")
         assert result is None
 
@@ -235,9 +229,7 @@ class TestFindCommitRange:
         mock_result = MagicMock()
         mock_result.returncode = 128
         mock_result.stdout = ""
-        with patch(
-            "squadron.review.git_utils.subprocess.run", return_value=mock_result
-        ):
+        with patch("squadron.review.git_utils.subprocess.run", return_value=mock_result):
             result = _find_commit_range(181, ".")
         assert result is None
 

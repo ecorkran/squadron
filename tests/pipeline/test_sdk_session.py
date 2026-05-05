@@ -264,9 +264,7 @@ async def test_dispatch_does_not_double_text_from_result_message() -> None:
     """Regression: AssistantMessage text and ResultMessage.result carry the
     same string — dispatch() must return it exactly once, not concatenated."""
     client = _make_client()
-    client.receive_response.return_value = _result_message_gen(
-        "one and only", session_id="sess-x"
-    )
+    client.receive_response.return_value = _result_message_gen("one and only", session_id="sess-x")
     session = _make_session(client)
     result = await session.dispatch("hi")
     assert result == "one and only"
@@ -275,9 +273,7 @@ async def test_dispatch_does_not_double_text_from_result_message() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_captures_session_id() -> None:
     client = _make_client()
-    client.receive_response.return_value = _result_message_gen(
-        "hi", session_id="sess-abc"
-    )
+    client.receive_response.return_value = _result_message_gen("hi", session_id="sess-abc")
     session = _make_session(client)
     await session.dispatch("hi")
     assert session.session_id == "sess-abc"
@@ -286,16 +282,12 @@ async def test_dispatch_captures_session_id() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_session_id_latest_wins() -> None:
     client = _make_client()
-    client.receive_response.return_value = _result_message_gen(
-        "one", session_id="sess-1"
-    )
+    client.receive_response.return_value = _result_message_gen("one", session_id="sess-1")
     session = _make_session(client)
     await session.dispatch("one")
     assert session.session_id == "sess-1"
 
-    client.receive_response.return_value = _result_message_gen(
-        "two", session_id="sess-2"
-    )
+    client.receive_response.return_value = _result_message_gen("two", session_id="sess-2")
     await session.dispatch("two")
     assert session.session_id == "sess-2"
 
@@ -476,9 +468,7 @@ class TestCompactSessionRotate:
         session = _make_session(old)
 
         with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
-            await session.compact(
-                instructions="x", summary="pre-made", restore_model="sonnet-id"
-            )
+            await session.compact(instructions="x", summary="pre-made", restore_model="sonnet-id")
 
         new.set_model.assert_called_once_with("sonnet-id")
         assert session.current_model == "sonnet-id"
@@ -551,9 +541,7 @@ class TestCaptureSummary:
             current_model="sonnet-id",
         )
 
-        await session.capture_summary(
-            "instr", summary_model="haiku-id", restore_model="sonnet-id"
-        )
+        await session.capture_summary("instr", summary_model="haiku-id", restore_model="sonnet-id")
 
         # set_model called twice: once to switch to haiku, once to restore sonnet
         assert client.set_model.call_count == 2

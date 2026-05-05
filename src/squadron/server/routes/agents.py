@@ -62,9 +62,7 @@ async def spawn_agent(body: SpawnRequest, request: Request) -> AgentInfoOut:
     except AgentAlreadyExistsError:
         return JSONResponse(  # type: ignore[return-value]
             status_code=409,
-            content=ErrorResponse(
-                detail=f"Agent '{body.name}' already exists"
-            ).model_dump(),
+            content=ErrorResponse(detail=f"Agent '{body.name}' already exists").model_dump(),
         )
     except ProviderAuthError as exc:
         return JSONResponse(  # type: ignore[return-value]
@@ -174,9 +172,7 @@ async def send_message(
 
 
 @agents_router.post("/{name}/task", response_model=MessageResponse)
-async def run_task(
-    name: str, body: TaskRequest, request: Request
-) -> MessageResponse | JSONResponse:
+async def run_task(name: str, body: TaskRequest, request: Request) -> MessageResponse | JSONResponse:
     """One-shot task: spawn ephemeral agent, message, shut down."""
     engine = _get_engine(request)
     resolved_provider = body.provider or body.agent_type
@@ -208,9 +204,7 @@ async def run_task(
 
 
 @agents_router.get("/{name}/history", response_model=MessageResponse)
-async def get_history(
-    name: str, request: Request, limit: int | None = None
-) -> MessageResponse:
+async def get_history(name: str, request: Request, limit: int | None = None) -> MessageResponse:
     """Get conversation history for an agent."""
     engine = _get_engine(request)
     history = engine.get_history(name)

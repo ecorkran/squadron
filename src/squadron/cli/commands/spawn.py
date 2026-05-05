@@ -47,21 +47,11 @@ def _resolve_profile(
 def spawn(
     name: str = typer.Option(..., help="Unique agent name"),
     agent_type: str = typer.Option("sdk", "--type", help="Agent type (default: sdk)"),
-    provider: str | None = typer.Option(
-        None, "--provider", help="Provider name (defaults to --type)"
-    ),
-    cwd: str | None = typer.Option(
-        None, "--cwd", help="Working directory (SDK agents)"
-    ),
-    system_prompt: str | None = typer.Option(
-        None, "--system-prompt", help="System prompt override"
-    ),
-    permission_mode: str | None = typer.Option(
-        None, "--permission-mode", help="SDK permission mode"
-    ),
-    model: str | None = typer.Option(
-        None, "--model", help="Model override (e.g. opus, sonnet)"
-    ),
+    provider: str | None = typer.Option(None, "--provider", help="Provider name (defaults to --type)"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory (SDK agents)"),
+    system_prompt: str | None = typer.Option(None, "--system-prompt", help="System prompt override"),
+    permission_mode: str | None = typer.Option(None, "--permission-mode", help="SDK permission mode"),
+    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
     base_url: str | None = typer.Option(
         None,
         "--base-url",

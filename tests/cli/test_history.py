@@ -46,9 +46,7 @@ class TestHistoryCommand:
         assert result.exit_code == 1
         assert "not running" in result.output.lower()
 
-    def test_history_with_limit(
-        self, cli_runner: CliRunner, patch_daemon_client: MagicMock
-    ) -> None:
+    def test_history_with_limit(self, cli_runner: CliRunner, patch_daemon_client: MagicMock) -> None:
         patch_daemon_client.get_history.return_value = [make_message_dict("latest")]
         with _patch_history_client(patch_daemon_client):
             result = _invoke(cli_runner, "agent1", "--limit", "5")

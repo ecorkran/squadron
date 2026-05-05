@@ -119,9 +119,7 @@ class DispatchAction:
                 error=str(exc),
             )
         except Exception as exc:
-            _logger.exception(
-                "dispatch: unexpected error in step %s", context.step_name
-            )
+            _logger.exception("dispatch: unexpected error in step %s", context.step_name)
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
@@ -162,14 +160,8 @@ class DispatchAction:
         ``stdout`` as the prompt.  This is the normal flow for phase steps:
         cf-op(build_context) produces the context text, dispatch sends it.
         """
-        action_model = (
-            str(context.params["model"]) if "model" in context.params else None
-        )
-        step_model = (
-            str(context.params["step_model"])
-            if "step_model" in context.params
-            else None
-        )
+        action_model = str(context.params["model"]) if "model" in context.params else None
+        step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         model_id, _ = context.resolver.resolve(action_model, step_model)
 
         await session.set_model(model_id)
@@ -237,26 +229,14 @@ class DispatchAction:
 
     def _resolve_model(self, context: ActionContext) -> tuple[str, str | None]:
         """Return (model_id, alias_profile) from the context param cascade."""
-        action_model = (
-            str(context.params["model"]) if "model" in context.params else None
-        )
-        step_model = (
-            str(context.params["step_model"])
-            if "step_model" in context.params
-            else None
-        )
+        action_model = str(context.params["model"]) if "model" in context.params else None
+        step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         return context.resolver.resolve(action_model, step_model)
 
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""
-        action_model = (
-            str(context.params["model"]) if "model" in context.params else None
-        )
-        step_model = (
-            str(context.params["step_model"])
-            if "step_model" in context.params
-            else None
-        )
+        action_model = str(context.params["model"]) if "model" in context.params else None
+        step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         model_id, alias_profile = context.resolver.resolve(action_model, step_model)
 
         profile_name = (

@@ -57,9 +57,7 @@ class TestSpawnProfileFlag:
         patch_daemon_client.spawn.return_value = make_agent_dict(
             "bot", agent_type="api", provider="openai"
         )
-        result = _invoke(
-            cli_runner, "--name", "bot", "--profile", "openrouter", "--model", "x"
-        )
+        result = _invoke(cli_runner, "--name", "bot", "--profile", "openrouter", "--model", "x")
         assert result.exit_code == 0, result.output
         call_kwargs = patch_daemon_client.spawn.call_args[0][0]
         assert call_kwargs["provider"] == "openai"
@@ -69,12 +67,8 @@ class TestSpawnProfileFlag:
     def test_profile_includes_credentials_in_request(
         self, cli_runner: CliRunner, patch_daemon_client: MagicMock
     ) -> None:
-        patch_daemon_client.spawn.return_value = make_agent_dict(
-            "bot", agent_type="api"
-        )
-        result = _invoke(
-            cli_runner, "--name", "bot", "--profile", "openrouter", "--model", "x"
-        )
+        patch_daemon_client.spawn.return_value = make_agent_dict("bot", agent_type="api")
+        result = _invoke(cli_runner, "--name", "bot", "--profile", "openrouter", "--model", "x")
         assert result.exit_code == 0, result.output
         call_kwargs = patch_daemon_client.spawn.call_args[0][0]
         assert "credentials" in call_kwargs
@@ -83,9 +77,7 @@ class TestSpawnProfileFlag:
     def test_profile_cli_base_url_overrides(
         self, cli_runner: CliRunner, patch_daemon_client: MagicMock
     ) -> None:
-        patch_daemon_client.spawn.return_value = make_agent_dict(
-            "bot", agent_type="api"
-        )
+        patch_daemon_client.spawn.return_value = make_agent_dict("bot", agent_type="api")
         result = _invoke(
             cli_runner,
             "--name",
@@ -108,9 +100,7 @@ class TestSpawnProfileFlag:
         assert result.exit_code == 1
         assert "nonexistent" in result.output
 
-    def test_no_profile_unchanged(
-        self, cli_runner: CliRunner, patch_daemon_client: MagicMock
-    ) -> None:
+    def test_no_profile_unchanged(self, cli_runner: CliRunner, patch_daemon_client: MagicMock) -> None:
         patch_daemon_client.spawn.return_value = make_agent_dict("bot")
         result = _invoke(cli_runner, "--name", "bot")
         assert result.exit_code == 0, result.output

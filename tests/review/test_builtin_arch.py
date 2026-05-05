@@ -42,9 +42,7 @@ class TestArchTemplate:
 
     def test_build_prompt_required_inputs(self) -> None:
         t = load_template(_slice_yaml())
-        prompt = t.build_prompt(
-            {"input": "slices/105-slice.md", "against": "arch/050-arch.md"}
-        )
+        prompt = t.build_prompt({"input": "slices/105-slice.md", "against": "arch/050-arch.md"})
         assert "slices/105-slice.md" in prompt
         assert "arch/050-arch.md" in prompt
 

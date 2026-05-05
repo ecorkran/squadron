@@ -66,9 +66,7 @@ def load_pool_state(pool_name: str) -> PoolState:
     pool_entry: dict[str, Any] = pools_section.get(pool_name, {})
     last_index = pool_entry.get("last_index", 0)
     if not isinstance(last_index, int):
-        _logger.warning(
-            "Invalid last_index for pool %r in %s — using 0", pool_name, path
-        )
+        _logger.warning("Invalid last_index for pool %r in %s — using 0", pool_name, path)
         return PoolState(last_index=0)
     return PoolState(last_index=last_index)
 
@@ -156,31 +154,25 @@ def _parse_pools_from_toml(
 
     for pool_name, raw in pools_section.items():
         if not isinstance(raw, dict):
-            raise PoolValidationError(
-                f"Pool {pool_name!r} in {path} must be a TOML table"
-            )
+            raise PoolValidationError(f"Pool {pool_name!r} in {path} must be a TOML table")
         entry: dict[str, Any] = cast(dict[str, Any], raw)
 
         models_val: list[Any] | None = cast("list[Any] | None", entry.get("models"))
         if not isinstance(models_val, list) or len(models_val) == 0:
             raise PoolValidationError(
-                f"Pool {pool_name!r} in {path}: "
-                "'models' must be a non-empty list of alias names"
+                f"Pool {pool_name!r} in {path}: 'models' must be a non-empty list of alias names"
             )
         models: list[str] = [str(m) for m in models_val]
 
         strategy_val = entry.get("strategy")
         if not isinstance(strategy_val, str):
-            raise PoolValidationError(
-                f"Pool {pool_name!r} in {path}: 'strategy' must be a string"
-            )
+            raise PoolValidationError(f"Pool {pool_name!r} in {path}: 'strategy' must be a string")
         # Raises StrategyNotFoundError if unknown — let it propagate as-is.
         try:
             get_strategy(strategy_val)
         except Exception as exc:
             raise PoolValidationError(
-                f"Pool {pool_name!r} in {path}: "
-                f"unknown strategy {strategy_val!r}. {exc}"
+                f"Pool {pool_name!r} in {path}: unknown strategy {strategy_val!r}. {exc}"
             ) from exc
 
         description: str = str(entry.get("description", ""))
@@ -213,9 +205,7 @@ def _validate_weights(
     model_set = set(models)
     unknown = [k for k in weights if k not in model_set]
     if unknown:
-        raise PoolValidationError(
-            f"Pool {pool_name!r} in {path}: weight keys not in models: {unknown}"
-        )
+        raise PoolValidationError(f"Pool {pool_name!r} in {path}: weight keys not in models: {unknown}")
 
 
 def _validate_pool_aliases(
@@ -233,8 +223,7 @@ def _validate_pool_aliases(
         if member not in valid_aliases:
             sample: list[str] = sorted(valid_aliases.keys())[:20]
             raise PoolValidationError(
-                f"Pool {pool_name!r}: unknown alias {member!r}. "
-                f"Known aliases (first 20): {sample}"
+                f"Pool {pool_name!r}: unknown alias {member!r}. Known aliases (first 20): {sample}"
             )
 
 
@@ -289,9 +278,7 @@ def get_pool(name: str) -> ModelPool:
     """
     pools = get_all_pools()
     if name not in pools:
-        raise PoolNotFoundError(
-            f"No pool named {name!r}. Available pools: {sorted(pools)}"
-        )
+        raise PoolNotFoundError(f"No pool named {name!r}. Available pools: {sorted(pools)}")
     return pools[name]
 
 
@@ -315,9 +302,7 @@ def select_from_pool(pool: ModelPool) -> str:
     from squadron.models.aliases import get_all_aliases
 
     aliases = get_all_aliases()
-    pool_state = (
-        load_pool_state(pool.name) if pool.strategy == _ROUND_ROBIN_STRATEGY else None
-    )
+    pool_state = load_pool_state(pool.name) if pool.strategy == _ROUND_ROBIN_STRATEGY else None
     context = SelectionContext(
         pool_name=pool.name,
         action_type="select",

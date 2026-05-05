@@ -197,9 +197,7 @@ class TestSummaryStep:
                 "source_step_index": 0,
                 "source_step_name": "compact-step",
                 "summary_model": "haiku-id",
-                "emit_results": [
-                    {"destination": "rotate", "ok": True, "detail": "session rotated"}
-                ],
+                "emit_results": [{"destination": "rotate", "ok": True, "detail": "session rotated"}],
             },
         )
         from squadron.pipeline.executor import ExecutionStatus, StepResult
@@ -219,9 +217,7 @@ class TestSummaryStep:
         assert cs.text == "COMPACT SUMMARY"
         assert cs.summary_model == "haiku-id"
 
-    def test_summary_action_without_rotate_emit_does_not_record(
-        self, tmp_path: Path
-    ) -> None:
+    def test_summary_action_without_rotate_emit_does_not_record(self, tmp_path: Path) -> None:
         """Summary action with stdout-only emit must not populate compact_summaries."""
         from squadron.pipeline.executor import ExecutionStatus, StepResult
 
@@ -251,9 +247,7 @@ class TestSummaryStep:
         state = mgr.load(run_id)
         assert state.compact_summaries == {}
 
-    def test_summary_action_with_failed_rotate_does_not_record(
-        self, tmp_path: Path
-    ) -> None:
+    def test_summary_action_with_failed_rotate_does_not_record(self, tmp_path: Path) -> None:
         """A rotate emit with ok=False must not populate compact_summaries."""
         from squadron.pipeline.executor import ExecutionStatus, StepResult
 
@@ -268,9 +262,7 @@ class TestSummaryStep:
                 "summary": "SOME SUMMARY",
                 "source_step_index": 0,
                 "source_step_name": "summary-step",
-                "emit_results": [
-                    {"destination": "rotate", "ok": False, "detail": "failure"}
-                ],
+                "emit_results": [{"destination": "rotate", "ok": False, "detail": "failure"}],
             },
         )
         cb(

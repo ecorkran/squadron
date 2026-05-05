@@ -48,9 +48,7 @@ def get_action(action_type: str) -> Action:
     """
     if action_type not in _REGISTRY:
         registered = list(_REGISTRY.keys())
-        raise KeyError(
-            f"Action '{action_type}' is not registered. Available actions: {registered}"
-        )
+        raise KeyError(f"Action '{action_type}' is not registered. Available actions: {registered}")
     return _REGISTRY[action_type]
 
 

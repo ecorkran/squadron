@@ -100,11 +100,7 @@ def test_collect_branches_count() -> None:
 
 
 def test_collect_branches_contain_expected_keys() -> None:
-    results = [
-        _make_step_result(
-            "my-branch", action_results=[_make_action_result(verdict="PASS")]
-        )
-    ]
+    results = [_make_step_result("my-branch", action_results=[_make_action_result(verdict="PASS")])]
     out = CollectReducer().reduce(results, {})
     branch = out.outputs["branches"][0]  # type: ignore[index]
     assert "step_name" in branch  # type: ignore[operator]
@@ -134,12 +130,8 @@ def test_get_reducer_nonexistent_raises_key_error() -> None:
 
 def test_first_pass_first_branch_pass_returned() -> None:
     results = [
-        _make_step_result(
-            "b0", action_results=[_make_action_result(verdict="PASS", outputs={"x": 1})]
-        ),
-        _make_step_result(
-            "b1", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 2})]
-        ),
+        _make_step_result("b0", action_results=[_make_action_result(verdict="PASS", outputs={"x": 1})]),
+        _make_step_result("b1", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 2})]),
     ]
     out = FirstPassReducer().reduce(results, {})
     assert out.verdict == "PASS"
@@ -148,12 +140,8 @@ def test_first_pass_first_branch_pass_returned() -> None:
 
 def test_first_pass_second_branch_pass_returned() -> None:
     results = [
-        _make_step_result(
-            "b0", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 1})]
-        ),
-        _make_step_result(
-            "b1", action_results=[_make_action_result(verdict="PASS", outputs={"x": 2})]
-        ),
+        _make_step_result("b0", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 1})]),
+        _make_step_result("b1", action_results=[_make_action_result(verdict="PASS", outputs={"x": 2})]),
     ]
     out = FirstPassReducer().reduce(results, {})
     assert out.verdict == "PASS"
@@ -162,12 +150,8 @@ def test_first_pass_second_branch_pass_returned() -> None:
 
 def test_first_pass_no_pass_returns_last_branch() -> None:
     results = [
-        _make_step_result(
-            "b0", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 1})]
-        ),
-        _make_step_result(
-            "b1", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 2})]
-        ),
+        _make_step_result("b0", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 1})]),
+        _make_step_result("b1", action_results=[_make_action_result(verdict="FAIL", outputs={"x": 2})]),
     ]
     out = FirstPassReducer().reduce(results, {})
     assert out.outputs == {"x": 2}

@@ -55,9 +55,7 @@ class TestShutdownCommand:
         assert "1 succeeded" in result.output
         assert "1 failed" in result.output
 
-    def test_daemon_not_running(
-        self, cli_runner: CliRunner, patch_daemon_client: MagicMock
-    ) -> None:
+    def test_daemon_not_running(self, cli_runner: CliRunner, patch_daemon_client: MagicMock) -> None:
         patch_daemon_client.shutdown_agent.side_effect = DaemonNotRunningError()
         result = _invoke(cli_runner, "myagent")
         assert result.exit_code == 1

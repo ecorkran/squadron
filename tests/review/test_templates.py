@@ -161,9 +161,7 @@ class TestLoadTemplate:
         with pytest.raises(TemplateValidationError, match="must specify"):
             load_template(path)
 
-    def test_prompt_builder_resolution(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_prompt_builder_resolution(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test prompt_builder dotted-path resolution with a real function."""
         import types
 

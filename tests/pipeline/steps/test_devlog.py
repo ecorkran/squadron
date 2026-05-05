@@ -57,9 +57,7 @@ def test_expand_mode_auto() -> None:
 
 
 def test_expand_mode_explicit_with_content() -> None:
-    actions = DevlogStepType().expand(
-        _make_config({"mode": "explicit", "content": "Done"})
-    )
+    actions = DevlogStepType().expand(_make_config({"mode": "explicit", "content": "Done"}))
     assert len(actions) == 1
     assert actions[0] == ("devlog", {"mode": "explicit", "content": "Done"})
 

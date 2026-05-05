@@ -345,9 +345,7 @@ async def test_non_sdk_review_injects_file_contents(tmp_path: Path) -> None:
 
     # Capture the prompt sent to the agent
     captured_prompts: list[str] = []
-    review_output = (
-        "## Summary\nPASS\n\n## Findings\n\n### [PASS] Coverage\nAll tasks covered."
-    )
+    review_output = "## Summary\nPASS\n\n## Findings\n\n### [PASS] Coverage\nAll tasks covered."
 
     mock_agent = MagicMock()
     mock_agent.state = AgentState.idle

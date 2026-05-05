@@ -78,9 +78,7 @@ class TestRestoreFlag:
         assert result.exit_code == 0
         assert "new summary" in result.output
 
-    def test_restore_multiple_files_lists_options_on_stderr(
-        self, tmp_path: Path
-    ) -> None:
+    def test_restore_multiple_files_lists_options_on_stderr(self, tmp_path: Path) -> None:
         """Multiple files: lists pipeline names and selects most recent."""
         summaries = tmp_path / "summaries"
         summaries.mkdir()

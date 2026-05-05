@@ -70,10 +70,7 @@ class CheckpointAction:
                 return [
                     ValidationError(
                         field="trigger",
-                        message=(
-                            f"Invalid trigger value '{trigger_val}'. "
-                            f"Valid values: {valid}"
-                        ),
+                        message=(f"Invalid trigger value '{trigger_val}'. Valid values: {valid}"),
                         action_type=ActionType.CHECKPOINT,
                     )
                 ]
@@ -90,10 +87,7 @@ class CheckpointAction:
                 success=False,
                 action_type=self.action_type,
                 outputs={
-                    "error": (
-                        f"Invalid checkpoint trigger '{trigger_str}'. "
-                        f"Valid values: {valid}"
-                    ),
+                    "error": (f"Invalid checkpoint trigger '{trigger_str}'. Valid values: {valid}"),
                 },
             )
 

@@ -74,9 +74,7 @@ def test_resolve_no_profile_uses_credentials(monkeypatch: pytest.MonkeyPatch) ->
 class TestFromConfig:
     def test_from_config_with_profile_env_var(self) -> None:
         config = _make_config()
-        profile = SimpleNamespace(
-            auth_type="api_key", api_key_env="CUSTOM_KEY", base_url=None
-        )
+        profile = SimpleNamespace(auth_type="api_key", api_key_env="CUSTOM_KEY", base_url=None)
         strategy = ApiKeyStrategy.from_config(config, profile=profile)  # type: ignore[arg-type]
         assert isinstance(strategy, ApiKeyStrategy)
         assert strategy._env_var == "CUSTOM_KEY"

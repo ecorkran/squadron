@@ -246,10 +246,7 @@ class TestRenderCheckpoint:
 
     def test_never_instruction_unchanged(self) -> None:
         result = _render_checkpoint({"trigger": "never"}, {})
-        assert (
-            "skip" in result.instruction.lower()
-            or "never" in result.instruction.lower()
-        )
+        assert "skip" in result.instruction.lower() or "never" in result.instruction.lower()
         assert "[a] Accept" not in result.instruction
 
 
@@ -279,9 +276,7 @@ class TestRenderDevlog:
 class TestRenderSummary:
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
     @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_with_model_and_emit(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_with_model_and_emit(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
         mock_load.return_value = MagicMock()
         mock_render.return_value = "Summarize recent work"
         resolver = _make_resolver("minimax-resolved")
@@ -306,9 +301,7 @@ class TestRenderSummary:
 
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
     @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_without_model_or_emit(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_without_model_or_emit(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
         resolver = _make_resolver()
@@ -325,25 +318,19 @@ class TestRenderSummary:
 
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
     @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_emit_with_rotate(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_emit_with_rotate(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
         resolver = _make_resolver()
 
-        result = _render_summary(
-            {"template": "minimal-sdk", "emit": ["rotate"]}, {}, resolver
-        )
+        result = _render_summary({"template": "minimal-sdk", "emit": ["rotate"]}, {}, resolver)
         assert result.emit == ["rotate"]
 
     # T12 — profile branching tests
 
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
     @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_sdk_profile_emits_model_switch(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_sdk_profile_emits_model_switch(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
         """SDK profile alias → model_switch set, command is None."""
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
@@ -373,18 +360,14 @@ class TestRenderSummary:
 
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
     @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_non_sdk_profile_emits_command(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_non_sdk_profile_emits_command(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
         """Non-SDK profile → command set with sq _summary-run, model_switch is None."""
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
         resolver = MagicMock()
         resolver.resolve.return_value = ("minimax-01", "openrouter")
 
-        result = _render_summary(
-            {"model": "minimax", "template": "minimal-sdk"}, {}, resolver
-        )
+        result = _render_summary({"model": "minimax", "template": "minimal-sdk"}, {}, resolver)
 
         assert result.model_switch is None
         assert result.command is not None
@@ -395,9 +378,7 @@ class TestRenderSummary:
 
     @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
     @patch("squadron.pipeline.prompt_renderer.render_instructions")
-    def test_non_sdk_profile_quotes_params(
-        self, mock_render: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_non_sdk_profile_quotes_params(self, mock_render: MagicMock, mock_load: MagicMock) -> None:
         """Shell-special param values are quoted so shlex.split recovers them."""
         import shlex
 

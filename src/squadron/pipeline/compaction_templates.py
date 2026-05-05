@@ -101,9 +101,7 @@ def render_instructions(
         keep_section = ""
 
     if summarize:
-        summarize_section = (
-            "After compaction, generate a concise summary of the compacted content."
-        )
+        summarize_section = "After compaction, generate a concise summary of the compacted content."
     else:
         summarize_section = ""
 

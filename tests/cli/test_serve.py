@@ -59,9 +59,7 @@ def test_serve_stop_sends_sigterm(tmp_path: Path):
         result = runner.invoke(app, ["serve", "--stop"])
         assert result.exit_code == 0
         # os.kill called for is_daemon_running (sig 0) and SIGTERM
-        sigterm_calls = [
-            c for c in mock_kill.call_args_list if c[0][1] == sig_mod.SIGTERM
-        ]
+        sigterm_calls = [c for c in mock_kill.call_args_list if c[0][1] == sig_mod.SIGTERM]
         assert len(sigterm_calls) == 1
         assert sigterm_calls[0][0][0] == os.getpid()
 

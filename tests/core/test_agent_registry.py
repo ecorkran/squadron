@@ -117,17 +117,13 @@ def _config(name: str = "agent1", provider: str = "mock") -> AgentConfig:
 
 
 class TestSpawn:
-    async def test_spawn_returns_agent_and_tracks_it(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_spawn_returns_agent_and_tracks_it(self, registry: AgentRegistry) -> None:
         agent = await registry.spawn(_config("bot"))
         assert agent.name == "bot"
         assert registry.has("bot")
         assert registry.get("bot") is agent
 
-    async def test_spawn_stores_agent_with_correct_name(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_spawn_stores_agent_with_correct_name(self, registry: AgentRegistry) -> None:
         await registry.spawn(_config("my-agent"))
         retrieved = registry.get("my-agent")
         assert retrieved.name == "my-agent"
@@ -137,18 +133,14 @@ class TestSpawn:
         with pytest.raises(AgentAlreadyExistsError, match="dup"):
             await registry.spawn(_config("dup"))
 
-    async def test_spawn_unregistered_provider_raises_key_error(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_spawn_unregistered_provider_raises_key_error(self, registry: AgentRegistry) -> None:
         with pytest.raises(KeyError, match="no-such-provider"):
             await registry.spawn(_config("x", provider="no-such-provider"))
 
     async def test_spawn_provider_error_propagates_and_agent_not_stored(
         self, registry: AgentRegistry
     ) -> None:
-        error_provider = MockProvider(
-            provider_type="broken", create_error=ProviderError("boom")
-        )
+        error_provider = MockProvider(provider_type="broken", create_error=ProviderError("boom"))
         register_provider("broken", error_provider)
         try:
             with pytest.raises(ProviderError, match="boom"):
@@ -171,14 +163,10 @@ class TestSpawn:
 
 
 class TestListAgents:
-    async def test_empty_registry_returns_empty_list(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_empty_registry_returns_empty_list(self, registry: AgentRegistry) -> None:
         assert registry.list_agents() == []
 
-    async def test_returns_agent_info_for_all_spawned(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_returns_agent_info_for_all_spawned(self, registry: AgentRegistry) -> None:
         await registry.spawn(_config("a"))
         await registry.spawn(_config("b"))
         infos = registry.list_agents()
@@ -190,9 +178,7 @@ class TestListAgents:
             assert info.provider == "mock"
             assert info.state == AgentState.idle
 
-    async def test_filter_by_state(
-        self, registry: AgentRegistry, mock_provider: MockProvider
-    ) -> None:
+    async def test_filter_by_state(self, registry: AgentRegistry, mock_provider: MockProvider) -> None:
         await registry.spawn(_config("idle-agent"))
         await registry.spawn(_config("busy-agent"))
         mock_provider.created_agents[1].set_state(AgentState.processing)
@@ -222,9 +208,7 @@ class TestListAgents:
         finally:
             _PROVIDER_REGISTRY.pop("other", None)
 
-    async def test_combined_filters(
-        self, registry: AgentRegistry, mock_provider: MockProvider
-    ) -> None:
+    async def test_combined_filters(self, registry: AgentRegistry, mock_provider: MockProvider) -> None:
         other_provider = MockProvider(provider_type="other")
         register_provider("other", other_provider)
         try:
@@ -239,9 +223,7 @@ class TestListAgents:
         finally:
             _PROVIDER_REGISTRY.pop("other", None)
 
-    async def test_filter_with_no_matches_returns_empty(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_filter_with_no_matches_returns_empty(self, registry: AgentRegistry) -> None:
         await registry.spawn(_config("agent"))
         assert registry.list_agents(state=AgentState.failed) == []
         assert registry.list_agents(provider="nonexistent") == []
@@ -339,9 +321,7 @@ class TestShutdownAll:
         assert set(report.failed.keys()) == {"x", "y", "z"}
         assert registry.list_agents() == []
 
-    async def test_registry_empty_after_shutdown_all(
-        self, registry: AgentRegistry
-    ) -> None:
+    async def test_registry_empty_after_shutdown_all(self, registry: AgentRegistry) -> None:
         await registry.spawn(_config("a"))
         await registry.spawn(_config("b"))
         await registry.shutdown_all()

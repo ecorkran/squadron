@@ -199,9 +199,7 @@ AI_AGENT_FILES = [
 def run_cmd(cmd: list[str], cwd: str, timeout: int = 60) -> tuple[str, str, int]:
     """Run a command, return (stdout, stderr, returncode)."""
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, cwd=cwd, timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, timeout=timeout)
         return result.stdout, result.stderr, result.returncode
     except FileNotFoundError:
         return "", f"Command not found: {cmd[0]}", -1
@@ -275,9 +273,7 @@ def extract_tree(repo: Path, max_depth: int = 3) -> dict:
             return {"_truncated": True}
         result = {}
         try:
-            entries = sorted(
-                path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
-            )
+            entries = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
         except PermissionError:
             return {"_permission_denied": True}
 
@@ -561,9 +557,7 @@ def detect_entry_points(repo: Path, primary_lang: str) -> list[str]:
     pyproject = repo / "pyproject.toml"
     if pyproject.exists():
         content = read_file_safe(pyproject)
-        if content and (
-            "[project.scripts]" in content or "[tool.poetry.scripts]" in content
-        ):
+        if content and ("[project.scripts]" in content or "[tool.poetry.scripts]" in content):
             candidates.append("pyproject.toml [scripts]")
 
     # Check package.json for scripts.start / main
@@ -642,9 +636,7 @@ def detect_architecture_signals(repo: Path) -> dict:
     pkg_jsons = list(repo.rglob("package.json"))
     pkg_jsons = [p for p in pkg_jsons if "node_modules" not in str(p)]
     if len(pkg_jsons) > 1:
-        signals["multiple_package_json"] = [
-            str(p.relative_to(repo)) for p in pkg_jsons[:20]
-        ]
+        signals["multiple_package_json"] = [str(p.relative_to(repo)) for p in pkg_jsons[:20]]
 
     # Docker compose services
     for compose_file in [
@@ -761,11 +753,7 @@ def get_docs(repo: Path) -> dict:
                 content = read_file_safe(path, max_bytes=30_000)
                 found[name] = content if content else "exists (unreadable)"
             elif path.is_dir():
-                files = [
-                    str(f.relative_to(repo))
-                    for f in sorted(path.rglob("*"))
-                    if f.is_file()
-                ][:30]
+                files = [str(f.relative_to(repo)) for f in sorted(path.rglob("*")) if f.is_file()][:30]
                 found[name] = {"type": "directory", "files": files}
     return found
 
@@ -775,16 +763,12 @@ def get_git_info(repo: Path) -> dict:
     info = {}
 
     # Recent commits
-    stdout, _, rc = run_cmd(
-        ["git", "log", "--oneline", "--no-decorate", "-20"], cwd=str(repo)
-    )
+    stdout, _, rc = run_cmd(["git", "log", "--oneline", "--no-decorate", "-20"], cwd=str(repo))
     if rc == 0:
         info["recent_commits"] = stdout.strip().split("\n")
 
     # Contributors
-    stdout, _, rc = run_cmd(
-        ["git", "shortlog", "-sn", "--no-merges", "HEAD"], cwd=str(repo)
-    )
+    stdout, _, rc = run_cmd(["git", "shortlog", "-sn", "--no-merges", "HEAD"], cwd=str(repo))
     if rc == 0:
         info["contributors"] = stdout.strip().split("\n")[:20]
 
@@ -840,9 +824,7 @@ def run_semgrep(repo: Path) -> dict | None:
             findings = []
             for r in results[:100]:  # cap detail
                 severity = r.get("extra", {}).get("severity", "unknown")
-                category = (
-                    r.get("extra", {}).get("metadata", {}).get("category", "unknown")
-                )
+                category = r.get("extra", {}).get("metadata", {}).get("category", "unknown")
                 by_severity[severity] += 1
                 by_category[category] += 1
                 findings.append(
@@ -930,11 +912,7 @@ def run_eslint(repo: Path) -> dict | None:
                 "total_errors": total_errors,
                 "total_warnings": total_warnings,
                 "files_with_issues": len(
-                    [
-                        r
-                        for r in results
-                        if r.get("errorCount", 0) + r.get("warningCount", 0) > 0
-                    ]
+                    [r for r in results if r.get("errorCount", 0) + r.get("warningCount", 0) > 0]
                 ),
             }
         except json.JSONDecodeError:
@@ -1013,9 +991,7 @@ def run_repomix(repo: Path, options: dict) -> dict:
                 "estimated_tokens": est_tokens,
                 "style": style,
                 "compressed": compress,
-                "note": (
-                    "Feed this file to the analysis prompt alongside probe-results.json"
-                ),
+                "note": ("Feed this file to the analysis prompt alongside probe-results.json"),
             }
         else:
             return {
@@ -1057,9 +1033,7 @@ def extract_python_imports(repo: Path) -> dict:
                 internal_modules.add(pkg[0])
 
     # Scan imports
-    import_re = re.compile(
-        r"^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))", re.MULTILINE
-    )
+    import_re = re.compile(r"^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))", re.MULTILINE)
 
     for f in repo.rglob("*.py"):
         if any(
@@ -1105,18 +1079,13 @@ def extract_js_imports(repo: Path) -> dict:
     # Relative import pattern: from './foo' or from '../bar'
     rel_import_re = re.compile(r"""(?:from|require\()\s*['"](\.[^'"]+)['"]""")
     # Package import: from 'package' or from '@scope/package'
-    pkg_import_re = re.compile(
-        r"""(?:from|require\()\s*['"](@?[^.'"/][^'"]*?)(?:/[^'"]*)?['"]"""
-    )
+    pkg_import_re = re.compile(r"""(?:from|require\()\s*['"](@?[^.'"/][^'"]*?)(?:/[^'"]*)?['"]""")
 
     extensions = [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]
 
     for ext in extensions:
         for f in repo.rglob(f"*{ext}"):
-            if any(
-                skip in str(f)
-                for skip in [".git", "node_modules", "dist", "build", ".next"]
-            ):
+            if any(skip in str(f) for skip in [".git", "node_modules", "dist", "build", ".next"]):
                 continue
             try:
                 content = f.read_text(errors="replace")
@@ -1130,9 +1099,7 @@ def extract_js_imports(repo: Path) -> dict:
                 external_deps.add(match.group(1))
 
     return {
-        "internal_import_graph": {
-            k: sorted(v) for k, v in sorted(imports.items())[:100]
-        },
+        "internal_import_graph": {k: sorted(v) for k, v in sorted(imports.items())[:100]},
         "external_dependencies": sorted(external_deps),
         "files_with_imports": len(imports),
     }
@@ -1147,9 +1114,7 @@ def run_depgraph(repo: Path, primary_lang: str) -> dict:
 
         # Try pipdeptree if available
         if tool_available("pipdeptree"):
-            stdout, stderr, rc = run_cmd(
-                ["pipdeptree", "--json"], cwd=str(repo), timeout=30
-            )
+            stdout, stderr, rc = run_cmd(["pipdeptree", "--json"], cwd=str(repo), timeout=30)
             if rc == 0 and stdout:
                 try:
                     result["pip_dependency_tree"] = json.loads(stdout)
@@ -1183,9 +1148,7 @@ def run_depgraph(repo: Path, primary_lang: str) -> dict:
                         "module_count": len(modules),
                         "violation_count": len(violations),
                         "circular_deps": [
-                            v
-                            for v in violations
-                            if v.get("rule", {}).get("name") == "no-circular"
+                            v for v in violations if v.get("rule", {}).get("name") == "no-circular"
                         ],
                     }
                 except json.JSONDecodeError:
@@ -1317,10 +1280,7 @@ def probe(repo_path: str, options: dict) -> dict:
     elif not repomix_detection["available"]:
         results["repomix"] = {
             "status": "not_requested",
-            "note": (
-                "Use --repomix to pack codebase for LLM context. "
-                "Install: npm install -g repomix"
-            ),
+            "note": ("Use --repomix to pack codebase for LLM context. Install: npm install -g repomix"),
         }
 
     return results
@@ -1332,32 +1292,20 @@ def main():
     )
     parser.add_argument("repo", help="Path to the repository to analyze")
     parser.add_argument("--output", "-o", help="Output file (default: stdout)")
-    parser.add_argument(
-        "--depth", type=int, default=3, help="Max directory tree depth (default: 3)"
-    )
+    parser.add_argument("--depth", type=int, default=3, help="Max directory tree depth (default: 3)")
     parser.add_argument("--semgrep", action="store_true", help="Run semgrep analysis")
-    parser.add_argument(
-        "--ruff", action="store_true", help="Run ruff analysis (Python)"
-    )
-    parser.add_argument(
-        "--eslint", action="store_true", help="Run eslint analysis (JS/TS)"
-    )
-    parser.add_argument(
-        "--depgraph", action="store_true", help="Extract dependency/import graph"
-    )
+    parser.add_argument("--ruff", action="store_true", help="Run ruff analysis (Python)")
+    parser.add_argument("--eslint", action="store_true", help="Run eslint analysis (JS/TS)")
+    parser.add_argument("--depgraph", action="store_true", help="Extract dependency/import graph")
     parser.add_argument(
         "--all",
         action="store_true",
         help="Run all available analyzers (semgrep, ruff, eslint, depgraph)",
     )
-    parser.add_argument(
-        "--compact", action="store_true", help="Compact JSON output (no indentation)"
-    )
+    parser.add_argument("--compact", action="store_true", help="Compact JSON output (no indentation)")
 
     # Repomix options (separate from --all since it can be slow/large)
-    repomix_group = parser.add_argument_group(
-        "repomix", "Code packing via Repomix (requires npm/npx)"
-    )
+    repomix_group = parser.add_argument_group("repomix", "Code packing via Repomix (requires npm/npx)")
     repomix_group.add_argument(
         "--repomix",
         action="store_true",
@@ -1431,9 +1379,7 @@ def main():
         )
     if depgraph_info:
         imp = depgraph_info.get("import_analysis", {})
-        files_mapped = imp.get(
-            "files_with_internal_imports", imp.get("files_with_imports", "?")
-        )
+        files_mapped = imp.get("files_with_internal_imports", imp.get("files_with_imports", "?"))
         print(
             f"  Import graph: {files_mapped} files mapped",
             file=sys.stderr,

@@ -80,9 +80,7 @@ async def test_dispatch_routes_to_agent_when_session_present_but_profile_non_sdk
     expected = _agent_result("openrouter")
 
     with (
-        patch.object(
-            action, "_dispatch_via_agent", new=AsyncMock(return_value=expected)
-        ) as mock_agent,
+        patch.object(action, "_dispatch_via_agent", new=AsyncMock(return_value=expected)) as mock_agent,
         patch.object(
             action,
             "_dispatch_via_session",
@@ -161,9 +159,7 @@ async def test_dispatch_routes_to_agent_when_no_session(
     expected = _agent_result("openrouter")
 
     with (
-        patch.object(
-            action, "_dispatch_via_agent", new=AsyncMock(return_value=expected)
-        ) as mock_agent,
+        patch.object(action, "_dispatch_via_agent", new=AsyncMock(return_value=expected)) as mock_agent,
         patch.object(
             action,
             "_dispatch_via_session",

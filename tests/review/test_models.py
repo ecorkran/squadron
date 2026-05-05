@@ -191,9 +191,7 @@ class TestReviewResult:
     def test_concern_count(self, result_with_mixed_findings: ReviewResult) -> None:
         assert result_with_mixed_findings.concern_count == 2
 
-    def test_to_dict_serializable(
-        self, result_with_mixed_findings: ReviewResult
-    ) -> None:
+    def test_to_dict_serializable(self, result_with_mixed_findings: ReviewResult) -> None:
         d = result_with_mixed_findings.to_dict()
         # Must be JSON-serializable
         serialized = json.dumps(d)
@@ -330,23 +328,17 @@ class TestStructuredFindingsProperty:
         ids = [sf.id for sf in result_with_findings.structured_findings]
         assert ids == ["F001", "F002", "F003"]
 
-    def test_maps_severity_to_lowercase(
-        self, result_with_findings: ReviewResult
-    ) -> None:
+    def test_maps_severity_to_lowercase(self, result_with_findings: ReviewResult) -> None:
         severities = [sf.severity for sf in result_with_findings.structured_findings]
         assert severities == ["concern", "note", "fail"]
 
-    def test_defaults_category_to_uncategorized(
-        self, result_with_findings: ReviewResult
-    ) -> None:
+    def test_defaults_category_to_uncategorized(self, result_with_findings: ReviewResult) -> None:
         sf = result_with_findings.structured_findings
         assert sf[0].category == "error-handling"
         assert sf[1].category == "uncategorized"
         assert sf[2].category == "security"
 
-    def test_uses_location_over_file_ref(
-        self, result_with_findings: ReviewResult
-    ) -> None:
+    def test_uses_location_over_file_ref(self, result_with_findings: ReviewResult) -> None:
         sf = result_with_findings.structured_findings[0]
         assert sf.location == "src/app.py:10"
 
@@ -354,9 +346,7 @@ class TestStructuredFindingsProperty:
         sf = result_with_findings.structured_findings[1]
         assert sf.location == "src/utils.py:5"
 
-    def test_location_none_when_both_absent(
-        self, result_with_findings: ReviewResult
-    ) -> None:
+    def test_location_none_when_both_absent(self, result_with_findings: ReviewResult) -> None:
         sf = result_with_findings.structured_findings[2]
         assert sf.location is None
 

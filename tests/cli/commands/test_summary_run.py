@@ -23,9 +23,7 @@ class TestSummaryRunHappyPath:
                 "squadron.cli.commands.summary_run.capture_summary_via_profile",
                 new=AsyncMock(return_value="SUMMARY OUTPUT"),
             ),
-            patch(
-                "squadron.cli.commands.summary_run.load_compaction_template"
-            ) as mock_load,
+            patch("squadron.cli.commands.summary_run.load_compaction_template") as mock_load,
             patch(
                 "squadron.cli.commands.summary_run.render_instructions",
                 return_value="rendered instructions",
@@ -63,9 +61,7 @@ class TestSummaryRunHappyPath:
                 "squadron.cli.commands.summary_run.capture_summary_via_profile",
                 new=AsyncMock(return_value="OK"),
             ),
-            patch(
-                "squadron.cli.commands.summary_run.load_compaction_template"
-            ) as mock_load,
+            patch("squadron.cli.commands.summary_run.load_compaction_template") as mock_load,
             patch(
                 "squadron.cli.commands.summary_run.render_instructions",
                 side_effect=_fake_render,
@@ -135,9 +131,7 @@ class TestSummaryRunErrorCases:
                 "squadron.cli.commands.summary_run.capture_summary_via_profile",
                 new=AsyncMock(side_effect=RuntimeError("network failed")),
             ),
-            patch(
-                "squadron.cli.commands.summary_run.load_compaction_template"
-            ) as mock_load,
+            patch("squadron.cli.commands.summary_run.load_compaction_template") as mock_load,
             patch(
                 "squadron.cli.commands.summary_run.render_instructions",
                 return_value="rendered",

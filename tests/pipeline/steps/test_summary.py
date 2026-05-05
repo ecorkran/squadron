@@ -75,9 +75,7 @@ def test_validate_checkpoint_invalid() -> None:
 
 
 def test_validate_multiple_errors() -> None:
-    errors = _make_step().validate(
-        _make_config({"template": 42, "model": 99, "checkpoint": "bad"})
-    )
+    errors = _make_step().validate(_make_config({"template": 42, "model": 99, "checkpoint": "bad"}))
     fields = {e.field for e in errors}
     assert fields == {"template", "model", "checkpoint"}
 
@@ -111,18 +109,14 @@ def test_expand_with_model_and_emit() -> None:
 
 
 def test_expand_with_checkpoint_always() -> None:
-    actions = _make_step().expand(
-        _make_config({"template": "minimal-sdk", "checkpoint": "always"})
-    )
+    actions = _make_step().expand(_make_config({"template": "minimal-sdk", "checkpoint": "always"}))
     assert len(actions) == 2
     assert actions[0][0] == "summary"
     assert actions[1] == ("checkpoint", {"trigger": "always"})
 
 
 def test_expand_with_checkpoint_on_fail() -> None:
-    actions = _make_step().expand(
-        _make_config({"template": "minimal-sdk", "checkpoint": "on-fail"})
-    )
+    actions = _make_step().expand(_make_config({"template": "minimal-sdk", "checkpoint": "on-fail"}))
     assert len(actions) == 2
     assert actions[1] == ("checkpoint", {"trigger": "on-fail"})
 

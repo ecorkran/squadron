@@ -23,8 +23,7 @@ def _config_dir() -> Path:
     if not new_dir.exists() and old_dir.exists():
         shutil.copytree(old_dir, new_dir)
         (old_dir / "MIGRATED.txt").write_text(
-            "Config migrated to ~/.config/squadron/\n"
-            "This directory can be safely deleted.\n"
+            "Config migrated to ~/.config/squadron/\nThis directory can be safely deleted.\n"
         )
         print(
             "Migrated config from ~/.config/orchestration/ → ~/.config/squadron/",

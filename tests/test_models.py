@@ -196,9 +196,7 @@ def test_message_json_round_trip() -> None:
 
 
 def test_agent_info_construction() -> None:
-    info = AgentInfo(
-        name="bot1", agent_type="sdk", provider="sdk", state=AgentState.idle
-    )
+    info = AgentInfo(name="bot1", agent_type="sdk", provider="sdk", state=AgentState.idle)
     assert info.name == "bot1"
     assert info.agent_type == "sdk"
     assert info.provider == "sdk"
@@ -206,9 +204,7 @@ def test_agent_info_construction() -> None:
 
 
 def test_agent_info_validates_state_as_enum() -> None:
-    info = AgentInfo(
-        name="bot2", agent_type="api", provider="anthropic", state=AgentState.processing
-    )
+    info = AgentInfo(name="bot2", agent_type="api", provider="anthropic", state=AgentState.processing)
     assert isinstance(info.state, AgentState)
     assert info.state == AgentState.processing
 
@@ -255,9 +251,7 @@ def test_topology_config_defaults() -> None:
 
 
 def test_topology_config_with_values() -> None:
-    tc = TopologyConfig(
-        topology_type=TopologyType.hierarchical, config={"root": "agent1"}
-    )
+    tc = TopologyConfig(topology_type=TopologyType.hierarchical, config={"root": "agent1"})
     assert tc.topology_type == TopologyType.hierarchical
     assert tc.config == {"root": "agent1"}
 

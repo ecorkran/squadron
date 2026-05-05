@@ -106,9 +106,7 @@ def _find_commit_range(slice_number: int, cwd: str) -> str | None:
         )
         if result.returncode != 0 or not result.stdout.strip():
             return None
-        hashes = [
-            line.split()[0] for line in result.stdout.splitlines() if line.strip()
-        ]
+        hashes = [line.split()[0] for line in result.stdout.splitlines() if line.strip()]
         if not hashes:
             return None
         if len(hashes) == 1:

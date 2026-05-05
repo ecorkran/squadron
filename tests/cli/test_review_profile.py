@@ -8,9 +8,7 @@ from squadron.cli.commands.review import _resolve_profile
 from squadron.review.templates import ReviewTemplate
 
 
-def _make_template(
-    profile: str | None = None, model: str | None = None
-) -> ReviewTemplate:
+def _make_template(profile: str | None = None, model: str | None = None) -> ReviewTemplate:
     """Create a minimal ReviewTemplate for testing."""
     return ReviewTemplate(
         name="test",
@@ -50,9 +48,7 @@ class TestResolveProfile:
         result = _resolve_profile(None, template)
         assert result == "openrouter"
 
-    def test_config_used_when_no_flag_or_template(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_config_used_when_no_flag_or_template(self, monkeypatch: pytest.MonkeyPatch) -> None:
         template = _make_template(profile=None)
         monkeypatch.setattr(
             "squadron.cli.commands.review.get_config",
@@ -69,9 +65,7 @@ class TestResolveProfile:
         result = _resolve_profile(None)
         assert result == "sdk"
 
-    def test_no_model_inference_in_resolve_profile(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_no_model_inference_in_resolve_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """_resolve_profile no longer infers from model — alias resolution
         handles this upstream in _run_review_command()."""
         monkeypatch.setattr(
@@ -137,9 +131,7 @@ class TestCLIProfileFlag:
         call_args = mock_exec.call_args
         assert call_args[1].get("profile") or call_args[0][4] == "openrouter"
 
-    def test_run_review_command_defaults_to_sdk(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_review_command_defaults_to_sdk(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Without --profile, profile defaults to sdk."""
         from unittest.mock import AsyncMock, patch
 
@@ -185,9 +177,7 @@ class TestCLIProfileFlag:
         call_args = mock_exec.call_args
         assert call_args[0][4] == "sdk"
 
-    def test_profile_and_model_passed_together(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_profile_and_model_passed_together(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """--profile and --model should both be forwarded."""
         from unittest.mock import AsyncMock, patch
 
@@ -240,9 +230,7 @@ class TestCLIProfileFlag:
 class TestAliasWiring:
     """Test alias resolution wiring in _run_review_command()."""
 
-    def test_alias_resolves_model_and_profile(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_alias_resolves_model_and_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """gpt54-nano alias resolves to gpt-5.4-nano on openai."""
         from unittest.mock import AsyncMock, patch
 
@@ -258,9 +246,7 @@ class TestAliasWiring:
             model="gpt-5.4-nano",
         )
 
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.load_all_templates", lambda: None
-        )
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
         monkeypatch.setattr(
             "squadron.cli.commands.review.get_template",
             lambda name: _make_template(),
@@ -285,9 +271,7 @@ class TestAliasWiring:
         assert call_args[0][3] == "gpt-5.4-nano"  # resolved model
         assert call_args[0][4] == "openai"  # resolved profile
 
-    def test_unknown_model_passes_through(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_unknown_model_passes_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Unknown model passes through unchanged, profile falls to sdk."""
         from unittest.mock import AsyncMock, patch
 
@@ -303,9 +287,7 @@ class TestAliasWiring:
             model="llama-3-70b",
         )
 
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.load_all_templates", lambda: None
-        )
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
         monkeypatch.setattr(
             "squadron.cli.commands.review.get_template",
             lambda name: _make_template(),
@@ -330,9 +312,7 @@ class TestAliasWiring:
         assert call_args[0][3] == "llama-3-70b"  # unchanged
         assert call_args[0][4] == "sdk"  # default fallback
 
-    def test_explicit_profile_overrides_alias(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_explicit_profile_overrides_alias(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Explicit --profile flag overrides alias-inferred profile."""
         from unittest.mock import AsyncMock, patch
 
@@ -348,9 +328,7 @@ class TestAliasWiring:
             model="gpt-5.4-nano",
         )
 
-        monkeypatch.setattr(
-            "squadron.cli.commands.review.load_all_templates", lambda: None
-        )
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
         monkeypatch.setattr(
             "squadron.cli.commands.review.get_template",
             lambda name: _make_template(),

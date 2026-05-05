@@ -81,9 +81,7 @@ class ClaudeSDKAgent:
         retries = 0
         while True:
             try:
-                async for sdk_msg in sdk_query(
-                    prompt=message.content, options=self._options
-                ):
+                async for sdk_msg in sdk_query(prompt=message.content, options=self._options):
                     for translated in translate_sdk_message(sdk_msg, sender=self._name):
                         yield translated
                 self._state = AgentState.idle
@@ -93,9 +91,7 @@ class ClaudeSDKAgent:
                 raise ProviderAuthError(str(exc)) from exc
             except ProcessError as exc:
                 self._state = AgentState.failed
-                raise ProviderAPIError(
-                    str(exc), status_code=getattr(exc, "exit_code", None)
-                ) from exc
+                raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
             except ClaudeSDKError as exc:
                 if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                     retries += 1
@@ -127,16 +123,11 @@ class ClaudeSDKAgent:
             while True:
                 try:
                     async for sdk_msg in self._client.receive_response():
-                        for translated in translate_sdk_message(
-                            sdk_msg, sender=self._name
-                        ):
+                        for translated in translate_sdk_message(sdk_msg, sender=self._name):
                             yield translated
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    if (
-                        "rate_limit_event" in str(exc)
-                        and retries < _MAX_RATE_LIMIT_RETRIES
-                    ):
+                    if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                         retries += 1
                         self._log.debug(
                             "Rate limit event %d/%d (CLI handles backoff)",
@@ -151,9 +142,7 @@ class ClaudeSDKAgent:
             raise ProviderAuthError(str(exc)) from exc
         except ProcessError as exc:
             self._state = AgentState.failed
-            raise ProviderAPIError(
-                str(exc), status_code=getattr(exc, "exit_code", None)
-            ) from exc
+            raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
         except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
             self._state = AgentState.failed
             raise ProviderError(str(exc)) from exc

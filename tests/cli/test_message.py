@@ -19,9 +19,7 @@ class TestMessageCommand:
     def test_message_displays_response(
         self, cli_runner: CliRunner, patch_daemon_client: MagicMock
     ) -> None:
-        patch_daemon_client.send_message.return_value = [
-            make_message_dict("Hello from agent")
-        ]
+        patch_daemon_client.send_message.return_value = [make_message_dict("Hello from agent")]
         # Need to also patch message command's DaemonClient
         with patch(
             "squadron.cli.commands.message.DaemonClient",

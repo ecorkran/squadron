@@ -33,9 +33,7 @@ class TestConfigSet:
         cli_runner: CliRunner,
         patch_config_paths: dict[str, Path],
     ) -> None:
-        result = cli_runner.invoke(
-            app, ["config", "set", "cwd", "/proj/path", "--project"]
-        )
+        result = cli_runner.invoke(app, ["config", "set", "cwd", "/proj/path", "--project"])
         assert result.exit_code == 0
         assert "(project config)" in result.output
 

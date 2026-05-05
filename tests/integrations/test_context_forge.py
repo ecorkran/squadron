@@ -95,23 +95,16 @@ _SLICES_JSON = {
 
 class TestListSlices:
     def test_list_slices_parses_entries(self) -> None:
-        with patch(
-            "subprocess.run", return_value=_mock_completed(json.dumps(_SLICES_JSON))
-        ):
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(_SLICES_JSON))):
             slices = ContextForgeClient().list_slices()
             assert len(slices) == 2
             assert slices[0].index == 100
             assert slices[0].name == "Project Setup"
-            assert (
-                slices[0].design_file
-                == "project-documents/user/slices/100-slice.project-setup.md"
-            )
+            assert slices[0].design_file == "project-documents/user/slices/100-slice.project-setup.md"
             assert slices[0].status == "complete"
 
     def test_list_slices_missing_design_file(self) -> None:
-        with patch(
-            "subprocess.run", return_value=_mock_completed(json.dumps(_SLICES_JSON))
-        ):
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(_SLICES_JSON))):
             slices = ContextForgeClient().list_slices()
             assert slices[1].design_file is None
 
@@ -135,18 +128,14 @@ _TASKS_JSON = [
 
 class TestListTasks:
     def test_list_tasks_parses_entries(self) -> None:
-        with patch(
-            "subprocess.run", return_value=_mock_completed(json.dumps(_TASKS_JSON))
-        ):
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(_TASKS_JSON))):
             tasks = ContextForgeClient().list_tasks()
             assert len(tasks) == 2
             assert tasks[0].index == 100
             assert tasks[0].files == ["100-tasks.project-setup.md"]
 
     def test_list_tasks_no_files(self) -> None:
-        with patch(
-            "subprocess.run", return_value=_mock_completed(json.dumps(_TASKS_JSON))
-        ):
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(_TASKS_JSON))):
             tasks = ContextForgeClient().list_tasks()
             assert tasks[1].files == []
 

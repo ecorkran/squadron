@@ -87,9 +87,7 @@ class CompletionResult:
 # ---------------------------------------------------------------------------
 
 
-def _render_cf_op(
-    config: dict[str, object], params: dict[str, object]
-) -> ActionInstruction:
+def _render_cf_op(config: dict[str, object], params: dict[str, object]) -> ActionInstruction:
     """Build instruction for a cf-op action (set_phase or build_context)."""
     operation = str(config.get("operation", ""))
     if operation == "set_phase":
@@ -186,9 +184,7 @@ def _render_dispatch(
 
     return ActionInstruction(
         action_type=ActionType.DISPATCH,
-        instruction=(
-            "Run the 'command' field via Bash. Capture stdout as the dispatch response."
-        ),
+        instruction=("Run the 'command' field via Bash. Capture stdout as the dispatch response."),
         model=model_id,
         command=command,
     )

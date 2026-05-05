@@ -25,9 +25,7 @@ class TestIntegration:
         pools = get_all_pools()
         assert len(pools["review"].models) >= 3
 
-    def test_select_from_review_returns_valid_member(
-        self, tmp_state_file: Path
-    ) -> None:
+    def test_select_from_review_returns_valid_member(self, tmp_state_file: Path) -> None:
         pool = get_pool("review")
         result = select_from_pool(pool)
         assert result in pool.models

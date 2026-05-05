@@ -558,9 +558,7 @@ class TestReviewActionRulesWiring:
         """A .py file in the diff triggers python.md auto-detection."""
         rules_dir = tmp_path / ".claude" / "rules"
         rules_dir.mkdir(parents=True)
-        (rules_dir / "python.md").write_text(
-            "---\npaths: [**/*.py]\n---\nPython auto rules."
-        )
+        (rules_dir / "python.md").write_text("---\npaths: [**/*.py]\n---\nPython auto rules.")
 
         mock_get_template.return_value = _mock_template()
         mock_run_review.return_value = _make_review_result()
@@ -668,9 +666,7 @@ class TestResolveSliceInputsRegression:
         return cf
 
     @patch(f"{_P}.resolve_slice_info")
-    def test_slice_template_populates_input_and_against(
-        self, mock_rsi: MagicMock
-    ) -> None:
+    def test_slice_template_populates_input_and_against(self, mock_rsi: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
         inputs: dict[str, str] = {"cwd": "/tmp"}
         action = ReviewAction()
@@ -679,16 +675,12 @@ class TestResolveSliceInputsRegression:
         assert inputs["against"] == self._SLICE_INFO["arch_file"]
 
     @patch(f"{_P}.resolve_slice_info")
-    def test_tasks_template_populates_input_and_against(
-        self, mock_rsi: MagicMock
-    ) -> None:
+    def test_tasks_template_populates_input_and_against(self, mock_rsi: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
         inputs: dict[str, str] = {"cwd": "/tmp"}
         action = ReviewAction()
         action._resolve_slice_inputs("tasks", 194, self._make_cf_client(), inputs)
-        assert inputs["input"] == (
-            f"project-documents/user/tasks/{self._SLICE_INFO['task_files'][0]}"
-        )
+        assert inputs["input"] == (f"project-documents/user/tasks/{self._SLICE_INFO['task_files'][0]}")
         assert inputs["against"] == self._SLICE_INFO["design_file"]
 
     @patch(f"{_P}.resolve_slice_info")
@@ -701,9 +693,7 @@ class TestResolveSliceInputsRegression:
 
     @patch("squadron.review.template_inputs.resolve_slice_diff_range")
     @patch(f"{_P}.resolve_slice_info")
-    def test_code_template_populates_diff(
-        self, mock_rsi: MagicMock, mock_diff: MagicMock
-    ) -> None:
+    def test_code_template_populates_diff(self, mock_rsi: MagicMock, mock_diff: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
         mock_diff.return_value = "abc123...slice-194"
         inputs: dict[str, str] = {"cwd": "/tmp"}

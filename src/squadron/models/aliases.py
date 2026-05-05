@@ -110,8 +110,7 @@ def _load_aliases_from_file(path: Path) -> dict[str, ModelAlias]:
         data = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(
-            f"Invalid TOML in {path}: {exc}. "
-            "Fix the file or remove it to use built-in defaults."
+            f"Invalid TOML in {path}: {exc}. Fix the file or remove it to use built-in defaults."
         ) from exc
     except OSError as exc:
         _logger.warning("Failed to read %s: %s", path, exc)
@@ -136,8 +135,7 @@ def _load_aliases_from_file(path: Path) -> dict[str, ModelAlias]:
             result[name] = alias
         else:
             _logger.warning(
-                "Skipping alias '%s' in %s — "
-                "expected string values for 'profile' and 'model'",
+                "Skipping alias '%s' in %s — expected string values for 'profile' and 'model'",
                 name,
                 path,
             )
@@ -208,10 +206,7 @@ def estimate_cost(
     if input_price is None or output_price is None:
         return None
 
-    total = (
-        input_tokens / 1_000_000 * input_price
-        + output_tokens / 1_000_000 * output_price
-    )
+    total = input_tokens / 1_000_000 * input_price + output_tokens / 1_000_000 * output_price
 
     if cached_tokens > 0:
         cache_read_price = pricing.get("cache_read")

@@ -32,10 +32,7 @@ async def _task(agent_name: str, prompt: str) -> None:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
         raise typer.Exit(code=1)
     except AgentNotFoundError:
-        rprint(
-            f"[red]Error: No agent named '{agent_name}'."
-            " Use 'sq list' to see active agents.[/red]"
-        )
+        rprint(f"[red]Error: No agent named '{agent_name}'. Use 'sq list' to see active agents.[/red]")
         raise typer.Exit(code=1)
     finally:
         await client.close()

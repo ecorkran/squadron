@@ -44,9 +44,7 @@ def test_empty_prior_outputs_returns_empty_string() -> None:
 
 
 def test_dispatch_output_included() -> None:
-    prior = {
-        "design": _result(ActionType.DISPATCH, outputs={"response": "Great design"})
-    }
+    prior = {"design": _result(ActionType.DISPATCH, outputs={"response": "Great design"})}
     output = assemble_dispatch_context(prior)
     assert "Great design" in output
     assert "## Step: design (dispatch)" in output
@@ -109,9 +107,7 @@ def test_failed_step_included_with_error() -> None:
 
 
 def test_checkpoint_skipped() -> None:
-    prior = {
-        "chk": _result(ActionType.CHECKPOINT, outputs={"message": "checkpoint hit"})
-    }
+    prior = {"chk": _result(ActionType.CHECKPOINT, outputs={"message": "checkpoint hit"})}
     output = assemble_dispatch_context(prior)
     assert output == ""
 
@@ -123,11 +119,7 @@ def test_commit_skipped() -> None:
 
 
 def test_summary_output_included() -> None:
-    prior = {
-        "summarize": _result(
-            ActionType.SUMMARY, outputs={"summary": "Prior summary text"}
-        )
-    }
+    prior = {"summarize": _result(ActionType.SUMMARY, outputs={"summary": "Prior summary text"})}
     output = assemble_dispatch_context(prior)
     assert "Prior summary text" in output
 

@@ -114,7 +114,5 @@ def app(engine: SquadronEngine) -> Any:
 async def async_client(app: Any) -> AsyncIterator[httpx.AsyncClient]:
     """httpx AsyncClient using ASGITransport for in-process route testing."""
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://testserver"
-    ) as client:
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client

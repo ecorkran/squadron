@@ -58,9 +58,7 @@ class TestFormatReviewMarkdown:
         assert "status: complete" in output
 
     def test_model_unknown_when_none(self) -> None:
-        output = format_review_markdown(
-            _make_result(model=None), "slice", _make_slice_info()
-        )
+        output = format_review_markdown(_make_result(model=None), "slice", _make_slice_info())
         assert "aiModel: unknown" in output
 
     def test_source_document_falls_back_to_design_file(self) -> None:

@@ -99,16 +99,12 @@ def get_emit(kind: EmitKind) -> EmitFn:
 # ---------------------------------------------------------------------------
 
 
-async def _emit_stdout(
-    text: str, dest: EmitDestination, ctx: ActionContext
-) -> EmitResult:
+async def _emit_stdout(text: str, dest: EmitDestination, ctx: ActionContext) -> EmitResult:
     print(text)  # noqa: T201 — intentional user-facing output
     return EmitResult(destination=dest.display(), ok=True, detail="")
 
 
-async def _emit_file(
-    text: str, dest: EmitDestination, ctx: ActionContext
-) -> EmitResult:
+async def _emit_file(text: str, dest: EmitDestination, ctx: ActionContext) -> EmitResult:
     if dest.arg is not None:
         path = Path(dest.arg)
         if not path.is_absolute():
@@ -134,9 +130,7 @@ async def _emit_file(
         return EmitResult(destination=dest.display(), ok=False, detail=str(exc))
 
 
-async def _emit_clipboard(
-    text: str, dest: EmitDestination, ctx: ActionContext
-) -> EmitResult:
+async def _emit_clipboard(text: str, dest: EmitDestination, ctx: ActionContext) -> EmitResult:
     import pyperclip  # lazy import — platform probe can fail on headless systems
 
     try:
@@ -146,9 +140,7 @@ async def _emit_clipboard(
         return EmitResult(destination=dest.display(), ok=False, detail=str(exc))
 
 
-async def _emit_rotate(
-    text: str, dest: EmitDestination, ctx: ActionContext
-) -> EmitResult:
+async def _emit_rotate(text: str, dest: EmitDestination, ctx: ActionContext) -> EmitResult:
     if ctx.sdk_session is None:
         return EmitResult(
             destination=dest.display(),
@@ -200,19 +192,13 @@ def parse_emit_entry(entry: object) -> EmitDestination:
         d: dict[object, object] = cast(dict[object, object], entry)
         keys = list(d.keys())
         if keys != ["file"]:
-            raise ValueError(
-                f"emit dict must have exactly one key 'file', got: {keys!r}"
-            )
+            raise ValueError(f"emit dict must have exactly one key 'file', got: {keys!r}")
         arg = d["file"]
         if not isinstance(arg, str) or not arg:
-            raise ValueError(
-                f"'file' emit path must be a non-empty string, got: {arg!r}"
-            )
+            raise ValueError(f"'file' emit path must be a non-empty string, got: {arg!r}")
         return EmitDestination(kind=EmitKind.FILE, arg=arg)
 
-    raise ValueError(
-        f"emit entry must be a string or dict, got: {type(entry).__name__}"
-    )
+    raise ValueError(f"emit entry must be a string or dict, got: {type(entry).__name__}")
 
 
 def parse_emit_list(raw: object) -> list[EmitDestination]:

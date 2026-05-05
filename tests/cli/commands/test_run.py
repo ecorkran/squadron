@@ -219,12 +219,8 @@ class TestValidate:
     def test_validate_with_errors(self) -> None:
         defn = _make_definition()
         errors = [
-            ValidationError(
-                field="step_type", message="Unknown step type 'bad'", action_type="bad"
-            ),
-            ValidationError(
-                field="model", message="Unresolved alias 'foo'", action_type="pipeline"
-            ),
+            ValidationError(field="step_type", message="Unknown step type 'bad'", action_type="bad"),
+            ValidationError(field="model", message="Unresolved alias 'foo'", action_type="pipeline"),
         ]
         with (
             patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
@@ -300,9 +296,7 @@ class TestStatus:
             mock_mgr = MagicMock()
             mock_mgr.load.return_value = state
             mock_cls.return_value = mock_mgr
-            result = runner.invoke(
-                app, ["run", "--status", "run-20260403-test-abc12345"]
-            )
+            result = runner.invoke(app, ["run", "--status", "run-20260403-test-abc12345"])
         assert result.exit_code == 0
         assert "run-20260403-test-abc12345" in result.output
 
@@ -328,9 +322,7 @@ class TestStatus:
             mock_mgr = MagicMock()
             mock_mgr.load.return_value = state
             mock_cls.return_value = mock_mgr
-            result = runner.invoke(
-                app, ["run", "--status", "run-20260403-test-abc12345"]
-            )
+            result = runner.invoke(app, ["run", "--status", "run-20260403-test-abc12345"])
         assert result.exit_code == 0
         assert "Checkpoint" in result.output
         assert "design" in result.output
@@ -442,9 +434,7 @@ class TestResume:
             mock_result.pipeline_name = "slice"
             mock_result.step_results = []
             mock_asyncio.run.return_value = mock_result
-            result = runner.invoke(
-                app, ["run", "--resume", "run-20260403-test-abc12345"]
-            )
+            result = runner.invoke(app, ["run", "--resume", "run-20260403-test-abc12345"])
         mock_mgr.first_unfinished_step.assert_called_once()
         # Should not error at validation
         assert result.exit_code == 0
@@ -591,9 +581,7 @@ class TestPromptOnly:
     """Tests for --prompt-only, --next, --step-done, and --verdict."""
 
     def test_prompt_only_and_dry_run_exclusive(self) -> None:
-        result = runner.invoke(
-            app, ["run", "slice", "152", "--prompt-only", "--dry-run"]
-        )
+        result = runner.invoke(app, ["run", "slice", "152", "--prompt-only", "--dry-run"])
         assert result.exit_code == 1
         assert "cannot be used together" in result.output
 
@@ -655,9 +643,7 @@ class TestPromptOnly:
 
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_prompt_only_creates_state(
-        self, mock_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_prompt_only_creates_state(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
         defn = PipelineDefinition(
             name="slice",
             description="Test",
@@ -730,9 +716,7 @@ class TestPromptOnly:
 
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_prompt_only_next_all_done(
-        self, mock_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_prompt_only_next_all_done(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
 
         defn = PipelineDefinition(
             name="slice",
@@ -770,9 +754,7 @@ class TestPromptOnly:
 
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_step_done_marks_complete(
-        self, mock_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_step_done_marks_complete(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
         defn = PipelineDefinition(
             name="slice",
             description="Test",
@@ -801,15 +783,11 @@ class TestPromptOnly:
 
         result = runner.invoke(app, ["run", "--step-done", "run-123"])
         assert result.exit_code == 0
-        mock_mgr.record_step_done.assert_called_once_with(
-            "run-123", "design-0", "design", verdict=None
-        )
+        mock_mgr.record_step_done.assert_called_once_with("run-123", "design-0", "design", verdict=None)
 
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_step_done_with_verdict(
-        self, mock_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_step_done_with_verdict(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
         defn = PipelineDefinition(
             name="slice",
             description="Test",
@@ -857,9 +835,7 @@ class TestPromptOnly:
 
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_step_done_all_steps_done(
-        self, mock_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    def test_step_done_all_steps_done(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
         defn = PipelineDefinition(
             name="slice",
             description="Test",

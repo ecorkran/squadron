@@ -34,9 +34,7 @@ class TestLoadAllBuiltIns:
         defn = load_pipeline(name, project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
         errors = validate_pipeline(defn)
         # Filter out unknown step type warnings (e.g. "each")
-        real_errors = [
-            e for e in errors if not (e.field == "step_type" and "Unknown" in e.message)
-        ]
+        real_errors = [e for e in errors if not (e.field == "step_type" and "Unknown" in e.message)]
         assert real_errors == [], f"Unexpected errors for {name}: {real_errors}"
 
 

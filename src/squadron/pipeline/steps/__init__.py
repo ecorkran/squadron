@@ -52,10 +52,7 @@ def get_step_type(step_type: str) -> StepType:
     """
     if step_type not in _REGISTRY:
         registered = list(_REGISTRY.keys())
-        raise KeyError(
-            f"Step type '{step_type}' is not registered. "
-            f"Available step types: {registered}"
-        )
+        raise KeyError(f"Step type '{step_type}' is not registered. Available step types: {registered}")
     return _REGISTRY[step_type]
 
 

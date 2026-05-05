@@ -159,9 +159,7 @@ async def test_execute_profile_from_alias(action: DispatchAction) -> None:
 
     with (
         patch(f"{_P}.get_registry", return_value=mock_registry),
-        patch(
-            f"{_P}.get_profile", return_value=_openrouter_profile()
-        ) as mock_get_profile,
+        patch(f"{_P}.get_profile", return_value=_openrouter_profile()) as mock_get_profile,
         patch(f"{_P}.ensure_provider_loaded"),
     ):
         result = await action.execute(ctx)
@@ -393,8 +391,7 @@ async def test_execute_agent_cli_error_response_returns_failure(
 ) -> None:
     """CLI API errors surfaced as text must not be treated as successful dispatch."""
     error_text = (
-        'API Error: 500 {"type":"error","error":{"type":"api_error",'
-        '"message":"Internal server error"}}'
+        'API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}'
     )
     mock_agent = _make_agent_mock(error_text)
     mock_registry = _make_registry(mock_agent)

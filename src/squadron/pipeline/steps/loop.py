@@ -51,9 +51,7 @@ class LoopStepType:
                 errors.append(
                     ValidationError(
                         field="until",
-                        message=(
-                            f"'until' must be one of {valid_until}, got: {until_val!r}"
-                        ),
+                        message=(f"'until' must be one of {valid_until}, got: {until_val!r}"),
                         action_type=step_type,
                     )
                 )
@@ -67,8 +65,7 @@ class LoopStepType:
                     ValidationError(
                         field="on_exhaust",
                         message=(
-                            f"'on_exhaust' must be one of {valid_exhaust}, "
-                            f"got: {on_exhaust_val!r}"
+                            f"'on_exhaust' must be one of {valid_exhaust}, got: {on_exhaust_val!r}"
                         ),
                         action_type=step_type,
                     )
@@ -112,9 +109,7 @@ class LoopStepType:
                 )
             )
         else:
-            errors.extend(
-                self._validate_inner_steps(cast(list[object], steps_val), step_type)
-            )
+            errors.extend(self._validate_inner_steps(cast(list[object], steps_val), step_type))
 
         return errors
 
@@ -137,9 +132,7 @@ class LoopStepType:
             else:
                 inner_name = f"{inner_type}-{idx}"
             # Ban (a): inner step config carries a loop: sub-field
-            if isinstance(inner_cfg, dict) and "loop" in cast(
-                dict[str, object], inner_cfg
-            ):
+            if isinstance(inner_cfg, dict) and "loop" in cast(dict[str, object], inner_cfg):
                 errors.append(
                     ValidationError(
                         field="steps",

@@ -40,8 +40,7 @@ def _make_definition(
         name=name,
         description="Test pipeline",
         params={},
-        steps=steps
-        or [StepConfig(step_type="dispatch", name="step1", config={"model": "sonnet"})],
+        steps=steps or [StepConfig(step_type="dispatch", name="step1", config={"model": "sonnet"})],
     )
 
 
@@ -109,9 +108,7 @@ class TestRunPipelinePoolBackendFallback:
         mock_backend_cls.assert_called_once()
         mock_execute.assert_awaited_once()
 
-    def test_supplied_pool_backend_skips_internal_construction(
-        self, tmp_path: Path
-    ) -> None:
+    def test_supplied_pool_backend_skips_internal_construction(self, tmp_path: Path) -> None:
         """Supplying pool_backend skips internal DefaultPoolBackend construction."""
         from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 
@@ -158,13 +155,9 @@ def _sdk_patches(
 ) -> tuple[Any, ...]:
     """Return a tuple of patch context managers for _run_pipeline_sdk tests."""
     patches: list[Any] = [
-        patch(
-            "squadron.cli.commands.run.load_pipeline", return_value=_make_definition()
-        ),
+        patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
         patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
-        patch(
-            "squadron.cli.commands.run.classify_pipeline", return_value=classification
-        ),
+        patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
         patch(
             "squadron.cli.commands.run._run_pipeline",
             new_callable=AsyncMock,
@@ -180,12 +173,8 @@ def _sdk_patches(
                 return_value=session_mock,
             )
         )
-        patches.append(
-            patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock())
-        )
-        patches.append(
-            patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock())
-        )
+        patches.append(patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock()))
+        patches.append(patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock()))
     else:
         patches.append(patch("squadron.cli.commands.run.SDKExecutionSession"))
     return tuple(patches)
@@ -225,9 +214,7 @@ class TestClassificationGate:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ) as mock_run,
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
         ):
@@ -260,9 +247,7 @@ class TestClassificationGate:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
         ):
@@ -298,9 +283,7 @@ class TestClassificationGate:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
                 "squadron.cli.commands.run.SDKExecutionSession",
@@ -348,9 +331,7 @@ class TestClassificationGate:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ) as mock_run,
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
         ):
@@ -387,9 +368,7 @@ class TestClassificationGate:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
                 "squadron.cli.commands.run.SDKExecutionSession",
@@ -417,9 +396,7 @@ class TestClassificationGate:
                 "squadron.cli.commands.run.classify_pipeline",
                 side_effect=ClassificationError("bad cascade"),
             ),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
         ):
@@ -439,9 +416,7 @@ class TestClassificationGate:
             step_class=StepClass.SDK_REQUIRED,
         )
         mock_session = AsyncMock()
-        mock_session.connect = AsyncMock(
-            side_effect=CLINotFoundError("claude not found")
-        )
+        mock_session.connect = AsyncMock(side_effect=CLINotFoundError("claude not found"))
         mock_session.disconnect = AsyncMock()
 
         with (
@@ -456,9 +431,7 @@ class TestClassificationGate:
                 return_value=classification,
             ),
             patch("squadron.cli.commands.run._run_pipeline", new_callable=AsyncMock),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
                 "squadron.cli.commands.run.SDKExecutionSession",
@@ -507,9 +480,7 @@ class TestResumePath:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
         ):
@@ -553,9 +524,7 @@ class TestResumePath:
                 new_callable=AsyncMock,
                 return_value=_make_result(),
             ),
-            patch(
-                "squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()
-            ),
+            patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
                 "squadron.cli.commands.run.SDKExecutionSession",

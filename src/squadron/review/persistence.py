@@ -255,9 +255,7 @@ def save_review_result(
     else:
         path = target / f"{base}.md"
         path.write_text(
-            format_review_markdown(
-                result, review_type, slice_info, source_document=input_file
-            )
+            format_review_markdown(result, review_type, slice_info, source_document=input_file)
         )
 
     return path

@@ -70,9 +70,7 @@ def test_protocol_compliance(action: CommitAction) -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_changes_returns_committed_false(
-    action: CommitAction, git_repo: Path
-) -> None:
+async def test_no_changes_returns_committed_false(action: CommitAction, git_repo: Path) -> None:
     ctx = _make_context(str(git_repo))
     result = await action.execute(ctx)
 
@@ -81,9 +79,7 @@ async def test_no_changes_returns_committed_false(
 
 
 @pytest.mark.asyncio
-async def test_creates_commit_when_changes_exist(
-    action: CommitAction, git_repo: Path
-) -> None:
+async def test_creates_commit_when_changes_exist(action: CommitAction, git_repo: Path) -> None:
     (git_repo / "new_file.txt").write_text("hello")
     ctx = _make_context(str(git_repo), message="feat: test commit")
 

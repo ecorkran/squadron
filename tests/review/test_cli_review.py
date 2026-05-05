@@ -68,9 +68,7 @@ class TestReviewSlice:
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
     ) -> None:
-        result = cli_runner.invoke(
-            app, ["review", "slice", "slice.md", "--against", "arch.md"]
-        )
+        result = cli_runner.invoke(app, ["review", "slice", "slice.md", "--against", "arch.md"])
         assert result.exit_code == 0
         assert "CONCERNS" in result.output
 
@@ -95,9 +93,7 @@ class TestReviewTasks:
             template_name="tasks",
             input_files={"input": "t.md", "against": "s.md"},
         )
-        result = cli_runner.invoke(
-            app, ["review", "tasks", "tasks.md", "--against", "slice.md"]
-        )
+        result = cli_runner.invoke(app, ["review", "tasks", "tasks.md", "--against", "slice.md"])
         assert result.exit_code == 0
 
     def test_missing_against_arg(self, cli_runner: CliRunner) -> None:
@@ -231,9 +227,7 @@ class TestErrorCases:
             template_name="arch",
             input_files={"input": "a.md", "against": "b.md"},
         )
-        result = cli_runner.invoke(
-            app, ["review", "slice", "a.md", "--against", "b.md"]
-        )
+        result = cli_runner.invoke(app, ["review", "slice", "a.md", "--against", "b.md"])
         assert result.exit_code == 2
 
 
@@ -305,9 +299,7 @@ class TestRulesWiring:
         """--rules custom.md + auto-detected rules both present in rules_content."""
         rules_dir = tmp_path / "rules"
         rules_dir.mkdir()
-        (rules_dir / "python.md").write_text(
-            "---\npaths: [**/*.py]\n---\nPython auto rules."
-        )
+        (rules_dir / "python.md").write_text("---\npaths: [**/*.py]\n---\nPython auto rules.")
         explicit_rules = tmp_path / "custom.md"
         explicit_rules.write_text("Explicit custom rules.")
 
@@ -342,27 +334,21 @@ class TestContextForgeErrors:
 
     def test_review_slice_cf_not_available(self, cli_runner: CliRunner) -> None:
         with patch("squadron.cli.commands.review.ContextForgeClient") as mock_cls:
-            mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable(
-                "cf not found"
-            )
+            mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable("cf not found")
             result = cli_runner.invoke(app, ["review", "slice", "122"])
             assert result.exit_code == 1
             assert "not installed" in result.output
 
     def test_review_slice_cf_error(self, cli_runner: CliRunner) -> None:
         with patch("squadron.cli.commands.review.ContextForgeClient") as mock_cls:
-            mock_cls.return_value.list_slices.side_effect = ContextForgeError(
-                "connection refused"
-            )
+            mock_cls.return_value.list_slices.side_effect = ContextForgeError("connection refused")
             result = cli_runner.invoke(app, ["review", "slice", "122"])
             assert result.exit_code == 1
             assert "connection refused" in result.output
 
     def test_review_tasks_cf_not_available(self, cli_runner: CliRunner) -> None:
         with patch("squadron.cli.commands.review.ContextForgeClient") as mock_cls:
-            mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable(
-                "cf not found"
-            )
+            mock_cls.return_value.list_slices.side_effect = ContextForgeNotAvailable("cf not found")
             result = cli_runner.invoke(app, ["review", "tasks", "122"])
             assert result.exit_code == 1
             assert "not installed" in result.output
@@ -423,9 +409,7 @@ class TestScopedDiff:
                 "squadron.cli.commands.review.resolve_slice_diff_range",
             ) as mock_resolve,
         ):
-            result = cli_runner.invoke(
-                app, ["review", "code", "122", "--diff", "HEAD~3", "--no-save"]
-            )
+            result = cli_runner.invoke(app, ["review", "code", "122", "--diff", "HEAD~3", "--no-save"])
         assert result.exit_code == 0
         mock_resolve.assert_not_called()
         # Verify the diff passed to review is HEAD~3

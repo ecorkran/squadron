@@ -238,9 +238,7 @@ class TestValidatePipelineSummaryStep:
             name="test",
             description="test",
             params={},
-            steps=[
-                StepConfig(step_type="summary", name="summary-step", config=step_cfg)
-            ],
+            steps=[StepConfig(step_type="summary", name="summary-step", config=step_cfg)],
         )
 
     def test_unknown_emit_produces_validation_error(self) -> None:

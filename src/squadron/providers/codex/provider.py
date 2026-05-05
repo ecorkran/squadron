@@ -31,9 +31,7 @@ class CodexProvider:
         """Validate credentials and return a ``CodexAgent``."""
         strategy = OAuthFileStrategy()
         if not strategy.is_valid():
-            raise ProviderAuthError(
-                f"No Codex credentials found. {strategy.setup_hint}."
-            )
+            raise ProviderAuthError(f"No Codex credentials found. {strategy.setup_hint}.")
 
         _log.debug("Creating Codex agent %r (model=%s)", config.name, config.model)
         return CodexAgent(name=config.name, config=config)

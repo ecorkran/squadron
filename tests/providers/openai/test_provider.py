@@ -10,9 +10,7 @@ from squadron.core.models import AgentConfig
 from squadron.providers.errors import ProviderAuthError, ProviderError
 from squadron.providers.openai.provider import OpenAICompatibleProvider
 
-_BASE_CONFIG = dict(
-    name="agent", agent_type="api", provider="openai", model="gpt-4o-mini"
-)
+_BASE_CONFIG = dict(name="agent", agent_type="api", provider="openai", model="gpt-4o-mini")
 
 
 @pytest.fixture
@@ -27,9 +25,7 @@ class TestProviderType:
 
 class TestCreateAgent:
     @pytest.mark.asyncio
-    async def test_uses_config_api_key(
-        self, provider: OpenAICompatibleProvider
-    ) -> None:
+    async def test_uses_config_api_key(self, provider: OpenAICompatibleProvider) -> None:
         config = AgentConfig(**{**_BASE_CONFIG, "api_key": "sk-config"})
         with patch("squadron.providers.openai.provider.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
@@ -73,9 +69,7 @@ class TestCreateAgent:
         self, provider: OpenAICompatibleProvider, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
-        config = AgentConfig(
-            **{**_BASE_CONFIG, "base_url": "http://localhost:11434/v1"}
-        )
+        config = AgentConfig(**{**_BASE_CONFIG, "base_url": "http://localhost:11434/v1"})
         with patch("squadron.providers.openai.provider.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
             await provider.create_agent(config)
@@ -145,9 +139,7 @@ class TestEnhancedCredentialResolution:
         self, provider: OpenAICompatibleProvider, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        config = AgentConfig(
-            **{**_BASE_CONFIG, "api_key": None, "base_url": "https://api.example.com"}
-        )
+        config = AgentConfig(**{**_BASE_CONFIG, "api_key": None, "base_url": "https://api.example.com"})
         with pytest.raises(ProviderAuthError):
             await provider.create_agent(config)
 

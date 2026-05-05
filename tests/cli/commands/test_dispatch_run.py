@@ -102,9 +102,7 @@ def test_dispatch_run_errors_when_prompt_file_missing() -> None:
     )
 
     assert result.exit_code != 0
-    combined = (result.output or "") + (
-        result.stderr if hasattr(result, "stderr") else ""
-    )
+    combined = (result.output or "") + (result.stderr if hasattr(result, "stderr") else "")
     assert "not found" in combined.lower() or "not found" in combined
 
 

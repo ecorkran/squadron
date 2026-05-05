@@ -105,9 +105,7 @@ async def test_shutdown_all(async_client: httpx.AsyncClient):
     assert "b" in data["succeeded"]
 
 
-async def test_spawn_credentials_forwarded(
-    async_client: httpx.AsyncClient, mock_provider: Any
-) -> None:
+async def test_spawn_credentials_forwarded(async_client: httpx.AsyncClient, mock_provider: Any) -> None:
     """Credentials in SpawnRequest reach AgentConfig (regression: profile bug)."""
     last_config: list = []
     original_create = mock_provider.create_agent

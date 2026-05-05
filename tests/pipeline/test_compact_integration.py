@@ -59,9 +59,7 @@ def test_step_callback_records_compact_summary(tmp_path: Path) -> None:
             "source_step_index": 3,
             "source_step_name": "compact-mid",
             "summary_model": "haiku-id",
-            "emit_results": [
-                {"destination": "rotate", "ok": True, "detail": "session rotated"}
-            ],
+            "emit_results": [{"destination": "rotate", "ok": True, "detail": "session rotated"}],
         },
     )
     step_result = StepResult(
@@ -115,24 +113,16 @@ def _make_definition() -> PipelineDefinition:
         model=None,
         params={"slice": "required"},
         steps=[
-            StepConfig(
-                step_type="fake-dispatch", name="step0", config={"prompt": "hi"}
-            ),
+            StepConfig(step_type="fake-dispatch", name="step0", config={"prompt": "hi"}),
             StepConfig(step_type="fake-dispatch", name="step1", config={}),
-            StepConfig(
-                step_type="fake-dispatch", name="step2", config={"prompt": "hi2"}
-            ),
+            StepConfig(step_type="fake-dispatch", name="step2", config={"prompt": "hi2"}),
         ],
     )
 
 
-def _prepare_paused_state(
-    tmp_path: Path, *, with_summary: bool
-) -> tuple[StateManager, str]:
+def _prepare_paused_state(tmp_path: Path, *, with_summary: bool) -> tuple[StateManager, str]:
     mgr = StateManager(runs_dir=tmp_path)
-    run_id = mgr.init_run(
-        "test-pipeline", {"slice": "154"}, execution_mode=ExecutionMode.SDK
-    )
+    run_id = mgr.init_run("test-pipeline", {"slice": "154"}, execution_mode=ExecutionMode.SDK)
     state = mgr.load(run_id)
     if with_summary:
         state.compact_summaries["1:step1"] = CompactSummary(

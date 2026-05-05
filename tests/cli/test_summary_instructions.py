@@ -38,9 +38,7 @@ class TestSummaryInstructions:
         assert "TEMPLATE" in result.output
 
     def test_suffix_flag_returns_suffix_for_minimal_sdk(self) -> None:
-        result = runner.invoke(
-            app, ["_summary-instructions", "minimal-sdk", "--suffix"]
-        )
+        result = runner.invoke(app, ["_summary-instructions", "minimal-sdk", "--suffix"])
         assert result.exit_code == 0
         assert "Do not take any action" in result.output
 
@@ -50,8 +48,6 @@ class TestSummaryInstructions:
         assert result.output.strip() == ""
 
     def test_suffix_flag_errors_on_missing_template(self) -> None:
-        result = runner.invoke(
-            app, ["_summary-instructions", "nonexistent", "--suffix"]
-        )
+        result = runner.invoke(app, ["_summary-instructions", "nonexistent", "--suffix"])
         assert result.exit_code == 1
         assert "nonexistent" in result.output

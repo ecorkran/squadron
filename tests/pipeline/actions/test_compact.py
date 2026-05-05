@@ -94,9 +94,7 @@ async def test_true_cli_forwards_instructions(action: CompactAction) -> None:
     session = MagicMock()
     session.current_model = None
     session.compact = AsyncMock(return_value="summary")
-    ctx = _make_context(
-        sdk_session=session, params={"instructions": "keep recent work"}
-    )
+    ctx = _make_context(sdk_session=session, params={"instructions": "keep recent work"})
 
     await action.execute(ctx)
 
@@ -178,9 +176,7 @@ async def test_prompt_only_dispatches_compact(action: CompactAction) -> None:
 async def test_prompt_only_includes_instructions_in_prompt(
     action: CompactAction,
 ) -> None:
-    ctx = _make_context(
-        sdk_session=None, params={"instructions": "keep recent context"}
-    )
+    ctx = _make_context(sdk_session=None, params={"instructions": "keep recent context"})
     captured_prompt: list[str] = []
 
     async def _gen(prompt: str, **kw: object) -> AsyncIterator[object]:
@@ -222,9 +218,7 @@ async def test_prompt_only_waits_for_boundary_after_other_messages(
     ctx = _make_context(sdk_session=None)
 
     async def _gen(*a: object, **kw: object) -> AsyncIterator[object]:
-        yield AssistantMessage(
-            content=[TextBlock(text="compacting...")], model="claude-sonnet-4"
-        )
+        yield AssistantMessage(content=[TextBlock(text="compacting...")], model="claude-sonnet-4")
         yield SystemMessage(subtype="other_event", data={})
         yield _make_compact_boundary_message()
 

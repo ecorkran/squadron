@@ -113,9 +113,7 @@ class CodexAgent:
         if self._codex is None:
             codex_bin = resolve_codex_binary()
             if codex_bin is None:
-                raise ProviderError(
-                    f"Codex CLI not found on PATH. Install with: {_CLI_INSTALL_CMD}"
-                )
+                raise ProviderError(f"Codex CLI not found on PATH. Install with: {_CLI_INSTALL_CMD}")
 
             config = AppServerConfig(codex_bin=codex_bin)  # pyright: ignore[reportUnknownVariableType]
             self._codex = await AsyncCodex(config=config).__aenter__()  # pyright: ignore[reportUnknownMemberType]

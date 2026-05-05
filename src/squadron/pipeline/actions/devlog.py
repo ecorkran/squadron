@@ -29,8 +29,7 @@ class DevlogAction:
                 ValidationError(
                     field="content",
                     message=(
-                        "No 'content' provided and no prior_outputs available "
-                        "— entry will be minimal"
+                        "No 'content' provided and no prior_outputs available — entry will be minimal"
                     ),
                     action_type=self.action_type,
                 )
@@ -40,9 +39,7 @@ class DevlogAction:
     async def execute(self, context: ActionContext) -> ActionResult:
         # Determine file path
         path_param = context.params.get("path")
-        devlog_path = (
-            Path(str(path_param)) if path_param else Path(context.cwd) / "DEVLOG.md"
-        )
+        devlog_path = Path(str(path_param)) if path_param else Path(context.cwd) / "DEVLOG.md"
 
         # Build entry content
         content = context.params.get("content")

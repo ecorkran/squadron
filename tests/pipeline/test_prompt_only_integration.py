@@ -66,11 +66,7 @@ class TestPromptOnlyFullCycle:
             step_names.append(instructions.step_name)
 
             # Mark step done (with verdict for phase steps that have review)
-            verdict = (
-                "PASS"
-                if instructions.step_type in ("design", "tasks", "implement")
-                else None
-            )
+            verdict = "PASS" if instructions.step_type in ("design", "tasks", "implement") else None
             state_mgr.record_step_done(
                 run_id, instructions.step_name, instructions.step_type, verdict=verdict
             )

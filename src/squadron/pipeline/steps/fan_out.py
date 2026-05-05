@@ -49,9 +49,7 @@ class FanOutStepType:
             errors.append(
                 ValidationError(
                     field="inner",
-                    message=(
-                        "'inner' must be a single-key dict (e.g. {dispatch: {...}})"
-                    ),
+                    message=("'inner' must be a single-key dict (e.g. {dispatch: {...}})"),
                     action_type=step_type,
                 )
             )

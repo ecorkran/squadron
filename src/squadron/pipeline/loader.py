@@ -89,11 +89,7 @@ def _search_dirs(
     """Return pipeline directories in search order (highest priority first)."""
     dirs: list[Path] = []
 
-    proj = (
-        project_dir
-        if project_dir is not None
-        else (Path.cwd() / _PROJECT_PIPELINES_REL)
-    )
+    proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
     dirs.append(proj)
 
     user = user_dir if user_dir is not None else _USER_DIR
@@ -121,11 +117,7 @@ def discover_pipelines(
     user = user_dir if user_dir is not None else _USER_DIR
     source_dirs.append((user, "user"))
 
-    proj = (
-        project_dir
-        if project_dir is not None
-        else (Path.cwd() / _PROJECT_PIPELINES_REL)
-    )
+    proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
     source_dirs.append((proj, "project"))
 
     found: dict[str, PipelineInfo] = {}
@@ -195,10 +187,7 @@ def validate_pipeline(
             errors.append(
                 ValidationError(
                     field="step_type",
-                    message=(
-                        f"Unknown step type '{step.step_type}'. "
-                        f"Registered: {registered}"
-                    ),
+                    message=(f"Unknown step type '{step.step_type}'. Registered: {registered}"),
                     action_type=step.step_type,
                 )
             )
@@ -306,10 +295,7 @@ def _validate_param_placeholders(
                 errors.append(
                     ValidationError(
                         field=f"steps[{step.name}].{key}",
-                        message=(
-                            f"Param placeholder '{{{ref}}}' "
-                            f"references undeclared param '{ref}'"
-                        ),
+                        message=(f"Param placeholder '{{{ref}}}' references undeclared param '{ref}'"),
                         action_type=step.step_type,
                     )
                 )

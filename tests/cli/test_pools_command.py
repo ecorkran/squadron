@@ -65,14 +65,10 @@ class TestPoolsShow:
         result = _invoke(cli_runner, "list", "review")
         assert "round-robin" in result.output
 
-    def test_list_pool_contains_at_least_one_member(
-        self, cli_runner: CliRunner
-    ) -> None:
+    def test_list_pool_contains_at_least_one_member(self, cli_runner: CliRunner) -> None:
         result = _invoke(cli_runner, "list", "review")
         # At least one of the known review pool members must appear
-        assert any(
-            m in result.output for m in ["minimax", "glm5", "kimi25", "grok-fast"]
-        )
+        assert any(m in result.output for m in ["minimax", "glm5", "kimi25", "grok-fast"])
 
     def test_list_unknown_pool_exits_nonzero(self, cli_runner: CliRunner) -> None:
         result = _invoke(cli_runner, "list", "nonexistent")
@@ -89,21 +85,15 @@ class TestPoolsShow:
 
 
 class TestPoolsReset:
-    def test_reset_known_pool_exits_zero(
-        self, cli_runner: CliRunner, isolated_state: None
-    ) -> None:
+    def test_reset_known_pool_exits_zero(self, cli_runner: CliRunner, isolated_state: None) -> None:
         result = _invoke(cli_runner, "reset", "review")
         assert result.exit_code == 0
 
-    def test_reset_prints_confirmation(
-        self, cli_runner: CliRunner, isolated_state: None
-    ) -> None:
+    def test_reset_prints_confirmation(self, cli_runner: CliRunner, isolated_state: None) -> None:
         result = _invoke(cli_runner, "reset", "review")
         assert "review" in result.output
 
-    def test_reset_clears_state(
-        self, cli_runner: CliRunner, isolated_state: None
-    ) -> None:
+    def test_reset_clears_state(self, cli_runner: CliRunner, isolated_state: None) -> None:
         from squadron.pipeline.intelligence.pools.loader import save_pool_state
         from squadron.pipeline.intelligence.pools.models import PoolState
 

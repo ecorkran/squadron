@@ -272,13 +272,9 @@ async def test_branch_coroutine_raises_step_result_is_failed() -> None:
 @pytest.mark.asyncio
 async def test_first_pass_with_pass_branch_returns_pass_result() -> None:
     """fan_in=first_pass with one PASS branch → action result reflects PASS."""
-    pass_result = _make_action_result(
-        success=True, verdict="PASS", outputs={"answer": "yes"}
-    )
+    pass_result = _make_action_result(success=True, verdict="PASS", outputs={"answer": "yes"})
     action = _mock_action(pass_result)
-    step = _make_fan_out_step(
-        {"models": ["opus"], "inner": {"dispatch": {}}, "fan_in": "first_pass"}
-    )
+    step = _make_fan_out_step({"models": ["opus"], "inner": {"dispatch": {}}, "fan_in": "first_pass"})
 
     result = await _execute_fan_out_step(
         step=step,
@@ -332,9 +328,7 @@ async def test_pool_reference_calls_resolver_n_times() -> None:
     dispatch_result = _make_action_result(success=True)
     action = _mock_action(dispatch_result)
     resolver = _mock_resolver("haiku")
-    step = _make_fan_out_step(
-        {"models": "pool:review", "n": 2, "inner": {"dispatch": {}}}
-    )
+    step = _make_fan_out_step({"models": "pool:review", "n": 2, "inner": {"dispatch": {}}})
 
     result = await _execute_fan_out_step(
         step=step,
@@ -366,9 +360,7 @@ async def test_pool_reference_resolver_raises_model_pool_not_implemented() -> No
     resolver = MagicMock()
     resolver.resolve.side_effect = ModelPoolNotImplemented("no pool backend")
 
-    step = _make_fan_out_step(
-        {"models": "pool:review", "n": 2, "inner": {"dispatch": {}}}
-    )
+    step = _make_fan_out_step({"models": "pool:review", "n": 2, "inner": {"dispatch": {}}})
 
     result = await _execute_fan_out_step(
         step=step,

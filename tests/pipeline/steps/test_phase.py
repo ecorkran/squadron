@@ -80,18 +80,14 @@ def test_validate_invalid_review_type(design_step: PhaseStepType) -> None:
 
 
 def test_validate_review_dict_missing_template(design_step: PhaseStepType) -> None:
-    errors = design_step.validate(
-        _make_config({"phase": 4, "review": {"model": "opus"}})
-    )
+    errors = design_step.validate(_make_config({"phase": 4, "review": {"model": "opus"}}))
     assert len(errors) == 1
     assert errors[0].field == "review"
     assert "template" in errors[0].message
 
 
 def test_validate_invalid_checkpoint(design_step: PhaseStepType) -> None:
-    errors = design_step.validate(
-        _make_config({"phase": 4, "checkpoint": "invalid-trigger"})
-    )
+    errors = design_step.validate(_make_config({"phase": 4, "checkpoint": "invalid-trigger"}))
     assert len(errors) == 1
     assert errors[0].field == "checkpoint"
     assert "not a valid" in errors[0].message

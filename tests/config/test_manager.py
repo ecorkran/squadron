@@ -25,9 +25,7 @@ class TestLoadConfig:
         assert config["default_rules"] is None
         assert config["default_model"] is None
 
-    def test_user_config_overrides_defaults(
-        self, patch_config_paths: dict[str, Path]
-    ) -> None:
+    def test_user_config_overrides_defaults(self, patch_config_paths: dict[str, Path]) -> None:
         user_file = patch_config_paths["user"]
         with open(user_file, "wb") as f:
             tomli_w.dump({"verbosity": 1, "cwd": "/home/user/project"}, f)
@@ -37,9 +35,7 @@ class TestLoadConfig:
         assert config["cwd"] == "/home/user/project"
         assert config["default_rules"] is None  # still default
 
-    def test_project_config_overrides_user(
-        self, patch_config_paths: dict[str, Path]
-    ) -> None:
+    def test_project_config_overrides_user(self, patch_config_paths: dict[str, Path]) -> None:
         user_file = patch_config_paths["user"]
         project_file = patch_config_paths["project"]
 
@@ -69,9 +65,7 @@ class TestLoadConfig:
         assert config["verbosity"] == 1
         assert config["default_rules"] == "project.md"
 
-    def test_unknown_keys_in_files_ignored(
-        self, patch_config_paths: dict[str, Path]
-    ) -> None:
+    def test_unknown_keys_in_files_ignored(self, patch_config_paths: dict[str, Path]) -> None:
         user_file = patch_config_paths["user"]
         with open(user_file, "wb") as f:
             tomli_w.dump({"unknown_key": "value", "verbosity": 2}, f)
@@ -117,9 +111,7 @@ class TestSetConfig:
             set_config("cwd", "/test")
             assert deep_path.exists()
 
-    def test_project_flag_writes_project_config(
-        self, patch_config_paths: dict[str, Path]
-    ) -> None:
+    def test_project_flag_writes_project_config(self, patch_config_paths: dict[str, Path]) -> None:
         set_config("cwd", "/project/dir", project=True)
         assert patch_config_paths["project"].exists()
         assert get_config("cwd") == "/project/dir"
@@ -138,9 +130,7 @@ class TestSetConfig:
         assert get_config("cwd") == "/first"
         assert get_config("verbosity") == 1
 
-    def test_default_model_round_trip(
-        self, patch_config_paths: dict[str, Path]
-    ) -> None:
+    def test_default_model_round_trip(self, patch_config_paths: dict[str, Path]) -> None:
         set_config("default_model", "opus")
         assert get_config("default_model") == "opus"
 
@@ -159,9 +149,7 @@ class TestResolveConfigSource:
         set_config("cwd", "/proj/path", project=True)
         assert resolve_config_source("cwd") == "project"
 
-    def test_project_overrides_user_source(
-        self, patch_config_paths: dict[str, Path]
-    ) -> None:
+    def test_project_overrides_user_source(self, patch_config_paths: dict[str, Path]) -> None:
         set_config("cwd", "/user")
         set_config("cwd", "/project", project=True)
         assert resolve_config_source("cwd") == "project"

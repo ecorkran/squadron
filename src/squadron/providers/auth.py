@@ -219,9 +219,7 @@ def resolve_auth_strategy(
     strategy_cls = AUTH_STRATEGIES.get(auth_type)
     if strategy_cls is None:
         available = ", ".join(sorted(AUTH_STRATEGIES))
-        raise ProviderAuthError(
-            f"Unknown auth_type {auth_type!r}. Available: {available}"
-        )
+        raise ProviderAuthError(f"Unknown auth_type {auth_type!r}. Available: {available}")
 
     return strategy_cls.from_config(config, profile)  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
 

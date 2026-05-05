@@ -49,9 +49,7 @@ class ReviewTemplate:
             return self.prompt_builder(inputs)
         if self.prompt_template is not None:
             return self.prompt_template.format(**inputs)
-        raise ValueError(
-            f"Template '{self.name}' has neither prompt_template nor prompt_builder"
-        )
+        raise ValueError(f"Template '{self.name}' has neither prompt_template nor prompt_builder")
 
 
 # ---------------------------------------------------------------------------
@@ -64,8 +62,7 @@ def _resolve_builder(dotted_path: str) -> Callable[[dict[str, str]], str]:
     parts = dotted_path.rsplit(".", 1)
     if len(parts) != 2:
         raise TemplateValidationError(
-            f"prompt_builder must be a dotted path (module.function), "
-            f"got: {dotted_path}"
+            f"prompt_builder must be a dotted path (module.function), got: {dotted_path}"
         )
     module_path, func_name = parts
     try:
@@ -77,9 +74,7 @@ def _resolve_builder(dotted_path: str) -> Callable[[dict[str, str]], str]:
 
     func = getattr(module, func_name, None)
     if func is None:
-        raise TemplateValidationError(
-            f"Module '{module_path}' has no attribute '{func_name}'"
-        )
+        raise TemplateValidationError(f"Module '{module_path}' has no attribute '{func_name}'")
     if not callable(func):
         raise TemplateValidationError(f"'{dotted_path}' is not callable")
     return func  # type: ignore[return-value]
@@ -114,9 +109,7 @@ def load_template(path: Path) -> ReviewTemplate:
 
     # Parse input definitions
     inputs_raw = data.get("inputs", {})
-    inputs_data = cast(
-        dict[str, object], inputs_raw if isinstance(inputs_raw, dict) else {}
-    )
+    inputs_data = cast(dict[str, object], inputs_raw if isinstance(inputs_raw, dict) else {})
     req_list: list[object] = list(inputs_data.get("required") or [])  # type: ignore[arg-type]
     opt_list: list[object] = list(inputs_data.get("optional") or [])  # type: ignore[arg-type]
     required = [InputDef(**i) for i in req_list]  # type: ignore[arg-type]
@@ -142,9 +135,7 @@ def load_template(path: Path) -> ReviewTemplate:
             if "diff_exclude_patterns" in data
             else None
         ),
-        prompt_template=(
-            str(data["prompt_template"]) if "prompt_template" in data else None
-        ),
+        prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
         prompt_builder=builder,
     )
 

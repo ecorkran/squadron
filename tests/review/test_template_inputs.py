@@ -55,9 +55,7 @@ def test_slice_template_populates_input_and_against() -> None:
 def test_tasks_template_populates_input_and_against() -> None:
     inputs: dict[str, str] = {}
     resolve_template_inputs("tasks", SLICE_INFO, CWD, inputs)
-    assert inputs["input"] == (
-        f"project-documents/user/tasks/{SLICE_INFO['task_files'][0]}"
-    )
+    assert inputs["input"] == (f"project-documents/user/tasks/{SLICE_INFO['task_files'][0]}")
     assert inputs["against"] == SLICE_INFO["design_file"]
 
 

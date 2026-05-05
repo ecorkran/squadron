@@ -114,16 +114,12 @@ class DaemonClient:
         )
         return resp.json()["messages"]  # type: ignore[no-any-return]
 
-    async def get_history(
-        self, agent_name: str, limit: int | None = None
-    ) -> list[dict[str, Any]]:
+    async def get_history(self, agent_name: str, limit: int | None = None) -> list[dict[str, Any]]:
         """GET /agents/{name}/history — get conversation history."""
         params: dict[str, str] = {}
         if limit is not None:
             params["limit"] = str(limit)
-        resp = await self._request(
-            "GET", f"/agents/{agent_name}/history", params=params
-        )
+        resp = await self._request("GET", f"/agents/{agent_name}/history", params=params)
         return resp.json()["messages"]  # type: ignore[no-any-return]
 
     async def shutdown_agent(self, name: str) -> None:

@@ -137,16 +137,12 @@ class TestCreateAgent:
 
 class TestValidateCredentials:
     @pytest.mark.asyncio
-    async def test_returns_true_when_importable(
-        self, provider: ClaudeSDKProvider
-    ) -> None:
+    async def test_returns_true_when_importable(self, provider: ClaudeSDKProvider) -> None:
         result = await provider.validate_credentials()
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_import_fails(
-        self, provider: ClaudeSDKProvider
-    ) -> None:
+    async def test_returns_false_when_import_fails(self, provider: ClaudeSDKProvider) -> None:
         with patch.dict("sys.modules", {"claude_agent_sdk": None}):
             # When the module entry is None, Python raises ImportError
             result = await provider.validate_credentials()

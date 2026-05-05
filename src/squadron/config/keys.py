@@ -38,9 +38,7 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         name="default_review_profile",
         type_=str,
         default=None,
-        description=(
-            "Default provider profile for review commands (e.g. openrouter, sdk)"
-        ),
+        description=("Default provider profile for review commands (e.g. openrouter, sdk)"),
     ),
     "default_model": ConfigKey(
         name="default_model",

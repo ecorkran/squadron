@@ -151,9 +151,7 @@ class TestHandleMessage:
 
     def test_yields_message_with_correct_fields(self, agent: CodexAgent) -> None:
         mock_thread = AsyncMock()
-        mock_thread.run = AsyncMock(
-            return_value=_MockRunResult(final_response="detailed output")
-        )
+        mock_thread.run = AsyncMock(return_value=_MockRunResult(final_response="detailed output"))
         agent._codex = MagicMock()
         agent._thread = mock_thread
 

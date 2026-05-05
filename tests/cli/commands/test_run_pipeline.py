@@ -202,9 +202,7 @@ class TestRunPipelineSdkRunId:
             mock_session = AsyncMock()
             mock_session_cls.return_value = mock_session
 
-            asyncio.run(
-                _run_pipeline_sdk("test-pipeline", {}, run_id="run-existing-123")
-            )
+            asyncio.run(_run_pipeline_sdk("test-pipeline", {}, run_id="run-existing-123"))
 
         # run_id must be forwarded
         call_kwargs = mock_inner.call_args.kwargs
@@ -332,9 +330,7 @@ class TestResumeDispatch:
 
         from squadron.cli.app import app
 
-        po_state = _make_run_state(
-            run_id="run-po", execution_mode=ExecutionMode.PROMPT_ONLY
-        )
+        po_state = _make_run_state(run_id="run-po", execution_mode=ExecutionMode.PROMPT_ONLY)
         definition = _make_definition()
         mock_result = MagicMock()
         mock_result.status.value = "completed"
@@ -409,9 +405,7 @@ class TestResumeDispatch:
 
         from squadron.cli.app import app
 
-        po_state = _make_run_state(
-            run_id="run-po", execution_mode=ExecutionMode.PROMPT_ONLY
-        )
+        po_state = _make_run_state(run_id="run-po", execution_mode=ExecutionMode.PROMPT_ONLY)
         definition = _make_definition()
         mock_result = MagicMock()
         mock_result.status.value = "completed"
@@ -501,9 +495,7 @@ class TestPipelineNameNormalisation:
         mock_result.step_results = []
 
         with (
-            patch(
-                "squadron.cli.commands.run.load_pipeline", return_value=definition
-            ) as mock_load,
+            patch("squadron.cli.commands.run.load_pipeline", return_value=definition) as mock_load,
             patch("squadron.cli.commands.run.StateManager") as mock_mgr_cls,
             patch("squadron.cli.commands.run.sys") as mock_sys,
             patch("squadron.cli.commands.run.typer") as mock_typer,
@@ -537,13 +529,9 @@ class TestDisplayRunStatus:
         captured = capsys.readouterr()
         assert "sdk" in captured.out
 
-    def test_prompt_only_execution_mode_shown(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_prompt_only_execution_mode_shown(self, capsys: pytest.CaptureFixture[str]) -> None:
         """_display_run_status output includes 'prompt-only' for PROMPT_ONLY mode."""
-        state = _make_run_state(
-            execution_mode=ExecutionMode.PROMPT_ONLY, status="paused"
-        )
+        state = _make_run_state(execution_mode=ExecutionMode.PROMPT_ONLY, status="paused")
         _display_run_status(state)
         captured = capsys.readouterr()
         assert "prompt-only" in captured.out

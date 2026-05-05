@@ -34,9 +34,7 @@ def test_validate_model_as_non_string() -> None:
 
 
 def test_validate_instructions_as_string() -> None:
-    errors = CompactStepType().validate(
-        _make_config({"instructions": "keep recent work"})
-    )
+    errors = CompactStepType().validate(_make_config({"instructions": "keep recent work"}))
     assert errors == []
 
 
@@ -74,9 +72,7 @@ def test_expand_passes_model() -> None:
 
 
 def test_expand_passes_instructions() -> None:
-    actions = CompactStepType().expand(
-        _make_config({"instructions": "keep design section"})
-    )
+    actions = CompactStepType().expand(_make_config({"instructions": "keep design section"}))
     action_type, config = actions[0]
     assert action_type == "compact"
     assert config["instructions"] == "keep design section"
@@ -95,9 +91,7 @@ def test_expand_passes_both_model_and_instructions() -> None:
 def test_expand_omits_unknown_keys() -> None:
     """Legacy fields (keep, summarize, template) are not forwarded."""
     actions = CompactStepType().expand(
-        _make_config(
-            {"model": "haiku", "keep": ["design"], "summarize": True, "template": "x"}
-        )
+        _make_config({"model": "haiku", "keep": ["design"], "summarize": True, "template": "x"})
     )
     _, config = actions[0]
     assert "keep" not in config

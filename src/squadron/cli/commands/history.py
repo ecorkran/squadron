@@ -13,9 +13,7 @@ from squadron.client.http import DaemonClient, DaemonNotRunningError
 
 def history(
     agent_name: str = typer.Argument(help="Name of the agent"),
-    limit: int | None = typer.Option(
-        None, "--limit", help="Show only the last N messages"
-    ),
+    limit: int | None = typer.Option(None, "--limit", help="Show only the last N messages"),
 ) -> None:
     """Display conversation history for an agent."""
     asyncio.run(_history(agent_name, limit))

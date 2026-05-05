@@ -29,9 +29,7 @@ def test_stub_satisfies_protocol() -> None:
             return "opus"
 
         def get_pool(self, pool_name: str) -> ModelPool:
-            return ModelPool(
-                name=pool_name, description="", models=["opus"], strategy="random"
-            )
+            return ModelPool(name=pool_name, description="", models=["opus"], strategy="random")
 
         def list_pools(self) -> dict[str, ModelPool]:
             return {}

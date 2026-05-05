@@ -168,15 +168,11 @@ class TestSaveReviewFile:
     def test_returns_none_on_write_failure(self, tmp_path: Path) -> None:
         content = "# Review"
         with patch.object(Path, "write_text", side_effect=OSError("disk full")):
-            result = save_review_file(
-                content, "code", "my-slice", 146, cwd=str(tmp_path)
-            )
+            result = save_review_file(content, "code", "my-slice", 146, cwd=str(tmp_path))
         assert result is None
 
     def test_json_extension(self, tmp_path: Path) -> None:
         content = '{"verdict": "PASS"}'
-        result = save_review_file(
-            content, "code", "my-slice", 146, cwd=str(tmp_path), as_json=True
-        )
+        result = save_review_file(content, "code", "my-slice", 146, cwd=str(tmp_path), as_json=True)
         assert result is not None
         assert result.suffix == ".json"

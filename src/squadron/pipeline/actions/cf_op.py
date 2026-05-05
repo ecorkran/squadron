@@ -93,9 +93,7 @@ class CfOpAction:
                     stdout = cf_client._run(["set", "slice", str(slice_id)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.BUILD_CONTEXT:
                     raw = cf_client._run_json(["build", "--json"])  # pyright: ignore[reportPrivateUsage]
-                    data_dict = (
-                        cast(dict[str, object], raw) if isinstance(raw, dict) else {}
-                    )
+                    data_dict = cast(dict[str, object], raw) if isinstance(raw, dict) else {}
                     stdout = str(data_dict.get("context", ""))
                 case CfOperation.SUMMARIZE:
                     stdout = cf_client._run(["summarize"])  # pyright: ignore[reportPrivateUsage]

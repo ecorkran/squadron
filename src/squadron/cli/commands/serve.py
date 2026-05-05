@@ -21,9 +21,7 @@ from squadron.server.engine import SquadronEngine
 def serve(
     stop: bool = typer.Option(False, "--stop", help="Stop a running daemon"),
     status: bool = typer.Option(False, "--status", help="Check daemon status"),
-    port: int | None = typer.Option(
-        None, "--port", help="Override HTTP port (default: 7862)"
-    ),
+    port: int | None = typer.Option(None, "--port", help="Override HTTP port (default: 7862)"),
 ) -> None:
     """Start the squadron daemon, or manage a running one."""
     config = DaemonConfig()
@@ -65,15 +63,9 @@ def _start_daemon(config: DaemonConfig) -> None:
     """Start the daemon process."""
     if is_daemon_running(config.pid_path):
         pid = read_pid_file(config.pid_path)
-        rprint(
-            f"[red]Error: Daemon is already running (PID {pid})."
-            " Use --stop first.[/red]"
-        )
+        rprint(f"[red]Error: Daemon is already running (PID {pid}). Use --stop first.[/red]")
         raise typer.Exit(code=1)
 
     engine = SquadronEngine()
-    rprint(
-        f"[green]Starting daemon on 127.0.0.1:{config.port}"
-        f" and {config.socket_path}[/green]"
-    )
+    rprint(f"[green]Starting daemon on 127.0.0.1:{config.port} and {config.socket_path}[/green]")
     asyncio.run(start_server(engine, config))

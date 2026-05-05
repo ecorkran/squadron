@@ -203,18 +203,13 @@ class TestEvaluateCondition:
         from squadron.pipeline.executor import LoopCondition, evaluate_condition
 
         results = [make_action_result(True, "review", verdict="CONCERNS")]
-        assert (
-            evaluate_condition(LoopCondition.REVIEW_CONCERNS_OR_BETTER, results) is True
-        )
+        assert evaluate_condition(LoopCondition.REVIEW_CONCERNS_OR_BETTER, results) is True
 
     def test_review_concerns_or_better_with_fail(self) -> None:
         from squadron.pipeline.executor import LoopCondition, evaluate_condition
 
         results = [make_action_result(True, "review", verdict="FAIL")]
-        assert (
-            evaluate_condition(LoopCondition.REVIEW_CONCERNS_OR_BETTER, results)
-            is False
-        )
+        assert evaluate_condition(LoopCondition.REVIEW_CONCERNS_OR_BETTER, results) is False
 
     def test_action_success_all_pass(self) -> None:
         from squadron.pipeline.executor import LoopCondition, evaluate_condition
@@ -580,9 +575,7 @@ class TestExecutePipelineErrorHandling:
             captured["findings"] = findings
             return CheckpointDecision(CheckpointResolution.EXIT, None)
 
-        monkeypatch.setattr(
-            executor_module, "_prompt_checkpoint_interactive", fake_prompt
-        )
+        monkeypatch.setattr(executor_module, "_prompt_checkpoint_interactive", fake_prompt)
 
         review_findings = [
             {
@@ -620,9 +613,7 @@ class TestExecutePipelineErrorHandling:
         step = mock_step_type([("review", {}), ("checkpoint", {})])
         register_step_type("_test_findings_pause", step)
 
-        pipeline = make_pipeline(
-            [make_step_config("_test_findings_pause", "step-x", {})]
-        )
+        pipeline = make_pipeline([make_step_config("_test_findings_pause", "step-x", {})])
 
         result = await execute_pipeline(
             pipeline,
@@ -862,9 +853,7 @@ class TestRetryLoop:
         assert result.paused_at == "step-loop"
 
     @pytest.mark.asyncio
-    async def test_loop_strategy_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_loop_strategy_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         import logging
 
         from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
@@ -953,9 +942,7 @@ class TestEachStepType:
         from squadron.pipeline.steps.collection import EachStepType
 
         impl = EachStepType()
-        cfg = make_step_config(
-            "each", "s", {"as": "slice", "steps": [{"design": {"phase": 4}}]}
-        )
+        cfg = make_step_config("each", "s", {"as": "slice", "steps": [{"design": {"phase": 4}}]})
         errors = impl.validate(cfg)
         assert any(e.field == "source" for e in errors)
 
@@ -975,9 +962,7 @@ class TestEachStepType:
         from squadron.pipeline.steps.collection import EachStepType
 
         impl = EachStepType()
-        cfg = make_step_config(
-            "each", "s", {"source": "cf.unfinished_slices()", "as": "slice"}
-        )
+        cfg = make_step_config("each", "s", {"source": "cf.unfinished_slices()", "as": "slice"})
         errors = impl.validate(cfg)
         assert any(e.field == "steps" for e in errors)
 
@@ -1033,9 +1018,7 @@ class TestCfUnfinishedSlices:
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
             SliceEntry(index=1, name="slice-a", design_file=None, status="complete"),
-            SliceEntry(
-                index=2, name="slice-b", design_file="f.md", status="in_progress"
-            ),
+            SliceEntry(index=2, name="slice-b", design_file="f.md", status="in_progress"),
             SliceEntry(index=3, name="slice-c", design_file=None, status="not_started"),
         ]
 
@@ -1178,9 +1161,7 @@ class TestEachExecution:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(
-                index=42, name="my-slice", design_file=None, status="not_started"
-            ),
+            SliceEntry(index=42, name="my-slice", design_file=None, status="not_started"),
         ]
 
         pipeline = make_pipeline(
@@ -1191,9 +1172,7 @@ class TestEachExecution:
                     {
                         "source": "cf.unfinished_slices()",
                         "as": "slice",
-                        "steps": [
-                            {"_test_each_resolve": {"slice_id": "{slice.index}"}}
-                        ],
+                        "steps": [{"_test_each_resolve": {"slice_id": "{slice.index}"}}],
                     },
                 )
             ]
@@ -1335,9 +1314,7 @@ class TestProjectParamInjection:
         assert ctx.params["_project"] == "myproject"
 
     @pytest.mark.asyncio
-    async def test_project_falls_back_to_unknown_when_cf_unavailable(
-        self, tmp_path: object
-    ) -> None:
+    async def test_project_falls_back_to_unknown_when_cf_unavailable(self, tmp_path: object) -> None:
         """CF unavailable → _project is 'unknown', no exception."""
         from pathlib import Path
         from unittest.mock import patch
@@ -1381,9 +1358,7 @@ class TestProjectParamInjection:
         assert ctx.params["_project"] == "unknown"
 
     @pytest.mark.asyncio
-    async def test_explicit_project_param_not_overwritten(
-        self, tmp_path: object
-    ) -> None:
+    async def test_explicit_project_param_not_overwritten(self, tmp_path: object) -> None:
         """Caller-supplied _project in params takes precedence over CF."""
         from pathlib import Path
         from unittest.mock import patch
@@ -1506,9 +1481,7 @@ class TestPromptCheckpointInteractive:
             for i in range(1, count + 1)
         ]
 
-    def test_non_interactive_env_var_returns_exit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_non_interactive_env_var_returns_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         from squadron.pipeline.executor import (
             CheckpointResolution,
             _prompt_checkpoint_interactive,
@@ -1559,14 +1532,8 @@ class TestPromptCheckpointInteractive:
             step_name="design",
         )
         assert decision.resolution == CheckpointResolution.ACCEPT
-        assert (
-            "[concern] Bad error handling — src/foo.py:10"
-            in decision.override_instructions
-        )
-        assert (
-            "[note] Variable name unclear — src/bar.py:5"
-            in decision.override_instructions
-        )
+        assert "[concern] Bad error handling — src/foo.py:10" in decision.override_instructions
+        assert "[note] Variable name unclear — src/bar.py:5" in decision.override_instructions
 
     def test_override_returns_user_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import sys
@@ -1748,9 +1715,7 @@ class TestCheckpointDetection:
         )
 
         decision = CheckpointDecision(CheckpointResolution.ACCEPT, "fix error handling")
-        result, captured = await self._run_checkpoint_pipeline(
-            decision, extra_actions=[("commit", {})]
-        )
+        result, captured = await self._run_checkpoint_pipeline(decision, extra_actions=[("commit", {})])
         assert result.status == ExecutionStatus.COMPLETED
         assert captured.get("override_instructions") == "fix error handling"
 
@@ -1762,12 +1727,8 @@ class TestCheckpointDetection:
             ExecutionStatus,
         )
 
-        decision = CheckpointDecision(
-            CheckpointResolution.OVERRIDE, "keep under 50 lines"
-        )
-        result, captured = await self._run_checkpoint_pipeline(
-            decision, extra_actions=[("commit", {})]
-        )
+        decision = CheckpointDecision(CheckpointResolution.OVERRIDE, "keep under 50 lines")
+        result, captured = await self._run_checkpoint_pipeline(decision, extra_actions=[("commit", {})])
         assert result.status == ExecutionStatus.COMPLETED
         assert captured.get("override_instructions") == "keep under 50 lines"
 
@@ -1805,9 +1766,7 @@ class TestCheckpointDetection:
 
         step_name = "_test_ckpt_replace"
         # One step with: checkpoint, commit, checkpoint, commit
-        step = mock_step_type(
-            [("checkpoint", {}), ("commit", {}), ("checkpoint", {}), ("commit2", {})]
-        )
+        step = mock_step_type([("checkpoint", {}), ("commit", {}), ("checkpoint", {}), ("commit2", {})])
         register_step_type(step_name, step)
 
         ck_action = MagicMock()

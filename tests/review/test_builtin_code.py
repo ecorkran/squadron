@@ -59,9 +59,7 @@ class TestCodeReviewPrompt:
         assert "/project" in prompt
 
     def test_both_diff_and_files(self) -> None:
-        prompt = code_review_prompt(
-            {"diff": "HEAD~3", "files": "src/**/*.py", "cwd": "."}
-        )
+        prompt = code_review_prompt({"diff": "HEAD~3", "files": "src/**/*.py", "cwd": "."})
         assert "git diff HEAD~3" in prompt
         assert "src/**/*.py" in prompt
 

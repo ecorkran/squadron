@@ -17,22 +17,16 @@ from squadron.pipeline.actions.dispatch import one_shot_dispatch
 
 
 def dispatch_run(
-    prompt_file: Path = typer.Option(
-        ..., "--prompt-file", help="Path to prompt text file."
-    ),
+    prompt_file: Path = typer.Option(..., "--prompt-file", help="Path to prompt text file."),
     model: str = typer.Option(..., "--model", help="Resolved model ID."),
-    profile: str | None = typer.Option(
-        None, "--profile", help="Provider profile name."
-    ),
+    profile: str | None = typer.Option(None, "--profile", help="Provider profile name."),
     param: list[str] = typer.Option(
         [],
         "--param",
         "-p",
         help="key=value pipeline parameters (repeatable).",
     ),
-    system_prompt: str | None = typer.Option(
-        None, "--system-prompt", help="System prompt text."
-    ),
+    system_prompt: str | None = typer.Option(None, "--system-prompt", help="System prompt text."),
 ) -> None:
     """[hidden] Run a one-shot dispatch via a non-SDK provider profile."""
     if not prompt_file.exists():

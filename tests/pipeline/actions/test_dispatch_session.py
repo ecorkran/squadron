@@ -78,18 +78,14 @@ async def test_routes_to_agent_path_when_session_none(
     ctx = _make_context(session=None)
     mock_agent = _make_agent_mock("agent response")
     mock_registry = _make_registry(mock_agent)
-    sdk_profile = ProviderProfile(
-        name="sdk", provider="sdk", api_key_env=None, description="test"
-    )
+    sdk_profile = ProviderProfile(name="sdk", provider="sdk", api_key_env=None, description="test")
 
     with (
         patch(
             "squadron.pipeline.actions.dispatch.get_registry",
             return_value=mock_registry,
         ),
-        patch(
-            "squadron.pipeline.actions.dispatch.get_profile", return_value=sdk_profile
-        ),
+        patch("squadron.pipeline.actions.dispatch.get_profile", return_value=sdk_profile),
         patch("squadron.pipeline.actions.dispatch.ensure_provider_loaded"),
     ):
         result = await action.execute(ctx)
@@ -185,8 +181,7 @@ async def test_session_dispatch_cli_error_response_returns_failure(
     not be treated as successful dispatch — executor uses result.success for
     flow control and must not proceed to review/checkpoint on a failed call."""
     error_text = (
-        'API Error: 500 {"type":"error","error":{"type":"api_error",'
-        '"message":"Internal server error"}}'
+        'API Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}'
     )
     session = _make_session(response=error_text)
     ctx = _make_context(session=session)

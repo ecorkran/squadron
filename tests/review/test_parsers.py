@@ -199,9 +199,7 @@ class TestUnknownFallback:
         assert result.input_files == {"input": "x"}
 
     def test_metadata_preserved_on_success(self) -> None:
-        result = parse_review_output(
-            WELL_FORMED_PASS, "arch", {"input": "a.md", "against": "b.md"}
-        )
+        result = parse_review_output(WELL_FORMED_PASS, "arch", {"input": "a.md", "against": "b.md"})
         assert result.template_name == "arch"
         assert result.input_files == {"input": "a.md", "against": "b.md"}
         assert result.raw_output == WELL_FORMED_PASS
@@ -264,9 +262,7 @@ class TestFallbackParsing:
 
     def test_fallback_synthesizes_finding(self) -> None:
         """CONCERNS verdict + no parseable findings → single synthesized finding."""
-        text = (
-            "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
-        )
+        text = "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
         result = parse_review_output(text, "slice", {})
         assert result.verdict == Verdict.CONCERNS
         assert len(result.findings) == 1
@@ -469,19 +465,12 @@ class TestCategoryExtraction:
         assert "Input not checked" in result.findings[0].description
 
     def test_category_case_insensitive(self) -> None:
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Title\n"
-            "Category: error-handling\n"
-            "Detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Title\nCategory: error-handling\nDetail.\n"
         result = parse_review_output(text, "code", {})
         assert result.findings[0].category == "error-handling"
 
     def test_category_uppercase(self) -> None:
-        text = (
-            "## Summary\nCONCERNS\n\n### [CONCERN] Title\nCATEGORY: naming\nDetail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Title\nCATEGORY: naming\nDetail.\n"
         result = parse_review_output(text, "code", {})
         assert result.findings[0].category == "naming"
 
@@ -490,22 +479,12 @@ class TestLocationExtraction:
     """Test location: tag extraction from finding bodies."""
 
     def test_location_extracted(self) -> None:
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "location: src/foo.py:45\n"
-            "Some detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:45\nSome detail.\n"
         result = parse_review_output(text, "code", {})
         assert result.findings[0].location == "src/foo.py:45"
 
     def test_location_stripped_from_description(self) -> None:
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "location: src/foo.py:45\n"
-            "Some detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:45\nSome detail.\n"
         result = parse_review_output(text, "code", {})
         assert "location:" not in result.findings[0].description
 
@@ -532,12 +511,7 @@ class TestLocationExtraction:
 
     def test_file_ref_populates_location(self) -> None:
         """-> path/to/file.py:123 also populates location when no location: tag."""
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "Some detail.\n"
-            "-> src/handler.py:42\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nSome detail.\n-> src/handler.py:42\n"
         result = parse_review_output(text, "code", {})
         f = result.findings[0]
         assert f.file_ref == "src/handler.py:42"
@@ -548,9 +522,7 @@ class TestLocationSoftFail:
     """Slice 904: missing/placeholder location: values are normalized to
     "unverified" with a WARNING."""
 
-    def test_missing_location_normalized_and_warned(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_missing_location_normalized_and_warned(self, caplog: pytest.LogCaptureFixture) -> None:
         text = "## Summary\nCONCERNS\n\n### [CONCERN] Title here\nSome detail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             result = parse_review_output(text, "code", {})
@@ -565,24 +537,15 @@ class TestLocationSoftFail:
         assert "CONCERNS" in message
         assert "unverified" in message
 
-    def test_cited_location_produces_no_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_cited_location_produces_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         # Regression: a fully-cited finding must not trigger the soft-fail warning.
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "location: src/foo.py:45\n"
-            "Some detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:45\nSome detail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             result = parse_review_output(text, "code", {})
         assert result.findings[0].location == "src/foo.py:45"
         assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
 
-    def test_arch_style_doc_path_parses_unchanged(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_arch_style_doc_path_parses_unchanged(self, caplog: pytest.LogCaptureFixture) -> None:
         # Non-code safety: arch/slice/tasks reviews cite documents, not code.
         # Any non-empty, non-placeholder location must be accepted as-is.
         text = (
@@ -604,10 +567,7 @@ class TestLocationSoftFail:
     def test_placeholder_values_normalized_to_unverified(
         self, raw: str, caplog: pytest.LogCaptureFixture
     ) -> None:
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            f"### [CONCERN] Bug\nlocation: {raw}\nSome detail.\n"
-        )
+        text = f"## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: {raw}\nSome detail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             result = parse_review_output(text, "code", {})
         assert result.findings[0].location == "unverified"
@@ -617,9 +577,7 @@ class TestLocationSoftFail:
             if r.name == "squadron.review.parsers"
         )
 
-    def test_unverified_passed_through_without_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_unverified_passed_through_without_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         # Model emitted the explicit "I don't know" token — no warning.
         text = (
             "## Summary\nPASS\n\n"
@@ -647,28 +605,16 @@ class TestLocationDiffMembershipAndPathExistence:
         # File exists in tmp_path AND is in the diff set: no warnings.
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "foo.py").write_text("# foo\n")
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "location: src/foo.py:42\n"
-            "Detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:42\nDetail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
-            parse_review_output(
-                text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path
-            )
+            parse_review_output(text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path)
         assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
 
     def test_nonexistent_path_warns_for_both_checks(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         # Cited path is neither in the diff nor on disk — both checks warn.
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "location: src/nonexistent.py:42\n"
-            "Detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/nonexistent.py:42\nDetail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             parse_review_output(
                 text,
@@ -677,11 +623,7 @@ class TestLocationDiffMembershipAndPathExistence:
                 diff_files={"src/squadron/foo.py"},
                 cwd=tmp_path,
             )
-        messages = [
-            r.getMessage()
-            for r in caplog.records
-            if r.name == "squadron.review.parsers"
-        ]
+        messages = [r.getMessage() for r in caplog.records if r.name == "squadron.review.parsers"]
         # One warning from diff-membership, one from path-existence.
         assert sum("not among the files in the diff" in m for m in messages) == 1
         assert sum("does not exist on disk" in m for m in messages) == 1
@@ -692,12 +634,7 @@ class TestLocationDiffMembershipAndPathExistence:
         # File exists on disk but is NOT in the diff: T8 warns, T9 silent.
         (tmp_path / "src" / "squadron").mkdir(parents=True)
         (tmp_path / "src" / "squadron" / "bar.py").write_text("# bar\n")
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "### [CONCERN] Bug\n"
-            "location: src/squadron/bar.py:10\n"
-            "Detail.\n"
-        )
+        text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/squadron/bar.py:10\nDetail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             parse_review_output(
                 text,
@@ -706,11 +643,7 @@ class TestLocationDiffMembershipAndPathExistence:
                 diff_files={"src/squadron/foo.py"},
                 cwd=tmp_path,
             )
-        messages = [
-            r.getMessage()
-            for r in caplog.records
-            if r.name == "squadron.review.parsers"
-        ]
+        messages = [r.getMessage() for r in caplog.records if r.name == "squadron.review.parsers"]
         assert any("not among the files in the diff" in m for m in messages)
         assert not any("does not exist on disk" in m for m in messages)
 
@@ -727,11 +660,7 @@ class TestLocationDiffMembershipAndPathExistence:
         )
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             parse_review_output(text, "arch", {}, cwd=tmp_path)
-        messages = [
-            r.getMessage()
-            for r in caplog.records
-            if r.name == "squadron.review.parsers"
-        ]
+        messages = [r.getMessage() for r in caplog.records if r.name == "squadron.review.parsers"]
         assert any("does not exist on disk" in m for m in messages)
 
     def test_arch_review_existing_doc_passes_silently(
@@ -762,9 +691,7 @@ class TestLocationDiffMembershipAndPathExistence:
             "Detail.\n"
         )
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
-            parse_review_output(
-                text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path
-            )
+            parse_review_output(text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path)
         assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
 
 

@@ -19,9 +19,7 @@ def client() -> DaemonClient:
     )
 
 
-def _mock_response(
-    status_code: int = 200, json_data: dict | list | None = None
-) -> httpx.Response:
+def _mock_response(status_code: int = 200, json_data: dict | list | None = None) -> httpx.Response:
     """Build a mock httpx.Response."""
     return httpx.Response(
         status_code=status_code,

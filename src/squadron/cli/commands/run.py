@@ -74,9 +74,7 @@ def _resolve_target(
     for name, default in definition.params.items():
         if default == "required":
             if target is None:
-                raise typer.BadParameter(
-                    f"Pipeline '{definition.name}' requires a '{name}' argument."
-                )
+                raise typer.BadParameter(f"Pipeline '{definition.name}' requires a '{name}' argument.")
             return (name, target)
     return None
 
@@ -193,9 +191,7 @@ async def _run_pipeline(
 
     state_mgr = StateManager(runs_dir=runs_dir)
     if run_id is None:
-        run_id = state_mgr.init_run(
-            pipeline_name, params, execution_mode=execution_mode
-        )
+        run_id = state_mgr.init_run(pipeline_name, params, execution_mode=execution_mode)
 
     _run_id = run_id  # capture for closure below
     if pool_backend is None:
@@ -365,8 +361,7 @@ def _display_run_status(state: object) -> None:
     ]
     if state.checkpoint is not None:
         lines.append(
-            f"[bold]Checkpoint:[/bold] paused at '{state.checkpoint.step}' "
-            f"— {state.checkpoint.reason}"
+            f"[bold]Checkpoint:[/bold] paused at '{state.checkpoint.step}' — {state.checkpoint.reason}"
         )
 
     rprint(Panel("\n".join(lines), title="Run Status"))
@@ -427,9 +422,7 @@ def _handle_prompt_only_init(
 
     params = _assemble_params(definition, target, model_override, param_list)
     state_mgr = StateManager()
-    run_id = state_mgr.init_run(
-        pipeline_name, params, execution_mode=ExecutionMode.PROMPT_ONLY
-    )
+    run_id = state_mgr.init_run(pipeline_name, params, execution_mode=ExecutionMode.PROMPT_ONLY)
     rprint(f"run_id={run_id}", file=sys.stderr)
 
     pool_backend = DefaultPoolBackend()
@@ -594,9 +587,7 @@ def _handle_step_done(
 
 
 def run(
-    pipeline: str | None = typer.Argument(
-        None, help="Pipeline name or path to YAML definition."
-    ),
+    pipeline: str | None = typer.Argument(None, help="Pipeline name or path to YAML definition."),
     target: str | None = typer.Argument(
         None,
         help="Target for the pipeline's primary required param (e.g. slice index).",
@@ -605,21 +596,11 @@ def run(
     param: list[str] | None = typer.Option(
         None, "--param", "-p", help="Additional param as key=value."
     ),
-    from_step: str | None = typer.Option(
-        None, "--from", help="Start execution from this step."
-    ),
-    resume: str | None = typer.Option(
-        None, "--resume", "-r", help="Resume a paused run by run-id."
-    ),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show plan without executing."
-    ),
-    validate_only: bool = typer.Option(
-        False, "--validate", help="Validate pipeline and exit."
-    ),
-    list_pipelines: bool = typer.Option(
-        False, "--list", "-l", help="List available pipelines."
-    ),
+    from_step: str | None = typer.Option(None, "--from", help="Start execution from this step."),
+    resume: str | None = typer.Option(None, "--resume", "-r", help="Resume a paused run by run-id."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show plan without executing."),
+    validate_only: bool = typer.Option(False, "--validate", help="Validate pipeline and exit."),
+    list_pipelines: bool = typer.Option(False, "--list", "-l", help="List available pipelines."),
     status: str | None = typer.Option(
         None, "--status", help="Show run status. Use 'latest' for most recent."
     ),
@@ -666,25 +647,18 @@ def run(
         raise typer.Exit(1)
 
     if step_done is not None and any([prompt_only, dry_run]):
-        rprint(
-            "[red]Error: --step-done cannot be combined "
-            "with --prompt-only or --dry-run.[/red]"
-        )
+        rprint("[red]Error: --step-done cannot be combined with --prompt-only or --dry-run.[/red]")
         raise typer.Exit(1)
 
     if verdict is not None and step_done is None:
         rprint("[red]Error: --verdict requires --step-done.[/red]")
         raise typer.Exit(1)
 
-    if list_pipelines and any(
-        [pipeline, model, from_step, resume, dry_run, validate_only, status]
-    ):
+    if list_pipelines and any([pipeline, model, from_step, resume, dry_run, validate_only, status]):
         rprint("[red]Error: --list cannot be combined with other options.[/red]")
         raise typer.Exit(1)
 
-    if status is not None and any(
-        [pipeline, model, from_step, resume, dry_run, validate_only]
-    ):
+    if status is not None and any([pipeline, model, from_step, resume, dry_run, validate_only]):
         rprint("[red]Error: --status cannot be combined with execution options.[/red]")
         raise typer.Exit(1)
 
@@ -727,9 +701,7 @@ def run(
         if pipeline is None:
             rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
             raise typer.Exit(1)
-        _handle_prompt_only_init(
-            pipeline.lower(), target, model, param, verbosity=verbose
-        )
+        _handle_prompt_only_init(pipeline.lower(), target, model, param, verbosity=verbose)
         raise typer.Exit(0)
 
     # ---- --list ----
@@ -776,9 +748,7 @@ def run(
             raise typer.Exit(1)
         errors = validate_pipeline(definition)
         if not errors:
-            rprint(
-                f"[bright_green]Pipeline '{definition.name}' is valid.[/bright_green]"
-            )
+            rprint(f"[bright_green]Pipeline '{definition.name}' is valid.[/bright_green]")
             raise typer.Exit(0)
         rprint(f"[red]Validation errors for '{definition.name}':[/red]")
         for err in errors:
@@ -834,11 +804,7 @@ def run(
             rprint("[yellow]All steps already completed. Nothing to resume.[/yellow]")
             raise typer.Exit(0)
 
-        resume_model = (
-            model or str(state.params.get("model"))
-            if state.params.get("model")
-            else model
-        )
+        resume_model = model or str(state.params.get("model")) if state.params.get("model") else model
 
         run_id = resume
         try:
@@ -888,12 +854,8 @@ def run(
     if sys.stdin.isatty():
         match = state_mgr.find_matching_run(pipeline, params, status="paused")
         if match is not None:
-            if typer.confirm(
-                f"Found a paused run ({match.run_id}). Resume?", default=True
-            ):
-                implicit_from = state_mgr.first_unfinished_step(
-                    match.run_id, definition
-                )
+            if typer.confirm(f"Found a paused run ({match.run_id}). Resume?", default=True):
+                implicit_from = state_mgr.first_unfinished_step(match.run_id, definition)
                 if implicit_from is not None:
                     try:
                         match match.execution_mode:
@@ -919,9 +881,7 @@ def run(
                                 )
                     except KeyboardInterrupt:
                         rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
-                        rprint(
-                            f"Resume with: [bold]sq run --resume {match.run_id}[/bold]"
-                        )
+                        rprint(f"Resume with: [bold]sq run --resume {match.run_id}[/bold]")
                         raise typer.Exit(1)
 
                     _display_result(result)

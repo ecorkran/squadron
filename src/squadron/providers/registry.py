@@ -21,9 +21,7 @@ def get_provider(name: str) -> AgentProvider:
     """
     if name not in _REGISTRY:
         registered = list(_REGISTRY.keys())
-        raise KeyError(
-            f"Provider '{name}' is not registered. Available providers: {registered}"
-        )
+        raise KeyError(f"Provider '{name}' is not registered. Available providers: {registered}")
     return _REGISTRY[name]
 
 

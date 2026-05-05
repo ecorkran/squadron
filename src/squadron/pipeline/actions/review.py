@@ -89,14 +89,8 @@ class ReviewAction:
             raise KeyError(f"Review template '{template_name}' not found")
 
         # Model resolution — same pattern as dispatch
-        action_model = (
-            str(context.params["model"]) if "model" in context.params else None
-        )
-        step_model = (
-            str(context.params["step_model"])
-            if "step_model" in context.params
-            else None
-        )
+        action_model = str(context.params["model"]) if "model" in context.params else None
+        step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         model_id, alias_profile = context.resolver.resolve(action_model, step_model)
 
         # Profile resolution — explicit param → alias-derived → SDK default
@@ -124,9 +118,7 @@ class ReviewAction:
             )
 
         # Check required inputs are satisfied after auto-resolution
-        missing = [
-            inp.name for inp in template.required_inputs if inp.name not in inputs
-        ]
+        missing = [inp.name for inp in template.required_inputs if inp.name not in inputs]
         if missing:
             names = ", ".join(missing)
             raise KeyError(
@@ -138,9 +130,7 @@ class ReviewAction:
         # Rules content — mirror CLI: template rules + language auto-detection,
         # layered on any explicit rules_content passed in via params.
         manual_rules = (
-            str(context.params["rules_content"])
-            if "rules_content" in context.params
-            else None
+            str(context.params["rules_content"]) if "rules_content" in context.params else None
         )
         rules_dir = resolve_rules_dir(cwd, None, None)
         file_paths: list[str] = []
@@ -149,9 +139,7 @@ class ReviewAction:
             if diff_ref:
                 exclude_raw = inputs.get("diff_exclude_patterns")
                 exclude_patterns = (
-                    [p.strip() for p in exclude_raw.split(",") if p.strip()]
-                    if exclude_raw
-                    else None
+                    [p.strip() for p in exclude_raw.split(",") if p.strip()] if exclude_raw else None
                 )
                 file_paths = extract_diff_paths(diff_ref, cwd, exclude_patterns)
             if not file_paths and inputs.get("files"):

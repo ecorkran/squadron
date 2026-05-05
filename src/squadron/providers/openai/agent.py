@@ -85,9 +85,7 @@ class OpenAICompatibleAgent:
         app_name = os.environ.get("SQUADRON_APP_NAME")
         extra_body = {"user": app_name} if app_name else None
 
-        stream: AsyncStream[
-            ChatCompletionChunk
-        ] = await self._client.chat.completions.create(
+        stream: AsyncStream[ChatCompletionChunk] = await self._client.chat.completions.create(
             model=self._model,
             messages=cast(list[ChatCompletionMessageParam], self._history),
             stream=True,
@@ -114,14 +112,10 @@ class OpenAICompatibleAgent:
                         if tc.function.name:
                             tool_calls_dict[idx]["function"]["name"] += tc.function.name
                         if tc.function.arguments:
-                            tool_calls_dict[idx]["function"]["arguments"] += (
-                                tc.function.arguments
-                            )
+                            tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
 
         tool_calls_list = [tool_calls_dict[k] for k in sorted(tool_calls_dict)]
-        messages = translation.build_messages(
-            text_buffer, tool_calls_list, self._name, self._model
-        )
+        messages = translation.build_messages(text_buffer, tool_calls_list, self._name, self._model)
         self._append_assistant_history(text_buffer, tool_calls_list)
         return messages
 

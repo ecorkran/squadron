@@ -455,10 +455,7 @@ class TestEdgeCases:
     @pytest.mark.asyncio
     async def test_result_has_all_fields(self) -> None:
         review_text = (
-            "**Verdict:** CONCERNS\n\n"
-            "## Findings\n\n"
-            "### [CONCERN] — Minor issue\n\n"
-            "Something to fix.\n"
+            "**Verdict:** CONCERNS\n\n## Findings\n\n### [CONCERN] — Minor issue\n\nSomething to fix.\n"
         )
         template = _make_template()
         inputs = {"input": "file.md"}

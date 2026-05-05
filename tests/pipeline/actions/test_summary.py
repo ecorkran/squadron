@@ -100,9 +100,7 @@ async def test_execute_summary_stdout_emit_calls_capture_and_emit() -> None:
     ctx = _make_context(sdk_session=session)
 
     dests = [EmitDestination(kind=EmitKind.STDOUT)]
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
@@ -268,9 +266,7 @@ async def test_execute_summary_captures_once_for_stdout_and_rotate() -> None:
         EmitDestination(kind=EmitKind.STDOUT),
         EmitDestination(kind=EmitKind.ROTATE),
     ]
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=recording_emit
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=recording_emit):
         await _execute_summary(
             context=ctx,
             instructions="x",
@@ -293,9 +289,7 @@ async def test_execute_summary_resolves_model_alias() -> None:
     ctx = _make_context(sdk_session=session)
     ctx.resolver.resolve.return_value = ("haiku-resolved", None)
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         await _execute_summary(
             context=ctx,
             instructions="x",
@@ -319,9 +313,7 @@ async def test_execute_summary_outputs_include_step_info() -> None:
     session.capture_summary = AsyncMock(return_value="SUMMARY")
     ctx = _make_context(sdk_session=session, step_index=3, step_name="my-step")
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         result = await _execute_summary(
             context=ctx,
             instructions="x",
@@ -386,9 +378,7 @@ async def test_execute_loads_template_and_passes_instructions() -> None:
     session.capture_summary = AsyncMock(return_value="SUMMARY")
     ctx = _make_context(params={"template": "minimal-sdk"}, sdk_session=session)
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         result = await _make_action().execute(ctx)
 
     assert result.success is True
@@ -423,9 +413,7 @@ async def test_execute_default_emit_is_stdout() -> None:
         emitted_to.append(dest.display())
         return EmitResult(destination=dest.display(), ok=True, detail="")
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=capturing_emit
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=capturing_emit):
         result = await _make_action().execute(ctx)
 
     assert result.success is True
@@ -463,9 +451,7 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
         "squadron.pipeline.actions.summary.capture_summary_via_profile",
         new=AsyncMock(return_value="ONESHOT SUMMARY"),
     ) as mock_oneshot:
-        with patch(
-            "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-        ):
+        with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
             result = await _execute_summary(
                 context=ctx,
                 instructions="summarize",
@@ -523,9 +509,7 @@ async def test_execute_summary_sdk_profile_path_unchanged() -> None:
     ctx = _make_context(sdk_session=session)
     ctx.resolver.resolve.return_value = ("haiku-resolved", "sdk")
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
@@ -550,9 +534,7 @@ async def test_execute_summary_unannotated_alias_uses_sdk_path() -> None:
     ctx = _make_context(sdk_session=session)
     ctx.resolver.resolve.return_value = ("some-resolved-id", None)
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
@@ -563,9 +545,7 @@ async def test_execute_summary_unannotated_alias_uses_sdk_path() -> None:
 
     assert result.success is True
     session.capture_summary.assert_called_once()
-    assert (
-        session.capture_summary.call_args.kwargs["summary_model"] == "some-resolved-id"
-    )
+    assert session.capture_summary.call_args.kwargs["summary_model"] == "some-resolved-id"
 
 
 # ---------------------------------------------------------------------------
@@ -594,9 +574,7 @@ async def test_non_sdk_summary_injects_prior_context() -> None:
         "squadron.pipeline.actions.summary.capture_summary_via_profile",
         new=AsyncMock(return_value="SUMMARY WITH CONTEXT"),
     ) as mock_oneshot:
-        with patch(
-            "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-        ):
+        with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
             result = await _execute_summary(
                 context=ctx,
                 instructions="Please summarize.",
@@ -634,9 +612,7 @@ async def test_sdk_summary_does_not_inject_context() -> None:
     )
     ctx.resolver.resolve.return_value = ("haiku-resolved", None)
 
-    with patch(
-        "squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok
-    ):
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
         result = await _execute_summary(
             context=ctx,
             instructions="Please summarize.",
@@ -763,9 +739,7 @@ async def test_normal_summarize_does_not_enter_restore_path() -> None:
 
     # We don't care if the normal summarize path succeeds or fails in this test;
     # we only care that seed_context (restore path) was NOT called.
-    with patch(
-        "squadron.pipeline.actions.summary._execute_summary", new_callable=AsyncMock
-    ):
+    with patch("squadron.pipeline.actions.summary._execute_summary", new_callable=AsyncMock):
         await _make_action().execute(ctx)
 
     session.seed_context.assert_not_awaited()

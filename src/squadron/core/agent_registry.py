@@ -43,9 +43,7 @@ class AgentRegistry:
             ProviderError: If the provider fails to create the agent.
         """
         if config.name in self._agents:
-            raise AgentAlreadyExistsError(
-                f"Agent '{config.name}' already exists in the registry"
-            )
+            raise AgentAlreadyExistsError(f"Agent '{config.name}' already exists in the registry")
 
         provider = get_provider(config.provider)
         agent = await provider.create_agent(config)

@@ -51,9 +51,7 @@ class TestLoadBuiltinPools:
         assert cheap.strategy == "cheapest"
         assert len(cheap.models) >= 3
 
-    def test_builtin_pools_toml_fixture_matches_loader(
-        self, builtin_pools_toml: str
-    ) -> None:
+    def test_builtin_pools_toml_fixture_matches_loader(self, builtin_pools_toml: str) -> None:
         """Confirm fixture reads same file the loader uses — parser parity."""
         from squadron.data import data_dir
 
@@ -67,18 +65,14 @@ class TestLoadBuiltinPools:
 
 
 class TestLoadUserPools:
-    def test_absent_file_returns_empty(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_absent_file_returns_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import squadron.pipeline.intelligence.pools.loader as loader_mod
 
         monkeypatch.setattr(loader_mod, "_config_dir", lambda: tmp_path / "squadron")
         result = load_user_pools()
         assert result == {}
 
-    def test_user_pool_overrides_builtin(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_user_pool_overrides_builtin(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import squadron.pipeline.intelligence.pools.loader as loader_mod
 
         cfg_dir = tmp_path / "squadron"
@@ -105,9 +99,7 @@ models = ["opus", "gpt54"]
 
 
 class TestGetAllPools:
-    def test_user_wins_on_name_collision(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_user_wins_on_name_collision(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         import squadron.pipeline.intelligence.pools.loader as loader_mod
 
         cfg_dir = tmp_path / "squadron"
@@ -115,10 +107,7 @@ class TestGetAllPools:
         monkeypatch.setattr(loader_mod, "_config_dir", lambda: cfg_dir)
 
         (cfg_dir / "pools.toml").write_text(
-            "[pools.review]\n"
-            'description = "custom"\n'
-            'strategy = "random"\n'
-            'models = ["opus"]\n'
+            '[pools.review]\ndescription = "custom"\nstrategy = "random"\nmodels = ["opus"]\n'
         )
         known = {
             "opus": {},
@@ -161,12 +150,7 @@ class TestPoolValidation:
         return _parse_pools_from_toml(Path("/fake/pools.toml"), toml_text)
 
     def test_unknown_strategy_raises(self) -> None:
-        toml = (
-            "[pools.test]\n"
-            'description = "x"\n'
-            'strategy = "no-such-strategy"\n'
-            'models = ["minimax"]\n'
-        )
+        toml = '[pools.test]\ndescription = "x"\nstrategy = "no-such-strategy"\nmodels = ["minimax"]\n'
         with pytest.raises(PoolValidationError, match="no-such-strategy"):
             self._parse(toml)
 
@@ -188,12 +172,7 @@ class TestPoolValidation:
             self._parse(toml)
 
     def test_valid_pool_parses_ok(self) -> None:
-        toml = (
-            "[pools.test]\n"
-            'description = "x"\n'
-            'strategy = "random"\n'
-            'models = ["minimax", "glm5"]\n'
-        )
+        toml = '[pools.test]\ndescription = "x"\nstrategy = "random"\nmodels = ["minimax", "glm5"]\n'
         pools = self._parse(toml)
         assert "test" in pools
 
@@ -240,25 +219,19 @@ _KNOWN_ALIASES_PATCH = "squadron.models.aliases.get_all_aliases"
 
 
 class TestSelectFromPool:
-    def test_random_pool_returns_member(
-        self, tmp_state_file: Path, sample_aliases: dict
-    ) -> None:
+    def test_random_pool_returns_member(self, tmp_state_file: Path, sample_aliases: dict) -> None:
         with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
             pool = get_pool("high")
             result = select_from_pool(pool)
         assert result in pool.models
 
-    def test_cheapest_pool_returns_member(
-        self, tmp_state_file: Path, sample_aliases: dict
-    ) -> None:
+    def test_cheapest_pool_returns_member(self, tmp_state_file: Path, sample_aliases: dict) -> None:
         with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
             pool = get_pool("cheap")
             result = select_from_pool(pool)
         assert result in pool.models
 
-    def test_round_robin_pool_advances_state(
-        self, tmp_state_file: Path, sample_aliases: dict
-    ) -> None:
+    def test_round_robin_pool_advances_state(self, tmp_state_file: Path, sample_aliases: dict) -> None:
         with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
             pool = get_pool("review")
             r1 = select_from_pool(pool)
@@ -266,9 +239,7 @@ class TestSelectFromPool:
         # Two consecutive calls must differ (pool has ≥4 members)
         assert r1 != r2
 
-    def test_round_robin_state_file_updated(
-        self, tmp_state_file: Path, sample_aliases: dict
-    ) -> None:
+    def test_round_robin_state_file_updated(self, tmp_state_file: Path, sample_aliases: dict) -> None:
         with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
             pool = get_pool("review")
             select_from_pool(pool)

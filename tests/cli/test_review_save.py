@@ -93,9 +93,7 @@ def testsave_review_result_writes_markdown(tmp_path: Path) -> None:
 def testsave_review_result_writes_json(tmp_path: Path) -> None:
     """Saves a JSON review file when as_json=True."""
     result = _make_result()
-    path = save_review_result(
-        result, "arch", SLICE_INFO, as_json=True, reviews_dir=tmp_path
-    )
+    path = save_review_result(result, "arch", SLICE_INFO, as_json=True, reviews_dir=tmp_path)
     assert path.exists()
     assert path.name == "118-review.arch.composed-workflows.json"
     data = json.loads(path.read_text())

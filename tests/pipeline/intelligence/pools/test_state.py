@@ -31,9 +31,7 @@ class TestLoadPoolState:
 
 
 class TestSavePoolState:
-    def test_save_updates_without_destroying_other_pools(
-        self, tmp_state_file: Path
-    ) -> None:
+    def test_save_updates_without_destroying_other_pools(self, tmp_state_file: Path) -> None:
         save_pool_state("review", PoolState(last_index=2))
         save_pool_state("high", PoolState(last_index=7))
 

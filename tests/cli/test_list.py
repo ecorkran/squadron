@@ -36,9 +36,7 @@ class TestListCommand:
         assert "agent-one" in result.output
         assert "agent-two" in result.output
 
-    def test_daemon_not_running(
-        self, cli_runner: CliRunner, patch_daemon_client: MagicMock
-    ) -> None:
+    def test_daemon_not_running(self, cli_runner: CliRunner, patch_daemon_client: MagicMock) -> None:
         patch_daemon_client.list_agents.side_effect = DaemonNotRunningError()
         result = _invoke(cli_runner)
         assert result.exit_code == 1

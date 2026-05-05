@@ -242,15 +242,11 @@ def classify_pipeline(
                     f"Step {step.name!r} (index {step_index}) resolves to pool "
                     f"{pool_name!r} but no pool backend is configured."
                 )
-            results.append(
-                _classify_pool_step(step, step_index, pool_name, pool_backend)
-            )
+            results.append(_classify_pool_step(step, step_index, pool_name, pool_backend))
             continue
 
         model_id, profile = resolve_model_alias(candidate)
-        classification = (
-            StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
-        )
+        classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
         rationale = (
             f"alias {candidate!r} resolves to profile {profile!r} (SDK)"
             if is_sdk_profile(profile)

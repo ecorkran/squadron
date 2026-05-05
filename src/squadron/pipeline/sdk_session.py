@@ -96,9 +96,7 @@ class SDKExecutionSession:
         try:
             await self.client.disconnect()
         except Exception:
-            _logger.debug(
-                "SDKExecutionSession.disconnect: ignoring error during cleanup"
-            )
+            _logger.debug("SDKExecutionSession.disconnect: ignoring error during cleanup")
 
     async def set_model(self, model_id: str) -> None:
         """Switch model if different from current.
@@ -140,12 +138,9 @@ class SDKExecutionSession:
                         # error text reaches the caller or _check_cli_error.
                         if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
                             raise ProviderAPIError(
-                                f"SDK reported is_error=True: "
-                                f"{sdk_msg.result or sdk_msg.subtype}"
+                                f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
                             )
-                        for translated in translate_sdk_message(
-                            sdk_msg, sender="pipeline"
-                        ):
+                        for translated in translate_sdk_message(sdk_msg, sender="pipeline"):
                             # ResultMessage duplicates the assistant text as
                             # its `result` field — it's for metadata only,
                             # not content. Assistant text already arrived via
@@ -159,10 +154,7 @@ class SDKExecutionSession:
                                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    if (
-                        "rate_limit_event" in str(exc)
-                        and retries < _MAX_RATE_LIMIT_RETRIES
-                    ):
+                    if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                         retries += 1
                         _logger.debug(
                             "Rate limit event %d/%d (CLI handles backoff)",
@@ -175,9 +167,7 @@ class SDKExecutionSession:
         except CLINotFoundError as exc:
             raise ProviderAuthError(str(exc)) from exc
         except ProcessError as exc:
-            raise ProviderAPIError(
-                str(exc), status_code=getattr(exc, "exit_code", None)
-            ) from exc
+            raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
         except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
             raise ProviderError(str(exc)) from exc
 

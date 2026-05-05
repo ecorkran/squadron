@@ -49,9 +49,7 @@ def test_models_shows_user_tag(tmp_path: Path) -> None:
     """User alias shows (user) tag in output."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        "[aliases]\n"
-        'deepseek = { profile = "openrouter",'
-        ' model = "deepseek/deepseek-r2" }\n'
+        '[aliases]\ndeepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }\n'
     )
 
     with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
@@ -65,8 +63,7 @@ def test_models_shows_user_override(tmp_path: Path) -> None:
     """User alias that overrides built-in shows (user override)."""
     toml_file = tmp_path / "models.toml"
     toml_file.write_text(
-        '[aliases]\nopus = { profile = "openrouter",'
-        ' model = "anthropic/claude-opus" }\n'
+        '[aliases]\nopus = { profile = "openrouter", model = "anthropic/claude-opus" }\n'
     )
 
     with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
@@ -117,9 +114,7 @@ def test_builtin_sdk_aliases_have_no_pricing() -> None:
 def test_builtin_api_aliases_have_pricing() -> None:
     """API aliases have pricing with input and output fields."""
     builtin = load_builtin_aliases()
-    api_aliases_with_pricing = {
-        name for name, alias in builtin.items() if "pricing" in alias
-    }
+    api_aliases_with_pricing = {name for name, alias in builtin.items() if "pricing" in alias}
     for name in api_aliases_with_pricing:
         alias = builtin[name]
         assert "pricing" in alias, f"{name} missing 'pricing'"
@@ -227,9 +222,7 @@ def test_user_alias_with_partial_pricing(tmp_path: Path) -> None:
 def test_user_alias_without_metadata(tmp_path: Path) -> None:
     """Minimal { profile, model } alias has no metadata keys."""
     toml_file = tmp_path / "models.toml"
-    toml_file.write_text(
-        '[aliases]\nsimple = { profile = "openai", model = "test-model" }\n'
-    )
+    toml_file.write_text('[aliases]\nsimple = { profile = "openai", model = "test-model" }\n')
     with patch(
         "squadron.models.aliases.models_toml_path",
         return_value=toml_file,

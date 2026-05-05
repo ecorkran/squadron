@@ -33,9 +33,7 @@ def test_built_in_local_has_no_api_key_env() -> None:
     assert BUILT_IN_PROFILES["local"].api_key_env is None
 
 
-def test_load_user_profiles_missing_file(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_user_profiles_missing_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Returns empty dict when providers.toml does not exist."""
     monkeypatch.setattr(
         "squadron.providers.profiles.providers_toml_path",
@@ -45,9 +43,7 @@ def test_load_user_profiles_missing_file(
     assert result == {}
 
 
-def test_load_user_profiles_from_toml(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_load_user_profiles_from_toml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     toml_file = tmp_path / "providers.toml"
     toml_file.write_text(
         textwrap.dedent("""\
@@ -72,9 +68,7 @@ def test_load_user_profiles_from_toml(
     assert profile.description == "A custom profile"
 
 
-def test_user_profile_overrides_builtin(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_user_profile_overrides_builtin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     toml_file = tmp_path / "providers.toml"
     toml_file.write_text(
         textwrap.dedent("""\
@@ -117,9 +111,7 @@ def test_builtin_profiles_auth_types() -> None:
         assert BUILT_IN_PROFILES[name].auth_type == auth_type
 
 
-def test_user_profile_with_custom_auth_type(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_user_profile_with_custom_auth_type(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     toml_file = tmp_path / "providers.toml"
     toml_file.write_text(
         textwrap.dedent("""\

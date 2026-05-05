@@ -54,24 +54,18 @@ def test_max_negative_produces_error() -> None:
 
 
 def test_invalid_until_value_produces_error() -> None:
-    errors = _make().validate(
-        _step({"max": 3, "until": "never", "steps": [{"review": {}}]})
-    )
+    errors = _make().validate(_step({"max": 3, "until": "never", "steps": [{"review": {}}]}))
     assert "until" in _fields(errors)
     assert any("never" in m for m in _messages(errors))
 
 
 def test_invalid_on_exhaust_value_produces_error() -> None:
-    errors = _make().validate(
-        _step({"max": 3, "on_exhaust": "retry", "steps": [{"review": {}}]})
-    )
+    errors = _make().validate(_step({"max": 3, "on_exhaust": "retry", "steps": [{"review": {}}]}))
     assert "on_exhaust" in _fields(errors)
 
 
 def test_strategy_not_string_produces_error() -> None:
-    errors = _make().validate(
-        _step({"max": 3, "strategy": 42, "steps": [{"review": {}}]})
-    )
+    errors = _make().validate(_step({"max": 3, "strategy": 42, "steps": [{"review": {}}]}))
     assert "strategy" in _fields(errors)
 
 

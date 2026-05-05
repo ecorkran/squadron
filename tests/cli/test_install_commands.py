@@ -161,6 +161,4 @@ def test_command_files_reference_correct_subcommand() -> None:
     sq_dir = source / "sq"
     for filename, expected_cmd in EXPECTED_COMMANDS.items():
         content = (sq_dir / filename).read_text()
-        assert expected_cmd in content, (
-            f"{filename} missing reference to '{expected_cmd}'"
-        )
+        assert expected_cmd in content, f"{filename} missing reference to '{expected_cmd}'"

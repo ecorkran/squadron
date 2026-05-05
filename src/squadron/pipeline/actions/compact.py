@@ -63,9 +63,7 @@ class CompactAction:
             return await self._execute_sdk_rotate(context, instructions)
         return await self._execute_prompt_only(context, instructions)
 
-    async def _execute_sdk_rotate(
-        self, context: ActionContext, instructions: str
-    ) -> ActionResult:
+    async def _execute_sdk_rotate(self, context: ActionContext, instructions: str) -> ActionResult:
         """True CLI: rotate the session via SDKExecutionSession.compact()."""
         model_raw = context.params.get("model")
         summary_model = str(model_raw) if model_raw is not None else None
@@ -78,9 +76,7 @@ class CompactAction:
                 restore_model=restore_model,
             )
         except Exception as exc:
-            _logger.exception(
-                "CompactAction: sdk rotate failed in step %s", context.step_name
-            )
+            _logger.exception("CompactAction: sdk rotate failed in step %s", context.step_name)
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
@@ -94,9 +90,7 @@ class CompactAction:
             outputs={},
         )
 
-    async def _execute_prompt_only(
-        self, context: ActionContext, instructions: str
-    ) -> ActionResult:
+    async def _execute_prompt_only(self, context: ActionContext, instructions: str) -> ActionResult:
         """Prompt-only: dispatch /compact via query() and await compact_boundary."""
         prompt = "/compact"
         if instructions:
@@ -118,16 +112,12 @@ class CompactAction:
                     prompt=prompt,
                     options=claude_agent_sdk.ClaudeAgentOptions(max_turns=1),
                 ):
-                    if (
-                        isinstance(message, SystemMessage)
-                        and message.subtype == "compact_boundary"
-                    ):
+                    if isinstance(message, SystemMessage) and message.subtype == "compact_boundary":
                         meta = message.data.get("compact_metadata", {})
                         pre_tokens = meta.get("pre_tokens")
                         trigger = meta.get("trigger")
                         _logger.debug(
-                            "CompactAction: compact_boundary received "
-                            "pre_tokens=%s trigger=%s",
+                            "CompactAction: compact_boundary received pre_tokens=%s trigger=%s",
                             pre_tokens,
                             trigger,
                         )

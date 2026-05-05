@@ -326,14 +326,10 @@ def _lenient_extract_findings(
     return findings
 
 
-def _synthesize_fallback_finding(
-    text: str, verdict: Verdict, template_name: str = ""
-) -> ReviewFinding:
+def _synthesize_fallback_finding(text: str, verdict: Verdict, template_name: str = "") -> ReviewFinding:
     """Create a single synthesized finding from summary text."""
     # Extract text between ## Summary and next ## heading (or end)
-    summary_match = re.search(
-        r"##\s+Summary\s*\n+(.*?)(?=\n##\s+|\Z)", text, re.DOTALL | re.IGNORECASE
-    )
+    summary_match = re.search(r"##\s+Summary\s*\n+(.*?)(?=\n##\s+|\Z)", text, re.DOTALL | re.IGNORECASE)
     if summary_match:
         description = summary_match.group(1).strip()
     else:
@@ -406,9 +402,7 @@ def parse_review_output(
     skipped by both checks.
     """
     verdict = _extract_verdict(raw_output)
-    findings = _extract_findings(
-        raw_output, verdict=verdict, template_name=template_name
-    )
+    findings = _extract_findings(raw_output, verdict=verdict, template_name=template_name)
     fallback_used = False
 
     mismatch = verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings
@@ -425,9 +419,7 @@ def parse_review_output(
         findings = _lenient_extract_findings(raw_output, verdict, template_name)
         if not findings:
             # Synthesize a single finding from the summary text
-            findings = [
-                _synthesize_fallback_finding(raw_output, verdict, template_name)
-            ]
+            findings = [_synthesize_fallback_finding(raw_output, verdict, template_name)]
         fallback_used = True
         _write_debug_log(
             template=template_name,

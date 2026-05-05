@@ -106,9 +106,7 @@ async def test_explicit_content(action: DevlogAction, tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_auto_generated_from_prior_outputs(
-    action: DevlogAction, tmp_path: Path
-) -> None:
+async def test_auto_generated_from_prior_outputs(action: DevlogAction, tmp_path: Path) -> None:
     devlog = tmp_path / "DEVLOG.md"
     devlog.write_text(SAMPLE_DEVLOG)
 
@@ -153,9 +151,7 @@ async def test_creates_devlog_if_missing(action: DevlogAction, tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_inserts_under_existing_today_header(
-    action: DevlogAction, tmp_path: Path
-) -> None:
+async def test_inserts_under_existing_today_header(action: DevlogAction, tmp_path: Path) -> None:
     devlog = tmp_path / "DEVLOG.md"
     devlog.write_text(SAMPLE_DEVLOG)
 
@@ -215,9 +211,7 @@ async def test_preserves_existing_content(action: DevlogAction, tmp_path: Path) 
 @pytest.mark.asyncio
 async def test_custom_path_override(action: DevlogAction, tmp_path: Path) -> None:
     custom_path = tmp_path / "subdir" / "MY_DEVLOG.md"
-    ctx = _make_context(
-        str(tmp_path), content="Custom path entry", path=str(custom_path)
-    )
+    ctx = _make_context(str(tmp_path), content="Custom path entry", path=str(custom_path))
 
     with patch("squadron.pipeline.actions.devlog.date") as mock_date:
         mock_date.today.return_value.strftime.return_value = "20260331"
@@ -230,9 +224,7 @@ async def test_custom_path_override(action: DevlogAction, tmp_path: Path) -> Non
 
 
 @pytest.mark.asyncio
-async def test_returns_path_and_entry_in_outputs(
-    action: DevlogAction, tmp_path: Path
-) -> None:
+async def test_returns_path_and_entry_in_outputs(action: DevlogAction, tmp_path: Path) -> None:
     devlog = tmp_path / "DEVLOG.md"
     devlog.write_text(SAMPLE_DEVLOG)
 
