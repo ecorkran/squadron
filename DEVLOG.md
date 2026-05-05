@@ -14,6 +14,24 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260504
 
+### Slice 245: Pool-Resolution Classification Policy and Mid-Run Session Construction — Complete
+
+Commit `be0138c`. 10 files changed, 947 insertions.
+
+**Delivered:**
+- `PoolClassificationPolicy` enum (`LAZY`/`STRICT`) in `classification.py`; `PipelineClassification` stores policy; `needs_persistent_session` evaluates `POOL_UNCERTAIN` against policy — LAZY skips it, STRICT counts it.
+- `classify_pipeline()` gains optional `policy=PoolClassificationPolicy.LAZY` param.
+- `PipelineDefinition.auth_policy: str | None` and `PipelineSchema.auth_policy` with validator (accepts `"lazy"`, `"strict"`, or `None`).
+- `execute_pipeline()` gains `pool_policy` param; mid-run lazy hook connects `SDKExecutionSession` just before the first step whose candidate statically resolves to an SDK alias. `_step_needs_sdk()` and `_connect_lazy_session()` are private helpers.
+- `LazySessionConnectError` exception carries step name; caught in `_run_pipeline_sdk` which prints a user-facing red message with `--strict` guidance and raises `typer.Exit(1)`.
+- `DispatchAction._dispatch` guard: when `sdk_session is None` and the resolved alias has an explicit `'sdk'` profile (pool selected an SDK alias at runtime), returns FAILED with `--strict` hint. `None` alias_profile (no explicit profile) still routes through the one-shot agent safely.
+- `sq run --strict` flag; YAML `auth_policy: strict` support; policy resolution precedence: LAZY → YAML strict → CLI `--strict`.
+- `PERSISTENT_SESSION_STEP_TYPES` renamed public (was `_PERSISTENT_SESSION_STEP_TYPES`) to avoid pyright `reportPrivateUsage`.
+
+**Tests:** `tests/cli/commands/test_run_pipeline_lazy.py` (new, 18 tests); expanded `test_classification.py` (+12 tests); `test_schema.py` (+4 tests); `test_dispatch.py` (1 updated). 1836 total passing, 0 new failures. ruff/pyright clean (3 pre-existing pyright errors from slice 244 unchanged).
+
+**Key design decision (implementation):** Dispatch guard uses `alias_profile == ProfileName.SDK` (not `is_sdk_profile(alias_profile)`) because `is_sdk_profile(None)` returns True but `None` profile means "one-shot agent, safe without session". Only an explicit `'sdk'` profile signals that a pool selected a true SDK alias requiring a persistent session.
+
 ### Slice 243: Resolution Pre-Scan — Phase 6 Implementation Complete
 
 Commit `e838898`. Changed files: `src/squadron/pipeline/classification.py` (new, 235 lines), `src/squadron/pipeline/resolver.py` (added `cascade_candidates()`; refactored `resolve()` to consume it), `tests/pipeline/test_classification.py` (new, 28 tests).

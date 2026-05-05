@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Lazy pool-auth default**: `sq run` no longer connects a Claude session at startup for pool-uncertain pipelines. The session is connected on-demand the first time a step actually resolves to an SDK model. Claude auth is skipped entirely for runs where pool selection never picks a Claude model.
+- **`--strict` flag** (`sq run --strict`): Opt in to the pre-245 eager-connect behaviour for pool-uncertain pipelines. Also configurable per-pipeline via `auth_policy: strict` in the pipeline YAML.
+- **`auth_policy` YAML field**: Pipelines can set `auth_policy: lazy` (explicit default) or `auth_policy: strict` in their YAML header. CLI `--strict` overrides the YAML setting.
 - Pipeline classification gates SDK session construction — non-Claude pipelines no longer require Claude auth. `sq run my-non-claude-pipeline` completes without spawning a Claude CLI process.
 - Pipeline classification pre-scan: Squadron now classifies each model-dispatching step (`dispatch`, `review`, `summary`, `compact`) as SDK-required, non-SDK, or pool-uncertain before the pipeline runs. This is the data foundation for upcoming conditional session construction (slice 244) and `sq run --explain` diagnostics (slice 246).
 - Non-SDK models (e.g. `minimax`, `gemini-flash`) now work correctly in prompt-only/IDE mode (`/sq:run`). The dispatch renderer emits a `sq _dispatch-run` command for non-SDK profiles; the IDE harness runs it via Bash instead of silently using the calling session.

@@ -7,7 +7,8 @@ dependencies: [244]
 interfaces: [246, 247, 248]
 dateCreated: 20260504
 dateUpdated: 20260504
-status: not_started
+status: complete
+commit: be0138c
 ---
 
 # Slice Design: Pool-Resolution Classification Policy and Mid-Run Session Construction
