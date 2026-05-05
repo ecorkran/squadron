@@ -114,6 +114,17 @@ async def test_execute_pipeline_session_none_propagates_none() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _make_sdk_classification() -> MagicMock:
+    """Return a classification mock with needs_persistent_session=True."""
+    from squadron.pipeline.classification import PipelineClassification, PipelineShape
+
+    mock = MagicMock(spec=PipelineClassification)
+    mock.needs_persistent_session = True
+    mock.shape = PipelineShape.CLAUDE_REQUIRED_PERSISTENT
+    mock.steps = ()
+    return mock
+
+
 @pytest.mark.asyncio
 async def test_run_pipeline_sdk_connects_and_disconnects_on_success() -> None:
     """_run_pipeline_sdk connects before run and disconnects after success."""
@@ -132,6 +143,12 @@ async def test_run_pipeline_sdk_connects_and_disconnects_on_success() -> None:
         patch("squadron.cli.commands.run._resolve_execution_mode"),
         patch("squadron.cli.commands.run.load_pipeline"),
         patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        patch(
+            "squadron.cli.commands.run.classify_pipeline",
+            return_value=_make_sdk_classification(),
+        ),
+        patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
+        patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
         patch(
             "squadron.cli.commands.run._run_pipeline",
             new_callable=AsyncMock,
@@ -164,6 +181,12 @@ async def test_run_pipeline_sdk_disconnects_on_failure() -> None:
         patch("squadron.cli.commands.run._resolve_execution_mode"),
         patch("squadron.cli.commands.run.load_pipeline"),
         patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        patch(
+            "squadron.cli.commands.run.classify_pipeline",
+            return_value=_make_sdk_classification(),
+        ),
+        patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
+        patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
         patch(
             "squadron.cli.commands.run._run_pipeline",
             new_callable=AsyncMock,

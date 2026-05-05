@@ -7,17 +7,22 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich import print as rprint
 from rich.panel import Panel
 from rich.table import Table
 
+if TYPE_CHECKING:
+    from squadron.pipeline.intelligence.pools.backend import PoolBackend
+
 from squadron.integrations.context_forge import (
     ContextForgeClient,
     ContextForgeError,
     ContextForgeNotAvailable,
 )
+from squadron.pipeline.classification import ClassificationError, classify_pipeline
 from squadron.pipeline.executor import (
     ExecutionStatus,
     PipelineResult,
@@ -37,6 +42,8 @@ from squadron.pipeline.prompt_renderer import (
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.sdk_session import SDKExecutionSession
 from squadron.pipeline.state import ExecutionMode, SchemaVersionError, StateManager
+
+_logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Status display colours
@@ -160,6 +167,7 @@ async def _run_pipeline(
     run_id: str | None = None,
     execution_mode: ExecutionMode = ExecutionMode.SDK,
     _action_registry: dict[str, object] | None = None,
+    pool_backend: PoolBackend | None = None,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
 
@@ -190,7 +198,8 @@ async def _run_pipeline(
         )
 
     _run_id = run_id  # capture for closure below
-    pool_backend = DefaultPoolBackend()
+    if pool_backend is None:
+        pool_backend = DefaultPoolBackend()
     resolver = ModelResolver(
         cli_override=model_override,
         pipeline_model=definition.model,
@@ -233,41 +242,85 @@ async def _run_pipeline_sdk(
     from_step: str | None = None,
     run_id: str | None = None,
 ) -> PipelineResult:
-    """Create an SDK session, run the pipeline, and disconnect on exit.
+    """Create an SDK session if needed, run the pipeline, and disconnect on exit.
+
+    Classifies the pipeline before session construction; only pipelines whose
+    steps require a persistent Claude session will construct and connect an
+    ``SDKExecutionSession``.  Non-SDK pipelines pass ``sdk_session=None`` to
+    ``execute_pipeline``.
 
     When *run_id* is provided the existing run state is reused (resume path).
 
-    Raises typer.Exit(1) when running inside a Claude Code session.
-    The session is disconnected in a ``finally`` block so cleanup happens
-    on success, failure, checkpoint pause, and keyboard interrupt.
+    Raises typer.Exit(1) when running inside a Claude Code session or when
+    pipeline classification fails.  The session is disconnected in a ``finally``
+    block so cleanup happens on success, failure, checkpoint pause, and
+    keyboard interrupt.
     """
     _resolve_execution_mode(prompt_only=False)
 
-    # Validate before connecting the SDK session — fail fast on bad YAML
+    # Validate before classification — fail fast on bad YAML
     definition = load_pipeline(pipeline_name)
     errors = validate_pipeline(definition)
     if errors:
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
-    import claude_agent_sdk
+    # Shared pool backend — used by both the classification resolver and
+    # the authoritative resolver built inside _run_pipeline.
+    pool_backend = DefaultPoolBackend()
 
-    # Permission mode must be set at session start; the SDK rejects runtime
-    # set_permission_mode("bypassPermissions") calls (since claude-agent-sdk
-    # ~Apr 2026). bypassPermissions matches the prior runtime behavior.
-    # Default to the Claude Code system prompt preset so SDK dispatches get the
-    # full Claude Code persona (coding conventions, response style, project
-    # context), not the Agent SDK's minimal tool-only prompt. See
-    # platform.claude.com/docs/en/agent-sdk/modifying-system-prompts.
-    options = claude_agent_sdk.ClaudeAgentOptions(
-        cwd=str(Path.cwd()),
-        permission_mode="bypassPermissions",
-        system_prompt={"type": "preset", "preset": "claude_code"},
+    # Classification-only resolver (no on_pool_selection callback needed;
+    # classify_pipeline never calls pool_backend.select()).
+    _classify_resolver = ModelResolver(
+        cli_override=model_override,
+        pipeline_model=definition.model,
+        pool_backend=pool_backend,
     )
-    client = claude_agent_sdk.ClaudeSDKClient(options=options)
-    session = SDKExecutionSession(client=client, options=options)
 
-    await session.connect()
+    try:
+        classification = classify_pipeline(definition, _classify_resolver, pool_backend)
+    except ClassificationError as exc:
+        rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
+        raise typer.Exit(1)
+
+    _logger.info(
+        "pipeline '%s' shape: %s (%d classified steps)",
+        pipeline_name,
+        classification.shape,
+        len(classification.steps),
+    )
+    for step in classification.steps:
+        _logger.debug(
+            "  step '%s' [%s]: %s (alias '%s' → profile '%s')",
+            step.step_name,
+            step.action_type,
+            step.classification,
+            step.resolved_alias,
+            step.profile,
+        )
+
+    session: SDKExecutionSession | None
+    if classification.needs_persistent_session:
+        import claude_agent_sdk
+
+        # Permission mode must be set at session start; the SDK rejects runtime
+        # set_permission_mode("bypassPermissions") calls (since claude-agent-sdk
+        # ~Apr 2026). bypassPermissions matches the prior runtime behavior.
+        # Default to the Claude Code system prompt preset so SDK dispatches get the
+        # full Claude Code persona (coding conventions, response style, project
+        # context), not the Agent SDK's minimal tool-only prompt. See
+        # platform.claude.com/docs/en/agent-sdk/modifying-system-prompts.
+        options = claude_agent_sdk.ClaudeAgentOptions(
+            cwd=str(Path.cwd()),
+            permission_mode="bypassPermissions",
+            system_prompt={"type": "preset", "preset": "claude_code"},
+        )
+        client = claude_agent_sdk.ClaudeSDKClient(options=options)
+        session = SDKExecutionSession(client=client, options=options)
+        await session.connect()
+    else:
+        session = None
+
     try:
         result = await _run_pipeline(
             pipeline_name,
@@ -278,9 +331,11 @@ async def _run_pipeline_sdk(
             sdk_session=session,
             run_id=run_id,
             execution_mode=ExecutionMode.SDK,
+            pool_backend=pool_backend,
         )
     finally:
-        await session.disconnect()
+        if session is not None:
+            await session.disconnect()
 
     return result
 
