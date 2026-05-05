@@ -12,34 +12,29 @@ dateCreated: 20260504
 dateUpdated: 20260504
 findings:
   - id: F001
-    severity: concern
-    category: test-coverage
-    summary: "Missing test for `claude_required_one_shot` shape (Success Criterion 8)"
-    location: tests/cli/test_run_pipeline_sdk.py
+    severity: pass
+    category: uncategorized
+    summary: "All eight functional success criteria trace to tasks"
+    location: unverified
   - id: F002
     severity: concern
-    category: task-clarity
-    summary: "T4 `on_pool_selection` callback resolution is ambiguous"
+    category: uncategorized
+    summary: "T4 prescribes assigning to `resolver._on_pool_selection` private attribute from outside the class"
     location: src/squadron/cli/commands/run.py
   - id: F003
     severity: note
-    category: consistency
-    summary: "Test file location differs from slice design"
+    category: uncategorized
+    summary: "Test file location differs from slice design suggestion"
     location: tests/cli/test_run_pipeline_sdk.py
   - id: F004
     severity: note
-    category: test-with-pattern
-    summary: "T4 refactoring step lacks immediate test (test-with pattern gap)"
-    location: src/squadron/cli/commands/run.py
-  - id: F005
-    severity: pass
-    category: coverage
-    summary: "All other success criteria have corresponding tasks"
+    category: uncategorized
+    summary: "Task IDs and design test IDs share the same namespace, creating potential confusion"
     location: unverified
-  - id: F006
-    severity: pass
-    category: sequencing
-    summary: "Task sequencing respects dependencies"
+  - id: F005
+    severity: note
+    category: uncategorized
+    summary: "T9 is a conditional audit task that may expand scope"
     location: unverified
 ---
 
@@ -50,33 +45,22 @@ findings:
 
 ## Findings
 
-### [CONCERN] Missing test for `claude_required_one_shot` shape (Success Criterion 8)
+### [PASS] All eight functional success criteria trace to tasks
 
-Success Criterion 8 explicitly requires that "`claude_required_one_shot` pipelines (review-only, SDK profiles) run without a persistent session." No task or test case covers this shape. T6 test T1 covers `claude_free` (all non-SDK), and T6 test T3 covers `claude_required_persistent` (at least one SDK dispatch step). But `claude_required_one_shot` is a distinct classification: it has SDK-resolved steps (reviews using one-shot), yet `needs_persistent_session=False`. Neither existing test exercises this combination. A test should be added to T6 (e.g., mock `classify_pipeline` returning `shape=claude_required_one_shot, needs_persistent_session=False` with at least one SDK-classified review step) and assert no persistent session is constructed.
+Every functional requirement (FR1–FR8) from the slice design maps to at least one implementation task and at least one test scenario. Specifically: FR1/T6-T1, FR2/T6-T1+T2, FR3/T6-T3, FR4/T6-T4, FR5/T5+T6-T5, FR6/T7, FR7/T6-T8, FR8/T6-T3b. Technical requirements (ruff, pyright, full suite) are covered by T8 and T10. No success criteria are left uncovered.
 
-### [CONCERN] T4 `on_pool_selection` callback resolution is ambiguous
+### [CONCERN] T4 prescribes assigning to `resolver._on_pool_selection` private attribute from outside the class
 
-T4 contains an extended discussion with multiple unresolved options for handling the `on_pool_selection` callback when the resolver is pre-built in `_run_pipeline_sdk`:
-- "thread `state_mgr` creation up to `_run_pipeline_sdk`"
-- "accept that pool selections during classification are not logged"
-- "set `resolver._on_pool_selection = lambda ...` after `state_mgr` is known"
-- "add an `attach_pool_callback(fn)` method on `ModelResolver`"
-- "Check `ModelResolver` for an existing setter or direct attribute; use whatever is cleanest"
+T4 instructs: "In the `else:` path (pre-built resolver supplied), attach the callback directly: `resolver._on_pool_selection = lambda sel: state_mgr.log_pool_selection(_run_id, sel)`". The task acknowledges this accesses a private attribute and explicitly says "Do not add a new public setter method." While the decision is deliberate, it couples `_run_pipeline` to `ModelResolver`'s internal implementation — any rename or refactor of `_on_pool_selection` in `resolver.py` would silently break this code with no type-checker warning. The slice design's implementation section does not address this callback-attachment detail at all, so there is no design-level justification to reference. A public constructor parameter (e.g., `on_pool_selection` passed to `ModelResolver.__init__`) or a documented setter would be more robust and would still allow the same functional behavior. This is not blocking, but it creates a maintenance hazard that should be reconsidered.
 
-A junior AI implementer cannot resolve this ambiguity. The task should prescribe a single approach. The slice design's implementation detail section shows the resolver constructed without `on_pool_selection` in the `_run_pipeline_sdk` code block, implying the callback is attached later. The task should state the chosen approach definitively (e.g., "Inside `_run_pipeline`, when `resolver is not None`, attach the `on_pool_selection` callback by setting `resolver.on_pool_selection = ...` after `state_mgr` and `_run_id` are available").
+### [NOTE] Test file location differs from slice design suggestion
 
-### [NOTE] Test file location differs from slice design
+The slice design suggests `tests/pipeline/test_conditional_session.py`, but tasks place all new tests in `tests/cli/test_run_pipeline_sdk.py`. This is a reasonable judgment call — the code under test (`_run_pipeline_sdk`) lives in `cli/commands/run.py` — but it diverges from the design's explicit suggestion. No action required; just noting the discrepancy.
 
-The slice design specifies `tests/pipeline/test_conditional_session.py` as the test file, but the tasks use `tests/cli/test_run_pipeline_sdk.py`. Either location is defensible, but the discrepancy should be acknowledged or the slice design updated to match.
+### [NOTE] Task IDs and design test IDs share the same namespace, creating potential confusion
 
-### [NOTE] T4 refactoring step lacks immediate test (test-with pattern gap)
+The task breakdown uses T1–T11 as task IDs. The slice design's test coverage table uses T1–T8 as test scenario IDs. Task T6's sub-items reference design test IDs (e.g., "T1", "T2", "T3") within a task named "T6", producing lines like "**T3b** — `claude_required_one_shot` shape" inside task T6. This is internally consistent once understood, but a reader encountering "T3" must infer from context whether it refers to task T3 or design test scenario T3. Using a different prefix (e.g., "S1"–"S8" for scenarios) would eliminate ambiguity.
 
-T4 lifts `pool_backend` and `resolver` construction into `_run_pipeline_sdk` — a behavioral no-op refactoring step. No test immediately follows T4; the next test task (T6) comes after T5. Since T4 doesn't change observable behavior, the gap is low-risk, but a quick "existing integration tests still pass" check after T4 would strengthen confidence before T5 adds the classification gate. Consider adding a `uv run pytest tests/cli/ -q` verification step at the end of T4.
+### [NOTE] T9 is a conditional audit task that may expand scope
 
-### [PASS] All other success criteria have corresponding tasks
-
-Cross-referencing success criteria 1–7 against tasks: SC 1 (non-SDK pipeline runs with `sdk_session=None`) → T6 T1/T2; SC 2 (no SDKExecutionSession constructed for non-SDK) → T6 T1; SC 3 (SDK pipeline constructs session) → T6 T3; SC 4 (POOL_UNCERTAIN constructs session) → T6 T4; SC 5 (ClassificationError → typer.Exit(1)) → T5 impl + T6 T5; SC 6 (resume re-classifies) → T7 T6/T7; SC 7 (connect() failure propagation) → T6 T8. Technical requirements (ruff, pyright, full suite) → T8, T10. Commit checkpoints are distributed (T8, T10, T11), not batched at end. No scope creep detected — all tasks trace to a success criterion or necessary infrastructure.
-
-### [PASS] Task sequencing respects dependencies
-
-T1→T2→T3 (param addition + test) →T4→T5→T6/T7 (gate implementation + tests) →T8 (commit) →T9 (audit) →T10 (final validation) →T11 (docs). No circular dependencies. The test-with pattern is correctly applied for the two behavioral change points: T2→T3 (fallback test) and T5→T6/T7 (gate tests).
+T9 is described as "a targeted audit, not a code change" but includes the conditional: "If any of the three guards are absent or broken, fix them in the respective action file and add a regression test." The slice design explicitly states these guards already exist and are correct. If the audit finds otherwise, the task would expand to code changes in `compact.py` and `summary.py` with no dedicated test task for those fixes. This is acceptable as a belt-and-suspenders check, but the task should be treated as potentially involving unplanned work.
