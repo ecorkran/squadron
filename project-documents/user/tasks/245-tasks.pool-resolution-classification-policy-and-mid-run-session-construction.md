@@ -6,7 +6,7 @@ parent: 245-slice.pool-resolution-classification-policy-and-mid-run-session-cons
 dependencies: [244]
 dateCreated: 20260504
 dateUpdated: 20260504
-status: not_started
+status: complete
 ---
 
 # Tasks: Pool-Resolution Classification Policy and Mid-Run Session Construction
@@ -34,13 +34,13 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T1 — Add `PoolClassificationPolicy` enum to `classification.py`
 
-- [ ] In `src/squadron/pipeline/classification.py`, add after the existing `PipelineShape` enum:
+- [x] In `src/squadron/pipeline/classification.py`, add after the existing `PipelineShape` enum:
   ```python
   class PoolClassificationPolicy(StrEnum):
       LAZY = "lazy"
       STRICT = "strict"
   ```
-- [ ] Export `PoolClassificationPolicy` from `__all__` if `classification.py` has one; otherwise ensure it is importable.
+- [x] Export `PoolClassificationPolicy` from `__all__` if `classification.py` has one; otherwise ensure it is importable.
 
 **Success:** `from squadron.pipeline.classification import PoolClassificationPolicy` works; `PoolClassificationPolicy.LAZY` and `PoolClassificationPolicy.STRICT` are the two members.
 
@@ -48,9 +48,9 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T2 — Test: `PoolClassificationPolicy` enum
 
-- [ ] In `tests/pipeline/test_classification.py`, add a test class `TestPoolClassificationPolicy`:
-  - [ ] `test_lazy_value` — `PoolClassificationPolicy.LAZY == "lazy"`
-  - [ ] `test_strict_value` — `PoolClassificationPolicy.STRICT == "strict"`
+- [x] In `tests/pipeline/test_classification.py`, add a test class `TestPoolClassificationPolicy`:
+  - [x] `test_lazy_value` — `PoolClassificationPolicy.LAZY == "lazy"`
+  - [x] `test_strict_value` — `PoolClassificationPolicy.STRICT == "strict"`
 
 **Success:** Both tests pass.
 
@@ -58,14 +58,14 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T3 — Update `PipelineClassification` to store policy
 
-- [ ] In `src/squadron/pipeline/classification.py`, add `policy` field to `PipelineClassification`:
+- [x] In `src/squadron/pipeline/classification.py`, add `policy` field to `PipelineClassification`:
   ```python
   policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY
   ```
-- [ ] Update `needs_persistent_session` property:
+- [x] Update `needs_persistent_session` property:
   - Under `LAZY`: `POOL_UNCERTAIN` steps do **not** count — only `SDK_REQUIRED` steps do.
   - Under `STRICT`: `POOL_UNCERTAIN` counts as SDK-required (existing behavior).
-- [ ] `needs_one_shot_claude` is unchanged (reviews are not gated by policy).
+- [x] `needs_one_shot_claude` is unchanged (reviews are not gated by policy).
 
 **Success:** `PipelineClassification` has a `policy` field; `needs_persistent_session` returns correctly under both policies.
 
@@ -73,11 +73,11 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T4 — Test: `needs_persistent_session` under both policies
 
-- [ ] In `tests/pipeline/test_classification.py`, add to (or extend) the classification test suite:
-  - [ ] `test_lazy_pool_uncertain_not_needs_persistent` — pipeline with one `POOL_UNCERTAIN` dispatch step; `policy=LAZY`; assert `needs_persistent_session is False`.
-  - [ ] `test_strict_pool_uncertain_needs_persistent` — same pipeline; `policy=STRICT`; assert `needs_persistent_session is True`.
-  - [ ] `test_lazy_sdk_required_still_needs_persistent` — pipeline with one `SDK_REQUIRED` dispatch step; `policy=LAZY`; assert `needs_persistent_session is True`.
-  - [ ] `test_lazy_mixed_sdk_and_pool_uncertain` — pipeline with one `SDK_REQUIRED` step and one `POOL_UNCERTAIN` step; `policy=LAZY`; assert `needs_persistent_session is True` (SDK_REQUIRED alone is sufficient).
+- [x] In `tests/pipeline/test_classification.py`, add to (or extend) the classification test suite:
+  - [x] `test_lazy_pool_uncertain_not_needs_persistent` — pipeline with one `POOL_UNCERTAIN` dispatch step; `policy=LAZY`; assert `needs_persistent_session is False`.
+  - [x] `test_strict_pool_uncertain_needs_persistent` — same pipeline; `policy=STRICT`; assert `needs_persistent_session is True`.
+  - [x] `test_lazy_sdk_required_still_needs_persistent` — pipeline with one `SDK_REQUIRED` dispatch step; `policy=LAZY`; assert `needs_persistent_session is True`.
+  - [x] `test_lazy_mixed_sdk_and_pool_uncertain` — pipeline with one `SDK_REQUIRED` step and one `POOL_UNCERTAIN` step; `policy=LAZY`; assert `needs_persistent_session is True` (SDK_REQUIRED alone is sufficient).
 
 **Success:** All four tests pass.
 
@@ -85,11 +85,11 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T5 — Update `classify_pipeline` signature and default
 
-- [ ] In `src/squadron/pipeline/classification.py`, update `classify_pipeline`:
+- [x] In `src/squadron/pipeline/classification.py`, update `classify_pipeline`:
   - Add `policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY` parameter.
   - Pass `policy` to `PipelineClassification(...)` constructor.
   - No other logic changes — per-step `StepClassification` is unchanged.
-- [ ] Update the docstring to document the `policy` parameter and new default.
+- [x] Update the docstring to document the `policy` parameter and new default.
 
 **Success:** `classify_pipeline(definition, resolver)` returns a `PipelineClassification` with `policy=LAZY`; passing `policy=PoolClassificationPolicy.STRICT` stores `STRICT`.
 
@@ -97,10 +97,10 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T6 — Test: `classify_pipeline` policy parameter
 
-- [ ] In `tests/pipeline/test_classification.py`:
-  - [ ] `test_classify_default_policy_is_lazy` — call `classify_pipeline` without `policy` arg; assert `result.policy == PoolClassificationPolicy.LAZY`.
-  - [ ] `test_classify_explicit_strict_policy` — call with `policy=STRICT`; assert `result.policy == PoolClassificationPolicy.STRICT`.
-- [ ] Verify existing `classify_pipeline` tests still pass with new default (pool-uncertain tests may need `policy=STRICT` annotation if they relied on the old conservative default behavior).
+- [x] In `tests/pipeline/test_classification.py`:
+  - [x] `test_classify_default_policy_is_lazy` — call `classify_pipeline` without `policy` arg; assert `result.policy == PoolClassificationPolicy.LAZY`.
+  - [x] `test_classify_explicit_strict_policy` — call with `policy=STRICT`; assert `result.policy == PoolClassificationPolicy.STRICT`.
+- [x] Verify existing `classify_pipeline` tests still pass with new default (pool-uncertain tests may need `policy=STRICT` annotation if they relied on the old conservative default behavior).
 
 **Success:** All tests in `test_classification.py` pass.
 
@@ -108,11 +108,11 @@ session construction hook (arch §5a) is implemented in `execute_pipeline`.
 
 ### T7 — Add `auth_policy` to `PipelineDefinition` and `PipelineSchema`
 
-- [ ] In `src/squadron/pipeline/models.py`, add to `PipelineDefinition`:
+- [x] In `src/squadron/pipeline/models.py`, add to `PipelineDefinition`:
   ```python
   auth_policy: str | None = None
   ```
-- [ ] In `src/squadron/pipeline/schema.py`:
+- [x] In `src/squadron/pipeline/schema.py`:
   - Add `auth_policy: str | None = None` field to `PipelineSchema`.
   - Add a `@field_validator("auth_policy")` (or inline check) that rejects any value that is not `None`, `"lazy"`, or `"strict"` — raise `ValueError` with a clear message.
   - In `to_definition()`, pass `auth_policy=self.auth_policy` to `PipelineDefinition(...)`.
@@ -125,11 +125,11 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T8 — Test: `auth_policy` YAML field
 
-- [ ] In `tests/pipeline/test_loader.py` (or a new `test_schema.py`), add:
-  - [ ] `test_auth_policy_strict_loads` — pipeline YAML with `auth_policy: strict`; assert `definition.auth_policy == "strict"`.
-  - [ ] `test_auth_policy_lazy_loads` — pipeline YAML with `auth_policy: lazy`; assert `definition.auth_policy == "lazy"`.
-  - [ ] `test_auth_policy_absent_defaults_none` — pipeline YAML without `auth_policy`; assert `definition.auth_policy is None`.
-  - [ ] `test_auth_policy_invalid_raises` — pipeline YAML with `auth_policy: banana`; assert `pydantic.ValidationError` is raised.
+- [x] In `tests/pipeline/test_loader.py` (or a new `test_schema.py`), add:
+  - [x] `test_auth_policy_strict_loads` — pipeline YAML with `auth_policy: strict`; assert `definition.auth_policy == "strict"`.
+  - [x] `test_auth_policy_lazy_loads` — pipeline YAML with `auth_policy: lazy`; assert `definition.auth_policy == "lazy"`.
+  - [x] `test_auth_policy_absent_defaults_none` — pipeline YAML without `auth_policy`; assert `definition.auth_policy is None`.
+  - [x] `test_auth_policy_invalid_raises` — pipeline YAML with `auth_policy: banana`; assert `pydantic.ValidationError` is raised.
 
 **Success:** All four tests pass.
 
@@ -137,28 +137,28 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T9 — Add `pool_policy` parameter to `execute_pipeline`
 
-- [ ] In `src/squadron/pipeline/executor.py`, add to `execute_pipeline` signature:
+- [x] In `src/squadron/pipeline/executor.py`, add to `execute_pipeline` signature:
   ```python
   pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
   ```
-- [ ] Add mid-run session construction hook inside the step loop, immediately before each step dispatch call:
+- [x] Add mid-run session construction hook inside the step loop, immediately before each step dispatch call:
   ```python
   if sdk_session is None and _step_needs_sdk(step, resolver, merged_params):
       sdk_session = await _connect_lazy_session(run_id=effective_run_id)
   ```
   Apply this before **all** step-type branches (`each`, `fan_out`, `loop`, `each`, and the default branch).
-- [ ] Implement `_connect_lazy_session(run_id: str) -> SDKExecutionSession` as a private async helper in `executor.py`:
+- [x] Implement `_connect_lazy_session(run_id: str) -> SDKExecutionSession` as a private async helper in `executor.py`:
   - Constructs `ClaudeAgentOptions` and `ClaudeSDKClient` identically to `_run_pipeline_sdk`.
   - Calls `await session.connect()`.
   - On connect failure: logs at `ERROR`, raises the exception (caller handles state persistence).
   - Returns the connected `SDKExecutionSession`.
-- [ ] Implement `_step_needs_sdk(step: StepConfig, resolver: ModelResolver, params: dict[str, object]) -> bool` as a private helper:
+- [x] Implement `_step_needs_sdk(step: StepConfig, resolver: ModelResolver, params: dict[str, object]) -> bool` as a private helper:
   - Returns `True` iff `step.step_type` is in `_PERSISTENT_SESSION_STEP_TYPES` and the resolved profile `is_sdk_profile(...)`.
   - Resolves the step model using the same cascade logic as classification (use `resolver.cascade_candidates` → first non-None → `resolve_model_alias`).
   - Returns `False` for pool candidates (cannot confirm statically) and for non-persistent-session step types.
   - Must not mutate resolver state or invoke pool selection.
-- [ ] Import `PoolClassificationPolicy` at top of `executor.py`.
-- [ ] Add `_connect_lazy_session` and `_step_needs_sdk` to the module but **not** to `__all__`.
+- [x] Import `PoolClassificationPolicy` at top of `executor.py`.
+- [x] Add `_connect_lazy_session` and `_step_needs_sdk` to the module but **not** to `__all__`.
 
 **Success:** `execute_pipeline` accepts `pool_policy`; `_step_needs_sdk` and `_connect_lazy_session` are importable for testing.
 
@@ -166,14 +166,14 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T10 — Test: mid-run session construction hook
 
-- [ ] Create `tests/cli/commands/test_run_pipeline_lazy.py`.
-- [ ] `test_lazy_static_sdk_step_constructs_session_before_step` — mock `_connect_lazy_session`; verify it is called before the first static-SDK step's `ActionContext` is built; verify all subsequent steps receive the same session object.
-- [ ] `test_lazy_no_sdk_steps_no_session_constructed` — pipeline with only non-SDK steps; verify `_connect_lazy_session` is never called.
-- [ ] `test_lazy_multiple_sdk_steps_reuse_same_session` — two consecutive SDK steps; verify `_connect_lazy_session` called exactly once; both steps get the same session.
-- [ ] `test_step_needs_sdk_returns_true_for_sdk_alias` — unit test `_step_needs_sdk` directly with a static SDK alias.
-- [ ] `test_step_needs_sdk_returns_false_for_non_sdk_alias` — non-SDK alias.
-- [ ] `test_step_needs_sdk_returns_false_for_pool_candidate` — pool-prefixed candidate.
-- [ ] `test_lazy_pool_uncertain_only_no_session_at_startup` — integration-level: call `_run_pipeline_sdk` with a pipeline whose only dispatch step is pool-uncertain; mock `SDKExecutionSession` constructor; assert constructor is never called (session construction skipped entirely).
+- [x] Create `tests/cli/commands/test_run_pipeline_lazy.py`.
+- [x] `test_lazy_static_sdk_step_constructs_session_before_step` — mock `_connect_lazy_session`; verify it is called before the first static-SDK step's `ActionContext` is built; verify all subsequent steps receive the same session object.
+- [x] `test_lazy_no_sdk_steps_no_session_constructed` — pipeline with only non-SDK steps; verify `_connect_lazy_session` is never called.
+- [x] `test_lazy_multiple_sdk_steps_reuse_same_session` — two consecutive SDK steps; verify `_connect_lazy_session` called exactly once; both steps get the same session.
+- [x] `test_step_needs_sdk_returns_true_for_sdk_alias` — unit test `_step_needs_sdk` directly with a static SDK alias.
+- [x] `test_step_needs_sdk_returns_false_for_non_sdk_alias` — non-SDK alias.
+- [x] `test_step_needs_sdk_returns_false_for_pool_candidate` — pool-prefixed candidate.
+- [x] `test_lazy_pool_uncertain_only_no_session_at_startup` — integration-level: call `_run_pipeline_sdk` with a pipeline whose only dispatch step is pool-uncertain; mock `SDKExecutionSession` constructor; assert constructor is never called (session construction skipped entirely).
 
 **Success:** All seven tests pass.
 
@@ -181,14 +181,14 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T10b — Implement dispatch-action guard: pool selects SDK, no session
 
-- [ ] In `src/squadron/pipeline/actions/dispatch.py`, locate the `_dispatch` method's session routing branch.
-- [ ] Add a guard: if the resolved profile `is_sdk_profile(profile)` and `context.sdk_session is None`, return a `FAILED` `ActionResult` with message:
+- [x] In `src/squadron/pipeline/actions/dispatch.py`, locate the `_dispatch` method's session routing branch.
+- [x] Add a guard: if the resolved profile `is_sdk_profile(profile)` and `context.sdk_session is None`, return a `FAILED` `ActionResult` with message:
   ```
   Step '{step_name}' resolved to an SDK profile at runtime but no persistent
   session is available. Re-run with --strict to connect at startup, or ensure
   this pool's runtime selection does not yield an SDK alias.
   ```
-- [ ] The guard fires only when `sdk_session is None` and the profile is SDK — it does not affect runs where the session was constructed (eager or lazy).
+- [x] The guard fires only when `sdk_session is None` and the profile is SDK — it does not affect runs where the session was constructed (eager or lazy).
 
 **Success:** When a dispatch step resolves to an SDK profile and `sdk_session` is `None`, the action returns `FAILED` with a message containing `--strict`.
 
@@ -196,9 +196,9 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T10c — Test: dispatch-action guard
 
-- [ ] In `tests/pipeline/test_run_pipeline_lazy.py` (or `tests/pipeline/actions/test_dispatch.py`):
-  - [ ] `test_dispatch_sdk_profile_no_session_returns_failed` — construct a `DispatchAction`, call `execute` with `ActionContext(sdk_session=None)` where the resolved profile is SDK; assert result is `FAILED` and message contains `"--strict"`.
-  - [ ] `test_dispatch_sdk_profile_with_session_proceeds` — same but `sdk_session` is a mock session; assert result is not `FAILED` from the guard.
+- [x] In `tests/pipeline/test_run_pipeline_lazy.py` (or `tests/pipeline/actions/test_dispatch.py`):
+  - [x] `test_dispatch_sdk_profile_no_session_returns_failed` — construct a `DispatchAction`, call `execute` with `ActionContext(sdk_session=None)` where the resolved profile is SDK; assert result is `FAILED` and message contains `"--strict"`.
+  - [x] `test_dispatch_sdk_profile_with_session_proceeds` — same but `sdk_session` is a mock session; assert result is not `FAILED` from the guard.
 
 **Success:** Both tests pass.
 
@@ -206,10 +206,10 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T11 — Handle mid-run connect failure in `execute_pipeline`
 
-- [ ] In `execute_pipeline`, wrap the `_connect_lazy_session` call in a `try/except`:
+- [x] In `execute_pipeline`, wrap the `_connect_lazy_session` call in a `try/except`:
   - On failure: save run state as `failed` via the state manager (use existing failure-persistence pattern in the executor), then re-raise so `_run_pipeline_sdk` surfaces it as a red error message.
   - Log at `ERROR` with the step name and exception.
-- [ ] Ensure `_run_pipeline_sdk` catches the re-raised exception and prints:
+- [x] Ensure `_run_pipeline_sdk` catches the re-raised exception and prints:
   ```
   [red]Error: Claude auth required — connection failed mid-run at step '{name}'.[/red]
   Run state saved. Resume with: sq run --resume {run_id}
@@ -221,9 +221,9 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T12 — Test: mid-run connect failure UX
 
-- [ ] In `tests/cli/commands/test_run_pipeline_lazy.py`:
-  - [ ] `test_lazy_connect_failure_saves_failed_state` — mock `_connect_lazy_session` to raise; verify run state status is `failed`; verify `typer.Exit(1)` raised.
-  - [ ] `test_lazy_connect_failure_message_names_step` — verify error message contains the triggering step name.
+- [x] In `tests/cli/commands/test_run_pipeline_lazy.py`:
+  - [x] `test_lazy_connect_failure_saves_failed_state` — mock `_connect_lazy_session` to raise; verify run state status is `failed`; verify `typer.Exit(1)` raised.
+  - [x] `test_lazy_connect_failure_message_names_step` — verify error message contains the triggering step name.
 
 **Success:** Both tests pass.
 
@@ -231,18 +231,18 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T13 — Add `--strict` flag to `sq run`; wire policy through `_run_pipeline_sdk`
 
-- [ ] In `src/squadron/cli/commands/run.py`, add to the `run()` typer function parameters:
+- [x] In `src/squadron/cli/commands/run.py`, add to the `run()` typer function parameters:
   ```python
   strict: bool = typer.Option(False, "--strict", help="Force eager session construction for pool-uncertain steps.")
   ```
-- [ ] In `_run_pipeline_sdk`, add `policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY` parameter.
-- [ ] Resolve the effective policy in `_run_pipeline_sdk`:
+- [x] In `_run_pipeline_sdk`, add `policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY` parameter.
+- [x] Resolve the effective policy in `_run_pipeline_sdk`:
   1. Start with `PoolClassificationPolicy.LAZY`.
   2. If `definition.auth_policy == "strict"`, use `STRICT`.
   3. If the CLI `strict` flag is `True`, use `STRICT` (takes precedence over YAML).
-- [ ] Pass `policy` to `classify_pipeline(...)`.
-- [ ] Pass `classification.policy` to `execute_pipeline(pool_policy=...)`.
-- [ ] Pass `strict` down from `run()` to `_run_pipeline_sdk(...)` (update the call sites).
+- [x] Pass `policy` to `classify_pipeline(...)`.
+- [x] Pass `classification.policy` to `execute_pipeline(pool_policy=...)`.
+- [x] Pass `strict` down from `run()` to `_run_pipeline_sdk(...)` (update the call sites).
 
 **Success:** `sq run my-pipeline --strict` results in `policy=STRICT` being used. `sq run my-pipeline` (no flag) results in `policy=LAZY`. A pipeline YAML with `auth_policy: strict` without the CLI flag also results in `STRICT`.
 
@@ -250,11 +250,11 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T14 — Test: `--strict` flag and policy resolution
 
-- [ ] In `tests/cli/commands/test_run_pipeline_lazy.py`:
-  - [ ] `test_strict_flag_passes_strict_policy_to_classify` — mock `classify_pipeline`; invoke `_run_pipeline_sdk` with `strict=True`; assert `classify_pipeline` called with `policy=STRICT`.
-  - [ ] `test_no_flag_passes_lazy_policy_to_classify` — same; `strict=False`; assert `policy=LAZY`.
-  - [ ] `test_yaml_auth_policy_strict_overrides_lazy_default` — pipeline definition with `auth_policy="strict"`; `strict=False`; assert `policy=STRICT`.
-  - [ ] `test_cli_strict_flag_overrides_yaml_lazy` — `auth_policy="lazy"` in YAML; `strict=True`; assert `policy=STRICT`.
+- [x] In `tests/cli/commands/test_run_pipeline_lazy.py`:
+  - [x] `test_strict_flag_passes_strict_policy_to_classify` — mock `classify_pipeline`; invoke `_run_pipeline_sdk` with `strict=True`; assert `classify_pipeline` called with `policy=STRICT`.
+  - [x] `test_no_flag_passes_lazy_policy_to_classify` — same; `strict=False`; assert `policy=LAZY`.
+  - [x] `test_yaml_auth_policy_strict_overrides_lazy_default` — pipeline definition with `auth_policy="strict"`; `strict=False`; assert `policy=STRICT`.
+  - [x] `test_cli_strict_flag_overrides_yaml_lazy` — `auth_policy="lazy"` in YAML; `strict=True`; assert `policy=STRICT`.
 
 **Success:** All four tests pass.
 
@@ -262,11 +262,11 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T15 — Audit and update existing pool-uncertain tests
 
-- [ ] In `tests/pipeline/test_classification.py`, identify any tests that relied on the old conservative default (pool-uncertain → `needs_persistent_session=True` without explicit policy).
-- [ ] For each such test, add `policy=PoolClassificationPolicy.STRICT` to the `classify_pipeline` call, or update the assertion to match the new default.
-- [ ] In `tests/cli/commands/test_run_pipeline_sdk.py`, identify any tests that expected session construction for pool-uncertain pipelines without a `--strict` flag.
-- [ ] Update those tests to pass `strict=True` or to assert `session=None` under the new default.
-- [ ] In `tests/pipeline/test_sdk_wiring.py`, check for any tests that depend on pool-uncertain classification defaulting to `needs_persistent_session=True`. Update any such tests with `policy=STRICT` or adjust assertions to match new lazy default.
+- [x] In `tests/pipeline/test_classification.py`, identify any tests that relied on the old conservative default (pool-uncertain → `needs_persistent_session=True` without explicit policy).
+- [x] For each such test, add `policy=PoolClassificationPolicy.STRICT` to the `classify_pipeline` call, or update the assertion to match the new default.
+- [x] In `tests/cli/commands/test_run_pipeline_sdk.py`, identify any tests that expected session construction for pool-uncertain pipelines without a `--strict` flag.
+- [x] Update those tests to pass `strict=True` or to assert `session=None` under the new default.
+- [x] In `tests/pipeline/test_sdk_wiring.py`, check for any tests that depend on pool-uncertain classification defaulting to `needs_persistent_session=True`. Update any such tests with `policy=STRICT` or adjust assertions to match new lazy default.
 
 **Success:** `pytest tests/pipeline/test_classification.py tests/cli/commands/test_run_pipeline_sdk.py tests/pipeline/test_sdk_wiring.py` passes with zero failures.
 
@@ -274,8 +274,8 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T16 — Full test suite
 
-- [ ] Run: `pytest tests/ -x -q`
-- [ ] Confirm: 0 new failures (pre-existing failures in `test_compact_compose_integration.py` are known and acceptable).
+- [x] Run: `pytest tests/ -x -q`
+- [x] Confirm: 0 new failures (pre-existing failures in `test_compact_compose_integration.py` are known and acceptable).
 
 **Success:** Test suite passes with zero new failures.
 
@@ -283,9 +283,9 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T17 — Build and format
 
-- [ ] Run `ruff format src/ tests/` and commit any formatting changes.
-- [ ] Run `ruff check src/ tests/` — address any new lint errors introduced by this slice.
-- [ ] Run `pyright src/` — zero new type errors.
+- [x] Run `ruff format src/ tests/` and commit any formatting changes.
+- [x] Run `ruff check src/ tests/` — address any new lint errors introduced by this slice.
+- [x] Run `pyright src/` — zero new type errors.
 
 **Success:** Ruff and pyright clean.
 
@@ -293,15 +293,15 @@ Note: `PipelineSchema` has `extra="forbid"`, so adding the field is all that is 
 
 ### T18 — Commit
 
-- [ ] Stage all changed files.
-- [ ] Commit with message: `feat: lazy pool-auth default; --strict opt-in; mid-run session construction`
+- [x] Stage all changed files.
+- [x] Commit with message: `feat: lazy pool-auth default; --strict opt-in; mid-run session construction`
 
 ---
 
 ### T19 — Update slice design and slice plan
 
-- [ ] In `245-slice.pool-resolution-classification-policy-and-mid-run-session-construction.md`, set `status: complete` and add commit hash.
-- [ ] In `240-slices.pipeline-auth-boundary-flexibility.md`, mark entry 5 `[x]` and add the commit note.
-- [ ] Write DEVLOG entry per `prompt.ai-project.system.md § Session State Summary`.
+- [x] In `245-slice.pool-resolution-classification-policy-and-mid-run-session-construction.md`, set `status: complete` and add commit hash.
+- [x] In `240-slices.pipeline-auth-boundary-flexibility.md`, mark entry 5 `[x]` and add the commit note.
+- [x] Write DEVLOG entry per `prompt.ai-project.system.md § Session State Summary`.
 
 **Success:** Slice plan entry 5 is checked off; slice design status is `complete`.
