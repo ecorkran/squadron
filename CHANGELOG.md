@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Pipeline classification gates SDK session construction — non-Claude pipelines no longer require Claude auth. `sq run my-non-claude-pipeline` completes without spawning a Claude CLI process.
 - Pipeline classification pre-scan: Squadron now classifies each model-dispatching step (`dispatch`, `review`, `summary`, `compact`) as SDK-required, non-SDK, or pool-uncertain before the pipeline runs. This is the data foundation for upcoming conditional session construction (slice 244) and `sq run --explain` diagnostics (slice 246).
 - Non-SDK models (e.g. `minimax`, `gemini-flash`) now work correctly in prompt-only/IDE mode (`/sq:run`). The dispatch renderer emits a `sq _dispatch-run` command for non-SDK profiles; the IDE harness runs it via Bash instead of silently using the calling session.
 - New hidden subcommand `sq _dispatch-run` for pipeline-internal use: accepts `--prompt-file`, `--model`, `--profile`, `--param` flags and invokes a one-shot non-SDK dispatch.

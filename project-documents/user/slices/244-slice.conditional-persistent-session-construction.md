@@ -8,7 +8,8 @@ interfaces: [245, 247, 248]
 dateCreated: 20260504
 dateUpdated: 20260504
 reviewResponse: 20260504
-status: not_started
+status: complete
+completedCommit: c939fb2
 reviewFindings: [F003, F004, F005]
 ---
 
@@ -421,10 +422,26 @@ Behavior identical to pre-slice.
 
 ```bash
 cd /Users/manta/source/repos/manta/squadron
-uv run pytest tests/pipeline/test_conditional_session.py -v
+uv run pytest tests/cli/commands/test_run_pipeline_sdk.py -v
 ```
 
-All T1–T6 scenarios pass.
+Expected output (11 tests, all passing):
+```
+tests/cli/commands/test_run_pipeline_sdk.py::TestRunPipelinePoolBackendFallback::test_fallback_constructs_default_pool_backend PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestRunPipelinePoolBackendFallback::test_supplied_pool_backend_skips_internal_construction PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t1_claude_free_no_session PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t2_non_sdk_pipeline_no_session PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t3_sdk_dispatch_step_constructs_session PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t3b_one_shot_shape_no_persistent_session PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t4_pool_uncertain_constructs_session PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t5_classification_error_exits_1 PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestClassificationGate::test_t8_connect_failure_propagates_no_disconnect PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestResumePath::test_t6_resume_non_sdk_no_session PASSED
+tests/cli/commands/test_run_pipeline_sdk.py::TestResumePath::test_t7_resume_sdk_constructs_session PASSED
+11 passed in 0.46s
+```
+
+Note: Test file is `tests/cli/commands/test_run_pipeline_sdk.py`, not `tests/pipeline/test_conditional_session.py` — placed alongside other CLI command tests per project conventions.
 
 ### 4. Full suite
 
