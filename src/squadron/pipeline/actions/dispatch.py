@@ -130,13 +130,36 @@ class DispatchAction:
     async def _dispatch(self, context: ActionContext) -> ActionResult:
         """Route to session or agent dispatch path based on resolved profile.
 
-        Precedence:
-        1. No persistent session → agent path.
-        2. Session present but resolved profile is non-SDK → agent path.
-        3. Session present and SDK profile (or None, per is_sdk_profile
-           contract) → session path.
+        When no session is available (lazy default or non-SDK pipeline):
+        - Explicit 'sdk' profile → guard: FAILED with --strict hint.
+        - Any other profile (including None) → agent path.
+
+        When a session is available:
+        - Non-SDK profile → agent path.
+        - SDK profile (explicit 'sdk' or None) → session path.
+
+        The guard fires when a pool selected an SDK alias at runtime but no
+        persistent session was constructed under the lazy default.  The None
+        alias_profile case (no profile specified in the alias) routes safely
+        through the one-shot agent; only an explicit 'sdk' profile requires a
+        persistent session and is therefore blocked without one.
         """
         if context.sdk_session is None:
+            _, alias_profile = self._resolve_model(context)
+            # Guard: pool selected an explicitly SDK-profiled alias at runtime,
+            # but no persistent session is available.
+            if alias_profile == ProfileName.SDK:
+                step_name = context.step_name
+                return ActionResult(
+                    success=False,
+                    action_type=self.action_type,
+                    outputs={},
+                    error=(
+                        f"Step '{step_name}' resolved to an SDK profile at runtime but no persistent "
+                        "session is available. Re-run with --strict to connect at startup, or ensure "
+                        "this pool's runtime selection does not yield an SDK alias."
+                    ),
+                )
             return await self._dispatch_via_agent(context)
 
         _, alias_profile = self._resolve_model(context)

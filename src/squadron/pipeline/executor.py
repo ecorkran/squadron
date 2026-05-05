@@ -20,6 +20,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast
 
+from squadron.pipeline.classification import (
+    PERSISTENT_SESSION_STEP_TYPES,
+    PoolClassificationPolicy,
+)
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.summary_render import gather_cf_params
@@ -40,6 +44,7 @@ __all__ = [
     "LoopConfig",
     "CheckpointResolution",
     "CheckpointDecision",
+    "LazySessionConnectError",
     "resolve_placeholders",
     "evaluate_condition",
     "execute_pipeline",
@@ -94,8 +99,21 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Result types
+# Result types and exceptions
 # ---------------------------------------------------------------------------
+
+
+class LazySessionConnectError(Exception):
+    """Raised when the mid-run lazy session hook fails to connect.
+
+    Carries the step name that triggered the connection attempt so callers
+    can surface a step-specific error message.
+    """
+
+    def __init__(self, step_name: str, cause: BaseException) -> None:
+        super().__init__(f"lazy session connect failed before step '{step_name}': {cause}")
+        self.step_name = step_name
+        self.cause = cause
 
 
 class ExecutionStatus(StrEnum):
@@ -476,6 +494,7 @@ async def execute_pipeline(
     run_id: str | None = None,
     start_from: str | None = None,
     sdk_session: SDKExecutionSession | None = None,
+    pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     on_step_complete: Callable[[StepResult], None] | None = None,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
@@ -497,6 +516,14 @@ async def execute_pipeline(
         Unique run identifier; auto-generated if not provided.
     start_from:
         Step name to resume from; earlier steps are skipped.
+    sdk_session:
+        Pre-connected SDK session; ``None`` for non-SDK or lazy pipelines.
+    pool_policy:
+        Controls lazy vs. strict session construction.  Under ``LAZY``
+        (default) the mid-run hook connects the session just before the
+        first step that statically requires SDK.  Under ``STRICT`` the
+        caller is expected to have passed a connected session for any
+        pipeline whose classification returned ``needs_persistent_session``.
     on_step_complete:
         Optional observer called after each step completes (any status).
     _action_registry:
@@ -600,6 +627,20 @@ async def execute_pipeline(
                 continue
 
         resolved_config = resolve_placeholders(step.config, merged_params)
+
+        # Mid-run lazy session hook: connect just before the first step that
+        # statically requires an SDK session, when none has been connected yet.
+        if sdk_session is None and pool_policy == PoolClassificationPolicy.LAZY:
+            if _step_needs_sdk(step, resolver, merged_params):
+                try:
+                    sdk_session = await _connect_lazy_session(run_id=effective_run_id)
+                except Exception as exc:
+                    _logger.error(
+                        "executor: lazy session connect failed before step '%s': %s",
+                        step.name,
+                        exc,
+                    )
+                    raise LazySessionConnectError(step.name, exc) from exc
 
         # Detect each step type
         if step.step_type == "each":
@@ -721,6 +762,77 @@ async def execute_pipeline(
         status=ExecutionStatus.COMPLETED,
         step_results=step_results,
     )
+
+
+def _step_needs_sdk(
+    step: Any,
+    resolver: Any,
+    params: dict[str, object],
+) -> bool:
+    """Return True iff *step* statically resolves to an SDK profile.
+
+    Used by the mid-run lazy session hook to decide whether to connect a
+    persistent session before a given step.
+
+    Returns False for:
+    - Step types that do not use a persistent session (e.g. review, checkpoint).
+    - Steps whose resolved candidate is a pool reference (cannot confirm statically).
+    - Any cascade level that resolves to a non-SDK profile.
+
+    Does not mutate resolver state and does not invoke pool selection.
+    """
+    from squadron.models.aliases import resolve_model_alias
+    from squadron.providers.profiles import is_sdk_profile
+
+    if step.step_type not in PERSISTENT_SESSION_STEP_TYPES:
+        return False
+
+    action_model = str(params["model"]) if "model" in params else None
+    step_model = str(params.get("step_model", "")) or None
+    step_action_model = step.config.get("model")
+    step_step_model = step.config.get("step_model")
+
+    candidates = resolver.cascade_candidates(
+        action_model=str(step_action_model) if isinstance(step_action_model, str) else action_model,
+        step_model=str(step_step_model) if isinstance(step_step_model, str) else step_model,
+    )
+    candidate = next((c for c in candidates if c is not None), None)
+    if candidate is None or candidate.startswith("pool:"):
+        return False
+
+    _, profile = resolve_model_alias(candidate)
+    return is_sdk_profile(profile)
+
+
+async def _connect_lazy_session(*, run_id: str) -> SDKExecutionSession:
+    """Construct and connect a new SDKExecutionSession for mid-run lazy auth.
+
+    Called by execute_pipeline the first time a statically-confirmed SDK step
+    is about to run and no session has been connected yet.
+
+    On connection failure, logs at ERROR and re-raises — the caller handles
+    state persistence and user-facing error messaging.
+    """
+    import claude_agent_sdk
+
+    from squadron.pipeline.sdk_session import SDKExecutionSession
+
+    options = claude_agent_sdk.ClaudeAgentOptions(
+        cwd=str(__import__("pathlib").Path.cwd()),
+        permission_mode="bypassPermissions",
+        system_prompt={"type": "preset", "preset": "claude_code"},
+    )
+    client = claude_agent_sdk.ClaudeSDKClient(options=options)
+    session = SDKExecutionSession(client=client, options=options)
+    try:
+        await session.connect()
+    except Exception:
+        _logger.exception(
+            "executor: lazy session connect failed for run %s",
+            run_id,
+        )
+        raise
+    return session
 
 
 async def _execute_step_once(

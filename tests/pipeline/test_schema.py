@@ -164,3 +164,29 @@ class TestToDefinition:
         assert defn.steps[0].name == "my-design"
         # The name should not leak into config
         assert "name" not in defn.steps[0].config
+
+
+# ---------------------------------------------------------------------------
+# T8 — auth_policy YAML field
+# ---------------------------------------------------------------------------
+
+
+class TestAuthPolicyField:
+    def _raw(self, **extra: object) -> dict[str, object]:
+        return {"name": "test", "steps": [{"dispatch": {"model": "sonnet"}}], **extra}
+
+    def test_auth_policy_strict_loads(self) -> None:
+        defn = PipelineSchema.model_validate(self._raw(auth_policy="strict")).to_definition()
+        assert defn.auth_policy == "strict"
+
+    def test_auth_policy_lazy_loads(self) -> None:
+        defn = PipelineSchema.model_validate(self._raw(auth_policy="lazy")).to_definition()
+        assert defn.auth_policy == "lazy"
+
+    def test_auth_policy_absent_defaults_none(self) -> None:
+        defn = PipelineSchema.model_validate(self._raw()).to_definition()
+        assert defn.auth_policy is None
+
+    def test_auth_policy_invalid_raises(self) -> None:
+        with pytest.raises(ValidationError, match="auth_policy"):
+            PipelineSchema.model_validate(self._raw(auth_policy="banana"))

@@ -71,3 +71,4 @@ class PipelineDefinition:
     params: dict[str, object]
     steps: list[StepConfig]
     model: str | None = None
+    auth_policy: str | None = None

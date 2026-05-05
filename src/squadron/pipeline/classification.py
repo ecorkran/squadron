@@ -35,7 +35,7 @@ _MODEL_DISPATCHING_STEP_TYPES = frozenset({"dispatch", "review", "summary", "com
 
 # Steps whose classification contributes to ``needs_persistent_session``.
 # Reviews route through the one-shot ClaudeSDKAgent, not the persistent session.
-_PERSISTENT_SESSION_STEP_TYPES = frozenset({"dispatch", "summary", "compact"})
+PERSISTENT_SESSION_STEP_TYPES = frozenset({"dispatch", "summary", "compact"})
 
 # Steps whose classification contributes to ``needs_one_shot_claude``.
 _ONE_SHOT_STEP_TYPES = frozenset({"review"})
@@ -55,6 +55,22 @@ class PipelineShape(StrEnum):
     CLAUDE_REQUIRED_PERSISTENT = "claude_required_persistent"
     CLAUDE_REQUIRED_ONE_SHOT = "claude_required_one_shot"
     CLAUDE_FREE = "claude_free"
+
+
+class PoolClassificationPolicy(StrEnum):
+    """Controls how POOL_UNCERTAIN steps factor into needs_persistent_session.
+
+    LAZY (default): pool-uncertain steps do NOT force session construction at
+    startup.  The mid-run hook in execute_pipeline will connect lazily if a
+    step resolves to an SDK alias at runtime.
+
+    STRICT: pool-uncertain steps are treated conservatively as SDK-required,
+    matching the pre-245 behaviour.  A persistent session is always constructed
+    before the pipeline starts.
+    """
+
+    LAZY = "lazy"
+    STRICT = "strict"
 
 
 class ClassificationError(Exception):
@@ -87,20 +103,31 @@ class PipelineClassification:
 
     pipeline_name: str
     steps: tuple[StepClassification, ...]
+    policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY
 
     @property
     def needs_persistent_session(self) -> bool:
-        """True iff at least one dispatch/summary/compact step is SDK-resolved
-        or POOL_UNCERTAIN (conservative default).
+        """True iff at least one dispatch/summary/compact step requires a persistent session.
 
-        Reviews are intentionally excluded — they route through the
-        provider registry's one-shot ClaudeSDKAgent, not the persistent
-        session.  Arch §Envisioned State point 2.
+        Under LAZY (default): only SDK_REQUIRED steps count.  POOL_UNCERTAIN steps
+        do not force session construction — the mid-run hook in execute_pipeline
+        handles lazy connection when a step resolves to an SDK alias at runtime.
+
+        Under STRICT: POOL_UNCERTAIN steps are treated as SDK-required, matching the
+        pre-245 conservative behaviour.
+
+        Reviews are intentionally excluded — they route through the provider registry's
+        one-shot ClaudeSDKAgent, not the persistent session.  Arch §Envisioned State
+        point 2.
         """
+        if self.policy == PoolClassificationPolicy.STRICT:
+            counted = (StepClass.SDK_REQUIRED, StepClass.POOL_UNCERTAIN)
+        else:
+            counted = (StepClass.SDK_REQUIRED,)
         return any(
-            s.classification in (StepClass.SDK_REQUIRED, StepClass.POOL_UNCERTAIN)
+            s.classification in counted
             for s in self.steps
-            if s.action_type in _PERSISTENT_SESSION_STEP_TYPES
+            if s.action_type in PERSISTENT_SESSION_STEP_TYPES
         )
 
     @property
@@ -188,6 +215,7 @@ def classify_pipeline(
     definition: PipelineDefinition,
     resolver: ModelResolver,
     pool_backend: PoolBackend | None = None,
+    policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
 ) -> PipelineClassification:
     """Classify each model-dispatching step in *definition*.
 
@@ -207,6 +235,10 @@ def classify_pipeline(
         pool_backend: Required only when any step resolves to a ``pool:``
                       candidate.  If ``None`` and a pool candidate is
                       encountered, raises ``ClassificationError``.
+        policy: Controls how POOL_UNCERTAIN steps affect
+                ``needs_persistent_session``.  Defaults to ``LAZY`` (no
+                upfront session for uncertain steps).  Pass ``STRICT`` to
+                use the pre-245 conservative behaviour.
 
     Raises:
         ClassificationError: If a step's entire cascade is None, or if a
@@ -268,4 +300,5 @@ def classify_pipeline(
     return PipelineClassification(
         pipeline_name=definition.name,
         steps=tuple(results),
+        policy=policy,
     )

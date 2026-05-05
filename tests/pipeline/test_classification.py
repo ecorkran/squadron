@@ -18,6 +18,7 @@ from squadron.pipeline.classification import (
     ClassificationError,
     PipelineClassification,
     PipelineShape,
+    PoolClassificationPolicy,
     StepClass,
     StepClassification,
     classify_pipeline,
@@ -432,14 +433,28 @@ def test_pool_mixed_classifies_as_pool_uncertain() -> None:
     assert spy.select_call_count == 0
 
 
-def test_pool_uncertain_conservative_treats_as_persistent() -> None:
+def test_pool_uncertain_strict_treats_as_persistent() -> None:
+    """Under STRICT policy, POOL_UNCERTAIN conservatively forces session construction."""
+    spy = SpyPoolBackend({"mixed-pool": _MIXED_POOL})
+    steps = [make_step("dispatch", "pool-step", {"model": "pool:mixed-pool"})]
+    pipeline = make_pipeline(steps)
+    resolver = make_resolver(pool_backend=spy)
+    result = classify_pipeline(
+        pipeline, resolver, pool_backend=spy, policy=PoolClassificationPolicy.STRICT
+    )
+
+    assert result.needs_persistent_session is True
+
+
+def test_pool_uncertain_lazy_does_not_need_persistent() -> None:
+    """Under LAZY policy (default), POOL_UNCERTAIN does not force session construction."""
     spy = SpyPoolBackend({"mixed-pool": _MIXED_POOL})
     steps = [make_step("dispatch", "pool-step", {"model": "pool:mixed-pool"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
     result = classify_pipeline(pipeline, resolver, pool_backend=spy)
 
-    assert result.needs_persistent_session is True
+    assert result.needs_persistent_session is False
 
 
 def test_pool_without_backend_raises() -> None:
@@ -480,3 +495,95 @@ def test_classification_is_idempotent_and_side_effect_free() -> None:
     assert result_a == result_b
     # Zero pool selections across both runs
     assert spy.select_call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# T2 — PoolClassificationPolicy enum
+# ---------------------------------------------------------------------------
+
+
+class TestPoolClassificationPolicy:
+    def test_lazy_value(self) -> None:
+        assert PoolClassificationPolicy.LAZY == "lazy"
+
+    def test_strict_value(self) -> None:
+        assert PoolClassificationPolicy.STRICT == "strict"
+
+
+# ---------------------------------------------------------------------------
+# T4 — needs_persistent_session under both policies
+# ---------------------------------------------------------------------------
+
+
+def _make_step_cls_uncertain(index: int = 0) -> StepClassification:
+    return StepClassification(
+        step_name=f"pool-step-{index}",
+        step_index=index,
+        action_type="dispatch",
+        resolved_alias=None,
+        resolved_model_id=None,
+        profile=None,
+        classification=StepClass.POOL_UNCERTAIN,
+        rationale="pool mixes SDK and non-SDK",
+        pool_name="mixed-pool",
+    )
+
+
+def test_lazy_pool_uncertain_not_needs_persistent() -> None:
+    pc = PipelineClassification(
+        pipeline_name="p",
+        steps=(_make_step_cls_uncertain(),),
+        policy=PoolClassificationPolicy.LAZY,
+    )
+    assert pc.needs_persistent_session is False
+
+
+def test_strict_pool_uncertain_needs_persistent() -> None:
+    pc = PipelineClassification(
+        pipeline_name="p",
+        steps=(_make_step_cls_uncertain(),),
+        policy=PoolClassificationPolicy.STRICT,
+    )
+    assert pc.needs_persistent_session is True
+
+
+def test_lazy_sdk_required_still_needs_persistent() -> None:
+    pc = PipelineClassification(
+        pipeline_name="p",
+        steps=(_make_step_cls("dispatch", StepClass.SDK_REQUIRED),),
+        policy=PoolClassificationPolicy.LAZY,
+    )
+    assert pc.needs_persistent_session is True
+
+
+def test_lazy_mixed_sdk_and_pool_uncertain() -> None:
+    pc = PipelineClassification(
+        pipeline_name="p",
+        steps=(
+            _make_step_cls("dispatch", StepClass.SDK_REQUIRED, 0),
+            _make_step_cls_uncertain(1),
+        ),
+        policy=PoolClassificationPolicy.LAZY,
+    )
+    assert pc.needs_persistent_session is True
+
+
+# ---------------------------------------------------------------------------
+# T6 — classify_pipeline policy parameter
+# ---------------------------------------------------------------------------
+
+
+def test_classify_default_policy_is_lazy() -> None:
+    steps = [make_step("dispatch", "step-a", {"model": "sonnet"})]
+    pipeline = make_pipeline(steps)
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+    assert result.policy == PoolClassificationPolicy.LAZY
+
+
+def test_classify_explicit_strict_policy() -> None:
+    steps = [make_step("dispatch", "step-a", {"model": "sonnet"})]
+    pipeline = make_pipeline(steps)
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver, policy=PoolClassificationPolicy.STRICT)
+    assert result.policy == PoolClassificationPolicy.STRICT

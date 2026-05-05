@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 
@@ -48,7 +48,15 @@ class PipelineSchema(BaseModel):
     description: str = ""
     params: dict[str, str] = {}
     model: str | None = None
+    auth_policy: str | None = None
     steps: list[StepSchema]
+
+    @field_validator("auth_policy")
+    @classmethod
+    def _validate_auth_policy(cls, value: str | None) -> str | None:
+        if value is not None and value not in ("lazy", "strict"):
+            raise ValueError(f"auth_policy must be 'lazy', 'strict', or absent; got {value!r}")
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -131,4 +139,5 @@ class PipelineSchema(BaseModel):
             params=dict(self.params),
             steps=steps,
             model=self.model,
+            auth_policy=self.auth_policy,
         )

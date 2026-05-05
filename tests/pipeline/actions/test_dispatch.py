@@ -146,7 +146,10 @@ async def test_execute_model_resolution(action: DispatchAction) -> None:
     ):
         await action.execute(ctx)
 
-    ctx.resolver.resolve.assert_called_once_with("opus", "sonnet")
+    # resolve is called once for the guard check (no session path) and once
+    # inside _dispatch_via_agent — both with the same args.
+    ctx.resolver.resolve.assert_called_with("opus", "sonnet")
+    assert ctx.resolver.resolve.call_count == 2
 
 
 @pytest.mark.asyncio

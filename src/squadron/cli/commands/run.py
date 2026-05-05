@@ -22,9 +22,14 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
-from squadron.pipeline.classification import ClassificationError, classify_pipeline
+from squadron.pipeline.classification import (
+    ClassificationError,
+    PoolClassificationPolicy,
+    classify_pipeline,
+)
 from squadron.pipeline.executor import (
     ExecutionStatus,
+    LazySessionConnectError,
     PipelineResult,
     execute_pipeline,
 )
@@ -166,6 +171,7 @@ async def _run_pipeline(
     execution_mode: ExecutionMode = ExecutionMode.SDK,
     _action_registry: dict[str, object] | None = None,
     pool_backend: PoolBackend | None = None,
+    pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
 
@@ -212,6 +218,7 @@ async def _run_pipeline(
             run_id=run_id,
             start_from=from_step,
             sdk_session=sdk_session,  # type: ignore[arg-type]
+            pool_policy=pool_policy,
             on_step_complete=state_mgr.make_step_callback(run_id),
             _action_registry=_action_registry,
         )
@@ -237,6 +244,7 @@ async def _run_pipeline_sdk(
     runs_dir: Path | None = None,
     from_step: str | None = None,
     run_id: str | None = None,
+    strict: bool = False,
 ) -> PipelineResult:
     """Create an SDK session if needed, run the pipeline, and disconnect on exit.
 
@@ -246,6 +254,11 @@ async def _run_pipeline_sdk(
     ``execute_pipeline``.
 
     When *run_id* is provided the existing run state is reused (resume path).
+
+    When *strict* is True (or the pipeline YAML has ``auth_policy: strict``),
+    POOL_UNCERTAIN steps are treated as SDK-required and a session is connected
+    at startup.  The default LAZY behaviour skips upfront connection for
+    uncertain steps and relies on the mid-run hook instead.
 
     Raises typer.Exit(1) when running inside a Claude Code session or when
     pipeline classification fails.  The session is disconnected in a ``finally``
@@ -261,6 +274,13 @@ async def _run_pipeline_sdk(
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
+    # Resolve effective policy: YAML auth_policy < CLI --strict (CLI wins).
+    policy = PoolClassificationPolicy.LAZY
+    if definition.auth_policy == PoolClassificationPolicy.STRICT:
+        policy = PoolClassificationPolicy.STRICT
+    if strict:
+        policy = PoolClassificationPolicy.STRICT
+
     # Shared pool backend — used by both the classification resolver and
     # the authoritative resolver built inside _run_pipeline.
     pool_backend = DefaultPoolBackend()
@@ -274,7 +294,7 @@ async def _run_pipeline_sdk(
     )
 
     try:
-        classification = classify_pipeline(definition, _classify_resolver, pool_backend)
+        classification = classify_pipeline(definition, _classify_resolver, pool_backend, policy=policy)
     except ClassificationError as exc:
         rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
         raise typer.Exit(1)
@@ -328,7 +348,18 @@ async def _run_pipeline_sdk(
             run_id=run_id,
             execution_mode=ExecutionMode.SDK,
             pool_backend=pool_backend,
+            pool_policy=classification.policy,
         )
+    except LazySessionConnectError as exc:
+        # State is already saved by _run_pipeline's BaseException handler.
+        # Surface a user-friendly error pointing to --strict.
+        _run_id = run_id or "unknown"
+        rprint(
+            f"[red]Error: Claude auth required — connection failed mid-run"
+            f" at step '{exc.step_name}'.[/red]\n"
+            f"Run state saved. Resume with: sq run --resume {_run_id}"
+        )
+        raise typer.Exit(1) from exc
     finally:
         if session is not None:
             await session.disconnect()
@@ -631,6 +662,11 @@ def run(
         count=True,
         help="Verbosity (-v for action summaries, -vv for full details).",
     ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Force eager session construction for pool-uncertain steps.",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
@@ -817,6 +853,7 @@ def run(
                             model_override=resume_model,
                             run_id=run_id,
                             from_step=resume_from,
+                            strict=strict,
                         )
                     )
                 case ExecutionMode.PROMPT_ONLY:
@@ -867,6 +904,7 @@ def run(
                                         model_override=model,
                                         run_id=match.run_id,
                                         from_step=implicit_from,
+                                        strict=strict,
                                     )
                                 )
                             case ExecutionMode.PROMPT_ONLY:
@@ -895,6 +933,7 @@ def run(
                 params,
                 model_override=model,
                 from_step=from_step,
+                strict=strict,
             )
         )
     except FileNotFoundError:
