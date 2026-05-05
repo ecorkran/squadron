@@ -12,6 +12,27 @@ Internal work log for squadron project development.
 
 ## 20260504
 
+### Slice 245: Pool-Resolution Classification Policy and Mid-Run Session Construction — Design Complete
+
+**Completed:** Phase 4 slice design.
+
+**Documents created:**
+- `project-documents/user/slices/245-slice.pool-resolution-classification-policy-and-mid-run-session-construction.md` — slice design
+- `project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md` — slice plan entry 5 updated with design link
+
+**Design summary:**
+- Introduces `PoolClassificationPolicy` enum (`conservative` / `lazy`) in `pipeline/classification.py`.
+- `classify_pipeline` gains optional `policy` parameter; `PipelineClassification` stores the policy used.
+- `needs_persistent_session` evaluates `POOL_UNCERTAIN` steps relative to stored policy: conservative treats them as SDK-required (unchanged default); lazy excludes them.
+- Mid-run session construction (arch §5a): `execute_pipeline` gains `pool_policy` parameter; lazy hook fires before each step's `ActionContext` is built, constructing and connecting a session on first confirmed-SDK step.
+- Two opt-in surfaces: `--lazy-auth` CLI flag and `auth_policy: lazy` pipeline config key.
+- Auth-failure UX: connect failure → `failed` run state + clear message; runtime pool selects SDK with no session → `FAILED` step result with remediation hint.
+- 12 new tests planned across `test_run_pipeline_lazy.py` and `test_classification.py`.
+
+**Pending:** Phase 5 (task breakdown) and Phase 6 (implementation). No open questions; design is self-contained.
+
+---
+
 ### Slice 244: Conditional Persistent Session Construction — Implementation Complete
 
 **Completed:** Phase 6 implementation (commit c939fb2, branch `244-slice.conditional-persistent-session-construction`)
