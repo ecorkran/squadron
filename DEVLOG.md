@@ -12,6 +12,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260505
+
+### Initiative 260: Non-SDK Agent Tool Use — Architecture and Slice Plan Complete
+
+Commits `0d94d7b` (arch + slice plan), `0c19515` (arch review).
+
+**Context:** Triggered by observing that `test-p4.yaml` with `model: kimi25` fails silently — the model emits raw tool-call XML into the response stream because `OpenAICompatibleAgent` never passes `tools` to the API and has no execution loop. Confirmed via code audit that `allowed_tools`, `permission_mode`, and all tool-related `AgentConfig` fields are silently ignored by non-SDK providers.
+
+**Architecture (`260-arch.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md`):** Agentic loop inside `OpenAICompatibleAgent._run_agentic_loop` (structured for future lift-out). Tool descriptor protocol: name, description, JSON Schema parameters, `cwd`-injecting factory, async executor returning `ToolResult(content, is_error)`. Process-level tool registry (`register`/`lookup`/`materialize`). Core tools: `read_file`, `write_file` (CWD-scoped), `bash` (CWD working directory; network/env/fork unrestricted at this stage — documented scope). Reuses existing `AgentConfig.allowed_tools` field with non-SDK semantics; empty by default, opt-in per pipeline step. Max-iterations guard + character-count token-budget threshold. Streaming contract: intermediate turns DEBUG-logged only; final turn streams normally. Arch review (GLM-5.1, CONCERNS) addressed in same session: F001 false "no network" claim fixed; F002–F008 covered by new Technical Considerations subsections (descriptor protocol, cwd injection, async-first interface, token budget, streaming contract, content+tool_calls co-occurrence).
+
+**Slice plan (`260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md`):** 5 slices. Critical path: 261 (tool registry + core tools, Effort 2/5) → 262 (agentic loop, Effort 3/5) → 263 (dispatch wiring + YAML surface, Effort 2/5). Deferred: 264 (CF MCP bridge), 265 (review/summary coverage).
+
+**Decision:** Initiative 260 shelved pending completion of initiative 240 (4 slices remaining: 246–249). Will resume 260 after 240 is closed.
+
 ## 20260504
 
 ### Slice 245: Pool-Resolution Classification Policy and Mid-Run Session Construction — Complete
