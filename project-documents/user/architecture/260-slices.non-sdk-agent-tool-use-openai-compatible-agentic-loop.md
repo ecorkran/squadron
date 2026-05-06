@@ -1,0 +1,82 @@
+---
+docType: slice-plan
+parent: 260-arch.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
+project: squadron
+dateCreated: 20260505
+dateUpdated: 20260505
+status: not_started
+---
+
+# Slice Plan: Non-SDK Agent Tool Use (OpenAI-Compatible Agentic Loop)
+
+## Parent Document
+`260-arch.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md` — Architecture: Non-SDK Agent Tool Use (OpenAI-Compatible Agentic Loop)
+
+---
+
+## Overview
+
+This initiative adds tool-calling capability to the `OpenAICompatibleAgent` so non-SDK providers (openrouter, openai, local, gemini) can run pipeline actions that require file I/O. Today the agent is text-in/text-out only — capable models like Kimi-K2.5 emit raw tool-call XML into the response stream because no `tools` parameter is sent and no execution loop exists. The work splits along three natural axes:
+
+1. **Tool foundation** (one slice) — descriptor protocol, registry, and core tool implementations (`read_file`, `write_file`, `bash`). Pure data + pure callables; testable in isolation; no agent or executor changes. Establishes the abstraction boundary for everything else.
+
+2. **Agentic loop** (one slice) — `_run_agentic_loop` inside `OpenAICompatibleAgent.handle_message`. Materializes tools from the registry per-dispatch, drives the OpenAI tool-call protocol (multi-turn message history, tool execution, max-iterations guard, token-budget threshold), and surfaces only the final turn through the existing message-yield interface. Self-contained behind the agent interface; the executor sees no change.
+
+3. **Pipeline wiring and end-to-end demo** (one slice) — `dispatch` action threads `allowed_tools` from step YAML to `AgentConfig.allowed_tools`. Pipeline schema validates the field. Demonstrates `test-p4.yaml` running to completion with `model: kimi25` and explicit `allowed_tools`.
+
+Two follow-on slices are tracked here as deferred work, not scoped into the initial three:
+
+4. **Context-forge MCP tool bridge** — adapter exposing CF MCP operations through the same descriptor protocol. Composes as an adapter because the descriptor protocol is async-first.
+
+5. **Review/summary action coverage** — applies the same `allowed_tools` plumbing to `review` and `summary` actions. Architectural extension; the dispatch path is the demonstration vehicle for the initial three slices.
+
+The initial three slices land independently (each leaves the system in a working state) but build on each other: 261 ships tools that no agent yet uses; 262 wires those tools into the agent but no pipeline yet declares them; 263 closes the loop by exposing the YAML surface and proving the end-to-end flow.
+
+---
+
+## Foundation Work
+
+This initiative has no separate foundation phase — slice 261 is itself the foundation slice (descriptor protocol + registry + core tools). It is listed under Feature Slices to keep the sequencing clear.
+
+---
+
+## Feature Slices (in implementation order)
+
+1. [ ] **(261) Tool Registry, Descriptor Protocol, and Core Tool Implementations** — Establish the tool abstraction boundary for the rest of the initiative. Define the `ToolDescriptor` protocol (name, description, JSON Schema `parameters` matching OpenAI's `tools[].function.parameters` shape, factory callable). Define `ToolResult(content: str, is_error: bool)`. Implement the process-level tool registry with `register(descriptor)`, `lookup(name) -> ToolDescriptor | None`, and `materialize(names: list[str], cwd: str) -> dict[name, async_executor]` (the materialize call invokes each descriptor's factory with `cwd` once per dispatch and returns the closure-bound async executors). Ship three core tools registered at module import time: `read_file`, `write_file` (both CWD-scoped, path-escape rejected via `pathlib.Path.resolve(strict=False).is_relative_to(cwd_resolved)`), and `bash` (runs with `cwd` as working directory; network/env/fork unrestricted at this stage — documented scope). Each tool's executor is `async def execute(args: dict[str, object]) -> ToolResult`; sync work wraps in `asyncio.to_thread` where needed. No `OpenAICompatibleAgent` or `AgentConfig` changes; nothing in the executor changes. Tests assert: descriptors register correctly, registry lookups return `None` for unknown names, materialized executors enforce CWD scope (path-escape attempts return `is_error=True` with a clear message), each tool's happy path produces the expected content. Dependencies: [100, 140]. Risk: Low. Effort: 2/5
+
+2. [ ] **(262) OpenAICompatibleAgent Agentic Loop** — Reuse the existing `AgentConfig.allowed_tools` field with non-SDK semantics (the SDK path already consumes it; non-SDK currently ignores it — this slice activates the non-SDK consumer). Inside `OpenAICompatibleAgent.handle_message`, replace the single API round-trip with `_run_agentic_loop`: materialize tool executors from the registry for the names in `config.allowed_tools`; on each iteration call `chat.completions.create(model=..., messages=history, tools=schemas, stream=True)`; aggregate streaming `tool_calls` deltas via the existing `_consume_stream` mechanism; if the assembled assistant message has `tool_calls`, append it verbatim to history (per OpenAI protocol — `content` and `tool_calls` co-occur), execute each call (parse JSON args, lookup, validate, dispatch to async executor, build `role: "tool"` message with matching `tool_call_id`), append all tool results to history, and re-invoke. Terminate when the assistant message has no `tool_calls` (yield final `content` as the response) OR when `max_iterations` is reached (default ~20; configurable; raises a structured error surfaced through the agent's normal failure path) OR when accumulated history exceeds the configured character-count threshold (return a budget-exceeded `role: "tool"` message back to the model so it can finalize). Streaming contract: intermediate turns logged at DEBUG only (caller does not see them); only the final turn streams through the existing message-yield interface. Tool-call argument parse failures and unknown-tool responses surface as `is_error=True` tool-result messages back to the model, not loop crashes. Tests: tool-call detection drives loop continuation; absent tool-calls terminate; max-iterations guard fires with a structured error; unknown-tool name returns error to model; malformed JSON args return error to model; multi-tool single-turn dispatches all tools and appends all results in order; final turn's content is yielded; intermediate turns are NOT yielded. Dependencies: [261]. Risk: Medium (multi-turn streaming + tool-call protocol fidelity, message-history shape, error surface). Effort: 3/5
+
+3. [ ] **(263) Dispatch Action Wiring and Pipeline YAML Surface** — Thread `allowed_tools` from step YAML through to `AgentConfig.allowed_tools`. Pipeline schema (`pipeline/schema.py`) gains a per-step optional `allowed_tools: list[str] | None` field validated against the tool registry (unknown names raise `pydantic.ValidationError` at load time, matching the slice 245 `auth_policy` pattern). `DispatchAction._dispatch_via_agent` reads the field from `context.params` (or `step.config`, whichever is the established pipeline-config path for this kind of metadata — confirm during slice design) and populates `AgentConfig.allowed_tools` when constructing the agent config. SDK path is unaffected (the field there continues to mean Claude Code tool names; non-SDK semantics are squadron-registry tool names). End-to-end demo: update `src/squadron/data/pipelines/test-p4.yaml` to declare `allowed_tools: [read_file, write_file]` on its design step; run `sq run test-p4 <slice>` with a non-SDK pipeline model (e.g. `kimi25`) and confirm the slice-design file is actually written and the subsequent review step finds its input. Tests: schema accepts a valid tool list, rejects an unknown tool name, defaults to no tools when absent; dispatch passes `allowed_tools` into `AgentConfig`; integration test runs a small pipeline against a mocked OpenAI-compatible endpoint that returns a tool call and verifies the file is written and the final response captures the model's confirmation. Dependencies: [262]. Risk: Low. Effort: 2/5
+
+4. [ ] **(264) Context-Forge MCP Tool Bridge** *(separate slice; tracked here for sequencing)* — Adapter that exposes selected context-forge MCP operations (e.g. `set_phase`, `set_slice`, `build_context`, `prompt_get`) through the slice-261 descriptor protocol. Each MCP operation is wrapped in a descriptor whose factory creates an async executor that calls the MCP client. The async-first execute interface from slice 261 makes this an adapter rather than a re-architecture. Pipelines can then declare `allowed_tools: [read_file, write_file, cf_set_phase, cf_build_context]` and capable non-SDK models can drive context-forge state directly. Out of scope: dynamic discovery of CF MCP tools (initial implementation registers a curated subset by name); other MCP servers (the bridge pattern can extend, but only CF in this slice). Dependencies: [261, 262]. Risk: Low. Effort: 2/5
+
+5. [ ] **(265) Review/Summary Action Coverage** *(deferred extension)* — Apply the same `allowed_tools` plumbing to the `review` and `summary` actions: the review/summary one-shot agent paths read `allowed_tools` from step config and pass it into `AgentConfig`. Tests assert that a review step using a capable non-SDK model with `allowed_tools: [read_file]` can read referenced files during review. Out of initial scope; the dispatch path is the demonstration vehicle for the agentic loop and is sufficient to prove the architecture. Dependencies: [262, 263]. Risk: Low. Effort: 2/5
+
+---
+
+## Slice Sequencing Notes
+
+- **261 → 262 → 263** is the critical path. Each slice leaves the system in a working state: after 261, tools exist but no agent uses them (no behavior change in the running system); after 262, the agent uses tools when given them but no pipeline declares them (still no behavior change in default pipelines); after 263, pipelines can declare `allowed_tools` and the end-to-end demo works.
+- **264 (CF MCP)** can land any time after 261. It does not block 262 or 263 and is independently valuable. Whether it ships in the initial push or after 263 is a scheduling call.
+- **265 (review/summary)** is genuinely optional. The dispatch path is sufficient to prove the architecture. Pull this in only when a concrete pipeline needs it.
+- Slice 261 is small enough that a foundation/feature split would add overhead without value — it is listed in Feature Slices.
+
+---
+
+## Cross-Initiative Coordination
+
+- **240 (Pipeline Auth-Boundary Flexibility):** No coordination needed at runtime. The agentic-loop changes are downstream of the dispatch routing decision in 240 (`_dispatch_via_agent` is called only after the profile-aware router has decided not to use the SDK session). 240's lazy/strict policy and pre-scan are unaffected.
+- **140 (Pipeline Foundation):** This initiative extends `AgentConfig` (semantic activation of `allowed_tools` for non-SDK) and the dispatch action wiring. No changes to the action protocol, executor, or step-type registry.
+- **180 (Pipeline Intelligence):** No coordination — orthogonal concern.
+- **Future orchestration initiative (tentatively planned):** The `_run_agentic_loop` extraction in slice 262 is the seam for future lift to a higher orchestration layer. No cross-initiative dependency yet, but the structure is intentional.
+
+---
+
+## Out of Scope
+
+- **Sandboxing depth for `bash`** beyond CWD restriction (env scrubbing, network deny, pid-namespace isolation). Tracked as future work; documented in arch §Bash scope.
+- **Automatic message-history truncation/summarization** when the token budget is approached. The initial implementation returns a budget-exceeded error to the model so it can finalize; truncation is deferred.
+- **Streaming intermediate tool-call turns to the executor.** Final turn only at this stage; future orchestration may lift the loop boundary.
+- **Tool-use for the SDK path.** The Claude SDK already has full tool support via `claude_code` preset and `bypassPermissions` — that path is not modified.
+- **Codex provider tool support.** Codex has its own internal agentic handling; out of scope here.
+- **Provider-side coercion of non-conforming tool-call responses.** If a chosen model emits malformed tool-call protocol, the agent handles the case gracefully (treats absent tool_calls as final response) but does not coerce or correct the model's output. Model selection is the user's responsibility.
