@@ -17,6 +17,13 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
+from squadron.pipeline.classification import (
+    ClassificationError,
+    PipelineClassification,
+    PoolClassificationPolicy,
+    StepClass,
+    StepClassification,
+)
 from squadron.pipeline.loader import PipelineInfo
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
 from squadron.pipeline.state import CheckpointState, RunState
@@ -859,3 +866,242 @@ class TestPromptOnly:
         result = runner.invoke(app, ["run", "--step-done", "run-123"])
         assert result.exit_code == 0
         assert "already completed" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by explain tests
+# ---------------------------------------------------------------------------
+
+
+def _make_step_classification(
+    name: str = "design",
+    action_type: str = "dispatch",
+    classification: StepClass = StepClass.SDK_REQUIRED,
+    resolved_alias: str | None = "sonnet",
+    resolved_model_id: str | None = "claude-sonnet-4-6",
+    profile: str | None = "sdk",
+    rationale: str = "alias 'sonnet' resolves to profile 'sdk' (SDK)",
+) -> StepClassification:
+    return StepClassification(
+        step_name=name,
+        step_index=0,
+        action_type=action_type,
+        resolved_alias=resolved_alias,
+        resolved_model_id=resolved_model_id,
+        profile=profile,
+        classification=classification,
+        rationale=rationale,
+    )
+
+
+def _make_pipeline_classification(
+    steps: list[StepClassification] | None = None,
+    policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
+    name: str = "my-pipeline",
+) -> PipelineClassification:
+    return PipelineClassification(
+        pipeline_name=name,
+        steps=tuple(steps or [_make_step_classification()]),
+        policy=policy,
+    )
+
+
+# ---------------------------------------------------------------------------
+# T3: TestExplainMutualExclusivity
+# ---------------------------------------------------------------------------
+
+
+class TestExplainMutualExclusivity:
+    """--explain cannot be combined with execution options."""
+
+    def test_explain_with_resume_exits_error(self) -> None:
+        result = runner.invoke(app, ["run", "p", "--explain", "--resume", "run-123"])
+        assert result.exit_code == 1
+        assert "--explain" in result.output
+
+    def test_explain_with_from_exits_error(self) -> None:
+        result = runner.invoke(app, ["run", "p", "--explain", "--from", "step-1"])
+        assert result.exit_code == 1
+        assert "--explain" in result.output
+
+    def test_explain_with_dry_run_exits_error(self) -> None:
+        result = runner.invoke(app, ["run", "p", "--explain", "--dry-run"])
+        assert result.exit_code == 1
+        assert "--explain" in result.output
+
+    def test_explain_with_prompt_only_exits_error(self) -> None:
+        result = runner.invoke(app, ["run", "p", "--explain", "--prompt-only"])
+        assert result.exit_code == 1
+        assert "--explain" in result.output
+
+    def test_explain_with_validate_exits_error(self) -> None:
+        result = runner.invoke(app, ["run", "p", "--explain", "--validate"])
+        assert result.exit_code == 1
+        assert "--explain" in result.output
+
+
+# ---------------------------------------------------------------------------
+# T7+T8: TestExplainCommand — happy paths and error paths
+# ---------------------------------------------------------------------------
+
+
+class TestExplainCommand:
+    """sq run --explain classifies and renders a pipeline without executing."""
+
+    def _patch_explain(
+        self,
+        classification: PipelineClassification,
+        defn: PipelineDefinition | None = None,
+    ):
+        """Return a context-manager stack for a successful explain invocation."""
+        if defn is None:
+            defn = _make_definition()
+        return (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        )
+
+    # T7a — all SDK_REQUIRED steps → Claude-required (persistent)
+    def test_all_sdk_pipeline(self) -> None:
+        classification = _make_pipeline_classification(
+            steps=[_make_step_classification(classification=StepClass.SDK_REQUIRED)]
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
+        assert result.exit_code == 0
+        # Rich may truncate "sdk_required" in narrow terminals; "sdk_requi" is always present
+        assert "sdk_requi" in result.output
+        assert "Claude-required (persistent)" in result.output
+
+    # T7b — all NON_SDK steps → Claude-free
+    def test_claude_free_pipeline(self) -> None:
+        classification = _make_pipeline_classification(
+            steps=[
+                _make_step_classification(
+                    classification=StepClass.NON_SDK,
+                    resolved_model_id="minimax-01",
+                    profile="openrouter",
+                    rationale="alias 'minimax' resolves to profile 'openrouter' (non-SDK)",
+                )
+            ]
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
+        assert result.exit_code == 0
+        assert "non_sdk" in result.output
+        assert "Claude-free" in result.output
+        assert "needs persistent session" in result.output.lower()
+        assert "no" in result.output
+
+    # T7c — SDK review step, needs_persistent_session=False → one-shot only
+    def test_one_shot_only_pipeline(self) -> None:
+        classification = _make_pipeline_classification(
+            steps=[
+                _make_step_classification(
+                    name="review",
+                    action_type="review",
+                    classification=StepClass.SDK_REQUIRED,
+                )
+            ]
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
+        assert result.exit_code == 0
+        assert "Claude-required (one-shot only)" in result.output
+
+    # T7d — --param model=minimax → ModelResolver constructed with cli_override="minimax"
+    def test_model_override_via_param(self) -> None:
+        classification = _make_pipeline_classification()
+        mock_resolver_cls = MagicMock()
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver", mock_resolver_cls),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "p", "--explain", "--param", "model=minimax"])
+        assert result.exit_code == 0
+        mock_resolver_cls.assert_called_once()
+        call_kwargs = mock_resolver_cls.call_args.kwargs
+        assert call_kwargs.get("cli_override") == "minimax"
+
+    # T7e — --strict → classify_pipeline called with STRICT policy
+    def test_strict_flag_passed_to_classify(self) -> None:
+        classification = _make_pipeline_classification(policy=PoolClassificationPolicy.STRICT)
+        mock_classify = MagicMock(return_value=classification)
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", mock_classify),
+        ):
+            result = runner.invoke(app, ["run", "p", "--explain", "--strict"])
+        assert result.exit_code == 0
+        mock_classify.assert_called_once()
+        call_kwargs = mock_classify.call_args.kwargs
+        assert call_kwargs.get("policy") == PoolClassificationPolicy.STRICT
+
+    # T8a — pipeline not found → exit 1, "not found"
+    def test_pipeline_not_found(self) -> None:
+        with patch(
+            "squadron.cli.commands.run.load_pipeline",
+            side_effect=FileNotFoundError("no such pipeline"),
+        ):
+            result = runner.invoke(app, ["run", "no-such", "--explain"])
+        assert result.exit_code == 1
+        assert "not found" in result.output
+
+    # T8b — validation errors → exit 1, field+message in output
+    def test_validation_errors(self) -> None:
+        defn = _make_definition()
+        errors = [
+            ValidationError(field="model", message="Unresolved alias 'bad'", action_type="dispatch")
+        ]
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=errors),
+        ):
+            result = runner.invoke(app, ["run", "p", "--explain"])
+        assert result.exit_code == 1
+        assert "model" in result.output
+        assert "Unresolved alias" in result.output
+
+    # T8c — ClassificationError → exit 1, "Classification failed"
+    def test_classification_error(self) -> None:
+        defn = _make_definition()
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch(
+                "squadron.cli.commands.run.classify_pipeline",
+                side_effect=ClassificationError("step has no model"),
+            ),
+        ):
+            result = runner.invoke(app, ["run", "p", "--explain"])
+        assert result.exit_code == 1
+        assert "Classification failed" in result.output

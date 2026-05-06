@@ -24,7 +24,10 @@ from squadron.integrations.context_forge import (
 )
 from squadron.pipeline.classification import (
     ClassificationError,
+    PipelineClassification,
+    PipelineShape,
     PoolClassificationPolicy,
+    StepClass,
     classify_pipeline,
 )
 from squadron.pipeline.executor import (
@@ -368,6 +371,118 @@ async def _run_pipeline_sdk(
 
 
 # ---------------------------------------------------------------------------
+# Explain helpers
+# ---------------------------------------------------------------------------
+
+_SHAPE_LABELS: dict[PipelineShape, str] = {
+    PipelineShape.CLAUDE_REQUIRED_PERSISTENT: "Claude-required (persistent)",
+    PipelineShape.CLAUDE_REQUIRED_ONE_SHOT: "Claude-required (one-shot only)",
+    PipelineShape.CLAUDE_FREE: "Claude-free",
+}
+
+_STEP_CLASS_COLORS: dict[StepClass, str] = {
+    StepClass.SDK_REQUIRED: "yellow",
+    StepClass.NON_SDK: "green",
+    StepClass.POOL_UNCERTAIN: "magenta",
+}
+
+
+def _render_explain(classification: PipelineClassification) -> None:
+    """Render a Rich table of per-step classification and a summary panel."""
+    table = Table(title=f"Pipeline: {classification.pipeline_name}")
+    table.add_column("Step", style="bold")
+    table.add_column("Action")
+    table.add_column("Alias")
+    table.add_column("Model ID")
+    table.add_column("Profile")
+    table.add_column("Classification")
+    table.add_column("Rationale")
+
+    for step in classification.steps:
+        color = _STEP_CLASS_COLORS[step.classification]
+        cls_val = f"[{color}]{step.classification.value}[/{color}]"
+        table.add_row(
+            step.step_name,
+            step.action_type,
+            step.resolved_alias or "—",
+            step.resolved_model_id or "—",
+            step.profile or "—",
+            cls_val,
+            step.rationale,
+        )
+
+    rprint(table)
+
+    policy_label = (
+        "strict" if classification.policy == PoolClassificationPolicy.STRICT else "lazy (default)"
+    )
+    rprint(f"[bold]Pipeline shape:[/bold]           {_SHAPE_LABELS[classification.shape]}")
+    rprint(f"[bold]Pool policy:[/bold]              {policy_label}")
+    needs_session = "yes" if classification.needs_persistent_session else "no"
+    needs_one_shot = "yes" if classification.needs_one_shot_claude else "no"
+    rprint(f"[bold]Needs persistent session:[/bold] {needs_session}")
+    rprint(f"[bold]Needs one-shot Claude:[/bold]    {needs_one_shot}")
+
+
+def _extract_model_override(model: str | None, param: list[str] | None) -> str | None:
+    """Extract the effective model override from --model and --param flags.
+
+    --model takes precedence; otherwise scans --param for a 'model=<value>' entry.
+    """
+    if model is not None:
+        return model
+    if param:
+        for entry in param:
+            key, _, value = entry.partition("=")
+            if key == "model" and value:
+                return value
+    return None
+
+
+def _handle_explain(
+    pipeline_name: str,
+    model_override: str | None,
+    param: list[str] | None,
+    strict: bool,
+) -> None:
+    """Load, classify, and render explain output for *pipeline_name*."""
+    try:
+        definition = load_pipeline(pipeline_name)
+    except FileNotFoundError:
+        rprint(f"[red]Error: Pipeline '{pipeline_name}' not found.[/red]")
+        raise typer.Exit(1)
+
+    errors = validate_pipeline(definition)
+    if errors:
+        for err in errors:
+            rprint(f"[red]{err.field}: {err.message}[/red]")
+        raise typer.Exit(1)
+
+    cli_override = _extract_model_override(model_override, param)
+
+    policy = PoolClassificationPolicy.LAZY
+    if definition.auth_policy == PoolClassificationPolicy.STRICT:
+        policy = PoolClassificationPolicy.STRICT
+    if strict:
+        policy = PoolClassificationPolicy.STRICT
+
+    pool_backend = DefaultPoolBackend()
+    resolver = ModelResolver(
+        cli_override=cli_override,
+        pipeline_model=definition.model,
+        pool_backend=pool_backend,
+    )
+
+    try:
+        classification = classify_pipeline(definition, resolver, pool_backend, policy=policy)
+    except ClassificationError as exc:
+        rprint(f"[red]Error: Classification failed — {exc}[/red]")
+        raise typer.Exit(1)
+
+    _render_explain(classification)
+
+
+# ---------------------------------------------------------------------------
 # Display helpers
 # ---------------------------------------------------------------------------
 
@@ -667,6 +782,11 @@ def run(
         "--strict",
         help="Force eager session construction for pool-uncertain steps.",
     ),
+    explain: bool = typer.Option(
+        False,
+        "--explain",
+        help="Print pipeline classification and exit without executing.",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
@@ -688,6 +808,26 @@ def run(
 
     if verdict is not None and step_done is None:
         rprint("[red]Error: --verdict requires --step-done.[/red]")
+        raise typer.Exit(1)
+
+    if explain and resume is not None:
+        rprint("[red]Error: --explain cannot be combined with --resume.[/red]")
+        raise typer.Exit(1)
+
+    if explain and from_step is not None:
+        rprint("[red]Error: --explain cannot be combined with --from.[/red]")
+        raise typer.Exit(1)
+
+    if explain and dry_run:
+        rprint("[red]Error: --explain cannot be combined with --dry-run.[/red]")
+        raise typer.Exit(1)
+
+    if explain and prompt_only:
+        rprint("[red]Error: --explain cannot be combined with --prompt-only.[/red]")
+        raise typer.Exit(1)
+
+    if explain and validate_only:
+        rprint("[red]Error: --explain cannot be combined with --validate.[/red]")
         raise typer.Exit(1)
 
     if list_pipelines and any([pipeline, model, from_step, resume, dry_run, validate_only, status]):
@@ -790,6 +930,14 @@ def run(
         for err in errors:
             rprint(f"  {err.field}: {err.message}")
         raise typer.Exit(1)
+
+    # ---- --explain ----
+    if explain:
+        if pipeline is None:
+            rprint("[red]Error: pipeline argument is required for --explain.[/red]")
+            raise typer.Exit(1)
+        _handle_explain(pipeline.lower(), model, param, strict)
+        raise typer.Exit(0)
 
     # ---- --dry-run ----
     if dry_run:

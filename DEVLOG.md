@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260504
+dateUpdated: 20260506
 
 ---
 
@@ -12,7 +12,41 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260506
+
+### Slice 246: Auth-Classification Diagnostics CLI — Task Breakdown Complete
+
+No commits (planning-only phase).
+
+Created `project-documents/user/tasks/246-tasks.auth-classification-diagnostics-cli.md` (173 lines, 9 tasks).
+
+**Task sequence:** Flag declaration (T1) → mutual-exclusivity guard (T2) → guard tests (T3) → `_render_explain` renderer (T4) → `_handle_explain` handler (T5) → wire dispatch branch (T6) → happy-path tests (T7) → error-path tests (T8) → quality gates + commit (T9).
+
+All changes confined to `src/squadron/cli/commands/run.py` and `tests/cli/commands/test_run.py`. No new modules. Dependencies (classify_pipeline, PipelineClassification, all related enums) fully stable.
+
+**Ready for Phase 6 (Implementation).**
+
+---
+
 ## 20260505
+
+### Slice 246: Auth-Classification Diagnostics CLI — Design Complete
+
+No commits (design-only phase).
+
+Created `project-documents/user/slices/246-slice.auth-classification-diagnostics-cli.md`. Updated slice plan entry (240-slices) to reference the design document and pin the flag name as `--explain`.
+
+**Decisions:**
+- Flag name `--explain` (over `--classify`, `--auth-check`) — most natural for the "explain to me why this needs Claude auth" user intent.
+- No new module; all changes land in `cli/commands/run.py`: new `--explain` flag, `_handle_explain`, and `_render_explain`.
+- `--explain` accepts `--model`, `--param`, `--strict`, and `--verbose`; rejected alongside execution options (`--resume`, `--dry-run`, `--from`, `--prompt-only`, `--validate`).
+- Resolver construction duplicates `_run_pipeline_sdk`'s `_classify_resolver` block intentionally — deferred to a `_build_classification_resolver` helper only when a third call site appears.
+- No `--json` output in this slice; trivial to add as a maintenance task later.
+- Rich table for per-step output (matches existing CLI conventions); summary panel below.
+
+**Ready for Phase 5 (Task Breakdown) and implementation.**
+
+---
 
 ### Initiative 260: Non-SDK Agent Tool Use — Architecture and Slice Plan Complete
 
