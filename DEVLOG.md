@@ -14,6 +14,23 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260506
 
+### Slice 246: Auth-Classification Diagnostics CLI — Complete (commit ec72fab)
+
+All 9 tasks implemented in a single pass on branch `246-slice.auth-classification-diagnostics-cli`.
+
+**Changes:**
+- `src/squadron/cli/commands/run.py` — Added `--explain` flag, `_render_explain`, `_handle_explain`, `_extract_model_override`, `_SHAPE_LABELS` constant, `_STEP_CLASS_COLORS` constant, mutual-exclusivity guards (5 incompatible options), and dispatch branch. All confined to this file; no new modules.
+- `tests/cli/commands/test_run.py` — Added `TestExplainMutualExclusivity` (5 tests) and `TestExplainCommand` (8 tests). Total test count: 1863 passing.
+
+**Verification findings:**
+- `uv run sq run p6 --explain` and `uv run sq run implement --explain` work correctly.
+- `test-compact-compose` has a misconfigured `summary-2` step with no model at any cascade level — `--explain` correctly raises `ClassificationError` for it. Verification walkthrough updated to use `p6` and `implement` instead.
+- Pre-existing integration test failures (2 in `test_compact_compose_integration.py`) are unrelated and present on `main` before this branch.
+
+**Quality gates:** ruff format ✓, ruff check ✓, pyright ✓ (3 pre-existing errors), pytest 1863 passed.
+
+---
+
 ### Slice 246: Auth-Classification Diagnostics CLI — Task Breakdown Complete
 
 No commits (planning-only phase).
