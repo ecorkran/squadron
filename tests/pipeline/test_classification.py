@@ -279,7 +279,7 @@ def test_classifies_all_minimax_pipeline_as_claude_free() -> None:
 
 
 def test_classifies_review_only_sdk_as_one_shot() -> None:
-    steps = [make_step("review", "review-step", {"model": "sonnet"})]
+    steps = [make_step("review", "review-step", {"template": "slice", "model": "sonnet"})]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
     result = classify_pipeline(pipeline, resolver)
@@ -294,7 +294,7 @@ def test_classifies_mixed_pipeline_per_step() -> None:
     steps = [
         make_step("dispatch", "claude-dispatch", {"model": "sonnet"}),
         make_step("dispatch", "minimax-dispatch", {"model": "minimax"}),
-        make_step("review", "sonnet-review", {"model": "sonnet"}),
+        make_step("review", "sonnet-review", {"template": "slice", "model": "sonnet"}),
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
@@ -363,7 +363,7 @@ def test_one_shot_excludes_non_sdk_review() -> None:
     """SC4 third sub-case: non-SDK review does not contribute to one-shot."""
     steps = [
         make_step("dispatch", "claude-dispatch", {"model": "sonnet"}),
-        make_step("review", "minimax-review", {"model": "minimax"}),
+        make_step("review", "minimax-review", {"template": "slice", "model": "minimax"}),
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
@@ -483,7 +483,7 @@ def test_classification_is_idempotent_and_side_effect_free() -> None:
     steps = [
         make_step("dispatch", "direct-claude", {"model": "sonnet"}),
         make_step("dispatch", "pooled", {"model": "pool:sdk-pool"}),
-        make_step("review", "review-sonnet", {"model": "sonnet"}),
+        make_step("review", "review-sonnet", {"template": "slice", "model": "sonnet"}),
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver(pool_backend=spy)
