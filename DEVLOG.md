@@ -12,6 +12,37 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260507
+
+### Slice 243 follow-up: classify_pipeline missed phase-step dispatches (commit aef3b41)
+
+Discovered while testing slice 246's `--explain` against P4: the classifier
+returned a single non-SDK row (the summary step), reporting P4 as
+Claude-free even though P4's `design` step dispatches with the default
+`model: sonnet` (SDK).
+
+**Root cause:** `_MODEL_DISPATCHING_STEP_TYPES` in `classification.py`
+gated on raw step-type names (`dispatch`/`review`/`summary`/`compact`).
+Phase step types (`design`/`tasks`/`implement`) expand into those
+actions via `StepType.expand()` but their step-type name doesn't match,
+so the classifier silently skipped them. The same gap also affected the
+embedded review block under a phase step.
+
+**Fix:** Classifier now walks `StepType.expand()` and classifies each
+emitted model-dispatching action. Action configs run through
+`resolve_placeholders` against pipeline-default params so `{model}`-style
+templates resolve to their concrete alias before cascade lookup. Two test
+fixtures for standalone review steps were updated to include the required
+`template` field.
+
+**Known limitation (out of scope here):** `each`, `loop`, and `fan_out`
+step types return `[]` from `expand()` — their inner model dispatches are
+still uncovered by classification. These are handled directly by the
+executor; a future slice should either teach those step types to surface
+their inner dispatches, or extend the classifier to introspect them.
+
+---
+
 ## 20260506
 
 ### Slice 246: Auth-Classification Diagnostics CLI — Complete (commit ec72fab)
