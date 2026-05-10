@@ -10,6 +10,30 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260510
+
+### Slice 250: Container Step Classification — Design Complete
+
+**Completed:** Phase 4 slice design.
+
+**Documents created/updated:**
+- `project-documents/user/slices/250-slice.container-step-classification-each-loop-fan-out.md` — full LLD
+- `project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md` — slice 250 entry updated with design link and today's date
+
+**Key design decisions:**
+- `inner_steps(config)` added as an optional extension method on step types (detected via `hasattr`, not a required protocol method) — avoids touching all existing step type files.
+- `_unpack_inner_steps` extracted from `executor.py` to a shared location so `EachStepType` and `LoopStepType` can reuse it in `inner_steps()` without a circular import.
+- `fan_out` returns one synthetic sentinel `StepConfig` (`step_type="_fan_out_aggregate"`) encoding the `models:` field. The classifier detects the sentinel and routes to pool-classify or alias-list-classify accordingly.
+- `_classify_alias_set` extracted from `_classify_pool_step` as a shared helper — both the pool path and the fan_out literal-list path call the same aggregation rule.
+- `StepClassification` gains `container_path: str | None = None` (backward-compatible, defaults to `None`).
+- `--explain` rendering uses `  ↳` indent in the Step column rather than a new column — keeps table width manageable.
+- Parent step attribution: inner-step `StepClassification` rows carry the container's `step_name` and `step_index`, not the inner step's own name (which goes in `container_path`).
+- No executor changes in scope.
+
+**Status:** Ready for Phase 5 (Task Breakdown).
+
+---
+
 ## 20260504
 
 ### Slice 245: Pool-Resolution Classification Policy and Mid-Run Session Construction — Task Breakdown Complete
