@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Container step classification**: `sq run --explain` now reports classification for `each`, `loop`, and `fan_out` steps by descending into their inner steps. Container steps appear as a dim header row with inner-step rows indented with `↳`. `fan_out` pipelines (pool-ref or literal alias list) produce correct `sdk_required` / `non_sdk` / `pool_uncertain` results in `--explain` output and for session-construction decisions.
 - **`sq run --explain <pipeline>`**: Print a per-step classification table and pipeline shape summary without executing. Shows each step's resolved alias, model ID, profile, classification (`sdk_required` / `non_sdk` / `pool_uncertain`), and rationale. Accepts `--model`, `--param`, and `--strict` to show what classification a real run would use with those overrides.
 - **Lazy pool-auth default**: `sq run` no longer connects a Claude session at startup for pool-uncertain pipelines. The session is connected on-demand the first time a step actually resolves to an SDK model. Claude auth is skipped entirely for runs where pool selection never picks a Claude model.
 - **`--strict` flag** (`sq run --strict`): Opt in to the pre-245 eager-connect behaviour for pool-uncertain pipelines. Also configurable per-pipeline via `auth_policy: strict` in the pipeline YAML.

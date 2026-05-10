@@ -12,6 +12,27 @@ Internal work log for squadron project development.
 
 ## 20260510
 
+### Slice 250: Container Step Classification — Implementation Complete
+
+**Completed:** Phase 6 implementation. Slice 250 is complete.
+
+**Summary of changes (commit 91f8ccd):**
+- New `src/squadron/pipeline/steps/utils.py` — `unpack_inner_steps` extracted from `executor.py` to eliminate circular import
+- `executor.py` — replaced local `_unpack_inner_steps` with imported utility
+- `EachStepType.inner_steps()`, `LoopStepType.inner_steps()` — parse `steps:` list, return `StepConfig` objects
+- `FanOutStepType.inner_steps()` — returns one synthetic `_fan_out_aggregate` sentinel carrying the `models:` value
+- `classification.py` — added `_classify_alias_set` (shared alias-set aggregator), `_classify_container_inner` (classifies a single inner step / handles `_fan_out_aggregate` sentinel), extended main step loop to descend into containers when `expand()` returns `[]`; added `container_path: str | None = None` field to `StepClassification`
+- `run.py` — `_render_explain` emits dim container header rows and `↳ {inner_name}` indented inner-step rows
+- 27 new tests across `test_inner_steps.py`, `test_classification.py`, `test_run.py`
+- Full suite: 1869 passed, 2 pre-existing failures (compact compose integration)
+
+**Notable implementation decisions:**
+- Used `getattr(step_impl, "inner_steps", None)` instead of a lambda to avoid pyright `Unknown` errors
+- Rich wraps cell content in narrow test terminals — `↳` assertions check for the symbol presence rather than `"↳ name"` substring
+- `_classify_pool_step` refactored to a thin wrapper over `_classify_alias_set` preserving `pool_name`
+
+---
+
 ### Slice 250: Container Step Classification — Task Breakdown Complete
 
 **Completed:** Phase 5 task breakdown.

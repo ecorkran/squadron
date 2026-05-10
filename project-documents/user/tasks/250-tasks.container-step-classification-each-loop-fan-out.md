@@ -9,7 +9,8 @@ dependencies:
 projectState: Slice 246 complete (branch 246-slice.auth-classification-diagnostics-cli). Slice 250 design and review complete. Ready for implementation.
 dateCreated: 20260510
 dateUpdated: 20260510
-status: not_started
+status: complete
+dateUpdated: 20260510
 ---
 
 # Tasks: Container Step Classification (each / loop / fan_out)
@@ -295,27 +296,27 @@ Add to `tests/cli/commands/test_run.py` in `TestExplainCommand`:
 
 ### T10 — Build, format, and full test gate
 
-- [ ] `uv run ruff format src/ tests/`
-- [ ] `uv run ruff check src/ tests/` — zero errors
-- [ ] `uv run pyright src/` — zero new errors (pre-existing count must not increase)
-- [ ] `uv run pytest -x -q` — full suite; confirm 1850+ tests pass; pre-existing failures in `test_compact_compose_integration.py` are the only failures
+- [x] `uv run ruff format src/ tests/`
+- [x] `uv run ruff check src/ tests/` — zero errors
+- [x] `uv run pyright src/` — zero new errors (pre-existing count must not increase)
+- [x] `uv run pytest -x -q` — full suite; confirm 1850+ tests pass; pre-existing failures in `test_compact_compose_integration.py` are the only failures
 
 ---
 
 ### T11 — Commit
 
-- [ ] `git add` all modified files
-- [ ] `git commit` with message: `feat: classify container steps (each/loop/fan_out) in classify_pipeline`
+- [x] `git add` all modified files
+- [x] `git commit` with message: `feat: classify container steps (each/loop/fan_out) in classify_pipeline`
 
 ---
 
 ### T12 — Slice closeout
 
-- [ ] Update `project-documents/user/slices/250-slice.container-step-classification-each-loop-fan-out.md`:
-  - [ ] Set `status: complete`
-  - [ ] Update `dateUpdated` to today
-- [ ] Update `project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md`:
-  - [ ] Mark slice 250 entry `[x]` with completion annotation and commit reference
-- [ ] Update `project-documents/CHANGELOG.md` with user-facing bullet under `[Unreleased]`
-- [ ] Write DEVLOG entry for this session
-- [ ] `git add` and commit docs: `docs: mark slice 250 complete; update slice plan, CHANGELOG, DEVLOG`
+- [x] Update `project-documents/user/slices/250-slice.container-step-classification-each-loop-fan-out.md`:
+  - [x] Set `status: complete`
+  - [x] Update `dateUpdated` to today
+- [x] Update `project-documents/user/architecture/240-slices.pipeline-auth-boundary-flexibility.md`:
+  - [x] Mark slice 250 entry `[x]` with completion annotation and commit reference
+- [x] Update `project-documents/CHANGELOG.md` with user-facing bullet under `[Unreleased]`
+- [x] Write DEVLOG entry for this session
+- [x] `git add` and commit docs: `docs: mark slice 250 complete; update slice plan, CHANGELOG, DEVLOG`
