@@ -411,13 +411,91 @@ uv run pytest tests/pipeline/test_classification.py -v
 ```
 All existing tests pass. New container-classification tests pass.
 
+## Failure Mode Enumeration
+
+Each new code path in `classify_pipeline` introduced by this slice has an explicit handling strategy.
+
+### `inner_steps()` raises on malformed config
+
+**Path:** `getattr(step_impl, "inner_steps", lambda _: [])(step)`
+
+**Modes:** `inner_steps()` raises `KeyError`, `ValueError`, or `TypeError` if the step config is
+malformed (e.g., `each` step missing `steps:` key, `loop` step with non-list `steps:` value).
+
+**Strategy:** Propagate. `classify_pipeline` already propagates expansion errors from `expand()` —
+the same contract applies to `inner_steps()`. Callers are expected to call `validate_pipeline`
+before `classify_pipeline`; a validated pipeline will never produce a malformed `inner_steps()`.
+This is an intentional fail-fast decision, documented here. Observable: caller receives an
+exception with a traceback that identifies the step and the malformed key. No silent empty result.
+
+### Sentinel `_fan_out_aggregate` step type escapes the guard
+
+**Path:** `_classify_container_inner` checks `inner.step_type == "_fan_out_aggregate"` before
+calling `get_step_type()`.
+
+**Mode:** If the sentinel check is removed or bypassed, `get_step_type("_fan_out_aggregate")` fails
+with `KeyError` (sentinel is never registered). This is the correct behavior — it surfaces the bug
+rather than producing wrong output.
+
+**Strategy:** The sentinel is an internal classifier artifact. Enforce its scope with an assertion
+rather than relying on a comment:
+
+```python
+assert inner.step_type != "_fan_out_aggregate", (
+    "_fan_out_aggregate sentinel must be handled before get_step_type()"
+)
+```
+
+placed immediately before the `get_step_type(inner.step_type)` call. Assertion failure is
+observable and identifies the exact invariant that was violated. Observable: `AssertionError` in
+tests; `KeyError` in production if assertions are disabled (still surfaces, just later).
+
+### Inner step type not registered
+
+**Path:** `get_step_type(inner.step_type)` on a step returned by `EachStepType.inner_steps()` or
+`LoopStepType.inner_steps()`.
+
+**Mode:** If `inner_steps()` returns a `StepConfig` with an unrecognized `step_type`, `get_step_type`
+raises `KeyError`. This can only happen if the inner step list contains a step type that hasn't been
+registered (i.e., a step type the validator doesn't recognize either).
+
+**Strategy:** Propagate. Same contract as the top-level loop's `get_step_type(step.step_type)` call
+(currently, an unregistered top-level step type causes `classify_pipeline` to skip the step with a
+`continue` — see the `except KeyError: continue` guard). Apply the same guard for inner steps:
+skip unregistered inner step types with a `continue`. This mirrors the existing behavior exactly.
+Observable: no rows for that inner step (same as today for an unregistered top-level step).
+
+### `unpack_inner_steps` returns empty or unexpected output
+
+**Path:** `unpack_inner_steps(raw_list)` called from `inner_steps()` implementations.
+
+**Mode:** If the raw step list contains malformed entries (non-dict items, dicts with more than one
+key), `_unpack_inner_steps` skips them silently. This is existing behavior inherited from the
+executor.
+
+**Strategy:** Accept the inherited behavior. Malformed inner-step lists are caught by `validate_pipeline`
+before classification runs. The empty-result case (all entries skipped) produces no inner-step
+classification rows for the container — incomplete but not wrong. Observable: `--explain` output
+will show the container row with no indented children, which is a visible signal that something is
+missing. No silent total failure.
+
+### `hasattr` finds `inner_steps` with an incompatible signature (F002)
+
+**Path:** `getattr(step_impl, "inner_steps", lambda _: [])(step)` — if a step type has an
+`inner_steps` attribute that is not callable or has a different signature, the call fails.
+
+**Strategy:** The type-narrowing available at call time is `hasattr`, not signature inspection.
+Accept that a signature mismatch surfaces as a `TypeError` at runtime, which is observable and
+diagnosable from the traceback. To reduce ambiguity: name the parameter `config: StepConfig`
+consistently in all three implementations, and document the expected signature in the protocol
+docstring. This does not prevent the failure but makes the expected interface unambiguous.
+
 ## Risk Notes
 
 - **`_unpack_inner_steps` extraction:** Moving this utility out of `executor.py` is mechanical but
   touches import paths. Run the full test suite after the move; executor tests are the primary
   regression signal.
-- **Sentinel step type `_fan_out_aggregate`:** This is an internal classifier artifact that must
-  never be registered in the step-type registry. The classifier explicitly checks for this sentinel
-  before calling `get_step_type()`. A comment in the classifier must document this invariant.
+- **Sentinel step type `_fan_out_aggregate`:** Enforced by assertion immediately before `get_step_type()`
+  in `_classify_container_inner`. Never registered in the step-type registry.
 
 Effort: 3/5. Dependencies: [243, 246].
