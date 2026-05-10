@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _SOURCE_PATTERN = re.compile(r"(\w+)\.(\w+)\([^)]*\)")
 
@@ -74,6 +76,13 @@ class EachStepType:
             )
 
         return errors
+
+    def inner_steps(self, config: StepConfig) -> list[StepConfig]:
+        raw: object = config.config.get("steps", [])
+        if not isinstance(raw, list):
+            return []
+        raw_list = cast(list[object], raw)
+        return unpack_inner_steps([cast(dict[str, object], s) for s in raw_list if isinstance(s, dict)])
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         """Return empty list — executor handles each execution directly."""

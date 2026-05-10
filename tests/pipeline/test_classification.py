@@ -30,6 +30,7 @@ from squadron.pipeline.intelligence.pools.models import (
 )
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
+from squadron.pipeline.steps.collection import EachStepType
 
 # ---------------------------------------------------------------------------
 # T1 — SpyPoolBackend and definition builders
@@ -587,3 +588,138 @@ def test_classify_explicit_strict_policy() -> None:
     resolver = make_resolver()
     result = classify_pipeline(pipeline, resolver, policy=PoolClassificationPolicy.STRICT)
     assert result.policy == PoolClassificationPolicy.STRICT
+
+
+# ---------------------------------------------------------------------------
+# Container classification (T8)
+# ---------------------------------------------------------------------------
+
+
+def _make_each_step(inner_model: str, name: str = "each-0") -> StepConfig:
+    return make_step(
+        "each",
+        name,
+        {
+            "source": "items.list()",
+            "as": "item",
+            "steps": [{"dispatch": {"model": inner_model}}],
+        },
+    )
+
+
+def _make_loop_step(inner_model: str, name: str = "loop-0") -> StepConfig:
+    return make_step(
+        "loop",
+        name,
+        {
+            "max": 3,
+            "steps": [{"dispatch": {"model": inner_model}}],
+        },
+    )
+
+
+def _make_fan_out_step(models: object, name: str = "fan-0") -> StepConfig:
+    return make_step("fan_out", name, {"models": models, "inner": {"dispatch": {}}})
+
+
+def test_each_sdk_inner_classifies_as_persistent() -> None:
+    pipeline = make_pipeline([_make_each_step("sonnet", "each-0")])
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    row = result.steps[0]
+    assert row.classification == StepClass.SDK_REQUIRED
+    assert row.step_name == "each-0"
+    assert row.container_path == "dispatch-0"
+    assert result.needs_persistent_session is True
+
+
+def test_each_non_sdk_inner_classifies_as_claude_free() -> None:
+    pipeline = make_pipeline([_make_each_step("minimax", "each-0")])
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.NON_SDK
+    assert result.shape == PipelineShape.CLAUDE_FREE
+
+
+def test_loop_sdk_inner_classifies_as_persistent() -> None:
+    pipeline = make_pipeline([_make_loop_step("sonnet", "loop-0")])
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.SDK_REQUIRED
+    assert result.needs_persistent_session is True
+
+
+def test_fan_out_all_sdk_literal_list() -> None:
+    pipeline = make_pipeline([_make_fan_out_step(["sonnet", "sonnet"])])
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.SDK_REQUIRED
+    assert result.steps[0].action_type == "dispatch"
+
+
+def test_fan_out_all_non_sdk_literal_list() -> None:
+    pipeline = make_pipeline([_make_fan_out_step(["minimax", "minimax"])])
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.NON_SDK
+
+
+def test_fan_out_mixed_literal_list_is_pool_uncertain() -> None:
+    pipeline = make_pipeline([_make_fan_out_step(["sonnet", "minimax"])])
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.POOL_UNCERTAIN
+
+
+def test_fan_out_pool_ref_delegates_to_pool_classify() -> None:
+    spy = SpyPoolBackend({"review": _MIXED_POOL})
+    pipeline = make_pipeline([_make_fan_out_step("pool:review")])
+    resolver = make_resolver(pool_backend=spy)
+    result = classify_pipeline(pipeline, resolver, pool_backend=spy)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.POOL_UNCERTAIN
+    assert result.steps[0].pool_name == "review"
+    assert spy.select_call_count == 0
+
+
+def test_container_with_unregistered_inner_step_type_returns_no_rows() -> None:
+    """Unregistered inner step type is skipped gracefully (mirrors top-level behaviour)."""
+    from squadron.pipeline.models import StepConfig as SC
+
+    sentinel = SC(step_type="unknown_type", name="unknown-0", config={})
+
+    with patch.object(EachStepType, "inner_steps", return_value=[sentinel]):
+        pipeline = make_pipeline([_make_each_step("sonnet")])
+        resolver = make_resolver()
+        result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 0
+
+
+def test_top_level_steps_still_classified_alongside_containers() -> None:
+    steps = [
+        _make_each_step("sonnet", "each-0"),
+        make_step("dispatch", "summary-0", {"model": "minimax"}),
+    ]
+    pipeline = make_pipeline(steps)
+    resolver = make_resolver()
+    result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 2
+    container_row = next(r for r in result.steps if r.step_name == "each-0")
+    top_row = next(r for r in result.steps if r.step_name == "summary-0")
+    assert container_row.classification == StepClass.SDK_REQUIRED
+    assert top_row.classification == StepClass.NON_SDK

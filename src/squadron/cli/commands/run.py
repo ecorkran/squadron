@@ -398,11 +398,28 @@ def _render_explain(classification: PipelineClassification) -> None:
     table.add_column("Classification")
     table.add_column("Rationale")
 
+    # Track which container step names have already had a header row emitted.
+    emitted_container_headers: set[str] = set()
+
     for step in classification.steps:
+        if step.container_path is not None and step.step_name not in emitted_container_headers:
+            # Emit a dim header row for the container step itself.
+            table.add_row(
+                f"[dim]{step.step_name}[/dim]",
+                "—",
+                "—",
+                "—",
+                "—",
+                "[dim](container)[/dim]",
+                "—",
+            )
+            emitted_container_headers.add(step.step_name)
+
         color = _STEP_CLASS_COLORS[step.classification]
         cls_val = f"[{color}]{step.classification.value}[/{color}]"
+        step_label = f"  ↳ {step.container_path}" if step.container_path is not None else step.step_name
         table.add_row(
-            step.step_name,
+            step_label,
             step.action_type,
             step.resolved_alias or "—",
             step.resolved_model_id or "—",

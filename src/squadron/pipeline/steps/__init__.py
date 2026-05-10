@@ -8,6 +8,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from squadron.pipeline.steps.protocol import StepType
+from squadron.pipeline.steps.utils import unpack_inner_steps
 
 __all__ = [
     "StepType",
@@ -16,6 +17,7 @@ __all__ = [
     "get_step_type",
     "list_step_types",
     "register_step_type",
+    "unpack_inner_steps",
 ]
 
 

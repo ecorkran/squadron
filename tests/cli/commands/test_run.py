@@ -1105,3 +1105,72 @@ class TestExplainCommand:
             result = runner.invoke(app, ["run", "p", "--explain"])
         assert result.exit_code == 1
         assert "Classification failed" in result.output
+
+    # T9a — container inner row shows ↳ prefix
+    def test_explain_each_container_shows_indent_prefix(self) -> None:
+        container_row = StepClassification(
+            step_name="each-0",
+            step_index=0,
+            action_type="dispatch",
+            resolved_alias="sonnet",
+            resolved_model_id="claude-sonnet-4-6",
+            profile="sdk",
+            classification=StepClass.SDK_REQUIRED,
+            rationale="alias 'sonnet' resolves to profile 'sdk' (SDK)",
+            container_path="dispatch-0",
+        )
+        classification = _make_pipeline_classification(steps=[container_row])
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
+        assert result.exit_code == 0
+        # Rich may wrap/truncate cell values in narrow test terminals;
+        # assert the ↳ prefix appears (the inner step prefix is rendered).
+        assert "↳" in result.output
+
+    # T9b — container header row is shown for the container step
+    def test_explain_container_header_row_shown(self) -> None:
+        container_row = StepClassification(
+            step_name="each-0",
+            step_index=0,
+            action_type="dispatch",
+            resolved_alias="sonnet",
+            resolved_model_id="claude-sonnet-4-6",
+            profile="sdk",
+            classification=StepClass.SDK_REQUIRED,
+            rationale="alias 'sonnet' resolves to profile 'sdk' (SDK)",
+            container_path="dispatch-0",
+        )
+        classification = _make_pipeline_classification(steps=[container_row])
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
+        assert result.exit_code == 0
+        assert "each-0" in result.output
+        # Rich may truncate "(container)" in narrow test terminals; check prefix.
+        assert "contain" in result.output
+
+    # T9c — top-level row (container_path=None) does not show ↳
+    def test_explain_top_level_row_no_indent(self) -> None:
+        top_row = _make_step_classification(name="dispatch-0")
+        classification = _make_pipeline_classification(steps=[top_row])
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run.DefaultPoolBackend"),
+            patch("squadron.cli.commands.run.ModelResolver"),
+            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        ):
+            result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
+        assert result.exit_code == 0
+        assert "↳" not in result.output

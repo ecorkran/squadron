@@ -97,6 +97,15 @@ class FanOutStepType:
 
         return errors
 
+    def inner_steps(self, config: StepConfig) -> list[StepConfig]:
+        return [
+            StepConfig(
+                step_type="_fan_out_aggregate",
+                name=config.name,
+                config={"models": config.config.get("models")},
+            )
+        ]
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         # Fan-out is executed directly by the executor; no actions to expand.
         return []

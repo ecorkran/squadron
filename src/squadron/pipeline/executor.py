@@ -26,6 +26,7 @@ from squadron.pipeline.classification import (
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
 
 if TYPE_CHECKING:
@@ -1100,7 +1101,7 @@ async def _execute_loop_body(
         ]
     else:
         raw_list = []
-    inner_steps = _unpack_inner_steps(raw_list)
+    inner_steps = unpack_inner_steps(raw_list)
 
     # Bound across the loop so the exhaustion path can return the latest
     # iteration's results.  Reassigned at the start of each iteration.
@@ -1169,30 +1170,6 @@ async def _execute_loop_body(
     )
 
 
-def _unpack_inner_steps(raw_steps: list[dict[str, object]]) -> list[Any]:
-    """Convert raw YAML step list to StepConfig objects.
-
-    Each element is a single-key dict: {step_type: config_or_scalar}.
-    """
-    from squadron.pipeline.models import StepConfig
-
-    result: list[StepConfig] = []
-    for index, raw_step in enumerate(raw_steps):
-        if len(raw_step) != 1:
-            continue
-        step_type = str(next(iter(raw_step)))
-        raw_config = raw_step[step_type]
-        if isinstance(raw_config, dict):
-            config: dict[str, object] = {str(k): v for k, v in raw_config.items()}  # type: ignore[union-attr]
-        elif raw_config is None:
-            config = {}
-        else:
-            config = {"mode": raw_config}
-        name = str(config.pop("name", f"{step_type}-{index}"))
-        result.append(StepConfig(step_type=step_type, name=name, config=config))
-    return result
-
-
 async def _execute_each_step(
     *,
     step: Any,
@@ -1232,7 +1209,7 @@ async def _execute_each_step(
         ]
     else:
         raw_list = []
-    inner_steps = _unpack_inner_steps(raw_list)
+    inner_steps = unpack_inner_steps(raw_list)
     all_action_results: list[ActionResult] = []
 
     for item in items:
@@ -1331,7 +1308,7 @@ async def _execute_fan_out_step(
     from typing import cast
 
     inner_list: list[dict[str, object]] = [cast(dict[str, object], inner_raw)]
-    inner_steps = _unpack_inner_steps(inner_list)
+    inner_steps = unpack_inner_steps(inner_list)
     if not inner_steps:
         raise ValueError(f"fan_out step '{step.name}': invalid inner step")
     inner_step = inner_steps[0]
