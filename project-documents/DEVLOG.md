@@ -12,6 +12,37 @@ Internal work log for squadron project development.
 
 ## 20260510
 
+### Slice 250: Container Step Classification — Task Breakdown Complete
+
+**Completed:** Phase 5 task breakdown.
+
+**Documents created:**
+- `project-documents/user/tasks/250-tasks.container-step-classification-each-loop-fan-out.md` — 12 tasks, 321 lines
+
+**Task structure:**
+- T1: Branch setup
+- T2: Extract `_unpack_inner_steps` → `steps/utils.py` (removes circular import); update executor call sites
+- T3: `EachStepType.inner_steps()` + tests
+- T4: `LoopStepType.inner_steps()` + tests
+- T5: `FanOutStepType.inner_steps()` returning sentinel `_fan_out_aggregate` + tests
+- T6: Extract `_classify_alias_set` from `_classify_pool_step`; regression test
+- T7: Add `container_path: str | None = None` to `StepClassification`; regression test
+- T8: Core classifier extension — `_classify_container_inner` helper + modified step loop; 9 new classification tests
+- T9: `_render_explain` container rendering (header row + `↳` indent) + 3 rendering tests
+- T10: ruff format/check, pyright, full pytest gate
+- T11: Implementation commit
+- T12: Slice closeout (status, slice plan, CHANGELOG, DEVLOG, docs commit)
+
+**Key task notes:**
+- T2 is the prerequisite for T3/T4 (circular import blocker). T5 is independent of T3/T4.
+- T6 must precede T8 (T8 calls `_classify_alias_set`).
+- T7 must precede T8 and T9 (both use `container_path`).
+- T8's `_classify_container_inner` asserts `inner.step_type != "_fan_out_aggregate"` before `get_step_type()`, enforcing the sentinel invariant.
+
+**Status:** Ready for Phase 6 (Implementation).
+
+---
+
 ### Slice 250: Container Step Classification — Design Complete
 
 **Completed:** Phase 4 slice design.
