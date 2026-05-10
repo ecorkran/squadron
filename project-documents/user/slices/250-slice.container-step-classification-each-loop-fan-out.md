@@ -411,6 +411,10 @@ uv run pytest tests/pipeline/test_classification.py -v
 ```
 All existing tests pass. New container-classification tests pass.
 
+**Implementation verification (20260510):**
+- Steps 1–4 require real pipeline YAML files; manual verification deferred (no project pipelines exercise container steps in the current repo state).
+- Step 5 confirmed: `uv run pytest tests/pipeline/test_classification.py -v` → 46 passed, 0 failed. Includes all 9 container classification tests (T8) and 3 rendering tests (T9) across the full test suite (1869 passed total, 2 pre-existing failures in `test_compact_compose_integration.py`).
+
 ## Failure Mode Enumeration
 
 Each new code path in `classify_pipeline` introduced by this slice has an explicit handling strategy.
