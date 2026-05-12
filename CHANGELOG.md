@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 20260512
+
 ### Added
 - **Container step classification**: `sq run --explain` now reports classification for `each`, `loop`, and `fan_out` steps by descending into their inner steps. Container steps appear as a dim header row with inner-step rows indented with `↳`. `fan_out` pipelines (pool-ref or literal alias list) produce correct `sdk_required` / `non_sdk` / `pool_uncertain` results in `--explain` output and for session-construction decisions.
 - **`sq run --explain <pipeline>`**: Print a per-step classification table and pipeline shape summary without executing. Shows each step's resolved alias, model ID, profile, classification (`sdk_required` / `non_sdk` / `pool_uncertain`), and rationale. Accepts `--model`, `--param`, and `--strict` to show what classification a real run would use with those overrides.
@@ -22,14 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--strict` flag** (`sq run --strict`): Opt in to the pre-245 eager-connect behaviour for pool-uncertain pipelines. Also configurable per-pipeline via `auth_policy: strict` in the pipeline YAML.
 - **`auth_policy` YAML field**: Pipelines can set `auth_policy: lazy` (explicit default) or `auth_policy: strict` in their YAML header. CLI `--strict` overrides the YAML setting.
 - Pipeline classification gates SDK session construction — non-Claude pipelines no longer require Claude auth. `sq run my-non-claude-pipeline` completes without spawning a Claude CLI process.
-- Pipeline classification pre-scan: Squadron now classifies each model-dispatching step (`dispatch`, `review`, `summary`, `compact`) as SDK-required, non-SDK, or pool-uncertain before the pipeline runs. This is the data foundation for upcoming conditional session construction (slice 244) and `sq run --explain` diagnostics (slice 246).
+- Pipeline classification pre-scan: Squadron now classifies each model-dispatching step (`dispatch`, `review`, `summary`, `compact`) as SDK-required, non-SDK, or pool-uncertain before the pipeline runs.
 - Non-SDK models (e.g. `minimax`, `gemini-flash`) now work correctly in prompt-only/IDE mode (`/sq:run`). The dispatch renderer emits a `sq _dispatch-run` command for non-SDK profiles; the IDE harness runs it via Bash instead of silently using the calling session.
 - New hidden subcommand `sq _dispatch-run` for pipeline-internal use: accepts `--prompt-file`, `--model`, `--profile`, `--param` flags and invokes a one-shot non-SDK dispatch.
 
 ### Fixed
 - `sq run … --param model=<non-sdk>` (pure-CLI mode) now correctly dispatches to the non-SDK provider instead of silently routing the prompt through the persistent Claude session. Mixed pipelines (some steps Claude, some non-SDK) route per-step correctly; `metadata.profile` in run state now accurately reflects which path executed.
-
-### Fixed
 - SDK synthetic errors (`ResultMessage.is_error=True`) are now caught and surfaced as `ProviderAPIError` before any response text is returned, preventing silent writes of error text into design artifacts.
 
 ## [0.5.1] - 20260427
