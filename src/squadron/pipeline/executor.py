@@ -46,6 +46,9 @@ __all__ = [
     "CheckpointResolution",
     "CheckpointDecision",
     "LazySessionConnectError",
+    "CHECKPOINT_KEY_ACCEPT",
+    "CHECKPOINT_KEY_OVERRIDE",
+    "CHECKPOINT_KEY_EXIT",
     "resolve_placeholders",
     "evaluate_condition",
     "execute_pipeline",
@@ -296,9 +299,9 @@ def _is_interactive() -> bool:
 
 
 _CHECKPOINT_RULE = "─" * 58
-_CHECKPOINT_KEY_ACCEPT = "a"
-_CHECKPOINT_KEY_OVERRIDE = "o"
-_CHECKPOINT_KEY_EXIT = "x"
+CHECKPOINT_KEY_ACCEPT = "a"
+CHECKPOINT_KEY_OVERRIDE = "o"
+CHECKPOINT_KEY_EXIT = "x"
 
 
 def _format_findings_as_instructions(findings: list[dict[str, object]]) -> str:
@@ -358,27 +361,25 @@ def _prompt_checkpoint_interactive(
     print()
     print("Options:")
     print(
-        f"  [{_CHECKPOINT_KEY_ACCEPT}] Accept   — continue; findings above become override instructions"
+        f"  [{CHECKPOINT_KEY_ACCEPT}] Accept   — continue; findings above become override instructions"
     )
-    print(f"  [{_CHECKPOINT_KEY_OVERRIDE}] Override — enter custom instructions, then continue")
-    print(f"  [{_CHECKPOINT_KEY_EXIT}] Exit     — save state; resume: sq run --resume {run_id}")
+    print(f"  [{CHECKPOINT_KEY_OVERRIDE}] Override — enter custom instructions, then continue")
+    print(f"  [{CHECKPOINT_KEY_EXIT}] Exit     — save state; resume: sq run --resume {run_id}")
     print(_CHECKPOINT_RULE)
 
     while True:
         choice = (
-            input(
-                f"Choice [{_CHECKPOINT_KEY_ACCEPT}/{_CHECKPOINT_KEY_OVERRIDE}/{_CHECKPOINT_KEY_EXIT}]: "
-            )
+            input(f"Choice [{CHECKPOINT_KEY_ACCEPT}/{CHECKPOINT_KEY_OVERRIDE}/{CHECKPOINT_KEY_EXIT}]: ")
             .strip()
             .lower()
         )
-        if choice == _CHECKPOINT_KEY_ACCEPT:
+        if choice == CHECKPOINT_KEY_ACCEPT:
             override_instructions = _format_findings_as_instructions(findings)
             return CheckpointDecision(CheckpointResolution.ACCEPT, override_instructions)
-        if choice == _CHECKPOINT_KEY_OVERRIDE:
+        if choice == CHECKPOINT_KEY_OVERRIDE:
             user_text = input("Instructions: ").strip()
             return CheckpointDecision(CheckpointResolution.OVERRIDE, user_text)
-        if choice == _CHECKPOINT_KEY_EXIT:
+        if choice == CHECKPOINT_KEY_EXIT:
             return CheckpointDecision(CheckpointResolution.EXIT, None)
         # Invalid input: loop and re-prompt
 
