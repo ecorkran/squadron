@@ -1,4 +1,4 @@
-name: P4
+name: slice-design
 description: Design a slice (phase 4) with review and human checkpoint
 
 params:
@@ -13,6 +13,7 @@ steps:
       review:
         template: slice
         model: "{review-model}"
+      checkpoint: on-fail
 
   - summary:
       template: minimal-sdk
