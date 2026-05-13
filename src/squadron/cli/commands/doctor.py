@@ -30,7 +30,7 @@ _STATUS_ICON: dict[CheckStatus, tuple[str, str]] = {
 
 
 def _render_table(results: list[CheckResult], verbose: bool) -> None:
-    console = Console()
+    console = Console(soft_wrap=True)
     console.print()
     console.print("[bold]Squadron Environment Diagnostic[/bold]")
     console.print("─" * 64)

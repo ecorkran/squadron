@@ -14,6 +14,30 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260513
 
+### Slice 905: `sq doctor` — Phase 6 Implementation Complete
+
+Completed full implementation of `sq doctor` in a single session across 35 tasks.
+
+Two new files: `src/squadron/cli/commands/doctor_checks.py` (~280 lines, pure check
+functions + `run_all_checks()`) and `src/squadron/cli/commands/doctor.py` (~120 lines,
+Typer command + Rich/JSON rendering). One edit to `cli/app.py` to register the command.
+
+Key implementation decisions:
+- Module-level imports for `get_all_profiles`, `providers_toml_path`, `models_toml_path`
+  (not lazy inside functions) — required for test patching to work correctly.
+- `Console(soft_wrap=True)` for path-heavy detail strings that exceed terminal width.
+- `_API_KEY_ONLY_PROFILES` fixture in integration tests because `sdk`, `local`,
+  `openai-oauth` profiles return `is_valid()=True` unconditionally — a fresh-system
+  env var wipe doesn't actually leave zero valid providers. The fixture simulates
+  a minimal env with only API-key-based profiles for the "fresh-system → exit 1" scenario.
+- Scenario 3 (broken providers.toml) produces two error signals: `get_all_profiles()` 
+  raises before per-profile checks run (process-boundary handler emits WARN), then 
+  `check_providers_toml()` independently emits the MISSING row. Both correct; both informative.
+
+Tests: 35 doctor tests added; full suite 1904 passing, 2 skipped (pre-existing). Ruff/pyright clean.
+
+Branch: `905-sq-doctor-environment-diagnostic-command`. Not yet merged.
+
 ### Slice 905: `sq doctor` — Phase 5 Task Breakdown
 
 Authored `user/tasks/905-tasks.sq-doctor-environment-diagnostic-command.md`

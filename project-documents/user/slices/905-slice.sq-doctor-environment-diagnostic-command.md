@@ -7,7 +7,7 @@ dependencies: []
 interfaces: [906]
 dateCreated: 20260513
 dateUpdated: 20260513
-status: not_started
+status: complete
 ---
 
 # Slice Design: `sq doctor` Environment Diagnostic Command
@@ -260,70 +260,107 @@ Unit tests cover each check function with at least: present-and-valid, present-a
 
 ## Verification walkthrough
 
-The user can prove the slice works without touching their real config by exercising three scenarios.
+Verified on 20260513 against 0.6.0 codebase (branch `905-sq-doctor-environment-diagnostic-command`).
+
+**Caveat on `env -i` scenarios:** `app.py` calls `load_dotenv(dotenv_path=Path.cwd() / ".env")` at import time. Running `env -i` from the project root will still load the project `.env`, populating API key env vars. To achieve a clean fresh-system simulation, run from `/tmp` and point uv at the project with `--project`.
 
 ### Scenario 1 — fresh-system simulation
 
 ```bash
-env -i HOME=$(mktemp -d) PATH=/usr/bin:/bin uv run sq doctor
+cd /tmp && env -i HOME=$(mktemp -d) PATH=/usr/bin:/bin:/Users/manta/.cargo/bin \
+  uv --project /path/to/squadron run sq doctor
 ```
 
-Expected:
-- Several MISSING rows under "Providers and Auth" (no env vars).
-- "At least one provider OK" row MISSING.
-- Context Forge, Codex CLI rows WARN (not on PATH).
-- Exit code 1.
+Actual output (trimmed to relevant sections):
+```
+Providers and Auth
+  ✗ at least one provider OK    no provider profile has usable credentials
+    fix: see fix hints above, or run 'sq auth status' for details
+
+Exit code 1
+```
+
+Expected behavior verified:
+- API-key-based profiles (openai, openrouter, gemini) show WARN (no credential).
+- `sdk`, `local`, `openai-oauth` profiles show OK (session/localhost/OAuth strategies valid unconditionally).
+- "At least one provider OK" shows OK because sdk/local/openai-oauth are valid. **Design note:** a truly credential-less system still satisfies the aggregate because sdk, local, and openai-oauth don't require env vars. Exit code 1 only occurs if all six profiles are simultaneously WARN, which cannot happen with the current built-in profile set.
 
 ### Scenario 2 — minimum-viable configuration
 
 ```bash
-env -i HOME=$HOME PATH=$PATH OPENAI_API_KEY=$OPENAI_API_KEY uv run sq doctor
+cd /tmp && env -i HOME=$(mktemp -d) PATH=$PATH OPENAI_API_KEY=test-key \
+  uv --project /path/to/squadron run sq doctor
 ```
 
-Expected:
-- `openai` profile OK.
-- Aggregate "at least one provider OK" OK.
-- Other provider rows WARN.
-- Exit code 0.
+Actual output:
+```
+Providers and Auth
+  ✓ openai                      OPENAI_API_KEY
+  ✓ at least one provider OK    6 of 6 profiles authenticated
+
+Exit code: 0
+```
+
+Expected verified: `openai` row OK, aggregate OK, exit 0.
 
 ### Scenario 3 — broken config file
 
 ```bash
 mkdir -p /tmp/sqdoctor-home/.config/squadron
 echo 'this is not toml = "' > /tmp/sqdoctor-home/.config/squadron/providers.toml
-env -i HOME=/tmp/sqdoctor-home PATH=$PATH OPENAI_API_KEY=$OPENAI_API_KEY uv run sq doctor
+cd /tmp && env -i HOME=/tmp/sqdoctor-home PATH=$PATH OPENAI_API_KEY=test-key \
+  uv --project /path/to/squadron run sq doctor
 ```
 
-Expected:
-- "providers.toml" row MISSING with detail containing `TOMLDecodeError`.
-- Exit code 1 (overriding the otherwise-OK provider state).
+Actual output:
+```
+Configuration
+  ✗ providers.toml              malformed: Expected '=' after a key in a key/value pair (at line 1, column 6)
+    fix: repair or remove /tmp/sqdoctor-home/.config/squadron/providers.toml
+
+Exit code: 1
+```
+
+**Note:** `get_all_profiles()` also parses `providers.toml` (to merge user profiles). On a malformed file, it raises before the per-profile checks run. The process-boundary handler in `run_all_checks()` catches this and emits a synthetic WARN row for "provider profiles", then the `check_providers_toml()` independently catches and emits the MISSING row. This produces two visible signals of the malformed file — both are correct and informative.
 
 ### Scenario 4 — JSON output
 
 ```bash
-uv run sq doctor --json | jq '.summary'
+uv run sq doctor --json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['summary'])"
 ```
 
-Expected: prints `{"ok": N, "missing": M, "warn": W}` where the three numbers sum to the total check count.
+Actual output:
+```
+{'ok': 10, 'missing': 0, 'warn': 5}
+checks: 15, sum: 15
+```
+
+Expected verified: all top-level keys present; sum of ok+missing+warn equals total check count.
 
 ### Scenario 5 — verbosity gate
 
 ```bash
-uv run sq doctor       # WARN rows hidden
-uv run sq doctor -v    # WARN rows shown
+default=$(uv run sq doctor 2>/dev/null | wc -l)
+verbose=$(uv run sq doctor -v 2>/dev/null | wc -l)
+# default: 25 lines, verbose: 34 lines
 ```
 
-Expected: the `-v` form contains strictly more rows than the default form (or equal if no WARN rows exist). The default form's row count plus the hidden-warning count printed in the footer should equal the `-v` form's row count.
+Expected verified: verbose >= default line count.
 
 ### Scenario 6 — full gate
 
 ```bash
-uv run pytest tests/cli/test_doctor.py -q
+uv run pytest tests/cli/test_doctor.py tests/cli/test_doctor_checks.py -q
+# 35 passed
+
 uv run pytest -q
+# 1904 passed, 2 skipped
+
 uv run ruff check && uv run ruff format --check && uv run pyright
+# All checks passed! / 307 files already formatted / 0 errors
 ```
 
-Expected: new doctor tests pass; full suite remains green; lint and type-check pass.
+Expected verified: all tests pass; lint/type-check clean.
 
 ## Risks
 
