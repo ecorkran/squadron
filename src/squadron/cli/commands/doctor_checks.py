@@ -237,7 +237,7 @@ def check_providers_toml() -> CheckResult:
         return CheckResult(
             name="providers.toml",
             status=CheckStatus.OK,
-            detail=f"not present at {path}",
+            detail=f"using defaults (no file at {path})",
             section=SECTION_CONFIG,
             required=True,
         )
@@ -271,7 +271,7 @@ def check_models_toml() -> CheckResult:
         return CheckResult(
             name="models.toml",
             status=CheckStatus.OK,
-            detail=f"not present at {path}",
+            detail=f"using defaults (no file at {path})",
             section=SECTION_CONFIG,
             required=True,
         )

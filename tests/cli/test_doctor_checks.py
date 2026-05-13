@@ -211,7 +211,7 @@ def test_check_providers_toml_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     with patch("squadron.cli.commands.doctor_checks.providers_toml_path", return_value=missing):
         result = check_providers_toml()
     assert result.status == CheckStatus.OK
-    assert "not present" in result.detail
+    assert "using defaults" in result.detail
 
 
 def test_check_providers_toml_valid(tmp_path: Path) -> None:
@@ -242,7 +242,7 @@ def test_check_models_toml_absent(tmp_path: Path) -> None:
     with patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=missing):
         result = check_models_toml()
     assert result.status == CheckStatus.OK
-    assert "not present" in result.detail
+    assert "using defaults" in result.detail
 
 
 def test_check_models_toml_valid(tmp_path: Path) -> None:
