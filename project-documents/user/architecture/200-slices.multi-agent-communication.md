@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 200-arch.multi-agent-communication.md
 project: squadron
 dateCreated: 20260322
-dateUpdated: 20260327
+dateUpdated: 20260513
 status: not_started
 ---
 
@@ -28,7 +28,7 @@ status: not_started
 
 2. [ ] **(202) Message Bus Core** — Async pub/sub message system. Agents and other participants (human, system) publish and subscribe. Broadcast routing (all subscribers see all messages) as the default topology. Message history (in-memory) with per-agent filtering view. Message schema: sender, recipients, content, timestamp, message_type, metadata. Dependencies: [Agent Registry (102)]. Risk: Low. Effort: 2/5
 
-3. [ ] **(203) Anthropic API Provider** — Implement AnthropicAPIProvider satisfying the AgentProvider Protocol. AnthropicAPIAgent wraps the anthropic SDK's AsyncAnthropic client for conversational message exchange. Supports both api_key and auth_token authentication. Manages conversation history internally. Converts between orchestration Messages and Anthropic message format. Provider auto-registers as "anthropic" in the provider registry. This is the first API provider and validates the Protocol for future providers (OpenAI, Gemini, etc.). Dependencies: [Foundation (100)]. Risk: Low. Effort: 3/5
+3. [ ] **(203) Anthropic API Provider** — Implement AnthropicAPIProvider satisfying the AgentProvider Protocol. AnthropicAPIAgent wraps the anthropic SDK's AsyncAnthropic client for conversational message exchange. Authentication via `ANTHROPIC_API_KEY` env var (via existing `ApiKeyStrategy` pattern). Manages conversation history internally. Converts between orchestration Messages and Anthropic message format (system as separate field, content blocks for text). Provider auto-registers as "anthropic" in the provider registry. Adds model aliases `haiku`, `sonnet-api`, `opus-api` (or similar) in `models.toml` pointing to the new profile so pipelines can target Claude models without requiring a Claude Code / Max subscription. **Standalone-eligible:** does not require slices 201 (Supervisor), 202 (Message Bus), or 204 (Routing) — can ship as a standalone provider addition before the rest of initiative 200, since the existing pipeline executor already uses the provider registry directly. This is the first API provider and validates the Protocol for future providers (OpenAI was retroactively built, Gemini, etc.). Primary motivation: enables Claude model use on API billing for users without a Claude Max/Pro subscription, enables CI/CD pipelines that can't depend on an interactive session, and enables cost-optimized pipelines (e.g. Sonnet design + Haiku review). Dependencies: [Foundation (100)]. Risk: Low. Effort: 3/5
 
 4. [ ] **(204) Multi-Agent Message Routing** — Connect agents to the message bus. When an agent publishes a message, the bus routes it to other agents based on the active topology. Each receiving agent's `handle_message` is called, and its response messages are published back to the bus. Conversation turn management to prevent infinite loops (max turns, cooldown, explicit stop). CLI `observe` command to watch a multi-agent conversation in real time. **Completes M2.** Dependencies: [Message Bus Core (202), Anthropic API Provider (203) OR SDK Agent Provider (101) (at least one)]. Risk: Medium (turn management and loop prevention need careful design). Effort: 3/5
 
