@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq doctor`: new command that inspects the runtime environment and reports configured providers, integrations, and config files. Exits 1 when a required item is missing. Use `--json` for machine-readable output and `-v` to show optional items.
+
 ## [0.6.0] - 20260512
 
 ### Added
