@@ -86,6 +86,20 @@ The provider matrix must be accurate as of 0.6.x. Columns: Provider, Profile nam
 | OpenAI Codex (agentic) | `openai-oauth` | `codex auth login` or `OPENAI_API_KEY` | Experimental |
 | Anthropic API | *(slice 203)* | `ANTHROPIC_API_KEY` | Planned — see slice 203 |
 
+### Agent SDK credit note (effective June 15, 2026)
+
+The SDK provider (`sdk`, `haiku`, `sonnet`, `opus` aliases) authenticates via the Claude Agent SDK — the same mechanism as `claude -p`. Starting June 15, 2026, Anthropic separates Agent SDK usage from interactive Claude Code usage:
+
+- **Prompt-only pipelines (`/sq:run` slash command in IDE):** unaffected. Squadron emits instructions; Claude Code's interactive session executes them. Draws from subscription usage limit as before.
+- **Full-CLI pipelines (`sq run ...`):** any step that dispatches to an SDK model (`sdk` profile) invokes `claude -p` directly. This is Agent SDK usage and draws from the monthly credit ($20–$200 depending on plan) starting June 15.
+
+QUICKSTART must include a callout under the SDK provider section instructing users to claim their Agent SDK monthly credit at claude.ai/settings before June 15, 2026. Key points to cover:
+
+1. The credit is a one-time opt-in that then auto-refreshes each billing cycle.
+2. Once the credit is exhausted, additional SDK calls spill to extra usage (if enabled) or stop until the credit refreshes.
+3. `sq doctor` reports the SDK profile as OK based on session presence — it cannot inspect credit balance. A depleted credit will cause `sq run` failures even when `sq doctor` shows all-OK.
+4. Users running only non-Claude models (`openai`, `openrouter`, `gemini`, `local`) via `sq run` are unaffected — those profiles don't use the Agent SDK.
+
 ### `sq doctor` integration
 
 QUICKSTART's "Verify" section should instruct the user to run `sq doctor` and interpret the output. The fix hints that `doctor` emits are designed to be self-contained one-liners; QUICKSTART provides the expanded explanation for each.
