@@ -14,6 +14,25 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260513
 
+### Slice 906: Quickstart and Onboarding Documentation — Phase 4 Slice Design
+
+Authored `user/slices/906-slice.quickstart-and-onboarding-documentation.md`.
+
+Scope: docs-only. Two deliverables — new `docs/QUICKSTART.md` (step-by-step from
+zero to working `sq run`) and targeted README edits (Quickstart → pointer, Install →
+keep global-install block only).
+
+Key design decisions:
+- QUICKSTART is structured as numbered install steps matching the `sq doctor` fix-hint
+  contract: every hint emitted by doctor maps to a named QUICKSTART section. This
+  mapping is documented in the slice design as a stable interface.
+- Provider matrix table derived from `BUILT_IN_PROFILES` — covers sdk, openai,
+  openrouter, gemini, local, openai-oauth (experimental), and Anthropic API (planned,
+  slice 203).
+- README Quickstart section replaced with ~3 lines + link; dev-install block moves
+  to QUICKSTART under a contributing subsection.
+- No code changes. Effort 1/5.
+
 ### Slice 905: `sq doctor` — Phase 6 Implementation Complete
 
 Completed full implementation of `sq doctor` in a single session across 35 tasks.
