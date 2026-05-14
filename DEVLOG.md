@@ -2,13 +2,111 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260506
+dateUpdated: 20260513
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260513
+
+### Slice 905: `sq doctor` — Phase 6 Implementation Complete
+
+Completed full implementation of `sq doctor` in a single session across 35 tasks.
+
+Two new files: `src/squadron/cli/commands/doctor_checks.py` (~280 lines, pure check
+functions + `run_all_checks()`) and `src/squadron/cli/commands/doctor.py` (~120 lines,
+Typer command + Rich/JSON rendering). One edit to `cli/app.py` to register the command.
+
+Key implementation decisions:
+- Module-level imports for `get_all_profiles`, `providers_toml_path`, `models_toml_path`
+  (not lazy inside functions) — required for test patching to work correctly.
+- `Console(soft_wrap=True)` for path-heavy detail strings that exceed terminal width.
+- `_API_KEY_ONLY_PROFILES` fixture in integration tests because `sdk`, `local`,
+  `openai-oauth` profiles return `is_valid()=True` unconditionally — a fresh-system
+  env var wipe doesn't actually leave zero valid providers. The fixture simulates
+  a minimal env with only API-key-based profiles for the "fresh-system → exit 1" scenario.
+- Scenario 3 (broken providers.toml) produces two error signals: `get_all_profiles()` 
+  raises before per-profile checks run (process-boundary handler emits WARN), then 
+  `check_providers_toml()` independently emits the MISSING row. Both correct; both informative.
+
+Tests: 35 doctor tests added; full suite 1904 passing, 2 skipped (pre-existing). Ruff/pyright clean.
+
+Branch: `905-sq-doctor-environment-diagnostic-command`. Not yet merged.
+
+### Slice 905: `sq doctor` — Phase 5 Task Breakdown
+
+Authored `user/tasks/905-tasks.sq-doctor-environment-diagnostic-command.md`
+(35 tasks across four phases: setup/data-model, individual checks,
+orchestration/rendering, final integration).
+
+Test-with pattern applied throughout — every implementation task is
+immediately followed by its test task (T4→T5, T6→T7, T8→T9, etc.), no
+batched test phase. Each check function gets its own implementation +
+test pair so failures surface against a small surface area.
+
+Phase A (T1–T3) bootstraps the branch, skeleton files, and the
+`CheckResult`/`CheckStatus` data model. Phase B (T4–T23) implements the
+10 individual check functions. Phase C (T24–T30) wires orchestration,
+Rich + JSON rendering, the Typer command, and 6 CliRunner integration
+tests. Phase D (T31–T35) is the gate (pytest/ruff/pyright), manual
+scenario verification mirroring 904's recorded-outcomes pattern,
+CHANGELOG, commit, and slice closure.
+
+Notable choices:
+
+- Provider profile tests use real `monkeypatch.setenv` against the real
+  auth registry — not mocked `resolve_auth_strategy_for_profile`. We're
+  testing integration with the actual auth strategies, not a fake.
+- TOML config checks distinguish absent (informational OK) from
+  malformed (MISSING). Repairing the file is the fix hint.
+- Process-boundary catch in `run_all_checks()` wraps each check call;
+  one broken check emits a synthetic WARN row instead of aborting.
+- Top-level command body raises `typer.Exit(exit_code)`. Exit 1 iff any
+  MISSING row exists; WARN never affects exit code.
+
+Status: not_started · 35 tasks · 219 lines.
+
+---
+
+### Slice 905: `sq doctor` Environment Diagnostic — Phase 4 Slice Design
+
+Authored `user/slices/905-slice.sq-doctor-environment-diagnostic-command.md`.
+Design covers a read-only `sq doctor` subcommand that orchestrates pure
+check functions over existing inspection targets — `get_all_profiles()`,
+`resolve_auth_strategy_for_profile()`, `providers_toml_path()`,
+`models_toml_path()`, `shutil.which("cf"|"codex")`, Claude Code env-var
+presence — and renders a Rich table (default) or JSON (`--json`).
+
+Key decisions:
+
+- Two new files: `cli/commands/doctor.py` (Typer command + rendering) and
+  `cli/commands/doctor_checks.py` (pure synchronous check functions
+  returning a `CheckResult` dataclass). Separation keeps checks unit-
+  testable without Typer.
+- "Apparent intent" inference is deferred. Required checks are only those
+  that block all Squadron use (the package itself, at-least-one provider
+  authenticated, parseability of any user-supplied `providers.toml` /
+  `models.toml`). Provider-specific and integration-specific rows are
+  WARN. Exit 1 iff any MISSING row.
+- WARN rows are hidden by default; surface via `-v`. JSON output always
+  includes all rows.
+- No network calls. Auth correctness against the wire remains
+  `sq auth login`'s job. Doctor reports "authenticated locally" — not
+  "will work."
+- Failure-mode enumeration is explicit for every I/O point (malformed
+  TOML, missing HOME, stale `which` results, unexpected profile shape,
+  `PackageNotFoundError` for dev installs). Every catch logs at WARNING
+  per project rules.
+
+Pairs with slice 906 (Quickstart docs) — `fix_hint` strings are the
+contract 906 will reference verbatim.
+
+Status: not_started · Effort: 2/5 · Risk: Low · Dependencies: none.
 
 ---
 

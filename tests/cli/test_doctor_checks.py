@@ -1,0 +1,308 @@
+"""Unit tests for doctor_checks module: data model, and each check function."""
+
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from squadron.cli.commands.doctor_checks import (
+    SECTION_CONFIG,
+    SECTION_INSTALL,
+    SECTION_INTEGRATIONS,
+    SECTION_PROVIDERS,
+    CheckResult,
+    CheckStatus,
+    check_at_least_one_provider,
+    check_claude_code_session,
+    check_codex_cli,
+    check_context_forge,
+    check_models_toml,
+    check_project_env,
+    check_provider_profiles,
+    check_providers_toml,
+    check_slash_commands,
+    check_squadron_install,
+    run_all_checks,
+)
+
+# --- T3: data model ---
+
+
+def test_check_status_string_equality() -> None:
+    assert CheckStatus.OK == "ok"
+    assert CheckStatus.MISSING == "missing"
+    assert CheckStatus.WARN == "warn"
+
+
+def test_check_result_is_hashable() -> None:
+    r = CheckResult(name="x", status=CheckStatus.OK, detail="d")
+    assert hash(r) is not None
+    s: set[CheckResult] = {r}
+    assert r in s
+
+
+def test_check_result_defaults() -> None:
+    r = CheckResult(name="x", status=CheckStatus.OK, detail="d")
+    assert r.required is True
+    assert r.fix_hint is None
+    assert r.section == ""
+
+
+# --- T5: check_squadron_install ---
+
+
+def test_check_squadron_install_installed() -> None:
+    with patch("importlib.metadata.version", return_value="0.6.0"):
+        result = check_squadron_install()
+    assert result.status == CheckStatus.OK
+    assert "0.6.0" in result.detail
+
+
+def test_check_squadron_install_dev() -> None:
+    from importlib.metadata import PackageNotFoundError
+
+    with patch("importlib.metadata.version", side_effect=PackageNotFoundError("squadron-ai")):
+        result = check_squadron_install()
+    assert result.status == CheckStatus.OK
+    assert "(dev install)" in result.detail
+
+
+# --- T7: check_slash_commands ---
+
+
+def test_check_slash_commands_present(tmp_path: Path) -> None:
+    cmd_dir = tmp_path / "sq"
+    cmd_dir.mkdir()
+    (cmd_dir / "foo.md").write_text("# foo")
+    result = check_slash_commands(target=cmd_dir)
+    assert result.status == CheckStatus.OK
+
+
+def test_check_slash_commands_empty_dir(tmp_path: Path) -> None:
+    cmd_dir = tmp_path / "sq"
+    cmd_dir.mkdir()
+    result = check_slash_commands(target=cmd_dir)
+    assert result.status == CheckStatus.WARN
+
+
+def test_check_slash_commands_missing_dir(tmp_path: Path) -> None:
+    missing = tmp_path / "nope"
+    result = check_slash_commands(target=missing)
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint is not None
+    assert "sq install-commands" in result.fix_hint
+
+
+# --- T9: check_provider_profiles ---
+
+
+def test_check_provider_profiles_none_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    results = check_provider_profiles()
+    # API-key-based profiles should be WARN with no env vars set
+    api_key_profiles = [r for r in results if r.name in ("openai", "openrouter", "gemini")]
+    assert all(r.status == CheckStatus.WARN for r in api_key_profiles)
+
+
+def test_check_provider_profiles_openai_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    results = check_provider_profiles()
+    openai_row = next((r for r in results if r.name == "openai"), None)
+    assert openai_row is not None
+    assert openai_row.status == CheckStatus.OK
+    assert "OPENAI_API_KEY" in openai_row.detail
+
+
+def test_check_provider_profiles_stable_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    results = check_provider_profiles()
+    names = [r.name for r in results]
+    assert names == sorted(names)
+
+
+# --- T11: check_at_least_one_provider ---
+
+
+def _make_result(status: CheckStatus) -> CheckResult:
+    return CheckResult(name="x", status=status, detail="d", section=SECTION_PROVIDERS, required=False)
+
+
+def test_check_at_least_one_provider_none() -> None:
+    results = [_make_result(CheckStatus.WARN), _make_result(CheckStatus.WARN)]
+    r = check_at_least_one_provider(results)
+    assert r.status == CheckStatus.MISSING
+
+
+def test_check_at_least_one_provider_one_ok() -> None:
+    results = [_make_result(CheckStatus.OK), _make_result(CheckStatus.WARN)]
+    r = check_at_least_one_provider(results)
+    assert r.status == CheckStatus.OK
+    assert "1 of" in r.detail
+
+
+# --- T13: check_context_forge ---
+
+
+def test_check_context_forge_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/cf")
+    result = check_context_forge()
+    assert result.status == CheckStatus.OK
+
+
+def test_check_context_forge_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    result = check_context_forge()
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint is not None
+    assert "npm i -g" in result.fix_hint
+
+
+# --- T15: check_codex_cli ---
+
+
+def test_check_codex_cli_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/codex")
+    result = check_codex_cli()
+    assert result.status == CheckStatus.OK
+
+
+def test_check_codex_cli_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    result = check_codex_cli()
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint is not None
+    assert "@openai/codex" in result.fix_hint
+
+
+# --- T17: check_claude_code_session ---
+
+
+def test_check_claude_code_session_claudecode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CLAUDECODE", "1")
+    result = check_claude_code_session()
+    assert result.status == CheckStatus.OK
+
+
+def test_check_claude_code_session_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    # Clear any CLAUDE_CODE_* vars
+    for key in list(__import__("os").environ):
+        if key.startswith("CLAUDE_CODE_"):
+            monkeypatch.delenv(key, raising=False)
+    result = check_claude_code_session()
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint is None
+
+
+# --- T19: check_providers_toml ---
+
+
+def test_check_providers_toml_absent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    missing = tmp_path / "providers.toml"
+    monkeypatch.setattr(
+        "squadron.cli.commands.doctor_checks.providers_toml_path",
+        lambda: missing,
+        raising=False,
+    )
+    with patch("squadron.cli.commands.doctor_checks.providers_toml_path", return_value=missing):
+        result = check_providers_toml()
+    assert result.status == CheckStatus.OK
+    assert "using defaults" in result.detail
+
+
+def test_check_providers_toml_valid(tmp_path: Path) -> None:
+    p = tmp_path / "providers.toml"
+    p.write_text('[section]\nkey = "value"\n')
+    with patch("squadron.cli.commands.doctor_checks.providers_toml_path", return_value=p):
+        result = check_providers_toml()
+    assert result.status == CheckStatus.OK
+    assert "loaded from" in result.detail
+
+
+def test_check_providers_toml_malformed(tmp_path: Path) -> None:
+    p = tmp_path / "providers.toml"
+    p.write_text('not = toml = "')
+    with patch("squadron.cli.commands.doctor_checks.providers_toml_path", return_value=p):
+        result = check_providers_toml()
+    assert result.status == CheckStatus.MISSING
+    assert "malformed" in result.detail
+    assert result.fix_hint is not None
+    assert str(p) in result.fix_hint
+
+
+# --- T21: check_models_toml ---
+
+
+def test_check_models_toml_absent(tmp_path: Path) -> None:
+    missing = tmp_path / "models.toml"
+    with patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=missing):
+        result = check_models_toml()
+    assert result.status == CheckStatus.OK
+    assert "using defaults" in result.detail
+
+
+def test_check_models_toml_valid(tmp_path: Path) -> None:
+    p = tmp_path / "models.toml"
+    p.write_text('[aliases]\nfoo = "bar"\n')
+    with patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=p):
+        result = check_models_toml()
+    assert result.status == CheckStatus.OK
+    assert "loaded from" in result.detail
+
+
+def test_check_models_toml_malformed(tmp_path: Path) -> None:
+    p = tmp_path / "models.toml"
+    p.write_text('not = toml = "')
+    with patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=p):
+        result = check_models_toml()
+    assert result.status == CheckStatus.MISSING
+    assert "malformed" in result.detail
+    assert result.fix_hint is not None
+    assert str(p) in result.fix_hint
+
+
+# --- T23: check_project_env ---
+
+
+def test_check_project_env_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("FOO=bar\n")
+    result = check_project_env()
+    assert result.status == CheckStatus.OK
+
+
+def test_check_project_env_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = check_project_env()
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint is None
+
+
+# --- T25: run_all_checks ---
+
+
+def test_run_all_checks_has_all_sections() -> None:
+    results = run_all_checks()
+    sections = {r.section for r in results}
+    assert SECTION_INSTALL in sections
+    assert SECTION_PROVIDERS in sections
+    assert SECTION_INTEGRATIONS in sections
+    assert SECTION_CONFIG in sections
+
+
+def test_run_all_checks_survives_broken_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom() -> CheckResult:
+        raise RuntimeError("simulated failure")
+
+    with patch(
+        "squadron.cli.commands.doctor_checks.check_squadron_install",
+        side_effect=RuntimeError("simulated failure"),
+    ):
+        results = run_all_checks()
+
+    warn_rows = [r for r in results if r.status == CheckStatus.WARN and "check failed" in r.detail]
+    assert len(warn_rows) >= 1

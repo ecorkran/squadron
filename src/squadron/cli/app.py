@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from squadron.cli.commands.auth import auth_app
 from squadron.cli.commands.config import config_app
 from squadron.cli.commands.dispatch_run import dispatch_run
+from squadron.cli.commands.doctor import doctor
 from squadron.cli.commands.history import history
 from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import list_agents
@@ -47,6 +48,7 @@ app.add_typer(pools_app, name="pools")
 app.add_typer(config_app, name="config")
 app.add_typer(auth_app, name="auth")
 app.command("run")(run_command)
+app.command("doctor")(doctor)
 app.command("install-commands")(install_commands)
 app.command("uninstall-commands")(uninstall_commands)
 app.command("_summary-instructions", hidden=True)(summary_instructions)
