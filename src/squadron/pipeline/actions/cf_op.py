@@ -8,6 +8,7 @@ from typing import cast
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+from squadron.providers.profiles import is_sdk_profile
 
 
 class CfOperation(StrEnum):
@@ -92,7 +93,20 @@ class CfOpAction:
                     slice_id = context.params["slice"]
                     stdout = cf_client._run(["set", "slice", str(slice_id)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.BUILD_CONTEXT:
-                    raw = cf_client._run_json(["build", "--json"])  # pyright: ignore[reportPrivateUsage]
+                    build_args = ["build", "--json"]
+                    # Use --embed when the step model can't read files natively,
+                    # so the context prompt is self-contained for non-SDK dispatch.
+                    action_model = str(context.params["model"]) if "model" in context.params else None
+                    step_model = (
+                        str(context.params["step_model"]) if "step_model" in context.params else None
+                    )
+                    try:
+                        _, alias_profile = context.resolver.resolve(action_model, step_model)
+                        if not is_sdk_profile(alias_profile):
+                            build_args.append("--embed")
+                    except Exception:
+                        pass  # resolution failure handled downstream in dispatch; use plain build
+                    raw = cf_client._run_json(build_args)  # pyright: ignore[reportPrivateUsage]
                     data_dict = cast(dict[str, object], raw) if isinstance(raw, dict) else {}
                     stdout = str(data_dict.get("context", ""))
                 case CfOperation.SUMMARIZE:
