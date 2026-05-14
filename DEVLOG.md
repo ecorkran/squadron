@@ -12,6 +12,30 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260514
+
+### Initiative 200: Multi-Agent Communication — Architecture Rewrite
+
+Rewrote `200-arch.multi-agent-communication.md` and `200-slices.multi-agent-communication.md` to reflect a fundamentally different model from the original pub/sub message bus design.
+
+**Why:** IDE plugins (Claude Code, Codex) and interactive sessions are reactive — they cannot receive async push. The original bus model assumed agents could be woken up; they can't. The new model is pull-based: a shared SQLite task store owned by the daemon, agents poll for work, claim atomically, complete via daemon socket.
+
+**New model summary:**
+- Daemon (`sq serve`) owns `workspace.db` (SQLite, WAL mode), listens on Unix socket
+- `sq run` posts tasks via socket, polls DB read-only for results — no more SDK session spawning from CLI
+- Claude Code IDE participates via `/sq:work` slash command + MCP tools
+- Codex IDE plugin: same poll/claim/complete loop, capability-routed
+- Hermes (remote machine): connects to local daemon via SSH tunnel, same socket protocol
+- Project isolation via `project_path` column — one daemon, one DB, multiple projects
+
+**Dropped from original 200-series:** Supervisor (OTP restart patterns), Message Bus Core, Multi-Agent Message Routing, Human-in-the-Loop as bus participant, Communication Topologies, ADK Integration, REST+WebSocket, Subprocess Agent Support.
+
+**Retained/adapted:** 203 (Anthropic API Provider, standalone, unchanged), 208→224 (MCP tools, repurposed for poll/claim), 210 (Ensemble Review, unchanged), 212→228 (E2E testing, rescoped).
+
+**New slices:** 221 (Task Store schema), 222 (Daemon Socket Server), 223 (Pipeline Executor Integration), 224 (MCP Tools), 225 (/sq:work slash command), 226 (Capability Routing), 227 (sq work Hermes worker CLI).
+
+**June 15 relevance noted:** Slices 203 + 223 together eliminate the Agent SDK credit dependency for `sq run` pipeline steps. Prioritized in implementation order notes.
+
 ## 20260513
 
 ### Slice 906: Quickstart and Onboarding Documentation — Phase 4 Slice Design

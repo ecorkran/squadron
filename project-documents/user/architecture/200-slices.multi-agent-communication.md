@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 200-arch.multi-agent-communication.md
 project: squadron
 dateCreated: 20260322
-dateUpdated: 20260513
+dateUpdated: 20260514
 status: not_started
 ---
 
@@ -14,85 +14,99 @@ status: not_started
 
 ## Milestone Targets
 
-**M2 — Multi-agent communication:** Two agents (SDK and/or API) communicate through the message bus. Proves the unified Agent Protocol works across provider types.
+**M1 — Task Store + Daemon Socket:** `sq run` posts tasks to the store; a Claude Code IDE session can poll, claim, and complete them. Single-agent pipeline via task store proven end-to-end.
 
-**M3 — Human + agents:** Human participates alongside multiple agents in a shared conversation with configurable topologies.
+**M2 — Multi-Agent Participation:** Claude Code and Codex (or Hermes) both participate in the same pipeline run. Capability routing assigns steps to the right agent.
+
+**M3 — Ensemble Review:** Fan-out review to multiple models, synthesize results.
 
 ---
 
 ## Feature Slices
 
-### → Milestone 2: Multi-Agent Communication
+### → Standalone (no task store dependency)
 
-1. [ ] **(201) Supervisor Component** — Core supervision and health monitoring. Supervisor watches asyncio task state, detects failures (crashed tasks, unhandled exceptions) and response timeouts (agent stuck in processing beyond configurable threshold). one_for_one restart strategy: restart only the failed agent with clean state. New agent states (restarting, failed) added to registry state machine. CLI list command reflects supervisor-managed states. Dependencies: [Agent Registry (102), Message Bus Core (202)]. Risk: Low. Effort: 2/5
+1. [ ] **(203) Anthropic API Provider** — Implement `AnthropicAPIProvider` and `AnthropicAPIAgent` satisfying the existing `AgentProvider` / `Agent` Protocols. Authentication via `ANTHROPIC_API_KEY` (existing `ApiKeyStrategy` pattern). Manages conversation history internally. Adds model aliases (`haiku-api`, `sonnet-api`, `opus-api`) pointing to the new profile. **Standalone-eligible:** ships before the rest of the 200-series. Primary motivation post-June-15: pipeline steps can route to Anthropic API instead of Agent SDK, avoiding the monthly credit constraint for non-interactive use. Risk: Low. Effort: 3/5. Dependencies: [Foundation (100)].
 
-2. [ ] **(202) Message Bus Core** — Async pub/sub message system. Agents and other participants (human, system) publish and subscribe. Broadcast routing (all subscribers see all messages) as the default topology. Message history (in-memory) with per-agent filtering view. Message schema: sender, recipients, content, timestamp, message_type, metadata. Dependencies: [Agent Registry (102)]. Risk: Low. Effort: 2/5
+### → Milestone 1: Task Store + Daemon Socket
 
-3. [ ] **(203) Anthropic API Provider** — Implement AnthropicAPIProvider satisfying the AgentProvider Protocol. AnthropicAPIAgent wraps the anthropic SDK's AsyncAnthropic client for conversational message exchange. Authentication via `ANTHROPIC_API_KEY` env var (via existing `ApiKeyStrategy` pattern). Manages conversation history internally. Converts between orchestration Messages and Anthropic message format (system as separate field, content blocks for text). Provider auto-registers as "anthropic" in the provider registry. Adds model aliases `haiku`, `sonnet-api`, `opus-api` (or similar) in `models.toml` pointing to the new profile so pipelines can target Claude models without requiring a Claude Code / Max subscription. **Standalone-eligible:** does not require slices 201 (Supervisor), 202 (Message Bus), or 204 (Routing) — can ship as a standalone provider addition before the rest of initiative 200, since the existing pipeline executor already uses the provider registry directly. This is the first API provider and validates the Protocol for future providers (OpenAI was retroactively built, Gemini, etc.). Primary motivation: enables Claude model use on API billing for users without a Claude Max/Pro subscription, enables CI/CD pipelines that can't depend on an interactive session, and enables cost-optimized pipelines (e.g. Sonnet design + Haiku review). Dependencies: [Foundation (100)]. Risk: Low. Effort: 3/5
+2. [ ] **(221) Task Store — Schema and Migrations** — Create `workspace.db` SQLite schema (`tasks`, `events` tables as defined in arch doc). Migration runner (simple version table, apply-once scripts). DB path resolution: project-local `.squadron/workspace.db` takes precedence over user-global `~/.config/squadron/workspace.db`. WAL mode enabled. Read-only connection helper for agent-side polling. Risk: Low. Effort: 1/5. Dependencies: [Daemon (112)].
 
-4. [ ] **(204) Multi-Agent Message Routing** — Connect agents to the message bus. When an agent publishes a message, the bus routes it to other agents based on the active topology. Each receiving agent's `handle_message` is called, and its response messages are published back to the bus. Conversation turn management to prevent infinite loops (max turns, cooldown, explicit stop). CLI `observe` command to watch a multi-agent conversation in real time. **Completes M2.** Dependencies: [Message Bus Core (202), Anthropic API Provider (203) OR SDK Agent Provider (101) (at least one)]. Risk: Medium (turn management and loop prevention need careful design). Effort: 3/5
+3. [ ] **(222) Daemon Socket Server** — Extend `sq serve` daemon with a Unix socket listener at `~/.config/squadron/daemon.sock`. Newline-delimited JSON protocol: `post_task`, `claim_task`, `complete_task`, `fail_task`, `list_tasks`, `watch_task`. Atomic claim (reject if already claimed). Stale task requeue: background loop checks `timeout_at`, requeues claimed-but-not-completed tasks, writes `requeued` event. Daemon holds the SQLite write connection. Risk: Low. Effort: 2/5. Dependencies: [Task Store (221), Daemon (112)].
 
-### → Milestone 3: Human + Agents
+4. [ ] **(223) Pipeline Executor Integration** — Update `sq run` pipeline executor: dispatch steps via `post_task` to daemon socket instead of spawning SDK sessions directly. Poll `workspace.db` read-only for result rows; advance pipeline when `status='complete'`. Retain existing SDK-spawn path as fallback when daemon is not running (or behind a `--legacy` flag). Auto-start daemon if not running (existing behavior). Risk: Medium (behavioral change to core executor). Effort: 2/5. Dependencies: [Daemon Socket (222)].
 
-5. [ ] **(205) Human-in-the-Loop Participation** — Human becomes a first-class participant on the message bus (not just a CLI command issuer). In multi-agent mode, human messages are broadcast to all agents alongside agent-to-agent messages. CLI interactive mode: human sees all agent messages and can interject at any point. Agents see human messages in their conversation context. Turn-taking options: free-form (anyone can speak), moderated (human approves each round), or prompted (agents wait for human input between rounds). Also retrofits streaming output to the CLI task command (deferred from slice 103 — see 103-slice.cli-foundation.md Tracked Enhancements). Completes M3. Dependencies: [Multi-Agent Message Routing (204)]. Risk: Low. Effort: 2/5
+5. [ ] **(224) MCP Tools — Poll/Claim/Complete** — MCP server exposing task store to IDE agents. Tools: `squadron_check_work(project_path)`, `squadron_claim_task(task_id, agent)`, `squadron_complete_task(task_id, result)`, `squadron_fail_task(task_id, error)`, `squadron_list_tasks(project_path, status?)`. Stdio transport for Claude Code / Cursor integration. All write operations proxy through daemon socket; reads hit `workspace.db` directly. **Completes M1** when paired with `/sq:work` slash command (225). Risk: Low. Effort: 2/5. Dependencies: [Daemon Socket (222)].
 
-### Post-Milestone Feature Work
+6. [ ] **(225) `/sq:work` Slash Command** — New Claude Code slash command. Calls `squadron_check_work` MCP tool, claims the returned task, presents it to the interactive session for execution, calls `squadron_complete_task` on completion. Installed by `sq install-commands` alongside existing slash commands. The primary human-facing interface for Claude Code IDE participation in pipeline runs. Risk: Low. Effort: 1/5. Dependencies: [MCP Tools (224)].
 
-6. [ ] **(206) Communication Topologies** — Topology manager as first-class component. Implement filtered topology (agents see addressed messages + broadcasts only), hierarchical topology (orchestrator sees all, workers see assigned scope), and custom topology (user-provided routing function). CLI commands to select and configure topology per session. Topology affects message bus routing, not agent logic — agents remain unaware of topology details. Dependencies: [Human-in-the-Loop (205)]. Risk: Medium. Effort: 3/5
+### → Milestone 2: Multi-Agent Participation
 
-7. [ ] **(207) ADK Integration** — Bridge between ADK workflow patterns (ParallelAgent, SequentialAgent, Loop) and core engine message bus. ADK manages execution order; each agent step routes through the message bus. Define ADK-compatible agent wrappers that use the AgentProvider abstraction. CLI commands for running ADK workflows (`workflow run`, `workflow list`). Dependencies: [Multi-Agent Message Routing (204)]. Risk: Medium (ADK API surface and integration patterns need exploration). Effort: 3/5
+7. [ ] **(226) Capability Routing** — Add `capabilities` JSON array column to tasks (e.g. `["file_access", "sandbox", "compute"]`). Agent self-declaration: each agent (Claude Code, Codex, Hermes worker) declares its capability set when connecting. `squadron_check_work` filters by declared capabilities + `assigned_to` hint. `sq run` pipeline YAML gains optional `capabilities` and `assigned_to` per step. Risk: Low. Effort: 2/5. Dependencies: [MCP Tools (224), Task Store (221)].
 
-8. [ ] **(208) MCP Server** — Expose orchestration as MCP tools via Python MCP SDK. Tools: create_agent, list_agents, send_task, send_message, get_conversation, shutdown_agent, set_topology. Stdio transport for Claude Code / Cursor integration. MCP server reads from same core engine as CLI — no duplication of logic. Dependencies: [Message Bus Core (202), Agent Registry (102)]. Risk: Low. Effort: 2/5
+8. [ ] **(227) `sq work` — Hermes Worker CLI** — New `sq work --agent <name>` CLI command. Runs the poll/claim/complete loop as a persistent process — the Hermes-side worker. Connects to daemon socket (configurable path, supports TCP for SSH tunnel). Accepts `--capabilities` flag to declare what this worker can handle. Graceful shutdown on SIGTERM/SIGINT; marks in-progress tasks as failed before exit. Documentation: SSH tunnel setup for remote participation. Risk: Low. Effort: 2/5. Dependencies: [Capability Routing (226)].
 
-9. [ ] **(209) REST + WebSocket API** — FastAPI server. REST endpoints for agent lifecycle (create, list, delete) and conversation management (send message, get history). WebSocket endpoint for real-time message streaming (subscribe to message bus events). Automatic OpenAPI docs. CORS configuration for future frontend consumption. Dependencies: [Message Bus Core (202), Agent Registry (102)]. Risk: Low. Effort: 2/5
+### → Milestone 3: Ensemble Review
 
-10. [ ] **(210) Ensemble Review & Cross-Model Analysis** — Run the same review across multiple models (e.g., Haiku, Sonnet, Opus) and synthesize results. Fan out identical review tasks to N agents with different --model settings, collect structured ReviewResult outputs, then route to an evaluator model that compares findings across reviewers. Key analysis dimensions: agreement frequency (findings that appear across multiple reviewers are high-confidence signal), novel detection (findings unique to one reviewer — especially interesting when a smaller model catches something a larger one missed), and noise filtering (findings from weaker models that the evaluator determines are false positives). The evaluator produces a consensus ReviewResult with provenance metadata indicating which models flagged each finding. Pre-M2: can run sequentially with current review system using different --model flags per run and manual comparison. Post-M2: parallel fan-out via message bus. Builds on the findings pipeline (findings ledger provides the structured comparison substrate). Prior art in the embedding-cluster repo explored clustering similar observations across multiple sources — that technique applies directly to grouping findings by semantic similarity across reviewers. Dependencies: [Review Workflow Templates (105), Findings Pipeline (130), model selection support]. Requires M2 for parallel execution but experimentally viable with sequential runs immediately. Risk: Medium (evaluator prompt engineering, cost/value calibration). Effort: 3/5
+9. [ ] **(210) Ensemble Review & Cross-Model Analysis** — Pipeline pattern for multi-model review fan-out. Squadron posts N identical review tasks with different model/profile hints, waits for all N results via task store, posts a synthesis task to an evaluator model. Analysis dimensions: agreement frequency (high-confidence signal), novel detection (finding unique to one reviewer), noise filtering. Implemented as a pipeline YAML pattern — no new infrastructure beyond what M1/M2 deliver. Risk: Medium (evaluator prompt engineering). Effort: 3/5. Dependencies: [Capability Routing (226), Pipeline Executor Integration (223)].
 
----
+### → Integration and Documentation
 
-## Integration Work
-
-11. [ ] **(211) Subprocess Agent Support** — Extend agent registry to spawn agents as OS processes (`asyncio.create_subprocess_exec`). Stdout/stderr streaming piped back through message bus. PID tracking in agent registry. Graceful and forced termination. Orphan cleanup on restart (PID file strategy). Primary use case: spawning non-SDK CLI tools as agent participants. Dependencies: [Agent Registry (102), Message Bus Core (202)]. Risk: Medium. Effort: 2/5
-
-12. [ ] **(212) End-to-End Testing & Documentation** — Integration tests for core flows (SDK agent task, API agent chat, multi-agent conversation, human-in-the-loop, topology switching, review workflows). CLI help text and usage examples. README with quickstart (install, configure credentials, spawn first agent). Deployment documentation (local dev, MCP config, server mode). Dependencies: [all prior slices]. Risk: Low. Effort: 2/5
+10. [ ] **(228) End-to-End Testing & Documentation** — Integration tests: task store lifecycle, socket protocol, pipeline executor post/poll, MCP tool round-trip, multi-agent claim race (two agents, one task — only one claims), Hermes worker via local socket. CLI help text. README section on task store and multi-agent participation. Deployment notes for Hermes SSH tunnel setup. Risk: Low. Effort: 2/5. Dependencies: [all prior slices].
 
 ---
 
 ## Implementation Order
 
 ```
-M2 — Multi-Agent Communication:
-  182. Message Bus Core                                (can start after 102)
-  181. Supervisor Component                            (after 102, Message Bus)
-  183. Anthropic API Provider                          (can start after 100, parallel with 162)
-  184. Multi-Agent Message Routing                     (after Message Bus + at least one provider)
+Standalone (no sequencing constraint):
+  203. Anthropic API Provider
 
-M3 — Human + Agents:
-  185. Human-in-the-Loop Participation                 (after Multi-Agent Message Routing)
+M1 — Task Store + Daemon Socket:
+  221. Task Store Schema
+  222. Daemon Socket Server          (after 221)
+  223. Pipeline Executor Integration (after 222)
+  224. MCP Tools                     (after 222, parallel with 223)
+  225. /sq:work Slash Command        (after 224)
 
-Post-Milestone (order flexible):
-  186. Communication Topologies                        (after Human-in-the-Loop)
-  187. ADK Integration                                 (after Multi-Agent Message Routing)
-  188. MCP Server                                      (after Message Bus + 102)
-  189. REST + WebSocket API                             (after Message Bus + 102)
-  190. Ensemble Review & Cross-Model Analysis           (after Findings Pipeline)
+M2 — Multi-Agent Participation:
+  226. Capability Routing            (after 224, 221)
+  227. sq work — Hermes Worker CLI   (after 226)
+
+M3 — Ensemble Review:
+  210. Ensemble Review               (after 226, 223)
 
 Integration:
-  191. Subprocess Agent Support                         (after 102, Message Bus)
-  192. End-to-End Testing & Documentation               (after all prior slices)
+  228. E2E Testing & Documentation   (after all prior)
 ```
 
 ### Parallelization Notes
 
-- **Anthropic API Provider (183) and Message Bus Core (182) are parallel tracks.** Both depend only on Foundation/Registry (complete). An agent working on one doesn't block the other.
-- **MCP Server and REST + WebSocket API are independent of each other** and can be done in any order after their dependencies are met.
-- **ADK exploration**: ADK Integration depends on the current ADK Python SDK API surface. A brief spike at the start of that slice may be warranted to validate assumptions.
+- **203 (Anthropic API Provider) is fully independent** — can start immediately, does not touch the task store.
+- **221 and 222 are sequential** — schema before socket server.
+- **223 and 224 are parallel** after 222 — pipeline executor and MCP tools are independent consumers of the daemon socket.
+- **225 is a thin wrapper** on 224 — fast to deliver once MCP tools exist.
 
 ---
 
+## Dropped from Original 200-series
+
+The following slices from the original plan are dropped in this revision. They addressed a push-based message bus model that doesn't fit IDE plugin constraints:
+
+| Original | Title | Reason dropped |
+|---|---|---|
+| 201 | Supervisor Component | Replaced by daemon timeout/requeue + events table |
+| 202 | Message Bus Core | Replaced by task store |
+| 204 | Multi-Agent Message Routing | Replaced by capability routing |
+| 205 | Human-in-the-Loop (bus participant) | Human *is* the interactive session; no bus needed |
+| 206 | Communication Topologies | Replaced by `assigned_to` + `capabilities` |
+| 207 | ADK Integration | Squadron pipeline YAML covers sequencing |
+| 209 | REST + WebSocket API | Daemon socket is the interface; REST deferred |
+| 211 | Subprocess Agent Support | Agents are external pollers, not daemon children |
+
 ## Notes
 
-- **Slice numbering**: Slices are reindexed to 181-192 to reflect their residence in the 160-series. Original numbers were 161-172.
-- **100-series prerequisites**: Agent Registry (102), Foundation (100), SDK Agent Provider (101), Local Daemon (112), and the provider infrastructure (111-114) are all complete in the 100-series.
-- **Frontend deferred**: The HLD identifies a future React UI. When it arrives, it connects to the REST + WebSocket API and warrants its own architecture document and slice plan.
-- **Ensemble Review**: Included here because its full value (parallel fan-out) requires M2. However, it can be experimentally run sequentially using the 100-series review system with different `--model` flags.
+- **100-series prerequisites:** Agent Registry (102), Foundation (100), SDK Agent Provider (101), Local Daemon (112), and provider infrastructure are complete.
+- **June 15, 2026 relevance:** Slice 203 (Anthropic API Provider) and slice 223 (Pipeline Executor Integration, task-store model) together eliminate the Agent SDK credit dependency for `sq run` pipeline steps. Prioritizing these two slices before June 15 is recommended.
+- **Frontend deferred:** REST+WebSocket and a React UI remain possible future work. When the use case materializes, they warrant their own architecture document.
+- **Remote TCP upgrade path:** V1 uses SSH tunnel for Hermes. A future slice can add native TCP with mTLS to the daemon socket without changing the protocol.
