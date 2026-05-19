@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from squadron.server.daemon import (
+from squadron.server.pid import (
     is_daemon_running,
     read_pid_file,
     remove_pid_file,

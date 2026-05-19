@@ -7,7 +7,7 @@ from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.auth import OAuthFileStrategy
-from squadron.providers.errors import ProviderAuthError
+from squadron.providers.errors import ProviderAuthError, ProviderError
 
 _log = get_logger("squadron.providers.codex.provider")
 
@@ -32,6 +32,11 @@ class CodexProvider:
         strategy = OAuthFileStrategy()
         if not strategy.is_valid():
             raise ProviderAuthError(f"No Codex credentials found. {strategy.setup_hint}.")
+
+        from squadron.providers.codex.agent import resolve_codex_binary
+
+        if resolve_codex_binary() is None:
+            raise ProviderError("Codex CLI binary not found on PATH.\n  npm i -g @openai/codex")
 
         _log.debug("Creating Codex agent %r (model=%s)", config.name, config.model)
         return CodexAgent(name=config.name, config=config)

@@ -293,7 +293,15 @@ Both keys honour the usual `--project` / user layering. `sq uninstall-commands` 
 
 ## Agent management
 
-Squadron also exposes lower-level agent lifecycle commands. These are the building blocks for the review system and are available for direct use:
+Agent lifecycle commands require the Squadron daemon. Start it first:
+
+```bash
+sq serve            # start daemon (included in uv tool install squadron-ai)
+sq serve --status   # check if running
+sq serve --stop     # stop daemon
+```
+
+Then use the agent commands:
 
 ```bash
 sq spawn --name my-agent

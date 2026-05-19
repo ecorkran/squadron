@@ -1,12 +1,10 @@
-"""Daemon lifecycle: PID management, signal handling, and server startup."""
+"""Daemon lifecycle: signal handling and server startup."""
 
 from __future__ import annotations
 
 import asyncio
-import errno
 import os
 import signal
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import uvicorn
@@ -14,67 +12,24 @@ import uvicorn
 from squadron.logging import get_logger
 from squadron.server.app import create_app
 from squadron.server.engine import SquadronEngine
+from squadron.server.pid import (
+    DaemonConfig,
+    is_daemon_running,
+    read_pid_file,
+    remove_pid_file,
+    write_pid_file,
+)
 
 logger = get_logger(__name__)
 
-_DEFAULT_DIR = Path.home() / ".squadron"
-
-
-@dataclass
-class DaemonConfig:
-    """Configuration for the daemon process."""
-
-    socket_path: str = field(default_factory=lambda: str(_DEFAULT_DIR / "daemon.sock"))
-    port: int = 7862
-    pid_path: str = field(default_factory=lambda: str(_DEFAULT_DIR / "daemon.pid"))
-
-
-def write_pid_file(path: str) -> None:
-    """Write the current process PID to a file, creating parents if needed."""
-    pid_path = Path(path)
-    pid_path.parent.mkdir(parents=True, exist_ok=True)
-    pid_path.write_text(str(os.getpid()))
-
-
-def remove_pid_file(path: str) -> None:
-    """Remove PID file if it exists."""
-    pid_path = Path(path)
-    if pid_path.exists():
-        pid_path.unlink()
-
-
-def read_pid_file(path: str) -> int | None:
-    """Read PID from file. Returns None if file is missing or invalid."""
-    pid_path = Path(path)
-    if not pid_path.exists():
-        return None
-    try:
-        return int(pid_path.read_text().strip())
-    except (ValueError, OSError):
-        return None
-
-
-def is_daemon_running(pid_path: str) -> bool:
-    """Check if a daemon process is alive based on its PID file.
-
-    Handles stale PID files: if the process is gone, removes the
-    stale file and returns False.
-    """
-    pid = read_pid_file(pid_path)
-    if pid is None:
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError as exc:
-        if exc.errno == errno.ESRCH:
-            # Stale PID file — process is gone
-            remove_pid_file(pid_path)
-            return False
-        if exc.errno == errno.EPERM:
-            # Process exists but we can't signal it (different user)
-            return True
-        raise
+__all__ = [
+    "DaemonConfig",
+    "is_daemon_running",
+    "read_pid_file",
+    "remove_pid_file",
+    "start_server",
+    "write_pid_file",
+]
 
 
 def remove_socket_file(path: str) -> None:
