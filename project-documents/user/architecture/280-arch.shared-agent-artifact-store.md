@@ -1,11 +1,13 @@
 ---
 docType: architecture
+archIndex: 280
+component: shared-agent-artifact-store
 initiative: shared-agent-artifact-store
 project: squadron
 parent: ../project-guides/001-initiative-plan.squadron.md
 dependencies: [100, 140, 260]
 dateCreated: 20260513
-dateUpdated: 20260513
+dateUpdated: 20260519
 status: not_started
 ---
 
