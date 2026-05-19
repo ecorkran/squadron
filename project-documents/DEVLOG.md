@@ -191,6 +191,45 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260518
+
+### Slice 907: Optional Dependency Split — Task Breakdown Complete
+
+**Completed:** Phase 5 task breakdown. Task file created at `user/tasks/907-tasks.optional-dependency-split-serve-and-codex-extras.md` (173 lines, 8 task groups, 31 checklist items).
+
+**Task structure:**
+- T1: Branch setup
+- T2: `pyproject.toml` — remove fastapi/uvicorn from deps, add `[serve]` and `[codex]` extras
+- T3: Extract `src/squadron/server/pid.py` (DaemonConfig + PID helpers); update `daemon.py` to import from it; update `tests/server/test_daemon.py`
+- T4: Update `serve.py` — top-level imports switch to `pid.py`; `start_server`/`SquadronEngine` deferred into `_start_daemon()` after import guard
+- T5: Codex binary guard in `provider.py` — `create_agent()` raises `ProviderError` (not `ProviderAuthError`) when binary absent
+- T6: Full test suite + static analysis (ruff, pyright, pytest)
+- T7: Clean-venv verification walkthrough
+- T8: Commit
+
+**Status:** Ready for Phase 6 (Implementation).
+
+---
+
+## 20260514
+
+### Slice 907: Optional Dependency Split — Design Complete
+
+**Completed:**
+- Created `user/slices/907-slice.optional-dependency-split-serve-and-codex-extras.md`
+
+**Key Design Decisions:**
+- `fastapi` and `uvicorn` move from `[project.dependencies]` to a new `[serve]` optional extra.
+- `[codex]` extra is declared empty (PyPI rejects direct URL refs); a comment block carries the GitHub install command.
+- `sq serve` start guard lives inside `_start_daemon()` — `--status` and `--stop` remain usable without `[serve]`.
+- `start_server` and `SquadronEngine` imports deferred into `_start_daemon` after the guard; `DaemonConfig`/PID helpers stay top-level (verify they don't transitively pull fastapi; extract to `server/pid.py` if they do).
+- `CodexProvider.create_agent()` gains an early binary check (`resolve_codex_binary is None` → `ProviderAuthError` with `npm i -g @openai/codex`). SDK import guard already present in `_run_prompt`; no change needed there.
+
+**Status:**
+- Design ready for Phase 5 (Task Breakdown).
+
+---
+
 ## 20260424
 
 ### Slice 167: Per-Action Model Override Convention — Design Complete

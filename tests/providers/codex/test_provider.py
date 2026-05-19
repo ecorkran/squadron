@@ -10,7 +10,7 @@ import pytest
 from squadron.core.models import AgentConfig
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.provider import CodexProvider
-from squadron.providers.errors import ProviderAuthError
+from squadron.providers.errors import ProviderAuthError, ProviderError
 
 
 @pytest.fixture()
@@ -54,9 +54,27 @@ class TestCreateAgent:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-        agent = asyncio.run(provider.create_agent(agent_config))
+        with patch(
+            "squadron.providers.codex.agent.resolve_codex_binary",
+            return_value="/usr/local/bin/codex",
+        ):
+            agent = asyncio.run(provider.create_agent(agent_config))
         assert isinstance(agent, CodexAgent)
         assert agent.name == "test-codex"
+
+    def test_raises_when_binary_absent(
+        self,
+        provider: CodexProvider,
+        agent_config: AgentConfig,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+        with patch(
+            "squadron.providers.codex.agent.resolve_codex_binary",
+            return_value=None,
+        ):
+            with pytest.raises(ProviderError, match="npm i -g @openai/codex"):
+                asyncio.run(provider.create_agent(agent_config))
 
     def test_raises_when_no_credentials(
         self,

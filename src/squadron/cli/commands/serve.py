@@ -9,13 +9,9 @@ import signal
 import typer
 from rich import print as rprint
 
-from squadron.server.daemon import (
-    DaemonConfig,
-    is_daemon_running,
-    read_pid_file,
-    start_server,
-)
+from squadron.server.daemon import start_server
 from squadron.server.engine import SquadronEngine
+from squadron.server.pid import DaemonConfig, is_daemon_running, read_pid_file
 
 
 def serve(
