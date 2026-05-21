@@ -10,6 +10,102 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260520
+
+### Slice 908: `sq setup` — Phase 6 Implementation Complete
+
+**Completed:** Phase 6 implementation for slice 908. Slice is complete.
+
+**Shipped:**
+- `src/squadron/cli/commands/setup_steps.py` (~220 lines): pure conversion layer (`CheckResult → SetupStep`). `StepKind` StrEnum, `SetupStep` frozen dataclass, `_RECHECK_MAP`, `_classify`, `build_steps` with profile filtering, `_DOCS_ANCHOR`, `_EXPLANATION`, synthesised per-profile recheck lambdas.
+- `src/squadron/cli/commands/setup.py` (~120 lines): Typer command with `--non-interactive`, `--check-only`, `--profile`, `--verbose` flags. Rendering functions `_render_check_only`, `_render_non_interactive`, `_run_interactive` (re-prompt cap=5, `q` exits 2).
+- `src/squadron/cli/app.py`: `app.command("setup")(setup)` registration.
+- `scripts/install.sh` (~100 lines): bash bootstrap with `set -euo pipefail`, interactive prompts, `uv`/`pipx` detection, `npm` detection, `--yes`/`--help` flags, `exec sq setup` handoff.
+- `tests/cli/test_setup_steps.py`: 20 tests covering T3, T6, T10, T11, T12.
+- `tests/cli/test_setup.py`: 10 tests covering T18a, T18b, T19, T20, T21, T22, T23, T24.
+- `tests/scripts/test_install_sh.sh` + `test_install_sh.py`: idempotency smoke test (T26).
+- README: "Fresh install (one liner)" section added (T27).
+- CHANGELOG: `sq setup` and `scripts/install.sh` entries added.
+
+**Deviations from design:** None. All design decisions implemented as specified.
+- T28 (QUICKSTART callout) skipped — `docs/QUICKSTART.md` does not exist yet (slice 906 not merged). DEVLOG follow-up noted.
+- Aggregate "at least one provider OK" suppression optimisation deferred per design decision (initial release shows all profile rows).
+
+**Test results (final gate):**
+- `pytest tests/cli/test_setup.py tests/cli/test_setup_steps.py tests/scripts/test_install_sh.py -q`: **31 passed**
+- `pytest -q` (full suite): **1936 passed, 2 skipped**
+- `ruff check && ruff format --check && pyright`: **all clean**
+
+**Exit codes verified:** 0 (all OK), 1 (MISSING present), 2 (user quit), 3 (internal error), 64 (unknown profile).
+
+**Follow-up:** When slice 906 merges and `docs/QUICKSTART.md` exists, add the `sq setup` callout under Step 5 / Troubleshooting (T28).
+
+**Branch:** `908-sq-setup-one-call-install-orchestrator`.
+
+---
+
+## 20260519
+
+### Slice 908: `sq setup` One-Call Install Orchestrator — Phase 4 Slice Design Complete
+
+**Completed:** Phase 4 low-level design for slice 908.
+
+**Document created:**
+- `project-documents/user/slices/908-slice.sq-setup-one-call-install-orchestrator.md` — full slice design (status: `not_started`)
+
+**Slice plan updated:** `900-slices.maintenance-and-refactoring.md` entry 7 now references the materialized design path.
+
+**Design highlights:**
+- `sq setup` is a *renderer* over slice 905's `run_all_checks()` — no new check logic. Conversion layer maps each `CheckResult` to a `SetupStep` with kind `ALREADY_DONE` / `INSTALL` / `CONFIGURE` / `OPTIONAL`.
+- Three modes: interactive (default, one prompt per missing step with `enter/s/q`), `--non-interactive` (emit all steps without prompts; pipe-to-file friendly), `--check-only` (one-liner per step, exits with `sq doctor`'s code).
+- `--profile <name>` filters Provider-section steps to a single profile.
+- Per-step re-check via a local "check-name → function" map inside `setup_steps.py`. Degrades to "press enter when done" if 905 adds checks we haven't mapped.
+- Companion `scripts/install.sh` (bash) handles only the pre-Squadron bootstrap (pipx/uv → `pipx install squadron-ai` → `npm i -g @manta-digital/context-forge` → handoff to `sq setup`). No automatic shell execution from Python.
+- Distribution via GitHub raw URL: `curl -sSL <raw URL> | sh`. Pinning to a tag is a follow-up.
+- Idempotency contract: setup is re-runnable, install.sh is re-runnable; both detect existing state and skip done steps.
+
+**Cross-slice contract:**
+- Strict consumer of slice 905's `CheckResult`, `CheckStatus`, `run_all_checks()`. No API changes requested upstream.
+- References slice 906 (QUICKSTART) anchors for `docs_anchor`. If 906 ships later, anchors degrade gracefully to plain section names.
+
+**Branch:** `908-sq-setup-one-call-install-orchestrator` (created from `main`).
+
+**Next:** Phase 5 task breakdown — `task-checker`-friendly checklist derived from this design.
+
+---
+
+### Slice 908: `sq setup` — Phase 5 Task Breakdown Complete
+
+**Completed:** Phase 5 task breakdown for slice 908.
+
+**Document created:**
+- `project-documents/user/tasks/908-tasks.sq-setup-one-call-install-orchestrator.md` — 32 tasks (T1–T32) across seven phases (status: `not_started`).
+
+**Phase shape (test-with-pattern preserved throughout):**
+- **A. Setup and data model** — branch confirmation, skeleton files, `StepKind` / `SetupStep` dataclass, baseline tests.
+- **B. `build_steps` conversion layer (pure)** — recheck-function map, `_classify`, `build_steps`, docs-anchor map, explanation strings; each implementation immediately followed by its tests.
+- **C. `setup.py` Typer command and rendering** — command skeleton with all flags, `--check-only` / `--non-interactive` / interactive renderers, registration in `cli/app.py`.
+- **D. Tests for `setup.py`** — `CliRunner`-based coverage of every flag combination, profile filter, `q`-quit, recheck loop, and the internal-error fallback.
+- **E. `install.sh` bootstrap** — bash script with `set -euo pipefail`, explicit prompts before each install, plus a `pytest`-wrapped idempotency smoke test using PATH-shimmed stubs.
+- **F. Documentation** — README one-liner pointer; optional QUICKSTART callout gated on slice 906 merge order.
+- **G. Final gate** — full `pytest` / `ruff` / `pyright` gate, verification walkthrough recording into the slice design, slice-plan checkbox flip, DEVLOG closeout.
+
+**Notable design constraints carried into tasks:**
+- No automatic shell execution from Python beyond `install_commands()` with explicit consent.
+- Per-step re-check cap = 5 (prevents infinite loops in scripted stdin).
+- `q` exits 2 (user-aborted), distinct from 1 (`sq doctor` reports missing) and 3 (internal error).
+- `_DOCS_ANCHOR` and `_EXPLANATION` maps are local to `setup_steps.py` — no upstream API changes to slice 905.
+
+**Review note:** Phase 4 review flagged 908 as "new feature under maintenance arch" (F001). PM decision was to leave categorisation alone — 905/906/908 form a cohesive onboarding trio that has historically lived under the 900 maintenance architecture. No design changes resulted.
+
+**Task file size:** 259 lines (well under 450-line target; no split needed).
+
+**Branch:** `908-sq-setup-one-call-install-orchestrator`.
+
+**Next:** Phase 6 implementation following T1–T32 in order.
+
+---
+
 ## 20260510
 
 ### Slice 250: Container Step Classification — Implementation Complete

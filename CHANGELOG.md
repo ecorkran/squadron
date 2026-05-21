@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `sq setup`: new command that walks a fresh user through the full Squadron install sequence in one invocation. Interactive by default (pauses at each step); use `--non-interactive` / `-y` to emit all steps without prompting, or `--check-only` for a fast one-line summary. Supports `--profile <name>` to scope provider steps to a single profile.
+- `scripts/install.sh`: bootstrap script for new users with no Squadron installed. Detects `uv`/`pipx` and `npm`, installs `squadron-ai` and `@manta-digital/context-forge`, then hands off to `sq setup`. Fetch with `curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh | sh`.
 - `sq doctor`: new command that inspects the runtime environment and reports configured providers, integrations, and config files. Exits 1 when a required item is missing. Use `--json` for machine-readable output and `-v` to show optional items.
 
 ## [0.6.0] - 20260512

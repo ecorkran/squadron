@@ -27,6 +27,21 @@ The template system is extensible — each template is a YAML file, and adding n
 
 ## Install
 
+### Fresh install (one liner)
+
+New user? Run this to install Squadron and Context Forge, then get guided setup:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh | sh
+```
+
+You can inspect the script first:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh \
+    -o install.sh && less install.sh && bash install.sh
+```
+
 ### Global install (recommended)
 
 ```bash

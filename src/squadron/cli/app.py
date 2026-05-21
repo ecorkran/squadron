@@ -21,6 +21,7 @@ from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.review import review_app
 from squadron.cli.commands.run import run as run_command
 from squadron.cli.commands.serve import serve
+from squadron.cli.commands.setup import setup
 from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.spawn import spawn
 from squadron.cli.commands.summary_instructions import summary_instructions
@@ -49,6 +50,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(auth_app, name="auth")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
+app.command("setup")(setup)
 app.command("install-commands")(install_commands)
 app.command("uninstall-commands")(uninstall_commands)
 app.command("_summary-instructions", hidden=True)(summary_instructions)
