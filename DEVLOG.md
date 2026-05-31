@@ -12,6 +12,32 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260530
+
+### Initiative 300: Eval Actions (LLM-as-Judge & Scoring) — Design Complete
+
+Stood up a new initiative and authored its architecture document. Adds an `eval` action family that gives squadron's deterministic executor a judgment-and-measurement layer.
+
+**Delivered:**
+- Initiative 300 entry added to `001-initiative-plan.squadron.md` (index 300, after 280; dependencies [100, 140]); cross-initiative dependency entry and `dateUpdated` refreshed.
+- `300-arch.eval-actions-llm-as-judge-scoring.md` created and registered (`cf set arch 300`).
+
+**Component shape.** `eval:judge` is LLM-as-judge: reuses the existing provider-agnostic review engine (`run_review_with_profile`) with a judge system-prompt and reference-dataset inputs, emitting a **0–100 scalar score + verdict + findings**. The verdict drops into the existing `sq run --step-done --verdict` checkpoint machinery with no new plumbing.
+
+**Key decisions:**
+- **Initiative, not a single slice** — because numeric scoring is a cross-cutting change to result models every pipeline depends on, reference-dataset eval is new infrastructure, and eval/review gate composition is an open arch question.
+- **Keystone slice first:** numeric scoring foundation (add `score` *alongside* verdict, additive/backward-compatible, verdict stays authoritative at summary level). Isolated and done first to de-risk the model migration.
+- **Scalar summarizes a latent criterion vector** — scalar consumed now, vector recorded but not surfaced.
+- **Read-file-on-request tool** for non-SDK judges is owned by this initiative (the canonical minimal one), but is a **secondary, later slice** — explicitly *not* dependent on 260's full agentic loop (260 may consume it later).
+
+**Grounding (verified against source this session):** action registry is open (`register_action`); `ActionResult` already carries `verdict`/`findings`; verdict enum `PASS|CONCERNS|FAIL|UNKNOWN` is exactly what `--step-done --verdict` consumes; provider/model support comes from the profile registry; the 500KB injection cap is the binding constraint on non-file-reading judge models.
+
+**Pending / open (for slice design):** dataset format & location convention; scalar score range vs. per-criterion schema detail; eval/review gate-composition policy (combined / separate / per-review-type).
+
+**Note:** these are planning-doc edits made on branch `908-sq-setup-one-call-install-orchestrator`; not yet committed.
+
+---
+
 ## 20260514
 
 ### Initiative 200: Multi-Agent Communication — Architecture Rewrite
