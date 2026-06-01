@@ -12,6 +12,38 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260531
+
+### Initiative 300 scope reduction + Initiative 320 + orchestrator Future Work — Design
+
+Major rethink after a review (GLM-5.1, CONCERNS) and an extended PM/architect design conversation. The 300 arch doc had spiraled toward over-engineering; pulled it back to what's actually needed, and split the rest into a sibling initiative and a far-future Future Work entry.
+
+**The "why" (captured for future context — this is the motivation behind 300/320 and the orchestrator):**
+Squadron is an excellent *deterministic workflow engine* running a *non-deterministic process*. High accuracy, decent-but-variable code quality, and an external quality standard now exists to measure against (a forked MIT `tech-debt-audit` Claude skill, adapted for squadron projects, which surfaces plenty of issues). In return for high accuracy it demands human-in-loop at too many gates — rarely at code, sometimes extensively at *design* — heavy enough that simple projects aren't worth the overhead. The automation breaks precisely at the **decision points**, because those are non-deterministic. LLM judgment at those points is the missing piece. (Origin: the CCA training + two interviews surfaced the eval gap; adding it makes squadron feel "complete"/legit — a workflow engine without eval is a car without a speedometer.)
+
+**Determinism/leverage ladder (the framing that resolved where agentic loops belong):**
+1. Now — high-accuracy, high-effort workflow engine (human at every gate).
+2. 300/320 — judge-at-decision-points; trade some accuracy for far less effort; variability accepted but kept minimal.
+3. Future — an orchestrator agent driving CF+squadron, human consulted only on hard calls; another leverage jump.
+Organism metaphor: CF structures = stable skeleton; LLM judges/orchestrator = nervous system (joints absorbing variability, making local decisions); human = consulted only where it matters. **Agentic loops belong ONLY at rung 3, above the engine — never inside a pipeline action.** The doc kept spiraling because it tried to put a rung-3 turn-loop inside a rung-2 action (the read-file capability). Removing that dissolved the circularity.
+
+**Initiative 300 — reduced and renamed → "Intrinsic LLM Judging & Scoring".**
+Now two reuse-first capabilities only: (1) an optional 0–100 numeric **score** added additively to result models/parser/persistence (keystone slice, done first), verdict *derived from* score by threshold (score = source of truth, verdict = its projection for `--step-done --verdict`), optional `criteria` map reserved from the start; (2) an **intrinsic judge** = the *existing* `review` action with a judge system-prompt emitting score+findings, composing with *existing* `each`/`loop`/`commit` for unattended review→fix→re-review. Ground truth is **in-repo** (parent doc, rules, code, phase criteria) — no external answer key. Prioritize design-phase gates (slice-vs-arch, tasks-vs-slice). **Dropped from 300:** the `eval:judge` action (duplicative of `review`), reference datasets, per-case dataset loop, read-file/turn-loop, fan-in aggregation. Arch doc fully rewritten; `status: not_started` (needs fresh review against reduced scope). Second-review findings re-dispositioned: F001/F002/F006/F007 fixed & carried forward, F003/F004/F005 removed from scope, F008 retained as a slice-design caveat.
+
+**Reference datasets — ruled out (not deferred scope, a different product).** Curated input/expected pairs to grade a model in the abstract. Poor fit here: prompts are complex, outputs non-deterministic (valid solutions vary), and ground-truth strength is a *gradient* — strong for tasks-vs-slice, minimal for arch-concept-vs-initiative-blurb. Squadron's judging needs none of it; its ground truth is the project's own documents.
+
+**Initiative 320 (new) — "Judge Calibration & Quality Metrology".** Answers "how good are the judges themselves?" Ground truth = **the human, sampled**: operator spot-checks a sample of judge verdicts; system reports judge-vs-human agreement + judge-vs-judge dispersion ("does model X overreach while Y rubber-stamps?"). Trust is per-artifact-level (scales with in-repo ground-truth strength) and feeds 300's escalate-vs-auto-gate decision. Includes the **tech-debt-audit code-quality baseline** + a dispatch-side **prompt-chaining pre-emption** prompt (chained because the current one is already complex) as the first measurable customer (audit-findings-per-project should drop). Two oracles, same metrology shape: tech-debt-audit (code), human-sampled agreement (design). Depends on [100, 140, 300]. Overview/rough-concept captured in the initiative-plan entry; full design in coming weeks.
+
+**Orchestrator — Future Work entry.** The rung-3 organism; named to keep its agentic loop from being smuggled back into 300-band components. Promote to a full initiative when pursued.
+
+**Index spacing:** initiatives now spaced by 20 (300, 320). 310 intentionally skipped.
+
+**Delivered:** rewrote `300-arch.eval-actions-llm-as-judge-scoring.md`; updated `001-initiative-plan.squadron.md` (300 entry slimmed, 320 added, Future Work section added, cross-deps + dateUpdated); re-dispositioned `300-review.arch...md`.
+
+**Pending:** fresh review of slimmed 300; `/cf:prompt get add-initiative-overview` already applied to capture 320 as a plan entry — a standalone 320 concept doc was not created (project has no concept-doc convention; the plan entry + this DEVLOG are the durable capture). All planning edits remain uncommitted on branch `908-sq-setup-one-call-install-orchestrator`.
+
+---
+
 ## 20260530
 
 ### Initiative 300: Eval Actions (LLM-as-Judge & Scoring) — Design Complete
