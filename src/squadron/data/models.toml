@@ -201,9 +201,22 @@ cost_tier = "cheap"
 
 [aliases.minimax.pricing]
 input = 0.30
-output = 1.25
+output = 1.20
 cache_read = 0.06
-cache_write = 0.30
+cache_write = 1.20
+
+[aliases.minimax3]
+profile = "openrouter"
+model = "minimax/minimax-m3"
+private = true
+cost_tier = "cheap"
+
+[aliases.minimax3.pricing]
+input = 0.60
+output = 2.40
+cache_read = 0.12
+cache_write = 2.40
+notes = "sale 50% off 1.20"
 
 [aliases.glm5]
 profile = "openrouter"
