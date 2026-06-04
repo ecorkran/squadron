@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import tomllib
 from dataclasses import dataclass
@@ -199,32 +198,29 @@ def check_codex_cli() -> CheckResult:
     )
 
 
-def check_claude_code_session() -> CheckResult:
-    """Detect whether running inside a Claude Code session."""
-    if os.environ.get("CLAUDECODE") == "1":
-        return CheckResult(
-            name="Claude Code session",
-            status=CheckStatus.OK,
-            detail="CLAUDECODE=1",
-            section=SECTION_INTEGRATIONS,
-            required=False,
-        )
+def check_claude_code_cli() -> CheckResult:
+    """Check if the Claude Code CLI is installed (the SDK provider's dependency).
 
-    matched = next((k for k in os.environ if k.startswith("CLAUDE_CODE_")), None)
-    if matched:
+    The ``sdk`` provider authenticates through the Claude Code CLI's stored
+    credentials, so its availability is gated on the CLI being installed -- not
+    on whether the current shell is itself a Claude Code session. Informational
+    only: absence means the SDK provider is unavailable, other providers still work.
+    """
+    path = shutil.which("claude")
+    if path:
         return CheckResult(
-            name="Claude Code session",
+            name="Claude Code CLI",
             status=CheckStatus.OK,
-            detail=f"{matched} set",
+            detail=f"SDK provider available (claude at {path})",
             section=SECTION_INTEGRATIONS,
             required=False,
         )
 
     return CheckResult(
-        name="Claude Code session",
+        name="Claude Code CLI",
         status=CheckStatus.WARN,
-        detail="not running inside Claude Code",
-        fix_hint=None,
+        detail="not installed; SDK provider unavailable (other providers OK)",
+        fix_hint="npm i -g @anthropic-ai/claude-code",
         section=SECTION_INTEGRATIONS,
         required=False,
     )
@@ -368,7 +364,7 @@ def run_all_checks() -> list[CheckResult]:
     _run("at least one provider OK", check_at_least_one_provider, profile_results)
     _run("context-forge", check_context_forge)
     _run("codex CLI", check_codex_cli)
-    _run("Claude Code session", check_claude_code_session)
+    _run("Claude Code CLI", check_claude_code_cli)
     _run("providers.toml", check_providers_toml)
     _run("models.toml", check_models_toml)
     _run("project .env", check_project_env)

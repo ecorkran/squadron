@@ -236,6 +236,31 @@ def test_interactive_q_exits_2() -> None:
 
 
 # ---------------------------------------------------------------------------
+# T22b -- informational optional step (no recheck) renders without trapping
+# ---------------------------------------------------------------------------
+
+
+def test_interactive_informational_step_does_not_block() -> None:
+    """An OPTIONAL step with no recheck (e.g. Claude Code CLI) is rendered and
+    skipped without prompting — feeding no input still reaches exit 0."""
+    results = [
+        _ok("squadron", SECTION_INSTALL),
+        _warn(
+            "Claude Code CLI",
+            SECTION_INTEGRATIONS,
+            fix_hint="npm i -g @anthropic-ai/claude-code",
+        ),
+    ]
+    with patch("squadron.cli.commands.setup.run_all_checks", return_value=results):
+        # --verbose so the OPTIONAL step is revealed; empty input must not hang.
+        result = runner.invoke(app, ["setup", "--verbose"], input="")
+    assert result.exit_code == 0
+    assert "Claude Code CLI" in result.output
+    # The interactive prompt must NOT appear for this informational step.
+    assert "[Enter] when done" not in result.output
+
+
+# ---------------------------------------------------------------------------
 # T23 -- interactive recheck loop (MISSING -> OK on second call)
 # ---------------------------------------------------------------------------
 

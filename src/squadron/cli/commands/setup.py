@@ -103,6 +103,11 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
 
         _render_step_block(console, step, n, total, verbose)
 
+        # Optional steps with no recheck are informational only — render and
+        # continue without trapping the user in a prompt they can't satisfy.
+        if step.kind == StepKind.OPTIONAL and step.recheck is None:
+            continue
+
         attempt = 0
         while True:
             response = (

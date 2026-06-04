@@ -16,7 +16,7 @@ from squadron.cli.commands.doctor_checks import (
     CheckResult,
     CheckStatus,
     check_at_least_one_provider,
-    check_claude_code_session,
+    check_claude_code_cli,
     check_codex_cli,
     check_context_forge,
     check_models_toml,
@@ -178,24 +178,23 @@ def test_check_codex_cli_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "@openai/codex" in result.fix_hint
 
 
-# --- T17: check_claude_code_session ---
+# --- T17: check_claude_code_cli ---
 
 
-def test_check_claude_code_session_claudecode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CLAUDECODE", "1")
-    result = check_claude_code_session()
+def test_check_claude_code_cli_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: "/usr/local/bin/claude")
+    result = check_claude_code_cli()
     assert result.status == CheckStatus.OK
+    assert "SDK provider available" in result.detail
 
 
-def test_check_claude_code_session_absent(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CLAUDECODE", raising=False)
-    # Clear any CLAUDE_CODE_* vars
-    for key in list(__import__("os").environ):
-        if key.startswith("CLAUDE_CODE_"):
-            monkeypatch.delenv(key, raising=False)
-    result = check_claude_code_session()
+def test_check_claude_code_cli_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    result = check_claude_code_cli()
     assert result.status == CheckStatus.WARN
-    assert result.fix_hint is None
+    assert result.required is False
+    assert result.fix_hint is not None
+    assert "claude-code" in result.fix_hint
 
 
 # --- T19: check_providers_toml ---

@@ -14,7 +14,6 @@ from squadron.cli.commands.doctor_checks import (
     CheckResult,
     CheckStatus,
     check_at_least_one_provider,
-    check_claude_code_session,
     check_codex_cli,
     check_context_forge,
     check_models_toml,
@@ -56,7 +55,8 @@ _RECHECK_MAP: dict[str, Callable[[], CheckResult]] = {
     "slash commands": check_slash_commands,
     "context-forge": check_context_forge,
     "codex CLI": check_codex_cli,
-    "Claude Code session": check_claude_code_session,
+    # "Claude Code CLI" is intentionally absent: it is informational only
+    # (no in-loop recheck), so setup renders it and moves on without prompting.
     "providers.toml": check_providers_toml,
     "models.toml": check_models_toml,
     "project .env": check_project_env,
@@ -98,9 +98,9 @@ _EXPLANATION: dict[str, str] = {
         "The Codex CLI enables the codex provider for AI-assisted shell tasks. "
         "Only required if you plan to use the openai/codex provider."
     ),
-    "Claude Code session": (
-        "Some Squadron features detect whether you are running inside a Claude Code session "
-        "to enable SDK-backed providers automatically."
+    "Claude Code CLI": (
+        "The sdk provider authenticates through the Claude Code CLI's stored credentials, "
+        "so it needs the CLI installed. Optional — other providers work without it."
     ),
     "at least one provider OK": (
         "Squadron needs at least one authenticated provider profile to run pipelines. "
@@ -156,7 +156,7 @@ def _human_title(result: CheckResult) -> str:
         "slash commands": "Install slash commands",
         "context-forge": "Install Context Forge",
         "codex CLI": "Install Codex CLI",
-        "Claude Code session": "Claude Code session",
+        "Claude Code CLI": "Claude Code CLI",
         "at least one provider OK": "At least one provider authenticated",
         "providers.toml": "providers.toml valid",
         "models.toml": "models.toml valid",
