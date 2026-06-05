@@ -10,6 +10,28 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260604
+
+### Initiative 300 (Intrinsic LLM Judging & Scoring): Phase 3 Slice Planning Complete
+
+**Completed:** Phase 3 slice planning for initiative 300. Slice plan created from the reviewed architecture document; architecture marked `complete`.
+
+**Shipped:**
+- `project-documents/user/architecture/300-slices.eval-actions-llm-as-judge-scoring.md`: five slices in dependency/implementation order — (300) Numeric Scoring Foundation [keystone, foundation, done alone], (301) Judge Enforcement Layer, (302) Design-Phase Judge Templates, (303) Judge-Gated Cycle Conventions, (304) Gate Composition [integration]. Plus a Future Work backlog: multi-sample judging, on-demand ground-truth fetching, checkpoint multi-verdict support (140).
+- `300-arch.eval-actions-llm-as-judge-scoring.md`: status `reviewed` → `complete`, dateUpdated 20260604.
+
+**Key planning decisions:**
+- Keystone (300) ordered first and done alone, per the architecture — the only Medium-risk cross-cutting model/parser/persistence change; everything composes on it.
+- Refined the architecture's four anticipated slices into five by splitting the judge **enforcement layer** (301: required-ness, 0–100 validation, score→verdict thresholding, provenance) from the judge **templates** (302). The two-layer parser/action split is an explicit architectural commitment, the enforcement is independently testable, and no template is gateable until it exists.
+- Every slice is additive and leaves the system in a working state; existing verdict-gating pipelines unchanged throughout.
+- Gate composition (304) carries the architecture's explicit boundary: prefer upstream reduction (additive, in-scope 300); if insufficient, escalate checkpoint multi-verdict support as a coordinated 140 dependency, not a silent absorption.
+
+**Open questions deferred to slice design (Phase 4):** provenance field name/enum, threshold band values + config keys, queryable-score storage representation, which design-phase judge templates to author first.
+
+**Next step:** Phase 4 slice design for slice 300 (numeric scoring foundation), the keystone.
+
+---
+
 ## 20260520
 
 ### Slice 908: `sq setup` — Phase 6 Implementation Complete

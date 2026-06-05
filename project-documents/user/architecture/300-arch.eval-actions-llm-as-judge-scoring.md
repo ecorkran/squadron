@@ -7,8 +7,8 @@ project: squadron
 parent: ../project-guides/001-initiative-plan.squadron.md
 dependencies: [100, 140]
 dateCreated: 20260530
-dateUpdated: 20260531
-status: reviewed
+dateUpdated: 20260604
+status: complete
 ---
 
 # Architecture: Intrinsic LLM Judging & Scoring
