@@ -10,6 +10,51 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260607
+
+### Initiative 300 — Slice 300 (Numeric Scoring Foundation): Phase 5 Task Breakdown Complete
+
+**Completed:** Phase 5 task breakdown for the keystone slice 300. Task file created from the (review-revised) slice design.
+
+**Shipped:** `project-documents/user/tasks/300-tasks.numeric-scoring-foundation.md` — 13 tasks, ~225 lines (well under the 450 cap, single file). Test-with ordering: each implementation task (T1/T3/T5/T7/T9/T11) is immediately followed by its test task (T2/T4/T6/T8/T10/T12); T13 is the full-suite + static-analysis + no-judging-logic-leaked validation pass. One commit per task. Closes with a coverage table mapping every LLD change to its task(s).
+
+**Decisions/notes:**
+- Tasks made authoritative on the **full three-field set** (`score`/`criteria`/`provenance`) on both `ReviewResult` and `ActionResult` — the LLD's component-summary table lagged on `provenance` in two rows, but the LLD body is explicit, so tasks follow the body. Provenance is field-only (T1/T3 add it; T13 verifies nothing populates/reads it).
+- Verified all referenced test-file paths against the real tree; corrected `test_review.py` → `tests/pipeline/actions/test_review_action.py` (the others — review test_models/test_parsers/test_persistence, pipeline test_models/test_state — all exist).
+- Parser failure-mode table (non-numeric/inf/nan/multi-line/malformed-criteria → `None`, no raise) is its own dedicated test task (T6).
+- `cf:check` for slice 300: clean (the prior "design but no task file" info is resolved).
+
+**Task review (glm-5.1, verdict PASS):** coverage/sequencing/test-with/sizing/commits/failure-mode-coverage all PASS. One CONCERN (F003): `_extract_criteria`'s recognized text format was underspecified — `score:` was pinned but `criteria:` was not, leaving T5/T6 without a positive-fixture anchor. **Fixed** in both LLD and task file: pinned `criteria` to the minimal YAML-map shape (top-level `criteria:` + indented `key: <number>` lines — the same idiom T9 emits), whole-map-to-`None` on any malformed value; added a criteria-bearing fixture to T6. Also fixed the LLD component-table + data-flow-diagram lag on `provenance` (body was already explicit).
+
+**Next step:** Phase 6 implementation of slice 300, following T1→T13. After 300 lands, Phase 4 design for slice 301 (Judge Enforcement Layer).
+
+---
+
+## 20260605
+
+### Initiative 300 — Slice 300 (Numeric Scoring Foundation): Phase 4 Slice Design Complete
+
+**Completed:** Phase 4 low-level design for the keystone slice 300, the numeric-scoring foundation. Design grounded in the actual code (read `review/models.py`, `pipeline/models.py`, `review/parsers.py`, `pipeline/actions/review.py`, `review/persistence.py`, `pipeline/state.py`).
+
+**Shipped:** `project-documents/user/slices/300-slice.numeric-scoring-foundation.md` — additive `score: float | None` + reserved `criteria: dict[str,float] | None` on `ReviewResult` and `ActionResult`; lenient, judging-unaware optional extraction in `parse_review_output`; threading through the review action's `ReviewResult → ActionResult` map; persistence on two surfaces.
+
+**Key design decisions:**
+- **"Queryable, first-class, not opaque" resolved against real code:** squadron has no SQL DB. The two queryable surfaces are (a) review-file YAML frontmatter — `score:` as a top-level key beside `verdict:`; and (b) run-state JSON — a new top-level `StepState.score` hoisted in `_append_step` from the last non-`None` action score, exactly mirroring the existing `verdict` hoist (state.py:267–286). Resolves the open question "storage representation for the queryable score."
+- **Field type `float | None`** (not int, not a sentinel): float holds integer scores and future multi-sample medians; `None` is the only "absent" representation — no `0`/`-1` fallback (project no-silent-fallback rule, and a correctness prerequisite for 301's required-ness check).
+- **Parser stays lenient and judging-unaware:** extracts when present, silent on absence, **no validation/range-check/thresholding.** Out-of-range values (e.g. `150`) are extracted as-is; validation → `UNKNOWN` is 301's job at the judge use. This is the parser side of the architecture's two-layer split.
+- **Real-fixture tests on both paths** (score-less regression fixture + score-bearing fixture in the judge-template shape) per the project "test the parser on real input" rule.
+
+**Scope boundary held:** no judging *logic* in this slice — required-ness, validation, thresholding, and verdict derivation are all 301.
+
+**Design review (glm-5.1, verdict CONCERNS) — both concerns addressed:**
+- **F001 (provenance):** the architecture commits the provenance field to the *result model*, and 300 is the keystone "settle the model shape once" slice — so deferring provenance entirely to 301 would force 301 to re-open the models. **Fix:** add `provenance: str | None = None` as a *latent reserved field* in 300 (mirrors how `criteria` is reserved), unpopulated/unread here; 301 supplies only its meaning and use. No model re-open downstream.
+- **F002 (parser failure modes):** added an explicit failure-mode enumeration table for the new score/criteria extraction path (non-numeric value → `None`; `inf`/`nan` → `None`; multiple score lines → first wins; malformed criteria → whole map `None`) — never raises, never fabricates a number. Observable-WARNING-on-required-absence stays 301's job (firing it in the parser would trigger on every ordinary score-less review). Satisfies the project Failure-Mode Enumeration rule.
+- F003 (note): structured-output parser shape correctly deferred to 302 — no change.
+
+**Next step:** Phase 5 task breakdown for slice 300, then Phase 6 implementation. After 300 lands, Phase 4 design for slice 301 (Judge Enforcement Layer).
+
+---
+
 ## 20260604
 
 ### Initiative 300 (Intrinsic LLM Judging & Scoring): Phase 3 Slice Planning Complete
