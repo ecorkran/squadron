@@ -18,6 +18,8 @@ Run via Bash:
 sq _summary-instructions --restore
 ```
 
+**CRITICAL: Run this command exactly as written — no redirects (`2>…`, `2>&1`, `2>/dev/null`), no stderr capture, no appended `;`/`&&` suffixes or compound wrappers.** Two reasons: (1) the skill needs stdout (the summary content) and stderr (the `Using:` line, and the picker listing) kept on **separate** channels — merging or discarding either breaks filename extraction in R2; (2) decorating the command changes its literal text, which misses Bash allowlist matching and triggers permission prompts.
+
 If the command exits non-zero, show the error output to the user and **stop** — do not continue.
 
 ---
@@ -47,6 +49,8 @@ sq _summary-instructions $ARGUMENTS
 sq _summary-instructions $ARGUMENTS --suffix
 sq _summary-instructions --project
 ```
+
+**CRITICAL: Run each `sq _summary-instructions` command exactly as written — no redirects (`2>…`, `2>&1`, `2>/dev/null`), no stderr capture, no appended `;`/`&&` suffixes or compound wrappers.** Two reasons: (1) the skill needs stdout and stderr kept on **separate** channels — merging or discarding either breaks output capture (the `Using:` line and picker listing are on stderr, the content on stdout); (2) decorating the command changes its literal text, which misses Bash allowlist matching and triggers permission prompts.
 
 Capture the first command's stdout as the **instruction text**.
 Capture the second command's stdout as the **suffix text** (may be empty).
