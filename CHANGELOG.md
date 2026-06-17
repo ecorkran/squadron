@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Review results can now carry an optional numeric **score** (0–100) and a per-criterion **criteria** breakdown alongside the existing PASS/CONCERNS/FAIL verdict. When a review response includes a top-level `score:` line, the score is parsed and surfaced as a first-class field: written to the review file's frontmatter as a top-level `score:` (greppable without reading the body), included in JSON output, and recorded on the run state. Score-less reviews are unchanged. (Foundation for upcoming LLM-as-judge scoring; no review template emits a score yet.)
+
 ## [0.6.1] - 20260604
 
 ### Added

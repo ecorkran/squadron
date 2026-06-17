@@ -10,6 +10,33 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260617
+
+### Initiative 300 — Slice 300 (Numeric Scoring Foundation): Phase 6 Implementation Complete
+
+**Completed:** Phase 6 implementation of the keystone slice 300. All 13 tasks (T1→T13) implemented, tested, and committed one-per-task on branch `300-slice.numeric-scoring-foundation`. The slice is the additive, judging-free foundation every later 300 slice composes on.
+
+**Shipped (six source modules, additive only):**
+- `review/models.py` — `ReviewResult.score` / `.criteria` / `.provenance` (all `float|dict|str | None`, default `None`); `to_dict()` emits the three keys.
+- `pipeline/models.py` — `ActionResult.score` / `.criteria` / `.provenance`, mirroring `verdict`; picked up automatically by `dataclasses.asdict`.
+- `review/parsers.py` — new `_extract_score` / `_extract_criteria` helpers + a shared `_parse_finite_float`; wired into `parse_review_output`. Lenient and judging-unaware: absent/malformed → `None`, never raises, never range-checks, first `score:` wins, `inf`/`nan` rejected as non-finite. Criteria parsed from the indented YAML-map block, whole-map-to-`None` on any malformed entry.
+- `pipeline/actions/review.py` — threads `result.score` / `.criteria` into the returned `ActionResult` (`provenance` left `None`).
+- `review/persistence.py` — `format_review_markdown` emits a top-level `score:` line and a `criteria:` block when present; score-less output is byte-for-byte unchanged.
+- `pipeline/state.py` — `StepState.score` + a score hoist in `_append_step` mirroring the verdict hoist.
+
+**Tests:** new coverage in `tests/review/test_models.py`, `tests/review/test_parsers.py` (incl. the full failure-mode table + real score-less / score-bearing / criteria-bearing fixtures), `tests/review/test_persistence.py`, `tests/pipeline/test_models.py`, `tests/pipeline/test_state.py` (incl. backward-compat: old run-state JSON without `score` loads), `tests/pipeline/actions/test_review_action.py`. Full suite: **1969 passed, 2 skipped**; `pyright` 0 errors; `ruff check` + `ruff format --check` clean.
+
+**Notable during implementation:**
+- One real bug found and fixed in `_extract_criteria`: the `$`-in-MULTILINE label match left the slice starting at the trailing newline, so `splitlines()[0]` was empty and the block ended immediately — fixed by lstripping the leading newline. Caught by an inline probe before the test task.
+- No-judging-logic-leak gate (T13): grepped the slice diff — `provenance` appears only as field declarations, comments, and the `to_dict()` serialization key; zero range checks, zero verdict-from-score derivation. Confirmed clean.
+- Verification Walkthrough updated with actual commands/output; interactive steps 4–5 replaced with equivalent non-interactive probes (plus a caveat) so an external agent can run them verbatim.
+
+**Process:** `cf:check` (workflow_check) slice 300 — clean after auto-fixing the slice-plan checkbox; slice design + task frontmatter set to `status: complete` / `dateUpdated: 20260617`; CHANGELOG `[Unreleased]` updated.
+
+**Next step:** Phase 4 design for slice 301 (Judge Enforcement Layer) — populates `provenance`, validates the score, derives the verdict by thresholding. No model re-open needed (the shape is settled here).
+
+---
+
 ## 20260607
 
 ### Initiative 300 — Slice 300 (Numeric Scoring Foundation): Phase 5 Task Breakdown Complete

@@ -6,8 +6,8 @@ parent: 300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [100, 140]
 interfaces: [301, 302, 303, 304]
 dateCreated: 20260605
-dateUpdated: 20260605
-status: not_started
+dateUpdated: 20260617
+status: complete
 ---
 
 # Slice Design: Numeric Scoring Foundation
@@ -219,22 +219,52 @@ print('score-less:', no_score.score)"
 # (A score-bearing parse is asserted in the test suite against a real fixture;
 #  exact recognized shape is pinned during task implementation.)
 
-# 4. Frontmatter carries score only when present (inspect a generated review file)
-#    After running a review whose template emits a score:
-# grep -E '^score:' project-documents/user/reviews/<file>.md
-# Expect: a top-level `score: <n>` line; absent for score-less reviews.
+# 4. Frontmatter carries score only when present.
+#    Verified non-interactively (no live review needed) by formatting a
+#    score-bearing result and grepping the frontmatter:
+uv run python - <<'PY' > /tmp/wt4_review.md
+from squadron.review.models import ReviewResult, Verdict
+from squadron.review.persistence import format_review_markdown
+r = ReviewResult(verdict=Verdict.PASS, findings=[], raw_output="", template_name="code",
+                 input_files={}, score=87.5, criteria={"alignment": 90.0})
+print(format_review_markdown(r, "code"))
+PY
+grep -E '^score:' /tmp/wt4_review.md
+# Expect: score: 87.5   (a score-less result emits no `^score:` line — 0 matches).
 
-# 5. Run state hoists the score as a first-class field
-#    After a pipeline run whose review step produced a score:
-# python -c "import json,sys; s=json.load(open(sys.argv[1])); \
-#   print([(st['step_name'], st.get('score')) for st in s['completed_steps']])" <run-state.json>
-# Expect: the review step shows its numeric score at the top level, not only inside action_results.
+# 5. Run state hoists the score as a first-class field.
+#    Verified non-interactively by round-tripping a StepState through the
+#    RunState JSON serialization (the same path _append_step writes):
+uv run python - <<'PY'
+import json
+from datetime import UTC, datetime
+from squadron.pipeline.state import StepState, RunState
+now = datetime.now(UTC)
+st = StepState(step_name="review", step_type="review", status="completed",
+               verdict="PASS", score=87.5, completed_at=now)
+rs = RunState(run_id="r1", pipeline="p", params={}, started_at=now, updated_at=now,
+              status="completed", completed_steps=[st])
+dumped = json.loads(json.dumps(rs.model_dump(mode="json")))
+print([(s["step_name"], s.get("score")) for s in dumped["completed_steps"]])
+PY
+# Expect: [('review', 87.5)] — the score is a top-level step field, not only
+# inside action_results. The hoist from a live action score is covered by
+# tests/pipeline/test_state.py::TestStepCallbackScore::test_score_hoisted_from_action.
 
 # 6. Full regression + static analysis
-uv run pytest          # Expect: existing suite passes unchanged + new tests pass
-uv run pyright         # Expect: 0 errors
+uv run pytest          # Expect: 1969 passed, 2 skipped (existing + new)
+uv run pyright         # Expect: 0 errors, 0 warnings, 0 informations
 uv run ruff check && uv run ruff format --check   # Expect: clean
 ```
+
+> **Caveat (verification):** Walkthrough commands 4 and 5 were originally
+> phrased against a live review file / run-state file. They are replaced
+> above with equivalent **non-interactive probes** that exercise the same
+> production code paths (`format_review_markdown`, `RunState`/`StepState`
+> serialization) without needing a provider call or a full pipeline run, so an
+> external agent can run them verbatim. The live-artifact path is additionally
+> covered by the test suite (frontmatter: `tests/review/test_persistence.py`;
+> hoist: `tests/pipeline/test_state.py`).
 
 ## Risk Assessment
 
