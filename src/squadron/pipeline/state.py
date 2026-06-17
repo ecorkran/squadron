@@ -81,6 +81,9 @@ class StepState(BaseModel):
     step_type: str
     status: str  # ExecutionStatus string value
     verdict: str | None = None
+    # Numeric scoring foundation (slice 300): hoisted from the last non-None
+    # action score, mirroring verdict. Default None → older state files load.
+    score: float | None = None
     outputs: dict[str, object] = {}
     action_results: list[dict[str, object]] = []
     iteration: int = 0
@@ -271,6 +274,14 @@ class StateManager:
                 verdict = ar.verdict
                 break
 
+        # Numeric scoring foundation (slice 300): hoist the last non-None
+        # action score, mirroring the verdict hoist above.
+        score: float | None = None
+        for ar in reversed(step_result.action_results):
+            if ar.score is not None:
+                score = ar.score
+                break
+
         # Extract outputs from last action
         outputs: dict[str, object] = {}
         if step_result.action_results:
@@ -284,6 +295,7 @@ class StateManager:
             step_type=step_result.step_type,
             status=step_result.status.value,
             verdict=verdict,
+            score=score,
             outputs=outputs,
             action_results=action_results_dicts,
             iteration=step_result.iteration,
