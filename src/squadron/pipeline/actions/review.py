@@ -207,6 +207,10 @@ class ReviewAction:
             outputs=outputs,
             verdict=result.verdict.value,
             findings=[sf.__dict__ for sf in result.structured_findings],
+            # Numeric scoring foundation (slice 300): pass through score/criteria.
+            # provenance is left unset (stays None — reserved for slice 301).
+            score=result.score,
+            criteria=result.criteria,
             metadata={
                 "model": model_id,
                 "profile": profile_name,
