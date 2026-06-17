@@ -125,6 +125,16 @@ def format_review_markdown(
         f"dateUpdated: {today}",
     ]
 
+    # Numeric scoring foundation (slice 300): emit score/criteria as top-level
+    # frontmatter only when present. A score-less result is byte-for-byte
+    # unchanged. provenance is never emitted here (reserved — slice 301).
+    if result.score is not None:
+        lines.append(f"score: {result.score}")
+    if result.criteria is not None:
+        lines.append("criteria:")
+        for name, value in result.criteria.items():
+            lines.append(f"  {name}: {value}")
+
     if result.findings:
         lines.append("findings:")
         for sf in result.structured_findings:
