@@ -711,3 +711,81 @@ class TestExistingFormatsRegression:
         result = parse_review_output(text, "code", {})
         assert len(result.findings) == 1
         assert result.findings[0].severity == expected
+
+
+# Score-bearing fixture: the minimal shape slice 300 pins — a top-level
+# ``score:`` line. NOT the structured-output/JSON shape (that is slice 302).
+SCORE_BEARING = """\
+## Summary
+PASS
+
+score: 87.5
+
+## Findings
+
+### [PASS] Looks good
+No issues found.
+"""
+
+# Criteria-bearing fixture: a ``criteria:`` YAML-map block of indented
+# ``key: <number>`` lines — the same shape ``format_review_markdown`` emits.
+CRITERIA_BEARING = """\
+## Summary
+PASS
+
+score: 88
+criteria:
+  alignment: 90
+  clarity: 80.5
+"""
+
+
+class TestScoreExtraction:
+    """Numeric scoring foundation (slice 300): optional score/criteria parse."""
+
+    def test_score_less_real_fixture_is_none(self) -> None:
+        """A real existing-template output carries no score (regression guard)."""
+        result = parse_review_output(WELL_FORMED_CONCERNS, "code", {})
+        assert result.score is None
+        assert result.criteria is None
+        # Verdict + findings parse exactly as before.
+        assert result.verdict == Verdict.CONCERNS
+        assert len(result.findings) == 3
+
+    def test_score_bearing_fixture_extracts_float(self) -> None:
+        result = parse_review_output(SCORE_BEARING, "code", {})
+        assert result.score == 87.5
+        # Existing extraction is unaffected.
+        assert result.verdict == Verdict.PASS
+        assert len(result.findings) == 1
+
+    def test_criteria_bearing_fixture_extracts_map(self) -> None:
+        result = parse_review_output(CRITERIA_BEARING, "code", {})
+        assert result.criteria == {"alignment": 90.0, "clarity": 80.5}
+        assert result.score == 88.0
+
+    def test_parser_never_sets_provenance(self) -> None:
+        assert parse_review_output(SCORE_BEARING, "code", {}).provenance is None
+
+    # --- Failure-mode table (each its own assertion) ---
+
+    def test_non_numeric_score_is_none(self) -> None:
+        result = parse_review_output("## Summary\nPASS\nscore: high\n", "code", {})
+        assert result.score is None
+
+    @pytest.mark.parametrize("token", ["inf", "Inf", "INF", "nan", "NaN", "-inf"])
+    def test_non_finite_score_is_none(self, token: str) -> None:
+        result = parse_review_output(f"## Summary\nPASS\nscore: {token}\n", "code", {})
+        assert result.score is None
+
+    def test_multiple_score_lines_first_wins(self) -> None:
+        text = "## Summary\nPASS\nscore: 10\nscore: 20\n"
+        assert parse_review_output(text, "code", {}).score == 10.0
+
+    def test_malformed_criteria_is_none_as_whole(self) -> None:
+        text = "## Summary\nPASS\ncriteria:\n  alignment: high\n  clarity: 80\n"
+        assert parse_review_output(text, "code", {}).criteria is None
+
+    def test_out_of_range_score_is_not_clamped(self) -> None:
+        """Range-checking is NOT done here (slice 301's job)."""
+        assert parse_review_output("## Summary\nPASS\nscore: 150\n", "code", {}).score == 150.0
