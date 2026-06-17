@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -143,6 +144,39 @@ class TestFormatReviewMarkdown:
         md = format_review_markdown(result, "code", _make_slice_info())
         assert "No specific findings." in md
         assert "findings:" not in md
+
+
+class TestFormatReviewMarkdownScore:
+    """Numeric scoring foundation (slice 300): frontmatter score/criteria."""
+
+    def test_score_bearing_has_top_level_score_line(self) -> None:
+        result = _make_result()
+        result.score = 87.5
+        md = format_review_markdown(result, "code", _make_slice_info())
+        # Greppable top-level score line, per the slice's success criteria.
+        assert re.search(r"^score: 87\.5$", md, re.MULTILINE)
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["score"] == 87.5
+
+    def test_score_less_result_has_no_score_line(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", _make_slice_info())
+        assert re.search(r"^score:", md, re.MULTILINE) is None
+        assert re.search(r"^criteria:", md, re.MULTILINE) is None
+
+    def test_criteria_present_emits_block(self) -> None:
+        result = _make_result()
+        result.score = 88.0
+        result.criteria = {"alignment": 90.0, "clarity": 80.5}
+        md = format_review_markdown(result, "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["criteria"] == {"alignment": 90.0, "clarity": 80.5}
+
+    def test_criteria_absent_has_no_block(self) -> None:
+        result = _make_result()
+        result.score = 88.0  # score present, criteria absent
+        md = format_review_markdown(result, "code", _make_slice_info())
+        assert re.search(r"^criteria:", md, re.MULTILINE) is None
 
 
 # ---------------------------------------------------------------------------
