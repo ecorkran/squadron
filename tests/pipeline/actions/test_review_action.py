@@ -53,6 +53,8 @@ def _make_context(**overrides: object) -> ActionContext:
 def _make_review_result(
     verdict: Verdict = Verdict.CONCERNS,
     model: str | None = "claude-sonnet-4-20250514",
+    score: float | None = None,
+    criteria: dict[str, float] | None = None,
 ) -> ReviewResult:
     """Build a canned ReviewResult with structured findings."""
     return ReviewResult(
@@ -72,6 +74,8 @@ def _make_review_result(
         input_files={"cwd": "/tmp/test"},
         timestamp=datetime(2026, 4, 1, 12, 0, 0),
         model=model,
+        score=score,
+        criteria=criteria,
     )
 
 
@@ -204,6 +208,57 @@ class TestReviewExecuteHappyPath:
 
         result = await ReviewAction().execute(_make_context())
         assert result.outputs["response"] == review_result.raw_output
+
+
+# ---------------------------------------------------------------------------
+# Execute — numeric scoring foundation (slice 300)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewScoreThreading:
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_score_and_criteria_threaded(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result(score=87.5, criteria={"alignment": 90.0})
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.score == 87.5
+        assert result.criteria == {"alignment": 90.0}
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_score_less_result_yields_none(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.score is None
+        assert result.criteria is None
+        # The action never sets provenance (reserved for slice 301).
+        assert result.provenance is None
 
 
 # ---------------------------------------------------------------------------
