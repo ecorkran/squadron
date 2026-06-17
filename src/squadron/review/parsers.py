@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 import sys
 from datetime import UTC, datetime
@@ -45,6 +46,20 @@ _SEVERITY_MAP: dict[str, Severity] = {
     "CONCERN": Severity.CONCERN,
     "FAIL": Severity.FAIL,
 }
+
+# Numeric scoring foundation (slice 300). Lenient, judging-unaware extraction.
+# A top-level ``score: <number>`` line — case-insensitive label, leading
+# whitespace tolerated, value captured up to end of line. First match wins.
+_SCORE_RE = re.compile(r"^[ \t]*score:[ \t]*(.+?)[ \t]*$", re.IGNORECASE | re.MULTILINE)
+
+# A top-level ``criteria:`` label introducing an indented YAML-map block.
+# Captures the label's own indent (group 1) so the block scan can stop at the
+# first line that is not more-indented than the label (i.e. dedents out).
+_CRITERIA_LABEL_RE = re.compile(r"^([ \t]*)criteria:[ \t]*$", re.IGNORECASE | re.MULTILINE)
+
+# A single ``key: <number>`` entry inside a criteria block. The value is
+# validated as a finite float separately; this only splits key from value.
+_CRITERIA_ENTRY_RE = re.compile(r"^[ \t]+([^:\n]+?):[ \t]*(.+?)[ \t]*$")
 
 # Matches "## Summary" section followed by a verdict keyword (possibly bold)
 _SUMMARY_RE = re.compile(
@@ -105,6 +120,74 @@ def _extract_verdict(text: str) -> Verdict:
         return Verdict.UNKNOWN
     keyword = match.group(1).upper()
     return _VERDICT_MAP.get(keyword, Verdict.UNKNOWN)
+
+
+def _parse_finite_float(raw: str) -> float | None:
+    """Parse a string to a finite float, or None.
+
+    Returns None for non-numeric values and for inf/nan — a non-finite value
+    is meaningless as a 0-100 quantity. Never raises. No range check (a value
+    outside 0-100 is still a parseable number; range validation is slice 301).
+    """
+    try:
+        value = float(raw)
+    except ValueError:
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
+def _extract_score(text: str) -> float | None:
+    """Extract an optional top-level ``score: <number>`` value.
+
+    Lenient and judging-unaware: returns None when no ``score:`` line is
+    present, when the value is non-numeric, or when it is non-finite. First
+    ``score:`` line wins (consistent with ``_extract_verdict`` taking the
+    first ``## Summary`` match). Never raises; never range-checks.
+    """
+    match = _SCORE_RE.search(text)
+    if match is None:
+        return None
+    return _parse_finite_float(match.group(1))
+
+
+def _extract_criteria(text: str) -> dict[str, float] | None:
+    """Extract an optional ``criteria:`` YAML-map block.
+
+    Recognized shape: a top-level ``criteria:`` label followed by an indented
+    block of ``key: <number>`` lines (the frontmatter map idiom emitted by
+    ``format_review_markdown``). Returns the parsed ``dict[str, float]`` or
+    None. The whole map becomes None (never a partial/coerced map) when the
+    block is absent, empty, or any entry's value is not a finite number.
+    Never raises. The structured-output/JSON variant is slice 302.
+    """
+    label = _CRITERIA_LABEL_RE.search(text)
+    if label is None:
+        return None
+
+    label_indent = len(label.group(1).expandtabs())
+    # `$` in MULTILINE matches before the newline, so the slice begins with the
+    # label line's trailing newline; lstrip it so the first block line is first.
+    block = text[label.end() :].lstrip("\n")
+    lines = block.splitlines()
+
+    criteria: dict[str, float] = {}
+    for line in lines:
+        if not line.strip():
+            break  # blank line ends the block
+        indent = len(line[: len(line) - len(line.lstrip())].expandtabs())
+        if indent <= label_indent:
+            break  # dedent ends the block
+        entry = _CRITERIA_ENTRY_RE.match(line)
+        if entry is None:
+            return None  # malformed line inside the block → whole map None
+        value = _parse_finite_float(entry.group(2))
+        if value is None:
+            return None  # non-finite/non-numeric value → whole map None
+        criteria[entry.group(1).strip()] = value
+
+    return criteria or None
 
 
 def _normalize_location(
@@ -440,6 +523,12 @@ def parse_review_output(
     if cwd is not None:
         _check_path_existence(findings, cwd, template_name=template_name)
 
+    # Numeric scoring foundation (slice 300): optional, lenient extraction.
+    # Absent or malformed → None (silent — a score-less review is the norm).
+    # provenance is never set by the parser (reserved field — slice 301).
+    score = _extract_score(raw_output)
+    criteria = _extract_criteria(raw_output)
+
     return ReviewResult(
         verdict=verdict,
         findings=findings,
@@ -448,4 +537,6 @@ def parse_review_output(
         input_files=input_files,
         model=model,
         fallback_used=fallback_used,
+        score=score,
+        criteria=criteria,
     )
