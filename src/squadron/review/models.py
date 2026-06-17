@@ -64,6 +64,12 @@ class ReviewResult:
     timestamp: datetime = field(default_factory=datetime.now)
     model: str | None = None
     fallback_used: bool = False
+    # Numeric scoring foundation (slice 300) — all optional, default None.
+    # score/criteria are populated by the parser when present; provenance is a
+    # reserved field (added here, never set or read in this slice — slice 301).
+    score: float | None = None
+    criteria: dict[str, float] | None = None
+    provenance: str | None = None
     # Prompt capture fields — populated at verbosity >= 2, excluded from to_dict()
     system_prompt: str | None = None
     user_prompt: str | None = None
@@ -98,6 +104,9 @@ class ReviewResult:
             "input_files": self.input_files,
             "timestamp": self.timestamp.isoformat(),
             "model": self.model,
+            "score": self.score,
+            "criteria": self.criteria,
+            "provenance": self.provenance,
         }
 
     @property
