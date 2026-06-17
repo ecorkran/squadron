@@ -313,6 +313,56 @@ class TestStepCallback:
         assert all(isinstance(ar, dict) for ar in ar_list)
 
 
+def _make_step_with_scores(scores: list[float | None]) -> StepResult:
+    """A completed step whose actions carry the given scores."""
+    return StepResult(
+        step_name="review",
+        step_type="review",
+        status=ExecutionStatus.COMPLETED,
+        action_results=[
+            ActionResult(success=True, action_type="review", outputs={}, score=s) for s in scores
+        ],
+    )
+
+
+class TestStepCallbackScore:
+    """Numeric scoring foundation (slice 300): StepState.score hoist."""
+
+    def test_score_hoisted_from_action(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_with_scores([87.5]))
+        state = state_manager.load(run_id)
+        assert state.completed_steps[0].score == 87.5
+
+    def test_no_action_score_is_none(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_with_scores([None]))
+        state = state_manager.load(run_id)
+        assert state.completed_steps[0].score is None
+
+    def test_last_non_none_score_wins(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_with_scores([10.0, 20.0, None]))
+        state = state_manager.load(run_id)
+        # Mirrors the verdict hoist: last non-None, scanning from the end.
+        assert state.completed_steps[0].score == 20.0
+
+    def test_old_run_state_without_score_loads(self) -> None:
+        """A StepState JSON written before slice 300 deserializes with score None."""
+        legacy = {
+            "step_name": "review",
+            "step_type": "review",
+            "status": "completed",
+            "verdict": "PASS",
+            "completed_at": datetime.now(UTC).isoformat(),
+        }
+        step = StepState.model_validate(legacy)
+        assert step.score is None
+
+
 # ---------------------------------------------------------------------------
 # T10: finalize tests
 # ---------------------------------------------------------------------------
