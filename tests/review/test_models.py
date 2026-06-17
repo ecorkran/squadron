@@ -287,6 +287,61 @@ class TestReviewResult:
         assert r.to_dict()["findings"] == []
 
 
+class TestReviewResultScoreFields:
+    """Numeric scoring foundation (slice 300): score/criteria/provenance."""
+
+    def _base(self, **overrides: object) -> ReviewResult:
+        kwargs: dict[str, object] = dict(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="",
+            template_name="t",
+            input_files={},
+        )
+        kwargs.update(overrides)
+        return ReviewResult(**kwargs)  # type: ignore[arg-type]
+
+    def test_defaults_none(self) -> None:
+        r = self._base()
+        assert r.score is None
+        assert r.criteria is None
+        assert r.provenance is None
+
+    def test_round_trips_explicit_values(self) -> None:
+        r = self._base(score=87.5, criteria={"alignment": 90.0}, provenance="judge")
+        assert r.score == 87.5
+        assert r.criteria == {"alignment": 90.0}
+        assert r.provenance == "judge"
+
+    def test_to_dict_includes_keys_when_set(self) -> None:
+        r = self._base(score=87.5, criteria={"alignment": 90.0}, provenance="judge")
+        d = r.to_dict()
+        assert {"score", "criteria", "provenance"} <= d.keys()
+        assert d["score"] == 87.5
+        assert d["criteria"] == {"alignment": 90.0}
+        assert d["provenance"] == "judge"
+
+    def test_to_dict_keys_none_when_unset(self) -> None:
+        d = self._base().to_dict()
+        assert d["score"] is None
+        assert d["criteria"] is None
+        assert d["provenance"] is None
+
+    def test_existing_shape_keys_unchanged(self) -> None:
+        """An existing-shape result still serializes its prior keys."""
+        d = self._base().to_dict()
+        for key in (
+            "verdict",
+            "findings",
+            "structured_findings",
+            "template_name",
+            "input_files",
+            "timestamp",
+            "model",
+        ):
+            assert key in d
+
+
 class TestStructuredFindingsProperty:
     """ReviewResult.structured_findings computed property."""
 
