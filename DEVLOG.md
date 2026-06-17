@@ -12,6 +12,25 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260617
+
+### Slice 301: Judge Enforcement Layer — Design Complete
+
+Authored `301-slice.judge-enforcement-layer.md`. No commits (design-only phase).
+
+**Design decisions committed:**
+- Judge templates identified by presence of a `judge:` YAML block (not naming convention — project rule forbids string dispatch). Block carries default `pass_floor`/`concerns_floor` thresholds.
+- `ReviewTemplate.judge: dict[str, object] | None` + `is_judge` property; `JudgeThresholds` and enforcement logic live in a new `pipeline/actions/judge.py`, keeping the template model a thin data carrier.
+- `enforce_judge()` is a pure function (logger injected); independently testable without action context.
+- Provenance set for ALL results from this slice forward: `"judge"` for judge templates, `"review"` for standard templates — completing the self-describing guarantee from 300.
+- Exception path (provider down, missing inputs) for judge templates returns `verdict="UNKNOWN"` rather than `verdict=None`, so checkpoints fire correctly.
+- Conservative defaults: `pass_floor=75`, `concerns_floor=50` (constants in `judge.py`).
+- Step-level override via `judge: {pass_floor: N}` in pipeline YAML; passed through from `ReviewStepType.expand()` to action params.
+
+**Pending:** PM review of design before task breakdown (Phase 5).
+
+---
+
 ## 20260531
 
 ### Initiative 300 scope reduction + Initiative 320 + orchestrator Future Work — Design
