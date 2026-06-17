@@ -35,6 +35,11 @@ class ActionResult:
     metadata: dict[str, object] = field(default_factory=dict[str, object])
     verdict: str | None = None
     findings: list[object] = field(default_factory=list[object])
+    # Numeric scoring foundation (slice 300) — mirror the optional verdict field.
+    # provenance is reserved (added here, never set or read this slice — 301).
+    score: float | None = None
+    criteria: dict[str, float] | None = None
+    provenance: str | None = None
 
 
 @dataclass
