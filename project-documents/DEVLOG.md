@@ -10,6 +10,42 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260625 (2)
+
+### Initiative 340 — Skill Pack Infrastructure: Slice Plan Complete
+
+**Completed:** Slice plan written at `user/architecture/340-slices.skill-pack-infrastructure.md`. Four slices across Foundation, Feature, and Integration sections.
+
+**Slice summary:**
+- **(340) Command Surface Spike** — Closes the dispatch-vs-prefix open question empirically. Time-boxed; outcome updates the arch doc. Effort 1/5.
+- **(341) Manifest Format + `sq skills install/list`** — Core mechanism: `skills.toml` schema, source resolution (bundled/local/git), file-copy installer. Effort 3/5.
+- **(342) Analysis Pack (Bundled)** — Ships `tech-debt-analyze` (and others) as `commands/analysis/` in the wheel; one-command install via `sq skills install analysis`. Effort 2/5.
+- **(343) `sq skills uninstall` + `sq doctor` integration** — Completes the CLI surface; `sq doctor` gains a Skill Packs section. Effort 1/5.
+
+**Next step:** Spike slice 340 when ready to begin implementation.
+
+---
+
+## 20260625
+
+### Initiative 340 — Skill Pack Infrastructure: Architecture Complete
+
+**Completed:** Initiative 340 added to the initiative plan and architecture document written.
+
+**Context:** Squadron's growing use for analysis of existing codebases surfaced a gap — useful external skills (tech-debt-analyze, understand-anything, etc.) have no principled install path alongside first-party commands. This initiative adds a thin, opt-in skill pack mechanism: a TOML manifest + `sq skills install/list` that copies external skill markdown files into `~/.claude/commands/<prefix>/`, exactly mirroring the existing `install-commands` pattern.
+
+**Key decisions captured in arch:**
+- Prefix-per-pack model (`/analysis:tech-debt`) keeps `/sq:*` clean; open question is whether a dispatch router (`/sq:analysis <skill>`) is a viable UX alternative — resolved by a planned spike slice.
+- File copy is the delivery primitive; no runtime indirection, no loader, no daemon involvement.
+- Analysis pack ships bundled in the wheel (parallel to `commands/sq/`); external sources (local path, git ref) supported by manifest format.
+- Squadron owns the analysis pack; third-party packs are supported by format but not hosted.
+
+**Shipped:** `user/architecture/340-arch.skill-pack-infrastructure.md`, initiative entry in `001-initiative-plan.squadron.md` (index 340, cross-dep entry added).
+
+**Next step:** Slice plan (`340-slices.skill-pack-infrastructure.md`) with spike slice as first entry.
+
+---
+
 ## 20260617
 
 ### Initiative 300 — Slice 300 (Numeric Scoring Foundation): Phase 6 Implementation Complete
