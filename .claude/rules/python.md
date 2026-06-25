@@ -23,13 +23,13 @@ paths:
 - Import Policy: Keep `from __future__ import annotations` for 3.12/3.13 projects to resolve forward references cleanly. (Remove only once strictly on 3.14+).
 
 #### Code Style & Structure
-- Follow PEP 8 with 104-character line length
+- Follow PEP 8 with 88-character line length
 - Formatter: Use `ruff` for both linting and formatting (replaces Black/Isort/Flake8 due to speed).
 - Required ruff configuration: every project MUST have a `[tool.ruff.lint]` block in `pyproject.toml` selecting at minimum `["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]`. `BLE` (blind-except) and `ASYNC` (async correctness) mechanically enforce the exception-handling and event-loop-discipline rules elsewhere in this guide. Copy-paste baseline:
 
     ```toml
     [tool.ruff]
-    line-length = 104
+    line-length = 88
 
     [tool.ruff.lint]
     select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]
