@@ -69,7 +69,10 @@ status: not_started
   - [ ] Routes `tech-debt-audit` → delegates to `/analysis:tech-debt-audit`
   - [ ] For unrecognized skill names, print usage and stop
   - [ ] Usage line: `/sq:analysis tech-debt-audit [target]`
-  - [ ] Success: file exists at `commands/sq/analysis.md`; content follows dispatcher pattern; `sq install-commands` includes it in its output
+  - [ ] Run `sq install-commands` — verify output lists `sq/analysis.md` among installed files
+  - [ ] Verify `~/.claude/commands/sq/analysis.md` exists after install
+  - [ ] Manual Claude Code check: invoke `/sq:analysis tech-debt-audit` in a Claude Code session and confirm it routes to the tech-debt-audit skill (cannot be automated; record result as a comment)
+  - [ ] Success: file exists at `commands/sq/analysis.md`; `sq install-commands` installs it; dispatcher routes correctly when invoked in Claude Code
 
 - [ ] **T7: Commit checkpoint — data package and manifest extension**
   - [ ] Run `ruff format src/squadron/ tests/skills/` — no changes
