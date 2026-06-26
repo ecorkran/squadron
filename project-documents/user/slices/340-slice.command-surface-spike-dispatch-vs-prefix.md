@@ -7,6 +7,7 @@ project: squadron
 dateCreated: 20260625
 dateUpdated: 20260625
 status: complete
+slice: command-surface-spike-dispatch-vs-prefix
 ---
 
 # Slice Design: Command Surface Spike — Dispatch vs. Prefix

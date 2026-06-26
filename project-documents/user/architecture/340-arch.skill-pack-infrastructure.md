@@ -5,6 +5,8 @@ initiative: 340
 dateCreated: 20260625
 dateUpdated: 20260625
 status: in_progress
+archIndex: 340
+component: skill-pack-infrastructure
 ---
 
 # Architecture: Skill Pack Infrastructure
