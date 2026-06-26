@@ -16,16 +16,16 @@ status: not_started
 
 ## Overview
 
-This slice creates the first bundled skill pack for squadron: the `analysis` pack. It adds a `commands/analysis/` directory to the repo (parallel to `commands/sq/`), populates it with the `tech-debt-analyze` skill and a dispatch router, wires it into the wheel via `pyproject.toml`, and registers it in a default `skills.toml` that ships with the package. After install, `sq skills install analysis` is a one-command on-ramp that works offline with no GitHub token.
+This slice creates the first bundled skill pack for squadron: the `analysis` pack. It adds a `commands/analysis/` directory to the repo (parallel to `commands/sq/`), populates it with the `tech-debt-audit` skill and a dispatch router, wires it into the wheel via `pyproject.toml`, and registers it in a default `skills.toml` that ships with the package. After install, `sq skills install analysis` is a one-command on-ramp that works offline with no GitHub token.
 
 ## Value
 
-Users working on existing codebases can get the `tech-debt-analyze` skill (and future analysis skills) in one command, without manual file management. The pack demonstrates the bundled source type end-to-end, validates the installer infrastructure built in 341, and serves as the reference implementation for `sq doctor` integration in 343.
+Users working on existing codebases can get the `tech-debt-audit` skill (and future analysis skills) in one command, without manual file management. The pack demonstrates the bundled source type end-to-end, validates the installer infrastructure built in 341, and serves as the reference implementation for `sq doctor` integration in 343.
 
 ## Technical Scope
 
 ### In scope
-- `commands/analysis/` directory with at minimum `tech-debt-analyze.md`
+- `commands/analysis/` directory with at minimum `tech-debt-audit.md`
 - A dispatcher `analysis.md` in `commands/sq/` enabling `/sq:analysis <skill>` (dispatch model from spike 340; mirrors the existing pattern in `commands/sq/`)
 - Default `skills.toml` shipped with the package, pre-declaring the analysis pack
 - `pyproject.toml` packaging — `commands/analysis/` already covered by the existing `force-include` rule; verify and document
@@ -35,7 +35,7 @@ Users working on existing codebases can get the `tech-debt-analyze` skill (and f
 ### Out of scope
 - `sq doctor` integration (slice 343)
 - `sq skills uninstall` (slice 343)
-- Additional analysis skills beyond `tech-debt-analyze` (future work; directory structure supports them trivially)
+- Additional analysis skills beyond `tech-debt-audit` (future work; directory structure supports them trivially)
 
 ## Dependencies
 
@@ -52,7 +52,7 @@ commands/
   sq/
     analysis.md         # NEW: dispatch router — /sq:analysis <skill>
   analysis/
-    tech-debt-analyze.md  # NEW: the analysis skill
+    tech-debt-audit.md  # NEW: the analysis skill
 
 src/squadron/
   data/
@@ -78,7 +78,7 @@ The `resolve_source()` path for `bundled` already exists (slice 341). This slice
 
 ### Dispatch Router: `/sq:analysis`
 
-`commands/sq/analysis.md` is a new entry in the existing `sq` command set — installed by `sq install-commands`, not by `sq skills install`. It acts as a top-level dispatcher: `/sq:analysis tech-debt` delegates to `/analysis:tech-debt-analyze` (or invokes the skill logic directly, following the dispatch pattern confirmed in spike 340).
+`commands/sq/analysis.md` is a new entry in the existing `sq` command set — installed by `sq install-commands`, not by `sq skills install`. It acts as a top-level dispatcher: `/sq:analysis tech-debt` delegates to `/analysis:tech-debt-audit` (or invokes the skill logic directly, following the dispatch pattern confirmed in spike 340).
 
 The content of `analysis.md` should follow the same structural pattern as other `commands/sq/*.md` dispatchers in the repo.
 
@@ -109,11 +109,9 @@ bundles the entire `commands/` tree into the wheel as `squadron/commands/`. Addi
 
 The `src/squadron/data/` directory (for `skills.toml`) must be added as a package data include. Hatch picks up `src/squadron/data/` automatically if it contains an `__init__.py` or is explicitly listed. The simplest approach: create `src/squadron/data/__init__.py` (empty) so `importlib.resources` can resolve `squadron.data`. Alternatively, declare it in `pyproject.toml` under `[tool.hatch.build.targets.wheel]`. Prefer the `__init__.py` approach for consistency with how `squadron/commands/` is resolved.
 
-### `tech-debt-analyze.md` content
+### `tech-debt-audit.md` content
 
-The content is the forked `tech-debt-analyze` skill that the team currently uses manually. This slice treats the content as an input from the Project Manager — the skill file should be provided (or adapted from the existing forked version). The slice does not author a new skill from scratch; it packages an existing one.
-
-If the skill content is not available at slice-start, a clearly-marked placeholder `tech-debt-analyze.md` with `# TODO: replace with skill content` is acceptable to unblock packaging and CLI wiring, with a note that content must be provided before the slice is considered complete.
+Content sourced from `github:ecorkran/tech-debt-audit` (MIT license, forked from `ksimback/tech-debt-skill`). The file is stored as `commands/analysis/tech-debt-audit.md` in the squadron repo with an attribution comment prepended. The file has been created; no further content decisions needed.
 
 ### `resolve_source("bundled")` for `analysis` pack
 
@@ -132,11 +130,11 @@ The resolver currently resolves `bundled` as `squadron/commands/<pack-name>/`. F
 ## Success Criteria
 
 ### Functional Requirements
-1. `commands/analysis/tech-debt-analyze.md` exists in the repo and the installed wheel.
-2. `commands/sq/analysis.md` exists and, when invoked as `/sq:analysis tech-debt`, routes to the tech-debt-analyze skill.
+1. `commands/analysis/tech-debt-audit.md` exists in the repo and the installed wheel.
+2. `commands/sq/analysis.md` exists and, when invoked as `/sq:analysis tech-debt`, routes to the tech-debt-audit skill.
 3. `sq skills list` shows the `analysis` pack (source=bundled, not-installed) without any user-created `skills.toml`.
 4. `sq skills install analysis` installs the pack with no network access and reports success.
-5. After install, `~/.claude/commands/analysis/tech-debt-analyze.md` exists and can be invoked in a Claude Code session as `/analysis:tech-debt-analyze`.
+5. After install, `~/.claude/commands/analysis/tech-debt-audit.md` exists and can be invoked in a Claude Code session as `/analysis:tech-debt-audit`.
 6. A second `sq skills install analysis` is idempotent.
 
 ### Technical Requirements
@@ -161,7 +159,7 @@ sq skills list
 sq skills install analysis
 # Installed pack 'analysis': 1 file(s) → /Users/<you>/.claude/commands/analysis
 ls ~/.claude/commands/analysis/
-# tech-debt-analyze.md
+# tech-debt-audit.md
 ```
 
 **3. List shows installed**
@@ -174,7 +172,7 @@ sq skills list
 
 Open a Claude Code session in any repo and run:
 ```
-/analysis:tech-debt-analyze
+/analysis:tech-debt-audit
 ```
 Claude Code should recognise and invoke the skill.
 
@@ -183,7 +181,7 @@ Claude Code should recognise and invoke the skill.
 sq install-commands    # installs commands/sq/analysis.md alongside other sq commands
 # then in Claude Code:
 # /sq:analysis tech-debt
-# → routes to tech-debt-analyze skill
+# → routes to tech-debt-audit skill
 ```
 
 **6. Idempotent reinstall**
@@ -197,7 +195,7 @@ sq skills install analysis
 ```bash
 pip install --dry-run dist/squadron-*.whl 2>&1 | grep -q analysis || true
 python -c "from importlib.resources import files; print(list((files('squadron') / 'commands' / 'analysis').iterdir()))"
-# Should list tech-debt-analyze.md
+# Should list tech-debt-audit.md
 python -c "from importlib.resources import files; print((files('squadron') / 'data' / 'skills.toml').read_text())"
 # Should print the TOML content
 ```
@@ -207,12 +205,12 @@ python -c "from importlib.resources import files; print((files('squadron') / 'da
 ### Development Order
 1. Create `src/squadron/data/__init__.py` and `src/squadron/data/skills.toml` — shortest path to verifying `load_effective()` extension
 2. Extend `manifest.py`'s `load_effective()` to load the shipped default as base layer; update tests
-3. Add `commands/analysis/tech-debt-analyze.md` (content from existing forked skill)
+3. Add `commands/analysis/tech-debt-audit.md` (content from existing forked skill)
 4. Add `commands/sq/analysis.md` dispatcher
 5. End-to-end smoke test per walkthrough above
 
 ### Testing
 - Unit test: `load_effective()` returns analysis pack entry even when no user/project manifest exists
 - Unit test: user manifest overrides the default entry for the same pack name
-- Integration smoke test: `sq skills install analysis` (invoked in test against a temp `commands_dir`) copies `tech-debt-analyze.md`
+- Integration smoke test: `sq skills install analysis` (invoked in test against a temp `commands_dir`) copies `tech-debt-audit.md`
 - Network tests are not needed; this slice has no external dependencies

@@ -13,11 +13,11 @@ status: not_started
 ## Context Summary
 
 - Working on slice 342: analysis pack (bundled)
-- Adds `commands/analysis/tech-debt-analyze.md`, `commands/sq/analysis.md` dispatcher, and `src/squadron/data/skills.toml` default manifest
+- Adds `commands/analysis/tech-debt-audit.md`, `commands/sq/analysis.md` dispatcher, and `src/squadron/data/skills.toml` default manifest
 - Only code change to existing modules: extend `manifest.py`'s `load_effective()` to load the shipped default as a base layer
 - `commands/analysis/` is covered by the existing `pyproject.toml` `force-include` rule — no packaging changes for commands
 - `src/squadron/data/skills.toml` requires a new `src/squadron/data/__init__.py` for `importlib.resources` resolution
-- `tech-debt-analyze.md` skill content must be provided by the Project Manager; a placeholder is acceptable to unblock wiring tasks
+- Skill content sourced from `github:ecorkran/tech-debt-audit` (MIT, forked from `ksimback/tech-debt-skill`); file already created at `commands/analysis/tech-debt-audit.md`
 - Next: slice 343 (`sq skills uninstall` and `sq doctor` integration)
 
 ---
@@ -58,23 +58,17 @@ status: not_started
   - [ ] Test: `load_effective()` result has `origin == "merged"` when user manifest is present alongside the default
   - [ ] Success: `pytest tests/skills/test_manifest.py` — all pass (including pre-existing tests)
 
-- [ ] **T5: Add `commands/analysis/` directory and skill file**
-  - [ ] Create directory `commands/analysis/`
-  - [ ] Create `commands/analysis/tech-debt-analyze.md` — use skill content provided by Project Manager, or if not yet available, create a placeholder:
-    ```markdown
-    # tech-debt-analyze
-
-    > **TODO:** Replace this placeholder with the tech-debt-analyze skill content before completing slice 342.
-    ```
+- [ ] **T5: Verify `commands/analysis/tech-debt-audit.md`**
+  - [ ] File already exists at `commands/analysis/tech-debt-audit.md` (attribution comment + skill content from `github:ecorkran/tech-debt-audit`)
   - [ ] Verify packaging: `python -c "from importlib.resources import files; print(list((files('squadron') / 'commands' / 'analysis').iterdir()))"`
-  - [ ] Success: command lists `tech-debt-analyze.md`; file is non-empty (or placeholder is clearly marked)
+  - [ ] Success: command lists `tech-debt-audit.md`; file is non-empty
 
 - [ ] **T6: Add `commands/sq/analysis.md` dispatcher**
   - [ ] Create `commands/sq/analysis.md` following the existing dispatcher pattern (see `commands/sq/run.md` for structure)
-  - [ ] The dispatcher reads `$ARGUMENTS`; the first word is the skill name (e.g. `tech-debt`)
-  - [ ] Routes `tech-debt` → delegates to `/analysis:tech-debt-analyze` 
+  - [ ] The dispatcher reads `$ARGUMENTS`; the first word is the skill name (e.g. `tech-debt-audit`)
+  - [ ] Routes `tech-debt-audit` → delegates to `/analysis:tech-debt-audit`
   - [ ] For unrecognized skill names, print usage and stop
-  - [ ] Usage line: `/sq:analysis tech-debt [target]`
+  - [ ] Usage line: `/sq:analysis tech-debt-audit [target]`
   - [ ] Success: file exists at `commands/sq/analysis.md`; content follows dispatcher pattern; `sq install-commands` includes it in its output
 
 - [ ] **T7: Commit checkpoint — data package and manifest extension**
@@ -94,7 +88,7 @@ status: not_started
 - [ ] **T9: CLI smoke test — `sq skills install analysis`**
   - [ ] Run `sq skills install analysis`
   - [ ] Expected output: `Installed pack 'analysis': 1 file(s) → .../.claude/commands/analysis`
-  - [ ] Verify: `ls ~/.claude/commands/analysis/` shows `tech-debt-analyze.md`
+  - [ ] Verify: `ls ~/.claude/commands/analysis/` shows `tech-debt-audit.md`
   - [ ] Run `sq skills install analysis` a second time — no error (idempotent)
   - [ ] Run `sq skills list` — `analysis` row shows `Status=Installed`
   - [ ] Success: all steps above pass
@@ -102,8 +96,8 @@ status: not_started
 - [ ] **T10: Integration test — install pack via test fixture**
   - [ ] In `tests/skills/test_installer.py` (or a new `tests/skills/test_analysis_pack.py`), add a test that:
     1. Calls `install_pack("analysis", PackEntry(source="bundled", prefix="analysis"), commands_dir=tmp_path)` 
-    2. Asserts `(tmp_path / "analysis" / "tech-debt-analyze.md").exists()`
-    3. Asserts `InstallResult.files_written` contains `"tech-debt-analyze.md"`
+    2. Asserts `(tmp_path / "analysis" / "tech-debt-audit.md").exists()`
+    3. Asserts `InstallResult.files_written` contains `"tech-debt-audit.md"`
   - [ ] Success: `pytest tests/skills/` — all pass
 
 - [ ] **T11: Full validation pass**
