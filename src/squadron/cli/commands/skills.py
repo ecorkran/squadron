@@ -37,7 +37,11 @@ def install(
     ),
 ) -> None:
     """Install a skill pack from the active manifest."""
-    manifest = load_effective(cwd=Path.cwd())
+    try:
+        manifest = load_effective(cwd=Path.cwd())
+    except ValueError as exc:
+        rprint(f"[red]Error loading skills.toml: {exc}[/red]")
+        raise typer.Exit(code=1)
     if manifest is None:
         _require_manifest()
         return  # unreachable; satisfies type checker
@@ -67,7 +71,11 @@ def list_packs(
     ),
 ) -> None:
     """List skill packs from the active manifest with install status."""
-    manifest = load_effective(cwd=Path.cwd())
+    try:
+        manifest = load_effective(cwd=Path.cwd())
+    except ValueError as exc:
+        rprint(f"[red]Error loading skills.toml: {exc}[/red]")
+        raise typer.Exit(code=1)
     if manifest is None:
         _require_manifest()
         return

@@ -3,7 +3,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from squadron.skills.models import PackEntry
 
@@ -28,7 +28,10 @@ def load(path: Path) -> SkillsManifest:
         except tomllib.TOMLDecodeError as exc:
             raise ValueError(f"Could not parse skills.toml at {path}: {exc}") from exc
 
-    packs = {name: PackEntry(**entry) for name, entry in data.get("packs", {}).items()}
+    try:
+        packs = {name: PackEntry(**entry) for name, entry in data.get("packs", {}).items()}
+    except (ValidationError, TypeError) as exc:
+        raise ValueError(f"Invalid pack entry in skills.toml at {path}: {exc}") from exc
     return SkillsManifest(packs=packs, origin=str(path))
 
 

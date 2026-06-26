@@ -6,7 +6,7 @@ index: 341
 project: squadron
 dateCreated: 20260625
 dateUpdated: 20260625
-status: not_started
+status: complete
 slice: manifest-format-and-sq-skills-install-list
 ---
 
@@ -197,6 +197,8 @@ Add one line: `app.add_typer(skills_app, name="skills")` and the corresponding i
 
 Prereq: squadron installed in dev mode; `commands/analysis/` exists (slice 342) OR substitute any local directory with `.md` files for the bundled-source steps.
 
+> **Implementation note:** `ValidationError` from malformed `PackEntry` entries in the TOML is now caught by `load()` and re-raised as `ValueError` with path context. The CLI catches `ValueError` from `load_effective()` and prints an actionable error. Step 5 below reflects this behavior.
+
 **1. Local-path source install**
 ```bash
 mkdir -p /tmp/test-pack
@@ -209,31 +211,34 @@ prefix = "test-pack"
 EOF
 
 sq skills install test
-# Expected: "Installed 1 file(s) to ~/.claude/commands/test-pack/"
+# Output: Installed pack 'test': 1 file(s) → /Users/<you>/.claude/commands/test-pack
 
 ls ~/.claude/commands/test-pack/
-# Expected: hello.md
+# Output: hello.md
 ```
 
 **2. List with status**
 ```bash
 sq skills list
-# Expected table showing "test" as installed, other manifest entries with their status
+# Output: Rich table with Pack/Source/Surface/Status/Origin columns
+#         "test" row shows Source="/tmp/test-pack", Status="Installed"
 ```
 
 **3. Idempotent reinstall**
 ```bash
 sq skills install test
-# Expected: same success output, no error; hello.md overwritten silently
+# Output: Installed pack 'test': 1 file(s) → /Users/<you>/.claude/commands/test-pack
+# (no error; hello.md overwritten silently)
 ```
 
 **4. Unknown pack**
 ```bash
 sq skills install nonexistent
-# Expected: "Pack 'nonexistent' not found in skills.toml. Available packs: test"
+# exit code 1
+# Output: Pack 'nonexistent' not found in skills.toml. Available: test
 ```
 
-**5. Invalid manifest entry**
+**5. Invalid manifest entry (both prefix and dispatch_file)**
 ```bash
 cat >> ~/.config/squadron/skills.toml << 'EOF'
 [packs.broken]
@@ -243,14 +248,18 @@ dispatch_file = "b"
 EOF
 
 sq skills install broken
-# Expected: validation error — "Pack 'broken': prefix and dispatch_file are mutually exclusive"
+# exit code 1
+# Output: Error loading skills.toml: Invalid pack entry in skills.toml at
+#         ~/.config/squadron/skills.toml: 1 validation error for PackEntry
+#           Value error, PackEntry must have exactly one of 'prefix' or 'dispatch_file', not both.
 ```
 
 **6. No manifest**
 ```bash
 mv ~/.config/squadron/skills.toml /tmp/skills-backup.toml
 sq skills list
-# Expected: "No skills.toml found. Create one at ~/.config/squadron/skills.toml to manage skill packs."
+# exit code 1
+# Output: No skills.toml found. Create one at ~/.config/squadron/skills.toml to manage skill packs.
 mv /tmp/skills-backup.toml ~/.config/squadron/skills.toml
 ```
 
@@ -263,13 +272,15 @@ prefix = "ghtest"
 EOF
 
 sq skills install gh-test
-# Expected: clones, copies .md files found, reports count; or actionable error if no .md files at root
+# Expected: clones repo, copies .md files found at repo root, reports count
+# Note: if no .md files exist at repo root, files_written will be empty (0 file(s))
 ```
 
 **8. Missing git binary (simulated)**
 ```bash
 PATH_SAVE=$PATH; export PATH=/usr/bin  # strip git from PATH
 sq skills install gh-test
-# Expected: "git is required to install packs from GitHub sources. Install git and retry."
+# exit code 1
+# Output: Error: Cannot install pack 'gh-test' from GitHub: 'git' is not on PATH. Install git and try again.
 export PATH=$PATH_SAVE
 ```
