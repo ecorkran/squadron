@@ -10,6 +10,23 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260625 (5)
+
+### Initiative 340 — Slice 340 (Command Surface Spike): Complete
+
+**Completed:** Phase 6 implementation of the command surface spike.
+
+**Decision:** Dispatch model is reliable. All four test cases passed — routing fired correctly, `<skill-args>` arrived intact, listing rendered cleanly, unknown-skill error was clear. Verdict: dispatch reliable.
+
+**Artifacts updated:**
+- `user/slices/340-slice.command-surface-spike-dispatch-vs-prefix.md` — Spike Results filled, status: complete
+- `user/architecture/340-arch.skill-pack-infrastructure.md` — "Open dispatch question" principle and technical consideration updated to reflect adopted dispatch model
+- `user/architecture/340-slices.skill-pack-infrastructure.md` — Slice 340 checked off
+
+**Next step:** Slice 341 slice design — manifest format + `sq skills install/list` (supports both `dispatch_file` and `prefix` options per the spike outcome).
+
+---
+
 ## 20260625 (4)
 
 ### Initiative 340 — Slice 340 (Command Surface Spike): Phase 5 Task Breakdown Complete

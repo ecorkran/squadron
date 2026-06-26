@@ -4,7 +4,7 @@ project: squadron
 initiative: 340
 dateCreated: 20260625
 dateUpdated: 20260625
-status: draft
+status: in_progress
 ---
 
 # Architecture: Skill Pack Infrastructure
@@ -30,7 +30,7 @@ Squadron's first-party slash commands are bundled in the wheel and installed via
 - **File copy is the delivery primitive** — `sq skills install` writes markdown files to `~/.claude/commands/<prefix>/`. No runtime indirection; no loader; no daemon involvement. The installed file IS the capability.
 - **Manifest is declarative, not executable** — `skills.toml` names packs and their sources. It does not describe installation logic. Squadron resolves and copies; the manifest does not run.
 - **Prefix per pack, not per skill** — each pack owns a command prefix (e.g. `analysis`), installing skills as `/analysis:tech-debt`, `/analysis:understand`. This keeps `/sq:*` first-party only and makes pack membership visible at the command surface without a routing layer.
-- **Open dispatch question** — whether `/sq:analysis <skill>` dispatch via a single router file is a viable UX alternative to per-prefix commands is an open question requiring a spike. The spike is a planned slice; the manifest design must not foreclose either outcome.
+- **Dispatch model adopted** — spike (slice 340) confirmed that `/sq:analysis <skill>` dispatch via a single router file is reliable: arguments pass through intact, routing is correct, and UX is equivalent to direct invocation. The manifest format (slice 341) will support a `dispatch_file` option alongside `prefix`, allowing packs to choose either surface.
 - **Squadron owns the analysis pack** — the bundled `analysis` pack lives in the squadron repo (like `commands/sq/`), sourced from the same wheel. Third-party packs are supported by the manifest format but the analysis pack is the reference implementation.
 
 ## Current State
@@ -61,7 +61,7 @@ The analysis pack (bundled) includes the forked `tech-debt-analyze` skill and an
 
 ## Technical Considerations
 
-- **Command surface open question** — the prefix-per-pack model (`/analysis:tech-debt`) is clean but means pack commands feel disconnected from squadron. A dispatch router (`/sq:analysis tech-debt` → routes via `analysis.md`) would unify the surface but requires Claude Code to pass arguments reliably through a markdown dispatcher — not verified. A spike slice closes this before the manifest design commits to prefix-only.
+- **Command surface: dispatch model adopted** — spike (slice 340) verified that a markdown dispatcher passes arguments reliably through Claude Code. The dispatch model (`/sq:analysis tech-debt`) is adopted; the manifest format will support `dispatch_file` as an alternative to `prefix`. Both models remain available; pack authors choose at manifest time.
 - **Git source fetch scope** — supporting `github:org/repo` sources requires fetching remote content at install time. Scope should be minimal: shallow clone or single-file download, no version pinning in v1. Pin/update semantics deferred.
 - **Bundled pack delivery** — the analysis pack ships as `commands/analysis/` in the wheel, parallel to `commands/sq/`. `importlib.resources` already handles this path; no new packaging mechanism needed.
 - **Per-project vs. user-level manifest** — a project-local `skills.toml` enables project-specific pack sets (e.g. a security pack only for security-audit projects). User-level is the default; project-level overrides or extends. Merge semantics need a decision at slice design time.

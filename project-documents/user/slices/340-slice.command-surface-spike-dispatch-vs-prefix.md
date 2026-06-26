@@ -6,7 +6,7 @@ index: 340
 project: squadron
 dateCreated: 20260625
 dateUpdated: 20260625
-status: needs-implementation
+status: complete
 ---
 
 # Slice Design: Command Surface Spike — Dispatch vs. Prefix
@@ -136,4 +136,22 @@ Claude Code slash command invocation
 
 ## Spike Results
 
-*(To be filled in after the spike runs.)*
+**Verdict: dispatch reliable**
+
+All four test cases passed. Arguments arrived intact in all routing cases.
+
+| Test | Invocation | Expected | Observed | Pass? |
+|------|-----------|----------|----------|-------|
+| 1 | `/sq:analysis tech-debt android/` | routes to tech-debt stub; args `android/` intact | "tech-debt skill invoked with args: android/" | ✓ |
+| 2 | `/sq:analysis understand android/src` | routes to understand stub; args `android/src` intact | "understand skill invoked with args: android/src" | ✓ |
+| 3 | `/sq:analysis` (no args) | skill listing appears | listing rendered correctly (tech-debt, understand) | ✓ |
+| 4 | `/sq:analysis fake` | unknown-skill error | "Unknown skill \"fake\". Available: tech-debt, understand." | ✓ |
+
+**Observations:**
+- Routing fired correctly in all cases with no intermediate preamble or confusion.
+- `<skill-args>` passed through without modification in both routed cases.
+- Empty-args listing was clean and unambiguous.
+- Unknown-skill error message was clear and actionable.
+- User experience is equivalent to a direct invocation.
+
+**Decision:** Adopt the dispatch model. The manifest format (slice 341) will support a `dispatch_file` option alongside `prefix`.
