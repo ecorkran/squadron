@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 from rich import print as rprint
@@ -10,7 +11,12 @@ from rich.console import Console
 from rich.table import Table
 
 from squadron.skills.installer import install_pack
-from squadron.skills.manifest import load_effective
+from squadron.skills.manifest import (
+    PROJECT_MANIFEST_NAME,
+    USER_MANIFEST,
+    load,
+    load_effective,
+)
 from squadron.skills.models import SkillSourceError
 
 _DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
@@ -18,8 +24,8 @@ _DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
 skills_app = typer.Typer(name="skills", help="Manage skill packs.", no_args_is_help=True)
 
 
-def _require_manifest() -> None:
-    """Print actionable message and exit if no manifest is found."""
+def _require_manifest() -> NoReturn:
+    """Print actionable message and exit — always raises typer.Exit."""
     rprint(
         "[yellow]No skills.toml found. Create one at "
         "~/.config/squadron/skills.toml to manage skill packs.[/yellow]"
@@ -44,7 +50,6 @@ def install(
         raise typer.Exit(code=1)
     if manifest is None:
         _require_manifest()
-        return  # unreachable; satisfies type checker
 
     if pack_name not in manifest.packs:
         available = ", ".join(sorted(manifest.packs)) or "(none)"
@@ -78,7 +83,6 @@ def list_packs(
         raise typer.Exit(code=1)
     if manifest is None:
         _require_manifest()
-        return
 
     table = Table(title="Skill Packs")
     table.add_column("Pack", style="bold")
@@ -98,7 +102,6 @@ def list_packs(
         installed = dest.exists() and (dest.is_dir() and any(dest.iterdir()) or dest.is_file())
         status = "[green]Installed[/green]" if installed else "[dim]Not installed[/dim]"
 
-        # Determine origin: which manifest file declared this pack
         origin = manifest.origin if manifest.origin != "merged" else _detect_origin(name)
 
         table.add_row(name, entry.source, surface, status, origin)
@@ -107,28 +110,28 @@ def list_packs(
 
 
 def _detect_origin(pack_name: str) -> str:
-    """For merged manifests, check which level declared the pack."""
-    from squadron.skills.manifest import PROJECT_MANIFEST_NAME, USER_MANIFEST
+    """For merged manifests, report which level declared the pack.
 
+    Project-level is checked first — this matches merge semantics where project
+    wins on collision. Errors loading either manifest are silently ignored here
+    because _detect_origin is best-effort display info; the earlier load_effective()
+    call would have already surfaced any parse errors before we reach this point.
+    """
     user_m = None
     proj_m = None
 
     if USER_MANIFEST.exists():
-        from squadron.skills.manifest import load
-
         try:
             user_m = load(USER_MANIFEST)
         except (ValueError, OSError):
-            pass
+            pass  # best-effort; load_effective already validated on the main path
 
     project_path = Path.cwd() / PROJECT_MANIFEST_NAME
     if project_path.exists():
-        from squadron.skills.manifest import load
-
         try:
             proj_m = load(project_path)
         except (ValueError, OSError):
-            pass
+            pass  # best-effort; same rationale as above
 
     if proj_m and pack_name in proj_m.packs:
         return "project"

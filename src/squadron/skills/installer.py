@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import shutil
-import tempfile
 from pathlib import Path
 
 from squadron.skills.models import InstallResult, PackEntry, SkillSourceError
-from squadron.skills.resolver import resolve_source
+from squadron.skills.resolver import clone_github, resolve_source
 
 
 def install_pack(pack_name: str, entry: PackEntry, commands_dir: Path) -> InstallResult:
@@ -16,21 +15,12 @@ def install_pack(pack_name: str, entry: PackEntry, commands_dir: Path) -> Instal
 
     Raises SkillSourceError on bad source (propagated from resolver).
     """
-    is_github = entry.source.startswith("github:")
-
-    if is_github:
-        return _install_with_temp_dir(pack_name, entry, commands_dir)
-    return _install_from_path(pack_name, entry, commands_dir, resolve_source(entry, pack_name))
-
-
-def _install_with_temp_dir(pack_name: str, entry: PackEntry, commands_dir: Path) -> InstallResult:
-    tmp = tempfile.mkdtemp(prefix="squadron-skills-install-")
-    try:
-        # Temporarily patch the already-cloned path from resolver
+    if entry.source.startswith("github:"):
+        with clone_github(entry.source, pack_name) as tmp_dir:
+            return _install_from_path(pack_name, entry, commands_dir, Path(tmp_dir))
+    else:
         source_path = resolve_source(entry, pack_name)
         return _install_from_path(pack_name, entry, commands_dir, source_path)
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _install_from_path(

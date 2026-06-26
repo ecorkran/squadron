@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from squadron.skills.models import PackEntry, SkillSourceError
-from squadron.skills.resolver import resolve_source
+from squadron.skills.resolver import clone_github, resolve_source
 
 
 class TestAbsolutePath:
@@ -42,22 +42,36 @@ class TestUnknownSource:
         with pytest.raises(SkillSourceError, match="s3://bucket/path"):
             resolve_source(entry, "mything")
 
+    def test_github_source_via_resolve_raises(self) -> None:
+        # resolve_source does not handle github: — use clone_github() instead
+        entry = PackEntry(source="github:org/repo", prefix="therepo")
+        with pytest.raises(SkillSourceError, match="clone_github"):
+            resolve_source(entry, "therepo")
+
 
 class TestGithubNoGit:
     def test_missing_git_raises_with_install_hint(self) -> None:
-        entry = PackEntry(source="github:org/repo", prefix="therepo")
         with patch("squadron.skills.resolver.shutil.which", return_value=None):
             with pytest.raises(SkillSourceError, match="git"):
-                resolve_source(entry, "therepo")
+                clone_github("github:org/repo", "therepo")
+
+    def test_cleanup_on_clone_failure(self) -> None:
+        # When clone fails, no temp directory should be left behind
+        with patch("squadron.skills.resolver.shutil.which", return_value="/usr/bin/git"):
+            with patch("squadron.skills.resolver.subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 128
+                mock_run.return_value.stderr = b"fatal: repository not found"
+                with pytest.raises(SkillSourceError, match="Failed to clone"):
+                    clone_github("github:org/repo", "therepo")
 
 
 @pytest.mark.network
 class TestGithubClone:
-    def test_clone_succeeds(self, tmp_path: Path) -> None:
-        # This test requires network access and a real git binary.
-        entry = PackEntry(source="github:anthropics/anthropic-cookbook", prefix="cookbook")
-        path = resolve_source(entry, "cookbook")
-        assert path.is_dir()
-        import shutil
-
-        shutil.rmtree(str(path), ignore_errors=True)
+    def test_clone_succeeds_and_cleans_up(self) -> None:
+        # Requires network access and a real git binary.
+        tmp = clone_github("github:anthropics/anthropic-cookbook", "cookbook")
+        cloned_path = Path(tmp.name)
+        assert cloned_path.is_dir()
+        assert any(cloned_path.iterdir()), "Clone should contain at least one file"
+        tmp.cleanup()
+        assert not cloned_path.exists(), "TemporaryDirectory.cleanup() should remove the clone"
