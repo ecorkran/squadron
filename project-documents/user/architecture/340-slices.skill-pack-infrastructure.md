@@ -46,7 +46,7 @@ Slices are ordered: spike → manifest/installer → analysis pack → CLI polis
    - **Dependencies:** [340] (command surface decision informs prefix vs. dispatch).
    - **Risk:** Low–Medium (git fetch path is new; local and bundled paths are trivial). **Effort:** 3/5.
 
-3. [ ] **(342) Analysis Pack (Bundled)** — Package the forked `tech-debt-analyze` skill and any other analysis-oriented skills into a bundled `analysis` pack shipped with the squadron wheel. The pack lives at `commands/analysis/` in the repo (parallel to `commands/sq/`), bundled via the same `pyproject.toml` `commands` include. The manifest's default `skills.toml` (or a shipped default) includes the `analysis` pack entry with `source = "bundled"`. Running `sq skills install analysis` installs it in one command; `sq doctor` reports the pack's presence.
+3. [x] **(342) Analysis Pack (Bundled)** — Package the forked `tech-debt-analyze` skill and any other analysis-oriented skills into a bundled `analysis` pack shipped with the squadron wheel. The pack lives at `commands/analysis/` in the repo (parallel to `commands/sq/`), bundled via the same `pyproject.toml` `commands` include. The manifest's default `skills.toml` (or a shipped default) includes the `analysis` pack entry with `source = "bundled"`. Running `sq skills install analysis` installs it in one command; `sq doctor` reports the pack's presence.
    - **Value:** User value — `sq skills install analysis` is the one-command on-ramp for existing-codebase analysis work; ships the forked tech-debt-analyze skill in a principled, updateable location.
    - **Success Criteria:**
      - `commands/analysis/` exists in the repo and wheel with at least `tech-debt-analyze.md`.

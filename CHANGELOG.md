@@ -17,8 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`sq skills install <pack>`** — install a skill pack from a `skills.toml` manifest. Supports local paths, bundled packs, and GitHub sources (`github:<org>/<repo>`). Copies `.md` files to `~/.claude/commands/<prefix>/` or the dispatch file location. Idempotent.
-- **`sq skills list`** — show all packs in the active manifest with their source, surface type, and install status (Installed / Not installed).
+- **`sq skills list`** — show all packs in the active manifest with their source, surface type, and install status (Installed / Not installed). The `analysis` pack is now visible out of the box (no `skills.toml` required).
 - **`skills.toml` manifest format** — declare skill packs at `~/.config/squadron/skills.toml` (user-level) and/or `<project>/.squadron/skills.toml` (project-level). Project-level entries win on name collision.
+- **`analysis` skill pack** — bundled with squadron. Run `sq skills install analysis` to install the `tech-debt-audit` skill to `~/.claude/commands/analysis/`. Works offline with no GitHub token.
+- **`/sq:analysis` dispatcher** — routes `/sq:analysis tech-debt-audit` to the installed tech-debt-audit skill. Install via `sq install-commands`.
+- **Shipped default manifest** — squadron now ships a built-in `skills.toml` that pre-declares the `analysis` pack, so `sq skills list` shows available packs even before the user creates their own manifest.
 - Review results can now carry an optional numeric **score** (0–100) and a per-criterion **criteria** breakdown alongside the existing PASS/CONCERNS/FAIL verdict. When a review response includes a top-level `score:` line, the score is parsed and surfaced as a first-class field: written to the review file's frontmatter as a top-level `score:` (greppable without reading the body), included in JSON output, and recorded on the run state. Score-less reviews are unchanged. (Foundation for upcoming LLM-as-judge scoring; no review template emits a score yet.)
 
 ## [0.6.1] - 20260604
