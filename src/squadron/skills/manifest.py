@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 from squadron.skills.models import PackEntry
 
-_USER_MANIFEST = Path.home() / ".config" / "squadron" / "skills.toml"
-_PROJECT_MANIFEST_NAME = ".squadron/skills.toml"
+USER_MANIFEST = Path.home() / ".config" / "squadron" / "skills.toml"
+PROJECT_MANIFEST_NAME = ".squadron/skills.toml"
 
 
 class SkillsManifest(BaseModel):
@@ -46,11 +46,11 @@ def load_effective(cwd: Path | None = None) -> SkillsManifest | None:
     user_manifest: SkillsManifest | None = None
     project_manifest: SkillsManifest | None = None
 
-    if _USER_MANIFEST.exists():
-        user_manifest = load(_USER_MANIFEST)
+    if USER_MANIFEST.exists():
+        user_manifest = load(USER_MANIFEST)
 
     if cwd is not None:
-        project_path = cwd / _PROJECT_MANIFEST_NAME
+        project_path = cwd / PROJECT_MANIFEST_NAME
         if project_path.exists():
             project_manifest = load(project_path)
 

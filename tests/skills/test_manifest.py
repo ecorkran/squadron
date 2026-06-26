@@ -74,7 +74,7 @@ class TestMerge:
 
 class TestLoadEffective:
     def test_no_files_returns_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr("squadron.skills.manifest._USER_MANIFEST", tmp_path / "no-such.toml")
+        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", tmp_path / "no-such.toml")
         result = load_effective(cwd=tmp_path)
         assert result is None
 
@@ -83,7 +83,7 @@ class TestLoadEffective:
     ) -> None:
         user_file = tmp_path / "skills.toml"
         user_file.write_text(VALID_TOML)
-        monkeypatch.setattr("squadron.skills.manifest._USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
         result = load_effective(cwd=tmp_path)
         assert result is not None
         assert result.origin == str(user_file)
@@ -91,7 +91,7 @@ class TestLoadEffective:
     def test_both_files_returns_merged(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         user_file = tmp_path / "skills-user.toml"
         user_file.write_text('[packs.user_pack]\nsource = "bundled"\nprefix = "user"\n')
-        monkeypatch.setattr("squadron.skills.manifest._USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
 
         project_dir = tmp_path / "project"
         project_dir.mkdir()

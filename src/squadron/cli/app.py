@@ -23,6 +23,7 @@ from squadron.cli.commands.run import run as run_command
 from squadron.cli.commands.serve import serve
 from squadron.cli.commands.setup import setup
 from squadron.cli.commands.shutdown import shutdown
+from squadron.cli.commands.skills import skills_app
 from squadron.cli.commands.spawn import spawn
 from squadron.cli.commands.summary_instructions import summary_instructions
 from squadron.cli.commands.summary_run import summary_run
@@ -48,6 +49,7 @@ app.add_typer(models_app, name="models")
 app.add_typer(pools_app, name="pools")
 app.add_typer(config_app, name="config")
 app.add_typer(auth_app, name="auth")
+app.add_typer(skills_app, name="skills")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
 app.command("setup")(setup)
