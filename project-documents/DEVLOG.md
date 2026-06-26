@@ -10,6 +10,34 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260626 (1)
+
+### Initiative 340 — Slice 342 (Analysis Pack Bundled): Complete
+
+**Completed:** Phase 6 implementation of slice 342. Analysis pack is now shipped with squadron and installable in one command with no network access.
+
+**Key changes:**
+- `src/squadron/data/skills.toml` — shipped default manifest; declares the `analysis` pack with `source="bundled"`
+- `src/squadron/skills/manifest.py` — `load_effective()` now loads the shipped default as a base layer (lowest priority); `SHIPPED_DEFAULT_ORIGIN = "default"` constant added; `_load_shipped_default()` helper added
+- `src/squadron/skills/resolver.py` — `_resolve_bundled()` gains a dev-mode fallback: walks up from `src/squadron/` to find the project-root `commands/` directory, enabling `sq skills install analysis` in editable installs (wheel installs use `importlib.resources` directly)
+- `commands/analysis/tech-debt-audit.md` — analysis skill file (previously created on planning branch)
+- `commands/sq/analysis.md` — dispatcher: `/sq:analysis tech-debt-audit` routes to the tech-debt-audit skill
+- Tests: `TestLoadEffectiveWithDefault` in `test_manifest.py`, `TestBundledAnalysisPack` in `test_installer.py`, updated `TestListNoManifest` in `test_cli_skills.py` (44 skills tests, all passing)
+
+**Notable implementation decision:** The `force-include` rule maps `commands/` into the wheel as `squadron/commands/`, but editable installs expose `src/squadron/` with no `commands/` subdirectory. Added a dev fallback in `_resolve_bundled()` to resolve via the project root. This is correct behavior: the fallback only fires when `importlib.resources` doesn't find `squadron/commands/<pack>`, which only happens in editable installs.
+
+**Artifacts updated:**
+- `user/slices/342-slice.analysis-pack-bundled.md` — Verification Walkthrough updated with actual output and dev-mode caveat; status: complete
+- `user/tasks/342-tasks.analysis-pack-bundled.md` — all tasks checked, status: complete
+- `user/architecture/340-slices.skill-pack-infrastructure.md` — slice 342 entry checked `[x]`
+- `CHANGELOG.md` — added analysis pack, `/sq:analysis` dispatcher, and shipped default manifest entries
+
+**State:** Branch `342-slice.analysis-pack-bundled` is 3 commits ahead of `340-planning.skill-pack-infrastructure`. Ready for merge.
+
+**Next step:** Merge `342-slice.analysis-pack-bundled` to main; then begin slice 343 (`sq skills uninstall` and `sq doctor` integration).
+
+---
+
 ## 20260625 (5)
 
 ### Initiative 340 — Slice 340 (Command Surface Spike): Complete

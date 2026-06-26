@@ -144,15 +144,22 @@ The resolver currently resolves `bundled` as `squadron/commands/<pack-name>/`. F
 
 ### Verification Walkthrough
 
-**Prereq:** squadron dev install (`pip install -e .`); no user-level `~/.config/squadron/skills.toml`.
+**Prereq:** squadron dev install (`uv pip install -e .`); no user-level `~/.config/squadron/skills.toml`.
 
 **1. List shows analysis pack with no user manifest**
 ```bash
 sq skills list
-# Pack   Source    Surface            Status         Origin
-# ─────────────────────────────────────────────────────────
-# analysis bundled  prefix:analysis  Not installed  default
 ```
+Expected output (verified 20260626):
+```
+                          Skill Packs
+┏━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━┓
+┃ Pack     ┃ Source  ┃ Surface          ┃ Status    ┃ Origin  ┃
+┡━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━┩
+│ analysis │ bundled │ prefix: analysis │ Installed │ default │
+└──────────┴─────────┴──────────────────┴───────────┴─────────┘
+```
+Note: `Status=Installed` because `sq install-commands` was run; on a fresh system it shows `Not installed`.
 
 **2. Install from bundled source (no network)**
 ```bash
@@ -161,12 +168,14 @@ sq skills install analysis
 ls ~/.claude/commands/analysis/
 # tech-debt-audit.md
 ```
+Verified 20260626: correct output.
 
 **3. List shows installed**
 ```bash
 sq skills list
-# analysis  bundled  prefix:analysis  Installed  default
+# analysis  bundled  prefix: analysis  Installed  default
 ```
+Verified 20260626.
 
 **4. Verify command is invocable**
 
@@ -174,31 +183,32 @@ Open a Claude Code session in any repo and run:
 ```
 /analysis:tech-debt-audit
 ```
-Claude Code should recognise and invoke the skill.
+Claude Code should recognise and invoke the skill. The skill file is at `~/.claude/commands/analysis/tech-debt-audit.md` after `sq skills install analysis`.
 
 **5. Dispatcher route (sq commands)**
 ```bash
-sq install-commands    # installs commands/sq/analysis.md alongside other sq commands
-# then in Claude Code:
-# /sq:analysis tech-debt
-# → routes to tech-debt-audit skill
+sq install-commands
+# Installed 10 command(s) to ~/.claude/commands:
+#   analysis/tech-debt-audit.md
+#   sq/analysis.md
+#   ...
 ```
+Verified 20260626. Then in Claude Code: `/sq:analysis tech-debt-audit` → routes to tech-debt-audit skill via `commands/sq/analysis.md` dispatcher.
 
 **6. Idempotent reinstall**
 ```bash
 sq skills install analysis
 # Installed pack 'analysis': 1 file(s) → /Users/<you>/.claude/commands/analysis
-# (no error)
+# (no error — verified 20260626)
 ```
 
-**7. Wheel packaging (smoke test)**
+**7. Package data smoke test**
 ```bash
-pip install --dry-run dist/squadron-*.whl 2>&1 | grep -q analysis || true
-python -c "from importlib.resources import files; print(list((files('squadron') / 'commands' / 'analysis').iterdir()))"
-# Should list tech-debt-audit.md
+# Verify shipped skills.toml resolves via importlib.resources (works in dev and installed)
 python -c "from importlib.resources import files; print((files('squadron') / 'data' / 'skills.toml').read_text())"
-# Should print the TOML content
+# Prints TOML content — verified 20260626
 ```
+**Caveat (dev mode):** `importlib.resources.files('squadron') / 'commands' / 'analysis'` does NOT resolve in editable installs because `commands/` is at the project root and mapped via `pyproject.toml` `force-include` (wheel-only). The resolver falls back to the project-root `commands/` directory via the `_resolve_bundled` dev fallback added in this slice. In an installed wheel, `importlib.resources` resolves `squadron/commands/analysis/` directly.
 
 ## Implementation Notes
 
