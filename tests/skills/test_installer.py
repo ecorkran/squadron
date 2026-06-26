@@ -97,3 +97,23 @@ class TestMissingSource:
 
         with pytest.raises(SkillSourceError):
             install_pack("mypack", entry, commands_dir)
+
+
+class TestBundledAnalysisPack:
+    def test_install_analysis_pack_creates_tech_debt_audit(self, tmp_path: Path) -> None:
+        commands_dir = tmp_path
+        entry = PackEntry(source="bundled", prefix="analysis")
+
+        result = install_pack("analysis", entry, commands_dir)
+
+        assert (commands_dir / "analysis" / "tech-debt-audit.md").exists()
+        assert "tech-debt-audit.md" in result.files_written
+
+    def test_install_analysis_pack_result_fields(self, tmp_path: Path) -> None:
+        commands_dir = tmp_path
+        entry = PackEntry(source="bundled", prefix="analysis")
+
+        result = install_pack("analysis", entry, commands_dir)
+
+        assert result.pack_name == "analysis"
+        assert result.destination == commands_dir / "analysis"
