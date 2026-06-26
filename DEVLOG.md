@@ -12,6 +12,26 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260625
+
+### Slice 341: Manifest Format and `sq skills install/list` — Design Complete
+
+Authored `341-slice.manifest-format-and-sq-skills-install-list.md`. Slice plan entry updated with materialized index and doc link.
+
+**Design decisions committed:**
+
+- **Manifest location:** User-level at `~/.config/squadron/skills.toml`; project-level at `<cwd>/.squadron/skills.toml`. Merge rule: additive union — project-level entries extend user-level; same-named pack in project-level wins.
+- **Schema:** Each pack entry has `source` (one of `"bundled"`, absolute/relative path, `"github:<org>/<repo>"`) and exactly one of `prefix` or `dispatch_file`. Both or neither is a validation error at load time.
+- **Source resolution:** `"bundled"` → `importlib.resources` (same pattern as `_get_commands_source()`); local path → direct; `github:` → shallow `git clone --depth=1` to temp dir, copy `.md` files, discard. No version pinning in v1.
+- **Install semantics:** Additive within a pack's prefix directory (no deletion of pre-existing files not from the pack — that is `uninstall`'s job). Idempotent: second install overwrites files, reports success, no error.
+- **No manifest auto-creation:** Missing `skills.toml` produces an actionable message; we do not silently create a default file.
+- **Component structure:** New `squadron/skills/` subpackage (`manifest.py`, `resolver.py`, `installer.py`, `models.py`) with thin Typer layer at `cli/commands/skills.py`. `skills_app` added to `app.py` via `add_typer`.
+- **Pydantic for manifest model**; `tomllib` (stdlib) for parsing; `subprocess` + `git` for GitHub fetch; no new third-party dependencies.
+
+**Pending:** Phase 5 task breakdown, then Phase 6 implementation.
+
+---
+
 ## 20260617
 
 ### Slice 301: Judge Enforcement Layer — Design Complete
