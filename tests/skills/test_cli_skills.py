@@ -21,8 +21,21 @@ def _write_manifest(path: Path, content: str) -> None:
 
 
 class TestListNoManifest:
-    def test_exits_1_with_no_skills_toml(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_shows_shipped_default_when_no_user_skills_toml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # No user manifest — shipped default provides the analysis pack.
         monkeypatch.setattr(_USER_MANIFEST_ATTR, tmp_path / "no-such.toml")
+        result = runner.invoke(app, ["skills", "list", "--commands-dir", str(tmp_path / "commands")])
+        assert result.exit_code == 0, result.output
+        assert "analysis" in result.output
+
+    def test_exits_1_when_all_sources_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Patch out both user manifest and shipped default to assert the None path.
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, tmp_path / "no-such.toml")
+        monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
         result = runner.invoke(app, ["skills", "list", "--commands-dir", str(tmp_path / "commands")])
         assert result.exit_code == 1
         assert "No skills.toml found" in result.output

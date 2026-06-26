@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from squadron.skills.manifest import SkillsManifest, load, load_effective, merge
+from squadron.skills.manifest import (
+    SHIPPED_DEFAULT_ORIGIN,
+    SkillsManifest,
+    load,
+    load_effective,
+    merge,
+)
 from squadron.skills.models import PackEntry
 
 VALID_TOML = """
@@ -74,7 +80,9 @@ class TestMerge:
 
 class TestLoadEffective:
     def test_no_files_returns_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Patch out both user manifest and shipped default so we can assert the None path.
         monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", tmp_path / "no-such.toml")
+        monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
         result = load_effective(cwd=tmp_path)
         assert result is None
 
@@ -84,6 +92,7 @@ class TestLoadEffective:
         user_file = tmp_path / "skills.toml"
         user_file.write_text(VALID_TOML)
         monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
         result = load_effective(cwd=tmp_path)
         assert result is not None
         assert result.origin == str(user_file)
@@ -92,6 +101,7 @@ class TestLoadEffective:
         user_file = tmp_path / "skills-user.toml"
         user_file.write_text('[packs.user_pack]\nsource = "bundled"\nprefix = "user"\n')
         monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
 
         project_dir = tmp_path / "project"
         project_dir.mkdir()
@@ -106,3 +116,42 @@ class TestLoadEffective:
         assert result.origin == "merged"
         assert "user_pack" in result.packs
         assert "proj_pack" in result.packs
+
+
+class TestLoadEffectiveWithDefault:
+    def test_shipped_default_present_with_no_user_manifest(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # With no user or project manifest, load_effective() returns the analysis pack
+        # from the shipped default.
+        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", tmp_path / "no-such.toml")
+        result = load_effective(cwd=tmp_path)
+        assert result is not None
+        assert "analysis" in result.packs
+        assert result.origin == SHIPPED_DEFAULT_ORIGIN
+
+    def test_user_manifest_overrides_shipped_default_pack(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # User manifest with a different analysis entry wins; other shipped packs survive.
+        user_file = tmp_path / "skills.toml"
+        user_file.write_text('[packs.analysis]\nsource = "bundled"\nprefix = "custom-analysis"\n')
+        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+
+        result = load_effective(cwd=tmp_path)
+        assert result is not None
+        assert result.packs["analysis"].prefix == "custom-analysis"
+        assert result.origin == "merged"
+
+    def test_merged_origin_when_user_manifest_alongside_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_file = tmp_path / "skills.toml"
+        user_file.write_text('[packs.extra]\nsource = "bundled"\nprefix = "extra"\n')
+        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+
+        result = load_effective(cwd=tmp_path)
+        assert result is not None
+        assert result.origin == "merged"
+        assert "analysis" in result.packs
+        assert "extra" in result.packs
