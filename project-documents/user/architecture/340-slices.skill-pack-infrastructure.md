@@ -4,7 +4,7 @@ parent: 340-arch.skill-pack-infrastructure.md
 project: squadron
 dateCreated: 20260625
 dateUpdated: 20260625
-status: not_started
+status: in_progress
 ---
 
 # Slice Plan: Skill Pack Infrastructure
@@ -21,7 +21,7 @@ Slices are ordered: spike → manifest/installer → analysis pack → CLI polis
 
 ## Foundation Work
 
-1. [ ] **(340) Command Surface Spike — Dispatch vs. Prefix** — A focused, time-boxed spike to determine whether `/sq:analysis <skill>` (single dispatcher markdown file routing by first argument) is a reliably usable alternative to `/analysis:<skill>` (prefix-per-pack, a dedicated subdirectory). The spike prototype a minimal `analysis.md` dispatcher that reads its first argument and delegates; test against at least two skill invocations (e.g. `tech-debt` and `understand`) to verify Claude Code passes arguments through reliably and the dispatch does not lose context or mangle invocation. Document the finding as a one-page decision record. **If dispatch is reliable:** update the arch to adopt dispatch; the manifest format gains a `dispatch_file` option alongside `prefix`. **If dispatch is unreliable:** prefix-per-pack is confirmed; the arch note is closed. Either outcome unblocks slice 341.
+1. [ ] **(340) Command Surface Spike — Dispatch vs. Prefix** `340-slice.command-surface-spike-dispatch-vs-prefix.md` — A focused, time-boxed spike to determine whether `/sq:analysis <skill>` (single dispatcher markdown file routing by first argument) is a reliably usable alternative to `/analysis:<skill>` (prefix-per-pack, a dedicated subdirectory). The spike prototype a minimal `analysis.md` dispatcher that reads its first argument and delegates; test against at least two skill invocations (e.g. `tech-debt` and `understand`) to verify Claude Code passes arguments through reliably and the dispatch does not lose context or mangle invocation. Document the finding as a one-page decision record. **If dispatch is reliable:** update the arch to adopt dispatch; the manifest format gains a `dispatch_file` option alongside `prefix`. **If dispatch is unreliable:** prefix-per-pack is confirmed; the arch note is closed. Either outcome unblocks slice 341.
    - **Value:** Architectural enablement — closes the only open design question before manifest design commits.
    - **Success Criteria:**
      - Dispatch prototype exists and is exercised against at least two skill invocations.

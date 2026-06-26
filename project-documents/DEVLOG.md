@@ -10,6 +10,34 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260625 (4)
+
+### Initiative 340 — Slice 340 (Command Surface Spike): Phase 5 Task Breakdown Complete
+
+**Completed:** Task breakdown for the spike slice.
+
+**Shipped:** `user/tasks/340-tasks.command-surface-spike-dispatch-vs-prefix.md` — 8 tasks, 105 lines.
+
+**Task summary:** T1–T2 create the dispatcher and two stub files; T3 installs them; T4 runs the four prescribed test invocations; T5 records the decision in the slice design; T6 updates the arch doc; T7 removes spike files and re-syncs; T8 marks complete and commits.
+
+**Next step:** Phase 6 implementation — run the spike (T1–T8 above).
+
+---
+
+## 20260625 (3)
+
+### Initiative 340 — Slice 340 (Command Surface Spike): Phase 4 Slice Design Complete
+
+**Completed:** Slice design written for the command surface spike.
+
+**Shipped:** `user/slices/340-slice.command-surface-spike-dispatch-vs-prefix.md`
+
+**Design summary:** A time-boxed spike. Builds a minimal dispatcher markdown file (`analysis.md`) and two stub skill files, installs them via the existing `sq install-commands` path, and runs four test invocations to determine whether Claude Code reliably passes arguments through a dispatch file. Records findings in a `## Spike Results` section appended to the slice design doc. Updates `340-arch` with the closed decision. Stub files are removed after the decision is recorded. The spike has no persistent code deliverable — its output is a decision and an arch doc update that unblocks slice 341.
+
+**Next step:** Run the spike (Phase 6 implementation is just running four commands and recording observations), then move to slice 341 slice design.
+
+---
+
 ## 20260625 (2)
 
 ### Initiative 340 — Skill Pack Infrastructure: Slice Plan Complete
