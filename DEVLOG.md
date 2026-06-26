@@ -14,6 +14,26 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260625
 
+### Slice 341: Manifest Format and `sq skills install/list` — Implementation Complete
+
+All 14 tasks implemented on branch `341-slice.manifest-format-and-sq-skills-install-list`.
+
+**What was built:**
+- `squadron/skills/models.py` — `PackEntry` (Pydantic, validates exactly-one-surface), `InstallResult` (dataclass), `SkillSourceError`
+- `squadron/skills/manifest.py` — `load()`, `merge()`, `load_effective()`; `ValidationError` from malformed pack entries is caught and re-raised as `ValueError` with path context
+- `squadron/skills/resolver.py` — `resolve_source()`: bundled (importlib.resources), absolute/relative path, `github:` (shallow clone via subprocess+git)
+- `squadron/skills/installer.py` — `install_pack()`: copies `.md` files to `commands_dir/<prefix>/` or `commands_dir/sq/<dispatch_file>.md`
+- `cli/commands/skills.py` — `skills_app` Typer sub-app with `install` and `list` commands; Rich table for list; catches `SkillSourceError` and `ValueError` at CLI boundary
+- `app.py` — wired `skills_app` via `add_typer`
+
+**Tests:** 35 tests in `tests/skills/` (models, manifest, resolver, installer, CLI). All pass. 1 network-gated test (GitHub clone) skipped by default.
+
+**One design correction during implementation:** `_USER_MANIFEST` and `_PROJECT_MANIFEST_NAME` renamed to public `USER_MANIFEST` / `PROJECT_MANIFEST_NAME` (pyright strict rejects cross-module use of private names).
+
+**Commits:** `cdeb3a1` (subpackage foundation) + `b60ecd5` (installer, CLI, wiring).
+
+---
+
 ### Slice 341: Manifest Format and `sq skills install/list` — Task Breakdown Complete
 
 Authored `341-tasks.manifest-format-and-sq-skills-install-list.md` (14 tasks, 130 lines).

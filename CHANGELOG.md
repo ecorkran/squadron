@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`sq skills install <pack>`** — install a skill pack from a `skills.toml` manifest. Supports local paths, bundled packs, and GitHub sources (`github:<org>/<repo>`). Copies `.md` files to `~/.claude/commands/<prefix>/` or the dispatch file location. Idempotent.
+- **`sq skills list`** — show all packs in the active manifest with their source, surface type, and install status (Installed / Not installed).
+- **`skills.toml` manifest format** — declare skill packs at `~/.config/squadron/skills.toml` (user-level) and/or `<project>/.squadron/skills.toml` (project-level). Project-level entries win on name collision.
 - Review results can now carry an optional numeric **score** (0–100) and a per-criterion **criteria** breakdown alongside the existing PASS/CONCERNS/FAIL verdict. When a review response includes a top-level `score:` line, the score is parsed and surfaced as a first-class field: written to the review file's frontmatter as a top-level `score:` (greppable without reading the body), included in JSON output, and recorded on the run state. Score-less reviews are unchanged. (Foundation for upcoming LLM-as-judge scoring; no review template emits a score yet.)
 
 ## [0.6.1] - 20260604

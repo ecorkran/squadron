@@ -76,6 +76,9 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "network: marks tests that require network access (deselect with '-m \"not network\"')",
+]
 
 [tool.pyright]
 include = ["src"]
