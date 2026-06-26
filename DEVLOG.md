@@ -14,6 +14,22 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260625
 
+### Slice 341: Manifest Format and `sq skills install/list` — Task Breakdown Complete
+
+Authored `341-tasks.manifest-format-and-sq-skills-install-list.md` (14 tasks, 130 lines).
+
+**Task sequence summary:**
+- T1–T2: `skills/models.py` (`PackEntry`, `InstallResult`, `SkillSourceError`) + tests
+- T3–T4: `skills/manifest.py` (`load`, `merge`, `load_effective`) + tests
+- T5–T6: `skills/resolver.py` (bundled / local / github source resolution) + tests
+- T7: Commit checkpoint — subpackage foundation
+- T8–T9: `skills/installer.py` (file-copy install for prefix and dispatch_file) + tests
+- T10–T11: `cli/commands/skills.py` (Typer `install`/`list` sub-app) + wire into `app.py`
+- T12: CLI integration tests via Typer CliRunner
+- T13–T14: Full validation pass + final commit
+
+**Pending:** PM approval, then Phase 6 implementation.
+
 ### Slice 341: Manifest Format and `sq skills install/list` — Design Complete
 
 Authored `341-slice.manifest-format-and-sq-skills-install-list.md`. Slice plan entry updated with materialized index and doc link.
