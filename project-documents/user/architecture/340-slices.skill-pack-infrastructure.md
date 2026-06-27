@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 340-arch.skill-pack-infrastructure.md
 project: squadron
 dateCreated: 20260625
-dateUpdated: 20260625
+dateUpdated: 20260626
 status: in_progress
 ---
 
@@ -68,6 +68,16 @@ Slices are ordered: spike → manifest/installer → analysis pack → CLI polis
      - `sq doctor` output includes a Skill Packs section with per-pack installed/missing status and fix hints.
    - **Dependencies:** [342] (analysis pack is the reference for install/uninstall round-trip).
    - **Risk:** Low. **Effort:** 1/5.
+
+5. [ ] **(344) Add `understand-anything` to Analysis Pack** — Fork `github:Egonex-AI/Understand-Anything` (MIT) to `ecorkran/understand-anything`, extract `SKILL.md` from its non-standard path (`understand-anything-plugin/skills/understand/SKILL.md`), prepend attribution comment, and add as `commands/analysis/understand-anything.md` in the squadron repo. Update `commands/sq/analysis.md` dispatcher to route `understand-anything` → `/analysis:understand-anything`. Audit SKILL.md for self-references to the original `/understand` command name; patch any that would break under the analysis pack prefix. User tests the skill locally before the slice merges.
+   - **Value:** Extends the analysis pack with a full codebase knowledge-graph skill — 7-phase pipeline (scan → batch → analyze → assemble → architecture → tour → save), incremental git-diff updates, multi-agent parallel file analysis, outputs to `.understand-anything/` at repo root. Together with `tech-debt-audit`, the pack covers both debt discovery and deep structural understanding.
+   - **Skill details:** `github:Egonex-AI/Understand-Anything` (MIT, Copyright 2026 Yuxiang Lin and Infinite Universe Inc.). SKILL.md lives at `understand-anything-plugin/skills/understand/SKILL.md`. Invoked as `/understand [path] [--full|--auto-update|--no-auto-update|--review|--language <lang>]`. Outputs: `.understand-anything/knowledge-graph.json`, `config.json`, `meta.json`, intermediate working files. Requires: any git repo. Supports incremental updates via git diff fingerprinting. Multi-agent: up to 5 concurrent file-analyzer subagents.
+   - **Success Criteria:**
+     - `commands/analysis/understand-anything.md` present in repo with attribution comment; no broken self-references to `/understand`.
+     - `sq skills install analysis` installs both `tech-debt-audit.md` and `understand-anything.md` to `~/.claude/commands/analysis/`.
+     - `/analysis:understand-anything` (direct) and `/sq:analysis understand-anything` (dispatcher) both route correctly in Claude Code.
+     - User has verified the skill works locally on a real repo before merge.
+   - **Dependencies:** [342]. **Risk:** Low (file copy + dispatcher update; no code changes). **Effort:** 1/5.
 
 ---
 
