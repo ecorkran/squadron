@@ -72,11 +72,24 @@ def _resolve_bundled(pack_name: str) -> Path:
     try:
         pkg = importlib.resources.files("squadron") / "commands" / pack_name
         with importlib.resources.as_file(pkg) as path:
-            if not path.is_dir():
-                raise SkillSourceError(f"Bundled pack '{pack_name}' not found in squadron package.")
-            return path
-    except (TypeError, FileNotFoundError) as exc:
-        raise SkillSourceError(f"Bundled pack '{pack_name}' not found in squadron package.") from exc
+            if path.is_dir():
+                return path
+    except (TypeError, FileNotFoundError):
+        pass
+
+    # Fallback for editable installs: force-include maps project-root/commands/ into
+    # the wheel as squadron/commands/, but editable installs resolve to src/squadron/.
+    # Walk up from the package source to find the project-root commands/ directory.
+    try:
+        pkg_source = importlib.resources.files("squadron")
+        with importlib.resources.as_file(pkg_source) as pkg_path:
+            candidate = pkg_path.parent.parent / "commands" / pack_name
+            if candidate.is_dir():
+                return candidate
+    except (TypeError, FileNotFoundError):
+        pass
+
+    raise SkillSourceError(f"Bundled pack '{pack_name}' not found in squadron package.")
 
 
 def _resolve_absolute(path: Path, pack_name: str) -> Path:

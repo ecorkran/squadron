@@ -1,0 +1,6 @@
+# Default skill pack manifest shipped with squadron.
+# User and project-level skills.toml files override or extend these entries.
+
+[packs.analysis]
+source = "bundled"
+prefix = "analysis"

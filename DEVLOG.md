@@ -14,6 +14,33 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260625
 
+### Slice 342: Analysis Pack (Bundled) — Task Breakdown Complete
+
+Authored `342-tasks.analysis-pack-bundled.md` (12 tasks, 122 lines).
+
+Task sequence: branch/prereq check → data package + skills.toml → extend `load_effective()` → tests → commands/analysis/ + commands/sq/analysis.md → commit checkpoint → two CLI smoke tests → integration test → full validation → final commit.
+
+**Pending unblock:** `tech-debt-analyze.md` skill content needed from Project Manager (T5); placeholder acceptable to unblock T6–T12.
+
+---
+
+### Slice 342: Analysis Pack (Bundled) — Design Complete
+
+Authored `342-slice.analysis-pack-bundled.md`.
+
+**Key decisions:**
+- Shipped default `skills.toml` at `src/squadron/data/skills.toml` acts as base layer in `load_effective()` — users see the `analysis` pack in `sq skills list` with no manual manifest setup.
+- `commands/analysis/` covered automatically by the existing `force-include` wheel rule; no `pyproject.toml` changes needed for commands.
+- `src/squadron/data/` package added via `__init__.py` for `importlib.resources` resolution.
+- `commands/sq/analysis.md` dispatcher wired into the existing `sq install-commands` path (not `sq skills install`) for `/sq:analysis <skill>` dispatch.
+- `tech-debt-analyze.md` content is an external input (existing forked skill); placeholder acceptable to unblock packaging.
+
+**Only code change:** `manifest.py`'s `load_effective()` gains a base-layer step to load the shipped default. Everything else is new files.
+
+**Pending:** Project Manager to supply or confirm `tech-debt-analyze.md` skill content before implementation begins.
+
+---
+
 ### Slice 341: Manifest Format and `sq skills install/list` — Implementation Complete
 
 All 14 tasks implemented on branch `341-slice.manifest-format-and-sq-skills-install-list`.
