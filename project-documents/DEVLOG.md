@@ -10,6 +10,33 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260626 (2)
+
+### Slice 343: `sq skills uninstall` and `sq doctor` Integration — Design Complete
+
+**Completed:** Phase 4 slice design for slice 343.
+
+**Artifact created:**
+- `user/slices/343-slice.sq-skills-uninstall-and-sq-doctor-integration.md`
+
+**Key design decisions:**
+- **Install receipt** — `installer.py` writes `~/.config/squadron/receipts/<pack>.toml` after each successful install. Contains `pack_name`, `surface`, `destination`, `files_written`. Uninstall reads this rather than re-resolving the source, making uninstall correct for all source types (including `github:`) and independent of source availability.
+- **No orphan detection** — `sq doctor` reports only packs declared in the effective manifest; it does not scan for installed files absent from the manifest. Deferred indefinitely.
+- **WARN (not MISSING) for uninstalled packs** — skill packs are optional; absence is notable but not blocking. Matches the pattern for `check_slash_commands`.
+- **Injected `receipts_dir`** — both `install_pack` and `uninstall` accept `receipts_dir` as an optional parameter for testability; defaults to the standard path.
+
+**New/modified files at implementation time:**
+- `src/squadron/skills/models.py` — add `InstallReceipt` model
+- `src/squadron/skills/installer.py` — write receipt after successful install
+- `src/squadron/cli/commands/skills.py` — add `uninstall` subcommand
+- `src/squadron/cli/commands/doctor_checks.py` — add `SECTION_SKILLS`, `check_skill_packs()`
+- `src/squadron/cli/commands/doctor.py` — add `SECTION_SKILLS` to `_SECTION_ORDER`
+- New tests in `tests/skills/` and `tests/cli/`
+
+**State:** Slice 343 is ready for Phase 5 (task breakdown) and Phase 6 (implementation). No open design questions.
+
+---
+
 ## 20260626 (1)
 
 ### Initiative 340 — Slice 342 (Analysis Pack Bundled): Complete
