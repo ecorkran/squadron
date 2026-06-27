@@ -77,6 +77,7 @@ Slices are ordered: spike → manifest/installer → analysis pack → CLI polis
      - `sq skills install analysis` installs both `tech-debt-audit.md` and `understand-anything.md` to `~/.claude/commands/analysis/`.
      - `/analysis:understand-anything` (direct) and `/sq:analysis understand-anything` (dispatcher) both route correctly in Claude Code.
      - User has verified the skill works locally on a real repo before merge.
+   - **Command surface tradeoff (known):** Claude Code's slash command system requires skill files to exist under `~/.claude/commands/` for the dispatcher to delegate to them. There is no mechanism to invoke skill content from a package path directly. As a result, `sq skills install analysis` necessarily installs skill files to `~/.claude/commands/analysis/`, which makes them reachable at both `/sq:analysis <skill>` (canonical, advertised) and `/analysis:<skill>` (byproduct, not advertised). The `/analysis:*` surface is an implementation detail of the delegation mechanism, not an intended user-facing entry point. This tradeoff is accepted; the `/sq:analysis` dispatcher is the only documented invocation path.
    - **Dependencies:** [342]. **Risk:** Low (file copy + dispatcher update; no code changes). **Effort:** 1/5.
 
 ---
