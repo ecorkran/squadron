@@ -10,6 +10,18 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260628 (3)
+
+### Slice 344: Add `understand-anything` to Analysis Pack — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/344-tasks.add-understand-anything-to-analysis-pack.md` (147 lines, 18 tasks).
+
+**Task structure:** Pre-work (branch + fork) → skill file (extract, adapt, verify, commit) → dispatcher update (3 targeted edits, verify, commit) → verification gate (test suite, live install/routing, required user real-repo run) → cleanup. Test-with pattern applied: install verification (T8) immediately follows skill file addition (T7); dispatcher verification (T13) immediately follows each dispatcher change.
+
+**Key gate:** T17 (user runs skill on real repo) is a required merge gate — slice is not done until knowledge-graph build and incremental update are both confirmed live.
+
+---
+
 ## 20260628 (2)
 
 ### Slice 344: Add `understand-anything` to Analysis Pack — Slice Design Complete
