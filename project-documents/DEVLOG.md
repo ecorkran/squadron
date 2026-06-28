@@ -10,6 +10,32 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260626 (3)
+
+### Slice 343: `sq skills uninstall` and `sq doctor` Integration — Task Breakdown Complete
+
+**Completed:** Phase 5 task breakdown for slice 343.
+
+**Artifact created:**
+- `user/tasks/343-tasks.sq-skills-uninstall-and-sq-doctor-integration.md` — 17 tasks, 154 lines
+
+**Task structure summary (test-with pattern):**
+- T1: Branch + prereqs
+- T2–T3: `InstallReceipt` model + tests
+- T4–T5: `receipts.py` helpers (`write_receipt` / `read_receipt`) + tests
+- T6–T7: Extend `installer.py` to write receipt + tests
+- T8: Commit checkpoint — receipt infrastructure
+- T9–T10: `uninstall` subcommand in `skills.py` + tests (round-trip, unrelated-file-preserved, graceful-failure cases)
+- T11: Commit checkpoint — uninstall command
+- T12–T13: `check_skill_packs()` + `SECTION_SKILLS` in `doctor_checks.py` + tests
+- T14–T15: Wire into `doctor.py` + tests for output
+- T16: Full validation pass + CLI smoke test (verification walkthrough)
+- T17: Final commit + slice status updates
+
+**State:** Ready for Phase 6 (implementation). No open questions.
+
+---
+
 ## 20260626 (2)
 
 ### Slice 343: `sq skills uninstall` and `sq doctor` Integration — Design Complete
