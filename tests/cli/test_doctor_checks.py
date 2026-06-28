@@ -8,11 +8,13 @@ from unittest.mock import patch
 
 import pytest
 
+from squadron.cli.commands import doctor_checks
 from squadron.cli.commands.doctor_checks import (
     SECTION_CONFIG,
     SECTION_INSTALL,
     SECTION_INTEGRATIONS,
     SECTION_PROVIDERS,
+    SECTION_SKILLS,
     CheckResult,
     CheckStatus,
     check_at_least_one_provider,
@@ -23,6 +25,7 @@ from squadron.cli.commands.doctor_checks import (
     check_project_env,
     check_provider_profiles,
     check_providers_toml,
+    check_skill_packs,
     check_slash_commands,
     check_squadron_install,
     run_all_checks,
@@ -281,6 +284,45 @@ def test_check_project_env_absent(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert result.fix_hint is None
 
 
+# --- check_skill_packs ---
+
+
+def test_check_skill_packs_installed(tmp_path: Path) -> None:
+    # The shipped-default manifest always declares the analysis prefix pack.
+    analysis_dir = tmp_path / "analysis"
+    analysis_dir.mkdir()
+    (analysis_dir / "tech-debt-audit.md").write_text("# audit")
+
+    results = check_skill_packs(commands_dir=tmp_path, cwd=tmp_path)
+
+    analysis = next(r for r in results if r.name == "analysis")
+    assert analysis.status == CheckStatus.OK
+    assert analysis.section == SECTION_SKILLS
+    assert "installed at" in analysis.detail
+
+
+def test_check_skill_packs_not_installed(tmp_path: Path) -> None:
+    # Empty commands_dir → analysis is not installed.
+    results = check_skill_packs(commands_dir=tmp_path / "empty", cwd=tmp_path)
+
+    analysis = next(r for r in results if r.name == "analysis")
+    assert analysis.status == CheckStatus.WARN
+    assert analysis.fix_hint == "sq skills install analysis"
+    assert analysis.section == SECTION_SKILLS
+
+
+def test_check_skill_packs_no_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(doctor_checks, "load_effective", lambda cwd=None: None)
+
+    results = check_skill_packs(commands_dir=tmp_path, cwd=tmp_path)
+
+    assert len(results) == 1
+    assert results[0].name == "skills.toml"
+    assert results[0].status == CheckStatus.OK
+    assert results[0].section == SECTION_SKILLS
+    assert "no manifest" in results[0].detail
+
+
 # --- T25: run_all_checks ---
 
 
@@ -290,6 +332,7 @@ def test_run_all_checks_has_all_sections() -> None:
     assert SECTION_INSTALL in sections
     assert SECTION_PROVIDERS in sections
     assert SECTION_INTEGRATIONS in sections
+    assert SECTION_SKILLS in sections
     assert SECTION_CONFIG in sections
 
 

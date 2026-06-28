@@ -17,7 +17,8 @@ from squadron.skills.manifest import (
     load,
     load_effective,
 )
-from squadron.skills.models import SkillSourceError
+from squadron.skills.models import SkillSourceError, SurfaceType
+from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, read_receipt
 
 _DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
 
@@ -41,6 +42,11 @@ def install(
         "--commands-dir",
         help="Destination directory for installed commands",
     ),
+    receipts_dir: Path = typer.Option(
+        DEFAULT_RECEIPTS_DIR,
+        "--receipts-dir",
+        help="Directory where the install receipt is written",
+    ),
 ) -> None:
     """Install a skill pack from the active manifest."""
     try:
@@ -58,13 +64,62 @@ def install(
 
     entry = manifest.packs[pack_name]
     try:
-        result = install_pack(pack_name, entry, commands_dir)
+        result = install_pack(pack_name, entry, commands_dir, receipts_dir=receipts_dir)
     except SkillSourceError as exc:
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1)
 
     count = len(result.files_written)
     rprint(f"[green]Installed pack '{pack_name}': {count} file(s) → {result.destination}[/green]")
+
+
+@skills_app.command()
+def uninstall(
+    pack_name: str = typer.Argument(..., help="Name of the pack to uninstall"),
+    commands_dir: Path = typer.Option(
+        _DEFAULT_COMMANDS_DIR,
+        "--commands-dir",
+        help="Directory the pack was installed into",
+    ),
+    receipts_dir: Path = typer.Option(
+        DEFAULT_RECEIPTS_DIR,
+        "--receipts-dir",
+        help="Directory holding the install receipt",
+    ),
+) -> None:
+    """Remove a skill pack's installed files using its install receipt."""
+    try:
+        receipt = read_receipt(pack_name, receipts_dir)
+    except ValueError as exc:
+        rprint(f"[red]Error reading receipt for '{pack_name}': {exc}[/red]")
+        raise typer.Exit(code=1)
+
+    if receipt is None:
+        rprint(
+            f"[red]Pack '{pack_name}' is not installed (no receipt found). "
+            "Use 'sq skills list' to check status.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    destination = Path(receipt.destination)
+    removed = 0
+    for filename in receipt.files_written:
+        target = destination / filename
+        if target.exists():
+            target.unlink()
+            removed += 1
+
+    # For prefix packs, drop the now-empty prefix directory; leave it if the user
+    # has unrelated files there (success criterion 1).
+    if receipt.surface == SurfaceType.PREFIX and destination.is_dir():
+        if not any(destination.iterdir()):
+            destination.rmdir()
+
+    (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
+
+    rprint(
+        f"[green]Uninstalled pack '{pack_name}': {removed} file(s) removed from {destination}[/green]"
+    )
 
 
 @skills_app.command(name="list")

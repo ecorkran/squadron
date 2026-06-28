@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`sq skills uninstall <pack>`** — remove a pack's installed files using an install receipt written at install time. Removes only the files `install` wrote; unrelated files you added to the pack directory are left untouched. Reports a clear error (no traceback) if the pack is not installed.
+- **`sq doctor` Skill Packs section** — `sq doctor` now lists every pack in the manifest with installed / not-installed status, and shows `fix: sq skills install <pack>` for any pack not yet installed. Included in `sq doctor --json` output.
 - **`sq skills install <pack>`** — install a skill pack from a `skills.toml` manifest. Supports local paths, bundled packs, and GitHub sources (`github:<org>/<repo>`). Copies `.md` files to `~/.claude/commands/<prefix>/` or the dispatch file location. Idempotent.
 - **`sq skills list`** — show all packs in the active manifest with their source, surface type, and install status (Installed / Not installed). The `analysis` pack is now visible out of the box (no `skills.toml` required).
 - **`skills.toml` manifest format** — declare skill packs at `~/.config/squadron/skills.toml` (user-level) and/or `<project>/.squadron/skills.toml` (project-level). Project-level entries win on name collision.

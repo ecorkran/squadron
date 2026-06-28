@@ -60,7 +60,7 @@ Slices are ordered: spike → manifest/installer → analysis pack → CLI polis
 
 ## Integration Work
 
-4. [ ] **(343) `sq skills uninstall` and `sq doctor` Integration** — Complete the `sq skills` surface with `uninstall <pack>` (removes files written by `install`, does not touch files it did not write) and wire pack status into `sq doctor`'s checklist output. `sq doctor` gains a "Skill Packs" section listing installed packs and flagging packs declared in the manifest but not yet installed, with a "fix it with: `sq skills install <pack>`" hint per missing entry.
+4. [x] **(343) `sq skills uninstall` and `sq doctor` Integration** — Complete the `sq skills` surface with `uninstall <pack>` (removes files written by `install`, does not touch files it did not write) and wire pack status into `sq doctor`'s checklist output. `sq doctor` gains a "Skill Packs" section listing installed packs and flagging packs declared in the manifest but not yet installed, with a "fix it with: `sq skills install <pack>`" hint per missing entry.
    - **Value:** Operational polish — users can cleanly remove packs and `sq doctor` gives a complete picture of the installed skill set alongside provider and integration status.
    - **Success Criteria:**
      - `sq skills uninstall <pack>` removes only files that `install` wrote; leaves unrelated files in the prefix directory untouched.
@@ -92,7 +92,7 @@ Slices are ordered: spike → manifest/installer → analysis pack → CLI polis
 
 **Open questions for slice design:**
 - Merge semantics for project-level vs. user-level manifest (union? override? additive-only?). Decide in 341 slice design.
-- Whether `sq doctor` should warn on packs installed but absent from any manifest (orphan detection). Decide in 343.
+- Whether `sq doctor` should warn on packs installed but absent from any manifest (orphan detection). **Decided in 343: No** — deferred indefinitely (see slice 343 "Decision: No orphan detection"). The analysis pack is always in the shipped default, so it can never become an orphan through normal use.
 
 ---
 

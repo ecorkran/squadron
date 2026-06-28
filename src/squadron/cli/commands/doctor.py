@@ -15,12 +15,19 @@ from squadron.cli.commands.doctor_checks import (
     SECTION_INSTALL,
     SECTION_INTEGRATIONS,
     SECTION_PROVIDERS,
+    SECTION_SKILLS,
     CheckResult,
     CheckStatus,
     run_all_checks,
 )
 
-_SECTION_ORDER = [SECTION_INSTALL, SECTION_PROVIDERS, SECTION_INTEGRATIONS, SECTION_CONFIG]
+_SECTION_ORDER = [
+    SECTION_INSTALL,
+    SECTION_PROVIDERS,
+    SECTION_INTEGRATIONS,
+    SECTION_SKILLS,
+    SECTION_CONFIG,
+]
 
 _STATUS_ICON: dict[CheckStatus, tuple[str, str]] = {
     CheckStatus.OK: ("✓", "green"),

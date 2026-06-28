@@ -8,8 +8,8 @@ index: 343
 dependencies: [342]
 interfaces: [344]
 dateCreated: 20260626
-dateUpdated: 20260626
-status: design
+dateUpdated: 20260628
+status: complete
 ---
 
 # Slice Design: `sq skills uninstall` and `sq doctor` Integration
@@ -216,19 +216,24 @@ sq doctor
 
 ## Verification Walkthrough
 
-**Prereq:** squadron dev install (`uv pip install -e .`); `sq skills install analysis` already run (so receipt exists).
+> **Verified 20260628** — all 8 steps executed against a dev install on macOS; output below is the actual observed output. One caveat noted in step 1.
+
+**Prereq:** squadron dev install (`uv pip install -e .`); `sq skills install analysis` already run (so a receipt exists). Note: a pack installed *before* this slice has no receipt — run `sq skills install analysis` once after upgrading to generate one.
 
 **1. Inspect receipt after install**
 ```bash
 cat ~/.config/squadron/receipts/analysis.toml
 ```
-Expected:
+Expected (actual observed):
 ```toml
 pack_name = "analysis"
 surface = "prefix"
 destination = "/Users/<you>/.claude/commands/analysis"
-files_written = ["tech-debt-audit.md"]
+files_written = [
+    "tech-debt-audit.md",
+]
 ```
+**Caveat:** `tomli-w` serializes the `files_written` array multi-line (one element per line), not the single-line form shown in the Architecture section above. This is cosmetic and semantically identical; `read_receipt` parses both. Do not assert on exact line layout.
 
 **2. Doctor shows analysis as installed**
 ```bash
@@ -245,7 +250,7 @@ Skill Packs
 sq skills uninstall analysis
 # Uninstalled pack 'analysis': 1 file(s) removed from /Users/<you>/.claude/commands/analysis
 ls ~/.claude/commands/analysis/
-# (empty or directory gone)
+# ls: .../analysis/: No such file or directory   ← prefix dir removed (it was empty)
 ls ~/.config/squadron/receipts/
 # (analysis.toml gone)
 ```
