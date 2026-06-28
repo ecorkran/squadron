@@ -10,6 +10,16 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260628 (2)
+
+### Slice 344: Add `understand-anything` to Analysis Pack — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/344-slice.add-understand-anything-to-analysis-pack.md`.
+
+**Design summary:** Content-only slice (effort 1/5, no Python code changes). Forks `github:Egonex-AI/Understand-Anything` (MIT) to `ecorkran/understand-anything`, extracts `understand-anything-plugin/skills/understand/SKILL.md`, prepends attribution, audits and patches instructional `/understand` self-references → `/analysis:understand-anything`, adds as `commands/analysis/understand-anything.md`, and updates the `sq:analysis` dispatcher. The existing installer's `_install_prefix()` glob picks up the new file automatically. Verification requires a user-run knowledge-graph build on a real repo before merge.
+
+---
+
 ## 20260628 (1)
 
 ### Slice 343: `sq skills uninstall` and `sq doctor` Integration — Implementation Complete
