@@ -1,7 +1,15 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from squadron.skills.models import InstallResult, PackEntry, SkillSourceError
+from squadron.skills.models import (
+    InstallReceipt,
+    InstallResult,
+    PackEntry,
+    SkillSourceError,
+    SurfaceType,
+)
 
 
 class TestPackEntry:
@@ -40,6 +48,49 @@ class TestInstallResult:
             pack_name="test", files_written=["a.md", "b.md"], destination=Path("/tmp")
         )
         assert len(result.files_written) == 2
+
+
+class TestInstallReceipt:
+    def test_prefix_surface_construction(self) -> None:
+        receipt = InstallReceipt(
+            pack_name="analysis",
+            surface=SurfaceType.PREFIX,
+            destination=Path("/Users/you/.claude/commands/analysis"),
+            files_written=["tech-debt-audit.md"],
+        )
+        assert receipt.surface == SurfaceType.PREFIX
+        assert receipt.files_written == ["tech-debt-audit.md"]
+
+    def test_dispatch_file_surface_construction(self) -> None:
+        receipt = InstallReceipt(
+            pack_name="core",
+            surface=SurfaceType.DISPATCH_FILE,
+            destination=Path("/Users/you/.claude/commands/sq"),
+            files_written=["run.md"],
+        )
+        assert receipt.surface == SurfaceType.DISPATCH_FILE
+
+    def test_destination_path_round_trips(self) -> None:
+        original = InstallReceipt(
+            pack_name="analysis",
+            surface=SurfaceType.PREFIX,
+            destination=Path("/Users/you/.claude/commands/analysis"),
+            files_written=["a.md", "b.md"],
+        )
+        restored = InstallReceipt.model_validate(original.model_dump())
+        assert restored == original
+        assert isinstance(restored.destination, Path)
+
+    def test_surface_accepts_string_value(self) -> None:
+        receipt = InstallReceipt.model_validate(
+            {
+                "pack_name": "analysis",
+                "surface": "prefix",
+                "destination": "/tmp/analysis",
+                "files_written": ["x.md"],
+            }
+        )
+        assert receipt.surface is SurfaceType.PREFIX
 
 
 class TestSkillSourceError:

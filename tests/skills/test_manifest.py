@@ -48,7 +48,7 @@ class TestLoad:
 
 
 class TestMerge:
-    def _manifest(self, packs: dict, origin: str) -> SkillsManifest:
+    def _manifest(self, packs: dict[str, dict[str, str]], origin: str) -> SkillsManifest:
         return SkillsManifest(packs={k: PackEntry(**v) for k, v in packs.items()}, origin=origin)
 
     def test_additive_union(self) -> None:
