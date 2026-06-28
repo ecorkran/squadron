@@ -83,6 +83,108 @@ class TestInstallLocalPack:
         assert (commands_dir / "testpack" / "skill_one.md").exists()
 
 
+class TestUninstall:
+    def _manifest_with_local_pack(self, tmp_path: Path) -> Path:
+        src = tmp_path / "pack-src"
+        src.mkdir()
+        (src / "tech-debt-audit.md").write_text("# audit")
+        manifest_file = tmp_path / "skills.toml"
+        _write_manifest(
+            manifest_file,
+            f'[packs.analysis]\nsource = "{src}"\nprefix = "analysis"\n',
+        )
+        return manifest_file
+
+    def test_install_then_uninstall_round_trip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        manifest_file = self._manifest_with_local_pack(tmp_path)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+
+        commands_dir = tmp_path / "commands"
+        receipts_dir = tmp_path / "receipts"
+        common = [
+            "--commands-dir",
+            str(commands_dir),
+            "--receipts-dir",
+            str(receipts_dir),
+        ]
+
+        install = runner.invoke(app, ["skills", "install", "analysis", *common])
+        assert install.exit_code == 0, install.output
+        assert (commands_dir / "analysis" / "tech-debt-audit.md").exists()
+        assert (receipts_dir / "analysis.toml").exists()
+
+        uninstall = runner.invoke(app, ["skills", "uninstall", "analysis", *common])
+        assert uninstall.exit_code == 0, uninstall.output
+        assert not (commands_dir / "analysis" / "tech-debt-audit.md").exists()
+        assert not (receipts_dir / "analysis.toml").exists()
+
+    def test_unrelated_file_not_removed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        manifest_file = self._manifest_with_local_pack(tmp_path)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+
+        commands_dir = tmp_path / "commands"
+        receipts_dir = tmp_path / "receipts"
+        common = [
+            "--commands-dir",
+            str(commands_dir),
+            "--receipts-dir",
+            str(receipts_dir),
+        ]
+
+        runner.invoke(app, ["skills", "install", "analysis", *common])
+        custom = commands_dir / "analysis" / "my-custom-skill.md"
+        custom.write_text("keep me")
+
+        result = runner.invoke(app, ["skills", "uninstall", "analysis", *common])
+        assert result.exit_code == 0, result.output
+        assert custom.read_text() == "keep me"
+        # Prefix dir is preserved because it still holds the unrelated file.
+        assert (commands_dir / "analysis").is_dir()
+        assert not (commands_dir / "analysis" / "tech-debt-audit.md").exists()
+
+    def test_uninstall_when_not_installed_exits_1(self, tmp_path: Path) -> None:
+        result = runner.invoke(
+            app,
+            [
+                "skills",
+                "uninstall",
+                "analysis",
+                "--commands-dir",
+                str(tmp_path / "commands"),
+                "--receipts-dir",
+                str(tmp_path / "receipts"),
+            ],
+        )
+        assert result.exit_code == 1
+        assert "not installed" in result.output
+
+    def test_uninstall_idempotent_when_file_already_gone(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        manifest_file = self._manifest_with_local_pack(tmp_path)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+
+        commands_dir = tmp_path / "commands"
+        receipts_dir = tmp_path / "receipts"
+        common = [
+            "--commands-dir",
+            str(commands_dir),
+            "--receipts-dir",
+            str(receipts_dir),
+        ]
+
+        runner.invoke(app, ["skills", "install", "analysis", *common])
+        # Remove the installed file out from under uninstall.
+        (commands_dir / "analysis" / "tech-debt-audit.md").unlink()
+
+        result = runner.invoke(app, ["skills", "uninstall", "analysis", *common])
+        assert result.exit_code == 0, result.output
+        assert "0 file(s) removed" in result.output
+        assert not (receipts_dir / "analysis.toml").exists()
+
+
 class TestListWithStatus:
     def test_shows_installed_and_not_installed(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

@@ -24,65 +24,65 @@ status: not_started
 
 ## Tasks
 
-- [ ] **T1: Create branch and verify prereqs**
-  - [ ] Verify on branch `343-slice.sq-skills-uninstall-and-sq-doctor-integration` (create from `main` if absent)
-  - [ ] Run `pytest tests/skills/ tests/cli/` — all pass (confirms slice 342 foundation is intact)
-  - [ ] Run `sq skills install analysis` — verify receipt directory does not yet exist at `~/.config/squadron/receipts/`
-  - [ ] Success: branch exists; all 342 tests pass; no receipt directory present
+- [x] **T1: Create branch and verify prereqs**
+  - [x] Verify on branch `343-slice.sq-skills-uninstall-and-sq-doctor-integration` (create from `main` if absent)
+  - [x] Run `pytest tests/skills/ tests/cli/` — all pass (confirms slice 342 foundation is intact)
+  - [x] Run `sq skills install analysis` — verify receipt directory does not yet exist at `~/.config/squadron/receipts/`
+  - [x] Success: branch exists; all 342 tests pass; no receipt directory present
 
-- [ ] **T2: Add `InstallReceipt` model to `models.py`**
-  - [ ] In `src/squadron/skills/models.py`, add a Pydantic `InstallReceipt` model with fields: `pack_name: str`, `surface: str` ("prefix" or "dispatch_file"), `destination: Path`, `files_written: list[str]`
-  - [ ] Add a `SurfaceType` `StrEnum` with values `PREFIX = "prefix"` and `DISPATCH_FILE = "dispatch_file"` to type the `surface` field (keeps magic strings out of callers)
-  - [ ] Success: `python -c "from squadron.skills.models import InstallReceipt, SurfaceType; print(SurfaceType.PREFIX)"` prints `prefix` without error
+- [x] **T2: Add `InstallReceipt` model to `models.py`**
+  - [x] In `src/squadron/skills/models.py`, add a Pydantic `InstallReceipt` model with fields: `pack_name: str`, `surface: str` ("prefix" or "dispatch_file"), `destination: Path`, `files_written: list[str]`
+  - [x] Add a `SurfaceType` `StrEnum` with values `PREFIX = "prefix"` and `DISPATCH_FILE = "dispatch_file"` to type the `surface` field (keeps magic strings out of callers)
+  - [x] Success: `python -c "from squadron.skills.models import InstallReceipt, SurfaceType; print(SurfaceType.PREFIX)"` prints `prefix` without error
 
-- [ ] **T3: Tests for `InstallReceipt` model**
-  - [ ] In `tests/skills/test_models.py`, add tests for `InstallReceipt`:
+- [x] **T3: Tests for `InstallReceipt` model**
+  - [x] In `tests/skills/test_models.py`, add tests for `InstallReceipt`:
     - Valid construction with `surface=SurfaceType.PREFIX` and a list of filenames
     - Valid construction with `surface=SurfaceType.DISPATCH_FILE`
     - `destination` field accepts a `Path`; round-trips correctly via `.model_dump()` / `.model_validate()`
-  - [ ] Run `pytest tests/skills/test_models.py` — all pass
-  - [ ] Success: all model tests pass; no regressions
+  - [x] Run `pytest tests/skills/test_models.py` — all pass
+  - [x] Success: all model tests pass; no regressions
 
-- [ ] **T4: Create `receipts.py` with `write_receipt` / `read_receipt`**
-  - [ ] Create `src/squadron/skills/receipts.py`
-  - [ ] Define `DEFAULT_RECEIPTS_DIR: Path = Path.home() / ".config" / "squadron" / "receipts"` as a module-level constant
-  - [ ] Implement `write_receipt(receipt: InstallReceipt, receipts_dir: Path) -> None`: serialize the receipt to TOML (use `tomli-w` if available, or build a minimal TOML string manually for this simple flat structure); write to `receipts_dir / f"{receipt.pack_name}.toml"`; create `receipts_dir` if absent (`mkdir(parents=True, exist_ok=True)`)
-  - [ ] Implement `read_receipt(pack_name: str, receipts_dir: Path) -> InstallReceipt | None`: read `receipts_dir / f"{pack_name}.toml"` with `tomllib`; return `InstallReceipt` if file exists and is valid; return `None` if file is absent; raise `ValueError` with path context on malformed TOML
-  - [ ] Check `pyproject.toml` for `tomli-w`; if absent, use manual TOML serialization (a flat key=value block is trivial for these fields) — do not add a new dependency without Project Manager approval
-  - [ ] If using manual TOML, all string values (`pack_name`, `surface`, `destination`) must be TOML-quoted: e.g. `destination = "{path}"`, not `destination = {path}`. Cast `destination` to `str` before quoting. The list field must use TOML array syntax with quoted elements: `files_written = ["a.md", "b.md"]`
-  - [ ] Success: module imports cleanly; both functions are importable from `squadron.skills.receipts`
+- [x] **T4: Create `receipts.py` with `write_receipt` / `read_receipt`**
+  - [x] Create `src/squadron/skills/receipts.py`
+  - [x] Define `DEFAULT_RECEIPTS_DIR: Path = Path.home() / ".config" / "squadron" / "receipts"` as a module-level constant
+  - [x] Implement `write_receipt(receipt: InstallReceipt, receipts_dir: Path) -> None`: serialize the receipt to TOML (use `tomli-w` if available, or build a minimal TOML string manually for this simple flat structure); write to `receipts_dir / f"{receipt.pack_name}.toml"`; create `receipts_dir` if absent (`mkdir(parents=True, exist_ok=True)`)
+  - [x] Implement `read_receipt(pack_name: str, receipts_dir: Path) -> InstallReceipt | None`: read `receipts_dir / f"{pack_name}.toml"` with `tomllib`; return `InstallReceipt` if file exists and is valid; return `None` if file is absent; raise `ValueError` with path context on malformed TOML
+  - [x] Check `pyproject.toml` for `tomli-w`; if absent, use manual TOML serialization (a flat key=value block is trivial for these fields) — do not add a new dependency without Project Manager approval
+  - [x] If using manual TOML, all string values (`pack_name`, `surface`, `destination`) must be TOML-quoted: e.g. `destination = "{path}"`, not `destination = {path}`. Cast `destination` to `str` before quoting. The list field must use TOML array syntax with quoted elements: `files_written = ["a.md", "b.md"]`
+  - [x] Success: module imports cleanly; both functions are importable from `squadron.skills.receipts`
 
-- [ ] **T5: Tests for `receipts.py`**
-  - [ ] In `tests/skills/`, add `test_receipts.py`
-  - [ ] Test `write_receipt` / `read_receipt` round-trip: write a receipt for an analysis-like pack, read it back, assert all fields match (use `tmp_path` fixture)
-  - [ ] Test `read_receipt` returns `None` when receipt file does not exist
-  - [ ] Test `write_receipt` creates the `receipts_dir` if it does not exist
-  - [ ] Test `read_receipt` raises `ValueError` on malformed TOML
-  - [ ] Run `pytest tests/skills/test_receipts.py` — all pass
-  - [ ] Success: all receipt helper tests pass
+- [x] **T5: Tests for `receipts.py`**
+  - [x] In `tests/skills/`, add `test_receipts.py`
+  - [x] Test `write_receipt` / `read_receipt` round-trip: write a receipt for an analysis-like pack, read it back, assert all fields match (use `tmp_path` fixture)
+  - [x] Test `read_receipt` returns `None` when receipt file does not exist
+  - [x] Test `write_receipt` creates the `receipts_dir` if it does not exist
+  - [x] Test `read_receipt` raises `ValueError` on malformed TOML
+  - [x] Run `pytest tests/skills/test_receipts.py` — all pass
+  - [x] Success: all receipt helper tests pass
 
-- [ ] **T6: Extend `installer.py` to write receipt after install**
-  - [ ] In `src/squadron/skills/installer.py`, import `write_receipt`, `DEFAULT_RECEIPTS_DIR`, `InstallReceipt`, `SurfaceType` from `receipts.py` / `models.py`
-  - [ ] Add `receipts_dir: Path | None = None` parameter to `install_pack()`; default to `DEFAULT_RECEIPTS_DIR` if `None`
-  - [ ] After a successful install (after `_install_from_path` returns `InstallResult`), build an `InstallReceipt` from the result and call `write_receipt()`; wrap in `try/except` — on failure, log `WARNING` but do not re-raise (install itself succeeded)
-  - [ ] Determine `surface` from `entry`: `SurfaceType.PREFIX` if `entry.prefix is not None`, else `SurfaceType.DISPATCH_FILE`
-  - [ ] Success: `install_pack()` signature updated; receipt is written to `receipts_dir` after any successful install
+- [x] **T6: Extend `installer.py` to write receipt after install**
+  - [x] In `src/squadron/skills/installer.py`, import `write_receipt`, `DEFAULT_RECEIPTS_DIR`, `InstallReceipt`, `SurfaceType` from `receipts.py` / `models.py`
+  - [x] Add `receipts_dir: Path | None = None` parameter to `install_pack()`; default to `DEFAULT_RECEIPTS_DIR` if `None`
+  - [x] After a successful install (after `_install_from_path` returns `InstallResult`), build an `InstallReceipt` from the result and call `write_receipt()`; wrap in `try/except` — on failure, log `WARNING` but do not re-raise (install itself succeeded)
+  - [x] Determine `surface` from `entry`: `SurfaceType.PREFIX` if `entry.prefix is not None`, else `SurfaceType.DISPATCH_FILE`
+  - [x] Success: `install_pack()` signature updated; receipt is written to `receipts_dir` after any successful install
 
-- [ ] **T7: Tests for receipt writing in `installer.py`**
-  - [ ] In `tests/skills/test_installer.py`, add tests:
+- [x] **T7: Tests for receipt writing in `installer.py`**
+  - [x] In `tests/skills/test_installer.py`, add tests:
     - After a successful `install_pack()` call (prefix case), `receipts_dir / "analysis.toml"` exists and `read_receipt()` returns correct fields
     - After a successful `install_pack()` call (dispatch_file case), receipt surface is `"dispatch_file"`
     - If `write_receipt` raises (monkeypatch it), `install_pack()` still returns normally and does not raise
-  - [ ] Run `pytest tests/skills/test_installer.py` — all pass, including pre-existing tests
-  - [ ] Success: receipt-writing tests pass; no regressions in installer tests
+  - [x] Run `pytest tests/skills/test_installer.py` — all pass, including pre-existing tests
+  - [x] Success: receipt-writing tests pass; no regressions in installer tests
 
-- [ ] **T8: Commit checkpoint — receipt infrastructure**
-  - [ ] Run `ruff format src/squadron/skills/ tests/skills/` — no changes
-  - [ ] Run `ruff check src/squadron/skills/ tests/skills/` — 0 errors
-  - [ ] Run `pyright --strict` — 0 errors
-  - [ ] Run `pytest tests/skills/` — all pass
-  - [ ] `git add src/squadron/skills/models.py src/squadron/skills/receipts.py src/squadron/skills/installer.py tests/skills/`
-  - [ ] Commit: `feat(skills): add install receipt written by installer`
+- [x] **T8: Commit checkpoint — receipt infrastructure**
+  - [x] Run `ruff format src/squadron/skills/ tests/skills/` — no changes
+  - [x] Run `ruff check src/squadron/skills/ tests/skills/` — 0 errors
+  - [x] Run `pyright --strict` — 0 errors
+  - [x] Run `pytest tests/skills/` — all pass
+  - [x] `git add src/squadron/skills/models.py src/squadron/skills/receipts.py src/squadron/skills/installer.py tests/skills/`
+  - [x] Commit: `feat(skills): add install receipt written by installer`
 
 - [ ] **T9: Add `uninstall` subcommand to `skills.py`**
   - [ ] In `src/squadron/cli/commands/skills.py`, import `read_receipt` and `DEFAULT_RECEIPTS_DIR` from `squadron.skills.receipts`
