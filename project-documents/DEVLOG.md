@@ -10,6 +10,32 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260628 (1)
+
+### Slice 343: `sq skills uninstall` and `sq doctor` Integration — Implementation Complete
+
+**Completed:** Phase 6 implementation of slice 343. All 17 tasks done; slice marked complete.
+
+**What shipped:**
+- `InstallReceipt` model + `SurfaceType` StrEnum in `skills/models.py`
+- `skills/receipts.py` — `write_receipt` / `read_receipt` (TOML via `tomli-w`, already a dependency; manual-TOML fallback not needed). Malformed/invalid receipts raise `ValueError` with path context; absent receipt returns `None`.
+- `installer.install_pack()` — new `receipts_dir` param; writes a receipt after every successful install. Receipt-write failure logs WARNING, never fails the install.
+- `sq skills uninstall <pack>` — reads receipt, removes exactly the files install wrote, drops the prefix dir only when empty, deletes the receipt. Graceful exit-1 with message when no receipt. Added `--receipts-dir` to `install` too.
+- `doctor_checks.check_skill_packs()` + `SECTION_SKILLS`; wired into `doctor.py` `_SECTION_ORDER` and `run_all_checks()`. Uninstalled packs → WARN with `sq skills install <name>` fix hint. Present in `--json`.
+
+**Tests:** receipts round-trip, installer receipt-writing (incl. failure-does-not-fail-install), uninstall CLI round-trip / unrelated-file-preserved / not-installed / idempotent, `check_skill_packs` installed/not-installed/no-manifest, doctor section + JSON. Full suite: 2036 passed, 2 skipped. `pyright --strict` clean, `ruff` clean.
+
+**Verification walkthrough:** all 8 steps executed against a live dev install; output recorded in the slice design. One caveat: `tomli-w` writes `files_written` as a multi-line TOML array (cosmetic; `read_receipt` parses both forms).
+
+**Baseline fixes (pre-existing slice-342 debt surfaced by the strict gate):**
+- `tests/cli/test_install_commands.py` — expected `analysis.md` (9 sq dispatch files, was 8).
+- `tests/skills/test_manifest.py` — annotated `_manifest` packs param for strict pyright.
+- `tests/skills/test_cli_skills.py` — `TestInstallLocalPack` now passes `--receipts-dir` so install tests don't write a real receipt into `~/.config/squadron/receipts/`.
+
+**State:** Slice 343 complete. Next: slice 344 (add `understand-anything` to analysis pack), no dependency on 343.
+
+---
+
 ## 20260626 (3)
 
 ### Slice 343: `sq skills uninstall` and `sq doctor` Integration — Task Breakdown Complete

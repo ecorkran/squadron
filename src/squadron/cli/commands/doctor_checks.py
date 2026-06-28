@@ -12,13 +12,19 @@ from pathlib import Path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
 from squadron.providers.profiles import get_all_profiles, providers_toml_path
+from squadron.skills.manifest import load_effective
 
 logger = logging.getLogger(__name__)
 
 SECTION_INSTALL = "Install"
 SECTION_PROVIDERS = "Providers and Auth"
 SECTION_INTEGRATIONS = "Integrations"
+SECTION_SKILLS = "Skill Packs"
 SECTION_CONFIG = "Configuration"
+
+# Default install location for skill packs. Defined locally (rather than imported
+# from cli.commands.skills) to keep the pure check layer free of CLI coupling.
+_DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
 
 
 class CheckStatus(StrEnum):
@@ -226,6 +232,65 @@ def check_claude_code_cli() -> CheckResult:
     )
 
 
+def check_skill_packs(
+    commands_dir: Path | None = None,
+    cwd: Path | None = None,
+) -> list[CheckResult]:
+    """Report install status for every pack in the effective manifest.
+
+    Pure: reads the manifest and the filesystem only. An uninstalled pack is a
+    WARN (informational + actionable), not a MISSING — no pack is required.
+    """
+    if commands_dir is None:
+        commands_dir = _DEFAULT_COMMANDS_DIR
+
+    manifest = load_effective(cwd=cwd or Path.cwd())
+    if manifest is None:
+        return [
+            CheckResult(
+                name="skills.toml",
+                status=CheckStatus.OK,
+                detail="no manifest found; using defaults",
+                section=SECTION_SKILLS,
+                required=False,
+            )
+        ]
+
+    results: list[CheckResult] = []
+    for name, entry in manifest.packs.items():
+        if entry.prefix is not None:
+            dest = commands_dir / entry.prefix
+            installed = dest.is_dir() and any(dest.iterdir())
+        else:
+            dest = commands_dir / "sq" / f"{entry.dispatch_file}.md"
+            installed = dest.is_file()
+
+        if installed:
+            results.append(
+                CheckResult(
+                    name=name,
+                    status=CheckStatus.OK,
+                    detail=f"installed at {dest}",
+                    section=SECTION_SKILLS,
+                    required=False,
+                )
+            )
+        else:
+            results.append(
+                CheckResult(
+                    name=name,
+                    status=CheckStatus.WARN,
+                    detail="not installed",
+                    fix_hint=f"sq skills install {name}",
+                    section=SECTION_SKILLS,
+                    required=False,
+                )
+            )
+
+    results.sort(key=lambda r: r.name)
+    return results
+
+
 def check_providers_toml() -> CheckResult:
     """Check parseability of providers.toml (MISSING iff present but malformed)."""
     path = providers_toml_path()
@@ -365,6 +430,7 @@ def run_all_checks() -> list[CheckResult]:
     _run("context-forge", check_context_forge)
     _run("codex CLI", check_codex_cli)
     _run("Claude Code CLI", check_claude_code_cli)
+    _run("skill packs", check_skill_packs)
     _run("providers.toml", check_providers_toml)
     _run("models.toml", check_models_toml)
     _run("project .env", check_project_env)

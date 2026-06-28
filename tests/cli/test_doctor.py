@@ -125,6 +125,29 @@ def test_doctor_verbose_shows_more_rows(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert verbose_lines >= default_lines
 
 
+def test_run_all_checks_includes_skill_packs_section() -> None:
+    """run_all_checks() emits at least one Skill Packs result."""
+    from squadron.cli.commands.doctor_checks import SECTION_SKILLS, run_all_checks
+
+    results = run_all_checks()
+    assert any(r.section == SECTION_SKILLS for r in results)
+
+
+def test_doctor_json_includes_skill_packs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """--json checks array includes a Skill Packs entry."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    nonexistent = tmp_path / "providers.toml"
+    nonexistent2 = tmp_path / "models.toml"
+    with (
+        patch("squadron.cli.commands.doctor_checks.providers_toml_path", return_value=nonexistent),
+        patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=nonexistent2),
+    ):
+        result = runner.invoke(app, ["doctor", "--json"])
+    data = json.loads(result.output)
+    skill_checks = [c for c in data["checks"] if c["section"] == "Skill Packs"]
+    assert len(skill_checks) >= 1
+
+
 def test_doctor_help() -> None:
     """--help includes the docstring text."""
     result = runner.invoke(app, ["doctor", "--help"])

@@ -6,8 +6,8 @@ lld: user/slices/343-slice.sq-skills-uninstall-and-sq-doctor-integration.md
 dependencies: [342]
 projectState: Slice 342 complete. Analysis pack bundled and installable. skills subpackage (models, manifest, resolver, installer, CLI) fully functional. No install receipt written yet; no uninstall command; sq doctor has no Skill Packs section.
 dateCreated: 20260626
-dateUpdated: 20260626
-status: not_started
+dateUpdated: 20260628
+status: complete
 ---
 
 ## Context Summary
@@ -84,72 +84,72 @@ status: not_started
   - [x] `git add src/squadron/skills/models.py src/squadron/skills/receipts.py src/squadron/skills/installer.py tests/skills/`
   - [x] Commit: `feat(skills): add install receipt written by installer`
 
-- [ ] **T9: Add `uninstall` subcommand to `skills.py`**
-  - [ ] In `src/squadron/cli/commands/skills.py`, import `read_receipt` and `DEFAULT_RECEIPTS_DIR` from `squadron.skills.receipts`
-  - [ ] Add `@skills_app.command()` function `uninstall(pack_name: str, commands_dir: Path = ..., receipts_dir: Path = ...)` with `--commands-dir` and `--receipts-dir` options (defaults to `_DEFAULT_COMMANDS_DIR` and `DEFAULT_RECEIPTS_DIR` respectively)
-  - [ ] Logic: (1) call `read_receipt(pack_name, receipts_dir)` — if `None`, print error and `raise typer.Exit(code=1)`; (2) iterate `receipt.files_written`, remove `Path(receipt.destination) / filename` if it exists; (3) if surface is `"prefix"` and destination directory is now empty, remove it; (4) delete receipt file; (5) print success with count removed
-  - [ ] Error message when no receipt: `Pack '<pack_name>' is not installed (no receipt found). Use 'sq skills list' to check status.`
-  - [ ] Success message: `Uninstalled pack '<pack_name>': <n> file(s) removed from <destination>`
-  - [ ] Also update the `install` CLI command to accept `--receipts-dir` option and pass it through to `install_pack()` (enables integration test coverage without touching the real receipts directory)
-  - [ ] Success: `sq skills uninstall --help` exits 0 and shows usage
+- [x] **T9: Add `uninstall` subcommand to `skills.py`**
+  - [x] In `src/squadron/cli/commands/skills.py`, import `read_receipt` and `DEFAULT_RECEIPTS_DIR` from `squadron.skills.receipts`
+  - [x] Add `@skills_app.command()` function `uninstall(pack_name: str, commands_dir: Path = ..., receipts_dir: Path = ...)` with `--commands-dir` and `--receipts-dir` options (defaults to `_DEFAULT_COMMANDS_DIR` and `DEFAULT_RECEIPTS_DIR` respectively)
+  - [x] Logic: (1) call `read_receipt(pack_name, receipts_dir)` — if `None`, print error and `raise typer.Exit(code=1)`; (2) iterate `receipt.files_written`, remove `Path(receipt.destination) / filename` if it exists; (3) if surface is `"prefix"` and destination directory is now empty, remove it; (4) delete receipt file; (5) print success with count removed
+  - [x] Error message when no receipt: `Pack '<pack_name>' is not installed (no receipt found). Use 'sq skills list' to check status.`
+  - [x] Success message: `Uninstalled pack '<pack_name>': <n> file(s) removed from <destination>`
+  - [x] Also update the `install` CLI command to accept `--receipts-dir` option and pass it through to `install_pack()` (enables integration test coverage without touching the real receipts directory)
+  - [x] Success: `sq skills uninstall --help` exits 0 and shows usage
 
-- [ ] **T10: Tests for `uninstall` command**
-  - [ ] In `tests/skills/test_cli_skills.py` (or a new `tests/cli/commands/test_skills_uninstall.py`), add tests using Typer's `CliRunner`:
+- [x] **T10: Tests for `uninstall` command**
+  - [x] In `tests/skills/test_cli_skills.py` (or a new `tests/cli/commands/test_skills_uninstall.py`), add tests using Typer's `CliRunner`:
     - Install then uninstall (round-trip): install pack into `tmp_path`, then uninstall using `--commands-dir tmp_path --receipts-dir tmp_receipts`; assert installed files removed, receipt deleted
     - Unrelated file not removed: place an extra `.md` file in the prefix directory before install; after uninstall, assert the extra file is still present
     - Uninstall when no receipt: assert exit code 1 and error message contains "not installed"
     - Uninstall idempotent removal: if a file in `files_written` is already gone before uninstall, command completes without error
-  - [ ] Run `pytest tests/skills/` (or the new test file) — all pass
-  - [ ] Success: all uninstall tests pass; no regressions
+  - [x] Run `pytest tests/skills/` (or the new test file) — all pass
+  - [x] Success: all uninstall tests pass; no regressions
 
-- [ ] **T11: Commit checkpoint — uninstall command**
-  - [ ] Run `ruff format src/squadron/ tests/` — no changes
-  - [ ] Run `ruff check src/squadron/ tests/` — 0 errors
-  - [ ] Run `pyright --strict` — 0 errors
-  - [ ] Run `pytest tests/skills/` — all pass
-  - [ ] `git add src/squadron/cli/commands/skills.py tests/`
-  - [ ] Commit: `feat(skills): add sq skills uninstall command`
+- [x] **T11: Commit checkpoint — uninstall command**
+  - [x] Run `ruff format src/squadron/ tests/` — no changes
+  - [x] Run `ruff check src/squadron/ tests/` — 0 errors
+  - [x] Run `pyright --strict` — 0 errors
+  - [x] Run `pytest tests/skills/` — all pass
+  - [x] `git add src/squadron/cli/commands/skills.py tests/`
+  - [x] Commit: `feat(skills): add sq skills uninstall command`
 
-- [ ] **T12: Add `SECTION_SKILLS` and `check_skill_packs()` to `doctor_checks.py`**
-  - [ ] In `src/squadron/cli/commands/doctor_checks.py`, add constant `SECTION_SKILLS = "Skill Packs"`
-  - [ ] Add function `check_skill_packs(commands_dir: Path | None = None, cwd: Path | None = None) -> list[CheckResult]`
-  - [ ] Logic: (1) call `load_effective(cwd=cwd or Path.cwd())`; (2) if manifest is `None`, return `[CheckResult(name="skills.toml", status=CheckStatus.OK, detail="no manifest; using defaults", section=SECTION_SKILLS, required=False)]`; (3) for each `(name, entry)` in `manifest.packs`, determine install presence using same logic as `sq skills list` (dir exists and non-empty for prefix; file exists for dispatch_file); (4) emit `CheckStatus.OK` if installed, `CheckStatus.WARN` with `fix_hint="sq skills install <name>"` if not; (5) return list sorted by pack name
-  - [ ] Import `load_effective` from `squadron.skills.manifest`; import `_DEFAULT_COMMANDS_DIR` from `squadron.cli.commands.skills` or re-define it locally as `Path.home() / ".claude" / "commands"` to avoid circular import
-  - [ ] Success: `check_skill_packs()` is importable and returns a non-empty list when the effective manifest contains the `analysis` pack
+- [x] **T12: Add `SECTION_SKILLS` and `check_skill_packs()` to `doctor_checks.py`**
+  - [x] In `src/squadron/cli/commands/doctor_checks.py`, add constant `SECTION_SKILLS = "Skill Packs"`
+  - [x] Add function `check_skill_packs(commands_dir: Path | None = None, cwd: Path | None = None) -> list[CheckResult]`
+  - [x] Logic: (1) call `load_effective(cwd=cwd or Path.cwd())`; (2) if manifest is `None`, return `[CheckResult(name="skills.toml", status=CheckStatus.OK, detail="no manifest; using defaults", section=SECTION_SKILLS, required=False)]`; (3) for each `(name, entry)` in `manifest.packs`, determine install presence using same logic as `sq skills list` (dir exists and non-empty for prefix; file exists for dispatch_file); (4) emit `CheckStatus.OK` if installed, `CheckStatus.WARN` with `fix_hint="sq skills install <name>"` if not; (5) return list sorted by pack name
+  - [x] Import `load_effective` from `squadron.skills.manifest`; import `_DEFAULT_COMMANDS_DIR` from `squadron.cli.commands.skills` or re-define it locally as `Path.home() / ".claude" / "commands"` to avoid circular import
+  - [x] Success: `check_skill_packs()` is importable and returns a non-empty list when the effective manifest contains the `analysis` pack
 
-- [ ] **T13: Tests for `check_skill_packs()`**
-  - [ ] In `tests/cli/` (e.g. `tests/cli/commands/test_doctor_checks.py`), add tests:
+- [x] **T13: Tests for `check_skill_packs()`**
+  - [x] In `tests/cli/` (e.g. `tests/cli/commands/test_doctor_checks.py`), add tests:
     - With analysis pack installed (dir and file exist in `tmp_path`): returns `CheckResult` with `status=OK` for `analysis`
     - With analysis pack not installed: returns `CheckResult` with `status=WARN` and `fix_hint` containing `"sq skills install analysis"`
     - When `load_effective()` is monkeypatched to return `None`: returns a single OK result describing "no manifest"
-  - [ ] Run `pytest tests/cli/` — all pass
-  - [ ] Success: doctor skill pack check tests pass; no regressions
+  - [x] Run `pytest tests/cli/` — all pass
+  - [x] Success: doctor skill pack check tests pass; no regressions
 
-- [ ] **T14: Wire `SECTION_SKILLS` into `doctor.py`**
-  - [ ] In `src/squadron/cli/commands/doctor.py`, import `SECTION_SKILLS` from `doctor_checks`
-  - [ ] Add `SECTION_SKILLS` to `_SECTION_ORDER` list after `SECTION_INTEGRATIONS`
-  - [ ] In `src/squadron/cli/commands/doctor_checks.py`, in `run_all_checks()`, add `_run("skill packs", check_skill_packs)` after the integrations checks and before config checks
-  - [ ] Success: `sq doctor` and `sq doctor -v` both exit without error; output includes "Skill Packs" section heading
+- [x] **T14: Wire `SECTION_SKILLS` into `doctor.py`**
+  - [x] In `src/squadron/cli/commands/doctor.py`, import `SECTION_SKILLS` from `doctor_checks`
+  - [x] Add `SECTION_SKILLS` to `_SECTION_ORDER` list after `SECTION_INTEGRATIONS`
+  - [x] In `src/squadron/cli/commands/doctor_checks.py`, in `run_all_checks()`, add `_run("skill packs", check_skill_packs)` after the integrations checks and before config checks
+  - [x] Success: `sq doctor` and `sq doctor -v` both exit without error; output includes "Skill Packs" section heading
 
-- [ ] **T15: Tests for `sq doctor` Skill Packs output**
-  - [ ] In `tests/cli/` (or existing doctor test file if present), add:
+- [x] **T15: Tests for `sq doctor` Skill Packs output**
+  - [x] In `tests/cli/` (or existing doctor test file if present), add:
     - Test that `run_all_checks()` result contains at least one `CheckResult` with `section == "Skill Packs"`
     - Test that JSON output from `sq doctor --json` includes a check entry with `"section": "Skill Packs"`
-  - [ ] Run `pytest tests/cli/` — all pass
-  - [ ] Success: doctor output tests pass; no regressions
+  - [x] Run `pytest tests/cli/` — all pass
+  - [x] Success: doctor output tests pass; no regressions
 
-- [ ] **T16: Full validation pass and CLI smoke test**
-  - [ ] Run `ruff format src/ tests/` — no changes
-  - [ ] Run `ruff check src/ tests/` — 0 errors
-  - [ ] Run `pyright --strict` — 0 errors
-  - [ ] Run `pytest tests/` — all pass
-  - [ ] Execute the verification walkthrough from the LLD (steps 1–8): install → inspect receipt → doctor shows installed → uninstall → doctor shows warn → graceful failure on second uninstall → reinstall → unrelated file preserved
-  - [ ] Success: all checks green; walkthrough steps produce expected output
+- [x] **T16: Full validation pass and CLI smoke test**
+  - [x] Run `ruff format src/ tests/` — no changes
+  - [x] Run `ruff check src/ tests/` — 0 errors
+  - [x] Run `pyright --strict` — 0 errors
+  - [x] Run `pytest tests/` — all pass
+  - [x] Execute the verification walkthrough from the LLD (steps 1–8): install → inspect receipt → doctor shows installed → uninstall → doctor shows warn → graceful failure on second uninstall → reinstall → unrelated file preserved
+  - [x] Success: all checks green; walkthrough steps produce expected output
 
-- [ ] **T17: Final commit and slice status updates**
-  - [ ] `git add src/squadron/cli/commands/doctor_checks.py src/squadron/cli/commands/doctor.py tests/`
-  - [ ] Commit: `feat(343): add sq doctor Skill Packs section`
-  - [ ] Update `343-slice.sq-skills-uninstall-and-sq-doctor-integration.md` frontmatter: `status: complete`
-  - [ ] Update `340-slices.skill-pack-infrastructure.md`: mark entry 4 (slice 343) checked `[x]`
-  - [ ] Commit: `docs: mark slice 343 complete`
-  - [ ] Success: all commits recorded; slice design and plan both reflect completion
+- [x] **T17: Final commit and slice status updates**
+  - [x] `git add src/squadron/cli/commands/doctor_checks.py src/squadron/cli/commands/doctor.py tests/`
+  - [x] Commit: `feat(343): add sq doctor Skill Packs section`
+  - [x] Update `343-slice.sq-skills-uninstall-and-sq-doctor-integration.md` frontmatter: `status: complete`
+  - [x] Update `340-slices.skill-pack-infrastructure.md`: mark entry 4 (slice 343) checked `[x]`
+  - [x] Commit: `docs: mark slice 343 complete`
+  - [x] Success: all commits recorded; slice design and plan both reflect completion

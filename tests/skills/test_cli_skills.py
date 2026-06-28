@@ -76,7 +76,16 @@ class TestInstallLocalPack:
 
         commands_dir = tmp_path / "commands"
         result = runner.invoke(
-            app, ["skills", "install", "testpack", "--commands-dir", str(commands_dir)]
+            app,
+            [
+                "skills",
+                "install",
+                "testpack",
+                "--commands-dir",
+                str(commands_dir),
+                "--receipts-dir",
+                str(tmp_path / "receipts"),
+            ],
         )
         assert result.exit_code == 0, result.output
         assert "2" in result.output  # 2 files written
