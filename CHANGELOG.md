@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 20260628
+
 ### Added
 - **`sq skills uninstall <pack>`** — remove a pack's installed files using an install receipt written at install time. Removes only the files `install` wrote; unrelated files you added to the pack directory are left untouched. Reports a clear error (no traceback) if the pack is not installed.
 - **`sq doctor` Skill Packs section** — `sq doctor` now lists every pack in the manifest with installed / not-installed status, and shows `fix: sq skills install <pack>` for any pack not yet installed. Included in `sq doctor --json` output.
