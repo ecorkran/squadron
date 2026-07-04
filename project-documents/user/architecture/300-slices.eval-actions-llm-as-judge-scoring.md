@@ -3,8 +3,8 @@ docType: slice-plan
 parent: 300-arch.eval-actions-llm-as-judge-scoring.md
 project: squadron
 dateCreated: 20260604
-dateUpdated: 20260604
-status: not_started
+dateUpdated: 20260704
+status: in_progress
 ---
 
 # Slice Plan: Intrinsic LLM Judging & Scoring
