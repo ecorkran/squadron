@@ -3,8 +3,8 @@ docType: architecture
 project: squadron
 initiative: 340
 dateCreated: 20260625
-dateUpdated: 20260625
-status: in_progress
+dateUpdated: 20260704
+status: complete
 archIndex: 340
 component: skill-pack-infrastructure
 ---
