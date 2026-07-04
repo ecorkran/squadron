@@ -10,6 +10,22 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260704 (1)
+
+### Slice 301: Judge Enforcement Layer — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/301-tasks.judge-enforcement-layer.md` (225 lines, 13 tasks) from `301-slice.judge-enforcement-layer.md`.
+
+**Task structure:** `ReviewTemplate.judge`/`is_judge` (T1–T2) → new `pipeline/actions/judge.py` module built incrementally — `Provenance`/`JudgeThresholds` (T3–T4), `resolve_thresholds` (T5–T6), `enforce_judge` (T7–T8) — each paired immediately with its test task → step-level `judge:` passthrough in `ReviewStepType.expand()` (T9–T10) → enforcement wired into `ReviewAction._review()` including the judge-exception path (T11–T12) → full validation gate (T13). Test-with pattern applied throughout; `judge.py`'s three functions are each independently tested before `ReviewAction` integration.
+
+**Key discipline carried from the LLD:** `enforce_judge()` must stay a pure function (logger passed in, no global state); it never reads `result.verdict` — T8 explicitly tests a mismatched-verdict `ReviewResult` to prove score wins. `is_judge` is the only judge-detection signal (T13 greps the diff for naming-convention dispatch). Threshold resolution is per-key (step → template → module constant), not all-or-nothing.
+
+**Branch:** `300-planning.judge-enforcement-layer` (Phase 5 planning work under initiative 300, per branch-naming rules).
+
+**State:** Task breakdown ready for Project Manager approval. Next: Phase 6 implementation of slice 301 on branch `301-slice.judge-enforcement-layer`.
+
+---
+
 ## 20260628 (3)
 
 ### Slice 344: Add `understand-anything` to Analysis Pack — Task Breakdown Complete
