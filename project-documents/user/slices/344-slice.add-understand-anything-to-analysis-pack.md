@@ -8,8 +8,15 @@ index: 344
 dependencies: [342]
 interfaces: []
 dateCreated: 20260628
-dateUpdated: 20260628
-status: not_started
+dateUpdated: 20260704
+status: deprecated
+deprecationReason: >
+  Superseded by Claude Code's native understand-anything marketplace plugin
+  (/plugin install understand-anything). Hosting a vendored copy in the analysis
+  pack added a 33 MB Node-engine dependency, a competing command surface, and a
+  3rd-party file to maintain for no bundling benefit. Branch deleted, not merged;
+  tech-debt-audit remains the sole analysis-pack skill. See slice plan
+  340-slices.skill-pack-infrastructure.md item (344) for full rationale.
 ---
 
 # Slice Design: Add `understand-anything` to Analysis Pack

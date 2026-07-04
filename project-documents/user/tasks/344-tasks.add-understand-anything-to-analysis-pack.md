@@ -9,8 +9,14 @@ projectState: >
   tech-debt-audit.md. Installer copies all *.md via _install_prefix(). Receipt
   system and sq doctor Skill Packs section are live.
 dateCreated: 20260628
-dateUpdated: 20260628
-status: not_started
+dateUpdated: 20260704
+status: deprecated
+deprecationReason: >
+  Slice deprecated — superseded by Claude Code's native understand-anything
+  marketplace plugin. These tasks were implemented on a branch, then dropped
+  (branch deleted, not merged). Retained as a historical record only; do not
+  execute. See the slice design frontmatter and slice plan item (344) for
+  rationale.
 ---
 
 ## Context Summary
