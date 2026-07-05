@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from squadron.pipeline.actions.judge import (
     _DEFAULT_CONCERNS_FLOOR,
     _DEFAULT_PASS_FLOOR,
     JudgeThresholds,
+    enforce_judge,
     resolve_thresholds,
 )
-from squadron.review.models import Verdict
+from squadron.review.models import ReviewResult, Verdict
+
+
+def _make_result(score: float | None, verdict: Verdict = Verdict.UNKNOWN) -> ReviewResult:
+    return ReviewResult(
+        verdict=verdict,
+        findings=[],
+        raw_output="",
+        template_name="judge.test",
+        input_files={},
+        score=score,
+    )
 
 
 class TestDeriveVerdict:
@@ -60,3 +74,72 @@ class TestResolveThresholds:
         t = resolve_thresholds({"pass_floor": 80}, None)
         assert t.pass_floor == 80.0
         assert isinstance(t.pass_floor, float)
+
+
+class TestEnforceJudge:
+    """Test enforce_judge failure modes and the score-wins-over-verdict contract."""
+
+    @pytest.fixture
+    def thresholds(self) -> JudgeThresholds:
+        return JudgeThresholds(pass_floor=75.0, concerns_floor=50.0)
+
+    @pytest.fixture
+    def logger(self) -> logging.Logger:
+        return logging.getLogger("test_enforce_judge")
+
+    def test_score_none_yields_unknown_and_warning(
+        self, thresholds: JudgeThresholds, logger: logging.Logger, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        result = _make_result(score=None)
+        with caplog.at_level(logging.WARNING):
+            verdict, provenance = enforce_judge(result, thresholds, "judge.test", logger)
+        assert verdict == "UNKNOWN"
+        assert provenance == "judge"
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)
+
+    def test_score_below_range_yields_unknown_and_warning(
+        self, thresholds: JudgeThresholds, logger: logging.Logger, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        result = _make_result(score=-3.0)
+        with caplog.at_level(logging.WARNING):
+            verdict, provenance = enforce_judge(result, thresholds, "judge.test", logger)
+        assert verdict == "UNKNOWN"
+        assert provenance == "judge"
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)
+
+    def test_score_above_range_yields_unknown_and_warning(
+        self, thresholds: JudgeThresholds, logger: logging.Logger, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        result = _make_result(score=150.0)
+        with caplog.at_level(logging.WARNING):
+            verdict, provenance = enforce_judge(result, thresholds, "judge.test", logger)
+        assert verdict == "UNKNOWN"
+        assert provenance == "judge"
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)
+
+    @pytest.mark.parametrize(
+        ("score", "expected"),
+        [(80.0, "PASS"), (60.0, "CONCERNS"), (30.0, "FAIL")],
+    )
+    def test_valid_score_derives_verdict_with_no_warning(
+        self,
+        score: float,
+        expected: str,
+        thresholds: JudgeThresholds,
+        logger: logging.Logger,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        result = _make_result(score=score)
+        with caplog.at_level(logging.WARNING):
+            verdict, provenance = enforce_judge(result, thresholds, "judge.test", logger)
+        assert verdict == expected
+        assert provenance == "judge"
+        assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+    def test_score_wins_over_mismatched_parsed_verdict(
+        self, thresholds: JudgeThresholds, logger: logging.Logger
+    ) -> None:
+        result = _make_result(score=95.0, verdict=Verdict.FAIL)
+        verdict, provenance = enforce_judge(result, thresholds, "judge.test", logger)
+        assert verdict == "PASS"
+        assert provenance == "judge"
