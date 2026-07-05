@@ -63,6 +63,8 @@ class ReviewStepType:
         }
         if "slice" in cfg:
             review_dict["slice"] = cfg["slice"]
+        if "judge" in cfg:
+            review_dict["judge"] = cfg["judge"]
 
         actions: list[tuple[str, dict[str, object]]] = [
             ("review", review_dict),
