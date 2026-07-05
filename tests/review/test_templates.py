@@ -71,6 +71,20 @@ inputs:
 prompt_builder: squadron.review.tests_helpers.sample_builder
 """
 
+JUDGE_YAML = """\
+name: judge-template
+description: A judge template
+system_prompt: You are a judge.
+allowed_tools: [Read]
+permission_mode: bypassPermissions
+judge:
+  pass_floor: 80
+  concerns_floor: 40
+inputs:
+  required: []
+prompt_template: "judge this: {input}"
+"""
+
 
 # -- Helper for prompt_builder tests ----------------------------------------
 # We need a real importable function. Create a mini module in-memory.
@@ -194,6 +208,18 @@ prompt_builder: nonexistent.module.func
         with pytest.raises(TemplateValidationError, match="Cannot import"):
             load_template(path)
 
+    def test_judge_block_parsed_from_yaml(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, JUDGE_YAML)
+        t = load_template(path)
+        assert t.is_judge is True
+        assert t.judge == {"pass_floor": 80, "concerns_floor": 40}
+
+    def test_no_judge_block_yields_not_judge(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML)
+        t = load_template(path)
+        assert t.is_judge is False
+        assert t.judge is None
+
 
 class TestBuildPrompt:
     """Test ReviewTemplate.build_prompt edge cases."""
@@ -211,6 +237,39 @@ class TestBuildPrompt:
         )
         with pytest.raises(ValueError, match="neither"):
             t.build_prompt({})
+
+
+class TestIsJudge:
+    """Test ReviewTemplate.is_judge computed property."""
+
+    def test_without_judge_kwarg(self) -> None:
+        t = ReviewTemplate(
+            name="standard",
+            description="d",
+            system_prompt="s",
+            allowed_tools=[],
+            permission_mode="bypassPermissions",
+            setting_sources=None,
+            required_inputs=[],
+            optional_inputs=[],
+            prompt_template="hello",
+        )
+        assert t.is_judge is False
+
+    def test_with_judge_kwarg(self) -> None:
+        t = ReviewTemplate(
+            name="judge",
+            description="d",
+            system_prompt="s",
+            allowed_tools=[],
+            permission_mode="bypassPermissions",
+            setting_sources=None,
+            required_inputs=[],
+            optional_inputs=[],
+            prompt_template="hello",
+            judge={"pass_floor": 75, "concerns_floor": 50},
+        )
+        assert t.is_judge is True
 
 
 class TestRegistry:
