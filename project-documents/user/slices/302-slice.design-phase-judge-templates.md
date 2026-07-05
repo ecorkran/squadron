@@ -274,12 +274,17 @@ four lines and keeps every dispatch in the codebase keyed off data
 2. Each template's system prompt instructs the model to emit `score:` +
    `criteria:` + findings, and explicitly instructs it not to emit a verdict
    summary.
-3. Running `sq review slice-vs-arch <artifact> <against>` (or the equivalent
-   `judge.slice-vs-arch` invocation) with a real slice-design/architecture pair
-   produces a `ReviewResult` with a non-`None` score, and the resulting
-   `ActionResult.verdict` is the threshold-derived value (not a parsed verdict)
-   with `provenance == "judge"`. Same for `judge.tasks-vs-slice` with a
-   task-file/slice-design pair.
+3. Running `judge.slice-vs-arch` via `run_review_with_profile()` directly (or
+   via a `review` pipeline step naming that template) with a real
+   slice-design/architecture pair produces a `ReviewResult` with a non-`None`
+   score, and the resulting `ActionResult.verdict` is the threshold-derived
+   value (not a parsed verdict) with `provenance == "judge"`. Same for
+   `judge.tasks-vs-slice` with a task-file/slice-design pair. **Note:** `sq
+   review`'s CLI subcommands (`slice`/`arch`/`tasks`/`code`) are each pinned to
+   their own template name and have no path to invoke an arbitrary template —
+   judge templates are reachable today only via the pipeline `review` step or
+   direct API/internal use, not via a new `sq review` CLI subcommand (out of
+   scope for this slice).
 4. A pipeline `review` step with `slice: <n>` and `template: judge.slice-vs-arch`
    (or `judge.tasks-vs-slice`) auto-resolves `input`/`against` via
    `TEMPLATE_INPUTS`, matching the existing behavior for `slice`/`tasks`.
@@ -358,14 +363,36 @@ assert inputs2["against"] == info["design_file"]
 print("PASS: TEMPLATE_INPUTS resolves both judge template names correctly")
 PY
 
-# 3. End-to-end judge run against a real artifact pair (requires provider access)
-sq review slice-vs-arch \
-  project-documents/user/slices/302-slice.design-phase-judge-templates.md \
-  project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md \
-  --template judge.slice-vs-arch
-# Expected: persisted review file with `score:` and `criteria:` frontmatter,
-# a derived verdict (PASS/CONCERNS/FAIL/UNKNOWN), and findings — no model-emitted
-# verdict line in the raw output.
+# 3. End-to-end judge run against a real artifact pair (requires provider access).
+# No `sq review` CLI subcommand exists for arbitrary template names (its four
+# subcommands are each pinned to one template) — invoke directly via Python,
+# or via a pipeline `review` step with `template: judge.slice-vs-arch`.
+uv run python - <<'PY'
+import asyncio
+from squadron.review.templates import load_all_templates, get_template
+from squadron.review.review_client import run_review_with_profile
+
+async def main() -> None:
+    load_all_templates()
+    template = get_template("judge.slice-vs-arch")
+    assert template is not None
+    result = await run_review_with_profile(
+        template,
+        {
+            "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+            "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+            "cwd": ".",
+        },
+        profile="sdk",
+        model=template.model,
+    )
+    print(f"score={result.score} verdict={result.verdict} criteria={result.criteria}")
+
+asyncio.run(main())
+PY
+# Expected: a non-None score, criteria map, findings, and no model-emitted
+# verdict summary in raw_output (verdict prints UNKNOWN because none was
+# parsed — expected, ignored by enforce_judge downstream).
 
 # 4. Full regression + static analysis
 uv run pytest
