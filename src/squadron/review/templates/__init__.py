@@ -38,10 +38,16 @@ class ReviewTemplate:
     model: str | None = None
     profile: str | None = None
     diff_exclude_patterns: list[str] | None = None
+    judge: dict[str, object] | None = None
 
     # Prompt construction — exactly one of these is set (validated at load time)
     prompt_template: str | None = None
     prompt_builder: Callable[[dict[str, str]], str] | None = None
+
+    @property
+    def is_judge(self) -> bool:
+        """Whether this template is a judge (identified by presence of a judge: block)."""
+        return self.judge is not None
 
     def build_prompt(self, inputs: dict[str, str]) -> str:
         """Construct the review prompt from user-supplied inputs."""
@@ -117,6 +123,7 @@ def load_template(path: Path) -> ReviewTemplate:
 
     setting_src = data.get("setting_sources")
     hooks_raw = data.get("hooks")
+    judge_raw = data.get("judge")
 
     return ReviewTemplate(
         name=str(data["name"]),
@@ -135,6 +142,7 @@ def load_template(path: Path) -> ReviewTemplate:
             if "diff_exclude_patterns" in data
             else None
         ),
+        judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]
         prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
         prompt_builder=builder,
     )
