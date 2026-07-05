@@ -10,6 +10,22 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260705 (3)
+
+### Slice 302: Design-Phase Judge Templates — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/302-tasks.design-phase-judge-templates.md` (11 tasks, 318 lines) from the reviewed slice design.
+
+**Found and fixed a defect in the reviewed slice design before writing tasks:** the LLD's Success Criteria #3 and Verification Walkthrough step 3 assumed `sq review <judge-template-name>` was invokable from the CLI. Checked the actual CLI (`src/squadron/cli/commands/review.py`): `sq review` exposes exactly four Typer subcommands (`slice`/`arch`/`tasks`/`code`), each hardcoded to its own template name — there is no generic template-name argument. Judge templates are reachable today only via the pipeline `review` step (arbitrary `template:` config) or by calling `run_review_with_profile()` directly. Raised this to the PM (AskUserQuestion) rather than silently patching it; PM chose to drop the CLI claim from scope and correct the walkthrough to invoke the review client directly instead of a nonexistent CLI form. Both fixes committed to the slice design (`00d14ed`) before task breakdown began.
+
+**Task structure:** author `judge-tasks-vs-slice.yaml` (T1) → test (T2) → author `judge-slice-vs-arch.yaml` (T3) → test (T4) → `TEMPLATE_INPUTS` registry entries for both (T5) → test, including updating the existing exact-keyset regression test (T6) → two tests for the failure modes newly introduced by this slice: rogue model-emitted verdict discarded (T7) and `TEMPLATE_INPUTS` resolution failure → `UNKNOWN` (T8), both confirming slice 301's existing enforcement/exception paths cover these cases with no new code → live-provider verification runs for each template (T9, T10), per the Risk Assessment's flagged prompt-quality-is-unverifiable-by-unit-test-alone risk → full validation gate (T11).
+
+**Key discipline carried from the LLD:** judge templates reuse their standard counterpart's evaluation criteria verbatim — only the output contract changes (score+rationale+findings, no verdict). Default thresholds are deliberately different per template (`tasks-vs-slice`: 78/55; `slice-vs-arch`: 82/60, harder to auto-pass — weaker/more interpretive ground truth). `is_judge` and the `TEMPLATE_INPUTS` dict remain the only dispatch signals; the `judge.` name prefix is human-readable only (T11 greps the diff to confirm no naming-convention dispatch leaked in).
+
+**Next:** Phase 6 (Implementation) for slice 302, not yet started.
+
+---
+
 ## 20260705 (2)
 
 ### Slice 302: Design-Phase Judge Templates — Slice Design Complete
