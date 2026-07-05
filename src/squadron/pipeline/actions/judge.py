@@ -30,3 +30,22 @@ class JudgeThresholds:
         if score >= self.concerns_floor:
             return "CONCERNS"
         return "FAIL"
+
+
+def resolve_thresholds(
+    template_judge: dict[str, object] | None,
+    step_override: dict[str, object] | None,
+) -> JudgeThresholds:
+    """Merge threshold values per-key: step override → template default → module constant."""
+    template_judge = template_judge or {}
+    step_override = step_override or {}
+
+    pass_floor = step_override.get("pass_floor", template_judge.get("pass_floor", _DEFAULT_PASS_FLOOR))
+    concerns_floor = step_override.get(
+        "concerns_floor", template_judge.get("concerns_floor", _DEFAULT_CONCERNS_FLOOR)
+    )
+
+    return JudgeThresholds(
+        pass_floor=float(pass_floor),  # type: ignore[arg-type]
+        concerns_floor=float(concerns_floor),  # type: ignore[arg-type]
+    )
