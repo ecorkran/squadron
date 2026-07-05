@@ -297,6 +297,12 @@ four lines and keeps every dispatch in the codebase keyed off data
     thresholds.
   - `TEMPLATE_INPUTS` resolves `input`/`against` correctly for both new
     template names given a `SliceInfo`.
+  - The two failure modes new to this slice (see Risk Assessment's failure-mode
+    table): a judge `ReviewResult` with a non-`UNKNOWN` parsed `verdict` still
+    yields a threshold-derived `ActionResult.verdict` (rogue verdict is
+    discarded); a `SliceInfo` missing a field a judge template's
+    `TEMPLATE_INPUTS` entry needs results in `ActionResult(verdict="UNKNOWN")`
+    via the existing required-input `KeyError` path, not a silent skip.
 - No changes to `pyright` strict / `ruff` status — new YAML files are data,
   not typed code; the one Python change (`template_inputs.py`) passes the
   same strict gates as the rest of the module.
@@ -373,6 +379,33 @@ uv run ruff check && uv run ruff format --check
 > and inspect the persisted output — is the fixed part.
 
 ## Risk Assessment
+
+### Failure Modes on the Judge Template Path
+
+The architecture requires every enumerated failure mode to map to a named,
+non-passing, logged outcome (Technical Considerations, "Failure modes and
+their verdict mapping"). This slice introduces two new I/O paths (the
+score-with-rationale prompt shape) and two new registry lookups
+(`TEMPLATE_INPUTS`), but adds **no new handling code** — every case below
+routes through infrastructure slice 301 or slice 300 already built and tested.
+Enumerated here so the mapping is explicit for these specific paths, not
+implicitly assumed:
+
+| Failure mode | Where it's introduced | Handling | Verdict |
+|---|---|---|---|
+| LLM call times out / provider unavailable | Not new — inherent to any `review` action call | `ReviewAction.execute()`'s exception handler (301), judge-aware via template re-lookup | `UNKNOWN`, WARNING+ log |
+| `score:` absent or outside 0–100 | Not new — parser (300) + enforcement (301) are prompt-shape-agnostic | `enforce_judge()` (301) | `UNKNOWN`, WARNING log |
+| Model emits a verdict summary despite the prompt forbidding it | **New to this slice** — the prompt's no-verdict instruction is this slice's addition | `enforce_judge()` (301) never reads `result.verdict`; a rogue verdict is parsed but discarded, never surfacing on `ActionResult` | Threshold-derived verdict (score wins) |
+| `TEMPLATE_INPUTS` resolution fails (e.g. `SliceInfo` missing `arch_file`/`design_file`) | **New to this slice** — new registry entries, new failure surface | Unresolved key stays absent from `inputs`; `ReviewAction._review()`'s existing required-input check raises `KeyError`, caught by `execute()`'s judge-aware exception handler | `UNKNOWN`, WARNING log |
+| `## Rationale`/`criteria:` block malformed or partial | Not new — `_extract_criteria` (300) already returns `None` (never a partial map) on any malformed entry | Enforcement only requires `score`; a `None` criteria map does not block verdict derivation | Verdict derived from `score` alone; `criteria` absent from result |
+
+**No silent pass**: every row above terminates in either `UNKNOWN` (via 301's
+existing enforcement/exception paths) or a score-derived verdict — never a
+verdict the judge template's own output could produce independently. This
+restates the architecture's no-silent-pass NFR for this slice's specific
+paths; the guarantee's *mechanism* is unchanged from slice 301, this slice
+only confirms it holds for the two new templates and the two new registry
+lookups.
 
 ### Technical Risks
 
