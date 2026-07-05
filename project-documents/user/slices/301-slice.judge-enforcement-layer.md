@@ -6,8 +6,8 @@ parent: 300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [300]
 interfaces: [302, 303, 304]
 dateCreated: 20260617
-dateUpdated: 20260617
-status: not_started
+dateUpdated: 20260705
+status: complete
 ---
 
 # Slice Design: Judge Enforcement Layer
@@ -337,6 +337,8 @@ is handled.
 
 ### Verification Walkthrough
 
+**Status: all commands verified 20260705, output matches exactly as shown below.**
+
 The walkthrough commands below verify each functional layer without a live provider call.
 
 ```bash
@@ -440,9 +442,9 @@ print("PASS: enforce_judge derives PASS/CONCERNS/FAIL correctly from score")
 PY
 
 # 6. Full regression + static analysis
-uv run pytest             # Expect: existing suite passes, new tests added and green
-uv run pyright            # Expect: 0 errors
-uv run ruff check && uv run ruff format --check   # Expect: clean
+uv run pytest             # Actual: 2066 passed, 2 skipped
+uv run pyright            # Actual: 0 errors, 0 warnings, 0 informations
+uv run ruff check && uv run ruff format --check   # Actual: All checks passed! / 329 files already formatted
 ```
 
 > **Note**: Walkthrough steps 1–5 exercise the pure logic layer without running a
@@ -450,6 +452,16 @@ uv run ruff check && uv run ruff format --check   # Expect: clean
 > real provider output — is covered by the test suite using mocked provider calls.
 > The `caplog` fixture asserts WARNING log lines for each failure mode; that is not
 > shown here but is required by Success Criteria item 10.
+>
+> **Caveat discovered during implementation**: existing test helpers in
+> `test_review_action.py` and `test_review_action_integration.py` build mock
+> `ReviewTemplate`s via `MagicMock(spec=ReviewTemplate)`. Because `is_judge` is a
+> real `@property` on the spec, `MagicMock` auto-mocks it as a truthy `Mock` object
+> unless explicitly set — every pre-existing test silently became a "judge" template
+> until `mock.judge = None; mock.is_judge = False` was added to the shared
+> `_mock_template()` helper. One pre-301 assertion (`result.provenance is None`)
+> was also updated to `"review"`, since this slice makes provenance non-`None` for
+> standard templates too (see "Provenance set for all results" above).
 
 ## Risk Assessment
 

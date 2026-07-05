@@ -10,6 +10,24 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260705 (1)
+
+### Slice 301: Judge Enforcement Layer — Implementation Complete
+
+**Phase 6 complete.** Implemented all 13 tasks from `301-tasks.judge-enforcement-layer.md` on branch `301-slice.judge-enforcement-layer` (created from `main` after merging the planning branch).
+
+**What shipped:** `ReviewTemplate.judge: dict | None` + `is_judge` property (identified by `judge:` YAML block presence, not naming convention); new `pipeline/actions/judge.py` — `Provenance` StrEnum (`judge`/`review`), `JudgeThresholds` dataclass with `derive_verdict()`, `resolve_thresholds()` (per-key merge: step override → template default → module constant, conservative defaults `pass_floor=75.0`/`concerns_floor=50.0`), and `enforce_judge()` (pure function — logger passed in, never reads `result.verdict`, returns `UNKNOWN` + WARNING log for absent/out-of-range score); `judge:` step-level override passthrough in `ReviewStepType.expand()`; enforcement wired into `ReviewAction._review()` for the success path and into both of `execute()`'s exception handlers (via a best-effort template re-lookup so a judge-template failure still surfaces as `verdict="UNKNOWN", provenance="judge"` rather than silently passing).
+
+**Caveat found during T11/T12:** existing `MagicMock(spec=ReviewTemplate)` test helpers in `test_review_action.py`/`test_review_action_integration.py` auto-mocked `is_judge` (a real `@property` on the spec) as a truthy `Mock`, silently turning every pre-existing review-action test into a "judge" test. Fixed by explicitly setting `mock.judge = None; mock.is_judge = False` on the shared helper. One pre-301 assertion (`provenance is None`) was updated to `"review"`, since this slice makes provenance non-`None` universally, not just for judges.
+
+**Validation:** full suite 2066 passed/2 skipped, `pyright` 0 errors, `ruff check`/`format --check` clean, all 5 LLD walkthrough commands verified against real output, checkpoint `_TRIGGER_THRESHOLDS` confirmed to already include `UNKNOWN` in both `ON_CONCERNS`/`ON_FAIL` (no change needed), grep for naming-convention dispatch leaks found none.
+
+**Slice 301 marked `complete`** in both its own slice-design frontmatter and the initiative slice-plan checklist. CHANGELOG entry added under `[Unreleased]`.
+
+**Next:** slice 302 (Design-Phase Judge Templates) — first real judge YAML templates against this enforcement contract; no engine changes expected.
+
+---
+
 ## 20260704 (1)
 
 ### Slice 301: Judge Enforcement Layer — Task Breakdown Complete

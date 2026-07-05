@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Review templates can now be marked as **judges** via a `judge:` block (with optional `pass_floor`/`concerns_floor`). For judge templates, the verdict is always derived from the numeric score by threshold — never the model's own stated verdict — and every result now carries a `provenance` field (`"judge"` or `"review"`) so consumers can tell how a verdict was produced. A score that's missing or out of range yields `UNKNOWN` (never a silent pass), each logged as a warning. Thresholds can be overridden per pipeline step via a `judge:` key. No judge templates ship yet — this is the enforcement layer they'll plug into.
+
 ## [0.6.2] - 20260628
 
 ### Added

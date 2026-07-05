@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 300-arch.eval-actions-llm-as-judge-scoring.md
 project: squadron
 dateCreated: 20260604
-dateUpdated: 20260704
+dateUpdated: 20260705
 status: in_progress
 ---
 
@@ -37,7 +37,7 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
 
 ## Feature Slices (in implementation order)
 
-2. [ ] **(301) Judge Enforcement Layer** — The second half of the two-layer split. At the judge **use** (not the parser): require the score, range-validate it to 0–100, and derive the verdict by thresholding the score (at/above a pass floor → `PASS`, middle band → `CONCERNS`, below a floor → `FAIL`). Thresholds live at **template-level config with step-level override**, defaults deliberately conservative (gate toward escalation when uncertain). Add the **provenance** field to the result (judge-derived vs. review-produced) so a result carrying both score and verdict is self-describing. Map the enumerated failure modes to non-passing verdicts: absent/out-of-range score, unparseable response, missing/unreadable ground-truth file, provider unavailable, ground truth over the injection cap → `UNKNOWN` (cannot judge); a substantive negative judgment → `FAIL`; each logged at WARNING or above. No templates yet — this slice provides the enforcement the templates plug into.
+2. [x] **(301) Judge Enforcement Layer** — The second half of the two-layer split. At the judge **use** (not the parser): require the score, range-validate it to 0–100, and derive the verdict by thresholding the score (at/above a pass floor → `PASS`, middle band → `CONCERNS`, below a floor → `FAIL`). Thresholds live at **template-level config with step-level override**, defaults deliberately conservative (gate toward escalation when uncertain). Add the **provenance** field to the result (judge-derived vs. review-produced) so a result carrying both score and verdict is self-describing. Map the enumerated failure modes to non-passing verdicts: absent/out-of-range score, unparseable response, missing/unreadable ground-truth file, provider unavailable, ground truth over the injection cap → `UNKNOWN` (cannot judge); a substantive negative judgment → `FAIL`; each logged at WARNING or above. No templates yet — this slice provides the enforcement the templates plug into.
    - **Value:** Architectural enablement — turns a parsed score into a gateable, self-describing verdict with conservative, observable failure handling; the contract every judge template depends on.
    - **Success Criteria:**
      - A score is required and 0–100-validated at the judge use; absent or out-of-range produces `UNKNOWN`, not a pass.
