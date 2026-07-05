@@ -10,6 +10,24 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260705 (2)
+
+### Slice 302: Design-Phase Judge Templates — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/302-slice.design-phase-judge-templates.md` on planning branch `300-planning.design-phase-judge-templates`, following the slice plan entry in `300-slices.eval-actions-llm-as-judge-scoring.md`.
+
+**Grounded in real code, not the plan's sketch alone:** read `templates/__init__.py` (YAML loader, `judge:`/`is_judge` from 301), `data/templates/{slice,tasks}.yaml` (the two standard templates being adapted), `template_inputs.py` (`TEMPLATE_INPUTS` registry — keyed by exact template name, so judge templates need their own entries), `parsers.py` (`_extract_score`/`_extract_criteria` — confirmed these are lenient markdown-line regexes, not a JSON/schema mechanism; `_extract_criteria`'s docstring explicitly flags "the structured-output/JSON variant is slice 302" — but no schema-enforcement mechanism exists in the engine, so the architecture's "structured-output constraint" is realized at the prompt level only), and `review_client.py` (500KB injection cap, unaffected by single-artifact judging).
+
+**Design:** two new built-in template YAML files (`judge-slice-vs-arch.yaml`, `judge-tasks-vs-slice.yaml`) reusing each standard template's evaluation criteria verbatim, swapping the output contract to score+rationale+findings (via the existing `criteria:` block, no new parser target) and explicitly forbidding a verdict summary. Plus two new `TEMPLATE_INPUTS` entries reusing the existing `_design_file`/`_arch_file`/`_tasks_input` source functions unchanged. No engine, parser, or action changes — matches the architecture's "no new engine changes" commitment for this slice.
+
+**Key decisions:** `judge.` name prefix is human-readable only, never a dispatch signal (`is_judge`/`judge:` block presence remains the only signal, per 301's precedent and the project's no-label-as-structure rule); differentiated default thresholds per ground-truth strength (`tasks-vs-slice`: pass_floor=78/concerns_floor=55, stronger ground truth; `slice-vs-arch`: pass_floor=82/concerns_floor=60, more interpretive, escalates more readily), consistent with the architecture's "bubble up the hard calls" principle; rejected a judge→standard template-name-stripping fallback in `TEMPLATE_INPUTS` as reintroducing naming-convention dispatch.
+
+**Flagged risk:** prompt quality (does the model actually skip the verdict, does score-with-rationale reduce anchoring) is unverifiable by unit test alone — walkthrough step 3 and the Risk Assessment call for at least one live-provider run per template during implementation, not just mocked tests.
+
+**Next:** Phase 5 (Task Breakdown) for slice 302, not yet started.
+
+---
+
 ## 20260705 (1)
 
 ### Slice 301: Judge Enforcement Layer — Implementation Complete
