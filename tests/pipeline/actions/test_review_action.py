@@ -521,6 +521,132 @@ class TestReviewErrors:
 
 
 # ---------------------------------------------------------------------------
+# Execute — judge enforcement (slice 301)
+# ---------------------------------------------------------------------------
+
+
+def _mock_judge_template(judge: dict[str, object] | None = None) -> ReviewTemplate:
+    mock = MagicMock(spec=ReviewTemplate, name="judge.test")
+    mock.required_inputs = []
+    mock.optional_inputs = []
+    mock.judge = judge if judge is not None else {"pass_floor": 75, "concerns_floor": 50}
+    mock.is_judge = True
+    return mock
+
+
+class TestJudgeEnforcement:
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_judge_template_verdict_is_threshold_derived(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_judge_template()
+        # Parsed verdict says FAIL, but score is well above pass_floor — score must win.
+        mock_run_review.return_value = _make_review_result(Verdict.FAIL, score=90.0)
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.verdict == "PASS"
+        assert result.provenance == "judge"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_judge_template_no_score_yields_unknown(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_judge_template()
+        mock_run_review.return_value = _make_review_result(score=None)
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.verdict == "UNKNOWN"
+        assert result.provenance == "judge"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_standard_template_provenance_is_review_verdict_unchanged(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result(Verdict.CONCERNS)
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.provenance == "review"
+        assert result.verdict == "CONCERNS"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_step_level_judge_override_wins_over_template_default(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        # Template default pass_floor=75; step override raises it to 95.
+        mock_get_template.return_value = _mock_judge_template({"pass_floor": 75, "concerns_floor": 50})
+        mock_run_review.return_value = _make_review_result(score=90.0)
+
+        ctx = _make_context(params={"template": "judge.test", "judge": {"pass_floor": 95}})
+        result = await ReviewAction().execute(ctx)
+        # 90.0 would PASS under the template default (75) but not under the
+        # step override (95) — CONCERNS proves the override was applied.
+        assert result.verdict == "CONCERNS"
+        assert result.provenance == "judge"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile", side_effect=RuntimeError("provider down"))
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_judge_template_exception_yields_unknown_with_warning_log(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        mock_get_template.return_value = _mock_judge_template()
+
+        with caplog.at_level("WARNING"):
+            result = await ReviewAction().execute(_make_context())
+
+        assert result.success is False
+        assert result.verdict == "UNKNOWN"
+        assert result.provenance == "judge"
+        assert any(r.levelno >= 30 for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
 # Execute — metadata
 # ---------------------------------------------------------------------------
 
