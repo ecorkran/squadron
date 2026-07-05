@@ -45,6 +45,8 @@ def _mock_template() -> ReviewTemplate:
     mock = MagicMock(spec=ReviewTemplate, name="code")
     mock.required_inputs = []
     mock.optional_inputs = []
+    mock.judge = None
+    mock.is_judge = False
     return mock
 
 

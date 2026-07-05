@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_thresholds
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
@@ -23,7 +25,7 @@ from squadron.review.rules import (
     resolve_rules_dir,
 )
 from squadron.review.template_inputs import resolve_template_inputs
-from squadron.review.templates import get_template, load_all_templates
+from squadron.review.templates import ReviewTemplate, get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
 
@@ -65,20 +67,38 @@ class ReviewAction:
         try:
             return await self._review(context)
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
-            return ActionResult(
-                success=False,
-                action_type=self.action_type,
-                outputs={},
-                error=str(exc),
+            _logger.warning(
+                "review: step %s failed before/during template resolution: %s",
+                context.step_name,
+                exc,
             )
+            return self._exception_result(context, exc)
         except Exception as exc:
             _logger.exception("review: unexpected error in step %s", context.step_name)
-            return ActionResult(
-                success=False,
-                action_type=self.action_type,
-                outputs={},
-                error=str(exc),
-            )
+            return self._exception_result(context, exc)
+
+    def _exception_result(self, context: ActionContext, exc: Exception) -> ActionResult:
+        """Build the ActionResult for an exception from _review().
+
+        Best-effort template re-lookup detects whether this was a judge
+        template so the failure surfaces as verdict=UNKNOWN/provenance=judge
+        (never silently passing a checkpoint). If the template can't be
+        found (e.g. the KeyError was the template lookup itself failing),
+        falls back to the pre-301 verdict=None/provenance=None shape.
+        """
+        template_name = context.params.get("template")
+        template: ReviewTemplate | None = (
+            get_template(str(template_name)) if template_name is not None else None
+        )
+        is_judge = template is not None and template.is_judge
+        return ActionResult(
+            success=False,
+            action_type=self.action_type,
+            outputs={},
+            error=str(exc),
+            verdict="UNKNOWN" if is_judge else None,
+            provenance=Provenance.JUDGE if is_judge else None,
+        )
 
     async def _review(self, context: ActionContext) -> ActionResult:
         # Template resolution
@@ -201,16 +221,26 @@ class ReviewAction:
         if review_file_path is not None:
             outputs["review_file"] = review_file_path
 
+        if template.is_judge:
+            judge_override = context.params.get("judge")
+            step_override = (
+                cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
+            )
+            thresholds = resolve_thresholds(template.judge, step_override)
+            verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
+        else:
+            verdict, provenance = result.verdict.value, Provenance.REVIEW
+
         return ActionResult(
             success=True,
             action_type=self.action_type,
             outputs=outputs,
-            verdict=result.verdict.value,
+            verdict=verdict,
             findings=[sf.__dict__ for sf in result.structured_findings],
             # Numeric scoring foundation (slice 300): pass through score/criteria.
-            # provenance is left unset (stays None — reserved for slice 301).
             score=result.score,
             criteria=result.criteria,
+            provenance=provenance,
             metadata={
                 "model": model_id,
                 "profile": profile_name,

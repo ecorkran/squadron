@@ -83,6 +83,8 @@ def _mock_template() -> ReviewTemplate:
     mock = MagicMock(spec=ReviewTemplate, name="code")
     mock.required_inputs = []
     mock.optional_inputs = []
+    mock.judge = None
+    mock.is_judge = False
     return mock
 
 
@@ -257,8 +259,7 @@ class TestReviewScoreThreading:
         result = await ReviewAction().execute(_make_context())
         assert result.score is None
         assert result.criteria is None
-        # The action never sets provenance (reserved for slice 301).
-        assert result.provenance is None
+        assert result.provenance == "review"
 
 
 # ---------------------------------------------------------------------------
