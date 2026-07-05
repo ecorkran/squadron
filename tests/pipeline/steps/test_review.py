@@ -83,3 +83,19 @@ def test_expand_slice_absent_when_not_in_config() -> None:
     actions = ReviewStepType().expand(_make_config({"template": "code"}))
     review = actions[0]
     assert "slice" not in review[1]
+
+
+def test_expand_judge_forwarded_when_present() -> None:
+    """'judge' override dict in config is forwarded verbatim to the review action dict."""
+    actions = ReviewStepType().expand(
+        _make_config({"template": "judge.slice-vs-arch", "judge": {"pass_floor": 80}})
+    )
+    review = actions[0]
+    assert review[1]["judge"] == {"pass_floor": 80}
+
+
+def test_expand_judge_absent_when_not_in_config() -> None:
+    """'judge' key is not emitted when absent from config (not set to None)."""
+    actions = ReviewStepType().expand(_make_config({"template": "code"}))
+    review = actions[0]
+    assert "judge" not in review[1]
