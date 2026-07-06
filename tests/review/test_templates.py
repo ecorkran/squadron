@@ -369,12 +369,21 @@ class TestBuiltinTemplateHardening:
 
 
 # ---------------------------------------------------------------------------
-# 302: judge.tasks-vs-slice built-in template
+# 302: built-in judge templates (judge.tasks-vs-slice, judge.slice-vs-arch)
 # ---------------------------------------------------------------------------
 
+# Single source of truth for each judge template's default thresholds, so the
+# per-template checks below and the cross-template differentiation check
+# reference the same values instead of repeating them as bare literals.
+JUDGE_TEMPLATE_THRESHOLDS: dict[str, dict[str, int]] = {
+    "judge.tasks-vs-slice": {"pass_floor": 78, "concerns_floor": 55},
+    "judge.slice-vs-arch": {"pass_floor": 82, "concerns_floor": 60},
+}
 
-class TestJudgeTasksVsSliceTemplate:
-    """Test the judge.tasks-vs-slice built-in template loads correctly."""
+
+@pytest.mark.parametrize("template_name", list(JUDGE_TEMPLATE_THRESHOLDS))
+class TestBuiltinJudgeTemplates:
+    """Test each built-in judge template loads with the correct shape."""
 
     @pytest.fixture(autouse=True)
     def _load(self) -> None:
@@ -382,68 +391,45 @@ class TestJudgeTasksVsSliceTemplate:
 
         load_all_templates()
 
-    def _get(self) -> ReviewTemplate:
-        t = get_template("judge.tasks-vs-slice")
-        assert t is not None, "Template 'judge.tasks-vs-slice' not found"
+    def _get(self, template_name: str) -> ReviewTemplate:
+        t = get_template(template_name)
+        assert t is not None, f"Template '{template_name}' not found"
         return t
 
-    def test_is_judge(self) -> None:
-        assert self._get().is_judge is True
+    def test_is_judge(self, template_name: str) -> None:
+        assert self._get(template_name).is_judge is True
 
-    def test_default_thresholds(self) -> None:
-        assert self._get().judge == {"pass_floor": 78, "concerns_floor": 55}
+    def test_default_thresholds(self, template_name: str) -> None:
+        assert self._get(template_name).judge == JUDGE_TEMPLATE_THRESHOLDS[template_name]
 
-    def test_required_inputs(self) -> None:
-        names = {i.name for i in self._get().required_inputs}
+    def test_required_inputs(self, template_name: str) -> None:
+        names = {i.name for i in self._get(template_name).required_inputs}
         assert names == {"input", "against"}
 
-    def test_registered_in_list_templates(self) -> None:
+    def test_registered_in_list_templates(self, template_name: str) -> None:
         names = {t.name for t in list_templates()}
-        assert "judge.tasks-vs-slice" in names
+        assert template_name in names
 
 
-# ---------------------------------------------------------------------------
-# 302: judge.slice-vs-arch built-in template
-# ---------------------------------------------------------------------------
+def test_judge_template_default_thresholds_differ_by_ground_truth_strength() -> None:
+    """Ground-truth-strength differentiation: judge.slice-vs-arch's pass_floor
+    must be stricter than judge.tasks-vs-slice's — regression guard for the
+    LLD's differentiated-thresholds requirement."""
+    from squadron.review.templates import load_all_templates
 
-
-class TestJudgeSliceVsArchTemplate:
-    """Test the judge.slice-vs-arch built-in template loads correctly."""
-
-    @pytest.fixture(autouse=True)
-    def _load(self) -> None:
-        from squadron.review.templates import load_all_templates
-
-        load_all_templates()
-
-    def _get(self) -> ReviewTemplate:
-        t = get_template("judge.slice-vs-arch")
-        assert t is not None, "Template 'judge.slice-vs-arch' not found"
-        return t
-
-    def test_is_judge(self) -> None:
-        assert self._get().is_judge is True
-
-    def test_default_thresholds(self) -> None:
-        assert self._get().judge == {"pass_floor": 82, "concerns_floor": 60}
-
-    def test_required_inputs(self) -> None:
-        names = {i.name for i in self._get().required_inputs}
-        assert names == {"input", "against"}
-
-    def test_registered_in_list_templates(self) -> None:
-        names = {t.name for t in list_templates()}
-        assert "judge.slice-vs-arch" in names
-
-    def test_default_thresholds_differ_from_tasks_vs_slice(self) -> None:
-        """Ground-truth-strength differentiation: slice-vs-arch's pass_floor
-        (82) must be stricter than tasks-vs-slice's (78) — regression guard
-        for the LLD's differentiated-thresholds requirement."""
-        slice_vs_arch = self._get()
-        tasks_vs_slice = get_template("judge.tasks-vs-slice")
-        assert tasks_vs_slice is not None
-        assert slice_vs_arch.judge is not None
-        assert tasks_vs_slice.judge is not None
-        assert slice_vs_arch.judge["pass_floor"] != tasks_vs_slice.judge["pass_floor"]
-        assert slice_vs_arch.judge["pass_floor"] == 82
-        assert tasks_vs_slice.judge["pass_floor"] == 78
+    load_all_templates()
+    slice_vs_arch = get_template("judge.slice-vs-arch")
+    tasks_vs_slice = get_template("judge.tasks-vs-slice")
+    assert slice_vs_arch is not None
+    assert tasks_vs_slice is not None
+    assert slice_vs_arch.judge is not None
+    assert tasks_vs_slice.judge is not None
+    assert (
+        slice_vs_arch.judge["pass_floor"]
+        == JUDGE_TEMPLATE_THRESHOLDS["judge.slice-vs-arch"]["pass_floor"]
+    )
+    assert (
+        tasks_vs_slice.judge["pass_floor"]
+        == JUDGE_TEMPLATE_THRESHOLDS["judge.tasks-vs-slice"]["pass_floor"]
+    )
+    assert slice_vs_arch.judge["pass_floor"] > tasks_vs_slice.judge["pass_floor"]

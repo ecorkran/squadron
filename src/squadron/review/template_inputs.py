@@ -28,7 +28,7 @@ def _design_file(info: SliceInfo, _cwd: str) -> str | None:
 
 
 def _arch_file(info: SliceInfo, _cwd: str) -> str | None:
-    return info["arch_file"]
+    return info["arch_file"] if info["arch_file"] else None
 
 
 def _tasks_input(info: SliceInfo, _cwd: str) -> str | None:

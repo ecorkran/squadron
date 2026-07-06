@@ -650,6 +650,9 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.resolve_slice_info")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -658,17 +661,30 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_resolve_slice_info: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
     ) -> None:
         """302: a SliceInfo missing arch_file leaves `against` unresolved for
         judge.slice-vs-arch. The required-input KeyError must surface as a
         judge-aware UNKNOWN via execute()'s exception handler, not a silent
-        skip."""
+        skip.
+
+        Uses the real "judge.slice-vs-arch" template name (not a synthetic
+        "judge.test") so this exercises the actual TEMPLATE_INPUTS registry
+        entry added in T5 — the empty arch_file, not an unregistered
+        template name, must be what causes `against` to stay unresolved.
+        run_review_with_profile is mocked to succeed so that, if inputs did
+        fully resolve, the test would fail loudly (success=True) instead of
+        an unrelated provider error masquerading as this failure mode.
+        """
         template = _mock_judge_template()
         template.required_inputs = [
             InputDef(name="input", description=""),
             InputDef(name="against", description=""),
         ]
         mock_get_template.return_value = template
+        mock_run_review.return_value = _make_review_result(score=90.0)
         mock_resolve_slice_info.return_value = {
             "index": 302,
             "name": "design-phase-judge-templates",
@@ -678,12 +694,13 @@ class TestJudgeEnforcement:
             "arch_file": "",
         }
 
-        ctx = _make_context(params={"template": "judge.test", "slice": "302"})
+        ctx = _make_context(params={"template": "judge.slice-vs-arch", "slice": "302"})
         result = await ReviewAction().execute(ctx)
 
         assert result.success is False
         assert result.verdict == "UNKNOWN"
         assert result.provenance == "judge"
+        mock_run_review.assert_not_called()
 
     @pytest.mark.asyncio
     @patch(f"{_P}.run_review_with_profile", side_effect=RuntimeError("provider down"))

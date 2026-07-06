@@ -54,6 +54,14 @@ def test_slice_template_populates_input_and_against() -> None:
     assert inputs["against"] == SLICE_INFO["arch_file"]
 
 
+def test_slice_template_no_against_when_arch_file_empty() -> None:
+    """source returning None must not set the key (not even to an empty string)."""
+    info: SliceInfo = {**SLICE_INFO, "arch_file": ""}
+    inputs: dict[str, str] = {}
+    resolve_template_inputs("slice", info, CWD, inputs)
+    assert "against" not in inputs
+
+
 # ---------------------------------------------------------------------------
 # tasks template
 # ---------------------------------------------------------------------------
@@ -161,3 +169,11 @@ def test_judge_slice_vs_arch_populates_input_and_against() -> None:
     resolve_template_inputs("judge.slice-vs-arch", SLICE_INFO, CWD, inputs)
     assert inputs["input"] == SLICE_INFO["design_file"]
     assert inputs["against"] == SLICE_INFO["arch_file"]
+
+
+def test_judge_slice_vs_arch_no_against_when_arch_file_empty() -> None:
+    """source returning None must not set the key (not even to an empty string)."""
+    info: SliceInfo = {**SLICE_INFO, "arch_file": ""}
+    inputs: dict[str, str] = {}
+    resolve_template_inputs("judge.slice-vs-arch", info, CWD, inputs)
+    assert "against" not in inputs
