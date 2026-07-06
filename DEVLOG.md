@@ -2,13 +2,36 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260513
+dateUpdated: 20260705
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260705 (4)
+
+### Slice 302: Design-Phase Judge Templates — Implementation Complete
+
+All 11 tasks (T1–T11) implemented on branch `300-planning.design-phase-judge-templates`.
+
+**What was built:**
+- `data/templates/judge-tasks-vs-slice.yaml` — judge variant of `tasks.yaml`; reuses its evaluation criteria verbatim, swaps the output contract to score+rationale+findings, forbids a verdict summary. `judge: {pass_floor: 78, concerns_floor: 55}`.
+- `data/templates/judge-slice-vs-arch.yaml` — judge variant of `slice.yaml`, same pattern. `judge: {pass_floor: 82, concerns_floor: 60}` (higher floor — architecture alignment is more interpretive ground truth than a concrete task list).
+- `review/template_inputs.py` — two new `TEMPLATE_INPUTS` entries (`judge.tasks-vs-slice`, `judge.slice-vs-arch`), reusing the existing `_tasks_input`/`_design_file`/`_arch_file` source functions unchanged. No prefix-stripping fallback (rejected in the slice design as reintroducing naming-convention dispatch).
+
+**No engine/parser/action changes** — both templates run through the unmodified `ReviewAction._review()` → `run_review_with_profile()` → parser → `enforce_judge()` path built in slice 301/300.
+
+**Tests:** 8 new/extended tests across `test_templates.py` (load + is_judge + threshold differentiation regression guard), `test_template_inputs.py` (resolution + exact-keyset regression), and `test_review_action.py` (T7: rogue model-emitted verdict discarded — confirms `enforce_judge()` never reads `result.verdict`; T8: `TEMPLATE_INPUTS` resolution failure surfaces as `UNKNOWN`/`provenance=judge` via the existing exception handler, not a silent skip). Both new-to-this-slice failure modes needed no new handling code — only new test coverage confirming slice 301's mechanisms already cover them.
+
+**Live-provider verification (T9/T10):** ran both templates against real in-repo artifact pairs via `run_review_with_profile()` directly (openrouter profile, `anthropic/claude-opus-4.5` — the `sdk` profile can't launch from inside an active Claude Code session). `judge.tasks-vs-slice` scored 91.0 reviewing this slice's own task file against its slice design; `judge.slice-vs-arch` scored 86.0 reviewing this slice's design against its architecture doc. Neither run emitted a `## Summary`/verdict line; both produced well-formed `criteria` maps and findings. No prompt revision needed. The slice-vs-arch score (clears `pass_floor=82`) is consistent with the design's already-fixed review findings — the committed human review's `CONCERNS` verdict predates the `d69ee7e` fixes to failure-mode enumeration.
+
+**Full validation:** 2080 passed / 2 skipped (pre-existing, unrelated), `pyright` 0 errors, `ruff check`/`format` clean, `sq review list` shows all 6 templates, no `template_name.startswith("judge.")`-style dispatch found in non-test code.
+
+**Unblocks:** slice 303 (judge-gated cycle conventions) now has two real judges to compose into a pipeline.
 
 ---
 

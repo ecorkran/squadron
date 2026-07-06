@@ -8,7 +8,7 @@ dependencies:
 projectState: "Slice 301 complete. ReviewTemplate.judge/.is_judge, enforce_judge(), resolve_thresholds(), and Provenance all exist and are exercised only by a synthetic test template — no real judge template exists yet. TEMPLATE_INPUTS in src/squadron/review/template_inputs.py has exactly four entries (slice, tasks, arch, code), each keyed by an existing standard template name. sq review's CLI subcommands (slice/arch/tasks/code) are each pinned to their own template name with no generic template-name argument; judge templates are reachable only via the pipeline review step (arbitrary template: string) or direct API use — this is a corrected finding from Phase 5, not part of the original LLD."
 dateCreated: 20260705
 dateUpdated: 20260705
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -67,23 +67,23 @@ status: not_started
 
 ### T1: Author `judge-tasks-vs-slice.yaml`
 
-- [ ] **Create `src/squadron/data/templates/judge-tasks-vs-slice.yaml`**, adapted
+- [x] **Create `src/squadron/data/templates/judge-tasks-vs-slice.yaml`**, adapted
   from `src/squadron/data/templates/tasks.yaml`
-  - [ ] `name: judge.tasks-vs-slice`
-  - [ ] Reuse `tasks.yaml`'s evaluation-criteria list verbatim (gaps, scope
+  - [x] `name: judge.tasks-vs-slice`
+  - [x] Reuse `tasks.yaml`'s evaluation-criteria list verbatim (gaps, scope
     creep, sequencing, test-with pattern, NFR/load-test checks, etc.)
-  - [ ] Replace the `## Summary` / verdict output-contract instructions with:
+  - [x] Replace the `## Summary` / verdict output-contract instructions with:
     require a `## Rationale` section (short justification per criterion before
     its numeric value), a top-level `score: <0-100>` line, a `criteria:` block
     (same shape the parser already extracts per slice 300), and existing
     `## Findings` blocks — and an explicit instruction **not** to emit a
     `## Summary` or PASS/CONCERNS/FAIL line
-  - [ ] Add a `judge:` block: `pass_floor: 78`, `concerns_floor: 55`
-  - [ ] Keep `allowed_tools`, `permission_mode`, `model`, `setting_sources`,
+  - [x] Add a `judge:` block: `pass_floor: 78`, `concerns_floor: 55`
+  - [x] Keep `allowed_tools`, `permission_mode`, `model`, `setting_sources`,
     and the `inputs:`/`prompt_template:` shape structurally the same as
     `tasks.yaml` (same required inputs: `input`, `against`; same optional
     `cwd`)
-- [ ] Success: file is valid YAML; `uv run python -c "from squadron.review.templates import load_template; from pathlib import Path; t = load_template(Path('src/squadron/data/templates/judge-tasks-vs-slice.yaml')); assert t.is_judge and t.judge == {'pass_floor': 78, 'concerns_floor': 55}"` passes with no error
+- [x] Success: file is valid YAML; `uv run python -c "from squadron.review.templates import load_template; from pathlib import Path; t = load_template(Path('src/squadron/data/templates/judge-tasks-vs-slice.yaml')); assert t.is_judge and t.judge == {'pass_floor': 78, 'concerns_floor': 55}"` passes with no error
 
 **Commit:** `feat: add judge.tasks-vs-slice template`
 
@@ -91,15 +91,15 @@ status: not_started
 
 ### T2: Tests for `judge.tasks-vs-slice` template loading
 
-- [ ] **Add tests in `tests/review/test_templates.py`** (extend existing)
-  - [ ] Loading `judge-tasks-vs-slice.yaml` via `load_template()` produces
+- [x] **Add tests in `tests/review/test_templates.py`** (extend existing)
+  - [x] Loading `judge-tasks-vs-slice.yaml` via `load_template()` produces
     `is_judge is True`
-  - [ ] `.judge == {"pass_floor": 78, "concerns_floor": 55}` (values as parsed,
+  - [x] `.judge == {"pass_floor": 78, "concerns_floor": 55}` (values as parsed,
     coerced or not — assert against the raw YAML-parsed types)
-  - [ ] Required inputs are `input` and `against` (same as `tasks.yaml`)
-  - [ ] `load_all_templates()` (built-in discovery) includes
+  - [x] Required inputs are `input` and `against` (same as `tasks.yaml`)
+  - [x] `load_all_templates()` (built-in discovery) includes
     `judge.tasks-vs-slice` in `list_templates()`
-- [ ] Success: `uv run pytest tests/review/test_templates.py` passes
+- [x] Success: `uv run pytest tests/review/test_templates.py` passes
 
 **Commit:** `test: cover judge.tasks-vs-slice template loading`
 
@@ -107,19 +107,19 @@ status: not_started
 
 ### T3: Author `judge-slice-vs-arch.yaml`
 
-- [ ] **Create `src/squadron/data/templates/judge-slice-vs-arch.yaml`**, adapted
+- [x] **Create `src/squadron/data/templates/judge-slice-vs-arch.yaml`**, adapted
   from `src/squadron/data/templates/slice.yaml`
-  - [ ] `name: judge.slice-vs-arch`
-  - [ ] Reuse `slice.yaml`'s evaluation-criteria list verbatim (architectural
+  - [x] `name: judge.slice-vs-arch`
+  - [x] Reuse `slice.yaml`'s evaluation-criteria list verbatim (architectural
     alignment, boundary violations, scope creep, dependency direction,
     integration points, failure-mode enumeration, NFR restatement, etc.)
-  - [ ] Same output-contract replacement as T1: `## Rationale` +
+  - [x] Same output-contract replacement as T1: `## Rationale` +
     `score:` + `criteria:` + `## Findings`, no `## Summary`/verdict line
-  - [ ] Add a `judge:` block: `pass_floor: 82`, `concerns_floor: 60`
-  - [ ] Keep `allowed_tools`, `permission_mode`, `model`, `setting_sources`,
+  - [x] Add a `judge:` block: `pass_floor: 82`, `concerns_floor: 60`
+  - [x] Keep `allowed_tools`, `permission_mode`, `model`, `setting_sources`,
     and the `inputs:`/`prompt_template:` shape structurally the same as
     `slice.yaml` (required inputs: `input`, `against`; optional `cwd`)
-- [ ] Success: `uv run python -c "from squadron.review.templates import load_template; from pathlib import Path; t = load_template(Path('src/squadron/data/templates/judge-slice-vs-arch.yaml')); assert t.is_judge and t.judge == {'pass_floor': 82, 'concerns_floor': 60}"` passes with no error
+- [x] Success: `uv run python -c "from squadron.review.templates import load_template; from pathlib import Path; t = load_template(Path('src/squadron/data/templates/judge-slice-vs-arch.yaml')); assert t.is_judge and t.judge == {'pass_floor': 82, 'concerns_floor': 60}"` passes with no error
 
 **Commit:** `feat: add judge.slice-vs-arch template`
 
@@ -127,17 +127,17 @@ status: not_started
 
 ### T4: Tests for `judge.slice-vs-arch` template loading
 
-- [ ] **Add tests in `tests/review/test_templates.py`** (extend existing)
-  - [ ] Loading `judge-slice-vs-arch.yaml` via `load_template()` produces
+- [x] **Add tests in `tests/review/test_templates.py`** (extend existing)
+  - [x] Loading `judge-slice-vs-arch.yaml` via `load_template()` produces
     `is_judge is True`
-  - [ ] `.judge == {"pass_floor": 82, "concerns_floor": 60}`
-  - [ ] Required inputs are `input` and `against` (same as `slice.yaml`)
-  - [ ] `load_all_templates()` includes `judge.slice-vs-arch` in
+  - [x] `.judge == {"pass_floor": 82, "concerns_floor": 60}`
+  - [x] Required inputs are `input` and `against` (same as `slice.yaml`)
+  - [x] `load_all_templates()` includes `judge.slice-vs-arch` in
     `list_templates()`
-  - [ ] Both judge templates' default thresholds differ from each other
+  - [x] Both judge templates' default thresholds differ from each other
     (`pass_floor` 82 vs. 78) — a direct regression guard for the
     ground-truth-strength differentiation the LLD requires
-- [ ] Success: `uv run pytest tests/review/test_templates.py` passes
+- [x] Success: `uv run pytest tests/review/test_templates.py` passes
 
 **Commit:** `test: cover judge.slice-vs-arch template loading`
 
@@ -145,16 +145,16 @@ status: not_started
 
 ### T5: Add `TEMPLATE_INPUTS` entries for both judge templates
 
-- [ ] **Update `TEMPLATE_INPUTS` in `src/squadron/review/template_inputs.py`**
-  - [ ] Add `"judge.tasks-vs-slice"` entry, reusing the exact same
+- [x] **Update `TEMPLATE_INPUTS` in `src/squadron/review/template_inputs.py`**
+  - [x] Add `"judge.tasks-vs-slice"` entry, reusing the exact same
     `TemplateInputSpec` list as the existing `"tasks"` entry
     (`_tasks_input` → `input`, `_design_file` → `against`)
-  - [ ] Add `"judge.slice-vs-arch"` entry, reusing the exact same
+  - [x] Add `"judge.slice-vs-arch"` entry, reusing the exact same
     `TemplateInputSpec` list as the existing `"slice"` entry
     (`_design_file` → `input`, `_arch_file` → `against`)
-  - [ ] Do not add a name-stripping fallback (`judge.X` → `X`) — two explicit
+  - [x] Do not add a name-stripping fallback (`judge.X` → `X`) — two explicit
     entries only, per the LLD's rejected-alternative rationale
-- [ ] Success: `resolve_template_inputs("judge.tasks-vs-slice", info, cwd, inputs)`
+- [x] Success: `resolve_template_inputs("judge.tasks-vs-slice", info, cwd, inputs)`
   and `resolve_template_inputs("judge.slice-vs-arch", info, cwd, inputs)`
   populate `input`/`against` identically to their standard counterparts given
   the same `SliceInfo`; `uv run pyright` passes
@@ -165,18 +165,18 @@ status: not_started
 
 ### T6: Tests for judge `TEMPLATE_INPUTS` resolution
 
-- [ ] **Update `tests/review/test_template_inputs.py`** (extend existing)
-  - [ ] Update `test_registry_has_all_templates` to assert the full expected
+- [x] **Update `tests/review/test_template_inputs.py`** (extend existing)
+  - [x] Update `test_registry_has_all_templates` to assert the full expected
     keyset now includes `judge.tasks-vs-slice` and `judge.slice-vs-arch`
     alongside the existing four (do not just add a separate weaker assertion —
     replace the exact-set check so it stays a true regression guard)
-  - [ ] `resolve_template_inputs("judge.tasks-vs-slice", ...)` populates
+  - [x] `resolve_template_inputs("judge.tasks-vs-slice", ...)` populates
     `input`/`against` identically to the existing `test_tasks_template_*` cases
-  - [ ] `resolve_template_inputs("judge.slice-vs-arch", ...)` populates
+  - [x] `resolve_template_inputs("judge.slice-vs-arch", ...)` populates
     `input`/`against` identically to the existing `test_slice_template_*` case
-  - [ ] `judge.tasks-vs-slice` with empty `task_files` → no `input` key set
+  - [x] `judge.tasks-vs-slice` with empty `task_files` → no `input` key set
     (mirrors `test_tasks_template_no_input_when_task_files_empty`)
-- [ ] Success: `uv run pytest tests/review/test_template_inputs.py` passes
+- [x] Success: `uv run pytest tests/review/test_template_inputs.py` passes
 
 **Commit:** `test: cover TEMPLATE_INPUTS resolution for judge templates`
 
@@ -184,20 +184,20 @@ status: not_started
 
 ### T7: Test — rogue model-emitted verdict is discarded for a judge result
 
-- [ ] **Add a test in `tests/pipeline/actions/test_review_action.py`** (extend
+- [x] **Add a test in `tests/pipeline/actions/test_review_action.py`** (extend
   existing judge-enforcement tests from slice 301)
-  - [ ] Using either new judge template (mock or the real loaded template),
+  - [x] Using either new judge template (mock or the real loaded template),
     mock `run_review_with_profile` to return a `ReviewResult` with a
     **non-`UNKNOWN` parsed `verdict`** (e.g. `Verdict.FAIL`) alongside a valid,
     in-range `score` that would derive to `PASS` under the template's
     thresholds
-  - [ ] Assert the resulting `ActionResult.verdict` is the **threshold-derived**
+  - [x] Assert the resulting `ActionResult.verdict` is the **threshold-derived**
     value (`"PASS"`), not the parsed `"FAIL"` — proving the rogue verdict never
     surfaces, consistent with `enforce_judge()` never reading `result.verdict`
-  - [ ] This is the LLD's Risk Assessment row "Model emits a verdict summary
+  - [x] This is the LLD's Risk Assessment row "Model emits a verdict summary
     despite the prompt forbidding it" — confirms the existing 301 mechanism
     covers this slice's new templates with no new code required
-- [ ] Success: `uv run pytest tests/pipeline/actions/test_review_action.py` passes;
+- [x] Success: `uv run pytest tests/pipeline/actions/test_review_action.py` passes;
   existing tests in this file remain unchanged and passing
 
 **Commit:** `test: cover rogue verdict discarded for judge templates`
@@ -206,23 +206,23 @@ status: not_started
 
 ### T8: Test — `TEMPLATE_INPUTS` resolution failure yields `UNKNOWN`, not a silent skip
 
-- [ ] **Add a test in `tests/pipeline/actions/test_review_action.py`** (extend
+- [x] **Add a test in `tests/pipeline/actions/test_review_action.py`** (extend
   existing)
-  - [ ] Construct a `SliceInfo` missing a field one of the new judge template's
+  - [x] Construct a `SliceInfo` missing a field one of the new judge template's
     `TEMPLATE_INPUTS` entries needs (e.g. `arch_file` empty/falsy for
     `judge.slice-vs-arch`, or empty `task_files` for `judge.tasks-vs-slice`
     with no explicit `input` already provided)
-  - [ ] Drive `ReviewAction` through its slice-based auto-resolution path (as
+  - [x] Drive `ReviewAction` through its slice-based auto-resolution path (as
     `_resolve_slice_inputs` does) with this incomplete `SliceInfo` and confirm
     the missing-required-input `KeyError` path fires
-  - [ ] Assert the resulting `ActionResult` has `success=False`,
+  - [x] Assert the resulting `ActionResult` has `success=False`,
     `verdict="UNKNOWN"`, `provenance=Provenance.JUDGE` — proving the failure
     surfaces as a judge-aware non-pass via `execute()`'s existing exception
     handler (slice 301), not a silent skip
-  - [ ] This is the LLD's Risk Assessment row "`TEMPLATE_INPUTS` resolution
+  - [x] This is the LLD's Risk Assessment row "`TEMPLATE_INPUTS` resolution
     fails" — confirms the existing 301 exception-handling mechanism covers
     this slice's new registry lookups with no new code required
-- [ ] Success: `uv run pytest tests/pipeline/actions/test_review_action.py` passes
+- [x] Success: `uv run pytest tests/pipeline/actions/test_review_action.py` passes
 
 **Commit:** `test: cover TEMPLATE_INPUTS resolution failure yields UNKNOWN`
 
@@ -230,22 +230,22 @@ status: not_started
 
 ### T9: Live-provider verification run — `judge.tasks-vs-slice`
 
-- [ ] **Run `judge.tasks-vs-slice` against a real in-repo artifact pair** using
+- [x] **Run `judge.tasks-vs-slice` against a real in-repo artifact pair** using
   `run_review_with_profile()` directly (see the LLD's corrected Verification
   Walkthrough step 3) — a real task-breakdown file and its parent slice design
   (e.g. this slice's own `302-tasks...`/`302-slice...` pair, once available, or
   any other completed slice's task/design pair)
-  - [ ] Confirm the persisted/printed output contains a non-`None` `score` and
+  - [x] Confirm the persisted/printed output contains a non-`None` `score` and
     a `criteria` map
-  - [ ] Confirm `raw_output` contains **no** `## Summary` / verdict line — the
+  - [x] Confirm `raw_output` contains **no** `## Summary` / verdict line — the
     prompt's no-verdict instruction is actually followed by the model
-  - [ ] Confirm findings are present and use the expected `### [SEVERITY]
+  - [x] Confirm findings are present and use the expected `### [SEVERITY]
     Title` / `location:` shape
-  - [ ] If the model does emit a stray verdict line or the score/criteria shape
+  - [x] If the model does emit a stray verdict line or the score/criteria shape
     deviates, treat this as prompt-tuning feedback and revise
     `judge-tasks-vs-slice.yaml`'s prompt (not the parser or enforcement code)
     before proceeding
-- [ ] Success: at least one real run produces a valid score + criteria +
+- [x] Success: at least one real run produces a valid score + criteria +
   findings with no emitted verdict summary; any prompt revisions are committed
   before moving on
 
@@ -256,21 +256,21 @@ a `feat:` commit if the prompt required revision)
 
 ### T10: Live-provider verification run — `judge.slice-vs-arch`
 
-- [ ] **Run `judge.slice-vs-arch` against a real in-repo artifact pair** — this
+- [x] **Run `judge.slice-vs-arch` against a real in-repo artifact pair** — this
   slice's own design document (`302-slice.design-phase-judge-templates.md`)
   against its architecture (`300-arch.eval-actions-llm-as-judge-scoring.md`),
   per the LLD's Verification Walkthrough step 3
-  - [ ] Confirm the same three properties as T9 (non-`None` score + criteria,
+  - [x] Confirm the same three properties as T9 (non-`None` score + criteria,
     no verdict summary, correctly shaped findings)
-  - [ ] Sanity-check the score qualitatively against the two committed reviews
+  - [x] Sanity-check the score qualitatively against the two committed reviews
     already on file for this slice design
     (`302-review.slice.design-phase-judge-templates.md`) — the judge's score
     should not be wildly inconsistent with the human/model review's verdict
     (e.g. a review verdict of `CONCERNS` should not pair with a judge score
     that clears `pass_floor=82` comfortably)
-  - [ ] If the model emits a stray verdict or the shape deviates, revise
+  - [x] If the model emits a stray verdict or the shape deviates, revise
     `judge-slice-vs-arch.yaml`'s prompt before proceeding
-- [ ] Success: at least one real run produces a valid score + criteria +
+- [x] Success: at least one real run produces a valid score + criteria +
   findings with no emitted verdict summary, and the score is not grossly
   inconsistent with the existing human-facing review of the same artifact
 
@@ -281,22 +281,22 @@ a `feat:` commit if the prompt required revision)
 
 ### T11: Full validation pass
 
-- [ ] **Run the full suite and static analysis**
-  - [ ] `uv run pytest` — entire suite green (existing tests unchanged + all
+- [x] **Run the full suite and static analysis**
+  - [x] `uv run pytest` — entire suite green (existing tests unchanged + all
     new tests from T2/T4/T6/T7/T8 pass)
-  - [ ] `uv run pyright` — 0 errors
-  - [ ] `uv run ruff check && uv run ruff format --check` — clean
-- [ ] **Run the LLD's Verification Walkthrough commands 1 and 2** (template
+  - [x] `uv run pyright` — 0 errors
+  - [x] `uv run ruff check && uv run ruff format --check` — clean
+- [x] **Run the LLD's Verification Walkthrough commands 1 and 2** (template
   loading, `TEMPLATE_INPUTS` resolution) from
   `302-slice.design-phase-judge-templates.md` and confirm the printed `PASS:`
   lines
-- [ ] **Confirm `sq review list` shows both new templates** alongside the
+- [x] **Confirm `sq review list` shows both new templates** alongside the
   existing four (Integration Requirements)
-- [ ] **Confirm no naming-convention dispatch leaked in:** grep the diff for
+- [x] **Confirm no naming-convention dispatch leaked in:** grep the diff for
   any `template_name.startswith("judge.")`-style check in non-test code —
   `is_judge` (and the `TEMPLATE_INPUTS` dict key lookup) must be the only
   signals used
-- [ ] Success: full suite + static analysis clean; walkthrough commands 1–2
+- [x] Success: full suite + static analysis clean; walkthrough commands 1–2
   print their `PASS:` lines; `sq review list` shows all 6 templates; no
   naming-convention dispatch found
 
