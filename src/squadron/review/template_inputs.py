@@ -56,6 +56,14 @@ TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]] = {
     "code": [
         TemplateInputSpec(key="diff", source=_diff_range),
     ],
+    "judge.tasks-vs-slice": [
+        TemplateInputSpec(key="input", source=_tasks_input),
+        TemplateInputSpec(key="against", source=_design_file),
+    ],
+    "judge.slice-vs-arch": [
+        TemplateInputSpec(key="input", source=_design_file),
+        TemplateInputSpec(key="against", source=_arch_file),
+    ],
 }
 
 
