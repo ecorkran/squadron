@@ -32,7 +32,14 @@ DIFF_RANGE = "abc123...slice-194"
 
 
 def test_registry_has_all_templates() -> None:
-    assert set(TEMPLATE_INPUTS.keys()) == {"slice", "tasks", "arch", "code"}
+    assert set(TEMPLATE_INPUTS.keys()) == {
+        "slice",
+        "tasks",
+        "arch",
+        "code",
+        "judge.tasks-vs-slice",
+        "judge.slice-vs-arch",
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -122,3 +129,35 @@ def test_unknown_template_does_not_raise() -> None:
     resolve_template_inputs("totally-unknown", SLICE_INFO, CWD, inputs)
     # No exception, no side effects
     assert inputs == {}
+
+
+# ---------------------------------------------------------------------------
+# judge.tasks-vs-slice template (302)
+# ---------------------------------------------------------------------------
+
+
+def test_judge_tasks_vs_slice_populates_input_and_against() -> None:
+    inputs: dict[str, str] = {}
+    resolve_template_inputs("judge.tasks-vs-slice", SLICE_INFO, CWD, inputs)
+    assert inputs["input"] == (f"project-documents/user/tasks/{SLICE_INFO['task_files'][0]}")
+    assert inputs["against"] == SLICE_INFO["design_file"]
+
+
+def test_judge_tasks_vs_slice_no_input_when_task_files_empty() -> None:
+    """source returning None must not set the key (not even to None)."""
+    info: SliceInfo = {**SLICE_INFO, "task_files": []}  # type: ignore[typeddict-item]
+    inputs: dict[str, str] = {}
+    resolve_template_inputs("judge.tasks-vs-slice", info, CWD, inputs)
+    assert "input" not in inputs
+
+
+# ---------------------------------------------------------------------------
+# judge.slice-vs-arch template (302)
+# ---------------------------------------------------------------------------
+
+
+def test_judge_slice_vs_arch_populates_input_and_against() -> None:
+    inputs: dict[str, str] = {}
+    resolve_template_inputs("judge.slice-vs-arch", SLICE_INFO, CWD, inputs)
+    assert inputs["input"] == SLICE_INFO["design_file"]
+    assert inputs["against"] == SLICE_INFO["arch_file"]
