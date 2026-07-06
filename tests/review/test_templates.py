@@ -366,3 +366,37 @@ class TestBuiltinTemplateHardening:
         for name in ("code", "slice", "tasks", "arch"):
             t = get_template(name)
             assert t is not None, f"Template '{name}' not registered"
+
+
+# ---------------------------------------------------------------------------
+# 302: judge.tasks-vs-slice built-in template
+# ---------------------------------------------------------------------------
+
+
+class TestJudgeTasksVsSliceTemplate:
+    """Test the judge.tasks-vs-slice built-in template loads correctly."""
+
+    @pytest.fixture(autouse=True)
+    def _load(self) -> None:
+        from squadron.review.templates import load_all_templates
+
+        load_all_templates()
+
+    def _get(self) -> ReviewTemplate:
+        t = get_template("judge.tasks-vs-slice")
+        assert t is not None, "Template 'judge.tasks-vs-slice' not found"
+        return t
+
+    def test_is_judge(self) -> None:
+        assert self._get().is_judge is True
+
+    def test_default_thresholds(self) -> None:
+        assert self._get().judge == {"pass_floor": 78, "concerns_floor": 55}
+
+    def test_required_inputs(self) -> None:
+        names = {i.name for i in self._get().required_inputs}
+        assert names == {"input", "against"}
+
+    def test_registered_in_list_templates(self) -> None:
+        names = {t.name for t in list_templates()}
+        assert "judge.tasks-vs-slice" in names
