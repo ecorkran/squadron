@@ -400,3 +400,50 @@ class TestJudgeTasksVsSliceTemplate:
     def test_registered_in_list_templates(self) -> None:
         names = {t.name for t in list_templates()}
         assert "judge.tasks-vs-slice" in names
+
+
+# ---------------------------------------------------------------------------
+# 302: judge.slice-vs-arch built-in template
+# ---------------------------------------------------------------------------
+
+
+class TestJudgeSliceVsArchTemplate:
+    """Test the judge.slice-vs-arch built-in template loads correctly."""
+
+    @pytest.fixture(autouse=True)
+    def _load(self) -> None:
+        from squadron.review.templates import load_all_templates
+
+        load_all_templates()
+
+    def _get(self) -> ReviewTemplate:
+        t = get_template("judge.slice-vs-arch")
+        assert t is not None, "Template 'judge.slice-vs-arch' not found"
+        return t
+
+    def test_is_judge(self) -> None:
+        assert self._get().is_judge is True
+
+    def test_default_thresholds(self) -> None:
+        assert self._get().judge == {"pass_floor": 82, "concerns_floor": 60}
+
+    def test_required_inputs(self) -> None:
+        names = {i.name for i in self._get().required_inputs}
+        assert names == {"input", "against"}
+
+    def test_registered_in_list_templates(self) -> None:
+        names = {t.name for t in list_templates()}
+        assert "judge.slice-vs-arch" in names
+
+    def test_default_thresholds_differ_from_tasks_vs_slice(self) -> None:
+        """Ground-truth-strength differentiation: slice-vs-arch's pass_floor
+        (82) must be stricter than tasks-vs-slice's (78) — regression guard
+        for the LLD's differentiated-thresholds requirement."""
+        slice_vs_arch = self._get()
+        tasks_vs_slice = get_template("judge.tasks-vs-slice")
+        assert tasks_vs_slice is not None
+        assert slice_vs_arch.judge is not None
+        assert tasks_vs_slice.judge is not None
+        assert slice_vs_arch.judge["pass_floor"] != tasks_vs_slice.judge["pass_floor"]
+        assert slice_vs_arch.judge["pass_floor"] == 82
+        assert tasks_vs_slice.judge["pass_floor"] == 78
