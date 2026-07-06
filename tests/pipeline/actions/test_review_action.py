@@ -19,7 +19,7 @@ from squadron.review.models import (
     Severity,
     Verdict,
 )
-from squadron.review.templates import ReviewTemplate
+from squadron.review.templates import InputDef, ReviewTemplate
 
 _P = "squadron.pipeline.actions.review"
 
@@ -647,6 +647,42 @@ class TestJudgeEnforcement:
 
         result = await ReviewAction().execute(_make_context())
         assert result.verdict == "PASS"
+        assert result.provenance == "judge"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.resolve_slice_info")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_template_inputs_resolution_failure_yields_unknown(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_resolve_slice_info: MagicMock,
+    ) -> None:
+        """302: a SliceInfo missing arch_file leaves `against` unresolved for
+        judge.slice-vs-arch. The required-input KeyError must surface as a
+        judge-aware UNKNOWN via execute()'s exception handler, not a silent
+        skip."""
+        template = _mock_judge_template()
+        template.required_inputs = [
+            InputDef(name="input", description=""),
+            InputDef(name="against", description=""),
+        ]
+        mock_get_template.return_value = template
+        mock_resolve_slice_info.return_value = {
+            "index": 302,
+            "name": "design-phase-judge-templates",
+            "slice_name": "design-phase-judge-templates",
+            "design_file": "project-documents/user/slices/302-slice.md",
+            "task_files": ["302-tasks.md"],
+            "arch_file": "",
+        }
+
+        ctx = _make_context(params={"template": "judge.test", "slice": "302"})
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        assert result.verdict == "UNKNOWN"
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
