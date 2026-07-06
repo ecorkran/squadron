@@ -367,6 +367,17 @@ PY
 # No `sq review` CLI subcommand exists for arbitrary template names (its four
 # subcommands are each pinned to one template) — invoke directly via Python,
 # or via a pipeline `review` step with `template: judge.slice-vs-arch`.
+#
+# CAVEAT (discovered during implementation): profile="sdk" shells out to the
+# Claude Code CLI, which refuses to launch from inside another Claude Code
+# session ("Claude Code cannot be launched inside another Claude Code
+# session"). When verifying from within an interactive Claude Code session,
+# use profile="openrouter" with an explicit model instead (the built-in
+# templates' `model: opus` field is an SDK-profile alias that does not
+# resolve under openrouter). Also `source .env` first — `sq`'s CLI loads
+# provider API keys from .env automatically; a bare `uv run python` script
+# does not.
+set -a && source .env && set +a
 uv run python - <<'PY'
 import asyncio
 from squadron.review.templates import load_all_templates, get_template
@@ -383,8 +394,8 @@ async def main() -> None:
             "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
             "cwd": ".",
         },
-        profile="sdk",
-        model=template.model,
+        profile="openrouter",
+        model="anthropic/claude-opus-4.5",
     )
     print(f"score={result.score} verdict={result.verdict} criteria={result.criteria}")
 
@@ -393,6 +404,16 @@ PY
 # Expected: a non-None score, criteria map, findings, and no model-emitted
 # verdict summary in raw_output (verdict prints UNKNOWN because none was
 # parsed — expected, ignored by enforce_judge downstream).
+#
+# Actual (T9/T10, run 20260705): judge.tasks-vs-slice scored 91.0 against this
+# slice's own task file vs. its slice design; judge.slice-vs-arch scored 86.0
+# against this slice's design vs. its architecture doc. Both runs produced a
+# criteria map, findings in the `### [SEVERITY] Title` / `location:` shape,
+# and no `## Summary` or verdict line in raw_output. No prompt revision was
+# required for either template. The slice-vs-arch score (86, clears
+# pass_floor=82) is consistent with the design's already-addressed review
+# findings (the committed 302-review.slice... CONCERNS verdict predates the
+# d69ee7e fixes to failure-mode enumeration and no-silent-pass restatement).
 
 # 4. Full regression + static analysis
 uv run pytest
