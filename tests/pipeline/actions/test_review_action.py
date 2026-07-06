@@ -625,6 +625,31 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_rogue_model_emitted_verdict_is_discarded(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """302: a judge template's model emits a verdict despite the prompt
+        forbidding it. enforce_judge() never reads result.verdict — the
+        threshold-derived verdict must win regardless of what was parsed."""
+        mock_get_template.return_value = _mock_judge_template()
+        # Parsed verdict says FAIL, but score (90) clears pass_floor (75).
+        mock_run_review.return_value = _make_review_result(Verdict.FAIL, score=90.0)
+
+        result = await ReviewAction().execute(_make_context())
+        assert result.verdict == "PASS"
+        assert result.provenance == "judge"
+
+    @pytest.mark.asyncio
     @patch(f"{_P}.run_review_with_profile", side_effect=RuntimeError("provider down"))
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
