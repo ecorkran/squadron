@@ -2,13 +2,57 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260705
+dateUpdated: 20260706
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260706 (1)
+
+### Slice 303: Judge-Gated Cycle Conventions — Slice Design (Phase 4) Complete
+
+Design document authored at `user/slices/303-slice.judge-gated-cycle-conventions.md`
+on branch `300-planning.judge-gated-cycle-conventions`.
+
+**Central finding:** the judge-gated review→fix→re-review cycle is expressible
+today with **zero new code** — it is `loop` + a judge `review` step + `dispatch`
++ `checkpoint`, all pre-existing. Verified against the real constructs:
+- `LoopCondition.REVIEW_PASS` / `REVIEW_CONCERNS_OR_BETTER` (`executor.py:215`)
+  evaluate the last verdict — and a judge's verdict is the score's threshold
+  projection (slice 301). So "gate on the score" needs no score-aware loop
+  condition.
+- `ExhaustBehavior.CHECKPOINT` (`executor.py:257`) → `PAUSED` StepResult is the
+  observable escalation path when the bound (`loop.max`) is hit without clearing.
+- The `review` step already accepts a step-level `judge:` threshold override
+  (`steps/review.py`) — so **advisory-only = `pass_floor > 100`**, a value not a
+  flag. No new "always-escalate" field.
+- `test-loop.yaml` already ships the exact `loop [dispatch, review] until:
+  review.pass` shape with a *standard* review; the delta to a judge cycle is the
+  template name and `on_exhaust: checkpoint` — data only.
+
+**Deliverables the slice defines (for Phase 6):**
+- `data/pipelines/judge-cycle.yaml` — worked reference pipeline (judge-first
+  shape: pre-loop judge, then `loop [fix, judge]`, `until: review.pass`,
+  `on_exhaust: checkpoint`), gating on `judge.slice-vs-arch`.
+- Structural + three control-flow tests (auto-advance, escalate-at-max,
+  advisory-always-escalates) with a mocked judge score to prove the flow
+  deterministically; one live unattended run to validate the fix prompt.
+- Authoring-guide section covering the bound, exit condition, escalation, the
+  two gating modes, and the optional `commit` body step.
+
+**Scope boundaries recorded:** gate composition (judge + review verdict) is
+slice 304; multi-sample judging is Future Work 1; new `each` sources are out of
+scope (only `cf.unfinished_slices` is registered).
+
+**Branch:** `300-planning.judge-gated-cycle-conventions` (created from `main`).
+
+**Next:** Phase 5 (Task Breakdown) for slice 303, then Phase 6 implementation on
+`303-slice.judge-gated-cycle-conventions`.
 
 ---
 
