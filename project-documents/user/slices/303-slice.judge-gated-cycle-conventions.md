@@ -221,24 +221,46 @@ gating. This reuses the exact override mechanism slice 301 built; no new
 > score pass. Advisory-only is the opposite — a floor above 100 so *no* score
 > passes. Both are expressed with the same `judge.pass_floor` override; only the
 > value differs. This keeps "advisory-only" as data, not a new code path.
+>
+> **This depends on thresholds staying unclamped.** Verified: `resolve_thresholds`
+> does no range validation on threshold values (the 0–100 range check applies to
+> the *score*, per slice 301's two-layer split), so `pass_floor: 101` is a
+> *sanctioned* value today. The authoring doc must state this explicitly, so a
+> future "validate thresholds to 0–100" cleanup does not silently break the
+> advisory-only convention — a threshold clamp would need to preserve an
+> above-range "never passes" sentinel, or advisory-only would need a different
+> expression. The advisory-always-escalates test (Success Criteria) pins the
+> current behavior as a regression guard.
 
 ### First-iteration shape
 
 The body is `[fix, judge]`, but on the first iteration there are no prior judge
 findings to fix. Two documented shapes, both using only existing constructs:
 
-- **Judge-first (recommended for the reference pipeline):** run an initial
-  `review` (judge) step *before* the loop, then loop `[fix, judge]`. The
-  pre-loop judge produces the first findings; each loop iteration fixes the
-  latest findings and re-judges. This mirrors `test-loop.yaml`'s precedent
-  (dispatch-then-review inside the loop) but front-loads the first score.
-- **Fix-first (fewer steps):** loop `[fix, judge]` directly; the first `fix`
-  dispatch is prompted to do an initial pass ("produce/improve {input}"), and the
-  first judge scores that. Simpler YAML; the fix prompt does double duty.
+- **Fix-first (recommended for the reference pipeline):** loop `[fix, judge]`
+  directly; the first `fix` dispatch is prompted to do an initial pass
+  ("produce/improve {input}"), and the first judge scores that. Simpler YAML; the
+  fix prompt does double duty. This mirrors `test-loop.yaml`'s precedent
+  (dispatch-then-review inside the loop) exactly.
+- **Judge-first (informational pre-score):** run an initial `review` (judge)
+  step *before* the loop, then loop `[fix, judge]`. The pre-loop judge produces
+  an initial score/findings for the log, but — see the executor note below — it
+  does **not** short-circuit the loop; iteration 1 still runs the fix leg. Choose
+  this only when an initial persisted score before any fix is worth the extra
+  step, not to avoid a "wasted" first fix.
 
-The reference pipeline uses judge-first because it makes the "auto-advance when
-already good" path observable: if the pre-loop judge already clears the floor,
-`until` is satisfied on iteration 1 with no wasted fix.
+> **Executor semantics (verified in `_execute_loop_body`, `executor.py:1109`).**
+> The multi-step loop is **post-test**: `until` is evaluated only *after* an
+> iteration's inner steps complete, and only against that iteration's own action
+> results — `iteration_action_results` is reset to `[]` at the top of each
+> iteration (line 1112) and never sees pre-loop or prior-iteration results.
+> Consequently a pre-loop judge PASS cannot satisfy `until`; iteration 1 always
+> runs `[fix, judge]` in full before `until` can exit. The reference pipeline
+> therefore uses **fix-first** and accepts that iteration 1 always fixes once —
+> even on an already-passing artifact — because the executor provides no
+> loop-entry pre-test to skip it. "Auto-advance when already good" means the loop
+> exits after **one** `[fix, judge]` iteration (the judge clears the floor and
+> `until` is satisfied), not that the loop is skipped entirely.
 
 ### Why no new construct is needed — the verification
 
@@ -440,18 +462,22 @@ slice's specific composition:
 
 | Failure mode | Handling | Outcome |
 |---|---|---|
-| Judge returns `UNKNOWN` (unparseable / missing score / provider down) | `until: review.pass` is not satisfied by `UNKNOWN`; the loop iterates or exhausts | Never a silent pass — loops then escalates via `on_exhaust: checkpoint` |
-| Fix leg (`dispatch`) fails | Standard action-failure handling in the loop body (`executor`) | Loop iteration fails per existing semantics; not a judge-specific path |
+| Judge returns `UNKNOWN` (unparseable / missing score / provider down/errored) | `until: review.pass` is not satisfied by `UNKNOWN`; the loop iterates or exhausts | Never a silent pass — loops then escalates via `on_exhaust: checkpoint` |
+| Fix leg (`dispatch`) inner step returns FAILED | `_execute_loop_body` treats an inner FAILED step as **transient** (`executor.py:1143`): the judge inner step still runs next, against the un-revised artifact | Judge scores the un-revised artifact → non-`PASS` → `until` not satisfied → iterate/escalate. No silent pass |
+| Judge or fix provider call **hangs / exceeds a timeout** mid-iteration | **Gap — no per-call timeout exists** in the review/dispatch action or `run_review_with_profile` path (verified: no `wait_for`/`timeout` there). `loop.max` bounds *iterations*, not wall-clock; a hung call stalls the unattended run indefinitely | **Accepted risk this slice** — see Technical Risks. Not silently *passing* (the run stalls, it never advances), but it does defeat unattended progress. Owner: pipeline-foundation (140); a per-call timeout mapping a `TimeoutError` to `UNKNOWN` is a 140 concern, tracked in Future Work, not authored here |
 | Bound exhausted without clearing | `ExhaustBehavior.CHECKPOINT` → `PAUSED` | Observable human escalation |
 | Advisory judge (floor > 100) on a high raw score | `enforce_judge` derives non-PASS from `score < pass_floor`; `until` never satisfied | Always escalates — the intended behavior, not a failure |
 | Judge emits a rogue verdict despite the template forbidding it | `enforce_judge` ignores `result.verdict` (slice 301); `until` reads the derived verdict | Score-derived verdict wins; rogue verdict never reaches the loop condition |
 
 **No silent pass**: the only way the loop exits without escalation is a genuine
-score-derived `PASS`. Every non-clearing outcome — including `UNKNOWN` — either
-iterates (within the bound) or escalates. This is the architecture's
-no-silent-pass NFR, and it holds here because the loop's exit condition reads the
-same score-derived verdict slices 300–302 established, with no new gate in
-between.
+score-derived `PASS`. Every non-clearing outcome — including `UNKNOWN` and a
+FAILED fix leg — either iterates (within the bound) or escalates. This is the
+architecture's no-silent-pass NFR, and it holds here because the loop's exit
+condition reads the same score-derived verdict slices 300–302 established, with no
+new gate in between. **The one mode that is not "escalate" is a provider hang**
+(row 3): it stalls rather than passes, and its remedy (a per-call timeout) is a
+140 concern this slice explicitly does not absorb — named here so the boundary is
+not a silent gap.
 
 ### Technical Risks
 
@@ -463,6 +489,18 @@ between.
   (auto-advance vs. escalate) deterministically; the live run validates the
   *prompt* separately. The slice's correctness claim is about the control-flow
   composition, which is fully testable; the fix prompt is tunable data.
+
+- **A hung provider call is not bounded by `loop.max` (accepted, deferred to
+  140).** `loop.max` bounds the iteration *count*, not wall-clock time, and the
+  review/dispatch path has no per-call timeout today (verified). An unattended
+  judge cycle whose provider hangs will stall inside an iteration rather than
+  escalate. This slice does **not** add a timeout — introducing one belongs in
+  the pipeline-foundation action/client layer (140), where every action (not just
+  judges) would benefit, and where a `TimeoutError` can be mapped to a review
+  `UNKNOWN` so the existing iterate/escalate flow absorbs it. Recorded as Future
+  Work below and surfaced in the failure-mode table so the gap is explicit, not
+  discovered mid-run. The judge cycle inherits whatever timeout 140 later adds
+  with no change to this slice's convention.
 
 ### Mitigation Strategies
 
@@ -502,3 +540,11 @@ Suggested order:
   is out of scope until a source for it is registered.
 - Reuse `test-loop.yaml`'s proven dispatch-then-review body shape; the delta is
   the judge template name and `on_exhaust: checkpoint`, nothing structural.
+- The authoring-guide section must state that `pass_floor > 100` is a *sanctioned*
+  advisory-only value — call it out so a later "clamp thresholds to 0–100"
+  cleanup does not silently disable the always-escalate convention (see the
+  advisory-only Note above).
+- Use the **fix-first** body shape in the reference pipeline (`loop [fix, judge]`
+  with no pre-loop judge). The executor's loop is post-test with per-iteration
+  result reset (`executor.py:1109`), so a pre-loop judge cannot short-circuit the
+  first iteration — do not write prose implying it can.
