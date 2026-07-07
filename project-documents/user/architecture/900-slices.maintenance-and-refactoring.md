@@ -101,4 +101,52 @@ Branch: `904-review-finding-location-required`, close issue on merge.
 
 **Status:** complete (20260520) · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [905, 906]
 
+8. [ ] **(909) Dispatch Artifact Post-Condition — No Silent "Success" on Unwritten Files**
+A `dispatch` action that expects the agent to *write an artifact* (a design doc, a
+task file) returns `success=True` whenever the agent's turn completes — with **no
+check that the artifact was actually created**. An agent that stops mid-task to
+ask a clarifying question, or simply never writes the file, is indistinguishable
+from one that succeeded. The failure then surfaces one step later at the review
+action with a misleading message.
+
+**Concrete failure (20260707, `run-20260707-p5a-73bbffc0.json`):** `sq run p5a 303`
+(Phase 5 task breakdown). The dispatch agent correctly began the task, discovered a
+real design flaw in the slice being tasked, and — following the interactive Q&A
+pattern — **ended its turn with "How would you like me to proceed?"** instead of
+writing `303-tasks.judge-gated-cycle-conventions.md`. Dispatch returned
+`success=True` (the call completed without error); the next action, `review
+template=tasks`, resolved its required `input` from `resolve_slice_info` →
+`list_tasks()`, found no 303 task file, and failed:
+> `Review template 'tasks' missing required input(s): input. The prior step may
+> not have created the expected file.`
+
+The review-side error is **accurate** (the input resolver did its job); the bug is
+that dispatch reported success for a no-op. This violates the project's
+no-silent-failure principle: an unattended pipeline step produced no artifact and
+did not signal it.
+
+**Distinct from CF review gates.** Initially suspected the new context-forge
+`review_gate_effective_date` setting. Ruled out: squadron contains zero references
+to `review_gate`/`effective_date`; the gate is a CF-side concern squadron does not
+read. It did not cause this failure.
+
+**Two coupled sub-problems:**
+1. **Dispatch has no artifact post-condition.** When a dispatch step is expected to
+   produce a file (phase steps `design`/`tasks`/`implement`), completing the agent
+   turn is not sufficient evidence of success. Options: (a) let a phase-step
+   dispatch declare an expected-output path and fail the dispatch if it's absent
+   after the turn; (b) detect an agent turn that ends in a question / with no file
+   writes and treat it as a non-success needing escalation. Design tradeoff: how
+   does a generic dispatch know an agent "should have" written a file? The phase
+   step *does* know (it's a `tasks` phase → expects a task file), so the
+   post-condition likely belongs at the phase-step level, not generic dispatch.
+2. **Unattended dispatch of an interactive-Q&A agent has no answer path.** The
+   agent paused for a human decision inside a headless pipeline. Either the
+   dispatch prompt for unattended phase steps must forbid mid-task questions (make
+   a best-effort decision and note it), or a question-terminated turn must route to
+   a checkpoint/escalation rather than silently completing.
+
+**Status:** open · **Risk:** Medium (silent no-op in the core phase pipeline) ·
+**Effort:** 2/5 · **Dependencies:** [149]
+
 

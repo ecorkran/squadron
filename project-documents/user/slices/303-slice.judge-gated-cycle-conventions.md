@@ -6,7 +6,7 @@ parent: 300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [302]
 interfaces: [304]
 dateCreated: 20260706
-dateUpdated: 20260706
+dateUpdated: 20260707
 status: in-progress
 ---
 
@@ -27,8 +27,9 @@ needs already exists and was verified in the codebase during this design:
   `on_exhaust` — the bound and the exit/escalation semantics.
 - The judge templates from slice 302 (`judge.slice-vs-arch`,
   `judge.tasks-vs-slice`) selected by name in a `review` step.
-- `dispatch` (the fix leg), `commit` (persist between iterations), `checkpoint`
-  (the escalation surface) — all pre-existing actions.
+- `dispatch` (the fix leg) and `checkpoint` (the escalation surface) — both
+  pre-existing. (`commit` is a pre-existing action too, but *not* usable as a
+  bare loop-body step — see Technical Decisions.)
 
 The deliverable is therefore **the convention, a worked reference pipeline that
 proves the machinery composes, and the documentation** that turns "this is
@@ -51,7 +52,7 @@ decision points" (architecture, Design Goals) becomes something a user runs.
 ### What this slice delivers
 
 1. **A documented judge-gated-cycle convention** — how `loop` / `review`
-   (judge) / `dispatch` / `commit` compose to express review→fix→re-review,
+   (judge) / `dispatch` compose to express review→fix→re-review,
    including the two gating modes (auto-advance vs. escalate) and how each is
    configured.
 
@@ -317,16 +318,34 @@ gating (default floor) to always-escalate (floor > 100). This is consistent with
 slice 301's "thresholds are the single locus" commitment and the project rule
 against scattering comparison values.
 
-### `commit` between iterations is opt-in, not mandatory
+### Per-iteration `commit` is NOT expressible as a bare loop-body step (verified)
 
-The architecture lists `commit` as part of the composable set, but a design-phase
-judge cycle revising a markdown artifact does not always need a commit per
-iteration. The convention documents `commit` as an **optional** third body step
-(`[fix, judge, commit]`) for cases where each fix should be individually
-persisted (e.g. to make the loop resumable at iteration granularity, or to leave
-an audit trail of the revision sequence). The reference pipeline shows it as an
-optional, commented step so a user sees where it goes without paying for it by
-default. Placing it *after* the judge means only judged revisions are committed.
+The architecture lists `commit` as part of the composable set, and an earlier
+draft of this design proposed an optional `[fix, judge, commit]` loop body.
+**That is invalid** — verified against the step registry: `commit` is a
+registered *action* (`ActionType.COMMIT`, `actions/commit.py`), **not** a
+registered *step type*. The registered step types are `design`, `tasks`,
+`implement`, `dispatch`, `compact`, `summary`, `review`, `each`, `fan_out`,
+`loop`, `devlog` (`StepTypeName`, `steps/__init__.py`) — no `commit`. A loop's
+`steps:` list only accepts registered step types (`inner_steps` /
+`unpack_inner_steps`), so writing `- commit: {...}` in a loop body would fail
+pipeline validation with `Unknown step type 'commit'`.
+
+`commit` is only emitted as an action *inside* a phase step (`PhaseStepType.expand`
+auto-appends it for `design`/`tasks`/`implement`), never as a standalone loop
+step. The judge cycle's body is therefore `[fix, judge]` only. Per-iteration
+commit is **not** available in this slice's conventions.
+
+This does not affect the slice's core mechanics — `loop` / `review` (judge) /
+`dispatch` / `on_exhaust` are all verified and sound. It only removes the
+optional-commit example. A user who needs each fix individually persisted must
+either commit once after the loop (a `commit`… also not a bare step — so via a
+phase step or an out-of-band `git` call), or wait on the Future Work item below.
+
+**Future Work (not this slice):** a standalone `commit` step type, or a way to
+reuse the phase-step commit action inside a loop body, would make per-iteration
+commit expressible. Adding one here is out of scope and would contradict Success
+Criterion #6 ("no new step type introduced"). Logged as a follow-up.
 
 ### The reference pipeline gates on a real slice-302 judge, not a synthetic one
 
@@ -360,8 +379,9 @@ against any real slice in the repo, not a toy fixture.
 ### Functional Requirements
 
 1. A documented convention shows `loop` + a judge `review` step expressing the
-   review→fix→re-review cycle, with the body `[fix, judge]` (optionally
-   `[fix, judge, commit]`) and `until: review.pass`.
+   review→fix→re-review cycle, with the body `[fix, judge]` and
+   `until: review.pass`. (Per-iteration `commit` is not a bare loop-body step —
+   see Technical Decisions; the body is `[fix, judge]` only.)
 2. A worked reference pipeline (`judge-cycle.yaml`) runs the cycle unattended
    against a real design-phase artifact: it auto-advances (loop exits) when the
    judge score clears the threshold, and reaches `on_exhaust: checkpoint`
@@ -523,7 +543,8 @@ Suggested order:
 3. Add the three control-flow tests (auto-advance, escalate-at-max,
    advisory-always-escalates) with a mocked judge score.
 4. Write the authoring-guide section: the convention table, the two gating modes,
-   the advisory-only override, the optional `commit` body step, and the bound.
+   the advisory-only override, and the bound. Note the per-iteration-commit
+   limitation (commit is not a bare loop-body step) as a stated constraint.
 5. Run one live unattended pass against a real slice to sanity-check the fix
    prompt end-to-end.
 
