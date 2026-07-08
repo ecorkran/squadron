@@ -9,4 +9,5 @@ regexes = [
 ]
 paths = [
   '''tests/''',
+  '''project-documents/user/slices/908-slice\.sq-setup-one-call-install-orchestrator\.md''',
 ]
