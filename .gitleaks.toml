@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and docs - fake/empty credentials"
+regexes = [
+  '''sk-abcdef1234567890''',
+  '''(GEMINI|ANTHROPIC|OPENAI)_API_KEY=""''',
+]
+paths = [
+  '''tests/''',
+]
