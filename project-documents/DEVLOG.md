@@ -10,6 +10,25 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260709 (1)
+
+### Slice 909: Pipeline Phase-Step Correctness — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/909-slice.pipeline-phase-step-correctness.md` on branch `909-slice.pipeline-phase-step-correctness`, from the slice-plan entry in `900-slices.maintenance-and-refactoring.md`. Three independent bugs bundled into one maintenance slice (all surfaced during slice 303 planning; all share a silent-success failure signature): Part A dispatch artifact post-condition (#15, Medium), Part B review-frontmatter project literal (#16, Low), Part C review-code scope guard (#17, Medium).
+
+**Grounded every anchor against on-disk code before designing, not the issue text alone:**
+- **Part A:** confirmed `PhaseStepType.expand()` (`steps/phase.py:96`) emits a bare `("dispatch", {"model": model})` with **no** expected-output attached — so the memory-carried claim "the phase step knows the expected artifact" is *aspirational*: the phase→artifact mapping is conceptually known but materialized nowhere. Confirmed both dispatch success paths (`dispatch.py:198`, `:284`) return `success=True` with only a `_check_cli_error` text scan — no artifact post-condition. Design decision recorded: the post-condition belongs on `PhaseStepType` (which *does* know its phase produces an artifact), NOT in generic `DispatchAction` (must stay usable for bare dispatch steps that write nothing) — rejecting the generic-dispatch home on SRP grounds.
+- **Part B:** verified live that `cf get --json` actually returns `"name": "squadron"` — so the fix has a real source, not a hallucinated one. Confirmed `ProjectInfo` (`context_forge.py:52`) has no `name` field, and that `resolve_slice_info` (`persistence.py:66`) *already* calls `get_project()` and merely discards everything but `arch_file`. Confirmed both review write paths (pipeline `save_review_result` → `actions/review.py:193`; CLI `persistence.py:268`) converge on `format_review_markdown`, so a single-point fix there satisfies interface-parity by construction. The `"project: squadron"` literal (`persistence.py:119`) sits directly beside `slice_name`/`slice_index`, which *are* already data-driven with an `"unknown"` fallback — the literal is the lone inconsistency.
+- **Part C:** confirmed the guard at `review.py:641` is `if slice_number is not None and slice_number.isdigit()`, so a **malformed non-digit** argument falls through identically to a missing one — the fix must cover both, not just the missing case. Confirmed `review_slice`/`review_tasks` already hard-guard (`if not against: raise typer.Exit(code=1)` at `review.py:408-410`, `551-553`); Part C mirrors that exact pattern. Confirmed `--model glm51` → `z-ai/glm-5.1` resolves correctly and is NOT part of the bug.
+
+**Cross-check carried from prior 303 work:** re-confirmed `StepTypeName` has no `COMMIT` member (design/tasks/implement/dispatch/compact/summary/review/each/fan_out/loop/devlog) — `commit` is an action, not a step type, consistent with the 303 loop-body finding.
+
+**Suggested implementation order (in the design):** Part C (isolated CLI guard, mirrors existing pattern) → Part B (small data-threading through a verified source) → Part A (the genuine design work: post-condition home + unattended-question routing) last, so the two easy wins land regardless of Part A's depth.
+
+**Next:** Phase 5 (Task Breakdown) for slice 909, not yet started. Then resume slice 303 Phase 5 past its original failure point.
+
+---
+
 ## 20260705 (3)
 
 ### Slice 302: Design-Phase Judge Templates — Task Breakdown Complete
