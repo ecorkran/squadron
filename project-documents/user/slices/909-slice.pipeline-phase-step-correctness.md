@@ -120,16 +120,52 @@ materialized anywhere**. Two candidate homes:
    "this phase produces an artifact of this type." The post-condition belongs at
    the phase-step level, not in generic dispatch.
 
-**Approach.** `PhaseStepType` resolves the expected artifact path for its phase
-(from the phase name + the project's document layout, the same information CF
-exposes via `fileSlice`/`fileTasks`/etc.) and the pipeline verifies, after the
-dispatch action completes, that the file exists and was written/modified by this
-run. The expected-path resolution is a single mapping defined once (phase →
-artifact-kind), consistent with the "define comparison values once" rule — not a
-scattered set of string checks. On a missing artifact, the phase step produces a
+**Approach.** `PhaseStepType` gains an explicit `expected_artifact_kind`
+property — a single mapping defined once (phase → artifact-kind), consistent with
+the "define comparison values once" rule, not a scattered set of string checks.
+The pipeline resolves the concrete path from that kind + the project's document
+layout (the same information CF exposes via `fileSlice`/`fileTasks`/etc.) and
+verifies, after the dispatch action completes, that the file exists and was
+written/modified by this run. On a missing artifact, the phase step produces a
 **failed** outcome with a clear message ("phase `tasks` completed dispatch but
 no task file was written for slice N"), which the existing checkpoint/on-fail
 machinery then routes — rather than the current silent `success=True`.
+
+**Which phases produce artifacts (F002).** The mapping is *not* uniform across
+the three registered phase types, which is exactly why applicability must be an
+explicit property rather than an assumption that every `PhaseStepType` has one
+artifact:
+
+| Phase (`StepTypeName`) | `expected_artifact_kind` | Post-condition applies? |
+|---|---|---|
+| `design`    | design file (`user/slices/NNN-slice.*.md`) | yes |
+| `tasks`     | task file (`user/tasks/NNN-tasks.*.md`)    | yes |
+| `implement` | `None` — no single deterministic artifact (implement mutates arbitrary source) | **no** — skipped |
+
+A phase whose `expected_artifact_kind` is `None` is skipped by the
+post-condition entirely. A future phase type that legitimately writes nothing
+sets `None` and is correctly exempt — resolving the "does *every* `PhaseStepType`
+imply an artifact?" ambiguity: only those with a non-`None`
+`expected_artifact_kind`.
+
+**Failure modes of the new artifact-check I/O path (F001).** The post-condition
+introduces a new file-system read (resolve path → check existence + mtime). Per
+the Failure-Mode Enumeration rule, each mode has an explicit, *observable*
+outcome — none propagate silently:
+
+| Failure mode | Outcome |
+|---|---|
+| Expected artifact absent (the target bug — agent wrote nothing) | Step **fails**; message names phase, expected artifact, slice. |
+| Path cannot be resolved from project layout (CF layout missing/empty) | Step **fails** with a distinct "could not resolve expected artifact path for phase X" message + WARNING log — never a silent pass. |
+| Permission denied / I/O error on the existence/mtime check | Step **fails**; the `OSError` is logged at WARNING+ with the path, not swallowed. Treated as "cannot confirm artifact" ⇒ not success. |
+| Artifact present but not written/modified by this run (stale prior-run file) | Step **fails**; mtime predates run start ⇒ treated as no-artifact, so a leftover file can't wave a stalled run through. |
+| Race: file created then deleted between dispatch and check | Resolves to "absent" ⇒ step fails. Acceptable — a vanished artifact is a real failure, not a false negative. |
+
+The load-bearing invariant: the check answers exactly one question — "did *this
+run* produce the expected artifact?" — and every path that cannot answer "yes"
+with confidence fails observably. This replaces the design's earlier reliance on
+"existing machinery would likely catch an unhandled exception," which is the
+implicit propagation the rule forbids.
 
 **Second sub-problem — the unattended-question path.** An agent that ends its
 turn by asking "how would you like me to proceed?" completes its dispatch
@@ -211,7 +247,9 @@ non-zero, never run.
 - **Fail fast, never silent-fallback** (all three parts) — replace a
   silent-success or silent-degrade path with an explicit error.
 - **Define the mapping once** (Part A) — the phase→artifact-kind mapping is a
-  single lookup, not scattered string comparisons.
+  single `expected_artifact_kind` property (design→design file, tasks→task file,
+  implement→`None`), not scattered string comparisons; a `None` kind means the
+  post-condition does not apply.
 - **Single-point fix for interface parity** (Part B) — fix at the shared
   `format_review_markdown` seam so CLI and pipeline paths get the fix together.
 - **Mirror the existing guard** (Part C) — reuse the `review_slice`/`review_tasks`
@@ -220,8 +258,11 @@ non-zero, never run.
 ## Implementation Details
 
 ### Part A files
-- [steps/phase.py](../../../src/squadron/pipeline/steps/phase.py) — resolve the
-  expected artifact path for the phase; attach/verify as a post-condition.
+- [steps/phase.py](../../../src/squadron/pipeline/steps/phase.py) — add the
+  `expected_artifact_kind` property (design/tasks/implement mapping); resolve the
+  concrete path from that kind + project layout; attach/verify as a
+  post-condition. Enumerate the artifact-check I/O failure modes (see table)
+  with observable outcomes.
 - [actions/dispatch.py](../../../src/squadron/pipeline/actions/dispatch.py) —
   unchanged contract for generic dispatch; the post-condition lives above it.
 - Checkpoint/on-fail routing — reuse existing machinery for the no-artifact
@@ -317,10 +358,20 @@ sq run p5 909      # or a crafted pipeline whose dispatch writes no artifact
   dispatch that legitimately writes nothing must use a bare `dispatch` step, not
   a phase step — the post-condition is scoped to phase steps only, which
   mitigates this.
+- **Part A new I/O path.** The artifact-existence/mtime check is a new
+  file-system read that can itself fail (path-resolution failure, permission
+  denied, I/O error, race delete). Accepted risk: every mode has an explicit
+  observable outcome (failed step + WARNING-level log) — see the failure-mode
+  table in the Part A architecture section. The check fails closed (any
+  "cannot confirm" ⇒ not success), so a check failure can never masquerade as a
+  successful phase.
 
 ### Mitigation Strategies
-- Scope Part A's post-condition to `PhaseStepType` (phases that *do* produce
-  artifacts), leaving generic `dispatch` untouched.
+- Scope Part A's post-condition to `PhaseStepType` phases whose
+  `expected_artifact_kind` is non-`None` (design, tasks), leaving generic
+  `dispatch` and no-artifact phases (implement) untouched.
+- Fail closed on every artifact-check failure mode; log at WARNING+ so the
+  failure is observable, never silent.
 
 ## Implementation Notes
 
@@ -335,3 +386,11 @@ Suggested order — cheapest and most isolated first:
 
 Each part is independently committable and independently testable; a stall on
 Part A does not block Parts B and C.
+
+**Split-out fallback (F007).** The three parts are bundled for pragmatism (each
+small, all on the correctness path), which runs slightly counter to the
+architecture's "prefer many small slices" preference. If any part stalls in
+implementation — most likely Part A, the only one with genuine design depth — it
+should be promoted to its own slice (e.g. 910) rather than held open and allowed
+to block the two completed parts. Parts B and C land on their own merits
+regardless.
