@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260707
+dateUpdated: 20260709
 status: in-progress
 ---
 
@@ -101,14 +101,16 @@ Branch: `904-review-finding-location-required`, close issue on merge.
 
 **Status:** complete (20260520) · **Risk:** Low · **Effort:** 2/5 · **Dependencies:** [905, 906]
 
-8. [ ] **(909) Pipeline Phase-Step Correctness — Dispatch Post-Condition + Review Frontmatter Project**
-Fixes [issue #15](https://github.com/ecorkran/squadron/issues/15) and [issue #16](https://github.com/ecorkran/squadron/issues/16). Two independent pipeline correctness bugs, both surfaced during slice 303 planning, bundled into one maintenance slice because each is small and both sit on the phase-step review/persistence path.
+8. [ ] **(909) Pipeline Phase-Step Correctness — Dispatch Post-Condition + Review Frontmatter Project + Review-Code Scope Guard**
+Fixes [issue #15](https://github.com/ecorkran/squadron/issues/15), [issue #16](https://github.com/ecorkran/squadron/issues/16), and [issue #17](https://github.com/ecorkran/squadron/issues/17). Three independent pipeline/CLI correctness bugs, all surfaced during slice 303 planning, bundled into one maintenance slice because each is small and all three sit on the phase-step / review command correctness path.
 
 **Part A — Dispatch artifact post-condition (#15, Medium).** A phase-step `dispatch` expected to *write an artifact* (design doc, task file) returns `success=True` whenever the agent's turn completes, with no check that the file was created. An agent that stops mid-task to ask a question — or never writes the file — is indistinguishable from success; the failure surfaces one step later at the review action with a misleading "prior step may not have created the expected file" message. Two coupled sub-problems: (1) dispatch has no artifact post-condition — the phase step knows the expected output (a `tasks` phase expects a task file) so the check likely belongs there, not in generic dispatch; (2) an unattended agent that ends its turn with a question has no answer path — it should route to a checkpoint/escalation rather than complete silently. Repro: `sq run p5a 303` (`run-20260707-p5a-73bbffc0.json`). (Ruled out CF review gates — squadron reads no `review_gate` setting.)
 
 **Part B — Review frontmatter hardcodes `project: squadron` (#16, Low).** `format_review_markdown` (`persistence.py:119`) emits `project: squadron` as a string literal on every review file, in every project — a review run in context-forge is mislabeled `squadron`. `ProjectInfo` (`context_forge.py:52`) does not currently carry the project name; the fix adds it (from the `cf get --json` response already parsed in `get_project`), threads it via `SliceInfo`/`resolve_slice_info` (which already calls `get_project()`), and replaces the literal — falling back to a non-silent `unknown`, never `squadron`. Verify both write paths (pipeline `actions/review.py:201`, CLI `persistence.py:268`) per interface-parity.
 
+**Part C — `sq review code` silently runs unscoped review when slice index missing/malformed (#17, Medium).** `review_code()` (`cli/commands/review.py:604-607`) declares `slice_number` as a fully optional Typer argument with no fallback validation; when it's omitted (or consumed by a misparsed flag), execution falls through with no `diff`/`files`/`slice_info` and no error. `_run_review_command`'s required-inputs check (`review.py:302-308`) is a no-op because the `code` template declares `required_inputs: []`. `code_review_prompt()` (`review/builders/code.py:40-44`) then substitutes an unconstrained "survey the project structure" instruction, and that prompt is sent to a real LLM, producing a confident, fully-formed review citing plausible-but-nonexistent files — a silent hallucinated-output failure, not a crash. Fix: require at least one of `slice_number` / `--diff` / `--files` before proceeding, mirroring the existing hard guards in `review_slice`/`review_tasks` (`review.py:408-410`, `551-553`). Repro: `sq review code -v --model glm51` run from context-forge with no slice index — produced a CONCERNS verdict citing files (`src/document-resolver.ts`, `src/git.ts`, etc.) that don't exist in that repo.
+
 **Slice design:** `user/slices/909-slice.pipeline-phase-step-correctness.md` (to be authored)
-**Status:** open · **Risk:** Medium (Part A) / Low (Part B) · **Effort:** 3/5 · **Dependencies:** [149]
+**Status:** open · **Risk:** Medium (Part A) / Low (Part B) / Medium (Part C) · **Effort:** 4/5 · **Dependencies:** [149]
 
 
