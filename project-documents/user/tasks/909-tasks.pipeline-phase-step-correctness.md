@@ -236,7 +236,20 @@ An execution-flow trace refined the design's Part A mechanics. The design said
     silently advancing.
   - Effort: 2/5
 
-- [ ] **T16. Commit Part A**
+- [ ] **T16. Test no-artifact → checkpoint/on-fail routing** *(test-with T15)*
+  - [ ] Integration test: run a pipeline containing a phase step whose dispatch
+    writes no expected artifact, with `on_fail`/checkpoint configured. Assert the
+    failed step result **routes through the existing on-fail machinery** — the
+    pipeline halts/escalates per the configured behavior and does **not** advance
+    to the next step. This verifies SC-A2 end-to-end (the failed *marking* is
+    already covered by T14; this asserts the *routing* consequence T14 does not).
+  - [ ] Assert the observable signal: the configured on-fail path fires (e.g.
+    checkpoint pause recorded / pipeline stops), not silent advancement.
+  - [ ] **Success:** the test proves a no-artifact phase step stops the run via
+    the existing failure routing rather than continuing to a downstream step.
+  - Effort: 2/5
+
+- [ ] **T17. Commit Part A**
   - [ ] `ruff format`, run Part A tests, commit
     (`fix: fail phase step when dispatch writes no expected artifact`).
   - [ ] Reference issue #15 in the commit body.
@@ -246,7 +259,7 @@ An execution-flow trace refined the design's Part A mechanics. The design said
 
 ## Final validation
 
-- [ ] **T17. Full validation gate + verification walkthrough**
+- [ ] **T18. Full validation gate + verification walkthrough**
   - [ ] Run the full test suite + `ruff format` + pyright strict; zero errors.
   - [ ] Execute the design's Verification Walkthrough for all three parts:
     Part C (`sq review code` with no/malformed/valid scope), Part B (grep
