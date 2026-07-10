@@ -116,20 +116,32 @@ materialized anywhere**. Two candidate homes:
    expected artifact and must stay usable for bare `dispatch` steps that write
    nothing. Pushing artifact-awareness into it would violate SRP and break the
    no-artifact case.
-2. **`PhaseStepType`** — chosen. The phase step *is* the component that knows
-   "this phase produces an artifact of this type." The post-condition belongs at
-   the phase-step level, not in generic dispatch.
+2. **`PhaseStepType`** — chosen for the *declaration*. The phase step *is* the
+   component that knows "this phase produces an artifact of this type," so the
+   `expected_artifact_kind` property lives there. The *check* runs in the
+   executor's per-action tail (the phase step has no runtime hook — see
+   Approach), reading that property — but the artifact-awareness originates with
+   the phase step, not generic dispatch.
 
 **Approach.** `PhaseStepType` gains an explicit `expected_artifact_kind`
 property — a single mapping defined once (phase → artifact-kind), consistent with
 the "define comparison values once" rule, not a scattered set of string checks.
-The pipeline resolves the concrete path from that kind + the project's document
-layout (the same information CF exposes via `fileSlice`/`fileTasks`/etc.) and
-verifies, after the dispatch action completes, that the file exists and was
-written/modified by this run. On a missing artifact, the phase step produces a
-**failed** outcome with a clear message ("phase `tasks` completed dispatch but
-no task file was written for slice N"), which the existing checkpoint/on-fail
-machinery then routes — rather than the current silent `success=True`.
+This property *declares* what artifact the phase owns; it is phase-step
+knowledge. The **check itself runs in the executor**, not in the phase step: an
+execution trace confirmed `PhaseStepType.expand()` returns a flat action list and
+is never consulted again — the phase step has no post-expansion runtime hook. The
+only seam that runs immediately after a phase step's `dispatch` action is the
+per-action tail of `_execute_step_once` (`executor.py` ~lines 898-943). There the
+executor, seeing the current step is a `PhaseStepType` with a non-`None`
+`expected_artifact_kind`, resolves the concrete path via
+`resolve_slice_info(context.cf_client, int(slice))` (`.task_files` / `.design_file`
+— the same call the review action uses) and verifies the file exists and was
+written/modified by this run. Run-start time comes from
+`RunState.started_at` (loadable via `StateManager().load(run_id)`; there is no
+timestamp on `ActionContext`). On a missing artifact, the step result is marked
+**failed** with a clear message ("phase `tasks` completed dispatch but no task
+file was written for slice N"), which the existing checkpoint/on-fail machinery
+then routes — rather than the current silent `success=True`.
 
 **Which phases produce artifacts (F002).** The mapping is *not* uniform across
 the three registered phase types, which is exactly why applicability must be an
@@ -259,12 +271,16 @@ non-zero, never run.
 
 ### Part A files
 - [steps/phase.py](../../../src/squadron/pipeline/steps/phase.py) — add the
-  `expected_artifact_kind` property (design/tasks/implement mapping); resolve the
-  concrete path from that kind + project layout; attach/verify as a
-  post-condition. Enumerate the artifact-check I/O failure modes (see table)
-  with observable outcomes.
+  `expected_artifact_kind` property (design/tasks/implement mapping). Declaration
+  only; no runtime check here (the phase step has no post-expansion hook).
+- [executor.py](../../../src/squadron/pipeline/executor.py) — in
+  `_execute_step_once`'s per-action tail (~898-943), after a `dispatch` result
+  for a phase step with non-`None` `expected_artifact_kind`: resolve the expected
+  path via `resolve_slice_info` and verify existence + mtime ≥ run-start; mark
+  the step failed otherwise. Enumerate the artifact-check I/O failure modes (see
+  table) with observable outcomes. Run-start from `StateManager().load(run_id).started_at`.
 - [actions/dispatch.py](../../../src/squadron/pipeline/actions/dispatch.py) —
-  unchanged contract for generic dispatch; the post-condition lives above it.
+  **unchanged**; generic dispatch stays artifact-agnostic.
 - Checkpoint/on-fail routing — reuse existing machinery for the no-artifact
   outcome.
 

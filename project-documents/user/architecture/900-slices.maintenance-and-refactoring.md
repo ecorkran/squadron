@@ -111,6 +111,7 @@ Fixes [issue #15](https://github.com/ecorkran/squadron/issues/15), [issue #16](h
 **Part C — `sq review code` silently runs unscoped review when slice index missing/malformed (#17, Medium).** `review_code()` (`cli/commands/review.py:604-607`) declares `slice_number` as a fully optional Typer argument with no fallback validation; when it's omitted (or consumed by a misparsed flag), execution falls through with no `diff`/`files`/`slice_info` and no error. `_run_review_command`'s required-inputs check (`review.py:302-308`) is a no-op because the `code` template declares `required_inputs: []`. `code_review_prompt()` (`review/builders/code.py:40-44`) then substitutes an unconstrained "survey the project structure" instruction, and that prompt is sent to a real LLM, producing a confident, fully-formed review citing plausible-but-nonexistent files — a silent hallucinated-output failure, not a crash. Fix: require at least one of `slice_number` / `--diff` / `--files` before proceeding, mirroring the existing hard guards in `review_slice`/`review_tasks` (`review.py:408-410`, `551-553`). Repro: `sq review code -v --model glm51` run from context-forge with no slice index — produced a CONCERNS verdict citing files (`src/document-resolver.ts`, `src/git.ts`, etc.) that don't exist in that repo.
 
 **Slice design:** `user/slices/909-slice.pipeline-phase-step-correctness.md`
-**Status:** designed · **Risk:** Medium (Part A) / Low (Part B) / Medium (Part C) · **Effort:** 4/5 · **Dependencies:** [149]
+**Task file:** `user/tasks/909-tasks.pipeline-phase-step-correctness.md`
+**Status:** tasked · **Risk:** Medium (Part A) / Low (Part B) / Medium (Part C) · **Effort:** 4/5 · **Dependencies:** [149]
 
 

@@ -10,6 +10,24 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260709 (2)
+
+### Slice 909: Pipeline Phase-Step Correctness — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/909-tasks.pipeline-phase-step-correctness.md` (17 tasks, 261 lines) from the review-addressed design. Tasks ordered C → B → A per the design's cheapest-first sequencing, with test-with pairing throughout and a commit task closing each part.
+
+**Grounding a trace before writing Part A tasks changed Part A's mechanics — and the design.** Before authoring tasks I traced the executor to answer "where does the artifact post-condition actually fire?" The design said "the phase step verifies after dispatch completes." The trace proved that's not mechanically possible: `PhaseStepType.expand()` (`steps/phase.py:96`) returns a flat action list and is **never consulted again** — the phase step has no post-expansion runtime hook. The only seam that runs right after a phase step's `dispatch` action is the per-action tail of `_execute_step_once` (`executor.py` ~898-943). So the honest split is: `expected_artifact_kind` is a **property on `PhaseStepType`** (declaration of what the phase owns — legitimately phase-step knowledge), but the **check runs in the executor**, keyed on `action_type == "dispatch"`, reading that property. Reconciled the design accordingly (Approach, chosen-home decision, Part A files list now name `executor.py` as a modified file, not just `phase.py`) so the two documents don't contradict.
+
+**Two more grounded facts the tasks now carry (no guessing left for the junior AI):**
+- **Run-start timestamp** for the stale-artifact mtime check is NOT on `ActionContext`; it lives in `RunState.started_at` (`state.py:126`), loadable via `StateManager().load(run_id).started_at` (precedent: `executor.py:603-606`). T12 makes this an explicit task.
+- **Expected-path resolution** reuses `resolve_slice_info(context.cf_client, int(slice)).task_files` / `.design_file` — the exact call the review action already makes at `review.py:264`; `ActionContext` exposes `cwd`, `params["slice"]`, and `cf_client` (a `CfClientProtocol` with the three methods `resolve_slice_info` needs).
+
+**Test-with coverage of the failure-mode table:** T14 enumerates all six Part A cases (present+fresh → pass, absent → fail, stale-mtime → fail, unresolvable-path → fail+WARNING, OSError → fail+log, `implement`/kind-`None` → skipped) plus a "generic dispatch unaffected" assertion. Part B's T5/T8 use real-shaped `cf get --json` fixtures (must include `name`) per the fixture-realism rule; Part C's T2 asserts the review client is **not called** for missing/malformed scope — proving the fabricated-review path is closed.
+
+**Next:** Phase 6 (Implementation) for slice 909, not yet started. Then resume slice 303 Phase 5 past its original failure point.
+
+---
+
 ## 20260709 (1)
 
 ### Slice 909: Pipeline Phase-Step Correctness — Slice Design Complete
