@@ -56,7 +56,7 @@ class TestConfigCwd:
             "squadron.cli.commands.review.get_config",
             side_effect=mock_get_config,
         ):
-            result = cli_runner.invoke(app, ["review", "code"])
+            result = cli_runner.invoke(app, ["review", "code", "--files", "**/*"])
             assert result.exit_code == 0
             # Verify run_review was called with the config cwd
             call_args = mock_run_review.call_args
@@ -79,7 +79,9 @@ class TestConfigCwd:
             "squadron.cli.commands.review.get_config",
             side_effect=mock_get_config,
         ):
-            result = cli_runner.invoke(app, ["review", "code", "--cwd", "/explicit/path"])
+            result = cli_runner.invoke(
+                app, ["review", "code", "--cwd", "/explicit/path", "--files", "**/*"]
+            )
             assert result.exit_code == 0
             call_args = mock_run_review.call_args
             _, inputs = call_args.args
@@ -107,7 +109,7 @@ class TestConfigCwd:
                 return_value=".",
             ),
         ):
-            result = cli_runner.invoke(app, ["review", "code"])
+            result = cli_runner.invoke(app, ["review", "code", "--files", "**/*"])
             assert result.exit_code == 0
             call_args = mock_run_review.call_args
             _, inputs = call_args.args

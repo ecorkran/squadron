@@ -54,6 +54,7 @@ SLICE_INFO: SliceInfo = {
     "design_file": ("project-documents/user/slices/118-slice.composed-workflows.md"),
     "task_files": ["118-tasks.composed-workflows.md"],
     "arch_file": ("project-documents/user/architecture/100-arch.orchestration-v2.md"),
+    "project": "squadron",
 }
 
 

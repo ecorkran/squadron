@@ -25,6 +25,7 @@ SLICE_INFO: SliceInfo = {
     "design_file": ("project-documents/user/slices/143-slice.structured-review-findings.md"),
     "task_files": ["143-tasks.structured-review-findings.md"],
     "arch_file": ("project-documents/user/architecture/140-arch.pipeline-foundation.md"),
+    "project": "squadron",
 }
 
 

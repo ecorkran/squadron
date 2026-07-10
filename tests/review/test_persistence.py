@@ -57,7 +57,7 @@ def _make_result(
     )
 
 
-def _make_slice_info() -> SliceInfo:
+def _make_slice_info(project: str = "squadron") -> SliceInfo:
     return SliceInfo(
         index=146,
         name="review-and-checkpoint-actions",
@@ -65,6 +65,7 @@ def _make_slice_info() -> SliceInfo:
         design_file="project-documents/user/slices/146-slice.md",
         task_files=["146-tasks.review-and-checkpoint-actions.md"],
         arch_file="project-documents/user/architecture/140-arch.md",
+        project=project,
     )
 
 
@@ -121,9 +122,21 @@ class TestFormatReviewMarkdown:
         md = format_review_markdown(result, "code")
         assert "---" in md
         assert "slice: unknown" in md
+        assert "project: unknown" in md
         parts = md.split("---")
         data = yaml.safe_load(parts[1])
         assert data["docType"] == "review"
+
+    def test_project_field_reflects_slice_info(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", _make_slice_info(project="context-forge"))
+        assert "project: context-forge" in md
+        assert "project: squadron" not in md
+
+    def test_project_field_unknown_when_slice_info_none(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", None)
+        assert "project: unknown" in md
 
     def test_prose_body_with_findings(self) -> None:
         result = _make_result()

@@ -149,6 +149,7 @@ class TestListTasks:
 # ---------------------------------------------------------------------------
 
 _PROJECT_JSON = {
+    "name": "squadron",
     "fileArch": "100-arch.orchestration-v2",
     "fileSlicePlan": "100-slices.orchestration-v2",
     "developmentPhase": "Phase 6: Implementation",
@@ -205,3 +206,20 @@ class TestGetProject:
         ):
             info = ContextForgeClient().get_project()
             assert info.arch_file == "custom/path/arch.md"
+
+    def test_get_project_name_populated(self) -> None:
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(_PROJECT_JSON)),
+        ):
+            info = ContextForgeClient().get_project()
+            assert info.name == "squadron"
+
+    def test_get_project_name_falls_back_to_unknown_when_absent(self) -> None:
+        data = {k: v for k, v in _PROJECT_JSON.items() if k != "name"}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ):
+            info = ContextForgeClient().get_project()
+            assert info.name == "unknown"

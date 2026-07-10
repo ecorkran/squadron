@@ -20,6 +20,7 @@ SLICE_INFO: SliceInfo = SliceInfo(
     design_file="project-documents/user/slices/194-slice.loop-step-type-for-multi-step-bodies.md",
     task_files=["194-tasks.loop-step-type-for-multi-step-bodies.md"],
     arch_file="project-documents/user/architecture/100-arch.orchestration-v2.md",
+    project="squadron",
 )
 
 CWD = "/tmp/fake-cwd"

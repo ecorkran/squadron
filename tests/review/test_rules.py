@@ -54,7 +54,9 @@ class TestRulesFlag:
         # Isolate from filesystem: suppress auto-template-rules resolution so
         # we only test that the explicit --rules file content reaches the runner.
         with patch("squadron.cli.commands.review.resolve_rules_dir", return_value=None):
-            result = cli_runner.invoke(app, ["review", "code", "--rules", str(rules_file)])
+            result = cli_runner.invoke(
+                app, ["review", "code", "--rules", str(rules_file), "--files", "**/*"]
+            )
         assert result.exit_code == 0
 
         # run_review was called with rules_content keyword
@@ -65,7 +67,9 @@ class TestRulesFlag:
         self,
         cli_runner: CliRunner,
     ) -> None:
-        result = cli_runner.invoke(app, ["review", "code", "--rules", "/nonexistent/rules.md"])
+        result = cli_runner.invoke(
+            app, ["review", "code", "--rules", "/nonexistent/rules.md", "--files", "**/*"]
+        )
         assert result.exit_code == 1
         assert "Rules file not found" in result.output
 
@@ -84,7 +88,7 @@ class TestRulesFlag:
                 return_value=None,
             ),
         ):
-            result = cli_runner.invoke(app, ["review", "code"])
+            result = cli_runner.invoke(app, ["review", "code", "--files", "**/*"])
             assert result.exit_code == 0
             call_kwargs = mock_run_review.call_args
             assert call_kwargs.kwargs["rules_content"] is None
@@ -118,7 +122,9 @@ class TestRulesFlag:
                 return_value=None,
             ),
         ):
-            result = cli_runner.invoke(app, ["review", "code", "--rules", str(flag_rules)])
+            result = cli_runner.invoke(
+                app, ["review", "code", "--rules", str(flag_rules), "--files", "**/*"]
+            )
             assert result.exit_code == 0
             call_kwargs = mock_run_review.call_args
             assert call_kwargs.kwargs["rules_content"] == ("Flag rules content.")
@@ -153,7 +159,7 @@ class TestConfigDefaultRules:
                 return_value=None,
             ),
         ):
-            result = cli_runner.invoke(app, ["review", "code"])
+            result = cli_runner.invoke(app, ["review", "code", "--files", "**/*"])
             assert result.exit_code == 0
             call_kwargs = mock_run_review.call_args
             assert call_kwargs.kwargs["rules_content"] == ("Default rules from config.")

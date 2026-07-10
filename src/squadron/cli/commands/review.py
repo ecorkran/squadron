@@ -490,6 +490,10 @@ def review_arch(
             if "." in Path(input_file).stem
             else Path(input_file).stem
         )
+        try:
+            project_name = ContextForgeClient().get_project().name
+        except (ContextForgeNotAvailable, ContextForgeError):
+            project_name = "unknown"
         arch_slice_info = SliceInfo(
             index=arch_index,
             name=arch_name,
@@ -497,6 +501,7 @@ def review_arch(
             design_file=None,
             task_files=[],
             arch_file=input_file,
+            project=project_name,
         )
         path = save_review_result(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file

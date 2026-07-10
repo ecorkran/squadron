@@ -25,6 +25,7 @@ def _make_slice_info() -> SliceInfo:
         design_file="project-documents/user/slices/122-slice.md",
         task_files=["122-tasks.review-context-enrichment.md"],
         arch_file="project-documents/user/architecture/100-arch.md",
+        project="squadron",
     )
 
 
