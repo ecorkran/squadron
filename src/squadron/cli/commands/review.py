@@ -644,6 +644,16 @@ def review_code(
             resolved_cwd_for_diff = _resolve_cwd(cwd)
             diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
 
+    if not slice_info and not diff and not files:
+        if slice_number is not None:
+            rprint(
+                f"[red]Error: slice number '{slice_number}' is not numeric; "
+                "provide a numeric slice, --diff, or --files.[/red]"
+            )
+        else:
+            rprint("[red]Error: provide a slice number, --diff, or --files.[/red]")
+        raise typer.Exit(code=1)
+
     if use_json:
         output = "json"
 
