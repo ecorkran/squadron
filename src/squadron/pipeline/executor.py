@@ -17,7 +17,9 @@ import sys
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from squadron.pipeline.classification import (
@@ -26,8 +28,10 @@ from squadron.pipeline.classification import (
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
+from squadron.review.persistence import resolve_slice_info
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -100,6 +104,102 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
         _logger.info("    -> FAILED: %s", result.error or "no details")
 
     _logger.debug("    outputs=%s metadata=%s", result.outputs, result.metadata)
+
+
+def _expected_artifact_paths(kind: ArtifactKind, slice_index: int, cf_client: Any) -> list[str]:
+    """Resolve the expected artifact path(s) for a phase's artifact kind.
+
+    Raises:
+        ValueError, TypeError: If the slice cannot be resolved via CF —
+            propagated to the caller, which treats it as "path unresolvable".
+    """
+    info = resolve_slice_info(cf_client, slice_index)
+    if kind is ArtifactKind.DESIGN:
+        return [info["design_file"]] if info["design_file"] else []
+    return [f"project-documents/user/tasks/{f}" for f in info["task_files"]]
+
+
+def _check_dispatch_artifact_written(
+    *,
+    kind: ArtifactKind,
+    slice_index: int,
+    cf_client: Any,
+    cwd: str,
+    run_started_at: datetime,
+) -> str | None:
+    """Verify a phase-step dispatch wrote its expected artifact this run.
+
+    Returns None if the post-condition is satisfied, else an error message
+    naming the failure mode. Every failure mode fails closed (returns a
+    message) and is logged at WARNING — never a silent pass.
+    """
+    try:
+        paths = _expected_artifact_paths(kind, slice_index, cf_client)
+    except (ValueError, TypeError) as exc:
+        msg = f"could not resolve expected {kind.value} artifact path for slice {slice_index}: {exc}"
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+
+    if not paths:
+        msg = f"no {kind.value} artifact path registered for slice {slice_index}"
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+
+    base_dir = Path(cwd) if cwd else Path(".")
+    for rel_path in paths:
+        full_path = base_dir / rel_path
+        try:
+            if not full_path.exists():
+                continue
+            mtime = datetime.fromtimestamp(full_path.stat().st_mtime, tz=UTC)
+            if mtime >= run_started_at:
+                return None
+        except OSError as exc:
+            msg = f"could not verify {kind.value} artifact at {rel_path}: {exc}"
+            _logger.warning("dispatch post-condition: %s", msg)
+            return msg
+
+    msg = (
+        f"phase dispatch completed but no {kind.value} artifact was written "
+        f"for slice {slice_index} (expected one of: {', '.join(paths)})"
+    )
+    _logger.warning("dispatch post-condition: %s", msg)
+    return msg
+
+
+def _dispatch_artifact_post_condition_error(
+    *,
+    kind: ArtifactKind,
+    slice_param: object,
+    cf_client: Any,
+    cwd: str,
+    run_started_at: datetime | None,
+    run_state_error: str | None,
+) -> str | None:
+    """Resolve the dispatch artifact post-condition for one dispatch action.
+
+    Returns None if satisfied, else the failure message. Every branch fails
+    closed and is logged at WARNING (see docstrings on the helpers it calls).
+    """
+    if run_state_error is not None:
+        return run_state_error
+    if run_started_at is None:
+        # Only reachable if a future caller sets expected_kind without also
+        # resolving run_started_at/run_state_error — guards the invariant.
+        msg = "run start time unavailable"
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+    if slice_param is None:
+        msg = f"could not resolve expected {kind.value} artifact path: no 'slice' param in scope"
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+    return _check_dispatch_artifact_written(
+        kind=kind,
+        slice_index=int(str(slice_param)),
+        cf_client=cf_client,
+        cwd=cwd,
+        run_started_at=run_started_at,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +598,7 @@ async def execute_pipeline(
     sdk_session: SDKExecutionSession | None = None,
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     on_step_complete: Callable[[StepResult], None] | None = None,
+    runs_dir: Path | None = None,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
     """Execute *definition* with the given *params*.
@@ -528,6 +629,12 @@ async def execute_pipeline(
         pipeline whose classification returned ``needs_persistent_session``.
     on_step_complete:
         Optional observer called after each step completes (any status).
+    runs_dir:
+        Directory where run state files live; forwarded to any internal
+        ``StateManager`` lookups (SDK-resume seeding, dispatch artifact
+        post-condition). Defaults to ``StateManager``'s own default location
+        when not provided — must match the ``runs_dir`` used to create
+        *run_id*'s state file, or those lookups will not find it.
     _action_registry:
         Internal override for testing; uses the global action registry by default.
     """
@@ -602,7 +709,7 @@ async def execute_pipeline(
         try:
             from squadron.pipeline.state import StateManager
 
-            _state_mgr = StateManager()
+            _state_mgr = StateManager(runs_dir=runs_dir)
             _run_state = _state_mgr.load(effective_run_id)
             _start_idx = next(
                 (i for i, s in enumerate(definition.steps) if s.name == start_from),
@@ -660,6 +767,7 @@ async def execute_pipeline(
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
                 get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+                runs_dir=runs_dir,
             )
         elif step.step_type == StepTypeName.FAN_OUT:
             step_result = await _execute_fan_out_step(
@@ -676,6 +784,7 @@ async def execute_pipeline(
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
                 get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+                runs_dir=runs_dir,
             )
         elif step.step_type == StepTypeName.LOOP:
             step_result = await _execute_loop_body(
@@ -692,6 +801,7 @@ async def execute_pipeline(
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type,
                 get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+                runs_dir=runs_dir,
             )
         else:
             # Check for loop config
@@ -716,6 +826,7 @@ async def execute_pipeline(
                     sdk_session=sdk_session,
                     get_step_type_fn=get_step_type,
                     get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+                    runs_dir=runs_dir,
                 )
             else:
                 step_result = await _execute_step_once(
@@ -732,6 +843,7 @@ async def execute_pipeline(
                     sdk_session=sdk_session,
                     get_step_type_fn=get_step_type,
                     get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+                    runs_dir=runs_dir,
                 )
 
         step_results.append(step_result)
@@ -853,6 +965,7 @@ async def _execute_step_once(
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
+    runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute a single step's action sequence once. Returns a StepResult."""
     step_type_impl = get_step_type_fn(step.step_type)
@@ -864,6 +977,26 @@ async def _execute_step_once(
         step.step_type,
         len(actions),
     )
+
+    # Loaded once per step (not per-action) — only needed when this step is a
+    # PhaseStepType with a non-None expected_artifact_kind, checked below.
+    # A missing/corrupt state file is itself a "cannot confirm" condition
+    # (fails closed below, at the dispatch post-condition check) rather than
+    # an uncaught crash — e.g. execute_pipeline invoked directly without a
+    # prior StateManager().init_run() (as some tests and tooling do).
+    run_started_at: datetime | None = None
+    run_state_error: str | None = None
+    expected_kind = (
+        step_type_impl.expected_artifact_kind if isinstance(step_type_impl, PhaseStepType) else None
+    )
+    if expected_kind is not None:
+        from squadron.pipeline.state import StateManager
+
+        try:
+            run_started_at = StateManager(runs_dir=runs_dir).load(run_id).started_at
+        except (FileNotFoundError, ValueError) as exc:
+            run_state_error = f"could not load run state for run_id={run_id!r}: {exc}"
+            _logger.warning("dispatch post-condition: %s", run_state_error)
 
     action_results: list[ActionResult] = []
     step_prior = dict(prior_outputs)  # snapshot; updated within step
@@ -898,6 +1031,25 @@ async def _execute_step_once(
         action_results.append(result)
 
         _log_action_result(action_type, result)
+
+        # Dispatch artifact post-condition (Part A, issue #15): a phase-step
+        # dispatch that completes without writing its expected artifact is
+        # not a success, regardless of what DispatchAction reported. Scoped
+        # to PhaseStepType steps with a non-None expected_artifact_kind;
+        # generic dispatch and no-artifact phases (e.g. implement) pass
+        # through unchecked.
+        if action_type == "dispatch" and result.success and expected_kind is not None:
+            artifact_error = _dispatch_artifact_post_condition_error(
+                kind=expected_kind,
+                slice_param=ctx.params.get("slice"),
+                cf_client=cf_client,
+                cwd=cwd,
+                run_started_at=run_started_at,
+                run_state_error=run_state_error,
+            )
+            if artifact_error is not None:
+                result.success = False
+                result.error = artifact_error
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"
@@ -995,6 +1147,7 @@ async def _execute_loop_step(
     sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
+    runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute a step with loop configuration."""
     if loop_config.strategy is not None:
@@ -1030,6 +1183,7 @@ async def _execute_loop_step(
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             iteration=iteration,
+            runs_dir=runs_dir,
         )
         last_result = result
 
@@ -1078,6 +1232,7 @@ async def _execute_loop_body(
     sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
+    runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute a ``loop:`` step type with a multi-step body.
 
@@ -1128,6 +1283,7 @@ async def _execute_loop_body(
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
                 iteration=iteration,
+                runs_dir=runs_dir,
             )
             iteration_action_results.extend(inner_result.action_results)
 
@@ -1186,6 +1342,7 @@ async def _execute_each_step(
     sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
+    runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute an `each` collection step."""
     source_str = str(resolved_config.get("source", ""))
@@ -1233,6 +1390,7 @@ async def _execute_each_step(
                 sdk_session=sdk_session,
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
+                runs_dir=runs_dir,
             )
             all_action_results.extend(inner_result.action_results)
 
@@ -1274,6 +1432,7 @@ async def _execute_fan_out_step(
     sdk_session: SDKExecutionSession | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
+    runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute a ``fan_out`` step: dispatch N branches concurrently, then reduce.
 
@@ -1339,6 +1498,7 @@ async def _execute_fan_out_step(
             sdk_session=None,  # never propagate session into branches
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
+            runs_dir=runs_dir,
         )
 
     # 4. Gather branches — return_exceptions=False for fast-fail on exception.

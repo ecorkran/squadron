@@ -4,6 +4,7 @@ evaluate_condition, retry loops, and core executor logic.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -629,6 +630,301 @@ class TestExecutePipelineErrorHandling:
         assert result.status == ExecutionStatus.PAUSED
         assert captured["verdict"] == "CONCERNS"
         assert captured["findings"] == review_findings
+
+
+# ---------------------------------------------------------------------------
+# Part A (909, issue #15) — Dispatch artifact post-condition
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchArtifactPostCondition:
+    """PhaseStepType dispatch must fail closed when its expected artifact
+    (design/tasks file) wasn't written by the current run."""
+
+    def _cf_client(self, slice_index: int, design_file: str, task_file: str) -> MagicMock:
+        from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
+
+        cf_client = MagicMock()
+        cf_client.list_slices.return_value = [
+            SliceEntry(index=slice_index, name="stub", design_file=design_file, status="in_progress")
+        ]
+        cf_client.list_tasks.return_value = [TaskEntry(index=slice_index, files=[task_file])]
+        cf_client.get_project.return_value = ProjectInfo(
+            arch_file="project-documents/user/architecture/100-arch.md",
+            slice_plan="100-slices.md",
+            phase="4",
+            slice=str(slice_index),
+            name="squadron",
+        )
+        return cf_client
+
+    def _init_run(self, tmp_path: Path, slice_index: int) -> str:
+        from squadron.pipeline.state import StateManager
+
+        state_mgr = StateManager(runs_dir=tmp_path)
+        return state_mgr.init_run("slice", {"slice": str(slice_index)})
+
+    def _pipeline(self, phase_step_type: str) -> PipelineDefinition:
+        return make_pipeline(
+            [make_step_config(phase_step_type, "design-0", {"phase": 4, "model": "opus"})]
+        )
+
+    def _registry(self, dispatch_mock: object) -> dict[str, object]:
+        """Full action registry for a PhaseStepType.expand() sequence:
+        cf-op(set_phase) -> cf-op(set_slice) -> cf-op(build_context)
+        -> dispatch -> commit (no review/checkpoint since these test
+        configs omit "review")."""
+        cf_op_mock = MagicMock()
+        cf_op_mock.execute = AsyncMock(return_value=make_action_result(True, "cf-op"))
+        commit_mock = mock_action([make_action_result(True, "commit")])
+        return {"cf-op": cf_op_mock, "dispatch": dispatch_mock, "commit": commit_mock}
+
+    @pytest.mark.asyncio
+    async def test_fresh_artifact_passes(self, tmp_path: Path) -> None:
+        """(a) Artifact present with mtime >= run start -> step completes."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 200)
+        cf_client = self._cf_client(200, "200-slice.stub.md", "200-tasks.stub.md")
+
+        async def dispatch_execute(ctx: object) -> ActionResult:
+            (tmp_path / "200-slice.stub.md").write_text("# design")
+            return make_action_result(True, "dispatch")
+
+        dispatch_mock = MagicMock()
+        dispatch_mock.execute = dispatch_execute
+
+        result = await execute_pipeline(
+            self._pipeline("design"),
+            {"slice": "200"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_absent_artifact_fails(self, tmp_path: Path) -> None:
+        """(b) Dispatch reports success but writes nothing -> step fails."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 201)
+        cf_client = self._cf_client(201, "201-slice.stub.md", "201-tasks.stub.md")
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        result = await execute_pipeline(
+            self._pipeline("design"),
+            {"slice": "201"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.FAILED
+        assert "201" in (result.step_results[0].action_results[-1].error or "")
+
+    @pytest.mark.asyncio
+    async def test_stale_artifact_fails(self, tmp_path: Path) -> None:
+        """(c) Artifact exists but predates run start -> treated as no-artifact."""
+        import time
+
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        stale_path = tmp_path / "202-slice.stub.md"
+        stale_path.write_text("# leftover from a prior run")
+        old_time = time.time() - 3600
+        import os as _os
+
+        _os.utime(stale_path, (old_time, old_time))
+
+        run_id = self._init_run(tmp_path, 202)
+        cf_client = self._cf_client(202, "202-slice.stub.md", "202-tasks.stub.md")
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        result = await execute_pipeline(
+            self._pipeline("design"),
+            {"slice": "202"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_unresolvable_slice_fails_with_distinct_message(self, tmp_path: Path) -> None:
+        """(d) Slice not found in the plan -> fails with a resolution-specific message."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 999)
+        cf_client = MagicMock()
+        cf_client.list_slices.return_value = []  # no slice 999 registered
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        result = await execute_pipeline(
+            self._pipeline("design"),
+            {"slice": "999"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.FAILED
+        error = result.step_results[0].action_results[-1].error or ""
+        assert "could not resolve" in error
+
+    @pytest.mark.asyncio
+    async def test_permission_error_on_check_fails_and_logs(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """(e) OSError while checking the artifact -> fails, logged, not swallowed."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 203)
+        cf_client = self._cf_client(203, "locked/203-slice.stub.md", "203-tasks.stub.md")
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        # Real permission error: unreadable parent directory means the
+        # artifact-check's .exists()/.stat() on the file inside it raises
+        # OSError, without disturbing StateManager's own file access.
+        artifact_dir = tmp_path / "locked"
+        artifact_dir.mkdir()
+        artifact_path = artifact_dir / "203-slice.stub.md"
+        artifact_path.write_text("# design")
+        artifact_dir.chmod(0o000)
+
+        try:
+            with caplog.at_level("WARNING"):
+                result = await execute_pipeline(
+                    self._pipeline("design"),
+                    {"slice": "203"},
+                    resolver=MagicMock(),
+                    cf_client=cf_client,
+                    cwd=str(tmp_path),
+                    run_id=run_id,
+                    runs_dir=tmp_path,
+                    _action_registry=self._registry(dispatch_mock),
+                )
+        finally:
+            artifact_dir.chmod(0o755)
+
+        assert result.status == ExecutionStatus.FAILED
+        assert any("dispatch post-condition" in rec.message for rec in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_implement_phase_skips_post_condition(self, tmp_path: Path) -> None:
+        """(f) implement phase (kind None) -> post-condition not applied at all."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 204)
+        cf_client = MagicMock()  # never consulted — no artifact check for implement
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        result = await execute_pipeline(
+            self._pipeline("implement"),
+            {"slice": "204"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        cf_client.list_slices.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_generic_dispatch_step_unaffected(self, tmp_path: Path) -> None:
+        """A bare (non-PhaseStepType) dispatch step that writes nothing still succeeds."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        step = mock_step_type([("dispatch", {})])
+        register_step_type("_test_bare_dispatch", step)
+
+        pipeline = make_pipeline([make_step_config("_test_bare_dispatch", "step-1", {})])
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={"dispatch": dispatch_mock},
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_no_artifact_routes_through_on_fail_not_silent_advance(self, tmp_path: Path) -> None:
+        """SC-A2: a phase step configured with checkpoint/review still halts at
+        the dispatch step on no-artifact — it must not reach review/checkpoint
+        or advance to a downstream step. This is the end-to-end routing
+        consequence; test_absent_artifact_fails only covers the failed
+        *marking*, not this *routing* guarantee."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 205)
+        cf_client = self._cf_client(205, "205-slice.stub.md", "205-tasks.stub.md")
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])  # writes nothing
+
+        review_mock = MagicMock()
+        review_mock.execute = AsyncMock()
+        checkpoint_mock = MagicMock()
+        checkpoint_mock.execute = AsyncMock()
+
+        pipeline = make_pipeline(
+            [
+                make_step_config(
+                    "design",
+                    "design-0",
+                    {
+                        "phase": 4,
+                        "model": "opus",
+                        "review": "slice",
+                        "checkpoint": "on-fail",
+                    },
+                ),
+                make_step_config("design", "design-1", {"phase": 4, "model": "opus"}),
+            ]
+        )
+
+        result = await execute_pipeline(
+            pipeline,
+            {"slice": "205"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry={
+                **self._registry(dispatch_mock),
+                "review": review_mock,
+                "checkpoint": checkpoint_mock,
+            },
+        )
+
+        # Halts at the dispatch step itself — not a downstream review/checkpoint
+        # verdict, and not a silent advance to design-1.
+        assert result.status == ExecutionStatus.FAILED
+        assert len(result.step_results) == 1
+        assert result.step_results[0].step_name == "design-0"
+        review_mock.execute.assert_not_called()
+        checkpoint_mock.execute.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
