@@ -136,7 +136,7 @@ class TestModelCLIFlag:
         )
         result = cli_runner.invoke(
             app,
-            ["review", "code", "--model", "haiku"],
+            ["review", "code", "--model", "haiku", "--files", "**/*"],
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs

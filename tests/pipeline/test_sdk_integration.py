@@ -6,6 +6,7 @@ to verify the execution flow end-to-end without real LLM calls.
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,10 +15,23 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.sdk_session import SDKExecutionSession
+from tests.pipeline.conftest import phase_artifact_cf_client
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _init_run_state(tmp_path: Path, pipeline_name: str, params: dict[str, object]) -> str:
+    """Create a real state file under tmp_path and return its run_id.
+
+    The dispatch artifact post-condition loads RunState.started_at via
+    StateManager(runs_dir=...); execute_pipeline needs a real state file
+    to find (via the runs_dir/run_id pair) or it fails closed.
+    """
+    from squadron.pipeline.state import StateManager
+
+    return StateManager(runs_dir=tmp_path).init_run(pipeline_name, params)
 
 
 def _make_mock_session() -> AsyncMock:
@@ -61,8 +75,25 @@ def _pass_review() -> ActionResult:
     )
 
 
+def _write_phase_artifacts(tmp_path: Path, slice_index: int) -> None:
+    """Write both the design and task stub artifacts for slice_index.
+
+    test-pipeline.yaml dispatches design/tasks phase steps multiple times
+    for the same slice, so writing both upfront (idempotent, mtime updates
+    each call) satisfies the dispatch artifact post-condition regardless of
+    which phase is currently running.
+    """
+    design_path = tmp_path / f"{slice_index}-slice.stub.md"
+    task_path = tmp_path / f"project-documents/user/tasks/{slice_index}-tasks.stub.md"
+    design_path.write_text("# stub design")
+    task_path.parent.mkdir(parents=True, exist_ok=True)
+    task_path.write_text("# stub tasks")
+
+
 def _make_full_registry(
     *,
+    tmp_path: Path,
+    slice_index: int = 154,
     dispatch_fn: AsyncMock | None = None,
     review_fn: AsyncMock | None = None,
     summary_fn: AsyncMock | None = None,
@@ -100,9 +131,10 @@ def _make_full_registry(
     if dispatch_fn is not None:
         registry["dispatch"] = _make_with_fn("dispatch", dispatch_fn)
     else:
-        registry["dispatch"] = _make(
-            "dispatch",
-            ActionResult(
+
+        async def _default_dispatch(ctx: ActionContext) -> ActionResult:
+            _write_phase_artifacts(tmp_path, slice_index)
+            return ActionResult(
                 success=True,
                 action_type="dispatch",
                 outputs={"response": "design output"},
@@ -110,8 +142,9 @@ def _make_full_registry(
                     "model": "claude-haiku-4-5-20251001",
                     "profile": "sdk-session",
                 },
-            ),
-        )
+            )
+
+        registry["dispatch"] = _make_with_fn("dispatch", _default_dispatch)
 
     if review_fn is not None:
         registry["review"] = _make_with_fn("review", review_fn)
@@ -151,18 +184,23 @@ def _make_full_registry(
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_cycle_completes() -> None:
+async def test_full_pipeline_cycle_completes(tmp_path: Path) -> None:
     """Full pipeline runs to completion with mock session."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     result = await execute_pipeline(
         definition,
         {"slice": "154"},
         resolver=_make_resolver(),
-        cf_client=MagicMock(),
+        cf_client=cf_client,
+        cwd=str(tmp_path),
+        run_id=run_id,
+        runs_dir=tmp_path,
         sdk_session=session,
-        _action_registry=_make_full_registry(),
+        _action_registry=_make_full_registry(tmp_path=tmp_path, slice_index=154),
     )
 
     assert result.status == ExecutionStatus.COMPLETED
@@ -170,15 +208,18 @@ async def test_full_pipeline_cycle_completes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sdk_session_propagated_to_all_dispatch_contexts() -> None:
+async def test_sdk_session_propagated_to_all_dispatch_contexts(tmp_path: Path) -> None:
     """Session is in ActionContext for all dispatch actions."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     captured: list[ActionContext] = []
 
     async def _capture(ctx: ActionContext) -> ActionResult:
         captured.append(ctx)
+        _write_phase_artifacts(tmp_path, 154)
         return ActionResult(
             success=True,
             action_type="dispatch",
@@ -190,9 +231,12 @@ async def test_sdk_session_propagated_to_all_dispatch_contexts() -> None:
         definition,
         {"slice": "154"},
         resolver=_make_resolver(),
-        cf_client=MagicMock(),
+        cf_client=cf_client,
+        cwd=str(tmp_path),
+        run_id=run_id,
+        runs_dir=tmp_path,
         sdk_session=session,
-        _action_registry=_make_full_registry(dispatch_fn=_capture),
+        _action_registry=_make_full_registry(tmp_path=tmp_path, slice_index=154, dispatch_fn=_capture),
     )
 
     assert result.status == ExecutionStatus.COMPLETED
@@ -202,10 +246,12 @@ async def test_sdk_session_propagated_to_all_dispatch_contexts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_compact_step_receives_session() -> None:
+async def test_compact_step_receives_session(tmp_path: Path) -> None:
     """Summary action context has the SDK session (test-pipeline uses summary:)."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     captured_summary: list[ActionContext] = []
 
@@ -228,9 +274,14 @@ async def test_compact_step_receives_session() -> None:
         definition,
         {"slice": "154"},
         resolver=_make_resolver(),
-        cf_client=MagicMock(),
+        cf_client=cf_client,
+        cwd=str(tmp_path),
+        run_id=run_id,
+        runs_dir=tmp_path,
         sdk_session=session,
-        _action_registry=_make_full_registry(summary_fn=_capture_summary),
+        _action_registry=_make_full_registry(
+            tmp_path=tmp_path, slice_index=154, summary_fn=_capture_summary
+        ),
     )
 
     assert result.status == ExecutionStatus.COMPLETED
@@ -239,19 +290,26 @@ async def test_compact_step_receives_session() -> None:
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_pauses_returns_paused_status() -> None:
+async def test_checkpoint_pauses_returns_paused_status(tmp_path: Path) -> None:
     """When checkpoint fires, pipeline returns PAUSED status."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     result = await execute_pipeline(
         definition,
         {"slice": "154"},
         resolver=_make_resolver(),
-        cf_client=MagicMock(),
+        cf_client=cf_client,
+        cwd=str(tmp_path),
+        run_id=run_id,
+        runs_dir=tmp_path,
         sdk_session=session,
         _action_registry=_make_full_registry(
-            checkpoint_fn=AsyncMock(return_value=_paused_checkpoint())
+            tmp_path=tmp_path,
+            slice_index=154,
+            checkpoint_fn=AsyncMock(return_value=_paused_checkpoint()),
         ),
     )
 
@@ -260,7 +318,9 @@ async def test_checkpoint_pauses_returns_paused_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_review_actions_context_has_session_but_review_does_not_call_it() -> None:
+async def test_review_actions_context_has_session_but_review_does_not_call_it(
+    tmp_path: Path,
+) -> None:
     """Review actions have session in context but don't call session methods.
 
     The real ReviewAction uses subprocess dispatch (existing review system),
@@ -268,6 +328,8 @@ async def test_review_actions_context_has_session_but_review_does_not_call_it() 
     """
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     review_contexts: list[ActionContext] = []
 
@@ -280,9 +342,14 @@ async def test_review_actions_context_has_session_but_review_does_not_call_it() 
         definition,
         {"slice": "154"},
         resolver=_make_resolver(),
-        cf_client=MagicMock(),
+        cf_client=cf_client,
+        cwd=str(tmp_path),
+        run_id=run_id,
+        runs_dir=tmp_path,
         sdk_session=session,
-        _action_registry=_make_full_registry(review_fn=_capture_review),
+        _action_registry=_make_full_registry(
+            tmp_path=tmp_path, slice_index=154, review_fn=_capture_review
+        ),
     )
 
     assert result.status == ExecutionStatus.COMPLETED

@@ -42,6 +42,7 @@ class TestResolveTemplateInstructions:
             slice_plan="y.md",
             phase="4",
             slice="162",
+            name="squadron",
         )
         with patch.object(
             mod.ContextForgeClient,
@@ -82,6 +83,7 @@ class TestGatherCfParams:
             slice_plan="y.md",
             phase="5",
             slice="162",
+            name="squadron",
         )
         with patch.object(
             mod.ContextForgeClient,
@@ -113,7 +115,7 @@ class TestGatherCfParams:
 
     def test_empty_slice_and_phase_omitted(self, tmp_path: Path) -> None:
         """Empty CF values should not clobber {slice}/{phase} placeholders."""
-        info = ProjectInfo(arch_file="x.md", slice_plan="y.md", phase="", slice="")
+        info = ProjectInfo(arch_file="x.md", slice_plan="y.md", phase="", slice="", name="squadron")
         with patch.object(
             mod.ContextForgeClient,
             "get_project",

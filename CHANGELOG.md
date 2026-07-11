@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Review templates can now be marked as **judges** via a `judge:` block (with optional `pass_floor`/`concerns_floor`). For judge templates, the verdict is always derived from the numeric score by threshold — never the model's own stated verdict — and every result now carries a `provenance` field (`"judge"` or `"review"`) so consumers can tell how a verdict was produced. A score that's missing or out of range yields `UNKNOWN` (never a silent pass), each logged as a warning. Thresholds can be overridden per pipeline step via a `judge:` key.
 - **`judge.tasks-vs-slice`** and **`judge.slice-vs-arch`** — the first two judge templates, scoring a task breakdown against its parent slice design and a slice design against its parent architecture, respectively. Each produces a numeric score with a per-criterion rationale and findings instead of a verdict. Usable via a pipeline `review` step (`template: judge.tasks-vs-slice`) or directly through the review API; not yet exposed as an `sq review` CLI subcommand.
 
+### Fixed
+- A pipeline's `design`/`tasks` phase step no longer reports success when the dispatched agent ends its turn without writing the expected design or task file. The step now fails immediately at the dispatch point (not one step later at review, with a misleading error), so an unattended run stops observably instead of silently limping forward.
+- `sq review code` run without a slice number, `--diff`, or `--files` (or with a non-numeric slice argument) now errors out instead of silently running an unscoped review — which could produce a confident, fully-fabricated result citing files that don't exist in your project.
+- Saved review files now record the actual project name in their `project:` frontmatter field, instead of always writing `squadron` regardless of which project the review ran in.
+
 ## [0.6.2] - 20260628
 
 ### Added

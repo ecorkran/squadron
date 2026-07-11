@@ -104,20 +104,26 @@ class TestReviewTasks:
 class TestReviewCode:
     """Test review code command."""
 
-    def test_with_no_args(
+    def test_with_no_args_and_no_scope_errors(
         self,
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
     ) -> None:
-        patch_run_review.return_value = ReviewResult(
-            verdict=Verdict.PASS,
-            findings=[],
-            raw_output="## Summary\nPASS\n",
-            template_name="code",
-            input_files={"cwd": "."},
-        )
+        """No slice number, --diff, or --files → exit 1, no review executed."""
         result = cli_runner.invoke(app, ["review", "code"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        patch_run_review.assert_not_called()
+
+    def test_malformed_slice_number_errors(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+    ) -> None:
+        """Non-digit slice argument with no --diff/--files → exit 1, no review executed."""
+        result = cli_runner.invoke(app, ["review", "code", "abc"])
+        assert result.exit_code == 1
+        assert "not numeric" in result.output
+        patch_run_review.assert_not_called()
 
     def test_with_files_flag(
         self,
@@ -424,17 +430,17 @@ class TestScopedDiff:
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
     ) -> None:
-        """review code (no slice number) → resolve not called."""
+        """review code (no slice number, --files provided) → resolve not called."""
         patch_run_review.return_value = ReviewResult(
             verdict=Verdict.PASS,
             findings=[],
             raw_output="## Summary\nPASS\n",
             template_name="code",
-            input_files={"cwd": "."},
+            input_files={"cwd": ".", "files": "src/**/*.py"},
         )
         with patch(
             "squadron.cli.commands.review.resolve_slice_diff_range",
         ) as mock_resolve:
-            result = cli_runner.invoke(app, ["review", "code"])
+            result = cli_runner.invoke(app, ["review", "code", "--files", "src/**/*.py"])
         assert result.exit_code == 0
         mock_resolve.assert_not_called()

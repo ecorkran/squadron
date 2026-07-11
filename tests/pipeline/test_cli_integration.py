@@ -16,6 +16,7 @@ from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager
+from tests.pipeline.conftest import artifact_writing_action, phase_artifact_cf_client
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_state_integration.py)
@@ -43,12 +44,12 @@ def _mock_action(success: bool = True, verdict: str | None = None) -> MagicMock:
     return action
 
 
-def _success_registry() -> dict[str, object]:
+def _success_registry(dispatch_action: MagicMock | None = None) -> dict[str, object]:
     """Registry where all actions return success."""
     action = _mock_action(success=True)
     return {
         "cf-op": action,
-        "dispatch": action,
+        "dispatch": dispatch_action or action,
         "review": _mock_action(success=True, verdict="PASS"),
         "checkpoint": _mock_action(success=True),
         "commit": action,
@@ -60,6 +61,7 @@ def _success_registry() -> dict[str, object]:
 
 def _paused_checkpoint_registry(
     pause_on_step: int = 2,
+    dispatch_action: MagicMock | None = None,
 ) -> dict[str, object]:
     """Registry where the checkpoint action pauses on the Nth call."""
     call_count = [0]
@@ -90,7 +92,7 @@ def _paused_checkpoint_registry(
 
     return {
         "cf-op": normal_action,
-        "dispatch": normal_action,
+        "dispatch": dispatch_action or normal_action,
         "review": review_action,
         "checkpoint": checkpoint_mock,
         "commit": normal_action,
@@ -106,14 +108,22 @@ def _paused_checkpoint_registry(
 
 class TestCliIntegration:
     @pytest.mark.asyncio
-    async def test_run_pipeline_completes_successfully(self, tmp_path: Path) -> None:
+    async def test_run_pipeline_completes_successfully(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """_run_pipeline returns COMPLETED and persists state."""
-        with patch("squadron.cli.commands.run._check_cf"):
+        monkeypatch.chdir(tmp_path)
+        cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")
+        dispatch_action = artifact_writing_action(tmp_path, 191)
+        with (
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.ContextForgeClient", return_value=cf_client),
+        ):
             result = await _run_pipeline(
                 "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
-                _action_registry=_success_registry(),
+                _action_registry=_success_registry(dispatch_action=dispatch_action),
             )
 
         assert result.status == ExecutionStatus.COMPLETED
@@ -148,14 +158,24 @@ class TestCliIntegration:
     # -------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_resume_from_paused_completes(self, tmp_path: Path) -> None:
+    async def test_resume_from_paused_completes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """First run pauses; second run resumes and completes all steps."""
-        with patch("squadron.cli.commands.run._check_cf"):
+        monkeypatch.chdir(tmp_path)
+        cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")
+        dispatch_action = artifact_writing_action(tmp_path, 191)
+        with (
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.ContextForgeClient", return_value=cf_client),
+        ):
             result1 = await _run_pipeline(
                 "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
-                _action_registry=_paused_checkpoint_registry(pause_on_step=2),
+                _action_registry=_paused_checkpoint_registry(
+                    pause_on_step=2, dispatch_action=dispatch_action
+                ),
             )
 
         assert result1.status == ExecutionStatus.PAUSED
@@ -177,11 +197,13 @@ class TestCliIntegration:
                 definition,
                 {"slice": "191"},
                 resolver=MagicMock(),
-                cf_client=MagicMock(),
+                cf_client=cf_client,
+                cwd=str(tmp_path),
                 run_id=run_id,
+                runs_dir=tmp_path,
                 start_from=next_step,
                 on_step_complete=mgr.make_step_callback(run_id),
-                _action_registry=_success_registry(),
+                _action_registry=_success_registry(dispatch_action=dispatch_action),
             )
         mgr.finalize(run_id, result2)
 

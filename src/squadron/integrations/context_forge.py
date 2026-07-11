@@ -56,6 +56,7 @@ class ProjectInfo:
     slice_plan: str
     phase: str
     slice: str
+    name: str
 
 
 # ---------------------------------------------------------------------------
@@ -167,4 +168,5 @@ class ContextForgeClient:
             slice_plan=str(data.get("fileSlicePlan", "")),
             phase=str(data.get("developmentPhase", "")),
             slice=slice_index,
+            name=str(data.get("name") or "unknown"),
         )

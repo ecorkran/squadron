@@ -10,6 +10,61 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260710
+
+### Slice 909: Pipeline Phase-Step Correctness — Implementation Complete
+
+**Phase 6 complete.** All 18 tasks implemented across three commits, C → B → A: `85f2e03` (Part C, review-code scope guard, #17), `ac01838` (Part B, review frontmatter project name, #16), `49b8522` (Part A, dispatch artifact post-condition, #15). Full suite passes (2101 passed, 2 skipped), ruff clean, pyright clean.
+
+**Part A surfaced a real pre-existing bug while wiring T12/T13, not a design flaw.** `PhaseStepType.expand()` (`steps/phase.py`) hardcoded a bare `"{slice}"` placeholder into the `cf-op(set_slice)` and `review` action tuples. That's correct for ordinary single-slice pipelines, but for `each`-loop pipelines (`design-batch.yaml`, `app.yaml`) the loop's `as: slice` binding puts the *whole slice record* into that variable — so `"{slice}"` resolved to a stringified Python dict instead of the numeric index. This silently corrupted `cf-op(set_slice)` (caught downstream as a `ContextForgeError`) and crashed the `review` action's `int(str(slice_param))` call outright — the identical crash my new post-condition hit immediately, since it reads `slice` on every dispatch rather than only when a review happens to run. Traced this live with the PM (three rounds of investigate-then-report, no guessing) before fixing: root cause was `expand()` receiving the step's *unresolved* config and never reading its own `slice:` key (both `design-batch.yaml` and `app.yaml` already wrote `slice: "{slice.index}"`, correctly anticipating this — it just was never consulted). Fix: `expand()` now uses `cfg.get("slice", "{slice}")` so a step-level override flows into every action tuple that references a slice, resolved later via the pre-existing (and already-correct) dotted-placeholder mechanism. Zero regression for the common case (no `slice` key in step config → identical `"{slice}"` fallback as before).
+
+**Also fixed while chasing test fallout: `execute_pipeline()` never accepted a `runs_dir` parameter.** Any internal `StateManager()` call (the pre-existing SDK-resume-seed code, and my new post-condition) silently read from the *default* runs directory regardless of what the caller configured — a second latent bug, invisible before because the SDK-resume path is rarely hit in tests and never combined with an artifact check. Threaded `runs_dir` through `execute_pipeline` and its loop/each/fan-out helpers; updated the CLI (`run.py`) and 12 pre-existing integration tests across 4 files that broke as a direct, expected consequence of the new post-condition (their mocked dispatch actions never wrote real files, and their `cf_client` mocks couldn't resolve real slices — both now genuinely required).
+
+**A real `sq review code 909 -v` run (not fabricated — this is the fixed Part C path) found four legitimate issues, addressed before closing the slice:** an unhandled `ValueError` in the post-condition's `int()` conversion (now caught, tested with a new case simulating an unresolved `"{slice.index}"` placeholder reaching the check); a swallowed exception in `review_arch`'s project-name resolution with no logging (now logged at WARNING per the exception-handling convention); a DRY violation — `_phase_artifact_cf_client`/`_artifact_writing_action` duplicated verbatim across 4 test files (extracted to `tests/pipeline/conftest.py`); and a scattered `"project-documents/user/tasks/"` magic-string prefix across 3 source files (extracted to a new `TASKS_DIR` constant in `squadron.review.persistence`). One flagged finding (a supposedly misleading error message in `review_code`'s scope guard) was investigated and determined to be a false positive — the code path it described is unreachable, since `_resolve_slice_number` already exits earlier with its own correct "no slice with index N" message.
+
+**Verification Walkthrough updated in the slice design** with actual commands run and real output (not the placeholder command text from Phase 4) — see `909-slice.pipeline-phase-step-correctness.md`. Part A's live-agent repro was not re-run interactively (would require a real dispatch); the automated `TestDispatchArtifactPostCondition` suite (9 cases) exercises the identical code path with mocked dispatch actions standing in, which is documented as the verification tier used, with an explicit note on what a fully-live re-verification would look like.
+
+**Next:** merge slice 909 to main; close issues #15, #16, #17. Then resume slice 303 Phase 5 past its original failure point — the fix that unblocks it (Part A's post-condition) is now in place.
+
+---
+
+## 20260709 (2)
+
+### Slice 909: Pipeline Phase-Step Correctness — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/909-tasks.pipeline-phase-step-correctness.md` (18 tasks after task review, 274 lines) from the review-addressed design. Tasks ordered C → B → A per the design's cheapest-first sequencing, with test-with pairing throughout and a commit task closing each part.
+
+**Grounding a trace before writing Part A tasks changed Part A's mechanics — and the design.** Before authoring tasks I traced the executor to answer "where does the artifact post-condition actually fire?" The design said "the phase step verifies after dispatch completes." The trace proved that's not mechanically possible: `PhaseStepType.expand()` (`steps/phase.py:96`) returns a flat action list and is **never consulted again** — the phase step has no post-expansion runtime hook. The only seam that runs right after a phase step's `dispatch` action is the per-action tail of `_execute_step_once` (`executor.py` ~898-943). So the honest split is: `expected_artifact_kind` is a **property on `PhaseStepType`** (declaration of what the phase owns — legitimately phase-step knowledge), but the **check runs in the executor**, keyed on `action_type == "dispatch"`, reading that property. Reconciled the design accordingly (Approach, chosen-home decision, Part A files list now name `executor.py` as a modified file, not just `phase.py`) so the two documents don't contradict.
+
+**Two more grounded facts the tasks now carry (no guessing left for the junior AI):**
+- **Run-start timestamp** for the stale-artifact mtime check is NOT on `ActionContext`; it lives in `RunState.started_at` (`state.py:126`), loadable via `StateManager().load(run_id).started_at` (precedent: `executor.py:603-606`). T12 makes this an explicit task.
+- **Expected-path resolution** reuses `resolve_slice_info(context.cf_client, int(slice)).task_files` / `.design_file` — the exact call the review action already makes at `review.py:264`; `ActionContext` exposes `cwd`, `params["slice"]`, and `cf_client` (a `CfClientProtocol` with the three methods `resolve_slice_info` needs).
+
+**Test-with coverage of the failure-mode table:** T14 enumerates all six Part A cases (present+fresh → pass, absent → fail, stale-mtime → fail, unresolvable-path → fail+WARNING, OSError → fail+log, `implement`/kind-`None` → skipped) plus a "generic dispatch unaffected" assertion. Part B's T5/T8 use real-shaped `cf get --json` fixtures (must include `name`) per the fixture-realism rule; Part C's T2 asserts the review client is **not called** for missing/malformed scope — proving the fabricated-review path is closed.
+
+**Next:** Phase 6 (Implementation) for slice 909, not yet started. Then resume slice 303 Phase 5 past its original failure point.
+
+---
+
+## 20260709 (1)
+
+### Slice 909: Pipeline Phase-Step Correctness — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/909-slice.pipeline-phase-step-correctness.md` on branch `909-slice.pipeline-phase-step-correctness`, from the slice-plan entry in `900-slices.maintenance-and-refactoring.md`. Three independent bugs bundled into one maintenance slice (all surfaced during slice 303 planning; all share a silent-success failure signature): Part A dispatch artifact post-condition (#15, Medium), Part B review-frontmatter project literal (#16, Low), Part C review-code scope guard (#17, Medium).
+
+**Grounded every anchor against on-disk code before designing, not the issue text alone:**
+- **Part A:** confirmed `PhaseStepType.expand()` (`steps/phase.py:96`) emits a bare `("dispatch", {"model": model})` with **no** expected-output attached — so the memory-carried claim "the phase step knows the expected artifact" is *aspirational*: the phase→artifact mapping is conceptually known but materialized nowhere. Confirmed both dispatch success paths (`dispatch.py:198`, `:284`) return `success=True` with only a `_check_cli_error` text scan — no artifact post-condition. Design decision recorded: the post-condition belongs on `PhaseStepType` (which *does* know its phase produces an artifact), NOT in generic `DispatchAction` (must stay usable for bare dispatch steps that write nothing) — rejecting the generic-dispatch home on SRP grounds.
+- **Part B:** verified live that `cf get --json` actually returns `"name": "squadron"` — so the fix has a real source, not a hallucinated one. Confirmed `ProjectInfo` (`context_forge.py:52`) has no `name` field, and that `resolve_slice_info` (`persistence.py:66`) *already* calls `get_project()` and merely discards everything but `arch_file`. Confirmed both review write paths (pipeline `save_review_result` → `actions/review.py:193`; CLI `persistence.py:268`) converge on `format_review_markdown`, so a single-point fix there satisfies interface-parity by construction. The `"project: squadron"` literal (`persistence.py:119`) sits directly beside `slice_name`/`slice_index`, which *are* already data-driven with an `"unknown"` fallback — the literal is the lone inconsistency.
+- **Part C:** confirmed the guard at `review.py:641` is `if slice_number is not None and slice_number.isdigit()`, so a **malformed non-digit** argument falls through identically to a missing one — the fix must cover both, not just the missing case. Confirmed `review_slice`/`review_tasks` already hard-guard (`if not against: raise typer.Exit(code=1)` at `review.py:408-410`, `551-553`); Part C mirrors that exact pattern. Confirmed `--model glm51` → `z-ai/glm-5.1` resolves correctly and is NOT part of the bug.
+
+**Cross-check carried from prior 303 work:** re-confirmed `StepTypeName` has no `COMMIT` member (design/tasks/implement/dispatch/compact/summary/review/each/fan_out/loop/devlog) — `commit` is an action, not a step type, consistent with the 303 loop-body finding.
+
+**Suggested implementation order (in the design):** Part C (isolated CLI guard, mirrors existing pattern) → Part B (small data-threading through a verified source) → Part A (the genuine design work: post-condition home + unattended-question routing) last, so the two easy wins land regardless of Part A's depth.
+
+**Next:** Phase 5 (Task Breakdown) for slice 909, not yet started. Then resume slice 303 Phase 5 past its original failure point.
+
+---
+
 ## 20260705 (3)
 
 ### Slice 302: Design-Phase Judge Templates — Task Breakdown Complete

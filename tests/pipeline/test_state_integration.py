@@ -15,6 +15,7 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager
+from tests.pipeline.conftest import artifact_writing_action, phase_artifact_cf_client
 
 
 def _no_project_pipeline(name: str) -> object:
@@ -38,12 +39,12 @@ def _mock_action(success: bool = True, verdict: str | None = None) -> MagicMock:
     return action
 
 
-def _success_registry() -> dict[str, object]:
+def _success_registry(dispatch_action: MagicMock | None = None) -> dict[str, object]:
     """Registry where all actions return success."""
     action = _mock_action(success=True)
     return {
         "cf-op": action,
-        "dispatch": action,
+        "dispatch": dispatch_action or action,
         "review": _mock_action(success=True, verdict="PASS"),
         "checkpoint": _mock_action(success=True),
         "commit": action,
@@ -53,7 +54,9 @@ def _success_registry() -> dict[str, object]:
     }
 
 
-def _paused_checkpoint_registry(pause_on_step: int = 2) -> dict[str, object]:
+def _paused_checkpoint_registry(
+    pause_on_step: int = 2, dispatch_action: MagicMock | None = None
+) -> dict[str, object]:
     """Registry where the checkpoint action pauses on the Nth call."""
     call_count = [0]
     normal_action = _mock_action(success=True)
@@ -83,7 +86,7 @@ def _paused_checkpoint_registry(pause_on_step: int = 2) -> dict[str, object]:
 
     return {
         "cf-op": normal_action,
-        "dispatch": normal_action,
+        "dispatch": dispatch_action or normal_action,
         "review": review_action,
         "checkpoint": checkpoint_mock,
         "commit": normal_action,
@@ -99,15 +102,19 @@ class TestStateIntegration:
         definition = _no_project_pipeline("slice")
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("slice", {"slice": "191"})
+        cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")
+        dispatch_action = artifact_writing_action(tmp_path, 191)
 
         result = await execute_pipeline(
             definition,
             {"slice": "191"},
             resolver=MagicMock(),
-            cf_client=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
             run_id=run_id,
             on_step_complete=mgr.make_step_callback(run_id),
-            _action_registry=_success_registry(),
+            runs_dir=tmp_path,
+            _action_registry=_success_registry(dispatch_action=dispatch_action),
         )
         mgr.finalize(run_id, result)
 
@@ -124,16 +131,22 @@ class TestStateIntegration:
         definition = _no_project_pipeline("slice")
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("slice", {"slice": "191"})
+        cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")
+        dispatch_action = artifact_writing_action(tmp_path, 191)
 
         # First execution — checkpoint pauses at 2nd checkpoint call (tasks step)
         result1 = await execute_pipeline(
             definition,
             {"slice": "191"},
             resolver=MagicMock(),
-            cf_client=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
             run_id=run_id,
             on_step_complete=mgr.make_step_callback(run_id),
-            _action_registry=_paused_checkpoint_registry(pause_on_step=2),
+            runs_dir=tmp_path,
+            _action_registry=_paused_checkpoint_registry(
+                pause_on_step=2, dispatch_action=dispatch_action
+            ),
         )
         # Must have paused
         assert result1.status == ExecutionStatus.PAUSED
@@ -151,11 +164,13 @@ class TestStateIntegration:
             definition,
             {"slice": "191"},
             resolver=MagicMock(),
-            cf_client=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
             run_id=run_id,
             start_from=start_from,
             on_step_complete=mgr.make_step_callback(run_id),
-            _action_registry=_success_registry(),
+            runs_dir=tmp_path,
+            _action_registry=_success_registry(dispatch_action=dispatch_action),
         )
         mgr.finalize(run_id, result2)
 

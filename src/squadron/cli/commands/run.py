@@ -223,6 +223,7 @@ async def _run_pipeline(
             sdk_session=sdk_session,  # type: ignore[arg-type]
             pool_policy=pool_policy,
             on_step_complete=state_mgr.make_step_callback(run_id),
+            runs_dir=runs_dir,
             _action_registry=_action_registry,
         )
     except BaseException:

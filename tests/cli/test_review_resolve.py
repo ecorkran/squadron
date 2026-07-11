@@ -43,6 +43,7 @@ PROJECT_INFO = ProjectInfo(
     slice_plan="100-slices.orchestration-v2",
     phase="Phase 6: Implementation",
     slice="118-slice.composed-workflows",
+    name="squadron",
 )
 
 

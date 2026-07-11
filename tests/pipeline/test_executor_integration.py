@@ -14,6 +14,7 @@ import pytest
 from squadron.pipeline.executor import ExecutionStatus, StepResult, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
+from tests.pipeline.conftest import artifact_writing_action, phase_artifact_cf_client
 
 
 def _mock_action_fn(success: bool = True, verdict: str | None = None) -> MagicMock:
@@ -53,17 +54,45 @@ def _success_registry() -> dict[str, object]:
     }
 
 
+def _artifact_writing_success_registry(cwd: Path, slice_index: int) -> dict[str, object]:
+    """Success registry whose dispatch mock writes the expected phase artifact.
+
+    Mirrors _success_registry but the "dispatch" action writes to whichever
+    path the current call's params/expected kind requires, satisfying the
+    dispatch artifact post-condition for design/tasks phase steps.
+    """
+    action = _mock_action_fn(success=True)
+    return {
+        "cf-op": action,
+        "dispatch": artifact_writing_action(cwd, slice_index),
+        "review": _mock_action_fn(success=True, verdict="PASS"),
+        "checkpoint": _mock_action_fn(success=True),
+        "commit": action,
+        "compact": action,
+        "summary": action,
+        "devlog": action,
+    }
+
+
 class TestSliceLifecycleIntegration:
     @pytest.mark.asyncio
-    async def test_all_steps_completed(self) -> None:
+    async def test_all_steps_completed(self, tmp_path: Path) -> None:
+        from squadron.pipeline.state import StateManager
+
         definition = _no_project_pipeline("slice")
-        registry = _success_registry()
+        registry = _artifact_writing_success_registry(tmp_path, 149)
+        cf_client = phase_artifact_cf_client(149, "149-slice.stub.md", "149-tasks.stub.md")
+        state_mgr = StateManager(runs_dir=tmp_path)
+        run_id = state_mgr.init_run("slice", {"slice": "149"})
 
         result = await execute_pipeline(
             definition,
             {"slice": "149"},
             resolver=MagicMock(),
-            cf_client=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
             _action_registry=registry,
         )
 
@@ -72,16 +101,24 @@ class TestSliceLifecycleIntegration:
         assert all(sr.status == ExecutionStatus.COMPLETED for sr in result.step_results)
 
     @pytest.mark.asyncio
-    async def test_on_step_complete_called_in_order(self) -> None:
+    async def test_on_step_complete_called_in_order(self, tmp_path: Path) -> None:
+        from squadron.pipeline.state import StateManager
+
         definition = _no_project_pipeline("slice")
-        registry = _success_registry()
+        registry = _artifact_writing_success_registry(tmp_path, 149)
+        cf_client = phase_artifact_cf_client(149, "149-slice.stub.md", "149-tasks.stub.md")
+        state_mgr = StateManager(runs_dir=tmp_path)
+        run_id = state_mgr.init_run("slice", {"slice": "149"})
         received: list[StepResult] = []
 
         await execute_pipeline(
             definition,
             {"slice": "149"},
             resolver=MagicMock(),
-            cf_client=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
             on_step_complete=received.append,
             _action_registry=registry,
         )
@@ -145,16 +182,28 @@ class TestReviewOnlyIntegration:
 
 class TestDesignBatchIntegration:
     @pytest.mark.asyncio
-    async def test_two_slices_inner_steps_run_twice(self) -> None:
-        from squadron.integrations.context_forge import SliceEntry
+    async def test_two_slices_inner_steps_run_twice(self, tmp_path: Path) -> None:
+        from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
+        from squadron.pipeline.state import StateManager
 
         definition = _no_project_pipeline("design-batch")
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=10, name="sl-a", design_file=None, status="not_started"),
-            SliceEntry(index=11, name="sl-b", design_file=None, status="in_progress"),
+            SliceEntry(index=10, name="sl-a", design_file="10-slice.sl-a.md", status="not_started"),
+            SliceEntry(index=11, name="sl-b", design_file="11-slice.sl-b.md", status="in_progress"),
         ]
+        cf_client.list_tasks.return_value = [
+            TaskEntry(index=10, files=[]),
+            TaskEntry(index=11, files=[]),
+        ]
+        cf_client.get_project.return_value = ProjectInfo(
+            arch_file="project-documents/user/architecture/100-arch.md",
+            slice_plan="100-slices.md",
+            phase="4",
+            slice="10",
+            name="squadron",
+        )
 
         call_count = 0
 
@@ -168,21 +217,38 @@ class TestDesignBatchIntegration:
                 verdict="PASS",
             )
 
+        async def dispatch_execute(ctx: object) -> ActionResult:
+            nonlocal call_count
+            call_count += 1
+            slice_index = ctx.params["slice"]  # type: ignore[attr-defined]
+            suffix = "a" if str(slice_index) == "10" else "b"
+            design_path = tmp_path / f"{slice_index}-slice.sl-{suffix}.md"
+            design_path.write_text("# stub design")
+            return ActionResult(success=True, action_type="dispatch", outputs={})
+
         action = MagicMock()
         action.execute = counting_execute
+        dispatch_mock = MagicMock()
+        dispatch_mock.execute = dispatch_execute
         registry: dict[str, object] = {
             "cf-op": action,
-            "dispatch": action,
+            "dispatch": dispatch_mock,
             "review": action,
             "checkpoint": action,
             "commit": action,
         }
+
+        state_mgr = StateManager(runs_dir=tmp_path)
+        run_id = state_mgr.init_run("design-batch", {"plan": "my-plan"})
 
         result = await execute_pipeline(
             definition,
             {"plan": "my-plan"},
             resolver=MagicMock(),
             cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
             _action_registry=registry,
         )
 

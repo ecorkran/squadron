@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 import typer
@@ -23,6 +24,7 @@ from squadron.models.aliases import resolve_model_alias
 from squadron.review.git_utils import find_git_root, resolve_slice_diff_range
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.persistence import (
+    TASKS_DIR,
     SliceInfo,
     resolve_slice_info,
     save_review_result,
@@ -39,6 +41,8 @@ from squadron.review.templates import (
     list_templates,
     load_all_templates,
 )
+
+_logger = logging.getLogger(__name__)
 
 review_app = typer.Typer(
     name="review",
@@ -490,6 +494,11 @@ def review_arch(
             if "." in Path(input_file).stem
             else Path(input_file).stem
         )
+        try:
+            project_name = ContextForgeClient().get_project().name
+        except (ContextForgeNotAvailable, ContextForgeError) as exc:
+            _logger.warning("Could not resolve project name from ContextForge: %s", exc)
+            project_name = "unknown"
         arch_slice_info = SliceInfo(
             index=arch_index,
             name=arch_name,
@@ -497,6 +506,7 @@ def review_arch(
             design_file=None,
             task_files=[],
             arch_file=input_file,
+            project=project_name,
         )
         path = save_review_result(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
@@ -543,7 +553,7 @@ def review_tasks(
         if not slice_info["design_file"]:
             rprint(f"[red]Error: No design file for slice {slice_info['index']}.[/red]")
             raise typer.Exit(code=1)
-        task_file_paths = [f"project-documents/user/tasks/{f}" for f in slice_info["task_files"]]
+        task_file_paths = [str(TASKS_DIR / f) for f in slice_info["task_files"]]
         against = slice_info["design_file"]
     else:
         task_file_paths = [input_file]
@@ -643,6 +653,16 @@ def review_code(
         if not diff:
             resolved_cwd_for_diff = _resolve_cwd(cwd)
             diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
+
+    if not slice_info and not diff and not files:
+        if slice_number is not None:
+            rprint(
+                f"[red]Error: slice number '{slice_number}' is not numeric; "
+                "provide a numeric slice, --diff, or --files.[/red]"
+            )
+        else:
+            rprint("[red]Error: provide a slice number, --diff, or --files.[/red]")
+        raise typer.Exit(code=1)
 
     if use_json:
         output = "json"

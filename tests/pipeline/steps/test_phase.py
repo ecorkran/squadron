@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from squadron.pipeline.models import StepConfig
-from squadron.pipeline.steps.phase import PhaseStepType
+from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
 
 
 @pytest.fixture
@@ -40,6 +40,26 @@ def test_step_type_tasks(tasks_step: PhaseStepType) -> None:
 
 def test_step_type_implement(implement_step: PhaseStepType) -> None:
     assert implement_step.step_type == "implement"
+
+
+# --- expected_artifact_kind property ---
+
+
+@pytest.mark.parametrize(
+    ("phase_name", "expected"),
+    [
+        ("design", ArtifactKind.DESIGN),
+        ("tasks", ArtifactKind.TASKS),
+        ("implement", None),
+    ],
+)
+def test_expected_artifact_kind_mapping(phase_name: str, expected: ArtifactKind | None) -> None:
+    assert PhaseStepType(phase_name).expected_artifact_kind == expected
+
+
+def test_expected_artifact_kind_unmapped_phase_defaults_to_none() -> None:
+    """A hypothetical future phase with no registered kind must not raise."""
+    assert PhaseStepType("some-future-phase").expected_artifact_kind is None
 
 
 # --- validate() ---
@@ -119,13 +139,13 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
     assert actions[0] == ("cf-op", {"operation": "set_phase", "phase": 4})
     assert actions[1] == ("cf-op", {"operation": "set_slice", "slice": "{slice}"})
     assert actions[2] == ("cf-op", {"operation": "build_context"})
-    assert actions[3] == ("dispatch", {"model": "opus"})
+    assert actions[3] == ("dispatch", {"model": "opus", "slice": "{slice}"})
     assert actions[4] == (
         "review",
         {"template": "slice", "model": None, "slice": "{slice}"},
     )
     assert actions[5] == ("checkpoint", {"trigger": "on-concerns"})
-    assert actions[6] == ("commit", {"message_prefix": "phase-4"})
+    assert actions[6] == ("commit", {"message_prefix": "phase-4", "slice": "{slice}"})
 
 
 def test_expand_review_as_dict(design_step: PhaseStepType) -> None:
@@ -168,19 +188,32 @@ def test_expand_review_no_checkpoint(design_step: PhaseStepType) -> None:
 def test_expand_dispatch_model_from_config(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4, "model": "opus"}))
     dispatch = actions[3]
-    assert dispatch == ("dispatch", {"model": "opus"})
+    assert dispatch == ("dispatch", {"model": "opus", "slice": "{slice}"})
 
 
 def test_expand_dispatch_model_none(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4}))
     dispatch = actions[3]
-    assert dispatch == ("dispatch", {"model": None})
+    assert dispatch == ("dispatch", {"model": None, "slice": "{slice}"})
 
 
 def test_expand_commit_prefix_includes_phase(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 7}))
     commit = actions[-1]
-    assert commit == ("commit", {"message_prefix": "phase-7"})
+    assert commit == ("commit", {"message_prefix": "phase-7", "slice": "{slice}"})
+
+
+def test_expand_uses_step_config_slice_when_present(design_step: PhaseStepType) -> None:
+    """A step-level 'slice' override (e.g. '{slice.index}' in an each-loop)
+    propagates into every action tuple that carries a slice reference,
+    instead of the bare '{slice}' default."""
+    actions = design_step.expand(_make_config({"phase": 4, "slice": "{slice.index}"}))
+    dispatch = next(a for a in actions if a[0] == "dispatch")
+    set_slice = next(a for a in actions if a[0] == "cf-op" and a[1].get("operation") == "set_slice")
+    commit = actions[-1]
+    assert dispatch[1]["slice"] == "{slice.index}"
+    assert set_slice[1]["slice"] == "{slice.index}"
+    assert commit[1]["slice"] == "{slice.index}"
 
 
 def test_expand_review_includes_slice_placeholder(design_step: PhaseStepType) -> None:

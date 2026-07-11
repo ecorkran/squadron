@@ -16,6 +16,11 @@ _logger = logging.getLogger(__name__)
 
 _REVIEWS_DIR = Path("project-documents/user/reviews")
 
+#: Directory prefix for task-breakdown files, relative to project root.
+#: SliceInfo["task_files"] entries are bare filenames — join with this to
+#: get the full relative path (mirrors _REVIEWS_DIR's role for reviews).
+TASKS_DIR = Path("project-documents/user/tasks")
+
 
 class SliceInfo(TypedDict):
     """Resolved slice metadata from Context-Forge."""
@@ -26,6 +31,7 @@ class SliceInfo(TypedDict):
     design_file: str | None
     task_files: list[str]
     arch_file: str
+    project: str
 
 
 class CfClientProtocol(Protocol):
@@ -73,6 +79,7 @@ def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:
         design_file=design_file,
         task_files=task_files,
         arch_file=arch_file,
+        project=project.name,
     )
 
 
@@ -109,6 +116,7 @@ def format_review_markdown(
     # Slice-derived fields
     slice_name = slice_info["slice_name"] if slice_info else "unknown"
     slice_index = slice_info["index"] if slice_info else 0
+    project_name = slice_info["project"] if slice_info else "unknown"
 
     lines = [
         "---",
@@ -116,7 +124,7 @@ def format_review_markdown(
         "layer: project",
         f"reviewType: {review_type}",
         f"slice: {slice_name}",
-        "project: squadron",
+        f"project: {project_name}",
         f"verdict: {result.verdict.value}",
         f"sourceDocument: {source_doc}",
         f"aiModel: {resolved_model}",
