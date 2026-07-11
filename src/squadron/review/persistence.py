@@ -16,6 +16,11 @@ _logger = logging.getLogger(__name__)
 
 _REVIEWS_DIR = Path("project-documents/user/reviews")
 
+#: Directory prefix for task-breakdown files, relative to project root.
+#: SliceInfo["task_files"] entries are bare filenames — join with this to
+#: get the full relative path (mirrors _REVIEWS_DIR's role for reviews).
+TASKS_DIR = Path("project-documents/user/tasks")
+
 
 class SliceInfo(TypedDict):
     """Resolved slice metadata from Context-Forge."""

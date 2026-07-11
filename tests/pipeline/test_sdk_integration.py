@@ -15,36 +15,11 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.sdk_session import SDKExecutionSession
+from tests.pipeline.conftest import phase_artifact_cf_client
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _phase_artifact_cf_client(slice_index: int, design_file: str, task_file: str) -> MagicMock:
-    """A CF client mock that resolves a slice with real design/task filenames.
-
-    Needed because design/tasks steps (PhaseStepType) now require
-    resolve_slice_info() to succeed and their dispatch to write the resolved
-    artifact — see the dispatch artifact post-condition (issue #15).
-    """
-    from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
-
-    cf_client = MagicMock()
-    cf_client.list_slices.return_value = [
-        SliceEntry(index=slice_index, name="stub", design_file=design_file, status="in_progress"),
-    ]
-    cf_client.list_tasks.return_value = [
-        TaskEntry(index=slice_index, files=[task_file]),
-    ]
-    cf_client.get_project.return_value = ProjectInfo(
-        arch_file="project-documents/user/architecture/100-arch.md",
-        slice_plan="100-slices.md",
-        phase="4",
-        slice=str(slice_index),
-        name="squadron",
-    )
-    return cf_client
 
 
 def _init_run_state(tmp_path: Path, pipeline_name: str, params: dict[str, object]) -> str:
@@ -213,7 +188,7 @@ async def test_full_pipeline_cycle_completes(tmp_path: Path) -> None:
     """Full pipeline runs to completion with mock session."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
-    cf_client = _phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     result = await execute_pipeline(
@@ -237,7 +212,7 @@ async def test_sdk_session_propagated_to_all_dispatch_contexts(tmp_path: Path) -
     """Session is in ActionContext for all dispatch actions."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
-    cf_client = _phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     captured: list[ActionContext] = []
@@ -275,7 +250,7 @@ async def test_compact_step_receives_session(tmp_path: Path) -> None:
     """Summary action context has the SDK session (test-pipeline uses summary:)."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
-    cf_client = _phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     captured_summary: list[ActionContext] = []
@@ -319,7 +294,7 @@ async def test_checkpoint_pauses_returns_paused_status(tmp_path: Path) -> None:
     """When checkpoint fires, pipeline returns PAUSED status."""
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
-    cf_client = _phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     result = await execute_pipeline(
@@ -353,7 +328,7 @@ async def test_review_actions_context_has_session_but_review_does_not_call_it(
     """
     session = _make_mock_session()
     definition = load_pipeline("test-pipeline")
-    cf_client = _phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
+    cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
     review_contexts: list[ActionContext] = []

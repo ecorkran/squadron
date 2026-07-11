@@ -642,21 +642,9 @@ class TestDispatchArtifactPostCondition:
     (design/tasks file) wasn't written by the current run."""
 
     def _cf_client(self, slice_index: int, design_file: str, task_file: str) -> MagicMock:
-        from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
+        from tests.pipeline.conftest import phase_artifact_cf_client
 
-        cf_client = MagicMock()
-        cf_client.list_slices.return_value = [
-            SliceEntry(index=slice_index, name="stub", design_file=design_file, status="in_progress")
-        ]
-        cf_client.list_tasks.return_value = [TaskEntry(index=slice_index, files=[task_file])]
-        cf_client.get_project.return_value = ProjectInfo(
-            arch_file="project-documents/user/architecture/100-arch.md",
-            slice_plan="100-slices.md",
-            phase="4",
-            slice=str(slice_index),
-            name="squadron",
-        )
-        return cf_client
+        return phase_artifact_cf_client(slice_index, design_file, task_file)
 
     def _init_run(self, tmp_path: Path, slice_index: int) -> str:
         from squadron.pipeline.state import StateManager
@@ -785,6 +773,43 @@ class TestDispatchArtifactPostCondition:
         assert result.status == ExecutionStatus.FAILED
         error = result.step_results[0].action_results[-1].error or ""
         assert "could not resolve" in error
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_slice_param_fails_closed(self, tmp_path: Path) -> None:
+        """A non-numeric 'slice' param (e.g. an unresolved '{slice.index}'
+        placeholder reaching the check) must fail closed, not raise ValueError."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 206)
+        cf_client = self._cf_client(206, "206-slice.stub.md", "206-tasks.stub.md")
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        # Step config's own "slice" value is left unresolved (simulates a
+        # loop context where the placeholder never got substituted).
+        pipeline = make_pipeline(
+            [
+                make_step_config(
+                    "design",
+                    "design-0",
+                    {"phase": 4, "model": "opus", "slice": "{slice.index}"},
+                )
+            ]
+        )
+
+        result = await execute_pipeline(
+            pipeline,
+            {"slice": "206"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.FAILED
+        error = result.step_results[0].action_results[-1].error or ""
+        assert "not a numeric index" in error
 
     @pytest.mark.asyncio
     async def test_permission_error_on_check_fails_and_logs(

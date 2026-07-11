@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: [149]
 interfaces: []
 dateCreated: 20260709
-dateUpdated: 20260709
-status: not_started
+dateUpdated: 20260710
+status: complete
 ---
 
 # Slice Design: Pipeline Phase-Step Correctness
@@ -325,45 +325,83 @@ non-zero, never run.
 
 ### Verification Walkthrough
 
-**Part C (most directly observable):**
+**Part C (most directly observable) — actually run, output as shown:**
 ```
-# Missing slice index — must exit non-zero, must NOT produce a review
-sq review code -v --model glm51
-# expect: error "provide a slice number, --diff, or --files"; exit code 1;
-#         no model call, no fabricated findings.
+$ uv run sq review code -v --model glm51
+Error: provide a slice number, --diff, or --files.
+$ echo $?
+1
 
-# Malformed (non-digit) slice index — same behavior
-sq review code abc -v
-# expect: error; exit 1.
+$ uv run sq review code abc -v
+Error: slice number 'abc' is not numeric; provide a numeric slice, --diff, or
+--files.
+$ echo $?
+1
 
-# Valid scope still works
-sq review code 909 -v
-# expect: a real, scoped review of slice 909's diff.
+$ uv run sq review code 909 -v
+# Ran to completion: a real, scoped review of slice 909's diff, saved to
+# project-documents/user/reviews/909-review.code.pipeline-phase-step-correctness.md
 ```
+Confirmed: neither error case invoked the review client (see T2's
+`assert_not_called()` tests); the valid-scope case produced a genuine review
+(verdict CONCERNS, 9 real findings against actual file:line locations in this
+slice's own diff — not fabricated).
 
-**Part B:**
+**Part B — verified via the Part C run above (same repo, same command):**
 ```
-# Run a review from a NON-squadron project (e.g. context-forge) and inspect
-# the saved review file's frontmatter.
-cd /path/to/context-forge && sq review code 910 -v
-grep '^project:' project-documents/user/reviews/<latest>.md
-# expect: project: context-forge   (NOT project: squadron)
+$ head -12 project-documents/user/reviews/909-review.code.pipeline-phase-step-correctness.md
+---
+docType: review
+...
+project: squadron
+verdict: CONCERNS
+...
 ```
-Confirm the pipeline path agrees: run a pipeline whose phase step includes a
-review, and grep the emitted review file's `project:` field — it must match the
-CLI value for the same project.
+`project: squadron` — the real project, resolved via `cf get --json`, not a
+hardcoded literal. (The "run from a non-squadron project" negative case
+requires a second repo checkout and was not exercised interactively this
+session; T5/T8's unit tests cover the `"unknown"` fallback and the
+non-squadron-value case with a real-shaped CF fixture.) Both CLI and pipeline
+write paths converge on `format_review_markdown` (persistence.py) by
+construction — verified via T8's interface-parity test and code inspection,
+not a second live pipeline run.
 
-**Part A:**
+**Part A — verified via automated tests, not a live `sq run` (see caveat below):**
 ```
-# Reproduce the original failure, then confirm the new guard fires.
-# Original repro: a Phase-5 dispatch agent that asks a question instead of
-# writing the task file (run-20260707-p5a-73bbffc0.json).
-sq run p5 909      # or a crafted pipeline whose dispatch writes no artifact
-# expect (after fix): the phase step fails at the DISPATCH step with a message
-#         naming the missing task file — NOT a success that fails one step later
-#         at the review action with "prior step may not have created the
-#         expected file."
+$ uv run pytest tests/pipeline/test_executor.py::TestDispatchArtifactPostCondition -v
+9 passed
 ```
+Covers: fresh artifact passes; absent artifact fails at the dispatch step
+(not one step later); stale (pre-run) artifact treated as absent; unresolvable
+slice fails with a distinct message; non-numeric `slice` param fails closed
+(does not raise `ValueError` — caught during review); permission/`OSError` on
+the check fails and logs at WARNING; `implement` phase (kind `None`) skips the
+check entirely; a bare non-`PhaseStepType` `dispatch` step is unaffected; and
+a phase step configured with `checkpoint: on-fail` genuinely halts at the
+dispatch step without reaching review/checkpoint or advancing to the next
+step (T16, SC-A2 end-to-end).
+
+**Caveat:** the original repro (`sq run p5a 909`, reproducing
+`run-20260707-p5a-73bbffc0.json`) was not re-run live this session — it
+requires a real agent dispatch. The unit/integration tests above exercise
+the identical code path (`_execute_step_once`'s post-dispatch check in
+`executor.py`) with mocked dispatch actions standing in for the agent, which
+is the standard verification tier for this kind of change; an external
+verifier wanting the fully live path should run `sq run p5 <a-real-slice>`
+against a dispatch that is expected to write no task file and confirm the
+step fails at dispatch, not one step later at review.
+
+**Fixes discovered during implementation (not in the original design):**
+- `execute_pipeline()` had no `runs_dir` parameter, so any internal
+  `StateManager()` lookup silently used the default runs directory regardless
+  of what the caller configured — a pre-existing latent bug, now fixed
+  (threaded through `execute_pipeline` and its loop/each/fan-out helpers).
+- `PhaseStepType.expand()` hardcoded a bare `"{slice}"` placeholder, which
+  resolved to a stringified Python dict (not the numeric index) inside
+  `each`-loop pipelines (`design-batch.yaml`, `app.yaml`) — corrupting
+  `cf-op(set_slice)` silently and crashing the `review` action's
+  `int(str(slice_param))` call. Fixed by preferring the step's own `slice`
+  config value (e.g. `"{slice.index}"`) when present.
 
 ## Risk Assessment
 

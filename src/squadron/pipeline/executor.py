@@ -31,7 +31,7 @@ from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
-from squadron.review.persistence import resolve_slice_info
+from squadron.review.persistence import TASKS_DIR, CfClientProtocol, resolve_slice_info
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -106,7 +106,9 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
     _logger.debug("    outputs=%s metadata=%s", result.outputs, result.metadata)
 
 
-def _expected_artifact_paths(kind: ArtifactKind, slice_index: int, cf_client: Any) -> list[str]:
+def _expected_artifact_paths(
+    kind: ArtifactKind, slice_index: int, cf_client: CfClientProtocol
+) -> list[str]:
     """Resolve the expected artifact path(s) for a phase's artifact kind.
 
     Raises:
@@ -116,14 +118,14 @@ def _expected_artifact_paths(kind: ArtifactKind, slice_index: int, cf_client: An
     info = resolve_slice_info(cf_client, slice_index)
     if kind is ArtifactKind.DESIGN:
         return [info["design_file"]] if info["design_file"] else []
-    return [f"project-documents/user/tasks/{f}" for f in info["task_files"]]
+    return [str(TASKS_DIR / f) for f in info["task_files"]]
 
 
 def _check_dispatch_artifact_written(
     *,
     kind: ArtifactKind,
     slice_index: int,
-    cf_client: Any,
+    cf_client: CfClientProtocol,
     cwd: str,
     run_started_at: datetime,
 ) -> str | None:
@@ -171,7 +173,7 @@ def _dispatch_artifact_post_condition_error(
     *,
     kind: ArtifactKind,
     slice_param: object,
-    cf_client: Any,
+    cf_client: CfClientProtocol,
     cwd: str,
     run_started_at: datetime | None,
     run_state_error: str | None,
@@ -193,9 +195,18 @@ def _dispatch_artifact_post_condition_error(
         msg = f"could not resolve expected {kind.value} artifact path: no 'slice' param in scope"
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
+    try:
+        slice_index = int(str(slice_param))
+    except ValueError:
+        msg = (
+            f"could not resolve expected {kind.value} artifact path: "
+            f"'slice' param {slice_param!r} is not a numeric index"
+        )
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
     return _check_dispatch_artifact_written(
         kind=kind,
-        slice_index=int(str(slice_param)),
+        slice_index=slice_index,
         cf_client=cf_client,
         cwd=cwd,
         run_started_at=run_started_at,

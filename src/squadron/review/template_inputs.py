@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from squadron.review.git_utils import resolve_slice_diff_range
-from squadron.review.persistence import SliceInfo
+from squadron.review.persistence import TASKS_DIR, SliceInfo
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ def _arch_file(info: SliceInfo, _cwd: str) -> str | None:
 def _tasks_input(info: SliceInfo, _cwd: str) -> str | None:
     if not info["task_files"]:
         return None
-    return f"project-documents/user/tasks/{info['task_files'][0]}"
+    return str(TASKS_DIR / info["task_files"][0])
 
 
 def _diff_range(info: SliceInfo, cwd: str) -> str | None:

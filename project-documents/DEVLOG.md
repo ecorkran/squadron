@@ -10,6 +10,24 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260710
+
+### Slice 909: Pipeline Phase-Step Correctness — Implementation Complete
+
+**Phase 6 complete.** All 18 tasks implemented across three commits, C → B → A: `85f2e03` (Part C, review-code scope guard, #17), `ac01838` (Part B, review frontmatter project name, #16), `49b8522` (Part A, dispatch artifact post-condition, #15). Full suite passes (2101 passed, 2 skipped), ruff clean, pyright clean.
+
+**Part A surfaced a real pre-existing bug while wiring T12/T13, not a design flaw.** `PhaseStepType.expand()` (`steps/phase.py`) hardcoded a bare `"{slice}"` placeholder into the `cf-op(set_slice)` and `review` action tuples. That's correct for ordinary single-slice pipelines, but for `each`-loop pipelines (`design-batch.yaml`, `app.yaml`) the loop's `as: slice` binding puts the *whole slice record* into that variable — so `"{slice}"` resolved to a stringified Python dict instead of the numeric index. This silently corrupted `cf-op(set_slice)` (caught downstream as a `ContextForgeError`) and crashed the `review` action's `int(str(slice_param))` call outright — the identical crash my new post-condition hit immediately, since it reads `slice` on every dispatch rather than only when a review happens to run. Traced this live with the PM (three rounds of investigate-then-report, no guessing) before fixing: root cause was `expand()` receiving the step's *unresolved* config and never reading its own `slice:` key (both `design-batch.yaml` and `app.yaml` already wrote `slice: "{slice.index}"`, correctly anticipating this — it just was never consulted). Fix: `expand()` now uses `cfg.get("slice", "{slice}")` so a step-level override flows into every action tuple that references a slice, resolved later via the pre-existing (and already-correct) dotted-placeholder mechanism. Zero regression for the common case (no `slice` key in step config → identical `"{slice}"` fallback as before).
+
+**Also fixed while chasing test fallout: `execute_pipeline()` never accepted a `runs_dir` parameter.** Any internal `StateManager()` call (the pre-existing SDK-resume-seed code, and my new post-condition) silently read from the *default* runs directory regardless of what the caller configured — a second latent bug, invisible before because the SDK-resume path is rarely hit in tests and never combined with an artifact check. Threaded `runs_dir` through `execute_pipeline` and its loop/each/fan-out helpers; updated the CLI (`run.py`) and 12 pre-existing integration tests across 4 files that broke as a direct, expected consequence of the new post-condition (their mocked dispatch actions never wrote real files, and their `cf_client` mocks couldn't resolve real slices — both now genuinely required).
+
+**A real `sq review code 909 -v` run (not fabricated — this is the fixed Part C path) found four legitimate issues, addressed before closing the slice:** an unhandled `ValueError` in the post-condition's `int()` conversion (now caught, tested with a new case simulating an unresolved `"{slice.index}"` placeholder reaching the check); a swallowed exception in `review_arch`'s project-name resolution with no logging (now logged at WARNING per the exception-handling convention); a DRY violation — `_phase_artifact_cf_client`/`_artifact_writing_action` duplicated verbatim across 4 test files (extracted to `tests/pipeline/conftest.py`); and a scattered `"project-documents/user/tasks/"` magic-string prefix across 3 source files (extracted to a new `TASKS_DIR` constant in `squadron.review.persistence`). One flagged finding (a supposedly misleading error message in `review_code`'s scope guard) was investigated and determined to be a false positive — the code path it described is unreachable, since `_resolve_slice_number` already exits earlier with its own correct "no slice with index N" message.
+
+**Verification Walkthrough updated in the slice design** with actual commands run and real output (not the placeholder command text from Phase 4) — see `909-slice.pipeline-phase-step-correctness.md`. Part A's live-agent repro was not re-run interactively (would require a real dispatch); the automated `TestDispatchArtifactPostCondition` suite (9 cases) exercises the identical code path with mocked dispatch actions standing in, which is documented as the verification tier used, with an explicit note on what a fully-live re-verification would look like.
+
+**Next:** merge slice 909 to main; close issues #15, #16, #17. Then resume slice 303 Phase 5 past its original failure point — the fix that unblocks it (Part A's post-condition) is now in place.
+
+---
+
 ## 20260709 (2)
 
 ### Slice 909: Pipeline Phase-Step Correctness — Task Breakdown Complete
