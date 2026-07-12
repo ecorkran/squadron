@@ -4,9 +4,9 @@ slice: optional-dependency-split-serve-and-codex-extras
 project: squadron
 lldReference: user/slices/907-slice.optional-dependency-split-serve-and-codex-extras.md
 dependencies: []
-status: not_started
+status: deferred
 dateCreated: 20260518
-dateUpdated: 20260519
+dateUpdated: 20260712
 ---
 
 # Tasks: Optional Dependency Split — `serve` and `codex` Extras

@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 interfaces: []
 dateCreated: 20260514
-dateUpdated: 20260514
-status: not_started
+dateUpdated: 20260712
+status: deferred
 reviewFindings: [F002-resolved, F003-resolved]
 ---
 
