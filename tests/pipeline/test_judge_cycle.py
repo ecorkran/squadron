@@ -109,3 +109,21 @@ class TestJudgeCycleAutoAdvance:
         loop_result = result.step_results[0]
         assert loop_result.iteration == 1
         assert dispatch_mock.execute.await_count == 1
+
+
+class TestJudgeCycleEscalates:
+    @pytest.mark.asyncio
+    async def test_judge_cycle_escalates(self, tmp_path: Path) -> None:
+        dispatch_mock = _dispatch_mock()
+        # 40 is below judge.slice-vs-arch's default concerns_floor (60) —
+        # FAIL on every iteration, never clears `until: review.pass`.
+        result = await _run_judge_cycle(dispatch_mock, tmp_path, score=40.0)
+
+        assert result.status == ExecutionStatus.PAUSED
+        loop_result = result.step_results[0]
+        assert loop_result.status == ExecutionStatus.PAUSED
+        assert dispatch_mock.execute.await_count == 3
+
+        last_review = loop_result.action_results[-1]
+        assert last_review.action_type == "review"
+        assert last_review.score == 40.0

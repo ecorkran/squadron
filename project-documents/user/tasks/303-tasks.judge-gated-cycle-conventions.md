@@ -120,19 +120,19 @@ status: not_started
 
 **Effort: 1**
 
-- [ ] **Extend `tests/pipeline/test_loader_integration.py`**
-  - [ ] Add `"judge-cycle"` to `_BUILTIN_NAMES` (covers load + validate via
+- [x] **Extend `tests/pipeline/test_loader_integration.py`**
+  - [x] Add `"judge-cycle"` to `_BUILTIN_NAMES` (covers load + validate via
     the existing parametrized tests)
-  - [ ] Add a structure test in `TestBuiltInPipelineStructure` asserting the
+  - [x] Add a structure test in `TestBuiltInPipelineStructure` asserting the
     judge-gated shape: exactly one `loop` step whose config has `max >= 1`,
     `until == "review.pass"`, `on_exhaust == "checkpoint"`, and a body of
     `dispatch` followed by `review` where the review's
     `template == "judge.slice-vs-arch"` (a `judge.`-prefixed slice-302
     template)
-- [ ] Success: `uv run pytest tests/pipeline/test_loader_integration.py`
+- [x] Success: `uv run pytest tests/pipeline/test_loader_integration.py`
   passes
 
-**Commit:** `test: assert judge-cycle loads with the bounded judge-gated shape`
+**Commit:** `test: assert judge-cycle loads with the bounded judge-gated shape` (d013d8b)
 
 ---
 
@@ -140,38 +140,38 @@ status: not_started
 
 **Effort: 3**
 
-- [ ] **Create `tests/pipeline/test_judge_cycle.py`** with a shared harness
+- [x] **Create `tests/pipeline/test_judge_cycle.py`** with a shared harness
   that drives the REAL loaded pipeline through `execute_pipeline`
-  - [ ] Load the real definition via
+  - [x] Load the real definition via
     `load_pipeline("judge-cycle", project_dir=..., user_dir=...)` (nonexistent
     dirs, as `test_loader_integration.py` does) — the tests exercise the
     shipped artifact, not a hand-built copy
-  - [ ] Action registry: the REAL `ReviewAction` for `review`; a mocked
+  - [x] Action registry: the REAL `ReviewAction` for `review`; a mocked
     dispatch action returning `success=True` (the fix leg's model call is not
     under test)
-  - [ ] Patch `run_review_with_profile` in `squadron.pipeline.actions.review`
+  - [x] Patch `run_review_with_profile` in `squadron.pipeline.actions.review`
     to return a `ReviewResult` with a **forced score** (follow the
     `_make_review_result` pattern in
     `tests/pipeline/actions/test_review_action.py`); patch
     `save_review_file` / `format_review_markdown` likewise
-  - [ ] Do NOT patch `resolve_thresholds`, `enforce_judge`, or anything in the
+  - [x] Do NOT patch `resolve_thresholds`, `enforce_judge`, or anything in the
     loop/executor path — the derived verdict and `until` evaluation must be
     real
-  - [ ] Satisfy the missing-input hard-fail (commit `4564471`): provide real
+  - [x] Satisfy the missing-input hard-fail (commit `4564471`): provide real
     tmp-path `input`/`against` files for the review step's resolved slice
     inputs, or patch the slice-input resolution seam in
     `squadron.pipeline.actions.review` — whichever is smaller; the judge
     threshold path must remain real either way
-- [ ] **Auto-advance test** (`test_judge_cycle_auto_advance`)
-  - [ ] Forced score above `judge.slice-vs-arch`'s default `pass_floor` (82)
+- [x] **Auto-advance test** (`test_judge_cycle_auto_advance`)
+  - [x] Forced score above `judge.slice-vs-arch`'s default `pass_floor` (82)
     — e.g. 90 → derived verdict PASS
-  - [ ] Assert the run COMPLETED (not PAUSED), the loop exited at iteration 1
+  - [x] Assert the run COMPLETED (not PAUSED), the loop exited at iteration 1
     (auto-advance = exit after ONE `[fix, judge]` iteration, not zero), and
     the dispatch mock was called exactly once
-- [ ] Success: `uv run pytest tests/pipeline/test_judge_cycle.py -k
+- [x] Success: `uv run pytest tests/pipeline/test_judge_cycle.py -k
   auto_advance` passes
 
-**Commit:** `test: judge-cycle auto-advances when the score clears the floor`
+**Commit:** `test: judge-cycle auto-advances when the score clears the floor` (7bce968)
 
 ---
 
