@@ -15,6 +15,7 @@ _BUILTIN_NAMES = [
     "implement",
     "design-batch",
     "tasks",
+    "judge-cycle",
 ]
 
 _NONEXISTENT = Path("/nonexistent")
@@ -79,3 +80,22 @@ class TestBuiltInPipelineStructure:
         )
         assert len(defn.steps) == 1
         assert defn.steps[0].step_type == "each"
+
+    def test_judge_cycle_shape(self) -> None:
+        defn = load_pipeline(
+            "judge-cycle",
+            project_dir=_NONEXISTENT,
+            user_dir=_NONEXISTENT,
+        )
+        assert len(defn.steps) == 1
+        loop_step = defn.steps[0]
+        assert loop_step.step_type == "loop"
+        assert loop_step.config["max"] >= 1
+        assert loop_step.config["until"] == "review.pass"
+        assert loop_step.config["on_exhaust"] == "checkpoint"
+
+        body = loop_step.config["steps"]
+        assert len(body) == 2
+        assert next(iter(body[0])) == "dispatch"
+        assert next(iter(body[1])) == "review"
+        assert body[1]["review"]["template"] == "judge.slice-vs-arch"

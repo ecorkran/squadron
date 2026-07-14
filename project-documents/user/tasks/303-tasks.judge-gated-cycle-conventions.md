@@ -73,13 +73,13 @@ status: not_started
 
 **Effort: 1**
 
-- [ ] **Create the slice branch per project git rules**
-  - [ ] `cd` to project root; confirm with `pwd`
-  - [ ] Read `cf config get git.integration_branch`; call its value (or `main`
+- [x] **Create the slice branch per project git rules**
+  - [x] `cd` to project root; confirm with `pwd`
+  - [x] Read `cf config get git.integration_branch`; call its value (or `main`
     if empty) the target
-  - [ ] Create `303-slice.judge-gated-cycle-conventions` from the target if it
+  - [x] Create `303-slice.judge-gated-cycle-conventions` from the target if it
     does not exist; otherwise switch to it
-- [ ] Success: `git branch --show-current` prints
+- [x] Success: `git branch --show-current` prints
   `303-slice.judge-gated-cycle-conventions`
 
 ---
@@ -88,31 +88,31 @@ status: not_started
 
 **Effort: 2**
 
-- [ ] **Create `src/squadron/data/pipelines/judge-cycle.yaml`**, modeled on
+- [x] **Create `src/squadron/data/pipelines/judge-cycle.yaml`**, modeled on
   `src/squadron/data/pipelines/test-loop.yaml` (the proven
   dispatch-then-review body shape)
-  - [ ] `name: judge-cycle`; description states it is the judge-gated
+  - [x] `name: judge-cycle`; description states it is the judge-gated
     review→fix→re-review reference pipeline
-  - [ ] `params:` block with `slice: required` (quote placeholders as
+  - [x] `params:` block with `slice: required` (quote placeholders as
     `"{slice}"` per the authoring guide's placeholder rule)
-  - [ ] A single `loop` step, fix-first body, no pre-loop judge:
-    - [ ] `max: 3`
-    - [ ] `until: review.pass`
-    - [ ] `on_exhaust: checkpoint` (not `fail` — the run is *undecided*, not
+  - [x] A single `loop` step, fix-first body, no pre-loop judge:
+    - [x] `max: 3`
+    - [x] `until: review.pass`
+    - [x] `on_exhaust: checkpoint` (not `fail` — the run is *undecided*, not
       wrong; escalation to a human is the point)
-    - [ ] Body step 1 — `dispatch:` fix leg. Prompt does double duty per the
+    - [x] Body step 1 — `dispatch:` fix leg. Prompt does double duty per the
       fix-first shape: address prior judge findings if any exist, otherwise
       perform an initial improvement pass on the artifact
-    - [ ] Body step 2 — `review:` with `template: judge.slice-vs-arch` and
+    - [x] Body step 2 — `review:` with `template: judge.slice-vs-arch` and
       `slice: "{slice}"` so `input`/`against` auto-resolve via
       `TEMPLATE_INPUTS` (the same path slice 302's live runs exercised)
-  - [ ] No `judge:` override in the shipped file — the reference pipeline is
+  - [x] No `judge:` override in the shipped file — the reference pipeline is
     the auto-advance mode; advisory-only is shown in docs (T6) and pinned by
     test (T5)
-- [ ] Success: `uv run sq run judge-cycle --validate` reports the pipeline
+- [x] Success: `uv run sq run judge-cycle --validate` reports the pipeline
   valid with no unknown step types
 
-**Commit:** `feat: add judge-cycle reference pipeline`
+**Commit:** `feat: add judge-cycle reference pipeline` (277620c)
 
 ---
 
