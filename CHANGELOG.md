@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 20260714
+
 ### Added
 - **`docs/QUICKSTART.md`** — new guide covering how to verify your install (`sq doctor`, `sq setup --check-only`), the full six-profile provider matrix, and where to go for your first review or pipeline run. Linked from the README.
 - Review templates can now be marked as **judges** via a `judge:` block (with optional `pass_floor`/`concerns_floor`). For judge templates, the verdict is always derived from the numeric score by threshold — never the model's own stated verdict — and every result now carries a `provenance` field (`"judge"` or `"review"`) so consumers can tell how a verdict was produced. A score that's missing or out of range yields `UNKNOWN` (never a silent pass), each logged as a warning. Thresholds can be overridden per pipeline step via a `judge:` key.

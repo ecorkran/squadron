@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260712
+dateUpdated: 20260714
 
 ---
 
@@ -11,6 +11,61 @@ dateUpdated: 20260712
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260714 (1)
+
+### Diagnosed field bug: 909 dispatch-artifact fix never released to PyPI
+
+`sq run p5a <slice>` failed in a client repo (grizcam_mobile_ios) at the
+`review template=tasks` step with `missing required input(s): input,
+against` — the exact pre-909 symptom, on a repo confirmed to have current
+guides and no CF-side formatting issue.
+
+**Investigation ruled out, in order:** (1) `p5a.yaml`/`p4.yaml` custom
+pipeline definitions — both correctly use `tasks:`/`design:` phase-step
+shorthand, not raw `dispatch:`, so they get the full 909 post-condition
+guard; (2) context-forge slice-plan parsing — slice 143's checklist line
+(`4. [ ] **(143) ...** — desc`) matches `PLAN_INDEXED_RE` cleanly, confirmed
+by testing the actual line against the regex; (3) CF worktree scoping — not
+in use in the affected repo; (4) a race between the two `resolve_slice_info`
+calls (dispatch's post-condition check and the review step's input
+resolution) — ruled out, `cf list tasks --json` does a live filesystem scan
+with no caching on either side.
+
+**Root cause:** the installed `sq` was `squadron-ai 0.6.2` via `uv tool
+install` — a real PyPI release, not a dev/editable checkout. Confirmed by
+grepping the installed wheel's `executor.py` directly: zero references to
+`_check_dispatch_artifact_written` / `expected_artifact_kind`. The 909 fix
+(commit `49b8522`) merged to `main` on 20260710 but `pyproject.toml`'s
+`version` was never bumped past `0.6.2` and no release was cut — so every
+consulting client running `squadron-ai` from PyPI has been on pre-909
+squadron the entire time, including this session's own local install
+(chalked up as "we should release 0.6.2 anyway" rather than investigated
+further, since the fix and its tests are confirmed correct on `main`).
+
+Slice 143 itself is legitimately `needs-design`/`not-started` — no
+`143-tasks.*.md` exists on disk, consistent with a dispatch agent turn that
+ended without writing the file (same failure shape as the original 303
+repro that motivated 909). On a release containing 49b8522, this would now
+fail loudly at the dispatch step with an accurate message instead of
+surfacing one step later at review.
+
+**Action:** prepared a 0.7.0 release (see below) rather than a 0.6.3 patch
+— `[Unreleased]` already contained a full minor's worth of shipped-but-
+unreleased feature work (judge templates, judge enforcement) alongside the
+three bug fixes, so a minor bump is correct per semver even though this
+investigation only needed the fix half.
+
+### Prepared release 0.7.0
+
+Bumped `pyproject.toml` version `0.6.2` → `0.7.0`, re-ran `uv lock` to sync
+`uv.lock`, converted `CHANGELOG.md`'s `[Unreleased]` section to `## [0.7.0]
+- 20260714` (left a fresh empty `[Unreleased]` above it). Verified `uv
+build` produces a clean sdist/wheel and that the built wheel actually
+contains the 909 fix (`unzip -p ... | grep _check_dispatch_artifact_written`
+→ 2 matches). Full test suite green: 2101 passed, 2 skipped, 0 failed — no
+regressions since the last recorded baseline. Committed and tagged `v0.7.0`;
+`pypi` publish deliberately deferred as a separate, explicit step.
 
 ## 20260712 (1)
 
