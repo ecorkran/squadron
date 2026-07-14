@@ -2,13 +2,69 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260706
+dateUpdated: 20260712
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260712 (1)
+
+### Slice 906: Quickstart and Onboarding Documentation — Complete
+
+New `docs/QUICKSTART.md`, plus two additive links from `README.md`. Docs-only
+slice; no code changes. Branch `906-slice.quickstart-and-onboarding-documentation`
+merges to `main` on completion, `codeReview: none` (no-code slice, gate
+bypassed via `cf check --set-review-none 906`).
+
+**Design history — two corrections, both discovered by re-verifying live
+state instead of trusting the prior draft:**
+
+1. The original design (20260513) assumed a manual multi-step install
+   narrative (npm → `cf init` → pipx → `sq install-commands` → provider auth)
+   that slice 908 (`sq setup`) has since superseded. Rebuilt 20260711 to lead
+   with `install.sh` → `sq setup` as the canonical path.
+2. That rebuild *itself* turned out to misdescribe the current README: it
+   assumed README's Install section still needed the `curl | sh` one-liner
+   added (908 had already landed it) and that Quickstart needed replacing
+   with an install-pointer (Quickstart is actually a different, already-good
+   section — SDK auth, review-a-design, review-tasks-then-code — unrelated to
+   install steps). Corrected 20260711 after actually reading the live README
+   top to bottom rather than reasoning from the stale design.
+3. During Phase 6 itself, Task 1's re-verification step (built into the task
+   file specifically to catch further drift) found a third error: the design
+   claimed `sq run` was undocumented anywhere in README. It is documented —
+   a `## Pipelines (sq run)` section already exists. "Your first pipeline
+   run" was written as a short bridge/pointer (matching the "Your first
+   review" section's treatment), not as net-new content.
+
+**What QUICKSTART actually covers** (the real, narrower gap after all three
+corrections): how to read `sq doctor`/`sq setup --check-only` output
+(undocumented anywhere before this), the full six-profile provider matrix
+(README's existing Quickstart only documents `sdk` auth), and pointers to
+README/`docs/PIPELINES.md` for review and pipeline walkthroughs rather than
+duplicating them.
+
+**Verification (20260712):** `sq doctor -v`, `sq setup --check-only`,
+`sq run --help`, and `BUILT_IN_PROFILES` all captured live and used verbatim
+in QUICKSTART rather than reconstructed from memory. `sq run slice 906
+--dry-run` confirmed QUICKSTART's example command resolves correctly.
+`git diff README.md` confirmed additive-only (two insertions, zero
+deletions). Full gate: ruff clean, pyright 0 errors, pytest 2101 passed / 2
+skipped / 0 failed — matches pre-slice baseline (docs-only change).
+
+**Takeaway for future doc slices:** a slice design's claims about "what's
+currently documented" or "what's currently missing" are load-bearing facts
+that decay fast — this slice needed re-verification at three separate
+points (initial rebuild, second rebuild, and again inside Phase 6's own
+task list) before its scope was actually correct. Building an explicit
+"re-verify live state" phase into the task file (rather than trusting the
+design as ground truth) is what caught the third error; worth carrying that
+pattern into future docs-only slices.
 
 ---
 

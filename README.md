@@ -59,6 +59,8 @@ sq --version
 sq install-commands   # Install Claude Code slash commands
 ```
 
+New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
+
 ### Development install
 
 ```bash
@@ -354,6 +356,7 @@ See **[docs/PIPELINES.md](docs/PIPELINES.md)** for the full authoring guide: YAM
 
 ## Documentation
 
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — Verify your install, configure any provider, troubleshoot `sq doctor`/`sq setup` output
 - **[docs/COMMANDS.md](docs/COMMANDS.md)** — Full command reference with all options and arguments
 - **[docs/TEMPLATES.md](docs/TEMPLATES.md)** — How review templates work and how to create new ones
 - **[docs/PIPELINES.md](docs/PIPELINES.md)** — Pipeline authoring guide

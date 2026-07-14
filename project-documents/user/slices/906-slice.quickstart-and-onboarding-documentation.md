@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [905, 908]
 interfaces: []
 dateCreated: 20260513
-dateUpdated: 20260711
-status: not_started
+dateUpdated: 20260712
+status: complete
 codeReview: none
 review: none
 ---
@@ -141,14 +141,34 @@ New to Squadron? See [docs/QUICKSTART.md](docs/QUICKSTART.md) for install verifi
 
 ## Verification Walkthrough
 
-Manual review — no automated tests for docs.
+Walkthrough validated in Phase 6 (20260712). Results recorded below.
 
-1. Read `docs/QUICKSTART.md` top to bottom and confirm each step is complete and actionable.
-2. Run `sq doctor --help`, `sq doctor -v`, `sq setup --help`, `sq setup --check-only` and confirm QUICKSTART's descriptions match actual current output.
-3. Diff the updated `README.md` against its pre-slice version — confirm only an additive pointer was added, nothing existing was removed or reworded.
-4. Follow QUICKSTART's "Your first pipeline run" section against a real `sq run` invocation and confirm it works as described.
-5. Run `uv run ruff check && uv run pyright` — should be zero errors (no code changes, but confirm the `.md` edits don't affect Python).
-6. Run `uv run pytest -q` — full suite green (no regressions; docs-only change).
+1. **Read `docs/QUICKSTART.md` top to bottom.** Confirmed complete and internally consistent — no forward references to nonexistent sections, no stale claims. One scope correction made during Phase A re-verification: README already documents `sq run` (a `## Pipelines (sq run)` section), contradicting the original design's premise that it was undocumented. "Your first pipeline run" was written as a bridge/pointer to README + `docs/PIPELINES.md`, matching the treatment of "Your first review", rather than as net-new content.
+
+2. **`sq doctor --help` / `sq doctor -v` / `sq setup --help` / `sq setup --check-only` against QUICKSTART's descriptions.** Ran live; captured real output before writing QUICKSTART's example block (not fabricated). One correction to the design's assumed section order: actual `sq doctor` output groups as Install → Providers and Auth → Integrations → Skill Packs → Configuration, not the Install → Integrations → Providers → Configuration order the design assumed — QUICKSTART documents the real order.
+
+3. **Diff `README.md` against pre-slice version.**
+   ```
+   $ git diff README.md
+   +New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
+   +- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — Verify your install, configure any provider, troubleshoot `sq doctor`/`sq setup` output
+   ```
+   Two insertions, zero deletions — confirmed additive-only.
+
+4. **`sq run` example command.** QUICKSTART's example (`sq run slice 152`) verified via `sq run slice 906 --dry-run`, which resolved correctly (pipeline `slice`, target `906`, 10-step plan printed). Matches README's own pre-existing example shape.
+
+5. **`uv run ruff check && uv run ruff format --check && uv run pyright`:**
+   ```
+   All checks passed!
+   329 files already formatted
+   0 errors, 0 warnings, 0 informations
+   ```
+
+6. **`uv run pytest -q`:**
+   ```
+   2101 passed, 2 skipped, 6 warnings in 19.18s
+   ```
+   No regressions from the pre-slice baseline (docs-only change).
 
 ## Effort
 

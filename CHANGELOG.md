@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`docs/QUICKSTART.md`** — new guide covering how to verify your install (`sq doctor`, `sq setup --check-only`), the full six-profile provider matrix, and where to go for your first review or pipeline run. Linked from the README.
 - Review templates can now be marked as **judges** via a `judge:` block (with optional `pass_floor`/`concerns_floor`). For judge templates, the verdict is always derived from the numeric score by threshold — never the model's own stated verdict — and every result now carries a `provenance` field (`"judge"` or `"review"`) so consumers can tell how a verdict was produced. A score that's missing or out of range yields `UNKNOWN` (never a silent pass), each logged as a warning. Thresholds can be overridden per pipeline step via a `judge:` key.
 - **`judge.tasks-vs-slice`** and **`judge.slice-vs-arch`** — the first two judge templates, scoring a task breakdown against its parent slice design and a slice design against its parent architecture, respectively. Each produces a numeric score with a per-criterion rationale and findings instead of a verdict. Usable via a pipeline `review` step (`template: judge.tasks-vs-slice`) or directly through the review API; not yet exposed as an `sq review` CLI subcommand.
 

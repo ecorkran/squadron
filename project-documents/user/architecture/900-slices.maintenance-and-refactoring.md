@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260711
+dateUpdated: 20260712
 status: in-progress
 ---
 
@@ -93,11 +93,11 @@ Branch: `904-review-finding-location-required`, close issue on merge.
 
 4. [x] **(905) `sq doctor` Environment Diagnostic Command** — New `sq doctor` subcommand that inspects and reports on the runtime environment a user has assembled: which providers are usable (auth file present, API key set, profile reachable), which integrations are wired (Context Forge CLI on PATH, Claude Code session detected, Codex CLI binary present), and which configuration files are loaded. Output is a human-readable checklist with `OK` / `MISSING` / `WARN` per item and "fix it with: X" hints for each `MISSING` (install command, env var name, login command). Exit code 0 when nothing is broken, non-zero when at least one required item is missing for the user's apparent intent. Primary motivation: lower onboarding friction — new users assemble Squadron + Context Forge + per-provider auth from three package managers, and a single diagnostic command tells them what's wrong without digging through README sections. Secondary motivation: promotion-readiness — a discoverable "is everything OK?" command is table stakes for tools that span multiple installation paths. Scope: read-only inspection; does not write config, does not install anything. Out of scope: auto-remediation, interactive setup wizard. Risk: Low. Effort: 2/5. Dependencies: none.
 
-5. [ ] **(906) Quickstart and Onboarding Documentation** — A single `docs/QUICKSTART.md` that walks a new user from "I have nothing installed" to "I can run `sq run P4 my-slice`," led by the one-line `install.sh` → `sq setup` path (slice 908) with a manual step-by-step fallback underneath. Names every environment variable a provider needs and which providers work without it; provider matrix reflects live `BUILT_IN_PROFILES` (openai, openrouter, local, gemini, sdk, openai-oauth), verified at write time rather than restated from this entry. Also updates the project README's installation section to lead with the `curl | sh` one-liner and link to QUICKSTART, removing step-by-step duplication. Pairs with slice 905 (`sq doctor`) and 908 (`sq setup`): both commands' output/fix-hints reference QUICKSTART anchors for resolution. Scope is docs-only; no code changes.
+5. [x] **(906) Quickstart and Onboarding Documentation** — New `docs/QUICKSTART.md` bridging "installed" to "verified and running": how to read `sq doctor`/`sq setup --check-only` output, the full six-profile provider matrix (`sdk`, `openai`, `openrouter`, `gemini`, `local`, `openai-oauth`), and pointers to README's existing review/pipeline walkthroughs rather than duplicating them. README gained two additive links to QUICKSTART; nothing existing was removed or reworded. Scope is docs-only; no code changes.
 
-**Slice design:** `user/slices/906-slice.quickstart-and-onboarding-documentation.md` (rebuilt 20260711 via `/cf:build` — superseded a stale 20260513 draft that predated `sq setup`)
+**Slice design:** `user/slices/906-slice.quickstart-and-onboarding-documentation.md` (rebuilt twice against live state during Phases 4–6 — see design's Overview and Verification Walkthrough for corrections found, including that `sq run` was already documented in README contrary to the original design's premise)
 
-**Status:** not_started · **Risk:** Low · **Effort:** 1/5 · **Dependencies:** [905, 908]
+**Status:** complete (20260712) · **Risk:** Low · **Effort:** 1/5 · **Dependencies:** [905, 908]
 
 6. [x] **(908) `sq setup` — One-Call Install Orchestrator** — Slice design: `user/slices/908-slice.sq-setup-one-call-install-orchestrator.md`. New `sq setup` command (and optional shell installer script) that walks a fresh user through the full install sequence in one invocation: checks for `cf` on PATH and prints the npm install command if missing, runs `sq install-commands`, prompts for provider choice and prints the relevant `export VAR=...` line, then runs `sq doctor` to confirm. Interactive by default; `--non-interactive` flag for scripted use (prints steps without prompting). No automatic execution of npm or system commands — prints and guides, does not run arbitrary installs. A companion `install.sh` (hosted alongside the PyPI package or in the repo) wraps `pipx install squadron-ai` + `npm i -g @manta-digital/context-forge` + `sq setup` into a single `curl | sh` for new users. Risk: Low. Effort: 2/5. Dependencies: [905 (sq doctor), 906 (QUICKSTART for links)].
 
