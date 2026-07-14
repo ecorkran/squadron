@@ -21,6 +21,7 @@ from squadron.providers.profiles import get_profile
 from squadron.providers.registry import get_provider
 from squadron.review.models import ReviewResult
 from squadron.review.parsers import parse_review_output
+from squadron.review.template_inputs import FILE_INPUT_KEYS
 from squadron.review.templates import ReviewTemplate
 
 _logger = logging.getLogger(__name__)
@@ -248,6 +249,16 @@ def _inject_file_contents(
 
         path = Path(value)
         if not path.is_file():
+            # input/against are always document paths; skipping one means
+            # the model reviews a document it never saw (issue #18). The
+            # CLI/pipeline boundaries hard-fail first — this is the last
+            # observable signal for direct callers that bypass them.
+            if key in FILE_INPUT_KEYS:
+                _logger.warning(
+                    "Review input '%s' file not found, content not injected: %s",
+                    key,
+                    value,
+                )
             continue
 
         try:

@@ -10,9 +10,15 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from squadron.review.git_utils import resolve_slice_diff_range
 from squadron.review.persistence import TASKS_DIR, SliceInfo
+
+#: Review input keys whose values are document paths that must exist on disk
+#: for the review to be grounded. Other keys (diff refs, file globs, cwd)
+#: have their own resolution logic and are not plain file paths.
+FILE_INPUT_KEYS = ("input", "against")
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,27 @@ TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]] = {
         TemplateInputSpec(key="against", source=_arch_file),
     ],
 }
+
+
+def missing_input_files(inputs: dict[str, str]) -> list[tuple[str, str]]:
+    """Return (key, path) pairs for ``FILE_INPUT_KEYS`` that name no real file.
+
+    A path counts as present when it resolves relative to the process cwd
+    (how content injection reads it) or relative to ``inputs["cwd"]`` (how
+    SDK review agents read it). Callers treat a non-empty result as a hard
+    error: a review whose input document is silently absent from the prompt
+    produces a fabricated verdict instead of a failure (issue #18).
+    """
+    cwd = Path(inputs.get("cwd", "."))
+    missing: list[tuple[str, str]] = []
+    for key in FILE_INPUT_KEYS:
+        value = inputs.get(key)
+        if value is None:
+            continue
+        if Path(value).is_file() or (cwd / value).is_file():
+            continue
+        missing.append((key, value))
+    return missing
 
 
 def resolve_template_inputs(

@@ -77,3 +77,18 @@ def builtin_templates_dir() -> Path:
     from squadron.data import data_dir
 
     return data_dir() / "templates"
+
+
+@pytest.fixture
+def doc_files(tmp_path: Path) -> tuple[str, str]:
+    """Real (input, against) document paths for CLI review invocations.
+
+    The input/against existence guard (issue #18) rejects paths that name
+    no real file, so tests driving review commands must point at files
+    that exist.
+    """
+    input_doc = tmp_path / "input-doc.md"
+    against_doc = tmp_path / "against-doc.md"
+    input_doc.write_text("# input document\n")
+    against_doc.write_text("# against document\n")
+    return str(input_doc), str(against_doc)

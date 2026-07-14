@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from squadron.cli.commands.review import _resolve_profile
@@ -23,6 +25,14 @@ def _make_template(profile: str | None = None, model: str | None = None) -> Revi
         profile=profile,
         model=model,
     )
+
+
+@pytest.fixture
+def doc_inputs(tmp_path: Path) -> dict[str, str]:
+    """Real input/against docs for _run_review_command (issue #18 guard)."""
+    (tmp_path / "f.md").write_text("# f\n")
+    (tmp_path / "a.md").write_text("# a\n")
+    return {"input": "f.md", "against": "a.md", "cwd": str(tmp_path)}
 
 
 class TestResolveProfile:
@@ -81,7 +91,7 @@ class TestCLIProfileFlag:
     """Test --profile flag wiring through CLI commands."""
 
     def test_run_review_command_passes_profile_to_execute(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
     ) -> None:
         """Verify _run_review_command passes profile through."""
         from unittest.mock import AsyncMock, patch
@@ -119,7 +129,7 @@ class TestCLIProfileFlag:
         ) as mock_exec:
             _run_review_command(
                 "arch",
-                {"input": "f.md", "against": "a.md", "cwd": "."},
+                doc_inputs,
                 "terminal",
                 None,
                 0,
@@ -131,7 +141,9 @@ class TestCLIProfileFlag:
         call_args = mock_exec.call_args
         assert call_args[1].get("profile") or call_args[0][4] == "openrouter"
 
-    def test_run_review_command_defaults_to_sdk(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_run_review_command_defaults_to_sdk(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
         """Without --profile, profile defaults to sdk."""
         from unittest.mock import AsyncMock, patch
 
@@ -167,7 +179,7 @@ class TestCLIProfileFlag:
         ) as mock_exec:
             _run_review_command(
                 "arch",
-                {"input": "f.md", "against": "a.md", "cwd": "."},
+                doc_inputs,
                 "terminal",
                 None,
                 0,
@@ -177,7 +189,9 @@ class TestCLIProfileFlag:
         call_args = mock_exec.call_args
         assert call_args[0][4] == "sdk"
 
-    def test_profile_and_model_passed_together(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_profile_and_model_passed_together(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
         """--profile and --model should both be forwarded."""
         from unittest.mock import AsyncMock, patch
 
@@ -213,7 +227,7 @@ class TestCLIProfileFlag:
         ) as mock_exec:
             _run_review_command(
                 "arch",
-                {"input": "f.md", "against": "a.md", "cwd": "."},
+                doc_inputs,
                 "terminal",
                 None,
                 0,
@@ -230,7 +244,9 @@ class TestCLIProfileFlag:
 class TestAliasWiring:
     """Test alias resolution wiring in _run_review_command()."""
 
-    def test_alias_resolves_model_and_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_alias_resolves_model_and_profile(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
         """gpt54-nano alias resolves to gpt-5.4-nano on openai."""
         from unittest.mock import AsyncMock, patch
 
@@ -260,7 +276,7 @@ class TestAliasWiring:
         ) as mock_exec:
             _run_review_command(
                 "slice",
-                {"input": "f.md", "against": "a.md", "cwd": "."},
+                doc_inputs,
                 "terminal",
                 None,
                 0,
@@ -271,7 +287,9 @@ class TestAliasWiring:
         assert call_args[0][3] == "gpt-5.4-nano"  # resolved model
         assert call_args[0][4] == "openai"  # resolved profile
 
-    def test_unknown_model_passes_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_unknown_model_passes_through(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
         """Unknown model passes through unchanged, profile falls to sdk."""
         from unittest.mock import AsyncMock, patch
 
@@ -301,7 +319,7 @@ class TestAliasWiring:
         ) as mock_exec:
             _run_review_command(
                 "slice",
-                {"input": "f.md", "against": "a.md", "cwd": "."},
+                doc_inputs,
                 "terminal",
                 None,
                 0,
@@ -312,7 +330,9 @@ class TestAliasWiring:
         assert call_args[0][3] == "llama-3-70b"  # unchanged
         assert call_args[0][4] == "sdk"  # default fallback
 
-    def test_explicit_profile_overrides_alias(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_explicit_profile_overrides_alias(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
         """Explicit --profile flag overrides alias-inferred profile."""
         from unittest.mock import AsyncMock, patch
 
@@ -342,7 +362,7 @@ class TestAliasWiring:
         ) as mock_exec:
             _run_review_command(
                 "slice",
-                {"input": "f.md", "against": "a.md", "cwd": "."},
+                doc_inputs,
                 "terminal",
                 None,
                 0,

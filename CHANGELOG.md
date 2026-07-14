@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Reviews now fail immediately with a clear error when the `input` or `against` document doesn't exist on disk (stale path, typo, or an artifact a prior step never wrote), instead of silently proceeding without that document and letting the model produce a fabricated verdict. Applies to `sq review slice|tasks|arch` and pipeline review steps; a warning is also logged if a missing document is ever skipped at the prompt-injection layer. Closes [#18](https://github.com/ecorkran/squadron/issues/18).
+
 ## [0.7.0] - 20260714
 
 ### Added

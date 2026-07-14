@@ -378,16 +378,21 @@ class TestReviewInputPassthrough:
         mock_run_review: MagicMock,
         mock_format: MagicMock,
         mock_save: MagicMock,
+        tmp_path: Path,
     ) -> None:
         mock_get_template.return_value = _mock_template()
         mock_run_review.return_value = _make_review_result()
+
+        # against must name a real file (issue #18 existence guard)
+        against_doc = tmp_path / "arch.md"
+        against_doc.write_text("# arch\n")
 
         ctx = _make_context(
             params={
                 "template": "code",
                 "diff": "main",
                 "files": "src/**/*.py",
-                "against": "arch.md",
+                "against": str(against_doc),
             }
         )
         await ReviewAction().execute(ctx)
@@ -396,7 +401,7 @@ class TestReviewInputPassthrough:
         inputs = call_args[0][1]
         assert inputs["diff"] == "main"
         assert inputs["files"] == "src/**/*.py"
-        assert inputs["against"] == "arch.md"
+        assert inputs["against"] == str(against_doc)
         assert inputs["cwd"] == "/tmp/test"
 
 
@@ -485,6 +490,33 @@ class TestReviewErrors:
         assert result.success is False
         assert "missing required input" in (result.error or "").lower()
         assert "input" in (result.error or "")
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_nonexistent_input_file_fails_before_review(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A resolved input path that names no real file must fail the action
+        before the model is called (issue #18) — previously the review ran
+        with the document silently absent and fabricated a verdict."""
+        mock_tpl = _mock_template()
+        mock_tpl.required_inputs = [InputDef(name="input", description="")]
+        mock_get_template.return_value = mock_tpl
+
+        missing = str(tmp_path / "never-written-tasks.md")
+        ctx = _make_context(params={"template": "tasks", "input": missing})
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        assert "not found" in (result.error or "")
+        assert "never-written-tasks.md" in (result.error or "")
+        mock_run_review.assert_not_called()
 
     @pytest.mark.asyncio
     @patch(f"{_P}.get_template")

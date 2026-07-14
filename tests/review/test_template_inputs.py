@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from squadron.review.persistence import SliceInfo
-from squadron.review.template_inputs import TEMPLATE_INPUTS, resolve_template_inputs
+from squadron.review.template_inputs import (
+    TEMPLATE_INPUTS,
+    missing_input_files,
+    resolve_template_inputs,
+)
 
 # ---------------------------------------------------------------------------
 # Shared fixture
@@ -178,3 +183,51 @@ def test_judge_slice_vs_arch_no_against_when_arch_file_empty() -> None:
     inputs: dict[str, str] = {}
     resolve_template_inputs("judge.slice-vs-arch", info, CWD, inputs)
     assert "against" not in inputs
+
+
+# ---------------------------------------------------------------------------
+# missing_input_files — the input/against existence guard (issue #18)
+# ---------------------------------------------------------------------------
+
+
+def test_missing_input_files_empty_when_keys_absent() -> None:
+    assert missing_input_files({"cwd": "."}) == []
+
+
+def test_missing_input_files_flags_nonexistent_input(tmp_path: Path) -> None:
+    against = tmp_path / "against.md"
+    against.write_text("# against\n")
+    inputs = {
+        "cwd": str(tmp_path),
+        "input": str(tmp_path / "no-such-file.md"),
+        "against": str(against),
+    }
+    assert missing_input_files(inputs) == [("input", str(tmp_path / "no-such-file.md"))]
+
+
+def test_missing_input_files_flags_nonexistent_against(tmp_path: Path) -> None:
+    input_doc = tmp_path / "input.md"
+    input_doc.write_text("# input\n")
+    inputs = {
+        "cwd": str(tmp_path),
+        "input": str(input_doc),
+        "against": str(tmp_path / "gone.md"),
+    }
+    assert missing_input_files(inputs) == [("against", str(tmp_path / "gone.md"))]
+
+
+def test_missing_input_files_accepts_cwd_relative_path(tmp_path: Path) -> None:
+    """A path resolvable under inputs['cwd'] counts as present (SDK agents
+    read files relative to their working directory)."""
+    (tmp_path / "doc.md").write_text("# doc\n")
+    inputs = {"cwd": str(tmp_path), "input": "doc.md"}
+    assert missing_input_files(inputs) == []
+
+
+def test_missing_input_files_flags_both(tmp_path: Path) -> None:
+    inputs = {
+        "cwd": str(tmp_path),
+        "input": str(tmp_path / "a.md"),
+        "against": str(tmp_path / "b.md"),
+    }
+    assert [key for key, _ in missing_input_files(inputs)] == ["input", "against"]

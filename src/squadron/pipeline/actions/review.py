@@ -24,7 +24,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
-from squadron.review.template_inputs import resolve_template_inputs
+from squadron.review.template_inputs import missing_input_files, resolve_template_inputs
 from squadron.review.templates import ReviewTemplate, get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
@@ -145,6 +145,18 @@ class ReviewAction:
                 f"Review template '{template_name}' missing required "
                 f"input(s): {names}. The prior step may not have "
                 f"created the expected file."
+            )
+
+        # input/against must name real files — a stale path would otherwise
+        # reach the model with its content silently absent, and the model
+        # reviews a document it never saw (issue #18).
+        not_found = missing_input_files(inputs)
+        if not_found:
+            details = ", ".join(f"{key}={value}" for key, value in not_found)
+            raise KeyError(
+                f"Review template '{template_name}' input file(s) not "
+                f"found: {details}. The prior step may not have created "
+                f"the expected file."
             )
 
         # Rules content — mirror CLI: template rules + language auto-detection,

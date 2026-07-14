@@ -12,6 +12,41 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260714 (2)
+
+### Fixed issue #18: review input/against existence guard
+
+`missing_input_files()` (new, `review/template_inputs.py`) returns the
+`input`/`against` keys whose values name no real file — checked against both
+the process cwd (how non-SDK content injection resolves paths) and
+`inputs["cwd"]` (how SDK review agents resolve them), so a path valid under
+either provider semantics is accepted. Both review boundaries now hard-fail
+on a non-empty result before any model call: `_run_review_command` (covers
+`sq review slice|tasks|arch|code`) exits 1 with `Error: {key} file not
+found: {path}`; `ReviewAction._review` raises the same KeyError shape as its
+existing required-inputs check, so judge-awareness (verdict=UNKNOWN) and
+step-failure routing are preserved. Defense-in-depth: `_inject_file_contents`
+now logs a WARNING when it skips a missing `input`/`against` (it previously
+skipped silently — the asymmetry with its logged `OSError` branch was the
+original #18 observation); other keys still skip silently by design since
+they may hold non-path values.
+
+Tests: 11 new (helper unit tests, CLI guard via CliRunner, pipeline action
+guard, injection-warning + no-noise cases). 13 existing tests updated —
+they passed fabricated paths (`slice.md`, `a.md`, `f.md`) to mocked review
+clients and now use real tmp files, which the guard correctly rejected.
+Full gate: ruff clean, format clean, pyright 0 errors, pytest 2112 passed /
+2 skipped.
+
+**Correction to 20260714 (1) below:** its claim that no `143-tasks.*.md`
+existed on disk was a stale snapshot — the file was created minutes later
+by a parallel agent working the same repo, and the review it sourced was
+genuine (verified via timestamps and finding-ID cross-references). Issue
+#18's "observed in the wild" example was retracted on the issue; the code
+gap itself was real regardless and is what this entry fixes. Lesson
+recorded: filesystem facts from earlier in a session decay — re-verify at
+the moment of use, especially before publishing claims.
+
 ## 20260714 (1)
 
 ### Diagnosed field bug: 909 dispatch-artifact fix never released to PyPI

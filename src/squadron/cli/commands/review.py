@@ -35,6 +35,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
+from squadron.review.template_inputs import missing_input_files
 from squadron.review.templates import (
     ReviewTemplate,
     get_template,
@@ -310,6 +311,13 @@ def _run_review_command(
                 f"[red]Error: Missing required input '{req.name}' for template '{template_name}'.[/red]"
             )
             raise typer.Exit(code=1)
+
+    # input/against must name real files — a stale or mistyped path would
+    # otherwise reach the model with its content silently absent, and the
+    # model reviews a document it never saw (issue #18).
+    for key, value in missing_input_files(inputs):
+        rprint(f"[red]Error: {key} file not found: {value}[/red]")
+        raise typer.Exit(code=1)
 
     # Prepend template-specific rules (review.md / review-{template}.md).
     # Language auto-detection is handled by the caller (review_code) where

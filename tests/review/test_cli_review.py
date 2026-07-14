@@ -67,8 +67,10 @@ class TestReviewSlice:
         self,
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
-        result = cli_runner.invoke(app, ["review", "slice", "slice.md", "--against", "arch.md"])
+        input_doc, against_doc = doc_files
+        result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", against_doc])
         assert result.exit_code == 0
         assert "CONCERNS" in result.output
 
@@ -84,6 +86,7 @@ class TestReviewTasks:
         self,
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
         # Update mock to return tasks template name
         patch_run_review.return_value = ReviewResult(
@@ -93,7 +96,8 @@ class TestReviewTasks:
             template_name="tasks",
             input_files={"input": "t.md", "against": "s.md"},
         )
-        result = cli_runner.invoke(app, ["review", "tasks", "tasks.md", "--against", "slice.md"])
+        input_doc, against_doc = doc_files
+        result = cli_runner.invoke(app, ["review", "tasks", input_doc, "--against", against_doc])
         assert result.exit_code == 0
 
     def test_missing_against_arg(self, cli_runner: CliRunner) -> None:
@@ -174,10 +178,12 @@ class TestOutputModes:
         self,
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
+        input_doc, against_doc = doc_files
         result = cli_runner.invoke(
             app,
-            ["review", "slice", "a.md", "--against", "b.md", "--output", "json"],
+            ["review", "slice", input_doc, "--against", against_doc, "--output", "json"],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -190,16 +196,18 @@ class TestOutputModes:
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
         tmp_path: Path,
+        doc_files: tuple[str, str],
     ) -> None:
+        input_doc, against_doc = doc_files
         out_file = tmp_path / "result.json"
         result = cli_runner.invoke(
             app,
             [
                 "review",
                 "slice",
-                "a.md",
+                input_doc,
                 "--against",
-                "b.md",
+                against_doc,
                 "--output",
                 "file",
                 "--output-path",
@@ -219,6 +227,7 @@ class TestErrorCases:
         self,
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
         patch_run_review.return_value = ReviewResult(
             verdict=Verdict.FAIL,
@@ -233,8 +242,59 @@ class TestErrorCases:
             template_name="arch",
             input_files={"input": "a.md", "against": "b.md"},
         )
-        result = cli_runner.invoke(app, ["review", "slice", "a.md", "--against", "b.md"])
+        input_doc, against_doc = doc_files
+        result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", against_doc])
         assert result.exit_code == 2
+
+
+class TestInputFileGuard:
+    """input/against must name real files — issue #18.
+
+    A nonexistent path must fail before the model is called; previously the
+    review proceeded with the document silently absent from the prompt and
+    the model fabricated a verdict.
+    """
+
+    def test_nonexistent_input_errors_before_review(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
+        tmp_path: Path,
+    ) -> None:
+        _, against_doc = doc_files
+        missing = str(tmp_path / "never-written.md")
+        result = cli_runner.invoke(app, ["review", "tasks", missing, "--against", against_doc])
+        assert result.exit_code == 1
+        assert "file not found" in result.output
+        assert "never-written.md" in result.output
+        patch_run_review.assert_not_called()
+
+    def test_nonexistent_against_errors_before_review(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
+        tmp_path: Path,
+    ) -> None:
+        input_doc, _ = doc_files
+        missing = str(tmp_path / "deleted-design.md")
+        result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", missing])
+        assert result.exit_code == 1
+        assert "file not found" in result.output
+        patch_run_review.assert_not_called()
+
+    def test_nonexistent_arch_input_errors_before_review(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        missing = str(tmp_path / "no-arch.md")
+        result = cli_runner.invoke(app, ["review", "arch", missing, "--no-save"])
+        assert result.exit_code == 1
+        assert "file not found" in result.output
+        patch_run_review.assert_not_called()
 
 
 class TestRulesWiring:
@@ -273,20 +333,22 @@ class TestRulesWiring:
         cli_runner: CliRunner,
         patch_run_review: AsyncMock,
         tmp_path: Path,
+        doc_files: tuple[str, str],
     ) -> None:
         """rules/review-slice.md present → injected into slice review."""
         rules_dir = tmp_path / "rules"
         rules_dir.mkdir()
         (rules_dir / "review-slice.md").write_text("Slice-specific review guidance.")
 
+        input_doc, against_doc = doc_files
         result = cli_runner.invoke(
             app,
             [
                 "review",
                 "slice",
-                "slice.md",
+                input_doc,
                 "--against",
-                "arch.md",
+                against_doc,
                 "--rules-dir",
                 str(rules_dir),
             ],

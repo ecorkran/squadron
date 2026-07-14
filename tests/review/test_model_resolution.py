@@ -89,10 +89,12 @@ class TestModelCLIFlag:
         self,
         cli_runner: CliRunner,
         mock_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
+        input_doc, _ = doc_files
         result = cli_runner.invoke(
             app,
-            ["review", "arch", "a.md", "--model", "sonnet", "--no-save"],
+            ["review", "arch", input_doc, "--model", "sonnet", "--no-save"],
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
@@ -103,6 +105,7 @@ class TestModelCLIFlag:
         self,
         cli_runner: CliRunner,
         mock_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
         mock_run_review.return_value = ReviewResult(
             verdict=Verdict.PASS,
@@ -112,9 +115,10 @@ class TestModelCLIFlag:
             input_files={"input": "t.md", "against": "s.md"},
             model="claude-opus-4-6",
         )
+        input_doc, against_doc = doc_files
         result = cli_runner.invoke(
             app,
-            ["review", "tasks", "t.md", "--against", "s.md", "--model", "opus"],
+            ["review", "tasks", input_doc, "--against", against_doc, "--model", "opus"],
         )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
@@ -147,15 +151,17 @@ class TestModelCLIFlag:
         self,
         cli_runner: CliRunner,
         mock_run_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
         """Config default_model must go through alias resolution (bug fix)."""
+        input_doc, against_doc = doc_files
         with patch(
             "squadron.cli.commands.review.get_config",
             side_effect=lambda key: "minimax" if key == "default_model" else None,
         ):
             result = cli_runner.invoke(
                 app,
-                ["review", "slice", "a.md", "--against", "b.md"],
+                ["review", "slice", input_doc, "--against", against_doc],
             )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs

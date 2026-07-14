@@ -145,8 +145,10 @@ class TestVerboseFlag:
         self,
         cli_runner: CliRunner,
         mock_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
-        result = cli_runner.invoke(app, ["review", "slice", "a.md", "--against", "b.md", "-v"])
+        input_doc, against_doc = doc_files
+        result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", against_doc, "-v"])
         assert result.exit_code == 0
         assert "Input not validated" in result.output
 
@@ -154,12 +156,14 @@ class TestVerboseFlag:
         self,
         cli_runner: CliRunner,
         mock_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
+        input_doc, against_doc = doc_files
         with patch(
             "squadron.cli.commands.review.get_config",
             return_value=0,
         ):
-            result = cli_runner.invoke(app, ["review", "slice", "a.md", "--against", "b.md"])
+            result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", against_doc])
             assert result.exit_code == 0
             assert "Input not validated" not in result.output
 
@@ -180,11 +184,13 @@ class TestConfigDefaultVerbosity:
         self,
         cli_runner: CliRunner,
         mock_review: AsyncMock,
+        doc_files: tuple[str, str],
     ) -> None:
+        input_doc, against_doc = doc_files
         with patch(
             "squadron.cli.commands.review.get_config",
             return_value=1,
         ):
-            result = cli_runner.invoke(app, ["review", "slice", "a.md", "--against", "b.md"])
+            result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", against_doc])
             assert result.exit_code == 0
             assert "Input not validated" in result.output

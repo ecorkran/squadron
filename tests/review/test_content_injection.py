@@ -56,6 +56,33 @@ def test_nonexistent_file_is_skipped(tmp_path: Path) -> None:
     assert result == prompt
 
 
+def test_nonexistent_input_skip_logs_warning(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Skipping a missing input/against document must be observable (issue
+    #18) — a silent skip means the model reviews a document it never saw."""
+    inputs = {"input": "/nonexistent/path/to/file.md", "cwd": str(tmp_path)}
+
+    with caplog.at_level("WARNING", logger="squadron.review.review_client"):
+        _inject_file_contents("Review this", inputs)
+
+    assert any(
+        "file not found" in record.message and "input" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_nonexistent_non_document_key_skips_silently(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Keys outside input/against may hold non-path values by design — no
+    warning noise for those."""
+    inputs = {"cwd": str(tmp_path), "some_key": "not-a-file"}
+
+    with caplog.at_level("WARNING", logger="squadron.review.review_client"):
+        _inject_file_contents("Review this", inputs)
+
+    assert not caplog.records
+
+
 def test_non_file_values_are_skipped(tmp_path: Path) -> None:
     """Non-file values like directories or bare strings are skipped."""
     prompt = "Review this"
