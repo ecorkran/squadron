@@ -1,0 +1,17 @@
+name: judge-cycle
+description: Judge-gated review-fix-review cycle — bounded loop that auto-advances on a passing score or escalates to a human at max iterations
+
+params:
+  slice: required
+
+steps:
+  - loop:
+      max: 3
+      until: review.pass
+      on_exhaust: checkpoint
+      steps:
+        - dispatch:
+            prompt: "Address any findings from the prior judge review if present; otherwise perform an initial improvement pass on the slice design artifact."
+            model: sonnet
+        - review:
+            template: judge.slice-vs-arch
