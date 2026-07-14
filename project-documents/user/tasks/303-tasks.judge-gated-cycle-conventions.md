@@ -200,22 +200,22 @@ status: not_started
 
 **Effort: 2**
 
-- [ ] **Add `test_judge_cycle_advisory_always_escalates`** to
+- [x] **Add `test_judge_cycle_advisory_always_escalates`** to
   `tests/pipeline/test_judge_cycle.py`
-  - [ ] Load the real `judge-cycle` definition, then inject
+  - [x] Load the real `judge-cycle` definition, then inject
     `judge: {pass_floor: 101}` into the loop-body review step's config — the
     exact step-level override a user would write; no other change
-  - [ ] Forced raw score 95 (well above the default floor) → derived verdict
+  - [x] Forced raw score 95 (well above the default floor) → derived verdict
     still non-PASS because `score < 101`
-  - [ ] Assert the loop always exhausts to `PAUSED` — proving the gate is the
+  - [x] Assert the loop always exhausts to `PAUSED` — proving the gate is the
     threshold, not the model, and pinning unclamped thresholds
     (`pass_floor > 100` sanctioned) as a regression guard per the LLD's
     advisory-only note
-- [ ] Success: `uv run pytest tests/pipeline/test_judge_cycle.py -k
+- [x] Success: `uv run pytest tests/pipeline/test_judge_cycle.py -k
   advisory` passes; full suite, `uv run pyright`, and `uv run ruff check`
   remain clean
 
-**Commit:** `test: advisory pass_floor override forces judge-cycle escalation`
+**Commit:** `test: advisory pass_floor override forces judge-cycle escalation` (9d04b76)
 
 ---
 
