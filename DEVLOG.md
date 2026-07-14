@@ -12,6 +12,34 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260714 (3)
+
+### Slice 303: Judge-Gated Cycle Conventions — In Progress
+
+Phase 5 (task breakdown) complete: created
+`user/tasks/303-tasks.judge-gated-cycle-conventions.md` (T0–T8) from the
+approved LLD. The slice is data + docs + tests only — no engine change:
+`judge-cycle.yaml` reference pipeline (fix-first `loop [dispatch, judge]`,
+`max: 3`, `until: review.pass`, `on_exhaust: checkpoint`), structural test in
+`test_loader_integration.py`, three control-flow tests (auto-advance,
+escalate-at-max, advisory-always-escalates) in a new
+`tests/pipeline/test_judge_cycle.py`, authoring docs in `docs/PIPELINES.md`,
+and one live unattended validation run.
+
+Two findings surfaced during breakdown, folded into the tasks:
+- `docs/PIPELINES.md` has no `### loop` (or bare-`dispatch`) Step Type
+  Catalog entry — the convention section is unfollowable without them; T6
+  adds both alongside the judge-gated-cycles section.
+- The issue-#18 guard (`4564471`, shipped after the 303 design) makes a
+  missing `input`/`against` file a hard error in `ReviewAction._review`, so
+  the control-flow tests cannot mock `run_review_with_profile` alone — T3's
+  harness must provide real tmp input/against files or patch the slice-input
+  resolution seam, while keeping `resolve_thresholds`/`enforce_judge` and the
+  loop evaluation real.
+
+Pending: Phase 6 implementation on branch
+`303-slice.judge-gated-cycle-conventions` (T0). Resume point: T0/T1.
+
 ## 20260714 (2)
 
 ### Fixed issue #18: review input/against existence guard
