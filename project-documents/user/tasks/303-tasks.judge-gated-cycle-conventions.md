@@ -179,20 +179,20 @@ status: not_started
 
 **Effort: 2**
 
-- [ ] **Add `test_judge_cycle_escalates`** to
+- [x] **Add `test_judge_cycle_escalates`** to
   `tests/pipeline/test_judge_cycle.py` using the T3 harness
-  - [ ] Forced score below `concerns_floor` (60) — e.g. 40 → derived verdict
+  - [x] Forced score below `concerns_floor` (60) — e.g. 40 → derived verdict
     FAIL on every iteration
-  - [ ] Assert the loop runs exactly `max` (3) iterations (dispatch mock
+  - [x] Assert the loop runs exactly `max` (3) iterations (dispatch mock
     called 3 times), then exhausts: the loop's `StepResult` has
     `status=PAUSED` — never a silent pass, never unbounded
-  - [ ] Assert observability (design Success Criterion #4): the exhausted
+  - [x] Assert observability (design Success Criterion #4): the exhausted
     step's `action_results` carry the last judge result (score and findings
     reachable by the human)
-- [ ] Success: `uv run pytest tests/pipeline/test_judge_cycle.py -k
+- [x] Success: `uv run pytest tests/pipeline/test_judge_cycle.py -k
   escalates` passes
 
-**Commit:** `test: judge-cycle exhausts to PAUSED at max when the floor is never cleared`
+**Commit:** `test: judge-cycle exhausts to PAUSED at max when the floor is never cleared` (35af4f0)
 
 ---
 

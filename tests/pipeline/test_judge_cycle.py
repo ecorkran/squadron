@@ -55,16 +55,22 @@ async def _run_judge_cycle(
     dispatch_mock: MagicMock,
     tmp_path: Path,
     score: float,
+    judge_override: dict[str, object] | None = None,
 ) -> object:
     """Load the real judge-cycle definition and execute it with a forced score.
 
     Returns the PipelineResult. Real design/arch tmp files satisfy the
     issue-#18 missing-input hard-fail; `resolve_slice_info` is mocked only to
-    point at them, not to fabricate the judge verdict path.
+    point at them, not to fabricate the judge verdict path. `judge_override`,
+    when given, is injected into the loop body's review step config — the
+    exact step-level `judge:` override a user would write.
     """
     bootstrap_step_types()
 
     definition = load_pipeline("judge-cycle", project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
+    if judge_override is not None:
+        loop_config = definition.steps[0].config
+        loop_config["steps"][1]["review"]["judge"] = judge_override
 
     design_file = tmp_path / "303-slice.md"
     design_file.write_text("# slice design\n")
@@ -127,3 +133,23 @@ class TestJudgeCycleEscalates:
         last_review = loop_result.action_results[-1]
         assert last_review.action_type == "review"
         assert last_review.score == 40.0
+
+
+class TestJudgeCycleAdvisoryAlwaysEscalates:
+    @pytest.mark.asyncio
+    async def test_judge_cycle_advisory_always_escalates(self, tmp_path: Path) -> None:
+        dispatch_mock = _dispatch_mock()
+        # 95 is well above the default pass_floor (82) but below the
+        # step-level advisory override (101) — the gate is the threshold,
+        # not the model, and pass_floor > 100 is a sanctioned unclamped value.
+        result = await _run_judge_cycle(
+            dispatch_mock,
+            tmp_path,
+            score=95.0,
+            judge_override={"pass_floor": 101},
+        )
+
+        assert result.status == ExecutionStatus.PAUSED
+        loop_result = result.step_results[0]
+        assert loop_result.status == ExecutionStatus.PAUSED
+        assert dispatch_mock.execute.await_count == 3
