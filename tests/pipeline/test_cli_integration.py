@@ -137,14 +137,22 @@ class TestCliIntegration:
         assert len(runs[0].completed_steps) == 10
 
     @pytest.mark.asyncio
-    async def test_state_file_loadable_after_run(self, tmp_path: Path) -> None:
+    async def test_state_file_loadable_after_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """State file is persisted and loadable via StateManager."""
-        with patch("squadron.cli.commands.run._check_cf"):
+        monkeypatch.chdir(tmp_path)
+        cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")
+        dispatch_action = artifact_writing_action(tmp_path, 191)
+        with (
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.ContextForgeClient", return_value=cf_client),
+        ):
             await _run_pipeline(
                 "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
-                _action_registry=_success_registry(),
+                _action_registry=_success_registry(dispatch_action=dispatch_action),
             )
 
         mgr = StateManager(runs_dir=tmp_path)
