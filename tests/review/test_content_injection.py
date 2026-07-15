@@ -7,12 +7,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from squadron.config.keys import CONFIG_KEYS
 from squadron.review.review_client import (
-    _MAX_FILE_SIZE,
-    _MAX_TOTAL_INJECTION,
     _demote_headings,
     _inject_file_contents,
 )
+
+_MAX_FILE_SIZE = CONFIG_KEYS["review.max_file_size_bytes"].default
+_MAX_TOTAL_INJECTION = CONFIG_KEYS["review.max_total_injection_bytes"].default
 
 # ---------------------------------------------------------------------------
 # Basic injection
@@ -205,6 +207,24 @@ def test_large_diff_is_truncated(tmp_path: Path) -> None:
         result = _inject_file_contents(prompt, inputs)
 
     assert "truncated" in result.lower()
+
+
+def test_max_file_size_config_override(patch_config_paths, tmp_path: Path) -> None:
+    """Raising review.max_file_size_bytes lets larger content through untruncated (issue #19)."""
+    from squadron.config.manager import set_config
+
+    set_config("review.max_file_size_bytes", str(_MAX_FILE_SIZE * 2))
+
+    large_file = tmp_path / "big.md"
+    content = "x" * (_MAX_FILE_SIZE + 10_000)
+    large_file.write_text(content)
+
+    prompt = "Review this"
+    inputs = {"input": str(large_file), "cwd": str(tmp_path)}
+
+    result = _inject_file_contents(prompt, inputs)
+    assert "truncated" not in result.lower()
+    assert content in result
 
 
 def test_diff_failure_is_skipped(tmp_path: Path) -> None:

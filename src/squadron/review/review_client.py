@@ -15,6 +15,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from squadron.config.manager import get_config
 from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
@@ -178,8 +179,6 @@ async def run_review_with_profile(
     return result
 
 
-_MAX_FILE_SIZE = 100_000  # 100KB per file
-_MAX_TOTAL_INJECTION = 500_000  # 500KB total
 _SKIP_KEYS = {"cwd", "diff", "files"}
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
@@ -200,13 +199,13 @@ def _demote_headings(content: str, levels: int = 2) -> str:
     return _HEADING_RE.sub(_shift, content)
 
 
-def _truncate(content: str, label: str) -> str:
-    """Truncate content exceeding _MAX_FILE_SIZE with a message."""
-    if len(content) <= _MAX_FILE_SIZE:
+def _truncate(content: str, label: str, max_file_size: int) -> str:
+    """Truncate content exceeding *max_file_size* with a message."""
+    if len(content) <= max_file_size:
         return content
     _logger.warning("Truncated %s (%d bytes)", label, len(content))
     return (
-        content[:_MAX_FILE_SIZE] + f"\n\n[truncated at {_MAX_FILE_SIZE // 1000}KB"
+        content[:max_file_size] + f"\n\n[truncated at {max_file_size // 1000}KB"
         " — file too large for API review]"
     )
 
@@ -222,19 +221,33 @@ def _inject_file_contents(
     Path.is_file(), and appends file contents as fenced code blocks.
     Skips keys in _SKIP_KEYS (e.g. cwd, diff, files) and non-file values.
     Also handles special 'diff' and 'files' inputs for code reviews.
+
+    Size caps are read from config (review.max_file_size_bytes,
+    review.max_total_injection_bytes) so they can be raised for
+    large-context models rather than hardcoded (issue #19).
     """
+    cwd_for_config = inputs.get("cwd", ".")
+    max_file_size = get_config("review.max_file_size_bytes", cwd=cwd_for_config)
+    if not isinstance(max_file_size, int):
+        raise TypeError(f"review.max_file_size_bytes config value is not an int: {max_file_size!r}")
+    max_total_injection = get_config("review.max_total_injection_bytes", cwd=cwd_for_config)
+    if not isinstance(max_total_injection, int):
+        raise TypeError(
+            f"review.max_total_injection_bytes config value is not an int: {max_total_injection!r}"
+        )
+
     injections: list[str] = []
     total_size = 0
 
     def _add_injection(label: str, content: str) -> bool:
         """Add content to injections, respecting total limit. Returns False if full."""
         nonlocal total_size
-        content = _truncate(content, label)
+        content = _truncate(content, label, max_file_size)
         file_size = len(content)
-        if total_size + file_size > _MAX_TOTAL_INJECTION:
+        if total_size + file_size > max_total_injection:
             _logger.warning(
                 "Total injection limit reached (%dKB), skipping %s",
-                _MAX_TOTAL_INJECTION // 1000,
+                max_total_injection // 1000,
                 label,
             )
             return False

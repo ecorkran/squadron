@@ -95,6 +95,24 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "If set, overrides compact.template. Param substitution still applies."
         ),
     ),
+    "review.max_file_size_bytes": ConfigKey(
+        name="review.max_file_size_bytes",
+        type_=int,
+        default=100_000,
+        description=(
+            "Per-file injection cap (bytes) for providers that can't read files "
+            "directly. Content beyond this is truncated with a marker."
+        ),
+    ),
+    "review.max_total_injection_bytes": ConfigKey(
+        name="review.max_total_injection_bytes",
+        type_=int,
+        default=500_000,
+        description=(
+            "Total injection cap (bytes) across all files/diff content for "
+            "providers that can't read files directly."
+        ),
+    ),
 }
 
 
