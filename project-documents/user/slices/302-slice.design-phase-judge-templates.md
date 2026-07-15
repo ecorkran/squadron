@@ -6,7 +6,7 @@ parent: 300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [301]
 interfaces: [303, 304]
 dateCreated: 20260705
-dateUpdated: 20260705
+dateUpdated: 20260714
 status: complete
 ---
 
@@ -244,6 +244,21 @@ signal" above forbids) into a second module. Two explicit dict entries costs
 four lines and keeps every dispatch in the codebase keyed off data
 (`is_judge`) or an explicit registry, never a string pattern.
 
+## Non-Functional Requirements
+
+The architecture states four qualitative NFR targets for the judge path. This
+slice introduces no new enforcement logic, so the targets are inherited from
+slices 300 and 301; the two new templates and two new `TEMPLATE_INPUTS` entries
+are the only additions. Each target is restated explicitly here with its
+confirmation for this slice's paths.
+
+| NFR | Architecture Target | Confirmation for This Slice |
+|-----|--------------------|-----------------------------|
+| **Conservative gating** | Default thresholds gate toward escalation when uncertain; a pass floor that cannot be cleared under doubt is preferred to one that silently auto-passes | `judge.slice-vs-arch` uses `pass_floor=82` (higher than `tasks-vs-slice`'s 78) because arch-alignment judgment is more interpretive; both floors are set conservatively, not generously, per the "bubble up the hard calls" principle |
+| **No silent pass** | No failure mode may silently yield a passing result; every unobserved failure must surface as `UNKNOWN` or a score-derived verdict | Confirmed via the failure-mode table: all five enumerated failure modes (including the two new to this slice) terminate in `UNKNOWN` or a threshold-derived verdict — never a model-asserted pass that bypasses score gating |
+| **Observability** | Non-passing outcomes are logged at `WARNING` or above so a checkpoint never advances on an unobserved failure | All `UNKNOWN` outcomes route through `enforce_judge()` (slice 301), which logs at `WARNING+`; this slice introduces no new exception paths that bypass that logging |
+| **Score-with-rationale** | The judge prompt requires the model to justify each criterion's number before emitting it, which empirically reduces anchoring | Both templates implement this: the `## Rationale` block requires a per-criterion justification immediately before the value; the model cannot emit a number without stating a reason |
+
 ## Integration Points
 
 ### Provides to Other Slices
@@ -367,16 +382,8 @@ PY
 # No `sq review` CLI subcommand exists for arbitrary template names (its four
 # subcommands are each pinned to one template) — invoke directly via Python,
 # or via a pipeline `review` step with `template: judge.slice-vs-arch`.
-#
-# CAVEAT (discovered during implementation): profile="sdk" shells out to the
-# Claude Code CLI, which refuses to launch from inside another Claude Code
-# session ("Claude Code cannot be launched inside another Claude Code
-# session"). When verifying from within an interactive Claude Code session,
-# use profile="openrouter" with an explicit model instead (the built-in
-# templates' `model: opus` field is an SDK-profile alias that does not
-# resolve under openrouter). Also `source .env` first — `sq`'s CLI loads
-# provider API keys from .env automatically; a bare `uv run python` script
-# does not.
+# (Environment-specific profile constraints: see Implementation Notes →
+# Environment-Specific Notes.)
 set -a && source .env && set +a
 uv run python - <<'PY'
 import asyncio
@@ -495,3 +502,15 @@ Suggested order:
 - Keep the `judge:` block's threshold values in the YAML, not hardcoded
   anywhere in Python — `resolve_thresholds` (slice 301) already reads them from
   `template.judge`; this slice's only job is to put sensible numbers there.
+
+### Environment-Specific Notes
+
+When running Verification Walkthrough Step 3 from within an interactive Claude
+Code session: `profile="sdk"` shells out to the Claude Code CLI, which refuses
+to launch from inside another Claude Code session. Use `profile="openrouter"`
+with an explicit model instead (the built-in templates' `model: opus` field is
+an SDK-profile alias that does not resolve under openrouter). Also `source .env`
+first — `sq`'s CLI loads provider API keys from `.env` automatically; a bare
+`uv run python` script does not. This is an environmental constraint, not an
+architectural requirement; any profile other than `sdk` works in a non-nested
+context.

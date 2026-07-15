@@ -205,6 +205,23 @@ class ReviewAction:
             rules_content=rules_content,
         )
 
+        # Judge enforcement runs before persistence: judge templates instruct
+        # the model to omit a verdict line (score is the source of truth), so
+        # result.verdict is always UNKNOWN for them. The persisted file must
+        # show the threshold-derived verdict instead, not the always-empty
+        # raw parse.
+        if template.is_judge:
+            judge_override = context.params.get("judge")
+            step_override = (
+                cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
+            )
+            thresholds = resolve_thresholds(template.judge, step_override)
+            verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
+            verdict_override = verdict
+        else:
+            verdict, provenance = result.verdict.value, Provenance.REVIEW
+            verdict_override = None
+
         # File persistence (non-fatal).
         # When slice_info is available, use save_review_result for correct
         # naming (e.g. 154-review.slice.prompt-only-loops.md). Otherwise
@@ -218,11 +235,15 @@ class ReviewAction:
                         template_name,
                         slice_info,
                         input_file=inputs.get("input"),
+                        verdict_override=verdict_override,
                     )
                 )
             else:
                 md_content = format_review_markdown(
-                    result, template_name, source_document=inputs.get("input")
+                    result,
+                    template_name,
+                    source_document=inputs.get("input"),
+                    verdict_override=verdict_override,
                 )
                 path = save_review_file(
                     md_content,
@@ -243,16 +264,6 @@ class ReviewAction:
         outputs: dict[str, object] = {"response": result.raw_output}
         if review_file_path is not None:
             outputs["review_file"] = review_file_path
-
-        if template.is_judge:
-            judge_override = context.params.get("judge")
-            step_override = (
-                cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
-            )
-            thresholds = resolve_thresholds(template.judge, step_override)
-            verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
-        else:
-            verdict, provenance = result.verdict.value, Provenance.REVIEW
 
         return ActionResult(
             success=True,

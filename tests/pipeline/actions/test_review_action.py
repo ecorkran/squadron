@@ -811,6 +811,54 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
         assert any(r.levelno >= 30 for r in caplog.records)
 
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_persisted_file_receives_derived_verdict_not_raw_unknown(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """Judge templates omit a verdict line by design (result.verdict is
+        always UNKNOWN), so the persisted file must receive the
+        threshold-derived verdict via verdict_override — otherwise a human
+        reading the file sees UNKNOWN next to a clearly-passing score."""
+        mock_get_template.return_value = _mock_judge_template()
+        mock_run_review.return_value = _make_review_result(Verdict.UNKNOWN, score=90.0)
+
+        result = await ReviewAction().execute(_make_context())
+
+        assert result.verdict == "PASS"
+        mock_format.assert_called_once()
+        assert mock_format.call_args.kwargs["verdict_override"] == "PASS"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_non_judge_persistence_receives_no_verdict_override(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result(Verdict.CONCERNS)
+
+        await ReviewAction().execute(_make_context())
+
+        assert mock_format.call_args.kwargs["verdict_override"] is None
+
 
 # ---------------------------------------------------------------------------
 # Execute — metadata

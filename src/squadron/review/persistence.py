@@ -94,6 +94,7 @@ def format_review_markdown(
     slice_info: SliceInfo | None = None,
     source_document: str | None = None,
     model: str | None = None,
+    verdict_override: str | None = None,
 ) -> str:
     """Format a ReviewResult as markdown with YAML frontmatter.
 
@@ -104,9 +105,17 @@ def format_review_markdown(
         source_document: Explicit source document path; falls back to
             ``slice_info["design_file"]`` when not provided.
         model: Explicit model name; falls back to ``result.model``.
+        verdict_override: Explicit verdict string; falls back to
+            ``result.verdict.value``. Judge templates deliberately omit a
+            verdict line from their raw output (the score is the source of
+            truth), so ``result.verdict`` is always ``UNKNOWN`` for them —
+            callers that have already derived a threshold-based verdict
+            (``enforce_judge``) pass it here so the persisted file shows the
+            real gating decision instead of the always-empty raw parse.
     """
     today = result.timestamp.strftime("%Y%m%d")
     resolved_model = model or result.model or "unknown"
+    resolved_verdict = verdict_override or result.verdict.value
 
     # Source document resolution
     if source_document is None and slice_info is not None:
@@ -125,7 +134,7 @@ def format_review_markdown(
         f"reviewType: {review_type}",
         f"slice: {slice_name}",
         f"project: {project_name}",
-        f"verdict: {result.verdict.value}",
+        f"verdict: {resolved_verdict}",
         f"sourceDocument: {source_doc}",
         f"aiModel: {resolved_model}",
         "status: complete",
@@ -157,7 +166,7 @@ def format_review_markdown(
     lines.append("")
     lines.append(f"# Review: {review_type} — slice {slice_index}")
     lines.append("")
-    lines.append(f"**Verdict:** {result.verdict.value}")
+    lines.append(f"**Verdict:** {resolved_verdict}")
     lines.append(f"**Model:** {resolved_model}")
     lines.append("")
 
@@ -247,6 +256,7 @@ def save_review_result(
     reviews_dir: Path | None = None,
     input_file: str | None = None,
     name_suffix: str | None = None,
+    verdict_override: str | None = None,
 ) -> Path:
     """Save a ReviewResult to the reviews directory (CLI compatibility).
 
@@ -259,6 +269,10 @@ def save_review_result(
     ``-1.md`` / ``-2.md`` each get their own review). For example,
     passing ``name_suffix="part-1"`` yields
     ``161-review.tasks.summary-step.part-1.md``.
+
+    ``verdict_override`` is forwarded to ``format_review_markdown`` — see
+    its docstring. Ignored for ``as_json`` output, which persists the raw
+    ``ReviewResult`` unchanged.
     """
     target = reviews_dir or _REVIEWS_DIR
     target.mkdir(parents=True, exist_ok=True)
@@ -273,7 +287,13 @@ def save_review_result(
     else:
         path = target / f"{base}.md"
         path.write_text(
-            format_review_markdown(result, review_type, slice_info, source_document=input_file)
+            format_review_markdown(
+                result,
+                review_type,
+                slice_info,
+                source_document=input_file,
+                verdict_override=verdict_override,
+            )
         )
 
     return path
