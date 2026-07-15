@@ -9,8 +9,8 @@ dependencies:
   - 302 design-phase-judge-templates (complete) — judge.slice-vs-arch / judge.tasks-vs-slice templates
 projectState: "Slices 300–302 complete. Both judge templates verified live (judge.tasks-vs-slice scored 91, judge.slice-vs-arch scored 86). test-loop.yaml already ships the dispatch-then-review loop-body shape with a standard review template. No judge-gated pipeline exists; docs/PIPELINES.md has no loop step-type documentation. Since the 303 design was written, commit 4564471 (issue #18) made missing input/against files a hard error in ReviewAction._review — this affects how the control-flow tests must be set up (see Context Summary)."
 dateCreated: 20260714
-dateUpdated: 20260714
-status: not_started
+dateUpdated: 20260715
+status: complete
 ---
 
 ## Context Summary
@@ -306,7 +306,7 @@ status: not_started
     the slice plan (`300-slices.eval-actions-llm-as-judge-scoring.md`)
   - [x] DEVLOG entry per `prompt.ai-project.system.md` Session State Summary,
     including the T7 live-run outcome
-  - [ ] Merge `303-slice.judge-gated-cycle-conventions` into the target
+  - [x] Merge `303-slice.judge-gated-cycle-conventions` into the target
     branch per project git rules
 
-**Commit:** `docs: close out slice 303 judge-gated cycle conventions`
+**Commit:** `docs: close out slice 303 judge-gated cycle conventions` (3b0cc8a)

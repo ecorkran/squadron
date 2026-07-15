@@ -63,7 +63,7 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
    - **Risk Level:** Low (templates are data; the connective work is authoring, not engine change).
    - **Relative Effort:** 2/5
 
-4. [ ] **(303) Judge-Gated Cycle Conventions** — Define and document how the existing `each` / `loop` / `commit` steps compose with a judge to express the review→fix→re-review cycle as an unattended pipeline: a judge scores an artifact, the score gates automatically where it clears the threshold, the cycle repeats on `CONCERNS`/`FAIL` up to a bound, and it escalates to a human where the score cannot clear (weak ground truth → advisory-only threshold). No new constructs — this slice is the conventions and the worked pipeline that proves the existing machinery drives repeated one-shot judges.
+4. [x] **(303) Judge-Gated Cycle Conventions** — Define and document how the existing `each` / `loop` / `commit` steps compose with a judge to express the review→fix→re-review cycle as an unattended pipeline: a judge scores an artifact, the score gates automatically where it clears the threshold, the cycle repeats on `CONCERNS`/`FAIL` up to a bound, and it escalates to a human where the score cannot clear (weak ground truth → advisory-only threshold). No new constructs — this slice is the conventions and the worked pipeline that proves the existing machinery drives repeated one-shot judges.
    - **Value:** User value — the human-driven review→fix→re-review loop becomes a pipeline that runs without a human at each gate; the initiative's headline capability.
    - **Success Criteria:**
      - A documented convention shows `each`/`loop`/`commit` + a judge expressing the review→fix→re-review cycle.
