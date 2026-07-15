@@ -258,19 +258,32 @@ class TestExpandedFindingFormats:
 
 
 class TestFallbackParsing:
-    """Test fallback parsing for verdict/findings mismatches."""
+    """Test mismatch handling when a verdict has zero structured findings.
 
-    def test_fallback_synthesizes_finding(self) -> None:
-        """CONCERNS verdict + no parseable findings → single synthesized finding."""
+    Issue #20: earlier versions fabricated findings from unstructured prose
+    (lenient keyword matching, then a synthesized single finding) when a
+    model didn't follow the required ``### [SEVERITY] Title`` format. A
+    fabricated finding that looks structurally valid but carries no real
+    information is worse than an empty list, so the parser now leaves
+    findings empty and only logs a WARNING; the raw model output remains on
+    ``ReviewResult.raw_output``.
+    """
+
+    def test_mismatch_leaves_findings_empty(self) -> None:
+        """CONCERNS verdict + no parseable findings → empty findings list."""
         text = "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
         result = parse_review_output(text, "slice", {})
         assert result.verdict == Verdict.CONCERNS
-        assert len(result.findings) == 1
-        assert result.findings[0].title == "Unparsed review findings"
-        assert result.findings[0].severity == Severity.CONCERN
+        assert result.findings == []
+
+    def test_mismatch_preserves_raw_output(self) -> None:
+        """Raw model text is never discarded, even when findings are empty."""
+        text = "## Summary\nCONCERNS\n\nThis review has some issues but unclear format.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.raw_output == text
 
     def test_fallback_not_triggered_on_pass(self) -> None:
-        """PASS with no findings → no fallback, findings list stays empty."""
+        """PASS with no findings → no mismatch, findings list stays empty."""
         text = "## Summary\nPASS\n\nLooks good overall.\n"
         result = parse_review_output(text, "slice", {})
         assert result.verdict == Verdict.PASS
@@ -278,10 +291,11 @@ class TestFallbackParsing:
         assert result.fallback_used is False
 
     def test_fallback_used_flag_true_when_triggered(self) -> None:
-        """result.fallback_used is True when fallback triggered."""
+        """result.fallback_used is True when a verdict/findings mismatch is detected."""
         text = "## Summary\nFAIL\n\nCritical issues found.\n"
         result = parse_review_output(text, "code", {})
         assert result.fallback_used is True
+        assert result.findings == []
 
     def test_fallback_used_flag_false_on_clean_parse(self) -> None:
         """result.fallback_used is False when standard parsing succeeds."""
@@ -289,17 +303,13 @@ class TestFallbackParsing:
         result = parse_review_output(text, "slice", {})
         assert result.fallback_used is False
 
-    def test_lenient_finds_paragraph_findings(self) -> None:
-        """CONCERNS verdict with findings in paragraph format → lenient path."""
-        text = (
-            "## Summary\nCONCERNS\n\n"
-            "CONCERN: Input validation is missing\n"
-            "The handler does not validate user input.\n"
-        )
-        result = parse_review_output(text, "slice", {})
-        assert result.verdict == Verdict.CONCERNS
-        assert len(result.findings) >= 1
-        assert result.fallback_used is True
+    def test_mismatch_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A verdict/findings mismatch logs a WARNING naming the template and verdict."""
+        text = "## Summary\nCONCERNS\n\nCONCERN: Input validation is missing\n"
+        with caplog.at_level("WARNING"):
+            result = parse_review_output(text, "slice", {})
+        assert result.findings == []
+        assert any("slice" in rec.message and "CONCERNS" in rec.message for rec in caplog.records)
 
 
 # ---------------------------------------------------------------------------

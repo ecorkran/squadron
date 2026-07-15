@@ -12,6 +12,105 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (3)
+
+### Issue #20: Parser No Longer Fabricates Findings From Unstructured Prose
+
+Follow-up from slice 303's comparison code-review testing (same batch as
+#19, below). A `sq review code 303 -vv --model claude-sonnet-5` run produced
+a persisted review whose frontmatter `findings` were verifiably garbage:
+truncated mid-sentence fragments lifted from the model's own tool-use
+narration (`"**What's solid:** ruff and pyright are clean..."`) and a
+numbered "Gaps found" list item, each dressed up with an invented severity
+and a fabricated `F001`/`F002` id. Structurally valid-looking, semantically
+meaningless.
+
+**Root cause:** `parsers.py`'s `_extract_findings` correctly requires a real
+structural marker (`### [SEVERITY] Title`, `**[SEVERITY]** Title`, or
+`- [SEVERITY] Title` — five formats total after slice 122's widening). When
+a model's response has a CONCERNS/FAIL verdict but doesn't emit any of those
+markers, the parser fell through to `_lenient_extract_findings`, whose
+`_LENIENT_RE` regex matched on the bare presence of `NOTE`/`CONCERN`/`FAIL`
+*anywhere in a line*, with no structural anchor — the opposite of what
+`_extract_findings` requires. Confirmed via the affected review's own raw
+output: the model wrote free-form prose, and the keyword-anywhere regex
+grabbed sentence fragments after it, truncated to 120 chars, as if they were
+independent findings.
+
+**History check (before fixing):** this fallback path is genuinely old
+(`c0c697f`, 2026-03-25, slice 122 "Review Context Enrichment") and was
+solving a real, documented problem at the time — `minimax` returning a
+CONCERNS verdict with the saved review showing "No specific findings" at
+all, silently dropping real concerns the model had raised. Slice 122's
+design doc (Layer 2/Layer 3 split) conflated two different fixes under one
+"fallback" umbrella: Layer 3 (widening `_FINDING_RE` to accept colon
+separators, bold brackets, bullets — still requiring a real marker) is
+sound and unchanged. Layer 2 (`_lenient_extract_findings` +
+`_synthesize_fallback_finding`, no structural anchor) is what actually
+fabricates. Confirmed via `git log` that nothing in the review subsystem
+changed in the days immediately before this bug was noticed — the parser
+gap is ~4 months old; it was model-response variance (this specific
+`sonnet5` run's prose shape) that exposed it now, not a regression.
+
+**Fix:** removed `_lenient_extract_findings` and
+`_synthesize_fallback_finding` entirely, along with `_LENIENT_RE`. When a
+CONCERNS/FAIL verdict has zero structured findings, `parse_review_output`
+now logs a WARNING (template, model, verdict) and leaves `findings` empty —
+the same "honest empty" shape already used for PASS. Nothing is silently
+lost: `ReviewResult.raw_output` (and the saved review file body) always
+carries the model's full raw response regardless of findings, so a human
+can still read what the model actually said; it's just no longer disguised
+as structured findings. `fallback_used` keeps its existing meaning
+("verdict/findings mismatch was detected") for telemetry/debug-log
+purposes. Updated `tests/review/test_parsers.py`'s `TestFallbackParsing`
+class to assert the new empty-findings-plus-warning behavior instead of
+the old synthesized-finding shape; added `test_mismatch_preserves_raw_output`
+and `test_mismatch_logs_warning`.
+
+Full gate: `uv run pytest` (2126 passed, 2 skipped), `uv run pyright` (0
+errors), `uv run ruff check`/`format` (clean). Committed directly to `main`
+(non-slice bugfix, no feature branch — `git.integration_branch` unset).
+Closes [#20](https://github.com/ecorkran/squadron/issues/20).
+
+## 20260715 (2)
+
+### Issue #19: Review File-Injection Size Caps Are Now Configurable
+
+Also from slice 303's comparison code-review testing: a `kimi26` review run
+truncated a 136,191-byte diff because `review_client.py`'s file-injection
+limits (`_MAX_FILE_SIZE` = 100KB, `_MAX_TOTAL_INJECTION` = 500KB) were
+hardcoded module constants with no way to raise them for a model with a
+larger context window.
+
+**Fix:** added two typed config keys, `review.max_file_size_bytes` (default
+100,000) and `review.max_total_injection_bytes` (default 500,000), to
+`config/keys.py` following the existing `ConfigKey` pattern. Removed the
+hardcoded constants from `review_client.py`; `_inject_file_contents` now
+resolves both via `get_config(key, cwd=...)` at call time, scoped to the
+review's `cwd`, with `isinstance` narrowing and an explicit `TypeError` on
+type mismatch (fail-fast per CLAUDE.md, since `_coerce_value` guarantees the
+stored type is always `int` — a mismatch here is genuinely exceptional, not
+a normal missing-config case). `_truncate` now takes `max_file_size` as an
+explicit parameter instead of reading a module constant. No additional
+wiring needed for `sq config get/set/unset/list` — those subcommands
+already operate generically over `CONFIG_KEYS`, so the new keys were live
+immediately; verified with `sq config list` and `sq config get
+review.max_file_size_bytes`.
+
+New test `test_max_file_size_config_override` proves a raised config value
+actually lets larger content through untruncated. Full gate: `uv run
+pytest` (2125 passed, 2 skipped), `uv run pyright` (0 errors, after fixing
+a `reportArgumentType` regression from passing untyped `object` to `int()`
+— resolved with the same `isinstance` narrowing pattern already used in
+`cli/commands/review.py:_resolve_verbosity`), `uv run ruff check`/`format`
+(clean). Committed directly to `main` (`71d8524`, non-slice bugfix, no
+feature branch). Closes [#19](https://github.com/ecorkran/squadron/issues/19).
+
+**Note:** this fix does not address #20 (above) — the `sonnet5` review
+artifact that motivated #20 had a diff well under the size cap; its failure
+is 100% attributable to the parser-fabrication bug, unrelated to injection
+truncation.
+
 ## 20260715 (1)
 
 ### Slice 303: Judge-Gated Cycle Conventions — Complete

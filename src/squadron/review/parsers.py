@@ -94,12 +94,6 @@ _FINDING_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
-# Lenient: scan for lines that contain severity keywords in paragraph context
-_LENIENT_RE = re.compile(
-    r"(?:^|\n)([^\n]*\b(NOTE|CONCERN|FAIL)\b[^\n]*)\n((?:[^\n]+\n?)*)",
-    re.IGNORECASE,
-)
-
 # Structured tag patterns for category/location extraction from finding bodies
 # [ \t]* (not \s*) so the value capture cannot bleed across a blank
 # value line into the next line of the body (e.g. an empty `location:`
@@ -369,72 +363,6 @@ def _extract_findings(
     return findings
 
 
-def _lenient_extract_findings(
-    text: str, verdict: Verdict, template_name: str = ""
-) -> list[ReviewFinding]:
-    """Attempt lenient extraction: scan for severity keywords in paragraph context."""
-    findings: list[ReviewFinding] = []
-    for index, match in enumerate(_LENIENT_RE.finditer(text), start=1):
-        header_line = match.group(1).strip()
-        body = match.group(3).strip()
-        # Determine severity from the header line
-        upper = header_line.upper()
-        if "FAIL" in upper:
-            severity = Severity.FAIL
-        elif "CONCERN" in upper:
-            severity = Severity.CONCERN
-        elif "NOTE" in upper:
-            severity = Severity.NOTE
-        else:
-            continue
-        title = header_line[:120]
-        # Lenient extraction never surfaces a structured location:
-        # always normalize (which will warn) so downstream sees the
-        # consistent UNVERIFIED_LOCATION sentinel.
-        location = _normalize_location(
-            None,
-            finding_id=f"F{index:03d}",
-            finding_title=title,
-            verdict=verdict,
-            template_name=template_name,
-        )
-        findings.append(
-            ReviewFinding(
-                severity=severity,
-                title=title,
-                description=body,
-                location=location,
-            )
-        )
-    return findings
-
-
-def _synthesize_fallback_finding(text: str, verdict: Verdict, template_name: str = "") -> ReviewFinding:
-    """Create a single synthesized finding from summary text."""
-    # Extract text between ## Summary and next ## heading (or end)
-    summary_match = re.search(r"##\s+Summary\s*\n+(.*?)(?=\n##\s+|\Z)", text, re.DOTALL | re.IGNORECASE)
-    if summary_match:
-        description = summary_match.group(1).strip()
-    else:
-        description = text.strip()[:500]
-
-    severity = Severity.FAIL if verdict == Verdict.FAIL else Severity.CONCERN
-    title = "Unparsed review findings"
-    location = _normalize_location(
-        None,
-        finding_id="F001",
-        finding_title=title,
-        verdict=verdict,
-        template_name=template_name,
-    )
-    return ReviewFinding(
-        severity=severity,
-        title=title,
-        description=description,
-        location=location,
-    )
-
-
 def _write_debug_log(
     *,
     template: str,
@@ -475,7 +403,13 @@ def parse_review_output(
 
     Falls back to UNKNOWN verdict if the output doesn't follow expected format.
     When verdict is CONCERNS/FAIL but structured parsing finds zero findings,
-    attempts lenient extraction then synthesizes a finding from summary text.
+    the model did not follow the required ``### [SEVERITY] Title`` format.
+    Rather than guessing at findings from unstructured prose, the findings
+    list is left empty and a WARNING is logged — a wrong-but-plausible
+    fabricated finding is worse than an honestly empty list, since it looks
+    like real signal. The raw model output remains available on
+    ``ReviewResult.raw_output`` (and in the saved review file) either way, so
+    nothing is silently discarded — it is just not disguised as a finding.
 
     When *diff_files* is provided (typically only for code-template reviews),
     each finding whose ``location`` cites a path is checked against the diff
@@ -490,25 +424,22 @@ def parse_review_output(
 
     mismatch = verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings
     if mismatch:
+        fallback_used = True
+        logger.warning(
+            "%s review (model=%s) has verdict=%s but zero structured findings "
+            "were parsed — the model likely did not follow the required "
+            "'### [SEVERITY] Title' format. Findings left empty rather than "
+            "fabricated from unstructured text; see raw_output for the "
+            "model's actual response.",
+            template_name,
+            model,
+            verdict.value,
+        )
         _write_debug_log(
             template=template_name,
             model=model,
             verdict=verdict,
             findings_parsed=0,
-            fallback_used=False,
-            raw_output=raw_output,
-        )
-        # Try lenient extraction first
-        findings = _lenient_extract_findings(raw_output, verdict, template_name)
-        if not findings:
-            # Synthesize a single finding from the summary text
-            findings = [_synthesize_fallback_finding(raw_output, verdict, template_name)]
-        fallback_used = True
-        _write_debug_log(
-            template=template_name,
-            model=model,
-            verdict=verdict,
-            findings_parsed=len(findings),
             fallback_used=True,
             raw_output=raw_output,
         )
