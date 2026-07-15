@@ -158,6 +158,16 @@ criterion, a short justification immediately before its numeric value, then
 roll the criteria into the top-level `score:`. This reuses the existing
 `criteria:` block (slice 300 parser) as the structured carrier — no new field.
 
+The justification-before-value ordering is the anchoring-mitigation mechanism
+the architecture characterizes as empirically effective: by requiring the model
+to commit to a per-criterion rationale before the numeric value appears in the
+output stream, the reasoning path is fixed before the number is chosen. This
+reduces drift toward convenient round numbers or context-implied reference
+points — the model cannot select a target score and construct justifications to
+fit it; it must reason from evidence to a conclusion. Both templates enforce
+this by structuring the `## Rationale` block so each criterion's prose precedes
+its numeric value.
+
 ```
 ## Rationale
 - alignment (85): the slice restates the NFR from the architecture doc
