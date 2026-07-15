@@ -227,7 +227,7 @@ steps:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `template` | string | yes | Review template name (`arch`, `slice`, `tasks`, `code`, or a `judge.*` template such as `judge.slice-vs-arch` — see [Judge-Gated Cycles](#judge-gated-cycles)) |
-| `model` | string | no | Model alias for the review |
+| `model` | string | no | Model alias for the review. If omitted and no other cascade level (CLI/step/pipeline/config) supplies one, falls back to the template's own `model:` default (e.g. `judge.slice-vs-arch` defaults to `opus`) — but prefer setting this explicitly via a named `params` entry; see the `loop` example below |
 | `slice` | — | no | Not a step field — set `slice` in the pipeline's top-level `params:` block instead. `judge.*` and other slice-aware templates auto-resolve `input`/`against` from the pipeline's `slice` param |
 | `judge` | dict | no | Step-level threshold override for judge templates, e.g. `{pass_floor: 90}` — merges over the template's default thresholds |
 | `checkpoint` | string | no | Same triggers as phase steps |
@@ -260,16 +260,25 @@ steps:
 **Example:**
 
 ```yaml
-- loop:
-    max: 3
-    until: review.pass
-    on_exhaust: checkpoint
-    steps:
-      - dispatch:
-          prompt: "Fix findings from the prior review."
-      - review:
-          template: judge.slice-vs-arch
+params:
+  model: sonnet
+  review-model: minimax
+
+steps:
+  - loop:
+      max: 3
+      until: review.pass
+      on_exhaust: checkpoint
+      steps:
+        - dispatch:
+            prompt: "Fix findings from the prior review."
+            model: "{model}"
+        - review:
+            template: judge.slice-vs-arch
+            model: "{review-model}"
 ```
+
+Give each model role its own named `params` entry (as above) rather than leaving a step's `model:` unset — every built-in pipeline follows this convention so a caller can retarget any model by overriding one param, without editing step bodies. See [Judge-Gated Cycles](#judge-gated-cycles) for why the review step needs an explicit model even though its judge template declares its own default.
 
 ---
 
@@ -338,7 +347,7 @@ Item fields are accessed as dotted references: `{slice.index}`, `{slice.title}`,
 | `max` | Always explicit — there is no unbounded pattern anywhere in this convention |
 | `on_exhaust: checkpoint` | If `max` is reached without a passing review, the run PAUSES for a human — the outcome is *undecided*, not wrong, so escalation (not failure) is the default |
 
-The built-in `judge-cycle` pipeline (see [Built-in Pipelines](#built-in-pipelines)) is the reference implementation of this convention.
+The built-in `judge-cycle` pipeline (see [Built-in Pipelines](#built-in-pipelines)) is the reference implementation of this convention. It declares `model` and `review-model` as named `params` (fix-leg model and judge-leg model respectively) rather than leaving either step's `model:` unset — see the [`loop`](#loop) example. A judge template does carry its own `model:` default as a last-resort fallback, but don't rely on it: an explicit param keeps the model visible and overridable in one place, consistent with every other built-in pipeline.
 
 ### Two gating modes
 

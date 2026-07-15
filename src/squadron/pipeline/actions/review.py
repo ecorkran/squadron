@@ -108,10 +108,21 @@ class ReviewAction:
         if template is None:
             raise KeyError(f"Review template '{template_name}' not found")
 
-        # Model resolution — same pattern as dispatch
+        # Model resolution — same pattern as dispatch, with one addition: when
+        # the standard cascade (CLI/action/step/pipeline/config) is entirely
+        # empty, fall back to the template's own `model:` default — the same
+        # fallback `sq review` already applies via its CLI-side cascade
+        # (cli/commands/review.py:_resolve_model). Without this, a judge
+        # template's declared default model is silently unreachable from any
+        # pipeline `review:` step.
         action_model = str(context.params["model"]) if "model" in context.params else None
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
-        model_id, alias_profile = context.resolver.resolve(action_model, step_model)
+        try:
+            model_id, alias_profile = context.resolver.resolve(action_model, step_model)
+        except ModelResolutionError:
+            if template.model is None:
+                raise
+            model_id, alias_profile = context.resolver.resolve(template.model, step_model)
 
         # Profile resolution — explicit param → alias-derived → SDK default
         profile_name = (

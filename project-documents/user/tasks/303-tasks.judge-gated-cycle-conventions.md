@@ -223,44 +223,44 @@ status: not_started
 
 **Effort: 3**
 
-- [ ] **Add a `### loop` entry to the Step Type Catalog** (currently absent —
+- [x] **Add a `### loop` entry to the Step Type Catalog** (currently absent —
   discovered this phase)
-  - [ ] Fields: `max` (required positive int — the bound), `until`
+  - [x] Fields: `max` (required positive int — the bound), `until`
     (`review.pass`, `review.concerns_or_better`, `action.success`),
     `on_exhaust` (`fail`, `checkpoint`, `skip`), `steps` (body of registered
     step types)
-  - [ ] Note the post-test semantics: `until` is evaluated only after an
+  - [x] Note the post-test semantics: `until` is evaluated only after an
     iteration's body completes, against that iteration's own results
-  - [ ] Add a minimal bare-`dispatch` step entry if none exists (verify at
+  - [x] Add a minimal bare-`dispatch` step entry if none exists (verify at
     impl time) — the convention body uses it
-- [ ] **Add a "Judge-Gated Cycles" section** covering, per the LLD:
-  - [ ] The convention: body `[fix, judge]`, `until: review.pass`,
+- [x] **Add a "Judge-Gated Cycles" section** covering, per the LLD:
+  - [x] The convention: body `[fix, judge]`, `until: review.pass`,
     `on_exhaust: checkpoint`, with the element-to-role table from the design
-  - [ ] The two gating modes: auto-advance (default floors, strong ground
+  - [x] The two gating modes: auto-advance (default floors, strong ground
     truth) vs. advisory-only / always-escalate (weak ground truth)
-  - [ ] Advisory-only expressed purely as `judge: {pass_floor: 101}` — state
+  - [x] Advisory-only expressed purely as `judge: {pass_floor: 101}` — state
     explicitly that an above-100 floor is a *sanctioned* value relying on
     thresholds staying unclamped, so a future 0–100 threshold clamp must
     preserve a "never passes" sentinel or this convention breaks
-  - [ ] The bound: `max` is always explicit; document no unbounded pattern
-  - [ ] Escalation observability: exhaustion produces a PAUSED run carrying
+  - [x] The bound: `max` is always explicit; document no unbounded pattern
+  - [x] Escalation observability: exhaustion produces a PAUSED run carrying
     the last judge's score and findings
-  - [ ] First-iteration shape: fix-first recommended; a pre-loop judge is
+  - [x] First-iteration shape: fix-first recommended; a pre-loop judge is
     informational only and cannot short-circuit iteration 1 (post-test loop)
-  - [ ] Stated constraint: `commit` is not a bare loop-body step —
+  - [x] Stated constraint: `commit` is not a bare loop-body step —
     per-iteration commit is not expressible; commit after the loop via a
     phase step instead
-  - [ ] `each` fan-out caveat: only against `cf.unfinished_slices`; do not
+  - [x] `each` fan-out caveat: only against `cf.unfinished_slices`; do not
     imply other sources exist
-  - [ ] `on_exhaust: fail` documented as the alternative only where an
+  - [x] `on_exhaust: fail` documented as the alternative only where an
     unclearable artifact should abort rather than wait for a human
-- [ ] **Add `judge-cycle` to the Built-in Pipelines table** (name,
+- [x] **Add `judge-cycle` to the Built-in Pipelines table** (name,
   description, key params: `slice`)
-- [ ] Success: a reader can author their own judge-gated pipeline from the
+- [x] Success: a reader can author their own judge-gated pipeline from the
   section alone; every convention above appears; no unbounded pattern is
   documented anywhere in the file
 
-**Commit:** `docs: add loop step and judge-gated cycle conventions to authoring guide`
+**Commit:** `docs: add loop step and judge-gated cycle conventions to authoring guide` (044ecad)
 
 ---
 

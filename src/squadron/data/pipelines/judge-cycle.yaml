@@ -3,6 +3,8 @@ description: Judge-gated review-fix-review cycle — bounded loop that auto-adva
 
 params:
   slice: required
+  model: sonnet
+  review-model: minimax
 
 steps:
   - loop:
@@ -12,6 +14,7 @@ steps:
       steps:
         - dispatch:
             prompt: "Address any findings from the prior judge review if present; otherwise perform an initial improvement pass on the slice design artifact."
-            model: sonnet
+            model: "{model}"
         - review:
             template: judge.slice-vs-arch
+            model: "{review-model}"
