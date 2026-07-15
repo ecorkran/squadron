@@ -12,6 +12,70 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (5)
+
+### Issue #22: Verified Against Real SDK Run; Issue #24 Filed (Rules Sent Twice)
+
+Erik ran the fixed build in a real terminal (`uv run sq run`, local
+unpublished build — an earlier attempt using the globally-installed
+version predictably still hit the old bug) against `claude-sonnet-5`,
+producing `project-documents/user/reviews/303-review.code.judge-gated-cycle-conventions.md`.
+Checked the saved review for validity: raw output is clean prose
+throughout — no `Using tool:` fragments, no run-on lines, well-formed
+`### [SEVERITY]`/`location:`/`category:` structure. All six findings
+(4 PASS, 2 NOTE) traced against real source and verified accurate — no
+hallucinated paths, lines, or symbols. Confirms the #22 fix (commit
+`2032cf0`) holds against actual Claude Agent SDK message shapes, not
+just the hand-constructed mocks in `test_review_client.py`/
+`test_summary_oneshot.py`. Closed #22.
+
+**New finding surfaced during verification, filed as #24 (not fixed
+this session):** the saved review's debug appendix showed the
+"Design Principles" / SOLID rules content duplicated — once in the
+`### System Prompt` section and again in `### Rules Injected`, and
+duplicated *within* the system prompt section itself. Traced to
+confirm this is a real double-send to the model, not just a debug
+display artifact:
+
+- `review_code` ([cli/commands/review.py:707-711](src/squadron/cli/commands/review.py#L707-L711))
+  calls `load_review_rules("code", resolved_rules_dir, file_paths=...,
+  manual_rules_content=manual_content)` — correctly assembles template
+  rules (`review-code.md`) + auto-detected language rules (`python.md`)
+  + any explicit override. One copy of template rules.
+- It then calls `_run_review_command` ([lines 721-729](src/squadron/cli/commands/review.py#L721-L729)),
+  passing **both** this already-assembled `rules_content` *and*
+  `rules_dir=resolved_rules_dir`.
+- `_run_review_command` ([lines 322-329](src/squadron/cli/commands/review.py#L322-L329))
+  unconditionally re-runs `load_review_rules` whenever `rules_dir is
+  not None`, prepending `review-code.md`'s content a **second time**
+  onto content that already has it.
+- `review_client.py:78-82` bakes the resulting doubled `rules_content`
+  into `AgentConfig.instructions` — the actual system prompt sent to
+  the model. Confirmed this is real, not cosmetic: every `sq review
+  code` run with a rules dir configured (the common case) sends
+  `review-code.md`'s content twice, inflating prompt size and token
+  cost on every call.
+- `slice`/`arch`/`tasks` review commands don't have this bug — they
+  never pre-assemble `rules_content` themselves, so `_run_review_
+  command`'s single internal `load_review_rules` call is the only one
+  that ever runs for those paths. `_run_review_command`'s own comment
+  ("Language auto-detection is handled by the caller... `_run_review_
+  command` only sees the template [rules]") is stale — `review_code`
+  now does its own full `load_review_rules` call including template
+  rules, not just auto-detection, so the comment's assumed division of
+  labor no longer holds.
+
+Not fixed this session — needs its own change (likely: `review_code`
+passes `rules_dir=None` once it has fully assembled `rules_content`
+itself, relying on the existing `if rules_dir is not None` guard to
+skip the redundant call) plus a regression test asserting `review-
+code.md` content appears exactly once in the final system prompt.
+
+Also committed (`477db4f`): the verification review file itself, and
+the untracked `303-review.code.judge-gated-cycle-conventions-kimi26.md`
+comparison-run artifact from the original #19 size-cap investigation
+(previously referenced but never committed).
+
 ## 20260715 (4)
 
 ### Issue #22: SDK Tool-Call Noise No Longer Corrupts Review/Summary Raw Output
