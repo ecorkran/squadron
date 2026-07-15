@@ -75,10 +75,17 @@ class ReviewResult:
     user_prompt: str | None = None
     rules_content_used: str | None = None
 
-    def to_dict(self) -> dict[str, object]:
-        """Serialize for JSON output."""
+    def to_dict(self, verdict_override: str | None = None) -> dict[str, object]:
+        """Serialize for JSON output.
+
+        Args:
+            verdict_override: Explicit verdict string; falls back to
+                ``self.verdict.value``. See ``format_review_markdown`` for
+                why judge templates need this (score-derived verdict, not
+                the always-``UNKNOWN`` raw parse).
+        """
         return {
-            "verdict": self.verdict.value,
+            "verdict": verdict_override or self.verdict.value,
             "findings": [
                 {
                     "severity": f.severity.value,

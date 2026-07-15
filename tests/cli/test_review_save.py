@@ -102,6 +102,18 @@ def testsave_review_result_writes_json(tmp_path: Path) -> None:
     assert len(data["findings"]) == 2
 
 
+def testsave_review_result_json_honors_verdict_override(tmp_path: Path) -> None:
+    """Slice 303 F004: a judge review persisted as JSON must show the
+    threshold-derived verdict_override, not the raw (always-UNKNOWN for
+    judge templates) ReviewResult.verdict."""
+    result = _make_result(verdict=Verdict.UNKNOWN)
+    path = save_review_result(
+        result, "arch", SLICE_INFO, as_json=True, reviews_dir=tmp_path, verdict_override="PASS"
+    )
+    data = json.loads(path.read_text())
+    assert data["verdict"] == "PASS"
+
+
 def testsave_review_result_overwrites_existing(tmp_path: Path) -> None:
     """Re-saving overwrites the existing file."""
     existing = tmp_path / "118-review.arch.composed-workflows.md"

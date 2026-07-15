@@ -12,6 +12,128 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (6)
+
+### Slice 303 re-review F001: judge-cycle's fix step never saw the judge's findings
+
+Re-verified a finding from an earlier, never-filed comparison-review
+artifact (`project-documents/user/analysis/303-review.code.judge-gated-cycle-conventions-sonnet5.md`,
+run via `/code-review`) before fixing, per this session's ongoing effort
+to eliminate false review findings — confirmed against current source
+rather than taken on faith.
+
+`judge-cycle.yaml`'s loop `dispatch` step had a static hardcoded
+`prompt:`, and `dispatch.py`'s `_resolve_prompt` only scans
+`prior_outputs` for a prompt when no explicit `prompt` param is set —
+so that scan never ran, and the fix step repeated the same generic
+instruction every iteration regardless of what the judge flagged.
+Root cause was actually two-layered: even with the hardcoded prompt
+removed, `_resolve_prompt` had no branch at all for a prior `review`
+action's output — it only knew how to pull `stdout` from a prior
+`cf-op(build_context)` result. Fixed both: removed the YAML's
+hardcoded `prompt:` ([judge-cycle.yaml](src/squadron/data/pipelines/judge-cycle.yaml)),
+and added `_resolve_prompt_from_prior_review`
+([dispatch.py](src/squadron/pipeline/actions/dispatch.py)) — a new
+fallback tier that scans `prior_outputs` for the most recent `review`
+action, formats its structured findings (severity/summary/location)
+into a fix prompt, or falls back to "perform an initial improvement
+pass" when the prior review had no findings (e.g. iteration 1, or a
+clean PASS). Verified `prior_outputs` does thread across loop
+iterations by reference (`executor.py:713-714`, `1013`), so this
+actually reaches the fix step on iteration 2+.
+
+Added `TestDispatchPriorReviewFallback` (4 tests) to
+`tests/pipeline/test_dispatch.py`: explicit `prompt:` still wins over
+a prior review (only steps that omit it fall through), prior-review
+findings become the prompt, a findings-less prior review yields the
+initial-pass message, and no prompt/build_context/review anywhere
+still raises `KeyError`.
+
+### Slice 303 re-review F002: `template.model` fallback invisible to the classification pre-scan
+
+The T7 fix in `ReviewAction._review` (`review.py:120-125`) retries
+model resolution against a review template's own `model:` default
+when the standard 5-level cascade is empty — but that retry is local
+to `_review` and never goes through `ModelResolver.cascade_candidates()`,
+which the slice-243 classification pre-scan (`classification.py`)
+treats as the single source of truth for what the cascade will
+resolve to. A pipeline relying solely on a template's default model
+(no CLI/action/step/pipeline/config override) got a false
+`ClassificationError` before the pipeline even started, even though
+runtime resolution would have succeeded.
+
+Considered making `template.model` a real 6th tier inside
+`ModelResolver` itself, but that would require teaching the generic
+resolver (shared by dispatch/summary/compact, none of which have
+templates) about review templates specifically. Asked Erik, who
+confirmed the surgical option: mirror the exact fallback locally in
+`classification.py` instead. Added `_review_template_model_fallback()`,
+called from both `classify_pipeline`'s top-level action loop and
+`_classify_container_inner` (the loop/each/fan_out inner-step path —
+the one `judge-cycle.yaml` actually exercises) when the cascade comes
+back empty for a `review` action. Loads the template via the same
+`get_template()`/`load_all_templates()` used at runtime; confirmed
+this doesn't violate the module's documented side-effect-freeness
+contract (`test_classification_is_idempotent_and_side_effect_free`
+only asserts idempotency and zero `pool.select()` calls, both
+preserved by a deterministic template load).
+
+Added 3 tests to `tests/pipeline/test_classification.py`: a top-level
+review step with no cascade model falls back to the template's
+default, still raises when the template also has no model, and the
+loop-container inner-step path specifically (matching
+`judge-cycle.yaml`'s actual shape).
+
+### Slice 303 re-review F003: malformed judge threshold silently discarded a completed review
+
+Fixing "judge reviews always persist as UNKNOWN" required moving
+judge-verdict computation (`resolve_thresholds`/`enforce_judge`)
+before persistence in `ReviewAction._review`, so the derived verdict
+could be passed into `verdict_override`. But `resolve_thresholds`
+calls unguarded `float()` on `pass_floor`/`concerns_floor` — a
+malformed step-level `judge:` override (e.g. a non-numeric
+`pass_floor`) now raised *before* persistence's own try/except
+(`review.py:230`) was ever reached, discarding a review whose model
+call had already succeeded, with no file written at all. Previously
+persistence ran first in its own non-fatal try/except, so the
+artifact was always saved regardless.
+
+Wrapped the threshold resolution/enforcement in its own narrow
+`try/except (TypeError, ValueError)` that logs a WARNING and degrades
+to `verdict="UNKNOWN"`/`provenance=judge` — matching the existing
+"no score / out-of-range score → UNKNOWN" behavior already inside
+`enforce_judge` for a different failure mode. Persistence below still
+runs either way.
+
+Added `test_malformed_threshold_override_degrades_to_unknown_and_still_persists`
+to `tests/pipeline/actions/test_review_action.py`, asserting
+`success=True`, `verdict=UNKNOWN`, a WARNING log, and that
+`save_review_file`/`format_review_markdown` were still called.
+
+### Slice 303 re-review F004 (PLAUSIBLE): `as_json` persistence never received `verdict_override`
+
+`save_review_result`'s `as_json=True` branch called `result.to_dict()`
+directly, bypassing `verdict_override` entirely — the docstring said
+as much ("Ignored for `as_json` output"). A judge review persisted as
+JSON would show `UNKNOWN` while the markdown persistence of the
+identical run showed the correct threshold-derived verdict. Dormant
+today (no live caller passes both `as_json=True` and a judge
+template), but real.
+
+Gave `ReviewResult.to_dict()` an optional `verdict_override` parameter
+(mirroring `format_review_markdown`'s existing signature) and threaded
+it through from `save_review_result`. Added 2 tests to
+`tests/review/test_models.py` (`to_dict(verdict_override=...)` in
+isolation) and 1 to `tests/cli/test_review_save.py` (the full
+`save_review_result(as_json=True, verdict_override=...)` path writing
+real JSON to a `tmp_path`).
+
+Full gate (2139 tests, pyright strict, ruff) clean before commit.
+None of F001-F004 were filed as GitHub issues — Erik preferred to fix
+directly since all four were confirmed against current source.
+
+---
+
 ## 20260715 (5)
 
 ### Issue #22: Verified Against Real SDK Run; Issue #24 Filed (Rules Sent Twice)

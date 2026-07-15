@@ -209,6 +209,21 @@ class TestReviewResult:
         assert "timestamp" in d
         assert isinstance(d["input_files"], dict)
 
+    def test_to_dict_verdict_override_wins_over_raw_verdict(
+        self, result_with_mixed_findings: ReviewResult
+    ) -> None:
+        """Slice 303 F004: judge templates always parse as UNKNOWN (score is
+        the source of truth), so the as_json path must honor verdict_override
+        the same way format_review_markdown already does for markdown output."""
+        d = result_with_mixed_findings.to_dict(verdict_override="PASS")
+        assert d["verdict"] == "PASS"
+
+    def test_to_dict_verdict_override_none_falls_back_to_raw_verdict(
+        self, result_with_mixed_findings: ReviewResult
+    ) -> None:
+        d = result_with_mixed_findings.to_dict(verdict_override=None)
+        assert d["verdict"] == result_with_mixed_findings.verdict.value
+
     def test_to_dict_findings_include_category_location(self) -> None:
         r = ReviewResult(
             verdict=Verdict.CONCERNS,

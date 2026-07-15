@@ -791,6 +791,46 @@ class TestJudgeEnforcement:
         mock_run_review.assert_not_called()
 
     @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_malformed_threshold_override_degrades_to_unknown_and_still_persists(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Slice 303 F003: a malformed judge threshold override (non-numeric
+        pass_floor) must not discard an already-successful review. Before
+        the fix, resolve_thresholds's unguarded float() raised before the
+        persistence try/except was reached, so no file was written at all."""
+        mock_get_template.return_value = _mock_judge_template()
+        mock_run_review.return_value = _make_review_result(score=90.0)
+
+        with caplog.at_level("WARNING"):
+            result = await ReviewAction().execute(
+                _make_context(
+                    params={
+                        "template": "code",
+                        "judge": {"pass_floor": "not-a-number"},
+                    }
+                )
+            )
+
+        assert result.success is True
+        assert result.verdict == "UNKNOWN"
+        assert result.provenance == "judge"
+        mock_format.assert_called_once()
+        assert mock_format.call_args.kwargs["verdict_override"] == "UNKNOWN"
+        mock_save.assert_called_once()
+        assert any(r.levelno >= 30 for r in caplog.records)
+
+    @pytest.mark.asyncio
     @patch(f"{_P}.run_review_with_profile", side_effect=RuntimeError("provider down"))
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")

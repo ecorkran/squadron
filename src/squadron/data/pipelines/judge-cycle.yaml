@@ -13,7 +13,6 @@ steps:
       on_exhaust: checkpoint
       steps:
         - dispatch:
-            prompt: "Address any findings from the prior judge review if present; otherwise perform an initial improvement pass on the slice design artifact."
             model: "{model}"
         - review:
             template: judge.slice-vs-arch

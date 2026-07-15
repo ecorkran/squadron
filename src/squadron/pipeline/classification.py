@@ -45,6 +45,30 @@ PERSISTENT_SESSION_STEP_TYPES = frozenset({"dispatch", "summary", "compact"})
 _ONE_SHOT_STEP_TYPES = frozenset({"review"})
 
 
+def _review_template_model_fallback(action_type: str, resolved_cfg: dict[str, object]) -> str | None:
+    """Return a review template's declared default ``model:``, if any.
+
+    Mirrors the fallback ``ReviewAction._review`` applies at runtime
+    (``pipeline/actions/review.py``): when the standard cascade is empty,
+    it retries model resolution against ``template.model``. That retry is
+    call-site-local and invisible to ``ModelResolver.cascade_candidates()``,
+    so the classification pre-scan must check it separately here or it
+    will raise a false ``ClassificationError`` for pipelines that rely
+    solely on a template's default model (slice 303 F002).
+    """
+    if action_type != "review":
+        return None
+    template_name_raw = resolved_cfg.get("template")
+    if not isinstance(template_name_raw, str):
+        return None
+
+    from squadron.review.templates import get_template, load_all_templates
+
+    load_all_templates()
+    template = get_template(template_name_raw)
+    return template.model if template is not None else None
+
+
 class StepClass(StrEnum):
     """Classification of a single model-dispatching step."""
 
@@ -303,6 +327,8 @@ def _classify_container_inner(
 
         candidates = resolver.cascade_candidates(action_model=action_model, step_model=None)
         candidate = next((c for c in candidates if c is not None), None)
+        if candidate is None:
+            candidate = _review_template_model_fallback(action_type, resolved_cfg)
 
         if candidate is None:
             raise ClassificationError(
@@ -467,6 +493,8 @@ def classify_pipeline(
                 step_model=step_model,
             )
             candidate = next((c for c in candidates if c is not None), None)
+            if candidate is None:
+                candidate = _review_template_model_fallback(action_type, resolved_cfg)
 
             if candidate is None:
                 raise ClassificationError(

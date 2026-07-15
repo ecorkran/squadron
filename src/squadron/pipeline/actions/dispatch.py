@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from squadron.core.agent_registry import get_registry
 from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
@@ -210,6 +210,12 @@ class DispatchAction:
         result and uses its ``stdout``.  This is the normal phase-step
         flow where cf-op(build_context) precedes dispatch.
 
+        If neither is present, falls back to the most recent ``review``
+        action's findings (the judge-gated fix/review loop flow —
+        slice 303 F001): the fix step needs to see what the prior judge
+        review actually flagged, not a generic instruction repeated every
+        iteration.
+
         If ``context.params["override_instructions"]`` is set (injected by
         the interactive checkpoint handler), prepends a delimited block to
         the resolved prompt so the model treats it as a directive.
@@ -224,7 +230,7 @@ class DispatchAction:
             for key in reversed(list(context.prior_outputs)):
                 result = context.prior_outputs[key]
                 if (
-                    result.action_type == "cf-op"
+                    result.action_type == ActionType.CF_OP
                     and result.outputs.get("operation") == "build_context"
                     and result.outputs.get("stdout") is not None
                 ):
@@ -233,13 +239,58 @@ class DispatchAction:
                     break
 
             if prompt is None:
+                prompt = self._resolve_prompt_from_prior_review(context)
+
+            if prompt is None:
                 msg = (
-                    "No 'prompt' param and no prior build_context output found. "
-                    "Dispatch requires a prompt — either pass one explicitly or "
-                    "include a cf-op(build_context) action before dispatch."
+                    "No 'prompt' param and no prior build_context or review "
+                    "output found. Dispatch requires a prompt — either pass "
+                    "one explicitly, include a cf-op(build_context) action, "
+                    "or precede this step with a review action."
                 )
                 raise KeyError(msg)
 
+        return self._apply_override(context, prompt)
+
+    @staticmethod
+    def _resolve_prompt_from_prior_review(context: ActionContext) -> str | None:
+        """Build a fix prompt from the most recent prior ``review`` action.
+
+        Returns None if no prior review action result is present, or if it
+        has no findings (e.g. a clean PASS with nothing to act on — in that
+        case an initial improvement pass reads better than an empty list).
+        """
+        for key in reversed(list(context.prior_outputs)):
+            result = context.prior_outputs[key]
+            if result.action_type != ActionType.REVIEW:
+                continue
+
+            findings: list[dict[str, object]] = [
+                cast(dict[str, object], f) for f in result.findings if isinstance(f, dict)
+            ]
+            if not findings:
+                return (
+                    "The prior review found no actionable findings. Perform "
+                    "an initial improvement pass on the artifact."
+                )
+
+            lines = [
+                f"Address the following findings from the prior review (verdict: {result.verdict}):",
+                "",
+            ]
+            for finding in findings:
+                severity = finding.get("severity", "NOTE")
+                summary = finding.get("summary", "")
+                location = finding.get("location")
+                loc_suffix = f" ({location})" if location else ""
+                lines.append(f"- [{severity}] {summary}{loc_suffix}")
+            return "\n".join(lines)
+
+        return None
+
+    @staticmethod
+    def _apply_override(context: ActionContext, prompt: str) -> str:
+        """Prepend checkpoint-injected override instructions, if present."""
         override = str(context.params.get("override_instructions", "")).strip()
         if override:
             prefix = (

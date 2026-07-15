@@ -270,9 +270,11 @@ def save_review_result(
     passing ``name_suffix="part-1"`` yields
     ``161-review.tasks.summary-step.part-1.md``.
 
-    ``verdict_override`` is forwarded to ``format_review_markdown`` — see
-    its docstring. Ignored for ``as_json`` output, which persists the raw
-    ``ReviewResult`` unchanged.
+    ``verdict_override`` is forwarded to ``format_review_markdown`` for
+    markdown output and to ``ReviewResult.to_dict()`` for ``as_json``
+    output — see their docstrings. Both persist the same threshold-derived
+    verdict for judge templates rather than the always-``UNKNOWN`` raw
+    parse.
     """
     target = reviews_dir or _REVIEWS_DIR
     target.mkdir(parents=True, exist_ok=True)
@@ -283,7 +285,7 @@ def save_review_result(
 
     if as_json:
         path = target / f"{base}.json"
-        path.write_text(json.dumps(result.to_dict(), indent=2))
+        path.write_text(json.dumps(result.to_dict(verdict_override=verdict_override), indent=2))
     else:
         path = target / f"{base}.md"
         path.write_text(

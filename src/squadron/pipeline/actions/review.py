@@ -210,13 +210,26 @@ class ReviewAction:
         # result.verdict is always UNKNOWN for them. The persisted file must
         # show the threshold-derived verdict instead, not the always-empty
         # raw parse.
+        #
+        # Threshold resolution/enforcement must not discard an already-
+        # successful model call: a malformed threshold override (e.g. a
+        # non-numeric pass_floor) degrades to UNKNOWN with a WARNING rather
+        # than raising here, so persistence below still runs and the review
+        # artifact is saved (slice 303 F003).
         if template.is_judge:
             judge_override = context.params.get("judge")
             step_override = (
                 cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
             )
-            thresholds = resolve_thresholds(template.judge, step_override)
-            verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
+            try:
+                thresholds = resolve_thresholds(template.judge, step_override)
+                verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
+            except (TypeError, ValueError):
+                _logger.warning(
+                    "review: malformed judge threshold override for template '%s'; verdict=UNKNOWN",
+                    template_name,
+                )
+                verdict, provenance = "UNKNOWN", Provenance.JUDGE
             verdict_override = verdict
         else:
             verdict, provenance = result.verdict.value, Provenance.REVIEW

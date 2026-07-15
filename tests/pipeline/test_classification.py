@@ -723,3 +723,85 @@ def test_top_level_steps_still_classified_alongside_containers() -> None:
     top_row = next(r for r in result.steps if r.step_name == "summary-0")
     assert container_row.classification == StepClass.SDK_REQUIRED
     assert top_row.classification == StepClass.NON_SDK
+
+
+# ---------------------------------------------------------------------------
+# Slice 303 F002 — template.model fallback must be visible to classification
+# ---------------------------------------------------------------------------
+
+
+def _make_template(model: str | None) -> object:
+    from squadron.review.templates import ReviewTemplate
+
+    return ReviewTemplate(
+        name="judge.slice-vs-arch",
+        description="Test judge template",
+        system_prompt="Review.",
+        allowed_tools=["Read"],
+        permission_mode="bypassPermissions",
+        setting_sources=None,
+        required_inputs=[],
+        optional_inputs=[],
+        model=model,
+        prompt_template="Review all.",
+    )
+
+
+def test_review_step_with_no_cascade_model_falls_back_to_template_model() -> None:
+    """A review step with no CLI/action/step/pipeline/config model must not
+    raise ClassificationError when the template declares its own default
+    model — mirrors the runtime fallback in ReviewAction._review."""
+    steps = [make_step("review", "review-0", {"template": "judge.slice-vs-arch"})]
+    pipeline = make_pipeline(steps)
+    resolver = make_resolver()
+
+    with patch(
+        "squadron.review.templates.get_template",
+        return_value=_make_template(model="minimax"),
+    ):
+        result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.NON_SDK
+
+
+def test_review_step_with_no_cascade_and_no_template_model_still_raises() -> None:
+    """When the template itself has no default model either, classification
+    must still raise — the fallback only extends the cascade, it doesn't
+    make an unconfigured pipeline classifiable."""
+    steps = [make_step("review", "review-0", {"template": "judge.slice-vs-arch"})]
+    pipeline = make_pipeline(steps)
+    resolver = make_resolver()
+
+    with (
+        patch(
+            "squadron.review.templates.get_template",
+            return_value=_make_template(model=None),
+        ),
+        pytest.raises(ClassificationError, match="no model at any cascade level"),
+    ):
+        classify_pipeline(pipeline, resolver)
+
+
+def test_loop_container_review_inner_falls_back_to_template_model() -> None:
+    """The judge-gated loop shape (loop > review, no step-level model):
+    the container-inner classification path must also see template.model."""
+    loop_step = make_step(
+        "loop",
+        "loop-0",
+        {
+            "max": 3,
+            "steps": [{"review": {"template": "judge.slice-vs-arch"}}],
+        },
+    )
+    pipeline = make_pipeline([loop_step])
+    resolver = make_resolver()
+
+    with patch(
+        "squadron.review.templates.get_template",
+        return_value=_make_template(model="minimax"),
+    ):
+        result = classify_pipeline(pipeline, resolver)
+
+    assert len(result.steps) == 1
+    assert result.steps[0].classification == StepClass.NON_SDK
