@@ -268,21 +268,21 @@ status: not_started
 
 **Effort: 2**
 
-- [ ] **Run the reference pipeline against a real slice** (requires provider
+- [x] **Run the reference pipeline against a real slice** (requires provider
   access; mirrors slice 302's live-run caveats)
-  - [ ] `set -a && source .env && set +a` first; from inside a Claude Code
+  - [x] `set -a && source .env && set +a` first; from inside a Claude Code
     session use `profile="openrouter"` with an explicit model
-  - [ ] Confirm the exact invocation shape at run time (`sq run judge-cycle
+  - [x] Confirm the exact invocation shape at run time (`sq run judge-cycle
     --validate`, then the run with the slice param as the CLI expects) —
     target a real slice with an existing design + arch pair, e.g. 302
-  - [ ] Expected: the judge scores the design vs. its arch doc; the loop
+  - [x] Expected: the judge scores the design vs. its arch doc; the loop
     auto-advances when the score clears the floor, otherwise the fix leg
     revises and it re-judges up to `max`, then PAUSES with the score/findings
     visible in the run output
-  - [ ] Treat the first runs' fix-prompt behavior as tuning data, not a
+  - [x] Treat the first runs' fix-prompt behavior as tuning data, not a
     one-shot final draft — prompt adjustments to the dispatch leg are
     in-scope data changes (commit as `fix:` if made)
-- [ ] Success: one complete unattended run reaching either auto-advance or an
+- [x] Success: one complete unattended run reaching either auto-advance or an
   observable PAUSED escalation, with the judge's score visible in the run
   output; the outcome is recorded in the DEVLOG entry (T8)
 
@@ -292,19 +292,19 @@ status: not_started
 
 **Effort: 1**
 
-- [ ] **Full regression + static analysis from project root**
-  - [ ] `uv run pytest` — all pass
-  - [ ] `uv run pyright` — zero errors
-  - [ ] `uv run ruff check` and `uv run ruff format` — clean (format
+- [x] **Full regression + static analysis from project root**
+  - [x] `uv run pytest` — all pass
+  - [x] `uv run pyright` — zero errors
+  - [x] `uv run ruff check` and `uv run ruff format` — clean (format
     immediately before committing)
-- [ ] **Verify design success criteria** — walk the LLD's Success Criteria
+- [x] **Verify design success criteria** — walk the LLD's Success Criteria
   list (six functional, five technical, two integration) and confirm each is
   satisfied; anything unmet returns to the relevant task above
-- [ ] **Close out**
-  - [ ] Mark completed/dropped items `[x]` in this file (task-checker agent)
-  - [ ] Update slice design status to complete; mark slice 303 complete in
-    the slice plan (`100-slices.orchestration-v2.md`) if applicable
-  - [ ] DEVLOG entry per `prompt.ai-project.system.md` Session State Summary,
+- [x] **Close out**
+  - [x] Mark completed/dropped items `[x]` in this file (task-checker agent)
+  - [x] Update slice design status to complete; mark slice 303 complete in
+    the slice plan (`300-slices.eval-actions-llm-as-judge-scoring.md`)
+  - [x] DEVLOG entry per `prompt.ai-project.system.md` Session State Summary,
     including the T7 live-run outcome
   - [ ] Merge `303-slice.judge-gated-cycle-conventions` into the target
     branch per project git rules

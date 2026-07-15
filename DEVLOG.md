@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260714
+dateUpdated: 20260715
 
 ---
 
@@ -11,6 +11,84 @@ dateUpdated: 20260714
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260715 (1)
+
+### Slice 303: Judge-Gated Cycle Conventions — Complete
+
+Phase 6 implementation complete, T0–T8. Delivered `judge-cycle.yaml` (built-in
+reference pipeline: fix-first `loop [dispatch, review]`, `max: 3`,
+`until: review.pass`, `on_exhaust: checkpoint`, review step templated on
+`judge.slice-vs-arch`), a structural test in `test_loader_integration.py`,
+three control-flow tests in a new `tests/pipeline/test_judge_cycle.py`
+(auto-advance, escalate-at-max, advisory-always-escalates — all driving the
+real `ReviewAction`/loop/`enforce_judge` path with only
+`run_review_with_profile`/persistence/`resolve_slice_info` mocked), and a
+"Judge-Gated Cycles" section plus missing `### loop`/bare-`dispatch` catalog
+entries in `docs/PIPELINES.md`.
+
+**Live validation (T7) surfaced two pre-existing bugs, both fixed:**
+
+1. `judge-cycle.yaml` initially left the review step's `model:` unset,
+   relying on an implicit fallback — inconsistent with every other built-in
+   pipeline's convention (`P4.yaml`, `slice.yaml`: named `model`/
+   `review-model` params, referenced via placeholders). Rewrote
+   `judge-cycle.yaml` to match: `params: {model: sonnet, review-model:
+   minimax}`, both steps reference their param via `"{...}"`.
+2. Independent of (1), `ReviewAction`'s model-resolution cascade (CLI →
+   action → step → pipeline → config) never consulted a review template's
+   own `model:` default — unlike `sq review`'s CLI-side cascade, which
+   falls back to `template.model` as its last resort
+   (`cli/commands/review.py:_resolve_model`). A pipeline `review:` step with
+   no model anywhere always raised `ModelResolutionError`, even for a judge
+   template that declares a sensible default (`judge.slice-vs-arch`:
+   `opus`). Fixed in `pipeline/actions/review.py`: on `ModelResolutionError`
+   from the standard cascade, retry once against `template.model` before
+   giving up. New tests in `test_review_action.py` cover both the rescue
+   path and the case where no template default exists (error still
+   propagates unchanged).
+3. Also surfaced live: the persisted review file's `verdict:` field came
+   from the raw `ReviewResult.verdict`, always `UNKNOWN` for judge templates
+   by design (`judge-slice-vs-arch.yaml`'s prompt explicitly forbids
+   emitting a verdict line — the score is the source of truth). A human
+   reading the file saw `UNKNOWN` next to a score that clearly passed.
+   Fixed: `format_review_markdown`/`save_review_result`
+   (`review/persistence.py`) now accept an optional `verdict_override`;
+   `ReviewAction._review` computes the `enforce_judge`-derived verdict
+   *before* persistence (previously persistence ran first) and supplies it
+   for judge templates. New tests in both `test_review_action.py` and
+   `test_persistence.py` cover the override and the unchanged
+   non-override/non-judge paths.
+
+All three fixes are small, additive parameter/reordering changes to
+*existing* functions — no new step type, action, selector, or executor
+branch, so FR6 ("no new constructs") holds — but they are a deviation from
+the slice's stricter "zero engine code" framing, noted directly in the LLD's
+Success Criteria section rather than glossed over.
+
+**T7 final live run** (`sq run judge-cycle 302`, no manual `--model`,
+minimax via the new param defaults): judge scored slice 302's design at 98
+against its architecture doc, cleared `pass_floor` (82), loop exited on
+iteration 1, pipeline reported `completed`/`PASS`. Persisted file
+(`302-review.judge.slice-vs-arch.design-phase-judge-templates.md`) now shows
+`verdict: PASS` end-to-end. An earlier iteration of this same live run (fix
+leg, score below the floor) genuinely improved
+`302-slice.design-phase-judge-templates.md`'s anchoring-mitigation
+rationale — committed as real design-doc value, not test residue.
+
+**Known gap, not fixed (out of scope):** `LoopStepType.expand()` deliberately
+returns `[]` (iteration is owned by the executor's `_execute_loop_body`, not
+the flat action-list path) — so `--prompt-only` mode cannot drive any `loop`
+step at all, including `judge-cycle`. `sq run` inside a Claude Code session
+also refuses direct SDK execution. A `loop`-based pipeline is therefore only
+runnable from a standalone terminal today. Not filed as a separate GitHub
+issue; noted here and in the slice's Verification Walkthrough for whoever
+picks up prompt-only/loop support next.
+
+Full gate: `uv run pytest` (2124 passed, 2 skipped), `uv run pyright` (0
+errors), `uv run ruff check` (clean). Slice 303 marked complete in its own
+frontmatter and in `300-slices.eval-actions-llm-as-judge-scoring.md`.
+Branch `303-slice.judge-gated-cycle-conventions` ready to merge to `main`.
 
 ## 20260714 (3)
 
