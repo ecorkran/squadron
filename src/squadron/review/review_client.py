@@ -133,7 +133,7 @@ async def run_review_with_profile(
 
     # Create agent, send prompt, collect response, shut down
     agent = await provider.create_agent(config)
-    raw_output = ""
+    output_parts: list[str] = []
     try:
         review_message = Message(
             sender="review-system",
@@ -142,14 +142,19 @@ async def run_review_with_profile(
             message_type=MessageType.chat,
         )
         async for response in agent.handle_message(review_message):
+            sdk_type = response.metadata.get("sdk_type")
             # SDK providers emit both an AssistantMessage and a ResultMessage
-            # with identical content.  Skip the ResultMessage to avoid
-            # duplicating findings in the review output.
-            if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
+            # with identical content (skip the duplicate), plus separate
+            # tool_use/tool_result messages narrating the agent's tool calls
+            # (e.g. "Using tool: Bash", command stdout) that are not part of
+            # the review's actual prose and must not be mixed into it — non-SDK
+            # providers never set sdk_type and are unaffected by this filter.
+            if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
                 continue
-            raw_output += response.content
+            output_parts.append(response.content)
     finally:
         await agent.shutdown()
+    raw_output = "\n".join(output_parts)
 
     # Resolve diff-file set (code-template path-membership check, slice 904)
     # and cwd (path-existence check, all template types).

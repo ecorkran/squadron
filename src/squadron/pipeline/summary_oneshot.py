@@ -64,7 +64,7 @@ async def capture_summary_via_profile(
     )
 
     agent = await provider.create_agent(config)
-    raw_output = ""
+    output_parts: list[str] = []
     try:
         message = Message(
             sender="summary-system",
@@ -73,10 +73,16 @@ async def capture_summary_via_profile(
             message_type=MessageType.chat,
         )
         async for response in agent.handle_message(message):
-            if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
+            sdk_type = response.metadata.get("sdk_type")
+            # SDK providers emit both an AssistantMessage and a ResultMessage
+            # with identical content (skip the duplicate), plus separate
+            # tool_use/tool_result messages narrating the agent's tool calls
+            # that are not part of the summary's actual prose — non-SDK
+            # providers never set sdk_type and are unaffected by this filter.
+            if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
                 continue
-            raw_output += response.content
+            output_parts.append(response.content)
     finally:
         await agent.shutdown()
 
-    return raw_output
+    return "\n".join(output_parts)

@@ -113,7 +113,7 @@ async def test_capture_summary_multi_chunk(
 ) -> None:
     from squadron.providers import registry as registry_mod
 
-    msgs = [_make_fake_message("Part A"), _make_fake_message(" Part B")]
+    msgs = [_make_fake_message("Part A"), _make_fake_message("Part B")]
     agent = _make_fake_agent(msgs)
     provider = _make_fake_provider(agent)
     registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
@@ -124,7 +124,36 @@ async def test_capture_summary_multi_chunk(
         profile=_FAKE_PROFILE,
     )
 
-    assert result == "Part A Part B"
+    # Chunks join with a newline, not a bare concatenation (issue #22) —
+    # otherwise adjacent message content runs together with no boundary.
+    assert result == "Part A\nPart B"
+    agent.shutdown.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_capture_summary_filters_tool_messages(
+    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
+) -> None:
+    """Issue #22: tool_use/tool_result narration must not reach the summary text."""
+    from squadron.providers import registry as registry_mod
+
+    msgs = [
+        _make_fake_message("Checking the diff.", sdk_type="assistant_text"),
+        _make_fake_message("Using tool: Bash", sdk_type="tool_use"),
+        _make_fake_message("<bash stdout>", sdk_type="tool_result"),
+        _make_fake_message("Summary complete.", sdk_type="assistant_text"),
+    ]
+    agent = _make_fake_agent(msgs)
+    provider = _make_fake_provider(agent)
+    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
+
+    result = await capture_summary_via_profile(
+        instructions="summarize",
+        model_id=None,
+        profile=_FAKE_PROFILE,
+    )
+
+    assert result == "Checking the diff.\nSummary complete."
     agent.shutdown.assert_called_once()
 
 

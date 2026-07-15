@@ -12,6 +12,70 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (4)
+
+### Issue #22: SDK Tool-Call Noise No Longer Corrupts Review/Summary Raw Output
+
+Noticed while investigating #20 (fabricated review findings): the fixed
+`sonnet-fail.md` artifact's raw response contained an unreadable run-on
+line — `Using tool: BashUsing tool: BashUsing tool: Read...Clean. Now
+let's run the relevant test suite...` — prose and tool-call narration mashed
+together with no whitespace between them at all.
+
+**Root cause:** `providers/sdk/translation.py` correctly translates each SDK
+content block into its own `Message` — a `TextBlock` (the model's actual
+prose, `sdk_type: assistant_text`) and each `ToolUseBlock` (a tool
+invocation, rendered as `content=f"Using tool: {block.name}"`, `sdk_type:
+tool_use`) are distinct, well-formed messages. The bug was downstream, in
+how callers reassembled them: both `review_client.py:150`
+(`raw_output += response.content`) and `pipeline/summary_oneshot.py:78`
+(identical pattern) accumulated every yielded message — prose, tool-use
+markers, and tool-result content (command stdout / file contents,
+`sdk_type: tool_result`) alike — via bare string concatenation with no
+separator and no type filtering. Whenever a model's turn alternated prose
+and tool calls (normal for any review or summary that reads files or runs
+commands before responding), the result was one run-on line with tool
+narration interleaved mid-sentence.
+
+**Why this isn't just cosmetic:** the corrupted text is exactly what
+`parse_review_output` parses for `## Summary` / `### [SEVERITY] Title`
+structure, and what gets written verbatim into the saved review file body
+and the `-vv`/mismatch debug log. A tool-use marker landing between two
+lines that were meant to be separate can break the very structural patterns
+the parser depends on — plausibly a contributing cause of #20's fabrication
+trigger, independent of #20's own (already-fixed) fallback-extraction bug.
+
+**Fix:** both call sites now filter out `sdk_type in ("tool_use",
+"tool_result")` messages entirely (alongside the pre-existing
+`SDK_RESULT_TYPE` duplicate-content filter) and join the remaining
+assistant-text chunks with `"\n"` instead of bare `+=`. Non-SDK providers
+never set `sdk_type` and are unaffected — the filter only ever excludes
+messages that explicitly opt in to the `tool_use`/`tool_result` marker.
+Updated `test_summary_oneshot.py`'s multi-chunk test to expect newline
+joining instead of the old bare-concatenation shape; added
+`test_capture_summary_filters_tool_messages` and (in
+`test_review_client.py`) `test_raw_output_excludes_tool_call_noise`, both
+asserting tool-call content never reaches the accumulated output.
+
+**Scope note:** `pipeline/sdk_session.py:166` (the main dispatch path for
+design/tasks/implement steps) has the identical pattern
+(`"".join(response_parts)`, no tool-message filtering) but was left
+untouched — it's a different subsystem (dispatch artifacts are mostly
+written by the agent's own file tools, not parsed from the returned string)
+that needs its own look at actual downstream impact before applying the
+same fix blind. Filed as [#23](https://github.com/ecorkran/squadron/issues/23).
+
+**Not yet verified against a real SDK run** — all coverage above is via
+mocked `handle_message` iterators. Real-terminal `sq review code` runs
+against `claude-sonnet-5` (or another SDK profile) are still needed to
+confirm the fix holds against actual Claude Agent SDK message shapes, not
+just the mocked translation this repo's tests construct by hand.
+
+Full gate: `uv run pytest` (2128 passed, 2 skipped), `uv run pyright` (0
+errors), `uv run ruff check`/`format` (clean). Committed directly to `main`
+(non-slice bugfix, no feature branch). Closes
+[#22](https://github.com/ecorkran/squadron/issues/22).
+
 ## 20260715 (3)
 
 ### Issue #20: Parser No Longer Fabricates Findings From Unstructured Prose

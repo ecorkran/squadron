@@ -488,6 +488,78 @@ class TestEdgeCases:
         d = result.to_dict()
         assert "verdict" in d
 
+    @pytest.mark.asyncio
+    async def test_raw_output_excludes_tool_call_noise(self) -> None:
+        """Issue #22: tool_use/tool_result messages must not corrupt raw_output.
+
+        SDK reviews interleave assistant prose with tool-call narration
+        ("Using tool: Bash") and tool results (command stdout). Bare
+        concatenation with no separator and no filtering previously mashed
+        these into the review's raw_output, corrupting the very
+        ### [SEVERITY] structure the parser depends on.
+        """
+        template = _make_template()
+        inputs = {"input": "file.md"}
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content="Let me check the diff first.",
+                message_type=MessageType.chat,
+                metadata={"sdk_type": "assistant_text"},
+            )
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content="Using tool: Bash",
+                message_type=MessageType.system,
+                metadata={"sdk_type": "tool_use"},
+            )
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content="<diff output>",
+                message_type=MessageType.system,
+                metadata={"sdk_type": "tool_result"},
+            )
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content=_SAMPLE_REVIEW_OUTPUT,
+                message_type=MessageType.chat,
+                metadata={"sdk_type": "assistant_text"},
+            )
+
+        agent = MagicMock()
+        agent.state = AgentState.idle
+        agent.shutdown = AsyncMock()
+        agent.handle_message = _handle
+        mock_provider = _make_mock_provider(agent=agent)
+
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            from squadron.providers.profiles import ProviderProfile
+
+            mock_get_profile.return_value = ProviderProfile(
+                name="sdk",
+                provider="sdk",
+                api_key_env=None,
+            )
+            result = await run_review_with_profile(
+                template,
+                inputs,
+                profile="sdk",
+                model="claude-sonnet-5",
+            )
+
+        assert "Using tool:" not in result.raw_output
+        assert "<diff output>" not in result.raw_output
+        assert result.raw_output == f"Let me check the diff first.\n{_SAMPLE_REVIEW_OUTPUT}"
+
 
 # ---------------------------------------------------------------------------
 # _write_prompt_log tests (unchanged)
