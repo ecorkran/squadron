@@ -12,6 +12,41 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (8)
+
+### Issue #23: SDKExecutionSession.dispatch had the same no-separator/no-filter join as #22
+
+Same root-cause pattern as #22 (fixed earlier today for `review_client.py`
+and `summary_oneshot.py`), found in a third location while fixing #22:
+`SDKExecutionSession.dispatch()`
+([src/squadron/pipeline/sdk_session.py:143-166](src/squadron/pipeline/sdk_session.py#L143-L166))
+accumulated every translated SDK message's content — including
+`tool_use` ("Using tool: Bash") and `tool_result` (command stdout) —
+via bare list-append + `"".join()`, mixing tool-call narration into the
+dispatch response with no separator.
+
+Traced the two real consumers before fixing, resolving the issue's own
+open question ("is this cosmetic-only?"): `_dispatch_via_session` in
+[src/squadron/pipeline/actions/dispatch.py:191-200](src/squadron/pipeline/actions/dispatch.py#L191-L200)
+passes the joined string to `_check_cli_error` (prefix check only, low
+risk) and stores it as `outputs={"response": response_text}` — which
+persists into `prior_outputs`, read by later steps including the F001
+fix from earlier today (`_resolve_prompt_from_prior_review` scans
+`prior_outputs` for review findings). A corrupted response string here
+can therefore leak tool-call noise into what a later dispatch step's
+prompt is built from — not cosmetic.
+
+Fix: filter `sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result")`
+before appending to `response_parts` (session_id capture still runs for
+every translated message, unchanged), and join with `"\n"` instead of
+`""`. Mirrors the #22 fix exactly. Added
+`test_dispatch_excludes_tool_call_noise` to
+`tests/pipeline/test_sdk_session.py`, using `AssistantMessage` with
+mixed `TextBlock`/`ToolUseBlock` content plus a top-level
+`ToolResultBlock` SDK message to match how `translate_sdk_message`
+actually produces these types. Full gate clean: 2141 tests passed,
+pyright strict 0 errors, ruff clean. Closes #23.
+
 ## 20260715 (7)
 
 ### Issue #24: `sq review code` sent its template rules to the model twice

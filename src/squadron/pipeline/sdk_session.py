@@ -141,12 +141,19 @@ class SDKExecutionSession:
                                 f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
                             )
                         for translated in translate_sdk_message(sdk_msg, sender="pipeline"):
+                            sdk_type = translated.metadata.get("sdk_type")
                             # ResultMessage duplicates the assistant text as
                             # its `result` field — it's for metadata only,
                             # not content. Assistant text already arrived via
                             # AssistantMessage/TextBlock. Appending both
-                            # doubles the response string.
-                            if translated.metadata.get("sdk_type") != SDK_RESULT_TYPE:
+                            # doubles the response string. tool_use/tool_result
+                            # messages narrate the agent's tool calls (e.g.
+                            # "Using tool: Bash", command stdout) and are not
+                            # part of the response's actual prose — mixing
+                            # them in with no separator produced an
+                            # unreadable, unparseable run-on line (issue #23,
+                            # same class of bug as #22/#20).
+                            if sdk_type not in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
                                 response_parts.append(translated.content)
                             sid = translated.metadata.get("session_id")
                             if isinstance(sid, str) and sid:
@@ -163,7 +170,7 @@ class SDKExecutionSession:
                         )
                         continue
                     raise
-            return "".join(response_parts)
+            return "\n".join(response_parts)
         except CLINotFoundError as exc:
             raise ProviderAuthError(str(exc)) from exc
         except ProcessError as exc:

@@ -147,6 +147,52 @@ async def test_dispatch_sends_query_and_collects_response() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_excludes_tool_call_noise() -> None:
+    """Issue #23: tool_use/tool_result messages must not corrupt the response.
+
+    Dispatch turns interleave assistant prose with tool-call narration
+    ("Using tool: Bash") and tool results (command stdout). Bare
+    concatenation with no separator and no filtering previously mashed
+    these into the returned response string — the same class of bug fixed
+    for review/summary in #22.
+    """
+    from claude_agent_sdk import AssistantMessage, TextBlock, ToolResultBlock, ToolUseBlock
+
+    client = _make_client()
+    session = _make_session(client)
+
+    async def _gen():  # type: ignore[return]
+        msg = MagicMock(spec=AssistantMessage)
+        text_block = MagicMock(spec=TextBlock)
+        text_block.text = "Let me check the diff first."
+        tool_use_block = MagicMock(spec=ToolUseBlock)
+        tool_use_block.name = "Bash"
+        tool_use_block.input = {"command": "git diff"}
+        msg.content = [text_block, tool_use_block]
+        yield msg
+
+        tool_result = MagicMock(spec=ToolResultBlock)
+        tool_result.content = "<diff output>"
+        yield tool_result
+
+        msg2 = MagicMock(spec=AssistantMessage)
+        text_block2 = MagicMock(spec=TextBlock)
+        text_block2.text = "Looks good."
+        msg2.content = [text_block2]
+        yield msg2
+
+    gen_mock = MagicMock()
+    gen_mock.__aiter__ = lambda self: _gen()
+    client.receive_response.return_value = gen_mock
+
+    result = await session.dispatch("review this")
+
+    assert "Using tool:" not in result
+    assert "<diff output>" not in result
+    assert result == "Let me check the diff first.\nLooks good."
+
+
+@pytest.mark.asyncio
 async def test_dispatch_retries_on_rate_limit() -> None:
     from claude_agent_sdk import AssistantMessage, ClaudeSDKError, TextBlock
 

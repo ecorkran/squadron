@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A malformed judge threshold override (e.g. a non-numeric `pass_floor`) no longer discards an already-completed review with no file written at all — it now degrades to an `UNKNOWN` verdict (logged as a warning) and the review is still saved.
 - A judge review persisted as JSON (`as_json=True`) now shows its real threshold-derived verdict instead of always showing `UNKNOWN`, matching the markdown output for the same run.
 - `sq review code` no longer sends its template-specific rules (`.claude/rules/review-code.md`) to the model twice in the system prompt — it was inflating prompt size on every run with a configured rules directory. Closes [#24](https://github.com/ecorkran/squadron/issues/24).
+- Pipeline dispatch steps (design/tasks/implement, via `SDKExecutionSession`) no longer mix tool-call narration ("Using tool: Bash", command output) into the response text passed to later pipeline steps, with no separator between messages — the same class of corruption fixed for reviews and summaries in #22. Closes [#23](https://github.com/ecorkran/squadron/issues/23).
 
 ## [0.7.0] - 20260714
 
