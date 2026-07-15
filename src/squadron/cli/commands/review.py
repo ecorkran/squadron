@@ -727,7 +727,11 @@ def review_code(
         rules_content,
         model_flag=model,
         profile_flag=profile,
-        rules_dir=resolved_rules_dir,
+        # rules_content is already fully assembled above (template rules +
+        # language auto-detection + manual override) — passing rules_dir here
+        # too would make _run_review_command redundantly re-prepend template
+        # rules onto content that already has them (issue #24).
+        rules_dir=None,
     )
 
     if slice_info and not no_save:

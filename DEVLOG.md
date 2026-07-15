@@ -12,6 +12,33 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (7)
+
+### Issue #24: `sq review code` sent its template rules to the model twice
+
+`review_code()` ([src/squadron/cli/commands/review.py:704-711](src/squadron/cli/commands/review.py#L704-L711))
+already fully assembles `rules_content` via `load_review_rules("code",
+resolved_rules_dir, file_paths=..., manual_rules_content=manual_content)`
+— template rules (`review-code.md`) + language auto-detection + any
+explicit `--rules` override, one copy of template rules. It then passed
+both that assembled `rules_content` *and* `rules_dir=resolved_rules_dir`
+into `_run_review_command`, whose own `if rules_dir is not None` guard
+([review.py:322-329](src/squadron/cli/commands/review.py#L322-L329))
+unconditionally re-ran `load_review_rules`, prepending `review-code.md`
+a second time onto content that already had it. `review_slice`/`arch`/
+`tasks` never hit this because they don't pre-assemble — they resolve
+only `rules_dir` and let `_run_review_command` do the one and only
+`load_review_rules` call for those templates.
+
+Fix: `review_code` now passes `rules_dir=None` to `_run_review_command`,
+since its `rules_content` is already complete — the existing guard then
+correctly skips the redundant call for this caller only. Added
+`test_review_code_template_rules_not_duplicated` to
+`tests/review/test_cli_review.py`'s `TestRulesWiring` class, asserting
+the template rules string appears exactly once in the `rules_content`
+actually passed to `run_review_with_profile`. Full gate clean: 2140
+tests passed, pyright strict 0 errors, ruff clean. Closes #24.
+
 ## 20260715 (6)
 
 ### Slice 303 re-review F001: judge-cycle's fix step never saw the judge's findings

@@ -396,6 +396,40 @@ class TestRulesWiring:
         assert "Explicit custom rules." in rc
         assert "Python auto rules." in rc
 
+    def test_review_code_template_rules_not_duplicated(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """review-code.md template rules appear exactly once (issue #24).
+
+        review_code() fully assembles rules_content itself (template rules +
+        auto-detection), then must not also pass rules_dir through to
+        _run_review_command — that would make it redundantly re-prepend
+        template rules onto content that already has them.
+        """
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "review-code.md").write_text("Code review template rules.")
+
+        result = cli_runner.invoke(
+            app,
+            [
+                "review",
+                "code",
+                "--rules-dir",
+                str(rules_dir),
+                "--diff",
+                "main",
+            ],
+        )
+        assert result.exit_code == 0
+        call_kwargs = patch_run_review.call_args.kwargs
+        rc = call_kwargs["rules_content"]
+        assert rc is not None
+        assert rc.count("Code review template rules.") == 1
+
 
 class TestContextForgeErrors:
     """Test error handling when CF is unavailable or fails."""

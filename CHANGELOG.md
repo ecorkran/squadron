@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A pipeline `review` step relying solely on a review template's own default model (no CLI/action/step/pipeline/config override) no longer fails with a false "no model at any cascade level" error before the pipeline even starts.
 - A malformed judge threshold override (e.g. a non-numeric `pass_floor`) no longer discards an already-completed review with no file written at all — it now degrades to an `UNKNOWN` verdict (logged as a warning) and the review is still saved.
 - A judge review persisted as JSON (`as_json=True`) now shows its real threshold-derived verdict instead of always showing `UNKNOWN`, matching the markdown output for the same run.
+- `sq review code` no longer sends its template-specific rules (`.claude/rules/review-code.md`) to the model twice in the system prompt — it was inflating prompt size on every run with a configured rules directory. Closes [#24](https://github.com/ecorkran/squadron/issues/24).
 
 ## [0.7.0] - 20260714
 
