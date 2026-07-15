@@ -2,7 +2,7 @@
 docType: guide
 title: Pipeline Authoring Guide
 dateCreated: 20260410
-dateUpdated: 20260410
+dateUpdated: 20260714
 ---
 
 # Pipeline Authoring Guide
@@ -197,6 +197,27 @@ steps:
 
 ---
 
+### `dispatch`
+
+**Purpose:** Send a prompt to an LLM as a standalone step, outside a phase build. Used as the fix leg of a loop body (see [Judge-Gated Cycles](#judge-gated-cycles)) or any time you need a one-off model call.
+
+**Fields:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | no | Prompt text. When absent, falls back to the most recent `build_context` output (same behavior as the dispatch action inside phase steps) |
+| `model` | string | no | Model alias for the dispatch |
+
+**Example:**
+
+```yaml
+- dispatch:
+    prompt: "Address any findings from the prior review."
+    model: sonnet
+```
+
+---
+
 ### `review`
 
 **Purpose:** Standalone review outside a phase build.
@@ -205,8 +226,10 @@ steps:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `template` | string | yes | Review template name (`arch`, `slice`, `tasks`, `code`) |
-| `model` | string | no | Model alias for the review |
+| `template` | string | yes | Review template name (`arch`, `slice`, `tasks`, `code`, or a `judge.*` template such as `judge.slice-vs-arch` — see [Judge-Gated Cycles](#judge-gated-cycles)) |
+| `model` | string | no | Model alias for the review. If omitted and no other cascade level (CLI/step/pipeline/config) supplies one, falls back to the template's own `model:` default (e.g. `judge.slice-vs-arch` defaults to `opus`) — but prefer setting this explicitly via a named `params` entry; see the `loop` example below |
+| `slice` | — | no | Not a step field — set `slice` in the pipeline's top-level `params:` block instead. `judge.*` and other slice-aware templates auto-resolve `input`/`against` from the pipeline's `slice` param |
+| `judge` | dict | no | Step-level threshold override for judge templates, e.g. `{pass_floor: 90}` — merges over the template's default thresholds |
 | `checkpoint` | string | no | Same triggers as phase steps |
 
 **Example:**
@@ -216,6 +239,46 @@ steps:
     template: code
     model: minimax
 ```
+
+---
+
+### `loop`
+
+**Purpose:** Repeat a body of steps until a condition passes or a bound is reached. The primary use is the [judge-gated cycle](#judge-gated-cycles): fix, then re-review, until a judge's score clears a floor.
+
+**Fields:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `max` | int | yes | The bound — maximum number of iterations. Always explicit; there is no unbounded form |
+| `until` | string | no | Exit condition, evaluated after each iteration completes: `review.pass`, `review.concerns_or_better`, `action.success` |
+| `on_exhaust` | string | no | What happens if `max` is reached without `until` passing: `fail` (mark the step FAILED, default), `checkpoint` (pause for a human), `skip` |
+| `steps` | list | yes | Body — an ordered list of step definitions, using any registered step type except `loop` itself |
+
+**Post-test semantics:** `until` is evaluated only *after* an iteration's body finishes, against that iteration's own results — never before the first iteration runs. A `loop` cannot use a pre-loop check to skip iteration 1.
+
+**Example:**
+
+```yaml
+params:
+  model: sonnet
+  review-model: minimax
+
+steps:
+  - loop:
+      max: 3
+      until: review.pass
+      on_exhaust: checkpoint
+      steps:
+        - dispatch:
+            prompt: "Fix findings from the prior review."
+            model: "{model}"
+        - review:
+            template: judge.slice-vs-arch
+            model: "{review-model}"
+```
+
+Give each model role its own named `params` entry (as above) rather than leaving a step's `model:` unset — every built-in pipeline follows this convention so a caller can retarget any model by overriding one param, without editing step bodies. See [Judge-Gated Cycles](#judge-gated-cycles) for why the review step needs an explicit model even though its judge template declares its own default.
 
 ---
 
@@ -253,8 +316,7 @@ Prefer scalar shorthand:
 
 | Expression | Returns |
 |---|---|
-| `cf.unfinished_slices("{plan}")` | All unfinished slices in a Context Forge plan |
-| `cf.slices("{plan}")` | All slices in a plan |
+| `cf.unfinished_slices("{plan}")` | All unfinished slices in a Context Forge plan — the only registered source |
 
 Item fields are accessed as dotted references: `{slice.index}`, `{slice.title}`, etc.
 
@@ -270,6 +332,56 @@ Item fields are accessed as dotted references: `{slice.index}`, `{slice.title}`,
           slice: "{slice.index}"
           model: opus
 ```
+
+---
+
+## Judge-Gated Cycles
+
+**The convention:** a bounded `loop` whose body is `[dispatch, review]` — fix, then re-review — gated by a `judge.*` template's score-derived verdict, with `until: review.pass` and `on_exhaust: checkpoint`:
+
+| Element | Role |
+|---|---|
+| Loop body step 1 (`dispatch`) | The fix leg. Prompt does double duty: address prior judge findings if any exist, otherwise perform an initial improvement pass |
+| Loop body step 2 (`review`) | The judge leg — a `judge.*` template (e.g. `judge.slice-vs-arch`) that scores the artifact and derives a PASS/CONCERNS/FAIL verdict from the score |
+| `until: review.pass` | Exit condition — the loop stops as soon as an iteration's judge review passes |
+| `max` | Always explicit — there is no unbounded pattern anywhere in this convention |
+| `on_exhaust: checkpoint` | If `max` is reached without a passing review, the run PAUSES for a human — the outcome is *undecided*, not wrong, so escalation (not failure) is the default |
+
+The built-in `judge-cycle` pipeline (see [Built-in Pipelines](#built-in-pipelines)) is the reference implementation of this convention. It declares `model` and `review-model` as named `params` (fix-leg model and judge-leg model respectively) rather than leaving either step's `model:` unset — see the [`loop`](#loop) example. A judge template does carry its own `model:` default as a last-resort fallback, but don't rely on it: an explicit param keeps the model visible and overridable in one place, consistent with every other built-in pipeline.
+
+### Two gating modes
+
+- **Auto-advance (default):** use the judge template's default thresholds (e.g. `judge.slice-vs-arch`'s `pass_floor: 82`). A high-confidence score clears the floor and the loop exits automatically — no human involvement needed for the common case.
+- **Advisory-only / always-escalate:** when the judge's ground truth is weak (e.g. an early-stage template, or a domain the judge is known to score unreliably), force every iteration to escalate by setting a step-level override that no score can clear:
+
+  ```yaml
+  - review:
+      template: judge.slice-vs-arch
+      judge:
+        pass_floor: 101
+  ```
+
+  **This is the entire mechanism** — there is no separate `advisory:` flag or field. `resolve_thresholds` does not clamp threshold values, so a `pass_floor` above 100 is a *sanctioned* value: no score (0–100) can ever clear it, so the loop always exhausts to `checkpoint` and a human always makes the final call. If thresholds are ever clamped to a strict 0–100 range in a future slice, that change must preserve some "never passes" sentinel or this convention breaks.
+
+### Escalation observability
+
+When a loop exhausts, the step's result carries the last iteration's judge review — its score and findings are present in `action_results`, reachable by whoever picks up the checkpoint. Exhaustion is never silent.
+
+### First-iteration shape: fix-first
+
+The recommended body is **fix-first** — `[dispatch, review]`, no pre-loop judge. The executor's loop is post-test (see [`loop`](#loop)): `until` is evaluated only after an iteration's body completes. A judge placed *before* the loop is purely informational — it cannot short-circuit iteration 1, because the loop hasn't started evaluating its exit condition yet. Don't design a judge-gated cycle expecting a pre-loop check to skip the first pass.
+
+### Constraint: no per-iteration commit
+
+`commit` is an action emitted by phase steps, not a registered step type — it cannot appear as a bare step inside a loop body. A judge-gated cycle's body is `[dispatch, review]` only. If you need to persist each iteration, commit *after* the loop completes (e.g. a phase step or a standalone `commit`-emitting step following the loop), not inside it.
+
+### `each` fan-out caveat
+
+If you fan a judge-gated cycle out over multiple slices with `each`, the only registered source is `cf.unfinished_slices("{plan}")` — do not assume other collection sources exist.
+
+### Alternative: `on_exhaust: fail`
+
+Use `on_exhaust: fail` instead of `checkpoint` only when an artifact that never clears the floor should abort the run outright, rather than wait for a human — e.g. a fully automated pipeline with no one to hand a checkpoint to.
 
 ---
 
@@ -363,6 +475,7 @@ sq run --list    # shows all available pipelines with descriptions
 | `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
 | `design-batch` | Phase 4 for every unfinished slice in a plan | `plan`, `model` |
+| `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
 | `P1` | Phase 1 (project vision) with arch review and checkpoint | `slice` |
 | `P2` | Phase 2 (architecture) with arch review and checkpoint | `slice` |
 | `P4` | Phase 4 (slice design) with slice review and checkpoint | `slice`, `model`, `review-model` |

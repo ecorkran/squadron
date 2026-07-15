@@ -15,8 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`judge-cycle`** — a new built-in reference pipeline for the judge-gated review→fix→re-review cycle: a bounded `loop` that fixes an artifact, re-judges it, auto-advances once the judge's score clears its threshold, and escalates to a human (`PAUSED`, with the last score and findings visible) if it never does. See the new "Judge-Gated Cycles" section in `docs/PIPELINES.md` for the convention, including the advisory-only (always-escalate) mode for weak-ground-truth judges.
+
 ### Fixed
 - Reviews now fail immediately with a clear error when the `input` or `against` document doesn't exist on disk (stale path, typo, or an artifact a prior step never wrote), instead of silently proceeding without that document and letting the model produce a fabricated verdict. Applies to `sq review slice|tasks|arch` and pipeline review steps; a warning is also logged if a missing document is ever skipped at the prompt-injection layer. Closes [#18](https://github.com/ecorkran/squadron/issues/18).
+- A pipeline `review` step with no model set anywhere now falls back to the review template's own default model instead of failing outright — matching how `sq review` already behaves.
+- A judge review's saved file now shows its real PASS/CONCERNS/FAIL verdict (derived from the score) instead of always showing `UNKNOWN` — judge templates intentionally don't state a verdict in their own output, so the file previously looked unresolved even when the score clearly passed or failed.
 
 ## [0.7.0] - 20260714
 

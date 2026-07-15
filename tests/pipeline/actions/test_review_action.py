@@ -85,6 +85,7 @@ def _mock_template() -> ReviewTemplate:
     mock.optional_inputs = []
     mock.judge = None
     mock.is_judge = False
+    mock.model = None
     return mock
 
 
@@ -358,6 +359,40 @@ class TestReviewModelResolution:
         result = await ReviewAction().execute(ctx)
         assert result.metadata["profile"] == ProfileName.SDK
 
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_template_model_rescues_empty_cascade(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """A judge template's own `model:` default (e.g. judge.slice-vs-arch's
+        `opus`) must be reachable when no pipeline/CLI/config level supplies
+        one — mirrors the fallback `sq review` already applies via its
+        CLI-side cascade (cli/commands/review.py:_resolve_model)."""
+        mock_tpl = _mock_template()
+        mock_tpl.model = "opus"
+        mock_get_template.return_value = mock_tpl
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(params={"template": "judge.slice-vs-arch"})
+        ctx.resolver.resolve.side_effect = [
+            ModelResolutionError("no model"),
+            ("claude-opus-4-8", None),
+        ]
+
+        result = await ReviewAction().execute(ctx)
+        assert result.success is True
+        assert ctx.resolver.resolve.call_count == 2
+        ctx.resolver.resolve.assert_called_with("opus", None)
+
 
 # ---------------------------------------------------------------------------
 # Execute — template inputs passthrough
@@ -534,6 +569,27 @@ class TestReviewErrors:
         result = await ReviewAction().execute(ctx)
         assert result.success is False
         assert "no model" in (result.error or "")
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_model_resolution_error_with_no_template_default_still_fails(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+    ) -> None:
+        """A template with no `model:` default must not mask the resolver error."""
+        mock_tpl = _mock_template()
+        mock_tpl.model = None
+        mock_get_template.return_value = mock_tpl
+
+        ctx = _make_context()
+        ctx.resolver.resolve.side_effect = ModelResolutionError("no model")
+
+        result = await ReviewAction().execute(ctx)
+        assert result.success is False
+        assert "no model" in (result.error or "")
+        ctx.resolver.resolve.assert_called_once()
 
     @pytest.mark.asyncio
     @patch(f"{_P}.run_review_with_profile", side_effect=RuntimeError("API down"))
@@ -754,6 +810,54 @@ class TestJudgeEnforcement:
         assert result.verdict == "UNKNOWN"
         assert result.provenance == "judge"
         assert any(r.levelno >= 30 for r in caplog.records)
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_persisted_file_receives_derived_verdict_not_raw_unknown(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """Judge templates omit a verdict line by design (result.verdict is
+        always UNKNOWN), so the persisted file must receive the
+        threshold-derived verdict via verdict_override — otherwise a human
+        reading the file sees UNKNOWN next to a clearly-passing score."""
+        mock_get_template.return_value = _mock_judge_template()
+        mock_run_review.return_value = _make_review_result(Verdict.UNKNOWN, score=90.0)
+
+        result = await ReviewAction().execute(_make_context())
+
+        assert result.verdict == "PASS"
+        mock_format.assert_called_once()
+        assert mock_format.call_args.kwargs["verdict_override"] == "PASS"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_non_judge_persistence_receives_no_verdict_override(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result(Verdict.CONCERNS)
+
+        await ReviewAction().execute(_make_context())
+
+        assert mock_format.call_args.kwargs["verdict_override"] is None
 
 
 # ---------------------------------------------------------------------------

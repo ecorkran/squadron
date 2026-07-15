@@ -6,7 +6,7 @@ parent: 300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [302]
 interfaces: [304]
 dateCreated: 20260706
-dateUpdated: 20260707
+dateUpdated: 20260715
 status: in-progress
 ---
 
@@ -421,56 +421,107 @@ against any real slice in the repo, not a toy fixture.
 - Slice 304 can extend the same loop/judge composition to gate composition
   without reworking the convention this slice establishes.
 
+> **Scope note (discovered during Phase 6):** "no new step type, action,
+> selector, or executor branch" (FR6) held exactly as designed — the delivered
+> artifact is `judge-cycle.yaml` + tests + docs, zero new engine constructs.
+> Getting the reference pipeline to actually run unattended (Success Criterion
+> #2, the live run) surfaced two pre-existing bugs in *existing* review
+> machinery that blocked it: `ReviewAction`'s model-resolution cascade never
+> consulted a review template's own `model:` default (unlike `sq review`'s
+> CLI cascade, which does), and the persisted review file always showed a
+> judge's raw `verdict: UNKNOWN` instead of its threshold-derived verdict
+> (judge templates omit a verdict line by design). Both were fixed as small,
+> additive parameter changes to existing functions
+> (`src/squadron/pipeline/actions/review.py`,
+> `src/squadron/review/persistence.py`) — no new step type, action, selector,
+> or executor branch was introduced, so FR6 is unbroken, but this is a
+> deviation from the stricter "zero engine code" framing in Technical Scope
+> above. Full test coverage for both fixes lives alongside the existing
+> `ReviewAction`/persistence test suites, not in this slice's `test_judge_cycle.py`.
+
 ## Verification Walkthrough
+
+Confirmed working during Phase 6 implementation. Commands and output below are
+actual, not illustrative.
 
 ```bash
 # 1. The reference pipeline loads and validates with no engine change.
-uv run python - <<'PY'
-from squadron.pipeline.loader import load_pipeline   # adjust to actual loader API
-p = load_pipeline("judge-cycle")
-# find the loop step and assert its judge-gated shape
-loop = next(s for s in p.steps if s.step_type == "loop")
-assert loop.config["max"] >= 1
-assert loop.config["until"] == "review.pass"
-assert loop.config["on_exhaust"] == "checkpoint"
-body = loop.config["steps"]
-review = next(s for s in body if "review" in s)["review"]
-assert review["template"].startswith("judge.")
-print("PASS: judge-cycle.yaml has the bounded, judge-gated, escalating shape")
-PY
+uv run sq run judge-cycle --validate
+# Output: Pipeline 'judge-cycle' is valid.
+
+# Structural shape (loader-level assertion, exercised by test_judge_cycle_shape
+# in tests/pipeline/test_loader_integration.py — not a standalone script):
+#   loop.config["max"] >= 1, until == "review.pass",
+#   on_exhaust == "checkpoint", body == [dispatch, review], and the review
+#   step's template == "judge.slice-vs-arch".
+uv run pytest tests/pipeline/test_loader_integration.py -k judge_cycle -v
+# Output: test_judge_cycle_shape PASSED
 
 # 2. Auto-advance: judge clears the floor → loop exits early, no escalation.
-#    (unit test, judge mocked to score above pass_floor)
 uv run pytest tests/ -k judge_cycle_auto_advance -v
+# Output: TestJudgeCycleAutoAdvance::test_judge_cycle_auto_advance PASSED
 
 # 3. Escalation: judge never clears the floor → loop exhausts to PAUSED at max.
-#    (unit test, judge mocked to score below concerns_floor)
 uv run pytest tests/ -k judge_cycle_escalates -v
+# Output: TestJudgeCycleEscalates::test_judge_cycle_escalates PASSED
 
 # 4. Advisory-only: pass_floor override > 100 → always escalates even on a high
 #    raw score. Proves the gate is the threshold, not the model.
 uv run pytest tests/ -k judge_cycle_advisory_always_escalates -v
+# Output: TestJudgeCycleAdvisoryAlwaysEscalates::test_judge_cycle_advisory_always_escalates PASSED
 
 # 5. End-to-end unattended run against a real slice (requires provider access).
-#    Mirrors slice 302's live-run caveats: from inside a Claude Code session use
-#    profile="openrouter" with an explicit model, and `source .env` first.
+#    CORRECTION: the slice target is positional, not a --slice flag, and the
+#    pipeline's `params.slice: required` matches CLI convention (cf. P4.yaml).
+#    CORRECTION: --prompt-only mode does NOT work here — LoopStepType.expand()
+#    deliberately returns [] (iteration is handled by the true executor's
+#    _execute_loop_body, not the flat action-list path prompt-only relies on).
+#    A `loop` step is therefore unrunnable from inside a Claude Code session;
+#    it must be run from a standalone terminal with direct SDK execution.
 set -a && source .env && set +a
-uv run sq run judge-cycle --slice 302   # exact flag shape confirmed at impl time
-# Expected: the judge scores 302's design vs. its arch doc; if it clears the
-# floor the loop exits and the run advances; otherwise the fix leg revises and
-# it re-judges up to max, then PAUSES for human review. The paused state and the
-# last judge's score/findings are visible in the run output.
+uv run sq run judge-cycle 302
+# Expected and observed: the judge scores 302's design vs. its arch doc
+# (judge.slice-vs-arch). Score 98 cleared pass_floor (82) → loop exited on
+# iteration 1, pipeline reported "judge-cycle — completed / loop-0: completed
+# (PASS)". The persisted review file
+# (project-documents/user/reviews/302-review.judge.slice-vs-arch.design-phase-judge-templates.md)
+# shows verdict: PASS (threshold-derived, not the judge's raw UNKNOWN — see
+# the verdict_override fix below) with score/criteria/findings all populated.
+# aiModel in the persisted file reflects the actually-dispatched model
+# (resolved via the pipeline's model/review-model params), confirming the
+# model that ran the judge, not a template artifact.
 
 # 6. Full regression + static analysis
-uv run pytest
-uv run pyright
-uv run ruff check && uv run ruff format --check
+uv run pytest        # 2124 passed, 2 skipped
+uv run pyright       # 0 errors, 0 warnings, 0 informations
+uv run ruff check    # All checks passed!
 ```
 
-> The exact loader API and `sq run` flag shape are confirmed against the current
-> surface during implementation (Phase 6); the *intent* — load the reference
-> pipeline, drive the loop to both auto-advance and escalation, and prove the
-> advisory override forces escalation — is the fixed part of this walkthrough.
+**Discovered during implementation (folded into the shipped artifacts, not just this note):**
+
+- `judge-cycle.yaml` must declare `model`/`review-model` as named top-level
+  `params` (defaults `sonnet`/`minimax`), referenced via `"{model}"`/
+  `"{review-model}"` placeholders on the dispatch and review steps
+  respectively — mirroring every other built-in pipeline (`P4.yaml`,
+  `slice.yaml`). Leaving a review step's `model:` unset and relying on
+  fallback resolution is inconsistent with the project's established
+  pipeline-authoring convention, even though a fallback exists (next point).
+- `ReviewAction`'s model cascade (CLI → action → step → pipeline → config)
+  never consulted the review template's own `model:` default, unlike
+  `sq review <template>`'s CLI-side cascade which does. Fixed: `ReviewAction`
+  now retries resolution against `template.model` when the standard cascade
+  is empty (`src/squadron/pipeline/actions/review.py`), so a judge template's
+  declared default (e.g. `judge.slice-vs-arch`'s `opus`) is reachable from a
+  pipeline `review:` step as a last resort — but pipelines should still set
+  an explicit param per the point above.
+- The persisted review file's `verdict:` field came from the raw
+  `ReviewResult.verdict`, which is always `UNKNOWN` for judge templates by
+  design (the prompt forbids emitting a verdict line — the score is the
+  source of truth). This meant a human reading the file saw `UNKNOWN` next
+  to a clearly-passing score. Fixed: `format_review_markdown` /
+  `save_review_result` now accept a `verdict_override`, and `ReviewAction`
+  supplies the `enforce_judge`-derived verdict for judge templates before
+  persisting — the file now shows the real gating decision.
 
 ## Risk Assessment
 

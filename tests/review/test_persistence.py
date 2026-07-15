@@ -158,6 +158,24 @@ class TestFormatReviewMarkdown:
         assert "No specific findings." in md
         assert "findings:" not in md
 
+    def test_verdict_override_replaces_raw_verdict(self) -> None:
+        """Judge templates leave result.verdict as UNKNOWN by design; the
+        caller-supplied threshold-derived verdict must win in both the
+        frontmatter and the prose body."""
+        result = _make_result()
+        result.verdict = Verdict.UNKNOWN
+        md = format_review_markdown(result, "code", _make_slice_info(), verdict_override="PASS")
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["verdict"] == "PASS"
+        assert "**Verdict:** PASS" in md
+        assert "UNKNOWN" not in md
+
+    def test_no_verdict_override_keeps_raw_verdict(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["verdict"] == "CONCERNS"
+
 
 class TestFormatReviewMarkdownScore:
     """Numeric scoring foundation (slice 300): frontmatter score/criteria."""
