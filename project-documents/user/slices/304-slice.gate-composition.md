@@ -1,4 +1,4 @@
----
+The minute↔daily agreement risk you mentioned is a different and real concern (two independent fetches of the same underlying reality), but it's out of scope for 162 — that's a cross-source reconciliation audit, worth its own future-work item. ---
 docType: slice-design
 slice: gate-composition
 project: squadron
@@ -128,6 +128,15 @@ reduced verdict = the more severe of (judge_verdict, review_verdict)
 - Any `FAIL` → `FAIL`; any `UNKNOWN` → `UNKNOWN` (cannot-judge dominates, so a
   broken judge never lets a passing review auto-advance, and vice-versa).
 - `PASS` + `CONCERNS` → `CONCERNS`.
+- **Ties are determinate.** When both legs carry the *same* severity, the reduced
+  verdict is that shared value — most-severe-wins is idempotent on equal ranks, so
+  `CONCERNS` + `CONCERNS` → `CONCERNS`, `FAIL` + `FAIL` → `FAIL`, etc. There is no
+  tie-break to decide because the reduction returns a *severity rank*, not a
+  *chosen leg*; which leg "won" is immaterial when both map to the same rank. This
+  is a property of the ordered reduction, tested explicitly (the 4×4 cross-product
+  includes all four diagonal ties). The raw per-leg verdicts remain on the gate
+  result's `metadata` regardless, so a same-rank tie is still auditable (a human
+  can see *both* legs said `CONCERNS`, not just the reduced `CONCERNS`).
 
 `UNKNOWN` is ranked **most** severe deliberately: it means "a judgment could not
 be rendered," and the architecture's no-silent-pass NFR requires that a
@@ -190,9 +199,53 @@ that makes (b) necessary, and the gate is designed to avoid depending on it.
 - **Per-criterion composition** (combining `criteria` maps). The gate reduces
   *verdicts*; the reserved `criteria` map (300) is passed through on the
   gate result for observability but is not itself reduced.
-- **Multi-sample judging** (Future Work 1) — orthogonal.
+- **Multi-sample judging** (Future Work 1) — orthogonal, and specifically a
+  *fan-in* concern, not a gate one. See the relationship note below.
+- **N-sample convergence via fan-out/fan-in** — a different reduction axis
+  entirely. See below.
 
-## The escalation boundary (option a → option b)
+### Relationship to fan-out/fan-in convergence (a different concern, likely to co-evolve)
+
+There is a second, more sophisticated convergence mechanism already in the
+codebase — the **`FanInReducer` protocol and registry**
+(`src/squadron/pipeline/intelligence/fan_in/reducers.py`, slice 182) — with
+built-in `collect` and `first_pass` reducers today and richer ones planned
+(`merge_findings`, `unanimous` — slice 189). It is worth stating precisely how
+the gate relates to it, because the two *look* similar ("reduce many results to
+one verdict") but reduce along **different axes**, and the boundary should be
+deliberate, not accidental:
+
+| | **Gate (this slice, 304)** | **Fan-in (182 / 189)** |
+|---|---|---|
+| Reduces | **2 heterogeneous** judgments of one artifact | **N homogeneous** branch results from a fan-out |
+| Sources differ in | *kind* — a judge verdict vs. an independent review verdict | *sample* — the same kind of review run across several models/prompts |
+| Answers | "do a judge **and** a review agree this gate should open?" | "does the **consensus/median** of N samples clear the gate?" |
+| Mechanism | one `gate` action, most-severe-wins over two named steps | `fan_out` step + a registered `FanInReducer` over N branches |
+| Multi-sample judging (300 FW1) | not here | **this is where it lives** — N judge samples → median, via fan-in |
+
+**They are orthogonal today and this slice keeps them so.** A gate composes two
+*different* judgments; a fan-in converges N *equivalent* samples. Multi-sample
+judging (running one judge N times and reducing by median to bound score
+variance — 300 Future Work 1) is a **fan-in** job, not a gate job: it belongs to
+the `fan_out`/`FanInReducer` machinery, and the gate should not grow a sample
+count.
+
+**But they will likely co-evolve, and the design should not pretend otherwise.**
+Both are instances of "reduce a set of `ActionResult`s to one verdict," and as
+fan-in gains richer reducers (median score, `unanimous`, majority-vote), the
+gate's most-severe rule is arguably a *special case* of the same reducer
+abstraction — a two-input, most-severe `FanInReducer`. A plausible future
+refactor unifies them: the gate's reduction becomes a registered reducer, and a
+"judge-plus-review" gate becomes a fan-out of two heterogeneous branches reduced
+by a most-severe reducer. **This slice deliberately does not attempt that
+unification** — there is no caller for it yet, and forcing the gate through the
+fan-out branch model now would add real complexity (heterogeneous branches,
+per-branch template config) to buy an abstraction nothing needs (project rule:
+resist complexity until truly necessary). The gate ships as its own small,
+purpose-built action. The note is here so a later slice that *does* unify them
+does so knowingly — treating the gate's most-severe reduction as one reducer
+among several — rather than discovering the overlap after the fact. **Flagged as
+a likely future direction, not scheduled work.**
 
 The slice plan requires: *"If option (a) is found insufficient for a required
 case, the need for option (b) is raised as an explicit, coordinated 140
@@ -357,10 +410,12 @@ leaves all 300–303 pipelines untouched.
 - The `gate` action and step register via the existing `register_action` /
   `register_step_type` with **no** checkpoint or `_find_review_verdict` change.
 - A `gate` step loads and validates via the existing pipeline loader.
-- Reduction is a **pure function** of the two verdicts (and their scores for
-  tie-context), unit-tested across the full verdict cross-product
-  (`PASS/CONCERNS/FAIL/UNKNOWN` × the same) with the most-severe result asserted
-  for each pair.
+- Reduction is a **pure function** of the two verdicts, unit-tested across the
+  full 4×4 verdict cross-product (`PASS/CONCERNS/FAIL/UNKNOWN` × the same, all 16
+  pairs) with the most-severe result asserted for each pair — including the four
+  **diagonal ties**, which must each reduce to their own shared value
+  (`CONCERNS`+`CONCERNS` → `CONCERNS`, etc.). No score context is needed to break
+  a tie: equal severities reduce to that severity by construction.
 - The severity ordering is defined once (single ordered enum/table) and
   referenced everywhere — no scattered comparison literals.
 - A test asserts a gate over (judge=PASS, review=CONCERNS) yields a checkpoint
