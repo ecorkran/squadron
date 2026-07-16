@@ -45,16 +45,29 @@ def _find_slice_branch(slice_number: int, cwd: str) -> str | None:
 def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
     """Find the merge commit for a slice branch on main.
 
+    Matches merge commit messages regardless of word order around the
+    slice number — e.g. both "Merge slice 303: ..." (message prose,
+    the actual convention real merge commits use on this project) and
+    "303-slice..." (branch-name convention). POSIX ERE has no word-boundary
+    escape, so number boundaries are anchored explicitly with
+    (^|[^0-9]) / ([^0-9]|$) to avoid slice 303 matching a commit about
+    slice 3033.
+
     Returns the commit hash or None if not found.
     """
     try:
+        grep_pattern = (
+            rf"slice[^0-9]{slice_number}([^0-9]|$)"
+            rf"|(^|[^0-9]){slice_number}-slice"
+        )
         result = subprocess.run(
             [
                 "git",
                 "log",
                 "--merges",
                 "--oneline",
-                f"--grep={slice_number}-slice",
+                "--extended-regexp",
+                f"--grep={grep_pattern}",
                 "main",
                 "-1",
             ],

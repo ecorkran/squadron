@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -74,6 +75,45 @@ class TestFindMergeCommit:
         ):
             result = _find_merge_commit(122, ".")
         assert result is None
+
+    @pytest.mark.parametrize(
+        ("message", "slice_number", "should_match"),
+        [
+            # Real convention: "Merge slice 303: judge-gated cycle conventions"
+            ("Merge slice 303: judge-gated cycle conventions", 303, True),
+            # Branch-name convention: "303-slice.foo"
+            ("Merge branch '303-slice.foo'", 303, True),
+            # Boundary false-positive: slice 303 must not match slice 3033
+            ("Merge slice 3033: unrelated work", 303, False),
+            ("Merge branch '3033-slice.unrelated'", 303, False),
+        ],
+    )
+    def test_grep_pattern_against_real_git(
+        self, message: str, slice_number: int, should_match: bool
+    ) -> None:
+        """Exercise the real `git log --grep` pattern, not a mocked subprocess.
+
+        A mock that only asserts on stdout-parsing can't catch a grep
+        pattern that never matches real commit messages (issue #14
+        follow-up regression: the merge-commit grep used the branch-name
+        word order "{n}-slice" while actual merge commits on this project
+        read "Merge slice {n}: ..." — the pattern silently never matched).
+        """
+        grep_pattern = (
+            rf"slice[^0-9]{slice_number}([^0-9]|$)"
+            rf"|(^|[^0-9]){slice_number}-slice"
+        )
+        # Use grep directly against the literal message to isolate pattern
+        # correctness from repository state (no real commit needed).
+        grep_result = subprocess.run(
+            ["grep", "-E", grep_pattern],
+            input=message,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        matched = grep_result.returncode == 0
+        assert matched == should_match
 
 
 class TestResolveSliceDiffRange:

@@ -689,6 +689,31 @@ class TestLocationDiffMembershipAndPathExistence:
             parse_review_output(text, "arch", {}, cwd=tmp_path)
         assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
 
+    def test_trailing_annotation_after_path_is_not_part_of_path(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Real model output sometimes appends prose after a bare filename
+        # citation, e.g. "foo.py (and related)" with no ':line' suffix.
+        # The trailing annotation must not be treated as part of the path,
+        # or a genuinely-valid citation triggers false-positive warnings.
+        (tmp_path / "tests" / "cli" / "commands").mkdir(parents=True)
+        (tmp_path / "tests" / "cli" / "commands" / "test_run_pipeline_sdk.py").write_text("# t\n")
+        text = (
+            "## Summary\nPASS\n\n"
+            "### [PASS] Load test assertions present\n"
+            "location: tests/cli/commands/test_run_pipeline_sdk.py (and related)\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(
+                text,
+                "code",
+                {},
+                diff_files={"tests/cli/commands/test_run_pipeline_sdk.py"},
+                cwd=tmp_path,
+            )
+        assert not [r for r in caplog.records if r.name == "squadron.review.parsers"]
+
     def test_unverified_skips_both_checks(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:

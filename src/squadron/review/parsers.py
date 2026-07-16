@@ -28,11 +28,14 @@ UNVERIFIED_LOCATION = "unverified"
 _PLACEHOLDER_LOCATIONS: frozenset[str] = frozenset({"", "-", "global", "n/a", "none"})
 
 # Captures the path portion of a location value: everything up to (but not
-# including) the first ':', '#', or end of string. Used by diff-membership
-# and path-existence checks. Returns None for UNVERIFIED_LOCATION callers
-# (handled by guard at the call site) and for any value that does not
-# look like a path (e.g. starts with '<' from leftover prompt examples).
-_LOCATION_PATH_RE = re.compile(r"^([^:#<>\s][^:#]*)")
+# including) the first ':', '#', whitespace, or end of string. Used by
+# diff-membership and path-existence checks. Stopping at whitespace drops
+# trailing prose annotations models sometimes append (e.g. "foo.py (and
+# related)"), which is never a valid path character on any target platform.
+# Returns None for UNVERIFIED_LOCATION callers (handled by guard at the call
+# site) and for any value that does not look like a path (e.g. starts with
+# '<' from leftover prompt examples).
+_LOCATION_PATH_RE = re.compile(r"^([^:#<>\s][^:#\s]*)")
 
 _VERDICT_MAP: dict[str, Verdict] = {
     "PASS": Verdict.PASS,
