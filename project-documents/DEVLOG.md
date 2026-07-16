@@ -10,6 +10,24 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260716 (2)
+
+### Slice 304: Gate Composition — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/304-tasks.gate-composition.md` (312 lines, within target) from the review-addressed design. 13 tasks in dependency order, each impl task followed immediately by its test (test-with pattern): reduction core (T1–T2) → executor read surface (T3–T4) → gate action (T5–T6) → gate step (T7–T8) → example pipeline + drives-checkpoint + boundary tests (T9–T11) → authoring guide (T12) → commit (T13).
+
+**Grounded every code anchor against on-disk source before writing tasks, so the junior AI does not re-derive them.** Verified and carried into the task file's grounding notes: the `Action`/`StepType` protocol method sets (`actions/protocol.py`, `steps/protocol.py` — both confirmed present); `register_action`/`register_step_type` signatures; the `ActionType`/`StepTypeName`/`Provenance` `StrEnum`s that each need a new `GATE`/`COMPOSED` member; and — the load-bearing one — that `StepResult` (`executor.py:244`) carries `step_name` + `action_results` and the executor already accumulates a `step_results` list, but `ActionContext` (`models.py:54`) exposes **only** the lossy action-keyed `prior_outputs`, no step-keyed view. That gap is exactly what T3 fills.
+
+**T3 (the F002-flagged executor touch) is written as a STOP-gated task, not a normal one.** It carries an explicit stop-gate: the step-keyed read surface must be a *pure additive* field on `ActionContext` populated from the already-accumulated `step_results`, changing no `prior_outputs` semantics and touching no checkpoint code, and it needs up-front 140 sign-off because `prior_outputs` is 140-owned. If a pure addition proves impossible, the task says STOP and escalate to option (b) per the design's escalation boundary — the task cannot silently absorb a checkpoint change. This mirrors the F002 resolution: the executor touch is 140-adjacent, not in-scope-by-default.
+
+**F001 (None-verdict) is pinned across three tasks:** `reduce_verdicts` normalizes `None → UNKNOWN` before ranking (T1), the 4×4 cross-product plus all `None` cases are required tests (T2), and the gate action's WARNING+ log on a `None`/unresolved leg is asserted via `caplog` (T6). The escalation-to-140 boundary test (T11) is a first-class required task encoding boundary condition (3) — a policy needing the checkpoint to see both raw verdicts distinctly is asserted *not* expressible via the single reduced gate and documented as a 140 concern.
+
+**Real-path corrections while grounding:** the authoring-guide target is `docs/PIPELINES.md` (slice 152's guide, where 303's `Judge-Gated Cycles` section already lives) — T12 names it and cross-links, rather than pointing at a vague "same doc as 303." Verification section maps each task back to the slice's FR1–FR4 and F001/F002 so the coverage is auditable.
+
+**Next:** Phase 6 (implementation) for slice 304 — create branch `304-slice.gate-composition` from the target (integration branch unset → `main`), start T1. Design and tasks are both review-addressed; the one open coordination is the T3 140 sign-off, to be obtained at implementation.
+
+---
+
 ## 20260716
 
 ### Slice 304: Gate Composition — Slice Design Complete
