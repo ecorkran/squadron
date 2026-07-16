@@ -10,6 +10,7 @@ from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_t
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
+from squadron.review.git_utils import DiffRangeUnresolvedError
 from squadron.review.persistence import (
     CfClientProtocol,
     SliceInfo,
@@ -66,7 +67,12 @@ class ReviewAction:
     async def execute(self, context: ActionContext) -> ActionResult:
         try:
             return await self._review(context)
-        except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
+        except (
+            ModelResolutionError,
+            ModelPoolNotImplemented,
+            KeyError,
+            DiffRangeUnresolvedError,
+        ) as exc:
             _logger.warning(
                 "review: step %s failed before/during template resolution: %s",
                 context.step_name,

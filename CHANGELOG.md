@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `sq _summary-instructions` (used by `/sq:summary`) no longer leaves `{keep_section}`/`{summarize_section}` as literal unresolved text in rendered output.
+- `sq review code <slice>` no longer silently guesses a diff range from a commit-message text search when no local branch or merge commit can be found for the slice — a wrong guess could pull an unrelated, already-merged prior slice's code into the review. It now fails with a clear error and asks you to pass `--diff` explicitly.
 
 ### Added
 - **`judge-cycle`** — a new built-in reference pipeline for the judge-gated review→fix→re-review cycle: a bounded `loop` that fixes an artifact, re-judges it, auto-advances once the judge's score clears its threshold, and escalates to a human (`PAUSED`, with the last score and findings visible) if it never does. See the new "Judge-Gated Cycles" section in `docs/PIPELINES.md` for the convention, including the advisory-only (always-escalate) mode for weak-ground-truth judges.

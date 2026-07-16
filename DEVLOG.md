@@ -12,6 +12,74 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260716 (1)
+
+### Issue #14: code review pipeline misfiled findings against a prior slice's merged code (3x across 2 slices)
+
+Traced the root cause to `resolve_slice_diff_range()`'s third fallback
+path, `_find_commit_range()`
+([src/squadron/review/git_utils.py](src/squadron/review/git_utils.py),
+now removed). It ran `git log --all --grep=\b{N}\b` — an unscoped
+word-boundary search over commit-message *prose*, across all refs —
+whenever both the local slice branch and a `--merges` merge commit
+could not be found. Path 2 (`_find_merge_commit`) only matches true
+two-parent merge commits, so any project using squash-merge (GitHub's
+default PR button) never produces one, making path 3 the de facto
+primary fallback the moment a slice branch is cleaned up post-merge.
+
+Verified the collision live against squadron's own history:
+`--grep='\b124\b'` matched not just slice-124 implementation commits
+but unrelated ones like "docs: mark slice 124 as superseded" and a
+reindexing commit — some **older** than slice 124's real work. Since
+the function took the oldest match as the range start, a stray older
+collision silently widened the "diff" to include everything committed
+since, including an entirely different slice's already-merged code —
+exactly the reported symptom (F001-F006 in the issue's slice-124
+occurrence cited files last touched by slice 122, not present in slice
+124's actual diff).
+
+Erik confirmed with a real commit-history excerpt that no regex over
+commit-message text can safely distinguish real slice-work commits
+from incidental mentions (e.g. `fd2469d docs: reconcile 300 initiative
+status to in_progress` — a bare number in an unrelated docs commit).
+Considered narrowing the grep pattern (e.g. matching the branch-name
+convention `{N}-slice` as a message substring) but disproved it against
+the same excerpt: commit messages don't echo branch names literally
+("slice 301", not "301-slice."), so a narrower pattern would just
+trade false positives for false negatives.
+
+Also confirmed with Erik that slice branches are not normally deleted
+before review completes in his workflow — so path 1 (`_find_slice_branch`)
+should fire in the healthy case. Why the reported slice-124 occurrence
+fell through to path 3 despite a branch reportedly existing at review
+time could not be confirmed from squadron's own repo — noted as an open
+verification item requiring the actual `grizcam_mobile_ios` repo state
+at review time, not blocking this fix.
+
+Fix: removed `_find_commit_range()` and path 3 entirely. When no local
+branch and no merge commit can be resolved,
+`resolve_slice_diff_range()` now raises `DiffRangeUnresolvedError`
+(new, in `git_utils.py`) instead of silently guessing or falling back
+to bare `--diff main`. Wired at both call sites: the CLI
+(`review.py:663`) catches it and reports via the existing
+`rprint("[red]Error: ...[/red]")` + `typer.Exit(code=1)` pattern used
+throughout that file; the pipeline action
+(`pipeline/actions/review.py`) added it to the existing named-exception
+tuple in `execute()`'s top-level handler (alongside `KeyError`), so it
+surfaces as a proper failed `ActionResult` with a `_logger.warning`
+instead of falling through to the generic `except Exception` catch-all.
+
+Updated `tests/review/test_git_utils.py`: removed `TestFindCommitRange`
+and `TestResolveSliceDiffRangeWithCommitGrep` (dead code coverage),
+replaced the old fallback-to-`"main"` test with one asserting
+`DiffRangeUnresolvedError` is raised. Verified live: direct call with
+an unresolvable slice number raises with a clear, actionable message.
+Full gate: 2133 tests passed (net -9: -14 dead, +1 new, plus 2 tests
+folded into fewer assertions), pyright strict 0 errors (project-wide
+run — a per-file pyright invocation on the test file alone showed
+pre-existing `reportPrivateUsage` noise unrelated to this change,
+confirmed present before this fix too), ruff clean. Closes #14.
+
 ## 20260715 (9)
 
 ### Issue #21: `{keep_section}`/`{summarize_section}` never resolved by `_summary-instructions`

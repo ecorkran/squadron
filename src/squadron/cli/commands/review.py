@@ -21,7 +21,11 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.models.aliases import resolve_model_alias
-from squadron.review.git_utils import find_git_root, resolve_slice_diff_range
+from squadron.review.git_utils import (
+    DiffRangeUnresolvedError,
+    find_git_root,
+    resolve_slice_diff_range,
+)
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.persistence import (
     TASKS_DIR,
@@ -660,7 +664,11 @@ def review_code(
         slice_info = _resolve_slice_number(slice_number)
         if not diff:
             resolved_cwd_for_diff = _resolve_cwd(cwd)
-            diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
+            try:
+                diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
+            except DiffRangeUnresolvedError as exc:
+                rprint(f"[red]Error: {exc}[/red]")
+                raise typer.Exit(code=1) from exc
 
     if not slice_info and not diff and not files:
         if slice_number is not None:
