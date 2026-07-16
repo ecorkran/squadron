@@ -7,6 +7,7 @@ dependencies: [302]
 interfaces: [140]
 dateCreated: 20260716
 dateUpdated: 20260716
+reviewsAddressed: [304-review.slice.gate-composition]
 status: not-started
 ---
 
@@ -121,6 +122,7 @@ principle (architecture, *thresholds*) and the checkpoint's own
 
 ```
 severity order (most severe first):  UNKNOWN  >  FAIL  >  CONCERNS  >  PASS
+None verdict  →  normalized to UNKNOWN  (before comparison)
 reduced verdict = the more severe of (judge_verdict, review_verdict)
 ```
 
@@ -128,6 +130,24 @@ reduced verdict = the more severe of (judge_verdict, review_verdict)
 - Any `FAIL` → `FAIL`; any `UNKNOWN` → `UNKNOWN` (cannot-judge dominates, so a
   broken judge never lets a passing review auto-advance, and vice-versa).
 - `PASS` + `CONCERNS` → `CONCERNS`.
+- **A `None` source verdict is normalized to `UNKNOWN` before the comparison.**
+  A named source step can resolve to an `ActionResult` whose `verdict` is `None`
+  — e.g. it ran a non-review action, or a review that produced no verdict. The
+  checkpoint's own `_find_review_verdict` *skips* `None` verdicts (it hunts for
+  the first non-`None`), but the gate **cannot** skip: a gate source that yielded
+  no verdict is a source that could not be judged, and silently dropping it would
+  let the *other* leg auto-advance a gate that was supposed to weigh both — the
+  exact silent-pass the initiative forbids. So `reduce_verdicts` maps `None →
+  UNKNOWN` on each leg *before* ranking, making a verdict-less source dominate
+  (most severe) rather than disappear. This is the fail-closed choice, consistent
+  with `UNKNOWN`-is-most-severe; it is **not** a fail-fast validation error,
+  because a gate source producing no verdict at runtime is an observable
+  cannot-judge outcome the checkpoint should gate on, not a pipeline-authoring
+  mistake to reject at load. (A *missing or misspelled* source step *name*, by
+  contrast, IS an authoring mistake — that is caught by gate-step validation, a
+  separate path; see the failure-mode table.) The `None → UNKNOWN` normalization
+  is unit-tested as its own case and logged at WARNING+ so a verdict-less gate
+  source is never silent.
 - **Ties are determinate.** When both legs carry the *same* severity, the reduced
   verdict is that shared value — most-severe-wins is idempotent on equal ranks, so
   `CONCERNS` + `CONCERNS` → `CONCERNS`, `FAIL` + `FAIL` → `FAIL`, etc. There is no
@@ -164,15 +184,34 @@ from `prior_outputs` alone. Two candidate resolutions, decided here:
   results keyed by **step**, which the global `prior_outputs` does not preserve
   (it is action-keyed and lossy across same-typed steps).
 
-  → **This is the point where option (a) touches the executor.** Exposing
-  per-step results to an action is a small, additive read-path addition (a
-  step-keyed view alongside the existing action-keyed `prior_outputs`), not a
-  change to how the checkpoint gates. **Assessment:** it is additive and within
-  300's scope *if* it is a pure read-surface addition. If, in Phase 6, exposing
-  step-keyed results cannot be done without altering `_find_review_verdict` or
-  the checkpoint's single-verdict contract, that is the signal that (a) is
-  insufficient and **(b) must be escalated as a coordinated 140 dependency** —
-  see *The escalation boundary* below.
+  → **This is the point where option (a) touches the executor — and this
+  executor touch is itself a candidate 140 coordination, not an unambiguously
+  in-scope 300 change.** The architecture defines 300's additive scope narrowly
+  as "not changing the *checkpoint* machinery"; it does not explicitly bless an
+  additive change to the *executor's result accumulation*. Exposing per-step
+  results to an action is a small, additive read-path addition (a step-keyed view
+  alongside the existing action-keyed `prior_outputs`) that leaves the checkpoint
+  and `_find_review_verdict` untouched — so it is *plausibly* within 300's spirit.
+  But because it modifies 140-owned executor code (`prior_outputs` lives in the
+  executor, slice 149/140), the honest classification is: **this is a 140-adjacent
+  change that 300 proposes to make additively, and it must be confirmed with the
+  140 owner before it lands, not assumed in-scope.** Two outcomes, both explicit
+  rather than silent:
+
+    - **Confirmed pure read-surface addition** (adds a step-keyed *view*, changes
+      no existing behavior, touches no checkpoint code): proceed as an additive
+      change with 140 sign-off recorded — this is the expected, default path.
+    - **Cannot be done without altering `_find_review_verdict`, the checkpoint's
+      single-verdict contract, or existing `prior_outputs` semantics**: option (a)
+      is insufficient; **(b) is escalated as a coordinated 140 dependency** — see
+      *The escalation boundary* below (this is condition 1 there).
+
+  The distinction from prior framing: the executor touch is not merely "in-scope
+  unless the downstream escalation conditions fire." It is a **140-adjacent change
+  requiring coordination up front**, whose *cheapest* resolution (pure read
+  surface) is additive and whose *expensive* resolution is the (b) escalation. The
+  slice does not claim unilateral authority to modify executor result
+  accumulation under 300's additive banner.
 
 The gate does **not** try to make two separate review steps survive under
 distinct keys in the existing `prior_outputs` — that is exactly the collision
@@ -262,7 +301,12 @@ only if any of these holds in Phase 6:
 
 1. Exposing per-step results to the gate action cannot be done as a pure
    additive read surface — i.e. it forces a change to `_find_review_verdict`'s
-   contract or the checkpoint's single-verdict behavior.
+   contract, the checkpoint's single-verdict behavior, or existing
+   `prior_outputs` semantics. (Note: the read-surface addition itself is
+   140-adjacent and requires up-front 140 sign-off regardless — see *Where the
+   two source results come from*; this condition is specifically about whether
+   that addition can stay *pure*, or must instead change existing behavior and
+   thereby become the full (b) escalation.)
 2. A required case emerges where the checkpoint itself (not an upstream action)
    must weigh two verdicts — e.g. two *independent* checkpoints, each gating on a
    different one of the two results, that cannot be expressed as one reduced
@@ -292,12 +336,26 @@ recognizes its own edge rather than silently overreaching.
   executor's `prior_outputs` accumulation, and the checkpoint — the machinery the
   gate composes with and the boundary it must not cross.
 
-### Coordinated dependency (conditional)
+### Coordinated dependencies with 140
 
-- **Initiative 140 — checkpoint multi-verdict support (Future Work 3).** Consumed
-  **only if** the escalation boundary above fires. This slice's default outcome
-  is that it does not fire and 140 is untouched; the dependency is named so its
-  possibility is not a surprise.
+Two distinct 140 touch-points, at different confidence levels — both named so
+neither is a silent absorption of 140-owned code:
+
+- **Expected (default path): the per-step result read surface.** Even the
+  in-scope, additive path modifies 140-owned executor code (`prior_outputs`
+  accumulation lives in the executor, slice 149/140). This slice proposes it as a
+  *pure read-surface addition* (a step-keyed view, no existing behavior changed,
+  no checkpoint code touched) — but that is a change to 140 territory and
+  **requires 140 sign-off before it lands**, not a unilateral 300 change. This is
+  the expected, default outcome; the coordination is lightweight (confirm the
+  addition is purely additive), but it is real and up front, not conditional.
+
+- **Conditional: checkpoint multi-verdict support (Future Work 3).** The heavier
+  140 change — extending the checkpoint to weigh multiple verdicts — is consumed
+  **only if** the escalation boundary fires (the read surface can't stay pure, or
+  a case needs the checkpoint itself to see both raw verdicts). The default
+  outcome is that this does *not* fire and the checkpoint stays untouched; it is
+  named so its possibility is not a surprise.
 
 ## Architecture
 
@@ -423,6 +481,10 @@ leaves all 300–303 pipelines untouched.
   **does not** — proving the reduced verdict, not either raw leg, drives the gate.
 - A test asserts (judge=UNKNOWN, review=PASS) reduces to `UNKNOWN` and the
   checkpoint fires — the no-silent-pass NFR under a broken judge leg.
+- A test asserts a source leg with `verdict=None` is normalized to `UNKNOWN`
+  (not skipped), reduces to `UNKNOWN`, fires the checkpoint, and logs at
+  WARNING+ — pinning the fail-closed handling of a verdict-less gate source and
+  the divergence from `_find_review_verdict`'s skip-`None` behavior.
 - No changes to `pyright` strict / `ruff` status.
 
 ### Integration Requirements
@@ -475,7 +537,8 @@ uv run pytest && uv run pyright && uv run ruff check
 | Failure mode | Handling | Outcome |
 |---|---|---|
 | One leg (judge or review) returns `UNKNOWN` | Reduction ranks `UNKNOWN` most severe | Reduced verdict `UNKNOWN`; checkpoint fires — never a silent pass |
-| A `gate` source step name is misspelled / missing | Gate action validates both `judge_from` / `review_from` resolve to a real prior review result; unresolved → validation error (fail fast), or a runtime `UNKNOWN` with a WARNING+ log if resolution fails at execute time | Observable failure, non-passing; no gate advances on an unresolved source |
+| A named source step exists and succeeded but its `ActionResult.verdict` is `None` (non-review action, or a review that produced no verdict) | `reduce_verdicts` normalizes `None → UNKNOWN` *before* ranking, and logs WARNING+ — unlike `_find_review_verdict`, the gate does **not** skip a `None` leg | Reduced verdict `UNKNOWN`; checkpoint fires — a verdict-less source dominates rather than vanishing, so it can never silently let the other leg advance |
+| A `gate` source step name is misspelled / missing | Gate-step *validation* (load-time) requires both `judge_from` / `review_from` name real prior steps → validation error, fail fast. If resolution nonetheless fails at execute time, the gate returns a runtime `UNKNOWN` with a WARNING+ log | Observable failure, non-passing; no gate advances on an unresolved source |
 | Both legs `PASS` | Reduction → `PASS` | Gate advances — the only advancing outcome, requiring *both* judgments to clear |
 | Per-step result read surface can't be added additively | Escalation boundary condition (1) fires | (b) raised as a coordinated 140 dependency; slice does not force a checkpoint change |
 | A required policy needs the checkpoint to see both raw verdicts | Escalation boundary condition (3) fires; boundary test encodes it | Documented as a 140 concern (Future Work 3), not smuggled in |
@@ -486,15 +549,22 @@ which requires *both* legs to be `PASS`. Any non-`PASS` on either leg — includ
 
 ### Technical Risks
 
-- **The one additive executor touch (per-step result read surface).** The gate
-  needs source results keyed by step, which the lossy action-keyed
-  `prior_outputs` does not preserve. Adding a step-keyed read view is the single
-  place this slice reaches into the executor. **Risk:** if it cannot be done as a
-  pure read-surface addition, option (a) is insufficient and the escalation
-  boundary fires. **Mitigation:** the boundary is a stated, checkable condition
-  (above); the slice escalates to 140 rather than distorting the checkpoint
-  contract. This is the architecture's anticipated edge, handled by the
-  prescribed escalation, not a surprise.
+- **The one executor touch (per-step result read surface) is 140-adjacent and
+  needs sign-off up front.** The gate needs source results keyed by step, which
+  the lossy action-keyed `prior_outputs` does not preserve. Adding a step-keyed
+  read view is the single place this slice reaches into the executor — and
+  `prior_outputs` is 140-owned. **This is not assumed in-scope under 300's
+  additive banner:** the default path proposes it as a *pure read-surface
+  addition* (a step-keyed view, no existing behavior changed, no checkpoint code
+  touched) requiring 140 confirmation before it lands — a lightweight but real,
+  up-front coordination. **Risk:** if it cannot be done purely additively, option
+  (a) is insufficient and the escalation boundary (condition 1) fires.
+  **Mitigation:** both outcomes are explicit — confirmed-pure-addition (default,
+  proceed with 140 sign-off) or escalate-to-(b) — and the boundary is a stated,
+  checkable condition; the slice coordinates with 140 rather than unilaterally
+  modifying executor result accumulation or distorting the checkpoint contract.
+  This is the architecture's anticipated edge, handled by explicit coordination,
+  not a surprise.
 
 ## Implementation Notes
 
