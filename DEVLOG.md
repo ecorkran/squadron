@@ -12,6 +12,42 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260715 (9)
+
+### Issue #21: `{keep_section}`/`{summarize_section}` never resolved by `_summary-instructions`
+
+Confirmed the issue's own diagnosis against current source: two independent
+render paths existed for compaction templates —
+`compaction_templates.render_instructions()`
+([src/squadron/pipeline/compaction_templates.py:83-116](src/squadron/pipeline/compaction_templates.py#L83-L116)),
+which computes `keep_section`/`summarize_section` from `keep`/`summarize`
+args, and `summary_render.resolve_template_instructions()`
+([src/squadron/pipeline/summary_render.py:22-41](src/squadron/pipeline/summary_render.py#L22-L41)),
+used by the `_summary-instructions` CLI command, which called
+`render_with_params()` directly and never computed those two placeholders
+at all — they fell through `LenientDict`'s missing-key handling and leaked
+into output as literal `{keep_section}` text.
+
+Checked `summary_instructions.py`'s CLI signature: no `--keep`/`--summarize`
+flags exist on this entry point, so `keep`/`summarize` can only ever be
+their defaults (empty list / `False`) here — ruling out "add CLI flags" as
+the fix and confirming the issue's own suggested direction (route through
+`render_instructions()`) was correct. Weighed against computing the two
+placeholders locally in `summary_render.py`: routing through
+`render_instructions()` keeps a single source of truth for which derived
+placeholders a compaction template can reference, at the cost of two unused
+`keep`/`summarize` parameters at this call site — preferred over
+duplicating the placeholder names in two files.
+
+Fix: `resolve_template_instructions()` now calls
+`render_instructions(template, pipeline_params=params)` instead of
+`render_with_params(template.instructions, params)` directly. Added
+`test_keep_section_placeholder_resolved_not_leaked` to
+`tests/pipeline/test_summary_render.py`, asserting `minimal-sdk.yaml`'s
+`{keep_section}` reference resolves rather than leaking. Verified live via
+`sq _summary-instructions minimal-sdk` — no leaked placeholders. Full gate:
+2142 tests passed (+1), pyright strict 0 errors, ruff clean. Closes #21.
+
 ## 20260715 (8)
 
 ### Issue #23: SDKExecutionSession.dispatch had the same no-separator/no-filter join as #22

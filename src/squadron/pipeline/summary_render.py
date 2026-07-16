@@ -16,7 +16,7 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.pipeline.compact_render import render_with_params
-from squadron.pipeline.compaction_templates import load_compaction_template
+from squadron.pipeline.compaction_templates import load_compaction_template, render_instructions
 
 
 def resolve_template_instructions(
@@ -38,7 +38,11 @@ def resolve_template_instructions(
     """
     template = load_compaction_template(template_name)
     params = gather_cf_params(cwd)
-    return render_with_params(template.instructions, params)
+    # This entry point has no --keep/--summarize CLI flags, so keep/summarize
+    # are always their defaults (empty/False) — routed through
+    # render_instructions() so keep_section/summarize_section resolve to ""
+    # instead of leaking as literal placeholder text (issue #21).
+    return render_instructions(template, pipeline_params=params)
 
 
 def resolve_template_suffix(

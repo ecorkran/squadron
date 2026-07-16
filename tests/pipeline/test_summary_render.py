@@ -70,6 +70,12 @@ class TestResolveTemplateInstructions:
         assert isinstance(result, str)
         assert len(result) > 0
 
+    def test_keep_section_placeholder_resolved_not_leaked(self) -> None:
+        """minimal-sdk.yaml references {keep_section}; it must resolve to
+        empty text rather than leak as a literal placeholder (issue #21)."""
+        result = resolve_template_instructions("minimal-sdk")
+        assert "{keep_section}" not in result
+
 
 # ---------------------------------------------------------------------------
 # gather_cf_params
