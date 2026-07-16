@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 300-arch.eval-actions-llm-as-judge-scoring.md
 project: squadron
 dateCreated: 20260604
-dateUpdated: 20260705
+dateUpdated: 20260716
 status: in_progress
 ---
 

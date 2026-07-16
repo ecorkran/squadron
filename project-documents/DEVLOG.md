@@ -10,6 +10,28 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260716
+
+### Slice 304: Gate Composition — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/304-slice.gate-composition.md` from the slice-plan entry (#5) in `300-slices.eval-actions-llm-as-judge-scoring.md`. This is the initiative's integration slice: resolve how a judge result and a standard review result compose into a single checkpoint gate. The architecture prescribed the *decision procedure* (prefer option a, upstream reduction, additive; escalate option b, checkpoint multi-verdict, as a 140 dependency if a is insufficient) but not the answer. The design **commits to option (a)** and proves it sufficient, grounded against the real machinery rather than the architecture's prose.
+
+**The decisive constraint was verified in code, not assumed.** The checkpoint is single-verdict-per-step for a *mechanical* reason: (1) the executor accumulates results as `prior_outputs[f"{action_type}-{idx}"]` with `idx` resetting per step (`executor.py:880-883`), and a `review` step expands to exactly one review action (`steps/review.py:69-76`) — so *every* standalone review step, judge or standard, writes the same key `review-0` and later steps **overwrite** earlier ones in the global map; (2) `_find_review_verdict` returns the *first* non-`None` verdict in reverse insertion order (`checkpoint.py:28-37`). Both a judge result (threshold-derived verdict) and a standard review (model verdict) carry a non-`None` verdict, so the checkpoint picks exactly one — whichever ran last — and structurally cannot combine two separately-stepped results. This is precisely why combining two *separate* steps' verdicts is option (b)/140 territory: it requires the checkpoint to look past a single key. Option (a) sidesteps it by reducing to one verdict *upstream*, in the same step as the checkpoint.
+
+**Design: a `gate` reduce action + `gate` step (both additive registrations).** The gate step names its two source steps (`judge_from` / `review_from`), the gate action reduces their verdicts by a documented **most-severe-wins** rule (`UNKNOWN > FAIL > CONCERNS > PASS`, `UNKNOWN` ranked most severe deliberately to preserve the no-silent-pass NFR — a broken judge leg must dominate a passing review leg), and the gate step expands to `[gate, checkpoint?]` so the reduced verdict and the checkpoint land in the **same step** — the one place a checkpoint can read the gate's output via the unchanged `_find_review_verdict`. New `Provenance.COMPOSED` value; both raw verdicts preserved on the gate result's metadata for auditability. `_find_review_verdict` and the checkpoint are **not modified** — that is the whole point of option (a), and any need to modify them is the escalation signal.
+
+**The escalation boundary (a → b) is a stated, checkable rule, not a mid-Phase-6 judgment call.** Option (a) is declared insufficient and (b) escalated to 140 iff, in implementation: (1) exposing per-step results to the gate action can't be done as a pure additive read surface without altering the checkpoint's single-verdict contract; (2) a required case needs the checkpoint itself (not an upstream action) to weigh two verdicts; or (3) the reduction can't be a pure function of the two verdicts because a policy needs the checkpoint to branch on *which* leg produced the severity. None holding → (a) stands, 140 untouched (the default, shipped outcome). The required **escalation-to-140 boundary test** encodes condition (3): it asserts a policy needing both raw verdicts seen distinctly is *not* expressible via the single reduced gate and is documented as a 140 concern — so the slice recognizes its own edge rather than silently overreaching.
+
+**The one additive executor touch is named as the risk.** The gate needs source results keyed by *step*, which the lossy action-keyed `prior_outputs` does not preserve (both legs clobbered `review-0`). Adding a step-keyed read view is the single place the slice reaches into the executor; if it can't be a pure read-surface addition, the escalation boundary fires. This is the architecture's anticipated edge, handled by the prescribed escalation.
+
+**Verification Walkthrough is a Phase-4 draft** (marked as such) — the 4×4 reduction cross-product, drives-checkpoint, unknown-dominates, boundary-requires-140, and non-composed-unchanged tests are specified; actual commands/output to be confirmed in Phase 6.
+
+**Slice status:** design is `not-started` (Phase 4 artifact exists; implementation not begun). This slice completes the 300 initiative's gating story once implemented — 300/301/302/303 are all `complete`.
+
+**Next:** Phase 5 (task breakdown) for slice 304, or PM direction. No branch created (planning work commits to the current target per the git rules).
+
+---
+
 ## 20260710
 
 ### Slice 909: Pipeline Phase-Step Correctness — Implementation Complete
