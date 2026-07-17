@@ -13,6 +13,7 @@ projectState: >
   No branch yet — created at Phase 6 start per git rules.
 dateCreated: 20260716
 dateUpdated: 20260716
+reviewsAddressed: [304-review.tasks.gate-composition]
 status: not_started
 ---
 
@@ -115,6 +116,13 @@ these:
   verdict-less leg dominates rather than vanishing.
 - Effort: 2/5
 
+- [ ] **T2c. Commit the reduction core** *(after T2 green)*
+  - [ ] `uv run ruff format`, run the reduction tests, then commit
+    (`feat: add pure verdict reduction and composed provenance for gate`).
+    This deliverable is self-contained (pure function + enum), independently
+    bisectable.
+  - Effort: 1/5
+
 ## T3. Executor step-keyed read surface (F002 — 140-adjacent, needs sign-off)
 
 > **STOP-gate:** this task modifies 140-owned executor code. It must be a **pure
@@ -155,6 +163,14 @@ these:
 - [ ] **Success:** both source results are recoverable by step name; no existing
   executor/checkpoint test changes behavior.
 - Effort: 2/5
+
+- [ ] **T4c. Commit the executor read surface** *(after T4 green, with 140 sign-off)*
+  - [ ] `uv run ruff format`, run the full executor suite, then commit
+    (`feat: add step-keyed result view to ActionContext for gate composition`).
+  - [ ] The commit body **must** record the 140 sign-off for the `prior_outputs`
+    read-surface addition (per T3's STOP-gate). If sign-off is not yet obtained,
+    do not commit — hold the branch and escalate.
+  - Effort: 1/5
 
 ## T5. `gate` action
 
@@ -203,24 +219,62 @@ these:
     `checkpoint:` key is present — mirroring `ReviewStepType.expand`
     (`steps/review.py:69-76`) so the gate's reduced verdict and the checkpoint
     land in the **same step**.
-  - `validate(config)`: require `judge_from` and `review_from`; validate they are
-    strings (step names). Optionally validate `policy` against the known set
-    (default `most-severe`; only one policy exists this slice — do not build a
-    policy registry with a single entry, but keep the key so the rule is named).
+  - `validate(config)`: this is the `StepType.validate(config)` hook, which sees
+    **only this step's own config** (per the protocol) — so it validates
+    *presence and type* here: `judge_from` and `review_from` required and
+    strings, `policy` (if present) is the known value (`most-severe`; only one
+    policy exists — keep the key so the rule is named, do not build a
+    single-entry registry). It **cannot** check that the named steps exist —
+    that is a cross-step check and belongs in the loader (T7b), not here.
 - [ ] `register_step_type(StepTypeName.GATE, GateStepType())`.
 - [ ] **Success:** a `gate:` step loads and validates via the existing loader;
   it expands to `[gate]` or `[gate, checkpoint]`.
 - Effort: 3/5
 
-## T8. Test the `gate` step *(test-with T7)*
+## T7b. Loader-level cross-step validation of `judge_from` / `review_from` (F005 — fail-fast)
+
+> The design's failure-mode table promises a misspelled/missing source step name
+> is caught at **load time**, failing fast — not deferred to the execute-time
+> `UNKNOWN` fallback (T5). A step type's own `validate` cannot do this (it sees
+> only its own config, T7); the check must live in the loader, which has all
+> steps in scope.
+
+- [ ] In `src/squadron/pipeline/loader.py`, in `validate_pipeline` (line 147; the
+  `for step in definition.steps:` loop at line 184 already has all steps in
+  scope), add a gate cross-reference check mirroring `_validate_review_template`
+  (line 210): for a `gate` step, verify `judge_from` and `review_from` each name
+  a step that **appears earlier** in `definition.steps` (a *prior* step — a gate
+  cannot reference a step that runs after it). Emit a `ValidationError` naming the
+  offending key and value when not found.
+- [ ] Keep the rule DRY — a small helper `_validate_gate_references(step,
+  prior_step_names, errors)` called from the loop, consistent with the existing
+  `_validate_*` helpers.
+- [ ] **Success:** a `gate` step naming a nonexistent or later step fails
+  `validate_pipeline` with a clear error at load time; a gate naming two real
+  prior steps validates clean.
+- Effort: 2/5
+
+## T8. Test the `gate` step and loader validation *(test-with T7, T7b)*
 
 - [ ] In `test_gate.py` (or a loader-integration test), assert:
   - `expand` produces `[gate]` with no `checkpoint:`, and `[gate, checkpoint]`
     with one — checkpoint trigger threaded through.
-  - `validate` returns an error when `judge_from` or `review_from` is missing.
-  - A minimal `gate` pipeline loads/validates with no new-registration errors.
-- [ ] **Success:** expansion, validation, and load all pass.
+  - step-type `validate` returns an error when `judge_from` or `review_from` is
+    missing or non-string (own-config check).
+  - **loader `validate_pipeline` (F005):** a `gate` naming a **nonexistent** step
+    → validation error at load time; a `gate` naming a **later** step → error; a
+    `gate` naming two real prior steps → clean. This proves the fail-fast promise,
+    distinct from T5's execute-time `UNKNOWN` fallback.
+  - A minimal valid `gate` pipeline loads/validates with no new-registration
+    errors.
+- [ ] **Success:** expansion, own-config validation, and loader cross-step
+  validation all pass; the bad-reference cases fail at load, not execute.
 - Effort: 2/5
+
+- [ ] **T8c. Commit the gate action + step + validation** *(after T8 green)*
+  - [ ] `uv run ruff format`, run the gate action/step/loader tests, then commit
+    (`feat: add gate action and step type with loader cross-step validation`).
+  - Effort: 1/5
 
 ## T9. Example composing pipeline
 
@@ -242,8 +296,16 @@ these:
     on `on-concerns`.
   - gate over (judge=PASS, review=PASS) → checkpoint does **not** fire.
   - gate over (judge=UNKNOWN, review=PASS) → checkpoint **fires** (no silent pass).
+  - **(F003) end-to-end `None` leg:** a source leg with `verdict=None` →
+    normalized to `UNKNOWN` → reduced `UNKNOWN` → the same-step checkpoint
+    **fires**. This exercises the fail-closed path *through the checkpoint*, not
+    just at the action level (T6). Assert the WARNING+ log is emitted on this
+    path too. This closes the gap between T6 (action-level normalization + log)
+    and T10 (checkpoint firing for fixed verdicts) — neither alone proves a
+    `None` input fires the gate end-to-end.
 - [ ] **Success:** the gate's reduced verdict, not either source leg alone,
-  determines whether the checkpoint pauses.
+  determines whether the checkpoint pauses — including a `None`-leg source, which
+  fires the checkpoint fail-closed.
 - Effort: 2/5
 
 ## T11. Escalation-to-140 boundary test *(required by success criteria)*
@@ -275,16 +337,24 @@ these:
   reading the slice design, and knows the 140 boundary.
 - Effort: 2/5
 
-## T13. Commit
+## T13. Final validation + example-pipeline & docs commit
+
+> Commits are distributed across deliverables (F004): the reduction core (T2c),
+> executor read surface (T4c), and gate action+step (T8c) are each already
+> committed as validated. This task commits the remaining deliverable (example
+> pipeline + boundary test + authoring guide) and runs the full-suite gate.
 
 - [ ] `uv run ruff format`, then `uv run pytest && uv run pyright && uv run ruff
-  check` — all green (new gate tests included; pyright strict, ruff clean).
+  check` — all green across the whole suite (all gate tests included; pyright
+  strict, ruff clean).
 - [ ] Confirm **non-composed** pipelines are byte-for-byte unchanged (existing
   checkpoint tests pass unmodified — success criterion #2).
-- [ ] Commit from project root
-  (`feat: add gate action/step for judge+review composition (slice 304)`).
-- [ ] If the T3 read-surface addition required 140 sign-off, note it in the
-  commit body and the DEVLOG.
+- [ ] Commit the example pipeline, boundary test, and authoring-guide section
+  from project root
+  (`docs: add gate composition example pipeline and authoring guide (slice 304)`).
+- [ ] Verify the branch history reads as four coherent commits (reduction,
+  read-surface w/ 140 sign-off note, gate action+step, example+docs) — bisectable,
+  not one monolithic delta.
 - Effort: 1/5
 
 ---
@@ -295,8 +365,23 @@ these:
 - FR2 (non-composed checkpoint unchanged): T3/T4 regression, T13.
 - FR3 (option-b need escalated explicitly, not silent): T11.
 - FR4 (composition tested incl. escalation boundary): T2, T6, T8, T10, T11.
-- F001 (None-verdict fail-closed): T1, T2, T6.
-- F002 (executor touch is 140-adjacent, up-front sign-off): T3 STOP-gate, T13.
+- F001 slice-design (None-verdict fail-closed): T1, T2, T6, **and T10 end-to-end
+  through the checkpoint** (tasks-review F003).
+- F002 slice-design (executor touch is 140-adjacent, up-front sign-off):
+  T3 STOP-gate, T4c sign-off note.
+
+**Tasks-review concerns (kimi-k2.6, CONCERNS) addressed:**
+- **F003** (no end-to-end `None`→checkpoint test): added the `None`-leg
+  end-to-end case to T10 — normalizes to `UNKNOWN`, reduces to `UNKNOWN`, fires
+  the checkpoint, WARNING+ logged; closes the T6↔T10 gap.
+- **F004** (commits batched at the end): commits distributed across the four
+  deliverables — T2c (reduction), T4c (read surface + sign-off note), T8c (gate
+  action+step), T13 (example + docs); branch reads as four bisectable commits.
+- **F005** (gate step omitted prior-step existence check): added T7b — loader
+  `validate_pipeline` cross-checks `judge_from`/`review_from` name real *prior*
+  steps (fail-fast at load), since a step type's own `validate` sees only its own
+  config; T8 asserts the load-time failure, distinct from T5's execute-time
+  `UNKNOWN`.
 
 ## Notes for the implementer
 
