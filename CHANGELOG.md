@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`judge-cycle`** — a new built-in reference pipeline for the judge-gated review→fix→re-review cycle: a bounded `loop` that fixes an artifact, re-judges it, auto-advances once the judge's score clears its threshold, and escalates to a human (`PAUSED`, with the last score and findings visible) if it never does. See the new "Judge-Gated Cycles" section in `docs/PIPELINES.md` for the convention, including the advisory-only (always-escalate) mode for weak-ground-truth judges.
+- **`gate` step** — compose a judge verdict and a standard review verdict into a single checkpoint gate. Reduces both by most-severe-wins (a broken or `UNKNOWN` leg always dominates a passing one — never a silent pass) and gates on the combined result, with both raw verdicts preserved for auditing. See the new "Composing a judge and a review at one gate" section in `docs/PIPELINES.md`, and the `compose-gate-example` built-in pipeline for the reference shape.
 
 ### Fixed
 - Reviews now fail immediately with a clear error when the `input` or `against` document doesn't exist on disk (stale path, typo, or an artifact a prior step never wrote), instead of silently proceeding without that document and letting the model produce a fabricated verdict. Applies to `sq review slice|tasks|arch` and pipeline review steps; a warning is also logged if a missing document is ever skipped at the prompt-injection layer. Closes [#18](https://github.com/ecorkran/squadron/issues/18).

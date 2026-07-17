@@ -3,8 +3,8 @@ docType: slice-plan
 parent: 300-arch.eval-actions-llm-as-judge-scoring.md
 project: squadron
 dateCreated: 20260604
-dateUpdated: 20260716
-status: in_progress
+dateUpdated: 20260717
+status: complete
 ---
 
 # Slice Plan: Intrinsic LLM Judging & Scoring
@@ -79,7 +79,7 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
 
 ## Integration Work
 
-5. [ ] **(304) Gate Composition** — Resolve and implement how a judge result and a standard review result compose into a single checkpoint gate. **Prefer (a): compose upstream of the checkpoint** — reduce judge + review into one verdict before the checkpoint sees it (additive, within 300's scope). The checkpoint machinery is single-verdict-per-step today (`_find_review_verdict` returns the first non-`None` verdict), so any composition needing *two* verdicts considered together would require **(b): extending the checkpoint to accept multiple verdicts — a 140 change, explicitly out of 300's additive scope**. This slice must pick (a) where possible and escalate (b) as a coordinated 140 dependency if (a) proves insufficient, rather than silently absorbing the change.
+5. [x] **(304) Gate Composition** — Resolve and implement how a judge result and a standard review result compose into a single checkpoint gate. **Prefer (a): compose upstream of the checkpoint** — reduce judge + review into one verdict before the checkpoint sees it (additive, within 300's scope). The checkpoint machinery is single-verdict-per-step today (`_find_review_verdict` returns the first non-`None` verdict), so any composition needing *two* verdicts considered together would require **(b): extending the checkpoint to accept multiple verdicts — a 140 change, explicitly out of 300's additive scope**. This slice must pick (a) where possible and escalate (b) as a coordinated 140 dependency if (a) proves insufficient, rather than silently absorbing the change.
    - **Value:** Architectural enablement — closes the cross-cutting question of combining judge and review judgments at a gate; completes the initiative's gating story.
    - **Success Criteria:**
      - A judge result and a review result compose into one checkpoint gate via an upstream reduction (option a), with the reduction rule documented.

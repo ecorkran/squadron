@@ -1,4 +1,4 @@
-The minute↔daily agreement risk you mentioned is a different and real concern (two independent fetches of the same underlying reality), but it's out of scope for 162 — that's a cross-source reconciliation audit, worth its own future-work item. ---
+---
 docType: slice-design
 slice: gate-composition
 project: squadron
@@ -6,9 +6,9 @@ parent: 300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [302]
 interfaces: [140]
 dateCreated: 20260716
-dateUpdated: 20260716
+dateUpdated: 20260717
 reviewsAddressed: [304-review.slice.gate-composition]
-status: not-started
+status: complete
 ---
 
 # Slice Design: Gate Composition
@@ -494,40 +494,51 @@ leaves all 300–303 pipelines untouched.
 
 ## Verification Walkthrough
 
-> Draft — to be confirmed and corrected against actual output during Phase 6, per
-> the process guide (this is the demo script, refined after implementation).
+> Confirmed against actual output during Phase 6 implementation (all commands
+> run from the project root, on branch `304-slice.gate-composition`).
 
 ```bash
 # 1. The gate action/step register and a composing pipeline validates.
 uv run sq run compose-gate-example --validate
-# Expected: Pipeline 'compose-gate-example' is valid.
+# Actual: Pipeline 'compose-gate-example' is valid.
 
 # 2. Reduction is a pure, exhaustively-tested function.
 uv run pytest tests/pipeline/test_gate.py -k reduce -v
-# Expected: the full 4×4 verdict cross-product asserts most-severe-wins,
-#           UNKNOWN dominating, two-PASS → PASS.
+# Actual: 31 passed — the full 4x4 verdict cross-product (test_most_severe_wins),
+#         diagonal ties, and None-normalization cases (test_none_dominates_every_verdict)
+#         plus GateAction's reduce-driven execute cases.
 
 # 3. The reduced verdict — not either raw leg — drives the checkpoint.
-uv run pytest tests/pipeline/test_gate.py -k drives_checkpoint -v
-# Expected: (PASS, CONCERNS) fires on-concerns; (PASS, PASS) does not.
+# Caveat: the class name, not a "drives_checkpoint" substring, is the filter —
+# the actual test class is TestDrivesCheckpoint.
+uv run pytest tests/pipeline/test_gate.py -k TestDrivesCheckpoint -v
+# Actual: 4 passed — test_pass_and_concerns_fires_on_concerns (fires),
+#         test_both_pass_does_not_fire (skips), test_judge_unknown_review_pass_fires
+#         (fires, no-silent-pass), test_none_leg_normalizes_and_fires_with_warning
+#         (F003 end-to-end None case, fires + WARNING logged).
 
 # 4. No-silent-pass under a broken judge leg.
-uv run pytest tests/pipeline/test_gate.py -k unknown_dominates -v
-# Expected: (UNKNOWN, PASS) → reduced UNKNOWN → checkpoint fires.
+# Caveat: the actual test name is test_judge_unknown_review_pass_fires, not
+# "unknown_dominates" — use the exact name below.
+uv run pytest tests/pipeline/test_gate.py -k test_judge_unknown_review_pass_fires -v
+# Actual: 1 passed — (judge=UNKNOWN, review=PASS) → reduced UNKNOWN → checkpoint fires.
 
 # 5. The escalation-to-140 boundary is recognized, not overreached.
 uv run pytest tests/pipeline/test_gate.py -k boundary_requires_140 -v
-# Expected: a policy needing the checkpoint to branch on both raw verdicts
-#           distinctly is asserted NOT expressible via the single reduced gate
-#           and documented as a 140 concern.
+# Actual: 1 passed — test_boundary_requires_140 asserts a policy needing the
+#         checkpoint to branch on both raw verdicts distinctly is NOT
+#         expressible via the single reduced gate (checkpoint reads only
+#         .verdict, never .metadata) and is documented as a 140 concern.
 
 # 6. Non-composed pipelines are byte-for-byte unchanged.
 uv run pytest tests/pipeline -k checkpoint -v
-# Expected: all pre-existing checkpoint tests pass unmodified.
+# Actual: 83 passed — every pre-existing checkpoint test (actions, prompt
+#         renderer, sdk integration, state, summary) passes unmodified.
 
 # 7. Full regression + static analysis.
 uv run pytest && uv run pyright && uv run ruff check
-# Expected: green across the board; new gate tests included.
+# Actual: 2198 passed, 2 skipped (pre-existing, unrelated); pyright 0 errors;
+#         ruff all checks passed.
 ```
 
 ## Risk Assessment

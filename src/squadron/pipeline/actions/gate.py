@@ -11,6 +11,9 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 
 _logger = logging.getLogger(__name__)
 
+DEFAULT_GATE_POLICY = "most-severe"
+VALID_GATE_POLICIES = {DEFAULT_GATE_POLICY}
+
 
 class _Severity(IntEnum):
     """Verdict severity ranking, most severe first (highest value = most severe).
@@ -79,6 +82,15 @@ class GateAction:
     async def execute(self, context: ActionContext) -> ActionResult:
         judge_from = str(context.params.get("judge_from", ""))
         review_from = str(context.params.get("review_from", ""))
+        policy = str(context.params.get("policy", DEFAULT_GATE_POLICY))
+
+        if policy not in VALID_GATE_POLICIES:
+            _logger.warning(
+                "gate: unknown policy '%s'; falling back to '%s'",
+                policy,
+                DEFAULT_GATE_POLICY,
+            )
+            policy = DEFAULT_GATE_POLICY
 
         judge_result = context.step_outputs.get(judge_from)
         review_result = context.step_outputs.get(review_from)
@@ -108,8 +120,17 @@ class GateAction:
                 review_from,
             )
 
+        # Only one policy exists today (most-severe-wins, applied by
+        # reduce_verdicts unconditionally) — policy is validated and recorded
+        # for auditability rather than dispatched on, per the project rule
+        # against building a single-entry registry ahead of a second caller.
         reduced = reduce_verdicts(judge_verdict, review_verdict)
 
+        # success=True regardless of the reduced verdict: it reports that the
+        # gate action itself executed and produced a verdict, not that the
+        # verdict passed — mirroring CheckpointAction, whose fired/skipped
+        # results are both success=True. The checkpoint step (if configured)
+        # is what acts on a non-passing `verdict`.
         return ActionResult(
             success=True,
             action_type=self.action_type,
@@ -120,6 +141,7 @@ class GateAction:
             verdict=reduced,
             provenance=Provenance.COMPOSED,
             metadata={
+                "policy": policy,
                 "judge_verdict": _normalize(judge_verdict),
                 "review_verdict": _normalize(review_verdict),
                 "judge_score": judge_result.score if judge_result is not None else None,

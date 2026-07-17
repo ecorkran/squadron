@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from squadron.pipeline.actions.checkpoint import CheckpointTrigger
+from squadron.pipeline.actions.gate import VALID_GATE_POLICIES
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
-
-_VALID_POLICIES = {"most-severe"}
 
 
 class GateStepType:
@@ -45,13 +44,13 @@ class GateStepType:
                 )
 
         policy = cfg.get("policy")
-        if policy is not None and policy not in _VALID_POLICIES:
+        if policy is not None and policy not in VALID_GATE_POLICIES:
             errors.append(
                 ValidationError(
                     field="policy",
                     message=(
                         f"'{policy}' is not a valid gate policy. "
-                        f"Valid values: {sorted(_VALID_POLICIES)}"
+                        f"Valid values: {sorted(VALID_GATE_POLICIES)}"
                     ),
                     action_type=self.step_type,
                 )
