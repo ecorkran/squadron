@@ -8,8 +8,8 @@ index: 344
 dependencies: [342]
 interfaces: []
 dateCreated: 20260628
-dateUpdated: 20260704
-status: complete
+dateUpdated: 20260717
+status: deprecated
 deprecationReason: >
   Superseded by Claude Code's native understand-anything marketplace plugin
   (/plugin install understand-anything). Hosting a vendored copy in the analysis
