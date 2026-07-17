@@ -1,0 +1,27 @@
+name: compose-gate-example
+description: Compose a judge verdict and a standard review verdict into one checkpoint gate
+
+params:
+  slice: required
+  model: sonnet
+  review-model: minimax
+
+steps:
+  - review:
+      name: judge-slice
+      template: judge.slice-vs-arch
+      model: "{review-model}"
+      slice: "{slice}"
+
+  - review:
+      name: review-slice
+      template: slice
+      model: "{review-model}"
+      slice: "{slice}"
+
+  - gate:
+      name: compose-gate
+      judge_from: judge-slice
+      review_from: review-slice
+      policy: most-severe
+      checkpoint: on-concerns

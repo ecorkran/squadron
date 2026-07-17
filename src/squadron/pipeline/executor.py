@@ -712,6 +712,9 @@ async def execute_pipeline(
     step_results: list[StepResult] = []
     # prior_outputs accumulates across all steps
     prior_outputs: dict[str, ActionResult] = {}
+    # step_outputs: step-name -> that step's verdict-bearing review result.
+    # Additive alongside prior_outputs; does not change prior_outputs semantics.
+    step_outputs: dict[str, ActionResult] = {}
 
     skipping = start_from is not None
 
@@ -770,6 +773,7 @@ async def execute_pipeline(
                 step_index=step_index,
                 merged_params=merged_params,
                 prior_outputs=prior_outputs,
+                step_outputs=step_outputs,
                 pipeline_name=definition.name,
                 run_id=effective_run_id,
                 cwd=effective_cwd,
@@ -787,6 +791,7 @@ async def execute_pipeline(
                 step_index=step_index,
                 merged_params=merged_params,
                 prior_outputs=prior_outputs,
+                step_outputs=step_outputs,
                 pipeline_name=definition.name,
                 run_id=effective_run_id,
                 cwd=effective_cwd,
@@ -804,6 +809,7 @@ async def execute_pipeline(
                 step_index=step_index,
                 merged_params=merged_params,
                 prior_outputs=prior_outputs,
+                step_outputs=step_outputs,
                 pipeline_name=definition.name,
                 run_id=effective_run_id,
                 cwd=effective_cwd,
@@ -829,6 +835,7 @@ async def execute_pipeline(
                     step_index=step_index,
                     merged_params=merged_params,
                     prior_outputs=prior_outputs,
+                    step_outputs=step_outputs,
                     pipeline_name=definition.name,
                     run_id=effective_run_id,
                     cwd=effective_cwd,
@@ -846,6 +853,7 @@ async def execute_pipeline(
                     step_index=step_index,
                     merged_params=merged_params,
                     prior_outputs=prior_outputs,
+                    step_outputs=step_outputs,
                     pipeline_name=definition.name,
                     run_id=effective_run_id,
                     cwd=effective_cwd,
@@ -881,6 +889,14 @@ async def execute_pipeline(
         for idx, action_result in enumerate(step_result.action_results):
             key = f"{action_result.action_type}-{idx}"
             prior_outputs[key] = action_result
+
+        # Accumulate step_outputs: step-name -> this step's most recent
+        # verdict-bearing result, mirroring _last_with_verdict's "most recent
+        # verdict" intent but scoped to this one step (additive; does not
+        # change prior_outputs or checkpoint behavior).
+        step_verdict_result = _last_with_verdict(step_result.action_results)
+        if step_verdict_result is not None:
+            step_outputs[step_result.step_name] = step_verdict_result
 
     return PipelineResult(
         pipeline_name=definition.name,
@@ -967,6 +983,7 @@ async def _execute_step_once(
     step_index: int,
     merged_params: dict[str, object],
     prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None = None,
     pipeline_name: str,
     run_id: str,
     cwd: str,
@@ -1035,6 +1052,7 @@ async def _execute_step_once(
             cf_client=cf_client,
             cwd=cwd,
             sdk_session=sdk_session,
+            step_outputs=step_outputs if step_outputs is not None else {},
         )
 
         action_impl = get_action_fn(action_type)
@@ -1150,6 +1168,7 @@ async def _execute_loop_step(
     step_index: int,
     merged_params: dict[str, object],
     prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None = None,
     pipeline_name: str,
     run_id: str,
     cwd: str,
@@ -1185,6 +1204,7 @@ async def _execute_loop_step(
             step_index=step_index,
             merged_params=merged_params,
             prior_outputs=prior_outputs,
+            step_outputs=step_outputs,
             pipeline_name=pipeline_name,
             run_id=run_id,
             cwd=cwd,
@@ -1235,6 +1255,7 @@ async def _execute_loop_body(
     step_index: int,
     merged_params: dict[str, object],
     prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None = None,
     pipeline_name: str,
     run_id: str,
     cwd: str,
@@ -1285,6 +1306,7 @@ async def _execute_loop_body(
                 step_index=step_index,
                 merged_params=merged_params,
                 prior_outputs=prior_outputs,
+                step_outputs=step_outputs,
                 pipeline_name=pipeline_name,
                 run_id=run_id,
                 cwd=cwd,
@@ -1345,6 +1367,7 @@ async def _execute_each_step(
     step_index: int,
     merged_params: dict[str, object],
     prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None = None,
     pipeline_name: str,
     run_id: str,
     cwd: str,
@@ -1393,6 +1416,7 @@ async def _execute_each_step(
                 step_index=step_index,
                 merged_params=item_params,
                 prior_outputs=prior_outputs,
+                step_outputs=step_outputs,
                 pipeline_name=pipeline_name,
                 run_id=run_id,
                 cwd=cwd,
@@ -1435,6 +1459,7 @@ async def _execute_fan_out_step(
     step_index: int,
     merged_params: dict[str, object],
     prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None = None,
     pipeline_name: str,
     run_id: str,
     cwd: str,
@@ -1501,6 +1526,7 @@ async def _execute_fan_out_step(
             step_index=step_index,
             merged_params=branch_params,
             prior_outputs=prior_outputs,
+            step_outputs=step_outputs,
             pipeline_name=pipeline_name,
             run_id=run_id,
             cwd=cwd,

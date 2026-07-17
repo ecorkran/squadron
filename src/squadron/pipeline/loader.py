@@ -176,6 +176,7 @@ def validate_pipeline(
     errors: list[ValidationError] = []
     registered = list_step_types()
     declared_params = set(definition.params.keys())
+    prior_step_names: set[str] = set()
 
     # Validate pipeline-level model alias
     if definition.model is not None:
@@ -211,6 +212,11 @@ def validate_pipeline(
 
         # Validate param placeholders
         _validate_param_placeholders(step, declared_params, errors)
+
+        # Validate gate judge_from/review_from name real prior steps (F005)
+        _validate_gate_references(step, prior_step_names, errors)
+
+        prior_step_names.add(step.name)
 
     return errors
 
@@ -269,6 +275,37 @@ def _validate_review_template(
                 action_type=step.step_type,
             )
         )
+
+
+def _validate_gate_references(
+    step: StepConfig,
+    prior_step_names: set[str],
+    errors: list[ValidationError],
+) -> None:
+    """Check a gate step's judge_from/review_from each name a prior step (F005).
+
+    A step type's own validate() only sees its own config, so this cross-step
+    check — the named step must exist and run before this gate — belongs here,
+    where all steps are in scope. Fails fast at load time rather than deferring
+    to GateAction's execute-time UNKNOWN fallback.
+    """
+    if step.step_type != "gate":
+        return
+
+    for field in ("judge_from", "review_from"):
+        value = step.config.get(field)
+        if not isinstance(value, str):
+            continue  # missing/non-string is GateStepType.validate's concern
+        if "{" in value:
+            continue  # contains param placeholder — skip
+        if value not in prior_step_names:
+            errors.append(
+                ValidationError(
+                    field=f"steps[{step.name}].{field}",
+                    message=(f"Gate '{field}' references '{value}', which is not a prior step"),
+                    action_type=step.step_type,
+                )
+            )
 
 
 def _validate_param_placeholders(

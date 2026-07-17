@@ -12,9 +12,9 @@ projectState: >
   gate via upstream reduction (option a). Slices 300/301/302/303 are complete.
   No branch yet — created at Phase 6 start per git rules.
 dateCreated: 20260716
-dateUpdated: 20260716
+dateUpdated: 20260717
 reviewsAddressed: [304-review.tasks.gate-composition]
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -84,40 +84,40 @@ these:
 
 ## T1. Reduction core: severity table, `reduce_verdicts`, `Provenance.COMPOSED`
 
-- [ ] Create `src/squadron/pipeline/actions/gate.py`. Define the severity
+- [x] Create `src/squadron/pipeline/actions/gate.py`. Define the severity
   ordering **once** as an ordered mapping/enum (most severe first):
   `UNKNOWN > FAIL > CONCERNS > PASS`. Do not scatter verdict-string comparisons —
   one table, referenced everywhere (project rule).
-- [ ] Add `COMPOSED = "composed"` to the `Provenance` `StrEnum` in
+- [x] Add `COMPOSED = "composed"` to the `Provenance` `StrEnum` in
   `actions/judge.py`.
-- [ ] Implement a **pure** `reduce_verdicts(a: str | None, b: str | None) -> str`:
+- [x] Implement a **pure** `reduce_verdicts(a: str | None, b: str | None) -> str`:
   - Normalize each argument: `None` → `"UNKNOWN"` **before** ranking (F001).
   - Return the more severe of the two per the severity table.
   - Ties (equal severity) return that shared value by construction — no
     tie-break, no score context needed.
   - The function must not read files, call providers, or mutate anything — pure
     over its inputs.
-- [ ] **Success:** `reduce_verdicts` is importable and returns the correct
+- [x] **Success:** `reduce_verdicts` is importable and returns the correct
   most-severe result for any pair including `None` inputs; `Provenance.COMPOSED`
   exists; the severity order is defined in exactly one place.
 - Effort: 2/5
 
 ## T2. Test the reduction core *(test-with T1)*
 
-- [ ] Add `tests/pipeline/test_gate.py`. Unit-test `reduce_verdicts` across the
+- [x] Add `tests/pipeline/test_gate.py`. Unit-test `reduce_verdicts` across the
   **full 4×4 cross-product** of `{PASS, CONCERNS, FAIL, UNKNOWN}` × the same (all
   16 pairs), asserting most-severe-wins for each, **including the four diagonal
   ties** (`CONCERNS`+`CONCERNS` → `CONCERNS`, etc.).
-- [ ] Add cases for `None` on each leg: `(None, PASS)` → `UNKNOWN`,
+- [x] Add cases for `None` on each leg: `(None, PASS)` → `UNKNOWN`,
   `(PASS, None)` → `UNKNOWN`, `(None, None)` → `UNKNOWN` — pinning the fail-closed
   normalization and its divergence from skip-`None`.
-- [ ] Parametrize (`@pytest.mark.parametrize`) rather than 19 separate functions.
-- [ ] **Success:** all pairs pass; the `None`-normalization cases prove a
+- [x] Parametrize (`@pytest.mark.parametrize`) rather than 19 separate functions.
+- [x] **Success:** all pairs pass; the `None`-normalization cases prove a
   verdict-less leg dominates rather than vanishing.
 - Effort: 2/5
 
-- [ ] **T2c. Commit the reduction core** *(after T2 green)*
-  - [ ] `uv run ruff format`, run the reduction tests, then commit
+- [x] **T2c. Commit the reduction core** *(after T2 green)*
+  - [x] `uv run ruff format`, run the reduction tests, then commit
     (`feat: add pure verdict reduction and composed provenance for gate`).
     This deliverable is self-contained (pure function + enum), independently
     bisectable.
@@ -134,47 +134,47 @@ these:
 > single-verdict contract, or existing `prior_outputs` semantics), **STOP** and
 > escalate to option (b) per the design's escalation boundary — do not force it.
 
-- [ ] In `models.py`, add an optional field to `ActionContext`:
+- [x] In `models.py`, add an optional field to `ActionContext`:
   `step_outputs: dict[str, ActionResult] = field(default_factory=...)` — a
   **step-name → that step's review ActionResult** view. Keep `prior_outputs`
   exactly as-is (do not remove or repurpose it).
-- [ ] In `executor.py`, where the per-step accumulation happens
+- [x] In `executor.py`, where the per-step accumulation happens
   (~line 880-883, alongside the existing `prior_outputs[key] = ...` loop), also
   populate a `step_outputs` map keyed by `step_result.step_name`, choosing that
   step's verdict-bearing review `ActionResult` (the one the checkpoint would
   consider). Thread it into the `ActionContext` construction in
   `_execute_step_once` (~line 1027) exactly like `prior_outputs` is threaded.
-- [ ] Decide and document (inline comment) which `ActionResult` a step maps to
+- [x] Decide and document (inline comment) which `ActionResult` a step maps to
   when it has several — the last verdict-bearing one, mirroring
   `_find_review_verdict`'s "most recent verdict" intent, scoped to that one step.
-- [ ] **Success:** `ActionContext.step_outputs` exposes prior steps' results by
+- [x] **Success:** `ActionContext.step_outputs` exposes prior steps' results by
   step name; every existing executor test still passes unchanged (pure addition);
   no checkpoint or `_find_review_verdict` edit.
 - Effort: 3/5
 
 ## T4. Test the read surface *(test-with T3)*
 
-- [ ] In `tests/pipeline/` (executor tests), assert that after two named review
+- [x] In `tests/pipeline/` (executor tests), assert that after two named review
   steps run, an action in a later step sees **both** results via
   `context.step_outputs` keyed by step name — proving the lossy `prior_outputs`
   collision (`review-0` overwrite) is bypassed for the gate's needs.
-- [ ] Add a regression assertion that `prior_outputs` behavior and
+- [x] Add a regression assertion that `prior_outputs` behavior and
   `_find_review_verdict` are unchanged (the read surface is purely additive).
-- [ ] **Success:** both source results are recoverable by step name; no existing
+- [x] **Success:** both source results are recoverable by step name; no existing
   executor/checkpoint test changes behavior.
 - Effort: 2/5
 
-- [ ] **T4c. Commit the executor read surface** *(after T4 green, with 140 sign-off)*
-  - [ ] `uv run ruff format`, run the full executor suite, then commit
+- [x] **T4c. Commit the executor read surface** *(after T4 green, with 140 sign-off)*
+  - [x] `uv run ruff format`, run the full executor suite, then commit
     (`feat: add step-keyed result view to ActionContext for gate composition`).
-  - [ ] The commit body **must** record the 140 sign-off for the `prior_outputs`
+  - [x] The commit body **must** record the 140 sign-off for the `prior_outputs`
     read-surface addition (per T3's STOP-gate). If sign-off is not yet obtained,
     do not commit — hold the branch and escalate.
   - Effort: 1/5
 
 ## T5. `gate` action
 
-- [ ] In `gate.py`, implement `GateAction` satisfying the `Action` protocol:
+- [x] In `gate.py`, implement `GateAction` satisfying the `Action` protocol:
   - `action_type` property returns `ActionType.GATE` (add `GATE = "gate"` to the
     `ActionType` enum).
   - `execute(ctx)`: read `ctx.params["judge_from"]` and
@@ -185,18 +185,18 @@ these:
     (`judge_verdict`, `review_verdict`) for auditability. Pass through the legs'
     `score`/`criteria` on metadata for observability (do not reduce them).
   - `validate(config)`: require `judge_from` and `review_from` keys present.
-- [ ] **Failure handling:** if a named source cannot be resolved at execute time,
+- [x] **Failure handling:** if a named source cannot be resolved at execute time,
   return `verdict="UNKNOWN"` with a WARNING+ log (never advance on an unresolved
   source). A `None` leg verdict is handled inside `reduce_verdicts` (T1).
-- [ ] `register_action(ActionType.GATE, GateAction())` at module load.
-- [ ] **Success:** the action reduces two named source results to one verdict with
+- [x] `register_action(ActionType.GATE, GateAction())` at module load.
+- [x] **Success:** the action reduces two named source results to one verdict with
   `composed` provenance and both raw verdicts preserved; an unresolved source
   yields a logged `UNKNOWN`.
 - Effort: 3/5
 
 ## T6. Test the `gate` action *(test-with T5)*
 
-- [ ] In `test_gate.py`, drive `GateAction.execute` with a hand-built
+- [x] In `test_gate.py`, drive `GateAction.execute` with a hand-built
   `ActionContext` whose `step_outputs` holds two named results. Assert:
   - (judge=PASS, review=CONCERNS) → reduced `CONCERNS`, provenance `composed`,
     metadata carries both raw verdicts.
@@ -205,12 +205,12 @@ these:
   - a source leg with `verdict=None` → reduced `UNKNOWN` **and** a WARNING+ log
     (assert via `caplog`).
   - an unresolvable `judge_from` name → `UNKNOWN` + WARNING+ log.
-- [ ] **Success:** all cases pass; the log assertions prove no silent path.
+- [x] **Success:** all cases pass; the log assertions prove no silent path.
 - Effort: 2/5
 
 ## T7. `gate` step type
 
-- [ ] Create `src/squadron/pipeline/steps/gate.py`. Implement `GateStepType`
+- [x] Create `src/squadron/pipeline/steps/gate.py`. Implement `GateStepType`
   satisfying `StepType`:
   - `step_type` returns `StepTypeName.GATE` (add `GATE = "gate"` to the
     `StepTypeName` enum).
@@ -226,8 +226,8 @@ these:
     policy exists — keep the key so the rule is named, do not build a
     single-entry registry). It **cannot** check that the named steps exist —
     that is a cross-step check and belongs in the loader (T7b), not here.
-- [ ] `register_step_type(StepTypeName.GATE, GateStepType())`.
-- [ ] **Success:** a `gate:` step loads and validates via the existing loader;
+- [x] `register_step_type(StepTypeName.GATE, GateStepType())`.
+- [x] **Success:** a `gate:` step loads and validates via the existing loader;
   it expands to `[gate]` or `[gate, checkpoint]`.
 - Effort: 3/5
 
@@ -239,24 +239,24 @@ these:
 > only its own config, T7); the check must live in the loader, which has all
 > steps in scope.
 
-- [ ] In `src/squadron/pipeline/loader.py`, in `validate_pipeline` (line 147; the
+- [x] In `src/squadron/pipeline/loader.py`, in `validate_pipeline` (line 147; the
   `for step in definition.steps:` loop at line 184 already has all steps in
   scope), add a gate cross-reference check mirroring `_validate_review_template`
   (line 210): for a `gate` step, verify `judge_from` and `review_from` each name
   a step that **appears earlier** in `definition.steps` (a *prior* step — a gate
   cannot reference a step that runs after it). Emit a `ValidationError` naming the
   offending key and value when not found.
-- [ ] Keep the rule DRY — a small helper `_validate_gate_references(step,
+- [x] Keep the rule DRY — a small helper `_validate_gate_references(step,
   prior_step_names, errors)` called from the loop, consistent with the existing
   `_validate_*` helpers.
-- [ ] **Success:** a `gate` step naming a nonexistent or later step fails
+- [x] **Success:** a `gate` step naming a nonexistent or later step fails
   `validate_pipeline` with a clear error at load time; a gate naming two real
   prior steps validates clean.
 - Effort: 2/5
 
 ## T8. Test the `gate` step and loader validation *(test-with T7, T7b)*
 
-- [ ] In `test_gate.py` (or a loader-integration test), assert:
+- [x] In `test_gate.py` (or a loader-integration test), assert:
   - `expand` produces `[gate]` with no `checkpoint:`, and `[gate, checkpoint]`
     with one — checkpoint trigger threaded through.
   - step-type `validate` returns an error when `judge_from` or `review_from` is
@@ -267,30 +267,30 @@ these:
     distinct from T5's execute-time `UNKNOWN` fallback.
   - A minimal valid `gate` pipeline loads/validates with no new-registration
     errors.
-- [ ] **Success:** expansion, own-config validation, and loader cross-step
+- [x] **Success:** expansion, own-config validation, and loader cross-step
   validation all pass; the bad-reference cases fail at load, not execute.
 - Effort: 2/5
 
-- [ ] **T8c. Commit the gate action + step + validation** *(after T8 green)*
-  - [ ] `uv run ruff format`, run the gate action/step/loader tests, then commit
+- [x] **T8c. Commit the gate action + step + validation** *(after T8 green)*
+  - [x] `uv run ruff format`, run the gate action/step/loader tests, then commit
     (`feat: add gate action and step type with loader cross-step validation`).
   - Effort: 1/5
 
 ## T9. Example composing pipeline
 
-- [ ] Add `src/squadron/data/pipelines/compose-gate-example.yaml`: two `review`
+- [x] Add `src/squadron/data/pipelines/compose-gate-example.yaml`: two `review`
   steps (a `judge.slice-vs-arch` judge leg and a `design` standard-review leg,
   both `slice: "{slice}"`), then a `gate` step naming both
   (`judge_from` / `review_from`) with `checkpoint: on-concerns`. Declare
   `model`/`review-model` as named top-level `params` referenced via placeholders,
   mirroring every other built-in pipeline (`P4.yaml`, `judge-cycle.yaml`) — do
   not rely on fallback model resolution.
-- [ ] **Success:** `uv run sq run compose-gate-example --validate` reports valid.
+- [x] **Success:** `uv run sq run compose-gate-example --validate` reports valid.
 - Effort: 2/5
 
 ## T10. Test drives-checkpoint end behavior *(test-with T9)*
 
-- [ ] Add tests asserting the **reduced** verdict drives the checkpoint, not
+- [x] Add tests asserting the **reduced** verdict drives the checkpoint, not
   either raw leg:
   - gate over (judge=PASS, review=CONCERNS) → the same-step checkpoint **fires**
     on `on-concerns`.
@@ -303,27 +303,27 @@ these:
     path too. This closes the gap between T6 (action-level normalization + log)
     and T10 (checkpoint firing for fixed verdicts) — neither alone proves a
     `None` input fires the gate end-to-end.
-- [ ] **Success:** the gate's reduced verdict, not either source leg alone,
+- [x] **Success:** the gate's reduced verdict, not either source leg alone,
   determines whether the checkpoint pauses — including a `None`-leg source, which
   fires the checkpoint fail-closed.
 - Effort: 2/5
 
 ## T11. Escalation-to-140 boundary test *(required by success criteria)*
 
-- [ ] Add `test_boundary_requires_140`: assert that a policy requiring the
+- [x] Add `test_boundary_requires_140`: assert that a policy requiring the
   checkpoint to see **both raw verdicts distinctly** (e.g. branch on *which* leg
   produced the severity) is **not** expressible via the single reduced gate —
   the gate result exposes one `verdict` plus both raw verdicts on `metadata`, but
   the checkpoint reads only the single reduced `verdict`. The test documents (in
   its docstring / an assertion on the recorded boundary) that this case is a
   **140 concern (Future Work 3)**, not silently absorbed here.
-- [ ] **Success:** the test encodes escalation-boundary condition (3) — the slice
+- [x] **Success:** the test encodes escalation-boundary condition (3) — the slice
   recognizes its own edge rather than overreaching.
 - Effort: 2/5
 
 ## T12. Authoring-guide section
 
-- [ ] Add a "Composing a judge and a review at one gate" section to
+- [x] Add a "Composing a judge and a review at one gate" section to
   `docs/PIPELINES.md` (the pipeline authoring guide from slice 152; slice 303's
   `Judge-Gated Cycles` section lives there — add this as a sibling section and
   cross-link it). Cover: the
@@ -333,7 +333,7 @@ these:
   instead (the boundary). Reference the fan-out/fan-in distinction (a gate is 2
   heterogeneous judgments; fan-in is N homogeneous samples) so authors don't
   reach for a gate where a fan-in reducer belongs.
-- [ ] **Success:** a reader can author a composed gate from the section without
+- [x] **Success:** a reader can author a composed gate from the section without
   reading the slice design, and knows the 140 boundary.
 - Effort: 2/5
 
@@ -344,15 +344,15 @@ these:
 > committed as validated. This task commits the remaining deliverable (example
 > pipeline + boundary test + authoring guide) and runs the full-suite gate.
 
-- [ ] `uv run ruff format`, then `uv run pytest && uv run pyright && uv run ruff
+- [x] `uv run ruff format`, then `uv run pytest && uv run pyright && uv run ruff
   check` — all green across the whole suite (all gate tests included; pyright
   strict, ruff clean).
-- [ ] Confirm **non-composed** pipelines are byte-for-byte unchanged (existing
+- [x] Confirm **non-composed** pipelines are byte-for-byte unchanged (existing
   checkpoint tests pass unmodified — success criterion #2).
-- [ ] Commit the example pipeline, boundary test, and authoring-guide section
+- [x] Commit the example pipeline, boundary test, and authoring-guide section
   from project root
   (`docs: add gate composition example pipeline and authoring guide (slice 304)`).
-- [ ] Verify the branch history reads as four coherent commits (reduction,
+- [x] Verify the branch history reads as four coherent commits (reduction,
   read-surface w/ 140 sign-off note, gate action+step, example+docs) — bisectable,
   not one monolithic delta.
 - Effort: 1/5
