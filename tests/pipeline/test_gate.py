@@ -555,3 +555,166 @@ class TestValidatePipelineGateReferences:
         errors = validate_pipeline(defn)
         gate_errors = [e for e in errors if "compose-gate" in e.field]
         assert gate_errors == []
+
+
+# ---------------------------------------------------------------------------
+# T10 — drives-checkpoint end behavior: the REDUCED verdict, not either raw
+# leg, determines whether the same-step checkpoint fires.
+# ---------------------------------------------------------------------------
+
+
+def _pipeline_with_gate_and_checkpoint(checkpoint_trigger: str = "on-concerns") -> PipelineDefinition:
+    """Two named review steps + a gate step expanding to [gate, checkpoint].
+
+    Uses the real, registered ReviewStepType/GateStepType (via
+    bootstrap_step_types) — only the "review" action is mocked so the test
+    drives real expand()/gate/checkpoint logic end-to-end.
+    """
+    return PipelineDefinition(
+        name="test-pipeline",
+        description="test",
+        params={},
+        steps=[
+            StepConfig(step_type="review", name="judge-slice", config={"template": "code"}),
+            StepConfig(step_type="review", name="review-slice", config={"template": "code"}),
+            StepConfig(
+                step_type="gate",
+                name="compose-gate",
+                config={
+                    "judge_from": "judge-slice",
+                    "review_from": "review-slice",
+                    "checkpoint": checkpoint_trigger,
+                },
+            ),
+        ],
+    )
+
+
+async def _run_drives_checkpoint(
+    judge_verdict: str | None,
+    review_verdict: str | None,
+) -> ActionResult:
+    """Run the compose-gate pipeline end-to-end and return the checkpoint's result."""
+    from squadron.pipeline.actions.checkpoint import CheckpointAction
+    from squadron.pipeline.actions.gate import GateAction
+    from squadron.pipeline.executor import execute_pipeline
+    from squadron.pipeline.steps import bootstrap_step_types
+
+    bootstrap_step_types()  # registers the real ReviewStepType/GateStepType
+
+    async def review_execute(ctx: ActionContext) -> ActionResult:
+        verdict = judge_verdict if ctx.step_name == "judge-slice" else review_verdict
+        return ActionResult(success=True, action_type="review", outputs={}, verdict=verdict)
+
+    review_action = MagicMock()
+    review_action.execute = review_execute
+
+    action_registry: dict[str, object] = {
+        "review": review_action,
+        "gate": GateAction(),
+        "checkpoint": CheckpointAction(),
+    }
+
+    result = await execute_pipeline(
+        _pipeline_with_gate_and_checkpoint(),
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry=action_registry,
+    )
+
+    gate_step_result = result.step_results[-1]
+    return gate_step_result.action_results[-1]
+
+
+class TestDrivesCheckpoint:
+    @pytest.mark.asyncio
+    async def test_pass_and_concerns_fires_on_concerns(self) -> None:
+        checkpoint_result = await _run_drives_checkpoint("PASS", "CONCERNS")
+        assert checkpoint_result.outputs["checkpoint"] == "paused"
+
+    @pytest.mark.asyncio
+    async def test_both_pass_does_not_fire(self) -> None:
+        checkpoint_result = await _run_drives_checkpoint("PASS", "PASS")
+        assert checkpoint_result.outputs["checkpoint"] == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_judge_unknown_review_pass_fires(self) -> None:
+        """No-silent-pass under a broken judge leg."""
+        checkpoint_result = await _run_drives_checkpoint("UNKNOWN", "PASS")
+        assert checkpoint_result.outputs["checkpoint"] == "paused"
+
+    @pytest.mark.asyncio
+    async def test_none_leg_normalizes_and_fires_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """F003: a None-verdict leg fires the same-step checkpoint end-to-end
+        (normalize -> reduce -> checkpoint fires), not just at the action level."""
+        with caplog.at_level(logging.WARNING):
+            checkpoint_result = await _run_drives_checkpoint(None, "PASS")
+        assert checkpoint_result.outputs["checkpoint"] == "paused"
+        assert any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# T11 — Escalation-to-140 boundary: a policy needing the checkpoint to branch
+# on WHICH leg produced the severity is not expressible via the single
+# reduced gate. This is escalation-boundary condition (3) — a 140 concern
+# (Future Work 3), not silently absorbed here.
+# ---------------------------------------------------------------------------
+
+
+class TestBoundaryRequires140:
+    def test_boundary_requires_140(self) -> None:
+        """A policy that must distinguish WHICH leg (judge vs. review) caused
+        a non-passing verdict cannot be expressed through the gate's single
+        reduced verdict — the checkpoint's read path (_find_review_verdict)
+        only ever sees ``ActionResult.verdict``, never ``ActionResult.metadata``.
+
+        Concretely: suppose a required policy is "pause on judge FAIL, but
+        auto-advance on review-only FAIL" (i.e. the checkpoint must react
+        differently depending on which raw leg produced the severity). The
+        gate's reduced verdict for (judge=FAIL, review=PASS) and
+        (judge=PASS, review=FAIL) is identical ("FAIL" in both cases) —
+        the two raw verdicts are preserved on metadata for auditability,
+        but the checkpoint's trigger evaluation never reads metadata, only
+        ``ActionResult.verdict``. A single-verdict checkpoint cannot express
+        "fire only when the judge leg specifically is FAIL."
+
+        This is escalation-boundary condition (3) (slice design, 300-slice
+        gate-composition): the reduction cannot be a pure function of the two
+        verdicts alone once the checkpoint itself needs to branch on which leg
+        produced the severity. That requires extending the checkpoint to see
+        multiple verdicts distinctly — option (b), a 140 concern (Future Work
+        3) — and is explicitly NOT implemented in this slice.
+        """
+        judge_fail = ActionResult(
+            success=True,
+            action_type="gate",
+            outputs={},
+            verdict=reduce_verdicts("FAIL", "PASS"),
+            metadata={"judge_verdict": "FAIL", "review_verdict": "PASS"},
+        )
+        review_fail = ActionResult(
+            success=True,
+            action_type="gate",
+            outputs={},
+            verdict=reduce_verdicts("PASS", "FAIL"),
+            metadata={"judge_verdict": "PASS", "review_verdict": "FAIL"},
+        )
+
+        # The reduced verdict is identical in both cases — a checkpoint
+        # reading only .verdict (as _find_review_verdict does) cannot tell
+        # these two scenarios apart, even though metadata distinguishes them.
+        assert judge_fail.verdict == review_fail.verdict == "FAIL"
+        assert judge_fail.metadata != review_fail.metadata
+
+        # The distinguishing information exists only on metadata, which the
+        # checkpoint's read path never consults — proving a "branch on which
+        # leg failed" policy is not expressible via the single reduced gate
+        # and requires the 140 checkpoint extension (option b) instead.
+        from squadron.pipeline.actions.checkpoint import _find_review_verdict
+
+        verdict_only = _find_review_verdict({"gate-0": judge_fail})
+        assert verdict_only == "FAIL"
+        # No information about *which* leg failed survives this read path.

@@ -242,6 +242,32 @@ steps:
 
 ---
 
+### `gate`
+
+**Purpose:** Reduce a named judge result and review result to one verdict, then optionally gate on it. See [Composing a judge and a review at one gate](#composing-a-judge-and-a-review-at-one-gate).
+
+**Fields:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `judge_from` | string | yes | Name of a prior `review` step whose result is the judge leg |
+| `review_from` | string | yes | Name of a prior `review` step whose result is the review leg |
+| `policy` | string | no | Reduction policy; only `most-severe` exists today |
+| `checkpoint` | string | no | Same triggers as phase/`review` steps — fires on the *reduced* verdict |
+
+Both named steps must appear **earlier** in the pipeline than the `gate` step — the loader validates this at load time and fails fast on a misspelled or forward reference.
+
+**Example:**
+
+```yaml
+- gate:
+    judge_from: judge-slice
+    review_from: review-slice
+    checkpoint: on-concerns
+```
+
+---
+
 ### `loop`
 
 **Purpose:** Repeat a body of steps until a condition passes or a bound is reached. The primary use is the [judge-gated cycle](#judge-gated-cycles): fix, then re-review, until a judge's score clears a floor.
@@ -385,6 +411,70 @@ Use `on_exhaust: fail` instead of `checkpoint` only when an artifact that never 
 
 ---
 
+## Composing a judge and a review at one gate
+
+A judge-gated cycle (above) uses *one* verdict to gate — a judge's score-derived PASS/CONCERNS/FAIL, or a standard review's model-produced verdict, but never both at once. When a gate needs to reflect **both** an independent judge's opinion and a standard review's opinion of the same artifact, use a `gate` step.
+
+### The composition shape
+
+Two `review` steps producing two named results, followed by a `gate` step that reduces them:
+
+```yaml
+# Two independent judgments of the same artifact, reduced to one gate.
+- review:
+    name: judge-slice
+    template: judge.slice-vs-arch
+    slice: "{slice}"
+- review:
+    name: review-slice
+    template: slice
+    slice: "{slice}"
+- gate:
+    name: compose-gate
+    judge_from: judge-slice
+    review_from: review-slice
+    policy: most-severe          # the only policy today — keep the key explicit
+    checkpoint: on-concerns      # fires on the REDUCED verdict
+```
+
+`judge_from` / `review_from` name the two prior **steps** (not the colliding `review-0` action key both review steps would otherwise write). A `gate` step expands to `[gate, checkpoint?]` — same as a `review` step's own optional `checkpoint:` — so the reduced verdict and the checkpoint land in the same step, and the checkpoint's existing read path sees the gate's output with no changes to checkpoint code. See the built-in `compose-gate-example` pipeline for the full reference shape.
+
+### The reduction rule: most-severe-wins
+
+```
+severity order (most severe first):  UNKNOWN  >  FAIL  >  CONCERNS  >  PASS
+None verdict  →  normalized to UNKNOWN  (before comparison)
+reduced verdict = the more severe of (judge_verdict, review_verdict)
+```
+
+- Two `PASS` → `PASS` — the gate advances only when *both* judgments clear.
+- Any `FAIL` or `UNKNOWN` on either leg dominates — a broken judge (or review) leg never lets the other leg auto-advance the gate.
+- **A verdict-less leg (`None`) is normalized to `UNKNOWN` before ranking, not skipped.** A named source step that ran a non-review action, or a review that produced no verdict, is a leg that *could not be judged* — treating it as most-severe (rather than silently dropping it, as the checkpoint's own `_find_review_verdict` does for a `None` verdict) means it can never let the other leg pass the gate unchallenged. This is logged at WARNING+ so a verdict-less source is never silent.
+- Both raw verdicts are preserved on the gate result's `metadata` (`judge_verdict`, `review_verdict`) regardless of the reduced outcome, so the composition is always auditable.
+
+### When you need 140 instead
+
+The gate reduces **exactly two** named sources to **one** verdict, upstream of an unmodified checkpoint. That is sufficient as long as a single reduced verdict is all the checkpoint needs to see. It is **not** sufficient — and the need becomes a **140 (pipeline-foundation) concern**, not something to force through a gate — when:
+
+- A required policy needs the checkpoint to branch on **which** leg produced the severity (e.g. "pause only if the judge leg specifically failed"). The gate's metadata preserves both raw verdicts for a human to read, but the checkpoint's trigger evaluation never reads `metadata` — only the single reduced `.verdict`. Distinguishing *which* leg failed at the checkpoint requires extending the checkpoint itself to weigh multiple verdicts (option b) — out of this slice's scope.
+- You need more than two sources, or N-way composition. The gate is intentionally not generalized past two named legs.
+
+Don't reach for a gate to solve either of these — raise it as a 140 dependency instead.
+
+### Gate vs. fan-in: don't confuse the two
+
+The `fan_out` / `FanInReducer` machinery (`collect`, `first_pass`, and richer reducers) looks similar to a gate — both "reduce results to one verdict" — but they reduce along different axes:
+
+| | **Gate** | **Fan-in** (`fan_out` + `FanInReducer`) |
+|---|---|---|
+| Reduces | **2 heterogeneous** judgments of one artifact | **N homogeneous** branch results from a fan-out |
+| Sources differ in | *kind* — a judge verdict vs. an independent review verdict | *sample* — the same kind of review run across several models/prompts |
+| Answers | "do a judge **and** a review agree this gate should open?" | "does the **consensus/median** of N samples clear the gate?" |
+
+If you're running the *same* judge or review N times and want a consensus (e.g. median score across samples to bound variance), that's a fan-in job — reach for `fan_out` and a `FanInReducer`, not a `gate` step. A gate is for combining two *different kinds* of judgment on one artifact, not for converging repeated samples of the same kind.
+
+---
+
 ## Action Type Catalog
 
 Actions are the internal execution units that step types expand into. Pipeline authors don't write actions directly — they appear in `--dry-run` and `--prompt-only` output.
@@ -394,7 +484,8 @@ Actions are the internal execution units that step types expand into. Pipeline a
 | `cf-op` | phase steps | Runs a Context Forge CLI operation (`set_phase`, `set_slice`, `build_context`) |
 | `dispatch` | phase steps | Sends assembled context to an LLM; performs the phase work |
 | `review` | phase steps, standalone review step | Runs `sq review <template>` and captures verdict and findings |
-| `checkpoint` | phase steps (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
+| `gate` | `gate` step | Reduces a named judge result and review result to one verdict (most-severe-wins) |
+| `checkpoint` | phase steps (when `checkpoint:` is set), `gate` step (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
 | `commit` | phase steps | Runs `git add -A && git commit` |
 | `compact` | compact step | Reduces context (session-rotate in true CLI; `/compact` dispatch in prompt-only) |
 | `summary` | summary step | Generates summary text and routes to emit destinations |
@@ -476,6 +567,7 @@ sq run --list    # shows all available pipelines with descriptions
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
 | `design-batch` | Phase 4 for every unfinished slice in a plan | `plan`, `model` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
+| `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
 | `P1` | Phase 1 (project vision) with arch review and checkpoint | `slice` |
 | `P2` | Phase 2 (architecture) with arch review and checkpoint | `slice` |
 | `P4` | Phase 4 (slice design) with slice review and checkpoint | `slice`, `model`, `review-model` |
