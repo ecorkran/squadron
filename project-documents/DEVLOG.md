@@ -12,6 +12,21 @@ Internal work log for squadron project development.
 
 ## 20260717
 
+### Architecture 320: Judge Calibration & Quality Metrology — Design Complete
+
+**Phase 2 complete.** Created `user/architecture/320-arch.judge-calibration-quality-metrology.md` from the initiative-plan entry 10 charter; `cf` arch field already registered as 320. Commit: `39b5f9d` (docs: add 320-arch judge calibration and quality metrology).
+
+**What the component is.** The measurement layer 300 explicitly deferred: judge-vs-human agreement and judge-vs-judge dispersion measured against a **sampled human oracle** (no curated dataset), computed **per artifact level**, feeding 300's escalate-vs-auto-gate threshold config. Second oracle with the same metrology shape: a cross-project **tech-debt-audit code-quality baseline** (skill shipped in 340's analysis pack), with the dispatch-side pre-emption prompt as its first measurable customer.
+
+**Key design decisions recorded in the doc:**
+- Principles: human sampled-not-resident (capture ergonomics are first-class), read-side over 300's write path (no judging-path changes), per-artifact-level calibration only (no blended global accuracy number), baseline-before-intervention ordering, honest small-n statistics (every report carries its sample size; minimum-evidence floor before recommending threshold loosening).
+- Metrology records are keyed by judge configuration (template identity/version, model) so template/model changes don't silently blend incompatible measurements.
+- Cross-project aggregation is a new persistence requirement (300's persistence is per-run/per-project); relation to the not-started 280 shared artifact store flagged as a leading slice-design decision, not assumed.
+- Non-goals: no curated dataset, no changes to the judging path, no automatic threshold mutation (calibration informs, operator decides), no general observability platform.
+- Anticipated slices (exploratory): metrology data layer & sample capture (keystone), agreement/dispersion reporting, calibration-to-threshold feedback, tech-debt-audit baseline harness, pre-emption prompt & delta measurement.
+
+**Pending.** Phase 3 (slice planning, `320-slices.*`) not started. Frontmatter `status: not_started` matches initiative-plan entry status; dependencies `[100, 140, 300]` all complete.
+
 ### Slice 304: Gate Composition — Implementation Complete
 
 **Phase 6 complete.** Branch `304-slice.gate-composition` created from `main` (integration branch unset). All 13 tasks (T1–T13, including T2c/T4c/T7b/T8c) implemented, tested, and verified in dependency order across four bisectable commits. Initiative 300 (eval-actions-llm-as-judge-scoring) is now fully closed — slices 300–304 are all complete.
