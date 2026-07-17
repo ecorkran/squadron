@@ -29,6 +29,7 @@ class ActionType(StrEnum):
     CF_OP = "cf-op"
     COMMIT = "commit"
     DEVLOG = "devlog"
+    GATE = "gate"
 
 
 # Module-level registry: action type name -> Action instance

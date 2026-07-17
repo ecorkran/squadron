@@ -19,6 +19,7 @@ class Provenance(StrEnum):
 
     JUDGE = "judge"
     REVIEW = "review"
+    COMPOSED = "composed"
 
 
 @dataclass
