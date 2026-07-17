@@ -56,6 +56,10 @@ class ActionContext:
     cf_client: CfClientProtocol
     cwd: str
     sdk_session: SDKExecutionSession | None = None
+    # Step-name -> that step's verdict-bearing review ActionResult. Additive
+    # read view alongside prior_outputs (which is lossy across same-typed
+    # steps); does not change prior_outputs semantics or checkpoint behavior.
+    step_outputs: dict[str, ActionResult] = field(default_factory=dict[str, ActionResult])
 
 
 @dataclass
