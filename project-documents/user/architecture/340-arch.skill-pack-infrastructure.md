@@ -17,7 +17,7 @@ Squadron's first-party slash commands are bundled in the wheel and installed via
 
 **Scope:** A thin, opt-in extension layer that treats external Claude Code skills as installable packs. A pack is a named collection of slash command markdown files with a declared source (local path or git ref). Squadron becomes the package manager for those files; Claude Code's existing slash command system handles invocation unchanged.
 
-**Motivation:** Squadron is used increasingly for analysis of non-greenfield codebases. Skills like `tech-debt-analyze` and `understand-anything` provide value first-party commands don't cover. Without a pack mechanism, users manage these manually, they drift out of sync, and there is no shared vocabulary for "the analysis toolkit." The analysis pack is the first customer; the mechanism is general.
+**Motivation:** Squadron is used increasingly for analysis of non-greenfield codebases. Skills like `tech-debt-audit` and `understand-anything` provide value first-party commands don't cover. Without a pack mechanism, users manage these manually, they drift out of sync, and there is no shared vocabulary for "the analysis toolkit." The analysis pack is the first customer; the mechanism is general.
 
 ## Design Goals
 
@@ -40,7 +40,7 @@ Squadron's first-party slash commands are bundled in the wheel and installed via
 - `sq install-commands` copies `commands/sq/*.md` from the wheel into `~/.claude/commands/sq/`. This is the only install path.
 - No manifest format exists for external skill sources.
 - No `sq skills` subcommand exists.
-- The forked `tech-debt-analyze` skill is used manually, outside squadron's install lifecycle.
+- The forked `tech-debt-audit` skill is used manually, outside squadron's install lifecycle.
 - All installed commands share the `/sq:*` prefix; the namespace is flat and will become cluttered as external skills are added.
 
 ## Envisioned State
@@ -59,7 +59,7 @@ prefix = "team"
 
 `sq skills install analysis` resolves the source, copies markdown files to `~/.claude/commands/analysis/`, and reports what was installed. `sq skills list` shows all known packs with installed/available status. The `/analysis:*` commands are immediately available to Claude Code after install.
 
-The analysis pack (bundled) includes the forked `tech-debt-analyze` skill and any other analysis-oriented skills added over time. Installing it is a one-command on-ramp for existing-codebase work.
+The analysis pack (bundled) includes the forked `tech-debt-audit` skill and any other analysis-oriented skills added over time. Installing it is a one-command on-ramp for existing-codebase work.
 
 ## Technical Considerations
 
@@ -72,7 +72,7 @@ The analysis pack (bundled) includes the forked `tech-debt-analyze` skill and an
 
 - **Spike: dispatch vs. prefix** — 20-minute prototype of `/sq:analysis <skill>` dispatch to determine reliability. Closes the open command-surface question before manifest design commits.
 - **Manifest format + `sq skills install/list`** — TOML schema, resolver (bundled / local path / git ref), file-copy installer, list command with status output.
-- **Analysis pack (bundled)** — package `tech-debt-analyze` and initial analysis skills into `commands/analysis/`; wire into wheel; document the pack.
+- **Analysis pack (bundled)** — package `tech-debt-audit` and initial analysis skills into `commands/analysis/`; wire into wheel; document the pack.
 - **`sq skills` CLI surface** — `install`, `list`, `uninstall` subcommands; integration with `sq doctor` to report installed packs.
 
 ## Related Work

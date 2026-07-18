@@ -12,6 +12,10 @@ Internal work log for squadron project development.
 
 ## 20260717
 
+### Housekeeping: reconcile `tech-debt-analyze` → `tech-debt-audit` skill-name drift
+
+Surfaced by 320 arch review F011. The shipped analysis-pack skill is `tech-debt-audit` everywhere load-bearing (frontmatter `name:`, file `commands/analysis/tech-debt-audit.md`, live dispatch `/analysis:tech-debt-audit`), but the 340-band planning docs called it `tech-debt-analyze` — a name that never matched what shipped. Blast radius was documentation-only (zero occurrences in `src/` or `commands/`). Fixed all live docs to the canonical name: `340-arch` (4 spots, was also self-inconsistent with its own line 81), `340-slices` (3 spots), `001-initiative-plan` (2 spots in the 340 entry), `340-slice.command-surface-spike` (1 spot, the spike's stub-dispatcher example — skill name only; left the illustrative `tech-debt` dispatch token as prototyped). Historical review artifacts (342/320 reviews) left as-is — they are point-in-time records. Trimmed 320-arch's Related Work note now that 340-arch is correct. No code change.
+
 ### Architecture 320: Judge Calibration & Quality Metrology — Design Complete
 
 **Phase 2 complete.** Created `user/architecture/320-arch.judge-calibration-quality-metrology.md` from the initiative-plan entry 10 charter; `cf` arch field already registered as 320. Commit: `39b5f9d` (docs: add 320-arch judge calibration and quality metrology).

@@ -35,7 +35,7 @@ If <skill> is empty, list available skills and stop:
   - tech-debt: analyze technical debt in a project
   - understand: build a deep understanding of a codebase
 
-If <skill> is "tech-debt", execute the tech-debt-analyze skill with <skill-args>.
+If <skill> is "tech-debt", execute the tech-debt-audit skill with <skill-args>.
 If <skill> is "understand", execute the understand-anything skill with <skill-args>.
 Otherwise, print: Unknown skill "<skill>". Available: tech-debt, understand.
 ```
