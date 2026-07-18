@@ -12,6 +12,18 @@ Internal work log for squadron project development.
 
 ## 20260718
 
+### 320 Human-Load Constraints: Blind-Capture Scoping & Sampling Budget
+
+**Concern raised by PM:** the blind-capture design read as "operator must always evaluate before judge output is visible" — an efficiency regression, and incompatible with the Amoeba direction (Amoeba takes over much running of squadron; human only at critical points; concept-stage, but 320's calibrated judges are its prerequisite — uncalibrated judges would make Amoeba's decisions unacceptably unpredictable).
+
+**Evaluation outcome:** architecture direction confirmed correct (calibration is the *exit* from the resident-human loop, not more of it), but the docs left one door open: "which results are offered for sampling" was fully deferred to slice design, and escalation-triggered offering — the tempting cheapest-n choice — would blind every escalated review, strip the judge's assistive value, and bias the sample. Closed that door plus two adjacent ones. Amended 320-arch and 320-slices:
+
+- **Blindness scoped:** attaches only to designated calibration samples, never the escalated-gate review flow. Reviewer-at-gate and calibration-sampler are distinct roles; an escalated verdict (formed after seeing judge output) is anchored and inadmissible as blind agreement data. Escalation may *enqueue* a sample; it is never itself blinded.
+- **New arch principle — sampling is pull-based, budgeted, never blocking:** samples queue for the operator to drain at convenience; no pipeline/gate/dispatch waits on a sample verdict; skip is free; human load is a configured budget (rate/ceiling), not emergent from pipeline volume. Slow evidence → slower graduation + honest floor refusal, never more interruptions.
+- **Division of labor named:** dispersion + trend (321) and the audit oracle are the human-free *continuous* monitors maintaining graduated judges' standing between samples; rising dispersion flags where the scarce human budget is spent.
+- **Template-churn caveat:** version-keying means frequent template edits can perpetually reset n and starve graduation; minor-revision inheritance vs. full re-calibration flagged as a 322 slice-design question.
+- Slice 320 gains matching success criteria (blindness scoping, non-blocking capture, budget respected); open questions gain budget representation and churn items.
+
 ### Slice Plan 320: Judge Calibration & Quality Metrology — Phase 3 Complete
 
 **Phase 3 complete.** Created `user/architecture/320-slices.judge-calibration-quality-metrology.md` from the reviewed 320-arch. `cf` Slice Plan field already registered as `320-slices.judge-calibration-quality-metrology`.
