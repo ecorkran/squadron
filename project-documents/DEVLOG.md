@@ -12,6 +12,26 @@ Internal work log for squadron project development.
 
 ## 20260718
 
+### Slice Design 320: Metrology Data Layer & Sample Capture (keystone) — Phase 4 Complete
+
+**Phase 4 complete for the keystone.** Created `user/slices/320-slice.metrology-data-layer-sample-capture-keystone.md`. Index already materialized as `(320)` in the slice plan (first slice shares the initiative base). Designed against the actual codebase, not assumptions — mapped 300's persistence and squadron infra first.
+
+**Load-bearing reality that shaped the design:** 300 review results are **id-less flat files** (`review/persistence.py` writes `project-documents/user/reviews/{index}-review.{type}.{slice}.{ext}`, overwritten on re-run — no run-id, no DB, no query surface over scores). So the keystone must *introduce* two things that don't exist in squadron today:
+- **Stable project identity** — git-remote-URL-derived (normalized), fallback to a recorded `.squadron.toml` `metrology.project_id`; **fails explicitly** if neither exists (never a path fallback, per arch + no-silent-fallback rule). No project identity exists in the codebase today (confirmed).
+- **Stable judge-result reference** — content-addressed `(project_id, relative_review_path, content_hash)` over the canonical judge fields, because there is no id to key against and re-runs overwrite the file.
+
+**Store follows the `StateManager` precedent exactly** (`pipeline/state.py`): user-level `~/.config/squadron/metrology/`, Pydantic records at the file boundary, `_SCHEMA_VERSION` + `SchemaVersionError`, atomic write-then-rename, one JSON file per record, glob-and-filter query surface. **No new DB dependency** — matches established squadron convention (config TOML, JSON run state). A `record_type` envelope discriminator (`"sample"` now, `"audit_finding"` reserved) lets 323 add audit records without migration.
+
+**Blindness enforced at the data layer, not the UI:** the capture core builds the presented payload from artifact + ground truth only and never places judge output in it — assertable by a test on the payload, not a fragile render-order convention. Human-load constraints from the prior session's arch amendment are carried through as success criteria (blindness scoped to designated samples; non-blocking; skip records nothing; budget respected as an offered-sample ceiling).
+
+**Parity by shared core:** new `squadron.metrology` package (identity/models/store/capture) is surface-agnostic; `cli/commands/metrology.py` is a thin Typer sub-app delegating to it (the `config.py` pattern). No MCP tool ships (MCP surface is still a stub) — parity is structural, guaranteed when the MCP slice later wraps the same core.
+
+**Command surface:** `sq metrology sample <target>` (blind capture) + `sq metrology list` (inspection aid, not the 321 reporting surface). Config keys added to `CONFIG_KEYS`: `metrology.store_dir`, `metrology.sample_budget`, `metrology.project_id`.
+
+**Deferrals honored:** no agreement/dispersion math (321), no version-keying *resolution* or minimum-evidence floor (322) — this slice records both a template-content hash and the judge-config identity as candidate keys but decides neither; no audit records (323); no judging-path change.
+
+**Pending.** Frontmatter `status: not_started`. Next: Phase 5 (task breakdown) for 320, or design the remaining slices (321–324). Effort 4/5.
+
 ### 320 Human-Load Constraints: Blind-Capture Scoping & Sampling Budget
 
 **Concern raised by PM:** the blind-capture design read as "operator must always evaluate before judge output is visible" — an efficiency regression, and incompatible with the Amoeba direction (Amoeba takes over much running of squadron; human only at critical points; concept-stage, but 320's calibrated judges are its prerequisite — uncalibrated judges would make Amoeba's decisions unacceptably unpredictable).
