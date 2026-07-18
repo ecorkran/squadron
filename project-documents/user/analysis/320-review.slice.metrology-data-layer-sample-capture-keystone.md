@@ -4,7 +4,7 @@ layer: project
 reviewType: slice
 slice: metrology-data-layer-sample-capture-keystone
 project: squadron
-verdict: CONCERNS
+verdict: UNKNOWN
 sourceDocument: project-documents/user/slices/320-slice.metrology-data-layer-sample-capture-keystone.md
 aiModel: moonshotai/kimi-k2.7-code
 status: complete

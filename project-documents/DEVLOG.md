@@ -12,6 +12,16 @@ Internal work log for squadron project development.
 
 ## 20260718
 
+### Task Breakdown 320: Metrology Keystone — Phase 5 Complete
+
+**Phase 5 complete.** Created `user/tasks/320-tasks.metrology-data-layer-sample-capture-keystone.md` (247 lines, within the 450 target — no split). 16 tasks (T1–T16), sequentially ordered following the LLD's Development Approach (identity → models/store → capture → CLI/config → e2e), test-with pairing throughout (each impl task immediately followed by its test task), per-task semantic commit lines.
+
+**Ordering rationale:** identity first (T2–T5) because it's the hardest new territory and everything keys on it — the content-addressed result ref and project-id derivation are the two things squadron lacks today. Store (T8/T9) modeled on `StateManager` with the cross-project-query test called out explicitly. Blindness (T10/T11) has its own load-bearing test asserting the capture payload excludes judge output (data-layer enforcement, not UI). All Failure Modes table rows collapse into T15's CLI failure-mode coverage (one assertion per row). T16 is the judging-path regression gate + walkthrough smoke + slice-completion marking.
+
+**Coverage check appended** mapping every design element to tasks and confirming the correct absences (321 reporting, 322 version-keying resolution, 323 audit records, MCP tool, 300 write-path change — all deferred by design, none in this task file).
+
+**Pending.** Frontmatter `status: not_started`. Next: PM approval, then Phase 6 (implementation) on branch `320-slice.metrology-data-layer-sample-capture-keystone` (integration branch unset → forks from and merges to `main`).
+
 ### 320 Keystone Slice Review — Addressed (F001, F005)
 
 Slice review (`320-review.slice...`, kimi-k2.7-code) returned 3 PASS on the load-bearing dimensions (scope deferral, architectural commitments, version-keying deferral), 1 CONCERN, 1 NOTE — both actionable, both fixed in the design:
