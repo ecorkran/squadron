@@ -10,7 +10,24 @@ Internal work log for squadron project development.
 
 ---
 
-## 20260717
+## 20260718
+
+### Slice Plan 320: Judge Calibration & Quality Metrology — Phase 3 Complete
+
+**Phase 3 complete.** Created `user/architecture/320-slices.judge-calibration-quality-metrology.md` from the reviewed 320-arch. `cf` Slice Plan field already registered as `320-slices.judge-calibration-quality-metrology`.
+
+**Structure: five slices, keystone-first, two oracles on one spine.** Kept the architecture's anticipated-slice count and boundaries — the load-bearing decisions were already resolved in arch, so no slice reopens them.
+- **(320) Metrology Data Layer & Sample Capture (keystone, High, 4/5)** — the queryable/joinable user-level store keyed on stable explicit project identity (not a path, no 280 dependency) plus the blind inline human-sample capture surface (judge output withheld until the human commits). Done alone, no reporting, per the architecture.
+- **(321) Agreement & Dispersion Reporting (Medium, 3/5)** — human-oracle headline: judge-vs-human agreement + judge-vs-judge dispersion, per artifact level / judge configuration, every figure carrying its n; dispersion sourced from 300's multi-sample (no 180 `fan_out` dependency); refuses to pool across incompatible judge configs.
+- **(322) Calibration-to-Threshold Feedback (Medium, 3/5)** — evidence-floored path to 300's threshold config; graduation-is-not-a-one-way-door forced residual sampling; the (template,model)↔(template,step) mismatch inherited as a config-time model+threshold pairing; resolves the version-keying tension (coordinated 300 write-path field vs. content-hash fallback).
+- **(323) Tech-Debt-Audit Baseline Harness (Medium, 3/5)** — cross-project audit baseline, normalized findings, and the audit's own run-to-run noise floor measured first (variance-before-baseline).
+- **(324) Pre-Emption Prompt & Delta Measurement (Medium, 3/5)** — dispatch-side generated static prompt fragment flowing down-only into dispatch config (dispatch never queries the store at runtime); before/after delta reported against the noise floor as a directional signal, not causal proof; ships only after 323.
+
+**Two ordering constraints honored explicitly.** *Variance, then baseline, then intervention* forces the audit oracle into two slices (323 measures the floor, 324 intervenes after). The keystone is done alone — reporting is a separate slice so storage/join/ergonomics de-risk in isolation. The version-keying tension is resolved in 322 (where the calibration recommendation depends on it), not the keystone; 321 already enforces non-blending on whatever key is present.
+
+**Future Work seeded:** 300 judge-result version/hash field (if 322 takes the preferred path), 280-store convergence (not a dependency), general 180 `fan_out` for dispersion (boundary made explicit, not assumed).
+
+**Pending.** Phase 4 (slice design) not started. Frontmatter `status: not_started`.
 
 ### Housekeeping: reconcile `tech-debt-analyze` → `tech-debt-audit` skill-name drift
 
