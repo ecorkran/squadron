@@ -12,6 +12,14 @@ Internal work log for squadron project development.
 
 ## 20260718
 
+### 320 Keystone Slice Review — Addressed (F001, F005)
+
+Slice review (`320-review.slice...`, kimi-k2.7-code) returned 3 PASS on the load-bearing dimensions (scope deferral, architectural commitments, version-keying deferral), 1 CONCERN, 1 NOTE — both actionable, both fixed in the design:
+- **F001 (CONCERN, failure-mode enumeration):** design stated "typed errors/actionable messages" without enumerating modes — a direct hit on the project's Failure-Mode Enumeration rule. Added a **Failure Modes** table under Implementation Details covering all new I/O boundaries (git-remote subprocess w/ timeout, project-identity absence, review-file missing/malformed, target zero/multi-match, atomic store-write failure, non-TTY/SIGINT/invalid-input capture), each with an explicit handling decision, an observable signal (typed error at ERROR / clean skip at INFO / no partial record — never silent), and a required test. Introduced three typed exceptions (`MetrologyIdentityError`, `MetrologyTargetError`, `MetrologyStoreError`) so "bad input" is distinguishable from "store broken." Absent git remote is deliberately *not* an error (normal case, defined fallback) but still surfaces loudly if the fallback also yields nothing.
+- **F005 (NOTE, CLI consistency):** walkthrough used `--type` but API Contracts didn't document it. Documented the full `sq metrology sample <target> [--type] [--verdict] [--note] [--skip]` signature and clarified target forms (path alone, or bare index + `--type`, required when the index is ambiguous). Walkthrough now consistent.
+
+Added a Technical Requirement that every Failure Modes row has a test asserting its observable signal.
+
 ### Slice Design 320: Metrology Data Layer & Sample Capture (keystone) — Phase 4 Complete
 
 **Phase 4 complete for the keystone.** Created `user/slices/320-slice.metrology-data-layer-sample-capture-keystone.md`. Index already materialized as `(320)` in the slice plan (first slice shares the initiative base). Designed against the actual codebase, not assumptions — mapped 300's persistence and squadron infra first.

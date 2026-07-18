@@ -111,18 +111,38 @@ Config: new entries in `config.keys.CONFIG_KEYS` (see Technical Decisions).
 **CLI (the surface that ships):**
 
 ```
-sq metrology sample <target>       # blind-capture a human verdict for one judge result
+sq metrology sample <target> [--type REVIEW_TYPE] [--verdict V] [--note TEXT] [--skip]
+                                   # blind-capture a human verdict for one judge result
 sq metrology list [--project ID] [--judge-config KEY]   # inspect stored samples (verification aid)
 ```
 
 - **`<target>` resolution.** The target names a persisted 300 review result. Accepted forms (resolved by the core, fail-fast on ambiguity):
-  - a path to a review file under `project-documents/user/reviews/`, or
-  - a `(slice-index, review-type)` pair resolved against the reviews dir in the current project.
+  - a **path** to a review file under `project-documents/user/reviews/` — used alone, `--type` is ignored; or
+  - a **slice index** (integer) combined with `--type REVIEW_TYPE` (e.g. `slice`, `code`, `arch`) — resolved against the reviews dir in the current project to the file `{index}-review.{type}.{slice}.{ext}`. `--type` is **required** when the target is a bare index and there is more than one review type for that index; if omitted and the index is ambiguous, the command fails explicitly listing the candidate types.
   The core resolves the target to exactly one review file, derives `result_ref`, and proceeds. Zero or multiple matches → explicit error.
 - **`sample` interaction (blind):** prints the artifact and its ground truth, prompts `Your verdict [PASS/CONCERNS/FAIL]:` (reusing the `Verdict` enum from `review.models`), optionally a one-line note, commits, then offers post-commit reveal. Non-interactive/`--verdict` form supported for scripted tests. Skipping (empty input / `--skip`) records nothing and exits 0.
 - **`list`** is a verification/inspection aid this slice ships so the store is observable; it is *not* the reporting surface (that is 321) — it prints raw stored records, no agreement math.
 
 Both commands are thin Typer shells delegating to `squadron.metrology`. The identical core is what a future `mcp` tool will call — parity by shared core, matching the `config.py` pattern.
+
+### Failure Modes
+
+Per the project's Failure-Mode Enumeration rule, each new I/O boundary this slice introduces has an enumerated failure mode, an explicit handling decision, and an observable signal (error/log at WARNING+ — never silent). Each row below gets at least one test asserting the observable outcome.
+
+| Boundary | Failure | Handling | Observable signal | Test |
+| --- | --- | --- | --- | --- |
+| **git remote subprocess** (`git config --get remote.origin.url`) | git not installed / not a repo / command hangs | bounded `timeout` on the subprocess (following the existing `git_utils` subprocess pattern, which uses `check=False`); on any non-zero/empty/timeout result, treat remote as *absent* and fall through to the recorded-id path — **not** a hard error (missing remote is a normal case) | if it then also falls through to no recorded id, the identity error below fires | identity resolves via recorded id when remote absent; timeout does not hang the command |
+| **project identity** (remote absent **and** no `.squadron.toml` `metrology.project_id`) | no stable identity derivable | **fail fast**, write nothing; error names the fix (`sq config set metrology.project_id <id>` at project level) | `MetrologyIdentityError` at ERROR; non-zero exit | error raised, actionable message, store unchanged |
+| **read 300 review result** | file missing | fail fast, write nothing | `MetrologyTargetError` at ERROR naming the resolved path | missing target → explicit error, no record |
+| **read 300 review result** | file present but malformed / unparseable / missing required judge fields (score, template, model) | fail fast, write nothing — never hash a partial result into a `result_ref` | `MetrologyTargetError` at ERROR naming what could not be parsed | malformed target → explicit error, no record |
+| **target resolution** (bare index) | zero matches | fail fast | `MetrologyTargetError` listing where it looked | zero-match → error |
+| **target resolution** (bare index) | multiple matches (several review types) | fail fast; do **not** guess | `MetrologyTargetError` listing candidate types and prompting `--type` | multi-match → error naming candidates |
+| **store write** (atomic write-then-rename) | store dir not creatable / not writable / rename fails | fail fast, surface the OSError; the `.tmp` sibling is left for inspection or cleaned, never a partial record at the final path | `MetrologyStoreError` (wrapping OSError) at ERROR | unwritable store dir → error, no partial `{sample_id}.json` |
+| **interactive capture** | non-TTY / piped stdin with no `--verdict` | do not block waiting on a human that isn't there; require `--verdict` in non-interactive mode | error instructing to pass `--verdict` (exit non-zero) | non-TTY without `--verdict` → explicit error, no hang |
+| **interactive capture** | SIGINT / EOF during the verdict prompt | treat as a skip: record nothing, exit cleanly (skipping is always free and safe) | INFO "sample skipped", exit 0 | interrupt at prompt → nothing written |
+| **interactive capture** | invalid verdict input (not a `Verdict` value) | re-prompt in interactive mode; reject with an error in `--verdict` mode | inline re-prompt / error on bad `--verdict` | bad `--verdict` value → error, no record |
+
+The store-write and identity/target errors are distinct typed exceptions (`MetrologyStoreError`, `MetrologyIdentityError`, `MetrologyTargetError`) so callers — and the future MCP surface — can distinguish "your input was wrong" from "the store is broken." No boundary swallows its failure; the closest thing to a silent path (absent git remote) is deliberately *not* an error because it is a normal, expected case with a defined fallback, and it still surfaces loudly if the fallback also yields nothing.
 
 ### Storage Schema
 
@@ -184,6 +204,7 @@ SampleVerdict
 - New code passes strict pyright and ruff (per python.md); Pydantic at file boundaries, schema versioning with `SchemaVersionError`.
 - Core logic (`squadron.metrology`) is surface-agnostic; the CLI is a thin shell — verified by the core having no Typer imports.
 - Test coverage modeled on `tests/pipeline/test_state.py` (store round-trip, atomic write, schema-version rejection, cross-project query) and `tests/review/test_persistence.py` (record parse-back).
+- Every row in the Failure Modes table has at least one test asserting its observable signal (typed error at ERROR / clean skip at INFO / no partial record) — silent failure paths are not acceptable.
 
 ### Integration Requirements
 - 321 can, against this store, retrieve samples grouped by project and judge-configuration with the artifact-level field present — without any schema change.
