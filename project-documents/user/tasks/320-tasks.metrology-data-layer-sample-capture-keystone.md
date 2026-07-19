@@ -155,8 +155,9 @@ status: not_started
   - [ ] `resolve_target(target, review_type, cwd) -> Path`: resolve a path or `(index, type)` to exactly one review file; zero matches → `MetrologyTargetError`; multiple matches → `MetrologyTargetError` listing candidate types
   - [ ] `build_capture_payload(review_file, cwd) -> CapturePayload`: load the **artifact and its ground truth** (from the result's `input_files` / `sourceDocument`) and **explicitly exclude** the judge's score/verdict/findings from the payload
   - [ ] `record_sample(payload, human_verdict, note, *, store, blind=True) -> str`: derive identity/ref/config, construct `SampleVerdict`, write via the store
+  - [ ] **Budget check:** before writing, count captures already recorded for this `project_id` in the current budget period via `store.list_samples(project_id=...)`; if the count is at or above `metrology.sample_budget`, refuse the write and signal budget-exhausted (do **not** write, do **not** raise a store/target error — this is a normal "ceiling reached" outcome the CLI reports and exits cleanly on). *Scope note:* this slice enforces the budget as a ceiling on **captures written**, because the *offering/selection policy* (which results are proffered) is deferred to 321 — there is no offer queue here to gate. The store sees every write, so the write-ceiling is the enforceable slice of the design's "respects the configured budget" criterion.
   - [ ] A separate `reveal(review_file)` accessor returns the judge output for optional **post-commit** display only — never called before `record_sample`
-- [ ] Success: the object returned by `build_capture_payload` contains artifact + ground truth and contains **no** judge score/verdict/findings (this is the load-bearing blindness property); `record_sample` returns a `sample_id` and the store holds the record
+- [ ] Success: the object returned by `build_capture_payload` contains artifact + ground truth and contains **no** judge score/verdict/findings (this is the load-bearing blindness property); `record_sample` returns a `sample_id` and the store holds the record; at/over `metrology.sample_budget` for the project, `record_sample` refuses and writes nothing
 
 **Commit:** `feat(metrology): add blind, non-blocking capture core`
 
@@ -168,6 +169,7 @@ status: not_started
   - [ ] **Blindness:** `build_capture_payload` output contains the artifact + ground truth and does **not** contain the judge's score, verdict, or findings (assert on the payload object/fields directly)
   - [ ] Target resolution: a valid path resolves; a valid `(index, type)` resolves; zero matches → `MetrologyTargetError`; multiple types for one index → `MetrologyTargetError` naming candidates
   - [ ] `record_sample` writes a `blind=True` record joinable back to the target via `result_ref`
+  - [ ] **Budget enforcement:** with `metrology.sample_budget = N`, the (N+1)th `record_sample` for the same `project_id` refuses and writes nothing; a capture for a *different* `project_id` under its own budget still succeeds (ceiling is per-project)
   - [ ] `reveal` returns judge output (used only post-commit) — exists and is independent of the blind payload
 - [ ] Success: `uv run pytest tests/metrology/test_capture.py` passes
 
@@ -208,6 +210,7 @@ status: not_started
     - non-TTY without `--verdict` → explicit error instructing to pass `--verdict` (no hang)
     - SIGINT / EOF at the prompt → treat as skip: record nothing, exit 0 (INFO "sample skipped")
     - invalid verdict → re-prompt (interactive) or error (`--verdict` mode); `--skip` / empty records nothing, exit 0
+    - **budget exhausted** (core refuses per `metrology.sample_budget`) → print a clear "budget reached for this project" message and exit 0 (a ceiling, not an error)
     - `--type` required and enforced only when a bare index is ambiguous
   - [ ] `list [--project ID] [--judge-config KEY]`: print raw stored records (inspection aid, **not** the 321 reporting surface — no agreement math)
 - [ ] **Register in `cli/app.py`** via `app.add_typer(metrology_app, name="metrology")`
@@ -222,6 +225,7 @@ status: not_started
 - [ ] **Add `tests/metrology/test_cli.py`** using Typer's `CliRunner`
   - [ ] `sample` on a real review file records a blind sample and prints the `sample_id`
   - [ ] `list` shows the stored record
+  - [ ] **Budget exhausted:** with `metrology.sample_budget` reached for the project, `sq metrology sample` reports the ceiling and exits 0, writing nothing
   - [ ] **Failure-mode coverage (one assertion per Failure Modes table row):** missing target → `MetrologyTargetError` / non-zero exit; ambiguous bare index → error naming candidate types; non-TTY without `--verdict` → error, no hang; `--skip` / interrupt → nothing written, exit 0; bad `--verdict` value → error, no record; identity absent (no remote, no recorded id) → `MetrologyIdentityError`; unwritable store dir → `MetrologyStoreError`, no partial file
 - [ ] Success: `uv run pytest tests/metrology/test_cli.py` passes; every Failure Modes row is asserted
 
@@ -243,5 +247,6 @@ status: not_started
 
 ## Coverage Check (design → tasks)
 
-- Package/exceptions → T1 · Project identity → T2/T3 · Result ref + judge-config id → T4/T5 · Record models → T6/T7 · Store (StateManager shape, cross-project) → T8/T9 · Blind capture core (data-layer blindness) → T10/T11 · Config keys → T12/T13 · CLI thin shell + parity core → T14/T15 · Failure Modes table (all rows) → T15 · Judging-path regression + walkthrough → T16.
+- Package/exceptions → T1 · Project identity → T2/T3 · Result ref + judge-config id → T4/T5 · Record models → T6/T7 · Store (StateManager shape, cross-project) → T8/T9 · Blind capture core (data-layer blindness) → T10/T11 · Sample-budget enforcement (per-project write ceiling) → T10/T11 core + T14/T15 CLI · Config keys → T12/T13 · CLI thin shell + parity core → T14/T15 · Judging-path regression + walkthrough → T16.
+- **Failure Modes table (all rows)** → jointly T3 (git-remote-absent/timeout), T5 (missing/malformed target), and T15 (the remaining rows: zero/multi-match, store-write failure, non-TTY, SIGINT/EOF, invalid input, identity absent). T15's "one assertion per row" bullet covers its rows; T3/T5 cover theirs at the unit level.
 - Deferred by design, correctly absent here: agreement/dispersion (321), version-keying resolution + evidence floor (322), audit records (323), MCP tool (later), any 300 write-path change.

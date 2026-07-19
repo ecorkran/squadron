@@ -12,6 +12,14 @@ Internal work log for squadron project development.
 
 ## 20260718
 
+### 320 Keystone Task Review — Addressed (F001 budget, F008 traceability)
+
+Task review (`320-review.tasks...`, kimi-k2.7-code) returned 6 PASS, 1 CONCERN, 1 NOTE — both actionable, both fixed:
+- **F001 (CONCERN, sample budget registered but never enforced/tested):** correct gap — I added `metrology.sample_budget` to config but no task read it. Added budget enforcement to T10's `record_sample` (count prior captures for the `project_id` via `list_samples`; at/over budget → refuse the write, no error, a normal "ceiling reached" outcome), T11 asserts the (N+1)th write refuses per-project, T14 reports budget-exhausted and exits 0, T15 asserts it. **Scope correction made explicit in the task:** this slice enforces a ceiling on *captures written*, not on *offering* — the offer/selection policy is deferred to 321, so there is no offer queue here to gate; the write-ceiling is the enforceable slice of the design's "respects the configured budget" criterion.
+- **F008 (NOTE, failure-mode traceability):** Coverage Check mapped all Failure Modes rows to T15, but git-remote-absent is asserted in T3 and malformed-target in T5. Corrected the cross-reference to show T3 + T5 + T15 jointly cover the table.
+
+Task file now 252 lines (within 450). Verdict was CONCERNS; both items resolved in-place.
+
 ### Task Breakdown 320: Metrology Keystone — Phase 5 Complete
 
 **Phase 5 complete.** Created `user/tasks/320-tasks.metrology-data-layer-sample-capture-keystone.md` (247 lines, within the 450 target — no split). 16 tasks (T1–T16), sequentially ordered following the LLD's Development Approach (identity → models/store → capture → CLI/config → e2e), test-with pairing throughout (each impl task immediately followed by its test task), per-task semantic commit lines.
