@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -198,3 +199,83 @@ def write_review_file() -> Callable[..., Path]:
         return path
 
     return _write
+
+
+@dataclass(frozen=True)
+class CaptureProject:
+    """A ready-to-sample project: git repo + reviews dir + graded artifact."""
+
+    root: Path
+    review_file: Path
+    artifact_file: Path
+    review_index: int
+    review_type: str
+
+
+def _build_capture_project(root: Path, remote: str, body: str) -> CaptureProject:
+    """Build a capture-ready project at ``root``: repo + review + artifact.
+
+    The persisted review's ``sourceDocument`` points at a real on-disk slice
+    design (the ground truth capture loads), so the whole capture flow — target
+    resolution, blind payload, identity, ref — runs end to end.
+    """
+    _init_repo(root)
+    _git("remote", "add", "origin", remote, cwd=root)
+
+    artifact_rel = "project-documents/user/slices/500-slice.example.md"
+    artifact = root / artifact_rel
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text(
+        f"---\ndocType: slice-design\nslice: example\n---\n\n# Example slice\n\n{body}\n",
+        encoding="utf-8",
+    )
+
+    reviews_dir = root / "project-documents/user/reviews"
+    reviews_dir.mkdir(parents=True, exist_ok=True)
+    review = make_judge_result()
+    slice_info = SliceInfo(
+        index=500,
+        name="Example",
+        slice_name="example",
+        design_file=artifact_rel,
+        task_files=[],
+        arch_file="",
+        project="squadron",
+    )
+    content = format_review_markdown(
+        review,
+        "judge.slice-vs-arch",
+        slice_info=slice_info,
+        source_document=artifact_rel,
+        verdict_override=review.verdict.value,
+    )
+    review_file = reviews_dir / "500-review.judge.slice-vs-arch.example.md"
+    review_file.write_text(content, encoding="utf-8")
+
+    return CaptureProject(
+        root=root,
+        review_file=review_file,
+        artifact_file=artifact,
+        review_index=500,
+        review_type="judge.slice-vs-arch",
+    )
+
+
+@pytest.fixture
+def capture_project(tmp_path: Path, isolated_user_config: Path) -> CaptureProject:
+    """A ready-to-sample project rooted in a git repo with a known remote."""
+    return _build_capture_project(
+        tmp_path / "capture-repo",
+        "https://github.com/manta/capture-repo.git",
+        "Ground truth body.",
+    )
+
+
+@pytest.fixture
+def make_second_project(tmp_path: Path, isolated_user_config: Path) -> CaptureProject:
+    """A second capture-ready project with a distinct remote (cross-project)."""
+    return _build_capture_project(
+        tmp_path / "capture-repo-b",
+        "https://github.com/manta/capture-repo-b.git",
+        "Second project body.",
+    )

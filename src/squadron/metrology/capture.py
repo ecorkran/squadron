@@ -99,10 +99,16 @@ def resolve_target(
             "Produce one (e.g. 'sq review slice <n>') first."
         )
 
+    # The authoritative review type is the file's ``reviewType`` frontmatter,
+    # not a filename segment — a type like ``judge.slice-vs-arch`` contains
+    # dots, so parsing it out of ``{index}-review.{type}.{slice}.{ext}`` by
+    # splitting on '.' is unreliable. Read each candidate's frontmatter.
+    by_type = _candidates_by_type(candidates)
+
     if review_type is not None:
-        typed = [c for c in candidates if c.name.startswith(f"{index}-review.{review_type}.")]
+        typed = by_type.get(review_type, [])
         if not typed:
-            available = _candidate_types(candidates, index)
+            available = sorted(by_type)
             raise MetrologyTargetError(
                 f"No review of type {review_type!r} for index {index}. "
                 f"Available: {', '.join(available) or '(none)'}."
@@ -117,27 +123,42 @@ def resolve_target(
     # No explicit type: only unambiguous when exactly one candidate exists.
     if len(candidates) == 1:
         return candidates[0]
-    available = _candidate_types(candidates, index)
+    available = sorted(by_type)
     raise MetrologyTargetError(
         f"Index {index} is ambiguous — multiple review types exist: "
         f"{', '.join(available)}. Re-run with --type <one-of-these>."
     )
 
 
-def _candidate_types(candidates: list[Path], index: str) -> list[str]:
-    """Extract the review-type segment from ``{index}-review.{type}.{slice}``."""
-    types: list[str] = []
-    prefix = f"{index}-review."
+def _candidates_by_type(candidates: list[Path]) -> dict[str, list[Path]]:
+    """Group candidate review files by their ``reviewType`` frontmatter.
+
+    A file whose frontmatter can't be read is grouped under its filename's
+    first post-``-review.`` segment as a lenient fallback, so a malformed
+    sibling still surfaces as a distinct candidate rather than vanishing.
+    """
+    grouped: dict[str, list[Path]] = {}
     for candidate in candidates:
-        name = candidate.name
-        if not name.startswith(prefix):
-            continue
-        rest = name[len(prefix) :]
-        # rest == "{type}.{slice}.{ext}" — the type is the first segment.
-        parts = rest.split(".")
-        if parts:
-            types.append(parts[0])
-    return sorted(set(types))
+        review_type = _read_review_type(candidate)
+        grouped.setdefault(review_type, []).append(candidate)
+    return grouped
+
+
+def _read_review_type(candidate: Path) -> str:
+    """Return a candidate's ``reviewType``, or a filename-derived fallback."""
+    try:
+        frontmatter = read_review_frontmatter(candidate)
+    except MetrologyTargetError:
+        frontmatter = {}
+    raw_type = frontmatter.get("reviewType")
+    if isinstance(raw_type, str) and raw_type:
+        return raw_type
+    # Fallback: first segment after "{index}-review." in the filename.
+    name = candidate.name
+    marker = "-review."
+    if marker in name:
+        return name.split(marker, 1)[1].split(".", 1)[0]
+    return name
 
 
 def build_capture_payload(review_file: Path, cwd: str) -> CapturePayload:
