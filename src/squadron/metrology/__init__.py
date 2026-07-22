@@ -20,10 +20,14 @@ from squadron.metrology.identity import (
     derive_result_ref,
 )
 from squadron.metrology.models import (
+    RECORD_TYPE_AUDIT_FINDING,
+    RECORD_TYPE_SAMPLE,
     JudgeConfigId,
     JudgeResultRef,
+    MetrologyRecord,
     ProjectId,
     ProjectIdSource,
+    SampleVerdict,
 )
 
 __all__ = [
@@ -35,6 +39,10 @@ __all__ = [
     "ProjectIdSource",
     "JudgeResultRef",
     "JudgeConfigId",
+    "SampleVerdict",
+    "MetrologyRecord",
+    "RECORD_TYPE_SAMPLE",
+    "RECORD_TYPE_AUDIT_FINDING",
     "derive_project_id",
     "derive_result_ref",
     "derive_judge_config_id",

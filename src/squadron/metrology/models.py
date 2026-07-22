@@ -12,9 +12,18 @@ adds the reference/config-id models; T6 adds ``SampleVerdict`` and the
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel
+
+from squadron.review.models import Verdict
+
+#: Record types the store envelope may carry. ``sample`` is written by this
+#: slice; ``audit_finding`` is reserved for 323's tech-debt-audit oracle so it
+#: can extend the store behind the same discriminator without a migration.
+RECORD_TYPE_SAMPLE = "sample"
+RECORD_TYPE_AUDIT_FINDING = "audit_finding"
 
 
 class ProjectIdSource(StrEnum):
@@ -67,3 +76,36 @@ class JudgeConfigId(BaseModel):
     template_name: str
     model: str
     template_content_hash: str | None = None
+
+
+class SampleVerdict(BaseModel):
+    """One human calibration verdict graded blind against a judge result."""
+
+    sample_id: str
+    project_id: ProjectId
+    result_ref: JudgeResultRef
+    judge_config: JudgeConfigId
+    human_verdict: Verdict
+    human_note: str | None = None
+    #: Artifact grain (e.g. "slice" vs "tasks") — recorded when resolvable so
+    #: 321 can report agreement per artifact level without a schema change.
+    artifact_level: str | None = None
+    captured_at: datetime
+    #: Always True for this surface. Recorded so that if a non-blind capture
+    #: path is ever added, anchored verdicts can never masquerade as blind
+    #: agreement data and 321 can exclude them.
+    blind: bool = True
+
+
+class MetrologyRecord(BaseModel):
+    """The on-disk envelope: one JSON file per record in the store.
+
+    ``record_type`` discriminates the payload. This slice writes only
+    ``"sample"`` records (``sample`` set, other payloads absent); the
+    envelope reserves room for 323's ``"audit_finding"`` behind the same
+    discriminator, so a second record type needs no store migration.
+    """
+
+    schema_version: int
+    record_type: str = RECORD_TYPE_SAMPLE
+    sample: SampleVerdict | None = None
