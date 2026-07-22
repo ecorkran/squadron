@@ -17,8 +17,43 @@ from unittest.mock import patch
 import pytest
 import tomli_w
 
+from squadron.metrology.models import (
+    JudgeConfigId,
+    JudgeResultRef,
+    ProjectId,
+    ProjectIdSource,
+    SampleVerdict,
+)
 from squadron.review.models import ReviewFinding, ReviewResult, Verdict
 from squadron.review.persistence import SliceInfo, format_review_markdown
+
+
+def make_sample_verdict(
+    *,
+    sample_id: str = "sample-20260722-abcd1234",
+    project_value: str = "github.com/manta/example-repo",
+    template_name: str = "judge.slice-vs-arch",
+    model: str = "minimax/minimax-m2.7",
+    human_verdict: Verdict = Verdict.PASS,
+    content_hash: str = "0" * 64,
+    artifact_level: str | None = "slice",
+) -> SampleVerdict:
+    """A fully-populated SampleVerdict for store/model tests."""
+    pid = ProjectId(value=project_value, source=ProjectIdSource.REMOTE)
+    return SampleVerdict(
+        sample_id=sample_id,
+        project_id=pid,
+        result_ref=JudgeResultRef(
+            project_id=project_value,
+            relative_review_path="project-documents/user/reviews/302-review.judge.x.example.md",
+            content_hash=content_hash,
+        ),
+        judge_config=JudgeConfigId(template_name=template_name, model=model),
+        human_verdict=human_verdict,
+        human_note=None,
+        artifact_level=artifact_level,
+        captured_at=datetime(2026, 7, 22, tzinfo=UTC),
+    )
 
 
 def _git(*args: str, cwd: Path) -> None:
