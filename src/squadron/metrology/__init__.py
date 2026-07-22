@@ -29,6 +29,12 @@ from squadron.metrology.models import (
     ProjectIdSource,
     SampleVerdict,
 )
+from squadron.metrology.store import (
+    MetrologyStore,
+    SchemaVersionError,
+    generate_sample_id,
+    resolve_store_dir,
+)
 
 __all__ = [
     "MetrologyError",
@@ -43,6 +49,10 @@ __all__ = [
     "MetrologyRecord",
     "RECORD_TYPE_SAMPLE",
     "RECORD_TYPE_AUDIT_FINDING",
+    "MetrologyStore",
+    "SchemaVersionError",
+    "generate_sample_id",
+    "resolve_store_dir",
     "derive_project_id",
     "derive_result_ref",
     "derive_judge_config_id",
