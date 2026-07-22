@@ -8,6 +8,14 @@ store, capture); today it exports the typed exception hierarchy.
 
 from __future__ import annotations
 
+from squadron.metrology.capture import (
+    CaptureOutcome,
+    CapturePayload,
+    build_capture_payload,
+    record_sample,
+    resolve_target,
+    reveal,
+)
 from squadron.metrology.errors import (
     MetrologyError,
     MetrologyIdentityError,
@@ -53,6 +61,12 @@ __all__ = [
     "SchemaVersionError",
     "generate_sample_id",
     "resolve_store_dir",
+    "CapturePayload",
+    "CaptureOutcome",
+    "resolve_target",
+    "build_capture_payload",
+    "record_sample",
+    "reveal",
     "derive_project_id",
     "derive_result_ref",
     "derive_judge_config_id",

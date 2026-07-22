@@ -40,6 +40,15 @@ _FM_FINDINGS = "findings"
 _FM_TIMESTAMP = "dateUpdated"
 _FM_SOURCE_DOC = "sourceDocument"
 
+#: Public frontmatter keys other metrology modules need (capture reads the
+#: graded artifact from sourceDocument; reveal reads the judge output). Kept
+#: here so the on-disk field names live in exactly one module.
+SOURCE_DOC_KEY = _FM_SOURCE_DOC
+VERDICT_KEY = _FM_VERDICT
+SCORE_KEY = _FM_SCORE
+CRITERIA_KEY = _FM_CRITERIA
+FINDINGS_KEY = _FM_FINDINGS
+
 #: Judge fields that must be present to hash a result. A file missing any of
 #: these is malformed for calibration purposes — never hash a partial result.
 _REQUIRED_JUDGE_FIELDS = (_FM_TEMPLATE, _FM_MODEL, _FM_SCORE)
