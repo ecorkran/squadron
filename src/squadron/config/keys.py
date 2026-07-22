@@ -113,6 +113,34 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "providers that can't read files directly."
         ),
     ),
+    "metrology.store_dir": ConfigKey(
+        name="metrology.store_dir",
+        type_=str,
+        default=None,
+        description=(
+            "Metrology store location override (defaults to "
+            "~/.config/squadron/metrology/). Mainly for tests."
+        ),
+    ),
+    "metrology.sample_budget": ConfigKey(
+        name="metrology.sample_budget",
+        type_=int,
+        default=20,
+        description=(
+            "Per-project ceiling on human sample verdicts the capture "
+            "surface will write. At or above this count, capture reports the "
+            "ceiling and records nothing (a normal outcome, not an error)."
+        ),
+    ),
+    "metrology.project_id": ConfigKey(
+        name="metrology.project_id",
+        type_=str,
+        default=None,
+        description=(
+            "Recorded fallback project identity for repos with no git remote "
+            "(project-level, via .squadron.toml). Never a filesystem path."
+        ),
+    ),
 }
 
 

@@ -14,10 +14,15 @@ from squadron.metrology.errors import (
     MetrologyStoreError,
     MetrologyTargetError,
 )
+from squadron.metrology.identity import derive_project_id
+from squadron.metrology.models import ProjectId, ProjectIdSource
 
 __all__ = [
     "MetrologyError",
     "MetrologyIdentityError",
     "MetrologyStoreError",
     "MetrologyTargetError",
+    "ProjectId",
+    "ProjectIdSource",
+    "derive_project_id",
 ]
