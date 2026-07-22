@@ -12,6 +12,57 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260722 (2)
+
+### Slice 321 designed: agreement & dispersion reporting (Phase 4)
+
+Low-level design for slice 321 (Agreement & Dispersion Reporting) — the human
+oracle's headline analysis over the sample 320 accumulates. Written to
+`project-documents/user/slices/321-slice.agreement-dispersion-reporting.md`,
+`status: not_started`, awaiting PM approval.
+
+**What the slice designs:** a pure read-and-aggregate layer over 320's
+`MetrologyStore` — agreement (judge-vs-human), dispersion (judge-vs-judge),
+and trend, always at the per-artifact-level / per-judge-configuration grain,
+every figure carrying its n. No new store engine, no capture change, no
+judging-path change. New surface-agnostic core (`levels.py`, `report.py`,
+`report_models.py`) plus `sq metrology report agreement|dispersion|trend`
+thin shells; report models are the typed interface 322 consumes.
+
+**Two load-bearing facts verified against the code (not assumed) shaped it:**
+- **300 multi-sample judging (FW#1) has NOT shipped** — one `ReviewResult`
+  per review file, no repeated same-config judgments exist. So 321 ships
+  **cross-configuration** dispersion (distinct model/template on one artifact,
+  which the store already holds) and builds/tests the **same-config** path but
+  leaves it **inert until 300 FW#1 lands** — no 300 dependency, no 180
+  `fan_out` dependency introduced. Recorded as an explicit cross-slice
+  coordination point in the slice design and mirrored into the 320 slice-plan
+  Future Work list (new item 4), per PM request to track when/where it goes.
+- **`SampleVerdict.artifact_level` is a reserved, always-`None` hook** with no
+  vocabulary defined. 321 defines an `ArtifactLevel` enum and derives it **at
+  report time** from each sample's `reviewType` — backfilling historical
+  `None` records with **no store migration**; unmappable types land in an
+  explicit `UNCLASSIFIED` bucket.
+
+**Key design decisions:**
+- **Store backend: flat-file retained.** 321 is the 320-inherited SQLite-vs-
+  flat-file revisit point, but the workload (in-memory group-by over a small
+  cross-project sample) does not strain glob-and-filter — keep flat-file, with
+  a recorded trip-wire condition for adopting stdlib `sqlite3` later.
+- **Agreement metric: naive percent + exposed n**, not a chance-corrected
+  coefficient that misbehaves at small n (honest-statistics-at-small-n).
+- **Content-verified judge-side join:** agreement re-reads the referenced
+  review file and verifies `result_ref.content_hash`; a changed/missing file
+  excludes the sample as `stale-judge-result` (counted, never joined to a
+  stale verdict). This is the load-bearing correctness point.
+- **Comparability enforced:** group on `JudgeConfigId`; unversioned records
+  (`template_content_hash` None) are flagged/segregated, never pooled.
+
+Relative effort 3/5. Dependencies: [320] (complete). Next: PM approval, then
+Phase 5 task breakdown for 321.
+
+---
+
 ## 20260722 (1)
 
 ### Slice 320 keystone implemented: metrology data layer & blind sample capture
