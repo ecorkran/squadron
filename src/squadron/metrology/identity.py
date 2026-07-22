@@ -190,9 +190,14 @@ def read_review_frontmatter(review_file: Path) -> dict[str, object]:
 def _canonical_projection(frontmatter: dict[str, object]) -> dict[str, object]:
     """Build the deterministic judge-field projection that is hashed.
 
-    Findings are reduced to a stable, order-independent list keyed by id;
-    criteria are sorted by name. Volatile presentation fields (paths already
-    relative in the file, formatting) are excluded.
+    Findings are reduced to a stable, order-independent list. The positional
+    ``id`` (F001, F002…) is deliberately excluded: it is an ordinal assigned
+    by serialization position, so the *same set* of findings listed in a
+    different order carries different ids. Hashing on content
+    (severity/category/summary/location) and sorting by that content makes the
+    reference stable across reorderings, as the design requires. Volatile
+    presentation fields (paths already relative in the file, formatting) are
+    excluded.
     """
     findings_raw: object = frontmatter.get(_FM_FINDINGS)
     findings: list[dict[str, str]] = []
@@ -203,14 +208,20 @@ def _canonical_projection(frontmatter: dict[str, object]) -> dict[str, object]:
             item = cast("dict[object, object]", entry)
             findings.append(
                 {
-                    "id": str(item.get("id", "")),
                     "severity": str(item.get("severity", "")),
                     "category": str(item.get("category", "")),
                     "summary": str(item.get("summary", "")),
                     "location": str(item.get("location", "")),
                 }
             )
-    findings.sort(key=lambda finding: finding["id"])
+    findings.sort(
+        key=lambda finding: (
+            finding["summary"],
+            finding["location"],
+            finding["severity"],
+            finding["category"],
+        )
+    )
 
     criteria_raw: object = frontmatter.get(_FM_CRITERIA)
     criteria: dict[str, object] = {}

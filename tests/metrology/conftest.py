@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 import tomli_w
+
+from squadron.review.models import ReviewFinding, ReviewResult, Verdict
+from squadron.review.persistence import SliceInfo, format_review_markdown
 
 
 def _git(*args: str, cwd: Path) -> None:
@@ -89,6 +93,73 @@ def write_project_config() -> Callable[[Path, dict[str, object]], Path]:
         existing.update(values)
         with open(path, "wb") as handle:
             tomli_w.dump(existing, handle)
+        return path
+
+    return _write
+
+
+def make_judge_result(
+    *,
+    verdict: Verdict = Verdict.PASS,
+    score: float = 98.0,
+    criteria: dict[str, float] | None = None,
+    findings: list[ReviewFinding] | None = None,
+    model: str = "minimax/minimax-m2.7",
+) -> ReviewResult:
+    """A ReviewResult shaped like a persisted 300 judge result."""
+    return ReviewResult(
+        verdict=verdict,
+        findings=findings if findings is not None else [],
+        raw_output="",
+        template_name="judge.slice-vs-arch",
+        input_files={"slice_design": "slices/302-slice.example.md"},
+        timestamp=datetime(2026, 7, 14, tzinfo=UTC),
+        model=model,
+        score=score,
+        criteria=criteria if criteria is not None else {"alignment": 95.0, "scope": 100.0},
+    )
+
+
+@pytest.fixture
+def write_review_file() -> Callable[..., Path]:
+    """Return a writer that persists a judge review in the production format.
+
+    Uses ``format_review_markdown`` — the exact writer the 300 path uses — so
+    the parser under test consumes the real on-disk shape, not a hand-rolled
+    approximation (CLAUDE.md parser-fixture rule).
+    """
+
+    def _write(
+        target_dir: Path,
+        *,
+        filename: str = "302-review.judge.slice-vs-arch.example.md",
+        review_type: str = "judge.slice-vs-arch",
+        result: ReviewResult | None = None,
+        raw_text: str | None = None,
+    ) -> Path:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        path = target_dir / filename
+        if raw_text is not None:
+            path.write_text(raw_text, encoding="utf-8")
+            return path
+        review = result if result is not None else make_judge_result()
+        slice_info = SliceInfo(
+            index=302,
+            name="Example",
+            slice_name="example",
+            design_file="project-documents/user/slices/302-slice.example.md",
+            task_files=[],
+            arch_file="",
+            project="squadron",
+        )
+        content = format_review_markdown(
+            review,
+            review_type,
+            slice_info=slice_info,
+            source_document="project-documents/user/slices/302-slice.example.md",
+            verdict_override=review.verdict.value,
+        )
+        path.write_text(content, encoding="utf-8")
         return path
 
     return _write
