@@ -38,3 +38,32 @@ class ProjectId(BaseModel):
 
     value: str
     source: ProjectIdSource
+
+
+class JudgeResultRef(BaseModel):
+    """A content-addressed pointer to one persisted 300 judge result.
+
+    300 results carry no id and are overwritten on re-run, so the reference
+    is ``(project_id, relative_review_path, content_hash)`` where
+    ``content_hash`` is a SHA-256 over a canonical projection of the judge
+    fields — stable for a given result, distinct after a re-run overwrites
+    the file. This is what makes a sample attach unambiguously to one result.
+    """
+
+    project_id: str
+    relative_review_path: str
+    content_hash: str
+
+
+class JudgeConfigId(BaseModel):
+    """The judge-configuration identity a sample was graded under.
+
+    ``(template_name, model, template_content_hash)``. The template-content
+    hash is computed at capture time from the resolved template; 322 decides
+    whether it or a coordinated 300 write-path field becomes the
+    comparability key. This slice records it.
+    """
+
+    template_name: str
+    model: str
+    template_content_hash: str | None = None

@@ -14,8 +14,17 @@ from squadron.metrology.errors import (
     MetrologyStoreError,
     MetrologyTargetError,
 )
-from squadron.metrology.identity import derive_project_id
-from squadron.metrology.models import ProjectId, ProjectIdSource
+from squadron.metrology.identity import (
+    derive_judge_config_id,
+    derive_project_id,
+    derive_result_ref,
+)
+from squadron.metrology.models import (
+    JudgeConfigId,
+    JudgeResultRef,
+    ProjectId,
+    ProjectIdSource,
+)
 
 __all__ = [
     "MetrologyError",
@@ -24,5 +33,9 @@ __all__ = [
     "MetrologyTargetError",
     "ProjectId",
     "ProjectIdSource",
+    "JudgeResultRef",
+    "JudgeConfigId",
     "derive_project_id",
+    "derive_result_ref",
+    "derive_judge_config_id",
 ]
