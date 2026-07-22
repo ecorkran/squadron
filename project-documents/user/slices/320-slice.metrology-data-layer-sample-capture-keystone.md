@@ -276,6 +276,14 @@ sq metrology sample 500 --type slice --verdict PASS --cwd <repo-no-remote>
 
 **Step 7 — judging-path regression:** `uv run pytest` → **2261 passed, 2 skipped** (46 new metrology tests included); `uv run pyright` and `uv run ruff check` → clean. The 300 judging path and all prior tests pass unchanged.
 
+### Code review (20260722) — CONCERNS addressed
+
+Post-implementation code review (`320-review.code.…`, kimi-k2.7-code) raised 4 CONCERNs, all fixed; 2 PASS (surface-agnostic core / data-structure blindness; atomic-write + schema guard). Full suite after fixes: **2268 passed, 2 skipped**.
+- **F001** — `_sample_budget()` now takes `cwd` (project-level `.squadron.toml` budget is honored, consistent with `resolve_store_dir`/`derive_project_id`) and raises `typer.BadParameter` on a non-integer value instead of silently falling back to `0` (which disabled all capture). Tests: project-budget-via-cwd, non-int-errors.
+- **F002** — `metrology list` wraps store construction + listing in the same `MetrologyStoreError` handler as `sample` (formatted error + clean exit, no traceback). Test: list-handles-store-init-error.
+- **F003** — the store's `judge_config` filter now compares `(template_name, model)` and only compares `template_content_hash` when the *filter* specifies one — so a template+model filter isn't silently defeated once records carry a hash. Fixed at the store predicate (`_judge_config_matches`). Tests: matches-despite-stored-hash, explicit-hash-still-narrows.
+- **F004** — added a git-remote-timeout test (patches `subprocess.run` → `TimeoutExpired`, asserts fall-through to recorded id + WARNING log), plus the timeout-then-no-recorded-id raise.
+
 ## Risk Assessment
 
 ### Technical Risks

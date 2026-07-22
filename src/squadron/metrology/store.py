@@ -61,6 +61,22 @@ def generate_sample_id(now: datetime | None = None) -> str:
     return f"sample-{stamp}-{uuid.uuid4().hex[:8]}"
 
 
+def _judge_config_matches(stored: JudgeConfigId, wanted: JudgeConfigId) -> bool:
+    """Whether a stored judge-config matches a filter.
+
+    Always compares ``(template_name, model)``. ``template_content_hash`` is a
+    322 version refinement that may be populated on the stored record but absent
+    on a template+model filter — so it is compared **only when the filter
+    specifies one**. Otherwise a template+model filter would silently return
+    nothing once records start carrying a hash.
+    """
+    if stored.template_name != wanted.template_name or stored.model != wanted.model:
+        return False
+    if wanted.template_content_hash is None:
+        return True
+    return stored.template_content_hash == wanted.template_content_hash
+
+
 class MetrologyStore:
     """Manages metrology record files on disk."""
 
@@ -166,7 +182,9 @@ class MetrologyStore:
                 continue
             if project_id is not None and sample.project_id.value != project_id:
                 continue
-            if judge_config is not None and sample.judge_config != judge_config:
+            if judge_config is not None and not _judge_config_matches(
+                sample.judge_config, judge_config
+            ):
                 continue
             samples.append(sample)
         samples.sort(key=lambda s: s.captured_at, reverse=True)

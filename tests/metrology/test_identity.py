@@ -7,8 +7,11 @@ remote-absent / non-repo fall-through (git-remote-absent failure-mode row).
 
 from __future__ import annotations
 
+import logging
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -70,3 +73,37 @@ class TestDeriveProjectId:
     def test_non_repo_no_recorded_id_raises(self, non_repo_dir: Path) -> None:
         with pytest.raises(MetrologyIdentityError):
             derive_project_id(str(non_repo_dir))
+
+    def test_git_remote_timeout_falls_through_with_warning(
+        self,
+        repo_no_remote: Path,
+        write_project_config: Callable[[Path, dict[str, object]], Path],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # Failure-mode row: a hung git must not hang the function — a timeout is
+        # treated as remote-absent (falls through to recorded id) and logged.
+        write_project_config(repo_no_remote, {"metrology.project_id": "timeout/id"})
+        with (
+            caplog.at_level(logging.WARNING, logger="squadron.metrology.identity"),
+            patch(
+                "squadron.metrology.identity.subprocess.run",
+                side_effect=subprocess.TimeoutExpired(cmd="git", timeout=5.0),
+            ),
+        ):
+            pid = derive_project_id(str(repo_no_remote))
+        assert pid.value == "timeout/id"
+        assert pid.source == ProjectIdSource.RECORDED
+        assert any(
+            "timed out" in record.message and record.levelno == logging.WARNING
+            for record in caplog.records
+        )
+
+    def test_git_remote_timeout_then_no_recorded_id_raises(self, repo_no_remote: Path) -> None:
+        # Timeout + no recorded id → the identity error still fires (loud, not
+        # a hang or a silent path-derived fallback).
+        with patch(
+            "squadron.metrology.identity.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="git", timeout=5.0),
+        ):
+            with pytest.raises(MetrologyIdentityError):
+                derive_project_id(str(repo_no_remote))

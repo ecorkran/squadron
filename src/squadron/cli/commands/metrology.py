@@ -63,9 +63,20 @@ def _build_store(cwd: str) -> MetrologyStore:
     return MetrologyStore(store_dir=resolve_store_dir(cwd=cwd))
 
 
-def _sample_budget() -> int:
-    value = get_config("metrology.sample_budget")
-    return value if isinstance(value, int) else 0
+def _sample_budget(cwd: str) -> int:
+    """Read the per-project sample budget, honoring project-level config.
+
+    Passes ``cwd`` so a ``.squadron.toml`` override is seen (consistent with
+    ``resolve_store_dir`` / ``derive_project_id``). A non-integer value is a
+    configuration error, not a silent ``0`` that would disable all capture.
+    """
+    value = get_config("metrology.sample_budget", cwd=cwd)
+    if not isinstance(value, int):
+        raise typer.BadParameter(
+            f"metrology.sample_budget must be an integer, got {value!r}. "
+            "Fix it with 'sq config set metrology.sample_budget <n>'."
+        )
+    return value
 
 
 @metrology_app.command("sample")
@@ -114,7 +125,7 @@ def sample(
             note,
             store=_build_store(resolved_cwd),
             cwd=resolved_cwd,
-            sample_budget=_sample_budget(),
+            sample_budget=_sample_budget(resolved_cwd),
         )
     except MetrologyIdentityError as exc:
         rprint(f"[red]Error: {exc}[/red]")
@@ -211,8 +222,12 @@ def list_samples(
         template_name, _, model = judge_config.partition("|")
         config_filter = JudgeConfigId(template_name=template_name, model=model)
 
-    store = _build_store(resolved_cwd)
-    samples = store.list_samples(project_id=project, judge_config=config_filter)
+    try:
+        store = _build_store(resolved_cwd)
+        samples = store.list_samples(project_id=project, judge_config=config_filter)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
     if not samples:
         rprint("[dim]No samples recorded.[/dim]")
         return

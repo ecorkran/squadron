@@ -118,6 +118,39 @@ class TestQuery:
         narrowed = store.list_samples(judge_config=target)
         assert [s.sample_id for s in narrowed] == ["sample-20260722-2222bbbb"]
 
+    def test_template_model_filter_matches_despite_stored_hash(self, tmp_path: Path) -> None:
+        # F003 regression: a template+model filter (hash None) must still match
+        # a stored record that carries a populated template_content_hash — the
+        # hash is a 322 version refinement, not part of a template+model query.
+        store = MetrologyStore(store_dir=tmp_path)
+        sample = make_sample_verdict(sample_id="sample-20260722-3333cccc")
+        sample.judge_config.template_content_hash = "deadbeef" * 8
+        store.write_sample(sample)
+        wanted = JudgeConfigId(
+            template_name=sample.judge_config.template_name,
+            model=sample.judge_config.model,
+        )
+        assert wanted.template_content_hash is None
+        matched = store.list_samples(judge_config=wanted)
+        assert [s.sample_id for s in matched] == ["sample-20260722-3333cccc"]
+
+    def test_filter_with_explicit_hash_still_narrows(self, tmp_path: Path) -> None:
+        # When the filter *does* specify a hash, it narrows on it.
+        store = MetrologyStore(store_dir=tmp_path)
+        a = make_sample_verdict(sample_id="sample-20260722-aaaa0001")
+        a.judge_config.template_content_hash = "aaaa" * 16
+        b = make_sample_verdict(sample_id="sample-20260722-bbbb0002")
+        b.judge_config.template_content_hash = "bbbb" * 16
+        store.write_sample(a)
+        store.write_sample(b)
+        wanted = JudgeConfigId(
+            template_name=a.judge_config.template_name,
+            model=a.judge_config.model,
+            template_content_hash="aaaa" * 16,
+        )
+        matched = store.list_samples(judge_config=wanted)
+        assert [s.sample_id for s in matched] == ["sample-20260722-aaaa0001"]
+
     def test_count_samples_per_project(self, tmp_path: Path) -> None:
         store = MetrologyStore(store_dir=tmp_path)
         for i in range(3):
