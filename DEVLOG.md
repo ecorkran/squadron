@@ -2,13 +2,73 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260715
+dateUpdated: 20260722
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260722 (1)
+
+### Slice 320 keystone implemented: metrology data layer & blind sample capture
+
+Implemented the keystone of initiative 320 (Judge Calibration & Quality
+Metrology) — the durable, user-level metrology store plus the blind,
+non-blocking human-sample capture command. All 16 tasks (T1–T16) landed on
+branch `320-slice.metrology-data-layer-sample-capture-keystone`, each with its
+own commit; full suite green (**2261 passed, 2 skipped**, 46 new metrology
+tests), pyright and ruff clean repo-wide, verification walkthrough executed.
+
+**What shipped:**
+- New surface-agnostic `squadron.metrology` package: `errors.py` (three typed
+  exceptions under `MetrologyError`), `identity.py` (stable project identity +
+  content-addressed judge-result reference + judge-config id), `models.py`
+  (Pydantic records + `record_type` envelope), `store.py` (`MetrologyStore`
+  modeled on `StateManager` — atomic write, schema version, glob-and-filter,
+  no DB), `capture.py` (blind capture core).
+- Thin Typer shell `cli/commands/metrology.py`: `sq metrology sample` /
+  `sq metrology list`, registered in `app.py` (the `config.py` parity pattern).
+- Three config keys: `metrology.store_dir`, `metrology.sample_budget`,
+  `metrology.project_id`.
+
+**Design decisions confirmed in code:**
+- **Stable project identity** is git-remote-URL-derived (normalized: strip
+  credentials/scheme/`.git`, collapse scp-vs-https), `.squadron.toml`
+  `metrology.project_id` fallback, explicit `MetrologyIdentityError` if neither
+  — never a filesystem path.
+- **Content-addressed result ref** `(project_id, relative_review_path,
+  content_hash)`: SHA-256 over a canonical projection of the persisted review's
+  judge frontmatter. The canonical projection **excludes the positional finding
+  id** (F001…) and sorts findings by content, so the same finding set hashes
+  identically regardless of serialized order — a correction made when the
+  order-independence test exposed that positional ids flip on reorder.
+- **Blindness is a data-layer property**: `CapturePayload` structurally holds
+  only `review_file`, `artifact_path`, `ground_truth_text` — there is no field
+  that could carry judge output. Asserted on the object, not by UI convention.
+- **Budget** is enforced as a per-project ceiling on *captures written*
+  (offering policy is 321); at/over the ceiling `record_sample` refuses cleanly
+  and returns a budget-reached outcome (exit 0, not an error).
+
+**Bugs caught during implementation:**
+- The metrology commands must anchor the reviews dir at the **process working
+  directory** (`--cwd`, default `.`), *not* the `cwd` config key (which points
+  inside `project-documents/user` for the review models' content lookups).
+  First CLI smoke produced a doubled path; corrected.
+- Review type is resolved from each candidate's `reviewType` **frontmatter**,
+  not by splitting the filename — a dotted type (`judge.slice-vs-arch`) is
+  unparseable by segment. Caught by the ambiguous-index test.
+
+**Discipline:** the 300 judging path is unmodified; a judge run with no
+metrology store present behaves exactly as before. `record_type` discriminator
+reserves the `audit_finding` path for 323 with no migration.
+
+**Next:** PM review / merge to `main`; then slice 321 (Agreement & Dispersion
+Reporting), the first aggregation workload and the store-backend (SQLite)
+revisit point.
 
 ---
 

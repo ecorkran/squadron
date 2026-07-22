@@ -6,8 +6,8 @@ parent: ../architecture/320-slices.judge-calibration-quality-metrology.md
 dependencies: [100, 140, 300]
 interfaces: [321, 322, 323, 324]
 dateCreated: 20260718
-dateUpdated: 20260718
-status: not_started
+dateUpdated: 20260722
+status: complete
 ---
 
 # Slice Design: Metrology Data Layer & Sample Capture (keystone)
@@ -239,6 +239,42 @@ This is the demo script proving the slice delivers. Commands marked *(new)* are 
 6. **Confirm explicit identity failure.** *(new)* In a git repo with **no remote** and no `metrology.project_id` set, run `sq metrology sample ...`; confirm an explicit error naming the fix (record `metrology.project_id`), and that nothing was written under a path-derived identity.
 
 7. **Confirm the judging path is untouched.** *(existing)* Run the full test suite and a normal judge review with no metrology involvement; confirm identical behavior to before this slice.
+
+### Implementation Verification (executed 20260722)
+
+The walkthrough was executed end-to-end during implementation. Reproducible commands and observed output below (an external agent can re-run these).
+
+**Caveats discovered:**
+- The metrology commands anchor the reviews dir at the **process working directory** (`--cwd`, default `.`), *not* the `cwd` config key. That key scopes the review models' document-content lookups (it points inside `project-documents/user`); reviews are persisted by `save_review_result` relative to the process dir. `resolve_target` therefore does not read the `cwd` config key — pass `--cwd <repo-root>` to operate against a specific project. This was a real bug caught in the first CLI smoke (doubled path) and corrected.
+- Target review type is resolved from each candidate file's `reviewType` **frontmatter**, not by splitting the filename — a dotted type like `judge.slice-vs-arch` is unparseable by segment. Caught by the ambiguous-index test.
+- The `judge_config.template_content_hash` is `None` unless the persisted `reviewType` resolves to a known template by name (never fabricated); 322 finalizes the version key.
+
+**Step 2 — blind capture (non-interactive `--verdict`):**
+```
+sq metrology sample 500 --type judge.slice --verdict PASS --cwd <repoA>
+```
+Observed: prints `Artifact: …/500-slice.demo.md` and the ground-truth body; the judge `score: 88.0` does **not** appear before the verdict; prints `Recorded sample-YYYYMMDD-xxxxxxxx`. (Interactive form prompts `Your verdict [PASS/CONCERNS/FAIL]`, then offers a post-commit reveal.)
+
+**Steps 3–4 — store, join, cross-project:**
+```
+sq metrology list --cwd <repoA>
+```
+Observed: with a capture in repoA (`github.com/manta/walk-a`) and repoB (`github.com/manta/walk-b`) sharing one `metrology.store_dir`, `list` returns **both** project ids. Stored `sample-*.json` carries `result_ref.content_hash`, `blind: true`, and `judge_config: (template, model)`.
+
+**Step 5 — fail-fast on missing target:**
+```
+sq metrology sample 999 --type slice --verdict PASS --cwd <repo>
+# → Error: No review result for index 999 … (exit 1, nothing written)
+```
+
+**Step 6 — explicit identity failure (repo with no remote, no recorded id):**
+```
+sq metrology sample 500 --type slice --verdict PASS --cwd <repo-no-remote>
+# → Error: No stable project identity … Record one with
+#   'sq config set metrology.project_id <id> --project' … (exit 1, nothing written)
+```
+
+**Step 7 — judging-path regression:** `uv run pytest` → **2261 passed, 2 skipped** (46 new metrology tests included); `uv run pyright` and `uv run ruff check` → clean. The 300 judging path and all prior tests pass unchanged.
 
 ## Risk Assessment
 
