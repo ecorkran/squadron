@@ -25,7 +25,15 @@ from squadron.metrology.errors import (
     MetrologyStoreError,
     MetrologyTargetError,
 )
+from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.models import JudgeConfigId
+from squadron.metrology.report import agreement_report, dispersion_report, trend_report
+from squadron.metrology.report_models import (
+    AgreementReport,
+    DispersionReport,
+    ExclusionSummary,
+    TrendReport,
+)
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.review.models import Verdict
 
@@ -34,6 +42,13 @@ metrology_app = typer.Typer(
     help="Capture and inspect blind human calibration samples.",
     no_args_is_help=True,
 )
+
+report_app = typer.Typer(
+    name="report",
+    help="Report agreement, dispersion, and trend over captured samples (read-only).",
+    no_args_is_help=True,
+)
+metrology_app.add_typer(report_app)
 
 _VERDICT_CHOICES = "/".join(v.value for v in (Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL))
 
@@ -238,3 +253,142 @@ def list_samples(
             f"{sample_record.judge_config.template_name}/{sample_record.judge_config.model}  "
             f"-> {sample_record.result_ref.relative_review_path}"
         )
+
+
+def _parse_level_filter(raw: str | None) -> ArtifactLevel | None:
+    if raw is None:
+        return None
+    try:
+        return ArtifactLevel(raw.strip().lower())
+    except ValueError as exc:
+        choices = "/".join(level.value for level in ArtifactLevel)
+        rprint(f"[red]Error: invalid --level {raw!r} (expected one of {choices}).[/red]")
+        raise typer.Exit(code=1) from exc
+
+
+def _excluded_line(excluded: ExclusionSummary) -> str:
+    return (
+        f"{excluded.total_excluded} excluded "
+        f"({excluded.stale_judge_result} stale-judge-result, {excluded.unversioned} unversioned)"
+    )
+
+
+@report_app.command("agreement")
+def report_agreement(
+    project: str | None = typer.Option(None, "--project", help="Filter by project id"),
+    level: str | None = typer.Option(None, "--level", help="Filter by artifact level"),
+    as_json: bool = typer.Option(False, "--json", help="Emit the AgreementReport model verbatim"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Judge-vs-human match rate, per artifact level and judge configuration."""
+    resolved_cwd = _resolve_cwd(cwd)
+    level_filter = _parse_level_filter(level)
+
+    try:
+        store = _build_store(resolved_cwd)
+        samples = store.list_samples(project_id=project)
+        report: AgreementReport = agreement_report(samples, resolved_cwd)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    cells = [c for c in report.cells if level_filter is None or c.group.artifact_level == level_filter]
+
+    if as_json:
+        typer.echo(report.model_dump_json())
+        return
+
+    if not cells:
+        rprint("[dim]No evidence.[/dim]")
+    for cell in cells:
+        marker = " [yellow](low-n)[/yellow]" if cell.below_floor else ""
+        rprint(
+            f"{cell.group.artifact_level.value}  "
+            f"{cell.group.judge_config.template_name}/{cell.group.judge_config.model}  "
+            f"match_rate={cell.match_rate:.2f} (n={cell.n}){marker}"
+        )
+    rprint(f"[dim]{_excluded_line(report.excluded)}[/dim]")
+
+
+@report_app.command("dispersion")
+def report_dispersion(
+    project: str | None = typer.Option(None, "--project", help="Filter by project id"),
+    level: str | None = typer.Option(None, "--level", help="Filter by artifact level"),
+    as_json: bool = typer.Option(False, "--json", help="Emit the DispersionReport model verbatim"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Judge-vs-judge disagreement on the same artifact across distinct configs."""
+    resolved_cwd = _resolve_cwd(cwd)
+    level_filter = _parse_level_filter(level)
+
+    try:
+        store = _build_store(resolved_cwd)
+        samples = store.list_samples(project_id=project)
+        report: DispersionReport = dispersion_report(samples, resolved_cwd)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    cells = [
+        c for c in report.cells if level_filter is None or c.artifact.artifact_level == level_filter
+    ]
+
+    if as_json:
+        typer.echo(report.model_dump_json())
+        return
+
+    if not cells:
+        rprint("[dim]No multi-config artifacts yet.[/dim]")
+    for cell in cells:
+        configs = ", ".join(f"{jc.template_name}/{jc.model}" for jc in cell.judge_configs)
+        rprint(
+            f"{cell.artifact.source_document} ({cell.artifact.artifact_level.value})  "
+            f"[{configs}]  disagreement_rate={cell.disagreement_rate:.2f} (n={cell.n})"
+        )
+    rprint(f"[dim]{_excluded_line(report.excluded)}[/dim]")
+
+
+@report_app.command("trend")
+def report_trend(
+    project: str | None = typer.Option(None, "--project", help="Filter by project id"),
+    level: str | None = typer.Option(None, "--level", help="Filter by artifact level"),
+    bucket: str | None = typer.Option(None, "--bucket", help="Time-bucket grain (day/week/month)"),
+    as_json: bool = typer.Option(False, "--json", help="Emit the TrendReport model verbatim"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Agreement/dispersion figures bucketed over time, on the same grain."""
+    resolved_cwd = _resolve_cwd(cwd)
+    level_filter = _parse_level_filter(level)
+
+    try:
+        store = _build_store(resolved_cwd)
+        samples = store.list_samples(project_id=project)
+        report: TrendReport = trend_report(samples, resolved_cwd, bucket=bucket)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except MetrologyTargetError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if as_json:
+        typer.echo(report.model_dump_json())
+        return
+
+    if not report.series:
+        rprint("[dim]No evidence.[/dim]")
+        return
+    for entry in report.series:
+        cells = [
+            c
+            for c in entry.agreement.cells
+            if level_filter is None or c.group.artifact_level == level_filter
+        ]
+        rprint(f"[bold]{entry.bucket_label}[/bold]")
+        for cell in cells:
+            marker = " [yellow](low-n)[/yellow]" if cell.below_floor else ""
+            rprint(
+                f"  {cell.group.artifact_level.value}  "
+                f"{cell.group.judge_config.template_name}/{cell.group.judge_config.model}  "
+                f"match_rate={cell.match_rate:.2f} (n={cell.n}){marker}"
+            )
