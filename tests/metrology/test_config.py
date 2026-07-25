@@ -38,6 +38,17 @@ class TestKeyRegistration:
         assert bucket_key.type_ is str
         assert bucket_key.default == "month"
 
+    def test_calibration_keys_present_with_float_types_and_defaults(self) -> None:
+        graduate_key = CONFIG_KEYS["metrology.graduate_match_rate"]
+        tighten_key = CONFIG_KEYS["metrology.tighten_match_rate"]
+        residual_key = CONFIG_KEYS["metrology.residual_sample_rate"]
+        assert graduate_key.type_ is float
+        assert isinstance(graduate_key.default, float)
+        assert tighten_key.type_ is float
+        assert isinstance(tighten_key.default, float)
+        assert residual_key.type_ is float
+        assert isinstance(residual_key.default, float)
+
 
 class TestReportKeysAreRead:
     def test_min_evidence_n_reads_back_as_int(self, repo_no_remote: Path) -> None:
@@ -65,6 +76,45 @@ class TestReportKeysAreRead:
         write_project_config(repo_no_remote, {"metrology.trend_bucket": "week"})
         value = get_config("metrology.trend_bucket", cwd=str(repo_no_remote))
         assert value == "week"
+
+    def test_graduate_match_rate_reads_back_as_float(self, repo_no_remote: Path) -> None:
+        value = get_config("metrology.graduate_match_rate", cwd=str(repo_no_remote))
+        assert isinstance(value, float)
+
+    def test_tighten_match_rate_reads_back_as_float(self, repo_no_remote: Path) -> None:
+        value = get_config("metrology.tighten_match_rate", cwd=str(repo_no_remote))
+        assert isinstance(value, float)
+
+    def test_residual_sample_rate_reads_back_as_float(self, repo_no_remote: Path) -> None:
+        value = get_config("metrology.residual_sample_rate", cwd=str(repo_no_remote))
+        assert isinstance(value, float)
+
+    def test_graduate_match_rate_project_override_honored(
+        self,
+        repo_no_remote: Path,
+        write_project_config: Callable[[Path, dict[str, object]], Path],
+    ) -> None:
+        write_project_config(repo_no_remote, {"metrology.graduate_match_rate": 0.95})
+        value = get_config("metrology.graduate_match_rate", cwd=str(repo_no_remote))
+        assert value == 0.95
+
+    def test_tighten_match_rate_project_override_honored(
+        self,
+        repo_no_remote: Path,
+        write_project_config: Callable[[Path, dict[str, object]], Path],
+    ) -> None:
+        write_project_config(repo_no_remote, {"metrology.tighten_match_rate": 0.5})
+        value = get_config("metrology.tighten_match_rate", cwd=str(repo_no_remote))
+        assert value == 0.5
+
+    def test_residual_sample_rate_project_override_honored(
+        self,
+        repo_no_remote: Path,
+        write_project_config: Callable[[Path, dict[str, object]], Path],
+    ) -> None:
+        write_project_config(repo_no_remote, {"metrology.residual_sample_rate": 0.25})
+        value = get_config("metrology.residual_sample_rate", cwd=str(repo_no_remote))
+        assert value == 0.25
 
 
 class TestKeysAreRead:
