@@ -33,8 +33,10 @@ from squadron.review.models import Verdict
 _logger = logging.getLogger(__name__)
 
 #: Where review/persistence.py writes results, relative to the project root.
-#: Filenames are ``{index}-review.{type}.{slice}.{ext}``.
-_REVIEWS_SUBDIR = Path("project-documents/user/reviews")
+#: Filenames are ``{index}-review.{type}.{slice}.{ext}``. Public so other
+#: metrology modules (e.g. ``discovery.py``) reference the same definition
+#: rather than duplicating the literal.
+REVIEWS_SUBDIR = Path("project-documents/user/reviews")
 
 
 @dataclass(frozen=True)
@@ -90,7 +92,7 @@ def resolve_target(
             "index. Pass a review-file path, or an index with --type."
         )
 
-    reviews_dir = Path(cwd) / _REVIEWS_SUBDIR
+    reviews_dir = Path(cwd) / REVIEWS_SUBDIR
     index = target
     candidates = sorted(reviews_dir.glob(f"{index}-review.*"))
     if not candidates:

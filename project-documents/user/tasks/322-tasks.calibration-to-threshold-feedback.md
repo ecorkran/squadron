@@ -61,7 +61,7 @@ status: not_started
   - [x] `ThresholdTarget`: `template_name: str`, `current: JudgeThresholds | None` (absent when the template is unresolvable — never fabricated), `model_dimension_note: str`
   - [x] `ThresholdRecommendation`: `group: GroupKey` (321's), `direction: RecommendationDirection`, `evidence: EvidenceSnapshot`, `target: ThresholdTarget`, `rationale: str`
   - [x] `RecommendationReport`: `cells: list[ThresholdRecommendation]`, `excluded: ExclusionSummary` (321's — pass through verbatim), `floor_applied: int`
-  - [x] `GraduatedConfig`: `judge_config: JudgeConfigId`, `artifact_level: ArtifactLevel`, `evidence: EvidenceSnapshot`, `graduated_at: datetime` — carries the **full** `JudgeConfigId` (template_name + model + template_content_hash), per the design's version-scoping decision
+  - [x] `GraduatedConfig`: `judge_config: JudgeConfigId`, `artifact_level: ArtifactLevel`, `evidence: EvidenceSnapshot`, `graduated_at: datetime` — carries the **full** `JudgeConfigId` (template_name + model + template_content_hash), per the design's version-scoping decision. Note: defined in `models.py` (not `calibration_models.py`) as a `MetrologyRecord` envelope payload, mirroring the `SampleVerdict` precedent.
   - [x] `OfferTarget`: `review_path: str`, `judge_config: JudgeConfigId`, `reason: Literal["residual-sampling"]`
   - [x] Note: `JudgeThresholds` is a `@dataclass` in `pipeline/actions/judge.py`, not currently a Pydantic model. Either import and use it as-is inside `ThresholdTarget` (dataclasses nest fine in Pydantic v2 models) or wrap it — do not duplicate its fields into a second type
 - [x] Success: each model round-trips `model_dump(mode="json")` → `model_validate`; `uv run pyright` passes
@@ -171,13 +171,13 @@ status: not_started
 
 ### T11: Graduated-config registry — record type and store integration
 
-- [ ] **Add `src/squadron/metrology/graduation.py`** (surface-agnostic; no Typer imports)
-  - [ ] Add `RECORD_TYPE_GRADUATED_CONFIG = "graduated_config"` alongside 320's `RECORD_TYPE_SAMPLE` / `RECORD_TYPE_AUDIT_FINDING` constants in `models.py` (extend that module, do not redefine the discriminator pattern elsewhere)
-  - [ ] Extend `MetrologyRecord` in `src/squadron/metrology/models.py` with an optional `graduated_config: GraduatedConfig | None = None` field, matching the existing `sample: SampleVerdict | None` pattern — this is 320's reserved extension point, so no schema version bump
-  - [ ] `write_graduation(store: MetrologyStore, graduated: GraduatedConfig) -> str`: envelope and persist via the store's existing atomic-write path (extend `MetrologyStore` with this method, mirroring `write_sample`); returns a generated record id
-  - [ ] `find_graduation(store: MetrologyStore, judge_config: JudgeConfigId, level: ArtifactLevel) -> GraduatedConfig | None`: scan stored `graduated_config` records for one matching **the exact `JudgeConfigId`** (including `template_content_hash`) and `artifact_level` — used for both the idempotent-update path and `select_residual_offers`
-  - [ ] `list_graduations(store: MetrologyStore) -> list[GraduatedConfig]`: all graduated-config records, tolerantly skipping unreadable siblings with a WARNING (mirrors `list_samples`' existing tolerance — do not duplicate that skip logic, extract a shared helper if `MetrologyStore` doesn't already expose one)
-- [ ] Success: writing then listing a `GraduatedConfig` round-trips; `find_graduation` matches only on the full `JudgeConfigId` (a differing `template_content_hash` with identical `template_name`/`model` does **not** match); an unreadable sibling record does not sink `list_graduations`
+- [x] **Add `src/squadron/metrology/graduation.py`** (surface-agnostic; no Typer imports)
+  - [x] Add `RECORD_TYPE_GRADUATED_CONFIG = "graduated_config"` alongside 320's `RECORD_TYPE_SAMPLE` / `RECORD_TYPE_AUDIT_FINDING` constants in `models.py` (extend that module, do not redefine the discriminator pattern elsewhere)
+  - [x] Extend `MetrologyRecord` in `src/squadron/metrology/models.py` with an optional `graduated_config: GraduatedConfig | None = None` field, matching the existing `sample: SampleVerdict | None` pattern — this is 320's reserved extension point, so no schema version bump. Note: `GraduatedConfig` is defined in `models.py` (not `calibration_models.py`) to avoid circular imports, since `calibration_models.py` already imports from `models.py` and `GraduatedConfig` is a `MetrologyRecord` envelope payload.
+  - [x] `write_graduation(store: MetrologyStore, graduated: GraduatedConfig) -> str`: envelope and persist via the store's existing atomic-write path (extend `MetrologyStore` with this method, mirroring `write_sample`); returns a generated record id
+  - [x] `find_graduation(store: MetrologyStore, judge_config: JudgeConfigId, level: ArtifactLevel) -> GraduatedConfig | None`: scan stored `graduated_config` records for one matching **the exact `JudgeConfigId`** (including `template_content_hash`) and `artifact_level` — used for both the idempotent-update path and `select_residual_offers`
+  - [x] `list_graduations(store: MetrologyStore) -> list[GraduatedConfig]`: all graduated-config records, tolerantly skipping unreadable siblings with a WARNING (mirrors `list_samples`' existing tolerance — do not duplicate that skip logic, extract a shared helper if `MetrologyStore` doesn't already expose one)
+- [x] Success: writing then listing a `GraduatedConfig` round-trips; `find_graduation` matches only on the full `JudgeConfigId` (a differing `template_content_hash` with identical `template_name`/`model` does **not** match); an unreadable sibling record does not sink `list_graduations`
 
 **Commit:** `feat(metrology): add graduated-config registry with version-scoped matching`
 
@@ -185,12 +185,12 @@ status: not_started
 
 ### T12: Tests for the graduated-config registry
 
-- [ ] **Add `tests/metrology/test_graduation_registry.py`**
-  - [ ] Write then read back a `GraduatedConfig` — round-trips through the store unchanged
-  - [ ] `find_graduation` matches a config with identical `JudgeConfigId` + `artifact_level`
-  - [ ] **Version-scoping regression:** two `JudgeConfigId`s sharing `template_name`+`model` but differing `template_content_hash` → `find_graduation` for one does **not** return the other's record (the F002 review-fix regression: a graduation must not silently transfer across a prompt edit)
-  - [ ] `list_graduations` tolerates a corrupt sibling file (WARNING, skipped, other records still returned) — mirrors 320's store tolerance test
-- [ ] Success: `uv run pytest tests/metrology/test_graduation_registry.py` passes
+- [x] **Add `tests/metrology/test_graduation_registry.py`**
+  - [x] Write then read back a `GraduatedConfig` — round-trips through the store unchanged
+  - [x] `find_graduation` matches a config with identical `JudgeConfigId` + `artifact_level`
+  - [x] **Version-scoping regression:** two `JudgeConfigId`s sharing `template_name`+`model` but differing `template_content_hash` → `find_graduation` for one does **not** return the other's record (the F002 review-fix regression: a graduation must not silently transfer across a prompt edit)
+  - [x] `list_graduations` tolerates a corrupt sibling file (WARNING, skipped, other records still returned) — mirrors 320's store tolerance test
+- [x] Success: `uv run pytest tests/metrology/test_graduation_registry.py` passes
 
 **Commit:** `test(metrology): cover graduated-config round-trip and version-scoped matching`
 
