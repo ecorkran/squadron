@@ -9,7 +9,14 @@ from __future__ import annotations
 
 import logging
 
-from squadron.metrology.calibration_models import RecommendationDirection
+from squadron.metrology.calibration_models import (
+    EvidenceSnapshot,
+    RecommendationDirection,
+    RecommendationReport,
+    ThresholdRecommendation,
+    ThresholdTarget,
+)
+from squadron.metrology.report_models import AgreementReport
 from squadron.pipeline.actions.judge import JudgeThresholds, resolve_thresholds
 
 _logger = logging.getLogger(__name__)
@@ -89,3 +96,79 @@ def read_current_thresholds(template_name: str) -> JudgeThresholds | None:
             template_name,
         )
         return None
+
+
+def _model_dimension_note(template_name: str, model: str) -> str:
+    """The mandatory per-cell note: config has no model dimension.
+
+    Every recommendation states plainly that it holds for this template
+    paired with this model, and that acting on it means choosing model and
+    threshold together at config time — never a footnote.
+    """
+    return (
+        f"This recommendation holds for '{template_name}' paired with "
+        f"model '{model}'. 300's threshold config has no model dimension "
+        "(step override -> template default -> module constant): acting on "
+        "this recommendation means choosing the model and the threshold "
+        "together at config time, not just editing the floor."
+    )
+
+
+def recommend_thresholds(
+    agreement: AgreementReport,
+    *,
+    floor: int,
+    graduate_rate: float,
+    tighten_rate: float,
+) -> RecommendationReport:
+    """Build one advisory recommendation per agreement cell.
+
+    Read-only: reads ``AgreementReport`` and template state, never writes
+    to the store, a template file, or config. ``agreement.excluded`` passes
+    through verbatim so excluded evidence is never mistaken for absence of
+    evidence. An empty ``agreement.cells`` yields an empty report with the
+    floor still stated — honest, not an error.
+    """
+    cells: list[ThresholdRecommendation] = []
+    for cell in agreement.cells:
+        template_name = cell.group.judge_config.template_name
+        model = cell.group.judge_config.model
+        versioned = cell.group.judge_config.template_content_hash is not None
+
+        direction = classify_direction(
+            cell.match_rate,
+            cell.n,
+            floor,
+            versioned=versioned,
+            graduate_rate=graduate_rate,
+            tighten_rate=tighten_rate,
+        )
+        current = read_current_thresholds(template_name)
+
+        cells.append(
+            ThresholdRecommendation(
+                group=cell.group,
+                direction=direction,
+                evidence=EvidenceSnapshot(
+                    n=cell.n,
+                    match_rate=cell.match_rate,
+                    floor_applied=floor,
+                    below_floor=cell.below_floor,
+                ),
+                target=ThresholdTarget(
+                    template_name=template_name,
+                    current=current,
+                    model_dimension_note=_model_dimension_note(template_name, model),
+                ),
+                rationale=(
+                    f"direction={direction.value}: n={cell.n}, "
+                    f"match_rate={cell.match_rate:.3f}, floor={floor}"
+                ),
+            )
+        )
+
+    return RecommendationReport(
+        cells=cells,
+        excluded=agreement.excluded,
+        floor_applied=floor,
+    )

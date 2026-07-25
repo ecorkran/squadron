@@ -111,16 +111,16 @@ status: not_started
 
 ### T7: Recommendation core — direction classification and current-threshold read
 
-- [ ] **Add `src/squadron/metrology/calibration.py`** (surface-agnostic; no Typer imports)
-  - [ ] `classify_direction(match_rate: float, n: int, floor: int, *, versioned: bool, graduate_rate: float, tighten_rate: float) -> RecommendationDirection` — the floor gates **loosening only** (`GRADUATE`); `TIGHTEN` is checked before the floor applies and fires regardless of `n`. Implement in this literal top-to-bottom precedence (a naive if-elif ordered any other way will make `TIGHTEN` unreachable below the floor — this exact ordering matters, not just the band definitions):
+- [x] **Add `src/squadron/metrology/calibration.py`** (surface-agnostic; no Typer imports)
+  - [x] `classify_direction(match_rate: float, n: int, floor: int, *, versioned: bool, graduate_rate: float, tighten_rate: float) -> RecommendationDirection` — the floor gates **loosening only** (`GRADUATE`); `TIGHTEN` is checked before the floor applies and fires regardless of `n`. Implement in this literal top-to-bottom precedence (a naive if-elif ordered any other way will make `TIGHTEN` unreachable below the floor — this exact ordering matters, not just the band definitions):
     1. `not versioned` (i.e. `template_content_hash is None`) → `INSUFFICIENT_EVIDENCE` (never graduate on un-keyable evidence, regardless of n or match rate)
     2. `match_rate <= tighten_rate` → `TIGHTEN` (checked **before** the floor test — this is what makes tightening non-floor-gated: a below-floor cell with a low match rate must reach this case, not fall into case 3)
     3. `n < floor` → `INSUFFICIENT_EVIDENCE` (the floor gates only what's left: graduating or holding)
     4. `n >= floor and match_rate >= graduate_rate` → `GRADUATE`
     5. otherwise → `HOLD`
-  - [ ] Re-read the design's Direction Bands table before implementing — the floor gates **loosening** (`GRADUATE`) only; `TIGHTEN` fires regardless of evidence volume, so the precedence above must let a low-n, low-match-rate cell reach `TIGHTEN` rather than stopping at `INSUFFICIENT_EVIDENCE`
-  - [ ] `read_current_thresholds(template_name: str) -> JudgeThresholds | None`: look up the template via `squadron.review.templates.get_template`, call `resolve_thresholds(template.judge, None)` (step-level override is not knowable outside a specific step context, so pass `None` — this reads the *template's* configured floor, which is what the recommendation is a delta from); return `None` if the template is not registered — never fabricate a threshold, log WARNING naming the template name
-- [ ] Success: each band's boundary condition (`n` exactly at `floor`, `match_rate` exactly at `graduate_rate`/`tighten_rate`) resolves per the precedence rules above; a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`; an unresolvable template returns `None` from `read_current_thresholds` with a WARNING logged, never raises
+  - [x] Re-read the design's Direction Bands table before implementing — the floor gates **loosening** (`GRADUATE`) only; `TIGHTEN` fires regardless of evidence volume, so the precedence above must let a low-n, low-match-rate cell reach `TIGHTEN` rather than stopping at `INSUFFICIENT_EVIDENCE`
+  - [x] `read_current_thresholds(template_name: str) -> JudgeThresholds | None`: look up the template via `squadron.review.templates.get_template`, call `resolve_thresholds(template.judge, None)` (step-level override is not knowable outside a specific step context, so pass `None` — this reads the *template's* configured floor, which is what the recommendation is a delta from); return `None` if the template is not registered — never fabricate a threshold, log WARNING naming the template name. Malformed judge block (non-numeric threshold values) is handled via a local try/except around `resolve_thresholds`, returning `None` + WARNING, rather than propagating a raised exception from `resolve_thresholds` itself.
+- [x] Success: each band's boundary condition (`n` exactly at `floor`, `match_rate` exactly at `graduate_rate`/`tighten_rate`) resolves per the precedence rules above; a below-floor cell with low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`; an unresolvable template returns `None` from `read_current_thresholds` with a WARNING logged, never raises
 
 **Commit:** `feat(metrology): add direction classification and current-threshold read`
 
@@ -128,14 +128,14 @@ status: not_started
 
 ### T8: Tests for direction classification and threshold read
 
-- [ ] **Add `tests/metrology/test_calibration.py`**
-  - [ ] Parametrized test over every direction band, including boundary values (`n == floor`, `match_rate == graduate_rate`, `match_rate == tighten_rate`)
-  - [ ] **Loosening is floor-gated:** `n < floor` with a high match rate never returns `GRADUATE`
-  - [ ] **Tightening is not floor-gated:** `n < floor` with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE` (the regression this task's design explicitly calls out)
-  - [ ] **Unversioned refusal:** `versioned=False` with `n >= floor` and a high match rate still returns `INSUFFICIENT_EVIDENCE`, never `GRADUATE`
-  - [ ] `read_current_thresholds` for a registered template returns the template's actual `pass_floor`/`concerns_floor` (via `resolve_thresholds`); for an unregistered template name returns `None` and logs a WARNING (assert via `caplog`)
-  - [ ] **Malformed judge block:** a template whose `judge` dict has a non-numeric `pass_floor` (e.g. a string) — `read_current_thresholds` does not fabricate a threshold; it delegates to `resolve_thresholds`' documented merge behavior and the inherited WARNING surfaces, per the slice design's Failure Modes row for this case (assert via `caplog`, not a raised exception)
-- [ ] Success: `uv run pytest tests/metrology/test_calibration.py` passes
+- [x] **Add `tests/metrology/test_calibration.py`**
+  - [x] Parametrized test over every direction band, including boundary values (`n == floor`, `match_rate == graduate_rate`, `match_rate == tighten_rate`)
+  - [x] **Loosening is floor-gated:** `n < floor` with a high match rate never returns `GRADUATE`
+  - [x] **Tightening is not floor-gated:** `n < floor` with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE` (the regression this task's design explicitly calls out)
+  - [x] **Unversioned refusal:** `versioned=False` with `n >= floor` and a high match rate still returns `INSUFFICIENT_EVIDENCE`, never `GRADUATE`
+  - [x] `read_current_thresholds` for a registered template returns the template's actual `pass_floor`/`concerns_floor` (via `resolve_thresholds`); for an unregistered template name returns `None` and logs a WARNING (assert via `caplog`)
+  - [x] **Malformed judge block:** a template whose `judge` dict has a non-numeric `pass_floor` (e.g. a string) — `read_current_thresholds` delegates to a local try/except around `resolve_thresholds`, catching any raised exception from malformed input, and returns `None` + WARNING — no raised exception surfaces to the caller (assert via `caplog`, matching the slice design's Failure Modes treatment: degraded-to-warning behavior, not escalated error)
+- [x] Success: `uv run pytest tests/metrology/test_calibration.py` passes
 
 **Commit:** `test(metrology): cover direction bands, floor asymmetry, unversioned refusal`
 
