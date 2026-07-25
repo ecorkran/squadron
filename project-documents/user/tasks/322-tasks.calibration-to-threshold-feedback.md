@@ -22,7 +22,7 @@ status: not_started
 - **Nothing is written by `recommend` or `offers`.** The only write path in this slice is `sq metrology graduate`, and it writes exactly one record, refusing (non-zero exit) if the named pairing's current recommendation is not `GRADUATE`.
 - **Parity + discipline:** `calibration.py` / `graduation.py` / `calibration_models.py` are surface-agnostic (no Typer imports, matching 320/321's pattern verified by test). Strict pyright, ruff clean. No pipeline/gate/dispatch path is touched — 300's judging path and 320's capture path are otherwise unmodified.
 - **Dependencies:** 320, 321 — both complete. **Next slice:** none — 322 is terminal for this chain (323/324 are the audit oracle, sharing only 320's spine).
-- **Suggested order (from the design, followed here):** hash narrowing first (T1/T2) so everything else accumulates evidence under the corrected key, then models (T3/T4), then calibration core (T5-T8), then graduation + offers (T9-T12), then CLI shells + config keys (T13-T16), then end-to-end verification (T17).
+- **Suggested order (from the design, followed here):** hash narrowing first (T1/T2) so everything else accumulates evidence under the corrected key, then models (T3/T4), then config keys (T5/T6), then calibration core (T7-T10), then graduation registry + judge-result discovery + offers (T11-T15), then CLI shells (T16/T17), then end-to-end verification (T18).
 
 ---
 
@@ -112,11 +112,11 @@ status: not_started
 ### T7: Recommendation core — direction classification and current-threshold read
 
 - [ ] **Add `src/squadron/metrology/calibration.py`** (surface-agnostic; no Typer imports)
-  - [ ] `classify_direction(match_rate: float, n: int, floor: int, *, versioned: bool, graduate_rate: float, tighten_rate: float) -> RecommendationDirection` implementing the design's bands exactly, in this precedence order:
-    1. `n < floor` → `INSUFFICIENT_EVIDENCE`
-    2. `not versioned` (i.e. `template_content_hash is None`) → `INSUFFICIENT_EVIDENCE`
-    3. `n >= floor and match_rate >= graduate_rate` → `GRADUATE`
-    4. `match_rate <= tighten_rate` → `TIGHTEN` (reachable even if `n < floor` — this check is **not** gated by the floor, only cases 1/2 above are, since they're checked first only for the loosening path — implement so a below-floor cell with a low match rate still surfaces as `TIGHTEN`, not `INSUFFICIENT_EVIDENCE`, per the design's "tightening is not floor-gated")
+  - [ ] `classify_direction(match_rate: float, n: int, floor: int, *, versioned: bool, graduate_rate: float, tighten_rate: float) -> RecommendationDirection` — the floor gates **loosening only** (`GRADUATE`); `TIGHTEN` is checked before the floor applies and fires regardless of `n`. Implement in this literal top-to-bottom precedence (a naive if-elif ordered any other way will make `TIGHTEN` unreachable below the floor — this exact ordering matters, not just the band definitions):
+    1. `not versioned` (i.e. `template_content_hash is None`) → `INSUFFICIENT_EVIDENCE` (never graduate on un-keyable evidence, regardless of n or match rate)
+    2. `match_rate <= tighten_rate` → `TIGHTEN` (checked **before** the floor test — this is what makes tightening non-floor-gated: a below-floor cell with a low match rate must reach this case, not fall into case 3)
+    3. `n < floor` → `INSUFFICIENT_EVIDENCE` (the floor gates only what's left: graduating or holding)
+    4. `n >= floor and match_rate >= graduate_rate` → `GRADUATE`
     5. otherwise → `HOLD`
   - [ ] Re-read the design's Direction Bands table before implementing — the floor gates **loosening** (`GRADUATE`) only; `TIGHTEN` fires regardless of evidence volume, so the precedence above must let a low-n, low-match-rate cell reach `TIGHTEN` rather than stopping at `INSUFFICIENT_EVIDENCE`
   - [ ] `read_current_thresholds(template_name: str) -> JudgeThresholds | None`: look up the template via `squadron.review.templates.get_template`, call `resolve_thresholds(template.judge, None)` (step-level override is not knowable outside a specific step context, so pass `None` — this reads the *template's* configured floor, which is what the recommendation is a delta from); return `None` if the template is not registered — never fabricate a threshold, log WARNING naming the template name
@@ -134,6 +134,7 @@ status: not_started
   - [ ] **Tightening is not floor-gated:** `n < floor` with a low match rate returns `TIGHTEN`, not `INSUFFICIENT_EVIDENCE` (the regression this task's design explicitly calls out)
   - [ ] **Unversioned refusal:** `versioned=False` with `n >= floor` and a high match rate still returns `INSUFFICIENT_EVIDENCE`, never `GRADUATE`
   - [ ] `read_current_thresholds` for a registered template returns the template's actual `pass_floor`/`concerns_floor` (via `resolve_thresholds`); for an unregistered template name returns `None` and logs a WARNING (assert via `caplog`)
+  - [ ] **Malformed judge block:** a template whose `judge` dict has a non-numeric `pass_floor` (e.g. a string) — `read_current_thresholds` does not fabricate a threshold; it delegates to `resolve_thresholds`' documented merge behavior and the inherited WARNING surfaces, per the slice design's Failure Modes row for this case (assert via `caplog`, not a raised exception)
 - [ ] Success: `uv run pytest tests/metrology/test_calibration.py` passes
 
 **Commit:** `test(metrology): cover direction bands, floor asymmetry, unversioned refusal`
@@ -195,12 +196,39 @@ status: not_started
 
 ---
 
-### T13: `select_residual_offers` — offer selection over unsampled results
+### T13: Judge-result discovery surface (dependency resolution)
+
+*Confirmed gap, not a runtime judgment call: 320 has no whole-project "enumerate persisted judge results" surface. `capture.resolve_target` only resolves one target given an already-known slice index (a `reviews_dir.glob(f"{index}-review.*")` scoped to one index); there is no function that lists every judge review file across `project-documents/user/reviews/` so residual sampling can diff against what's already been sampled. This task builds that surface before T14 needs it, rather than leaving the choice to the implementer.*
+
+- [ ] **Add `discover_judge_results(cwd: str) -> list[Path]` to `src/squadron/metrology/capture.py`** (or a new `discovery.py` in `metrology/` if `capture.py` would exceed ~300 lines with this addition — check current line count first)
+  - [ ] Glob `project-documents/user/reviews/` (the same `_REVIEWS_SUBDIR` constant `capture.py` already defines) for all review files, not just one index's candidates
+  - [ ] For each candidate, read frontmatter (`read_review_frontmatter`) and keep only files that are **judge** results — i.e. whose `reviewType`'s resolved template `is_judge` (has a `judge:` block) — skip non-judge reviews (arch/tasks/code reviews with no judge template) without erroring
+  - [ ] Malformed / unreadable frontmatter → skip that file, log WARNING naming the path (mirrors `store.list_samples`' tolerant-skip convention) — one bad review file must not sink the whole discovery pass
+  - [ ] Return the file paths only; deriving each one's `JudgeConfigId` is `select_residual_offers`' job (T14), not this function's — keep this surface a pure enumeration
+- [ ] Success: a fixture reviews directory with a mix of judge and non-judge review files returns only the judge ones; a corrupt sibling file is skipped with a WARNING, not an exception
+
+**Commit:** `feat(metrology): add judge-result discovery surface for residual sampling`
+
+---
+
+### T13b: Tests for judge-result discovery
+
+- [ ] **Add `tests/metrology/test_capture_discovery.py`**
+  - [ ] Mixed fixture (judge + non-judge review files) → only judge results returned
+  - [ ] Corrupt/unreadable review file → skipped, WARNING logged, other results still returned
+  - [ ] Empty reviews directory → empty list, no exception
+- [ ] Success: `uv run pytest tests/metrology/test_capture_discovery.py` passes
+
+**Commit:** `test(metrology): cover judge-result discovery enumeration and tolerance`
+
+---
+
+### T14: `select_residual_offers` — offer selection over unsampled results
 
 - [ ] **Extend `graduation.py`** with `select_residual_offers(store: MetrologyStore, graduated: list[GraduatedConfig], *, rate: float, cwd: str) -> list[OfferTarget]`
-  - [ ] For each `GraduatedConfig`, find persisted judge results (review files) matching its exact `JudgeConfigId` that are **not yet sampled** (i.e. no `SampleVerdict.result_ref` points at them) — reuse 320's existing result-discovery surface rather than re-implementing a review-file scan; if no such surface exists yet, scope this task to the store-recorded samples only and note the gap rather than inventing a new file-walk (ask the Project Manager if this reveals a missing 320 capability)
-  - [ ] Select a `rate` fraction of the unsampled matches as `OfferTarget`s (`reason="residual-sampling"`)
-  - [ ] **Lapsed graduation:** if a `GraduatedConfig`'s `JudgeConfigId` no longer matches any current judge result (the underlying template/model has since changed), it contributes **zero** offers and this must be distinguishable from "config not yet due for sampling" at the CLI layer (T15) — return enough information (or have the CLI re-derive it via `find_graduation` against current results) to report the lapse explicitly, never silently
+  - [ ] Call `discover_judge_results(cwd)` (T13) to enumerate persisted judge review files; for each, derive its `JudgeConfigId` (`identity.derive_judge_config_id`) and compare against each `GraduatedConfig`'s exact identity
+  - [ ] A matching result is **unsampled** when no `SampleVerdict` in the store has a `result_ref` pointing at it (cross-reference `store.list_samples()`); select a `rate` fraction of the unsampled matches as `OfferTarget`s (`reason="residual-sampling"`)
+  - [ ] **Lapsed graduation:** if a `GraduatedConfig`'s `JudgeConfigId` no longer matches any current judge result (the underlying template/model has since changed), it contributes **zero** offers and this must be distinguishable from "config not yet due for sampling" at the CLI layer (T16) — return enough information (or have the CLI re-derive it via `find_graduation` against current results) to report the lapse explicitly, never silently
   - [ ] **Testable guarantee:** given a `GraduatedConfig` with unsampled matching results, this function returns a **non-empty** offer set — the architecture's explicit "agreement data does not freeze" commitment
   - [ ] An exhausted config (no unsampled results, but still current) yields an empty list for that config — distinct from the lapsed case above
 - [ ] Success: a graduated config with 3 unsampled matching results at `rate=1.0` yields 3 `OfferTarget`s; a graduated config with a since-edited template yields zero offers distinguishably from an exhausted one; the non-empty-offers guarantee holds under a passing test
@@ -209,12 +237,12 @@ status: not_started
 
 ---
 
-### T14: Tests for residual-offer selection
+### T15: Tests for residual-offer selection
 
 - [ ] **Add `tests/metrology/test_graduation_offers.py`**
   - [ ] **Non-empty guarantee:** a graduated config with unsampled matching results → `select_residual_offers` returns at least one `OfferTarget` (the architecture commitment, asserted directly)
   - [ ] **Exhausted config:** all matching results already sampled → empty offer list, no error
-  - [ ] **Lapsed graduation:** template edited post-graduation (new `JudgeConfigId`, prompt/model dimension differs) → zero offers under the stale graduation, and the lapse is distinguishable from the exhausted case (assert on whatever signal T13 produces for this — a return-value field, a paired lookup, or a logged WARNING naming the config-identity change)
+  - [ ] **Lapsed graduation:** template edited post-graduation (new `JudgeConfigId`, prompt/model dimension differs) → zero offers under the stale graduation, and the lapse is distinguishable from the exhausted case (assert on whatever signal T14 produces for this — a return-value field, a paired lookup, or a logged WARNING naming the config-identity change)
   - [ ] **Pruned review file:** a matching judge result's review file has been deleted since graduation → that target is skipped, counted (not silently dropped), WARNING logged naming the path
   - [ ] `rate` fraction is honored (e.g. `rate=0.5` over 4 unsampled results selects 2, not all 4)
 - [ ] Success: `uv run pytest tests/metrology/test_graduation_offers.py` passes
@@ -223,7 +251,7 @@ status: not_started
 
 ---
 
-### T15: CLI — `recommend`, `graduate`, `offers`
+### T16: CLI — `recommend`, `graduate`, `offers`
 
 - [ ] **Extend `src/squadron/cli/commands/metrology.py`** with three new commands (thin shells, all logic in `calibration.py`/`graduation.py`, matching the existing `report` sub-group pattern)
   - [ ] `sq metrology recommend [--project ID] [--level LEVEL] [--json] [--cwd .]`: build the store's `AgreementReport` (reuse `agreement_report`, do not re-aggregate), call `recommend_thresholds` with rates read from `metrology.graduate_match_rate` / `metrology.tighten_match_rate` / `metrology.min_evidence_n`, render one row per cell (direction, match rate + n, floor applied, current thresholds, model-dimension note); `INSUFFICIENT_EVIDENCE` cells state both n and floor, never render blank; `--json` emits `RecommendationReport` verbatim
@@ -237,7 +265,7 @@ status: not_started
 
 ---
 
-### T16: CLI tests — commands, `--json`, refusal, idempotence, no-mutation
+### T17: CLI tests — commands, `--json`, refusal, idempotence, no-mutation
 
 - [ ] **Add `tests/metrology/test_calibration_cli.py`** using Typer's `CliRunner` (mirrors 321's `test_report_cli.py`)
   - [ ] `recommend` prints per-cell rows with n, floor, and model-dimension note; `--json` parses back to `RecommendationReport`
@@ -253,7 +281,7 @@ status: not_started
 
 ---
 
-### T17: Full validation, regression gate, and verification walkthrough
+### T18: Full validation, regression gate, and verification walkthrough
 
 - [ ] **Run the full suite:** `uv run pytest` (entire repo) — 300 judging path, 320 capture path, 321 reporting path, and all existing tests pass unchanged except the deliberate hash-narrowing re-key (T1/T2)
 - [ ] **Run static checks:** `uv run pyright` and `uv run ruff check` — zero errors on new code; `uv run ruff format` before commit
@@ -275,14 +303,16 @@ status: not_started
 
 ## Coverage Check (design → tasks)
 
-- Hash-narrowing correctness fix (the self-defeating-loop fix) → T1/T2, re-verified at CLI/walkthrough level (T16, T17 step 5).
+- Hash-narrowing correctness fix (the self-defeating-loop fix) → T1/T2, re-verified at CLI/walkthrough level (T17, T18 step 5).
 - Calibration/graduation output models (`RecommendationDirection`, `EvidenceSnapshot`, `ThresholdTarget`, `ThresholdRecommendation`, `RecommendationReport`, `GraduatedConfig`, `OfferTarget`) → T3/T4.
 - New config keys (`graduate_match_rate`, `tighten_match_rate`, `residual_sample_rate`), sequenced before the tasks that read them → T5/T6.
-- Direction classification (floor-gated loosening, non-floor-gated tightening, unversioned refusal) + current-threshold read → T7/T8.
+- Direction classification (floor-gated loosening, non-floor-gated tightening — precedence corrected per tasks-review F001: unversioned, then tighten, then the floor gates only graduate/hold — unversioned refusal, malformed judge block) + current-threshold read → T7/T8.
 - Full recommendation report, per-cell model-dimension note, exclusion pass-through, no-mutation discipline → T9/T10.
 - Graduated-config registry, version-scoped matching (full `JudgeConfigId`, not the looser triple — the slice-review F002 fix) → T11/T12.
-- Residual-offer selection, the non-empty-offers architecture guarantee, lapsed-graduation detection, pruned-file handling → T13/T14.
-- CLI `recommend`/`graduate`/`offers` shells, `--json`, graduate refusal + idempotence → T15/T16.
-- Full validation, static checks, and the nine-step verification walkthrough (including both hash-narrowing-direction and version-scoping regressions) → T17.
-- **Failure Modes table (all rows)** covered: empty evidence (T9/T10); floor refusal (T7/T8); unversioned refusal (T7/T8); unresolvable template (T7/T9/T10); malformed judge block (inherited from `resolve_thresholds`, exercised in T8); graduate refusal / idempotence (T15/T16); exhausted / pruned / lapsed offers (T13/T14); hash-narrowing one-time re-key (T1/T2, T17 step 5).
+- Judge-result discovery surface (dependency resolved per tasks-review F003: 320 had no whole-project judge-result enumeration, so this task builds one rather than leaving the gap to the implementer) → T13/T13b.
+- Residual-offer selection, the non-empty-offers architecture guarantee, lapsed-graduation detection, pruned-file handling → T14/T15.
+- CLI `recommend`/`graduate`/`offers` shells, `--json`, graduate refusal + idempotence → T16/T17.
+- Full validation, static checks, and the nine-step verification walkthrough (including both hash-narrowing-direction and version-scoping regressions) → T18.
+- **Failure Modes table (all rows)** covered: empty evidence (T9/T10); floor refusal (T7/T8); unversioned refusal (T7/T8); unresolvable template (T7/T9/T10); malformed judge block (T7, tested explicitly in T8 per tasks-review F002); graduate refusal / idempotence (T16/T17); exhausted / pruned / lapsed offers (T14/T15); hash-narrowing one-time re-key (T1/T2, T18 step 5).
 - Deferred by design, correctly absent here: any automatic threshold mutation; a new gating mechanism; the coordinated 300 write-path version field (320-plan Future Work #1, still open); persisting the judge verdict onto the sample (321 Future Work #2); audit-oracle work (323/324); any change to 300's judging path or 320's capture path beyond the T1 hash narrowing.
+- **Tasks review (20260725, kimi-k2.7-code) fixes applied:** F001 (T7 precedence corrected so `TIGHTEN` is reachable below the evidence floor) · F002 (T8 malformed-judge-block test added) · F003 (T13/T13b added: judge-result discovery surface built explicitly rather than left as an implementer's runtime choice).

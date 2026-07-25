@@ -63,6 +63,14 @@ Created `user/tasks/322-tasks.calibration-to-threshold-feedback.md` — 17 tasks
 
 Task file is 288 lines, well within the ~450-line guideline. Frontmatter `status: not_started`; slice design frontmatter remains `status: not-started` (Phase 6 implementation not yet started). Coverage-checked against the design's Failure Modes table and Success Criteria — all rows traced to a task.
 
+### 322 Task Review — Addressed (F001 fixed, F002/F003 fixed)
+
+Task review (`322-review.tasks...`, kimi-k2.7-code): 1 PASS, 1 CONCERN, 2 NOTEs.
+
+- **F001 (CONCERN, T7 precedence contradicts its own "tightening is not floor-gated" claim) — correct, and a real bug in the task, not just prose.** T7's original numbered precedence checked `n < floor` first, unconditionally, then claimed a few lines later that `TIGHTEN` was "reachable even if `n < floor`." A literal top-to-bottom if-elif of that ordering makes `TIGHTEN` unreachable below the floor — the numbering itself contradicted the design's Direction Bands table it was supposed to encode. Fixed: reordered so unversioned is checked first, then `TIGHTEN` (before the floor applies), then the floor gates only what's left (`GRADUATE`/`HOLD`). The floor now only ever blocks loosening, matching the design exactly.
+- **F002 (NOTE, T8 claimed a malformed-judge-block test that wasn't actually listed) — correct.** The Coverage Check asserted this was "exercised in T8" but T8's bullets only covered registered-vs-unregistered templates. Added an explicit T8 bullet: a template with a non-numeric `pass_floor` must not fabricate a threshold, delegating to `resolve_thresholds`' inherited WARNING instead.
+- **F003 (NOTE, T13's residual-offer selection leaned on an unverified 320 surface) — correct, and worth resolving rather than deferring further.** Checked `capture.py` directly: `resolve_target` only resolves *one* target given an already-known slice index (`reviews_dir.glob(f"{index}-review.*")`) — there is no whole-project "list every judge review file" surface for residual sampling to diff against. Rather than leave this as a runtime judgment call for whoever implements T13 (my original escape-hatch phrasing), split out a new **T13 (judge-result discovery surface) + T13b (its tests)** ahead of the renumbered offer-selection task (T14), so the gap is resolved at task-breakdown time. Renumbered T13-T17 to T14-T18 throughout, including all cross-references and the Coverage Check.
+
 ---
 
 ## 20260718
