@@ -10,6 +10,35 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260725
+
+### Slice Design 322: Calibration-to-Threshold Feedback — Phase 4 Complete
+
+**Phase 4 complete.** Created `user/slices/322-slice.calibration-to-threshold-feedback.md`; materialized `(322)` in the 320 slice plan and marked its entry as designed. Terminal slice of the human-oracle chain (320 → 321 → 322), so `interfaces: []` — 323/324 are the audit oracle and share the 320 *spine*, not this path.
+
+**Three plan-level open questions resolved, all against the actual code rather than the prose:**
+
+1. **Version identity → the content-hash-at-capture fallback ships.** 320's `derive_judge_config_id` already computes `template_content_hash` and 321 already enforces non-blending on it, so no 300 write-path change is taken. The initiative's own *read-side over 300's write path* principle points here. 320-plan Future Work #1 (the 300 version field) and 321 Future Work #2 (judge-verdict persistence, which would ride with it) both stay **open**.
+
+2. **The comparability hash must exclude the `judge:` block — a correctness fix, not a preference.** `identity.py:298` currently hashes `{name, description, system_prompt, model, prompt_template, **judge**}`, and `judge` *is* `pass_floor`/`concerns_floor`. So acting on a graduation recommendation changes the hash → new `JudgeConfigId` → accumulated n resets to 0 → the cell drops below the floor → no further recommendation possible. **The calibration loop would destroy its own evidence every time it worked.** The plan flagged template *editing* as the churn risk; the loop's own success is in fact the dominant source. Fix: narrow the hash to the judged behavior, excluding thresholds — thresholds are the calibration's *output*, not part of the instrument. A judge that scores identically but bands differently is the same instrument with a different readout. Rejected the plan's third framing (a similarity/inherit policy) as more machinery than the actual failure needs. Costs a one-time re-key of historical records, accepted deliberately and documented.
+
+3. **Residual sampling → policy + offer-selection core, CLI-drained.** `capture.py`'s `sample_budget` is a ceiling on *writes*, not offers, and 320 explicitly deferred offer/selection — so the architecture's "continued forced random sampling" commitment needed a selection surface, which 322 adds. Offers are pull-based and non-blocking (nothing in a pipeline/gate/dispatch waits); "forced rate" means offers are *generated* at that rate. Doc-only was rejected: the architecture demands this be *asserted by a test* ("a graduated judge still produces sampled data"), which a documented policy cannot satisfy.
+
+**Other decisions of substance:**
+- **Direction bands are asymmetric.** Loosening is floor-gated; **tightening is not** — requiring a large sample before *warning* about a judge that disagrees with the human would suppress the signal most worth having early. Honest reading of the architecture's "refuses to recommend *loosening* below a floor."
+- **Recommendations are directions + evidence, never a computed `pass_floor`.** Deriving a specific numeric threshold would imply precision small-n data cannot support and would edge toward the forbidden self-tuning loop. Output shows *currently configured* thresholds (read via `resolve_thresholds`) so the operator sees the delta and picks the magnitude.
+- **The (template,model) ↔ (template,step) mismatch is per-recommendation output**, not a footnote — every recommendation carries the note, including the runtime-drawn-model (180 pool) case where the threshold cannot track the drawn model. Making it output is what stops it being ignored at the moment of action.
+
+**Verified against code, not assumed:** two threshold surfaces exist and neither has a model dimension (`judge.py:41-57` merges step override → template default → module constant `75.0`/`50.0`; template blocks live in the judge YAMLs at `pass_floor: 78`/`82`). `GraduatedConfig` persists behind 320's reserved `record_type` discriminator — no store migration.
+
+**Pending.** Frontmatter `status: not-started`. Next: Phase 5 (task breakdown) for 322. Effort 3/5.
+
+### cf config hygiene
+
+`custom.recentEvents` (rendered as "Current Project State" in `/cf:build` output) still pointed at the orchestration-v2 initiative (`100-arch`/`100-slices`) while the authoritative `Architecture:`/`Slice Plan:` fields correctly read 320. Updated to the 320 artifacts so the loaded context stops contradicting itself.
+
+---
+
 ## 20260718
 
 ### 320 Keystone Task Review — Addressed (F001 budget, F008 traceability)
