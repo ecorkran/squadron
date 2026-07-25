@@ -200,12 +200,12 @@ status: not_started
 
 *Confirmed gap, not a runtime judgment call: 320 has no whole-project "enumerate persisted judge results" surface. `capture.resolve_target` only resolves one target given an already-known slice index (a `reviews_dir.glob(f"{index}-review.*")` scoped to one index); there is no function that lists every judge review file across `project-documents/user/reviews/` so residual sampling can diff against what's already been sampled. This task builds that surface before T14 needs it, rather than leaving the choice to the implementer.*
 
-- [ ] **Add `discover_judge_results(cwd: str) -> list[Path]` to `src/squadron/metrology/capture.py`** (or a new `discovery.py` in `metrology/` if `capture.py` would exceed ~300 lines with this addition — check current line count first)
-  - [ ] Glob `project-documents/user/reviews/` (the same `_REVIEWS_SUBDIR` constant `capture.py` already defines) for all review files, not just one index's candidates
-  - [ ] For each candidate, read frontmatter (`read_review_frontmatter`) and keep only files that are **judge** results — i.e. whose `reviewType`'s resolved template `is_judge` (has a `judge:` block) — skip non-judge reviews (arch/tasks/code reviews with no judge template) without erroring
-  - [ ] Malformed / unreadable frontmatter → skip that file, log WARNING naming the path (mirrors `store.list_samples`' tolerant-skip convention) — one bad review file must not sink the whole discovery pass
-  - [ ] Return the file paths only; deriving each one's `JudgeConfigId` is `select_residual_offers`' job (T14), not this function's — keep this surface a pure enumeration
-- [ ] Success: a fixture reviews directory with a mix of judge and non-judge review files returns only the judge ones; a corrupt sibling file is skipped with a WARNING, not an exception
+- [x] **Add `discover_judge_results(cwd: str) -> list[Path]` to `src/squadron/metrology/discovery.py`** (new file, since `capture.py` was already at 256 lines — close enough to the task's own ~300-line threshold that a new file was the safer choice)
+  - [x] Glob `project-documents/user/reviews/` (using the public `REVIEWS_SUBDIR` constant, renamed from private `_REVIEWS_SUBDIR` in `capture.py` for reuse) for all review files, not just one index's candidates
+  - [x] For each candidate, read frontmatter (`read_review_frontmatter`) and keep only files that are **judge** results — i.e. whose `reviewType`'s resolved template `is_judge` (has a `judge:` block) — skip non-judge reviews (arch/tasks/code reviews with no judge template) without erroring
+  - [x] Malformed / unreadable frontmatter → skip that file, log WARNING naming the path (mirrors `store.list_samples`' tolerant-skip convention) — one bad review file must not sink the whole discovery pass
+  - [x] Return the file paths only; deriving each one's `JudgeConfigId` is `select_residual_offers`' job (T14), not this function's — keep this surface a pure enumeration
+- [x] Success: a fixture reviews directory with a mix of judge and non-judge review files returns only the judge ones; a corrupt sibling file is skipped with a WARNING, not an exception
 
 **Commit:** `feat(metrology): add judge-result discovery surface for residual sampling`
 
@@ -213,11 +213,11 @@ status: not_started
 
 ### T13b: Tests for judge-result discovery
 
-- [ ] **Add `tests/metrology/test_capture_discovery.py`**
-  - [ ] Mixed fixture (judge + non-judge review files) → only judge results returned
-  - [ ] Corrupt/unreadable review file → skipped, WARNING logged, other results still returned
-  - [ ] Empty reviews directory → empty list, no exception
-- [ ] Success: `uv run pytest tests/metrology/test_capture_discovery.py` passes
+- [x] **Add `tests/metrology/test_capture_discovery.py`**
+  - [x] Mixed fixture (judge + non-judge review files) → only judge results returned
+  - [x] Corrupt/unreadable review file → skipped, WARNING logged, other results still returned
+  - [x] Empty reviews directory → empty list, no exception
+- [x] Success: `uv run pytest tests/metrology/test_capture_discovery.py` passes
 
 **Commit:** `test(metrology): cover judge-result discovery enumeration and tolerance`
 

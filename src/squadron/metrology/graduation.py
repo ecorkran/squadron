@@ -10,8 +10,18 @@ looser ``(template_name, model)`` pair — see the slice design's
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
-from squadron.metrology.levels import ArtifactLevel
+from squadron.metrology.calibration_models import OfferTarget
+from squadron.metrology.discovery import discover_judge_results
+from squadron.metrology.errors import MetrologyTargetError
+from squadron.metrology.identity import (
+    derive_judge_config_id,
+    derive_project_id,
+    derive_result_ref,
+    read_review_frontmatter,
+)
+from squadron.metrology.levels import ArtifactLevel, derive_artifact_level
 from squadron.metrology.models import GraduatedConfig, JudgeConfigId
 from squadron.metrology.store import MetrologyStore
 
@@ -70,3 +80,80 @@ def find_graduation(
 def list_graduations(store: MetrologyStore) -> list[GraduatedConfig]:
     """Return all persisted graduated-config records."""
     return [graduated for _record_id, graduated in store.list_graduations()]
+
+
+def _review_reviewtype(review_file: Path) -> str | None:
+    """Return a persisted review's ``reviewType`` frontmatter, or ``None``.
+
+    Malformed/unreadable frontmatter is skipped (WARNING) rather than
+    raised — one bad review must not sink the whole selection pass.
+    """
+    try:
+        frontmatter = read_review_frontmatter(review_file)
+    except MetrologyTargetError:
+        _logger.warning("Skipping unreadable review file during offer selection: %s", review_file)
+        return None
+    raw_type = frontmatter.get("reviewType")
+    return raw_type if isinstance(raw_type, str) and raw_type else None
+
+
+def select_residual_offers(
+    store: MetrologyStore,
+    graduated: list[GraduatedConfig],
+    *,
+    rate: float,
+    cwd: str,
+) -> list[OfferTarget]:
+    """Select a ``rate`` fraction of each graduated config's unsampled results.
+
+    For each persisted judge review discovered by ``discover_judge_results``,
+    derives its ``JudgeConfigId`` and artifact level, and matches it against
+    every graduated config's exact identity. A matching result is unsampled
+    when no stored ``SampleVerdict`` has a ``result_ref`` pointing at it. A
+    graduated config whose identity matches **no** current judge result has
+    lapsed (its template/model has since changed) and contributes zero
+    offers — the same outcome, at this function's level, as an exhausted
+    config with no unsampled matches. Callers that need to report the lapse
+    explicitly (T16's CLI) re-derive it via ``find_graduation`` against
+    current discovered results, per the design's stated allowance.
+    """
+    project_id = derive_project_id(cwd)
+    sampled_refs = {
+        (sample.result_ref.relative_review_path, sample.result_ref.content_hash)
+        for sample in store.list_samples()
+    }
+
+    offers_by_config: dict[int, list[OfferTarget]] = {id(config): [] for config in graduated}
+    for review_file in discover_judge_results(cwd):
+        review_type = _review_reviewtype(review_file)
+        if review_type is None:
+            continue
+
+        try:
+            judge_config = derive_judge_config_id(review_file)
+            result_ref = derive_result_ref(review_file, project_id, cwd=cwd)
+        except MetrologyTargetError:
+            _logger.warning("Skipping unreadable judge result during offer selection: %s", review_file)
+            continue
+
+        level = derive_artifact_level(review_type)
+        already_sampled = (result_ref.relative_review_path, result_ref.content_hash) in sampled_refs
+        if already_sampled:
+            continue
+
+        for config in graduated:
+            if _identity_matches(config, judge_config, level):
+                offers_by_config[id(config)].append(
+                    OfferTarget(
+                        review_path=result_ref.relative_review_path,
+                        judge_config=judge_config,
+                        reason="residual-sampling",
+                    )
+                )
+
+    selected: list[OfferTarget] = []
+    for config in graduated:
+        unsampled_matches = offers_by_config[id(config)]
+        take = round(len(unsampled_matches) * rate)
+        selected.extend(unsampled_matches[:take])
+    return selected
