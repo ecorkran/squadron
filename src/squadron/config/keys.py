@@ -141,6 +141,22 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "(project-level, via .squadron.toml). Never a filesystem path."
         ),
     ),
+    "metrology.min_evidence_n": ConfigKey(
+        name="metrology.min_evidence_n",
+        type_=int,
+        default=5,
+        description=(
+            "Minimum-evidence floor for metrology reports: a report cell "
+            "with n below this is marked below_floor. Reported by 321, "
+            "consumed by 322 to gate recommendations."
+        ),
+    ),
+    "metrology.trend_bucket": ConfigKey(
+        name="metrology.trend_bucket",
+        type_=str,
+        default="month",
+        description=("Default time-bucket grain for 'sq metrology report trend' (--bucket overrides)."),
+    ),
 }
 
 
