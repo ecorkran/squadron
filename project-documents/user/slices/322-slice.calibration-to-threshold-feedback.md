@@ -93,8 +93,6 @@ New surface-agnostic core under `src/squadron/metrology/` (no Typer imports), pl
 
 ```
 RecommendationDirection   enum: GRADUATE | HOLD | TIGHTEN | INSUFFICIENT_EVIDENCE
-EvidenceSnapshot          n: int; match_rate: float; floor_applied: int;
-                          below_floor: bool
 ThresholdTarget           template_name: str; current: JudgeThresholds;
                           model_dimension_note: str
 ThresholdRecommendation   group: GroupKey; direction: RecommendationDirection;
@@ -102,13 +100,20 @@ ThresholdRecommendation   group: GroupKey; direction: RecommendationDirection;
                           rationale: str
 RecommendationReport      cells: list[ThresholdRecommendation];
                           excluded: ExclusionSummary; floor_applied: int
+OfferTarget               review_path: str; judge_config: JudgeConfigId;
+                          reason: Literal["residual-sampling"]
+```
+
+**Layering correction (T11, 20260725):** `EvidenceSnapshot` and `GraduatedConfig` were originally specified in `calibration_models.py`, but `GraduatedConfig` is a `MetrologyRecord` envelope payload (T11 extends the envelope with `graduated_config: GraduatedConfig | None`, mirroring `sample: SampleVerdict | None`). Since `calibration_models.py` already imports `JudgeConfigId` from `models.py`, having `models.py` import `GraduatedConfig` back from `calibration_models.py` would be circular. Confirmed with the Project Manager rather than guessing: both types now live in `models.py`, alongside `SampleVerdict` — the module's existing precedent for envelope payload types — and `calibration_models.py` imports them from there. Their shapes are unchanged from the table above; only their module changed.
+
+```
+EvidenceSnapshot          n: int; match_rate: float; floor_applied: int;
+                          below_floor: bool                          (models.py)
 GraduatedConfig           judge_config: JudgeConfigId; artifact_level;
-                          evidence: EvidenceSnapshot; graduated_at
+                          evidence: EvidenceSnapshot; graduated_at    (models.py)
                           (judge_config carries template_name + model +
                            template_content_hash — graduation is scoped to
                            the exact instrument the evidence measured)
-OfferTarget               review_path: str; judge_config: JudgeConfigId;
-                          reason: Literal["residual-sampling"]
 ```
 
 - **`cli/commands/metrology.py`** (extended) — `sq metrology recommend` and `sq metrology offers`, plus `sq metrology graduate` to record a graduation. Same `--cwd` / `--project` / `--json` conventions as 320/321.
