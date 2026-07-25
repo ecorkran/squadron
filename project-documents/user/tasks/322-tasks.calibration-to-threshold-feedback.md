@@ -225,13 +225,13 @@ status: not_started
 
 ### T14: `select_residual_offers` — offer selection over unsampled results
 
-- [ ] **Extend `graduation.py`** with `select_residual_offers(store: MetrologyStore, graduated: list[GraduatedConfig], *, rate: float, cwd: str) -> list[OfferTarget]`
-  - [ ] Call `discover_judge_results(cwd)` (T13) to enumerate persisted judge review files; for each, derive its `JudgeConfigId` (`identity.derive_judge_config_id`) and compare against each `GraduatedConfig`'s exact identity
-  - [ ] A matching result is **unsampled** when no `SampleVerdict` in the store has a `result_ref` pointing at it (cross-reference `store.list_samples()`); select a `rate` fraction of the unsampled matches as `OfferTarget`s (`reason="residual-sampling"`)
-  - [ ] **Lapsed graduation:** if a `GraduatedConfig`'s `JudgeConfigId` no longer matches any current judge result (the underlying template/model has since changed), it contributes **zero** offers and this must be distinguishable from "config not yet due for sampling" at the CLI layer (T16) — return enough information (or have the CLI re-derive it via `find_graduation` against current results) to report the lapse explicitly, never silently
-  - [ ] **Testable guarantee:** given a `GraduatedConfig` with unsampled matching results, this function returns a **non-empty** offer set — the architecture's explicit "agreement data does not freeze" commitment
-  - [ ] An exhausted config (no unsampled results, but still current) yields an empty list for that config — distinct from the lapsed case above
-- [ ] Success: a graduated config with 3 unsampled matching results at `rate=1.0` yields 3 `OfferTarget`s; a graduated config with a since-edited template yields zero offers distinguishably from an exhausted one; the non-empty-offers guarantee holds under a passing test
+- [x] **Extend `graduation.py`** with `select_residual_offers(store: MetrologyStore, graduated: list[GraduatedConfig], *, rate: float, cwd: str) -> list[OfferTarget]`
+  - [x] Call `discover_judge_results(cwd)` (T13) to enumerate persisted judge review files; for each, derive its `JudgeConfigId` (`identity.derive_judge_config_id`) and compare against each `GraduatedConfig`'s exact identity
+  - [x] A matching result is **unsampled** when no `SampleVerdict` in the store has a `result_ref` pointing at it (cross-reference `store.list_samples()`); select a `rate` fraction of the unsampled matches as `OfferTarget`s (`reason="residual-sampling"`)
+  - [x] **Lapsed graduation:** if a `GraduatedConfig`'s `JudgeConfigId` no longer matches any current judge result (the underlying template/model has since changed), it contributes **zero** offers and this must be distinguishable from "config not yet due for sampling" at the CLI layer (T16) — return enough information (or have the CLI re-derive it via `find_graduation` against current results) to report the lapse explicitly, never silently
+  - [x] **Testable guarantee:** given a `GraduatedConfig` with unsampled matching results, this function returns a **non-empty** offer set — the architecture's explicit "agreement data does not freeze" commitment
+  - [x] An exhausted config (no unsampled results, but still current) yields an empty list for that config — distinct from the lapsed case above
+- [x] Success: a graduated config with 3 unsampled matching results at `rate=1.0` yields 3 `OfferTarget`s; a graduated config with a since-edited template yields zero offers distinguishably from an exhausted one; the non-empty-offers guarantee holds under a passing test
 
 **Commit:** `feat(metrology): add residual-offer selection with lapsed-graduation detection`
 
@@ -239,13 +239,13 @@ status: not_started
 
 ### T15: Tests for residual-offer selection
 
-- [ ] **Add `tests/metrology/test_graduation_offers.py`**
-  - [ ] **Non-empty guarantee:** a graduated config with unsampled matching results → `select_residual_offers` returns at least one `OfferTarget` (the architecture commitment, asserted directly)
-  - [ ] **Exhausted config:** all matching results already sampled → empty offer list, no error
-  - [ ] **Lapsed graduation:** template edited post-graduation (new `JudgeConfigId`, prompt/model dimension differs) → zero offers under the stale graduation, and the lapse is distinguishable from the exhausted case (assert on whatever signal T14 produces for this — a return-value field, a paired lookup, or a logged WARNING naming the config-identity change)
-  - [ ] **Pruned review file:** a matching judge result's review file has been deleted since graduation → that target is skipped, counted (not silently dropped), WARNING logged naming the path
-  - [ ] `rate` fraction is honored (e.g. `rate=0.5` over 4 unsampled results selects 2, not all 4)
-- [ ] Success: `uv run pytest tests/metrology/test_graduation_offers.py` passes
+- [x] **Add `tests/metrology/test_graduation_offers.py`**
+  - [x] **Non-empty guarantee:** a graduated config with unsampled matching results → `select_residual_offers` returns at least one `OfferTarget` (the architecture commitment, asserted directly)
+  - [x] **Exhausted config:** all matching results already sampled → empty offer list, no error
+  - [x] **Lapsed graduation:** template edited post-graduation (new `JudgeConfigId`, prompt/model dimension differs) → zero offers under the stale graduation, and the lapse is distinguishable from the exhausted case (assert on whatever signal T14 produces for this — a return-value field, a paired lookup, or a logged WARNING naming the config-identity change)
+  - [x] **Pruned review file:** a matching judge result's review file has been deleted since graduation → that target is skipped, counted (not silently dropped), WARNING logged naming the path
+  - [x] `rate` fraction is honored (e.g. `rate=0.5` over 4 unsampled results selects 2, not all 4)
+- [x] Success: `uv run pytest tests/metrology/test_graduation_offers.py` passes
 
 **Commit:** `test(metrology): cover offer selection guarantee, lapse, and pruned-file cases`
 

@@ -8,25 +8,32 @@ same functions with zero duplication.
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
 from rich import print as rprint
 
 from squadron.config.manager import get_config
+from squadron.metrology.calibration import recommend_thresholds
+from squadron.metrology.calibration_models import RecommendationDirection, RecommendationReport
 from squadron.metrology.capture import (
     build_capture_payload,
     record_sample,
     resolve_target,
     reveal,
 )
+from squadron.metrology.discovery import discover_judge_results
 from squadron.metrology.errors import (
     MetrologyIdentityError,
     MetrologyStoreError,
     MetrologyTargetError,
 )
-from squadron.metrology.levels import ArtifactLevel
-from squadron.metrology.models import JudgeConfigId
+from squadron.metrology.graduation import find_graduation, list_graduations, select_residual_offers
+from squadron.metrology.graduation import write_graduation as write_graduation_record
+from squadron.metrology.identity import derive_judge_config_id, read_review_frontmatter
+from squadron.metrology.levels import ArtifactLevel, derive_artifact_level
+from squadron.metrology.models import EvidenceSnapshot, GraduatedConfig, JudgeConfigId
 from squadron.metrology.report import agreement_report, dispersion_report, trend_report
 from squadron.metrology.report_models import (
     AgreementReport,
@@ -409,3 +416,248 @@ def report_trend(
                 f"  {cell.artifact.source_document} ({cell.artifact.artifact_level.value})  "
                 f"[{configs}]  disagreement_rate={cell.disagreement_rate:.2f} (n={cell.n})"
             )
+
+
+def _read_float_config(key: str, cwd: str) -> float:
+    """Read a float config key, erroring loudly on a non-numeric override."""
+    value = get_config(key, cwd=cwd)
+    if not isinstance(value, (int, float)):
+        raise typer.BadParameter(
+            f"{key} must be a number, got {value!r}. Fix it with 'sq config set {key} <n>'."
+        )
+    return float(value)
+
+
+def _read_int_config(key: str, cwd: str) -> int:
+    value = get_config(key, cwd=cwd)
+    if not isinstance(value, int):
+        raise typer.BadParameter(
+            f"{key} must be an integer, got {value!r}. Fix it with 'sq config set {key} <n>'."
+        )
+    return value
+
+
+def _build_recommendation_report(cwd: str, project: str | None) -> RecommendationReport:
+    """Build the RecommendationReport a project's current agreement data supports."""
+    store = _build_store(cwd)
+    samples = store.list_samples(project_id=project)
+    agreement = agreement_report(samples, cwd)
+    return recommend_thresholds(
+        agreement,
+        floor=_read_int_config("metrology.min_evidence_n", cwd),
+        graduate_rate=_read_float_config("metrology.graduate_match_rate", cwd),
+        tighten_rate=_read_float_config("metrology.tighten_match_rate", cwd),
+    )
+
+
+@metrology_app.command("recommend")
+def recommend(
+    project: str | None = typer.Option(None, "--project", help="Filter by project id"),
+    level: str | None = typer.Option(None, "--level", help="Filter by artifact level"),
+    as_json: bool = typer.Option(False, "--json", help="Emit the RecommendationReport model verbatim"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Advisory threshold recommendations per (artifact level, judge config). Read-only."""
+    resolved_cwd = _resolve_cwd(cwd)
+    level_filter = _parse_level_filter(level)
+
+    try:
+        report = _build_recommendation_report(resolved_cwd, project)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except MetrologyTargetError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    cells = [c for c in report.cells if level_filter is None or c.group.artifact_level == level_filter]
+
+    if as_json:
+        typer.echo(report.model_dump_json())
+        return
+
+    if not cells:
+        rprint("[dim]No evidence.[/dim]")
+    for cell in cells:
+        jc = cell.group.judge_config
+        rprint(
+            f"{cell.group.artifact_level.value}  {jc.template_name}/{jc.model}  "
+            f"{cell.direction.value}  match_rate={cell.evidence.match_rate:.2f} "
+            f"(n={cell.evidence.n}, floor={cell.evidence.floor_applied})"
+        )
+        if cell.target.current is not None:
+            rprint(
+                f"  current: pass_floor={cell.target.current.pass_floor} "
+                f"concerns_floor={cell.target.current.concerns_floor}"
+            )
+        else:
+            rprint("  [yellow]current: template not resolvable[/yellow]")
+        rprint(f"  [dim]{cell.target.model_dimension_note}[/dim]")
+    rprint(f"[dim]{_excluded_line(report.excluded)}[/dim]")
+
+
+@metrology_app.command("graduate")
+def graduate(
+    template: str = typer.Option(..., "--template", help="Judge template name"),
+    model: str = typer.Option(..., "--model", help="Judge model"),
+    level: str = typer.Option(..., "--level", help="Artifact level"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Record a graduation for a (template, model) pairing. Refuses below GRADUATE."""
+    resolved_cwd = _resolve_cwd(cwd)
+    level_filter = _parse_level_filter(level)
+    if level_filter is None:
+        rprint("[red]Error: --level is required.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        report = _build_recommendation_report(resolved_cwd, None)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except MetrologyTargetError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    matching = [
+        cell
+        for cell in report.cells
+        if cell.group.artifact_level == level_filter
+        and cell.group.judge_config.template_name == template
+        and cell.group.judge_config.model == model
+    ]
+    if not matching:
+        rprint(
+            f"[red]Error: no recommendation cell for template={template!r} "
+            f"model={model!r} level={level_filter.value!r}.[/red]"
+        )
+        raise typer.Exit(code=1)
+    cell = matching[0]
+
+    if cell.direction != RecommendationDirection.GRADUATE:
+        rprint(
+            f"[red]Error: refusing to graduate — direction is {cell.direction.value}, "
+            f"not GRADUATE (n={cell.evidence.n}, floor={cell.evidence.floor_applied}, "
+            f"match_rate={cell.evidence.match_rate:.2f}). Nothing written.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    graduated_config = GraduatedConfig(
+        judge_config=cell.group.judge_config,
+        artifact_level=level_filter,
+        evidence=EvidenceSnapshot(
+            n=cell.evidence.n,
+            match_rate=cell.evidence.match_rate,
+            floor_applied=cell.evidence.floor_applied,
+            below_floor=cell.evidence.below_floor,
+        ),
+        graduated_at=datetime.now(UTC),
+    )
+
+    try:
+        store = _build_store(resolved_cwd)
+        existing = find_graduation(store, cell.group.judge_config, level_filter)
+        write_graduation_record(store, graduated_config)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if existing is not None:
+        rprint(
+            f"[green]Updated existing graduation[/green] for {template}/{model} at {level_filter.value}"
+        )
+    else:
+        rprint(f"[green]Graduated[/green] {template}/{model} at {level_filter.value}")
+
+
+@metrology_app.command("offers")
+def offers(
+    project: str | None = typer.Option(None, "--project", help="Filter by project id"),
+    as_json: bool = typer.Option(False, "--json", help="Emit OfferTargets as a JSON list"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """List residual-sampling targets for graduated judge configs. Read-only."""
+    resolved_cwd = _resolve_cwd(cwd)
+
+    try:
+        store = _build_store(resolved_cwd)
+        graduated_configs = list_graduations(store)
+        rate = _read_float_config("metrology.residual_sample_rate", resolved_cwd)
+        offer_targets = select_residual_offers(store, graduated_configs, rate=rate, cwd=resolved_cwd)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except MetrologyTargetError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if as_json:
+        typer.echo("[" + ", ".join(o.model_dump_json() for o in offer_targets) + "]")
+        return
+
+    if not graduated_configs:
+        rprint("[dim]No graduated configs.[/dim]")
+        return
+
+    offered_by_config: dict[tuple[str, str, str | None], int] = {}
+    for target in offer_targets:
+        jc = target.judge_config
+        key = (jc.template_name, jc.model, jc.template_content_hash)
+        offered_by_config[key] = offered_by_config.get(key, 0) + 1
+
+    # A graduation is current when at least one presently-discoverable judge
+    # result matches its exact identity — distinct from whether it has any
+    # *unsampled* matches (that's the offer count above). Zero offers with
+    # no current match at all means the graduation has lapsed.
+    current_identities = {
+        (jc.template_name, jc.model, jc.template_content_hash, level)
+        for review_file in discover_judge_results(resolved_cwd)
+        for jc, level in [_derive_judge_config_and_level(review_file)]
+        if jc is not None
+    }
+
+    for config in graduated_configs:
+        jc = config.judge_config
+        key = (jc.template_name, jc.model, jc.template_content_hash)
+        count = offered_by_config.get(key, 0)
+        if count > 0:
+            rprint(
+                f"{jc.template_name}/{jc.model} ({config.artifact_level.value}): {count} offer(s) due"
+            )
+            continue
+        still_current = (
+            jc.template_name,
+            jc.model,
+            jc.template_content_hash,
+            config.artifact_level,
+        ) in current_identities
+        if still_current:
+            rprint(f"{jc.template_name}/{jc.model} ({config.artifact_level.value}): no offers due")
+        else:
+            rprint(
+                f"[yellow]{jc.template_name}/{jc.model} ({config.artifact_level.value}): "
+                "graduation has lapsed — the judge configuration has changed "
+                "since this graduation was recorded[/yellow]"
+            )
+
+    for target in offer_targets:
+        rprint(f"  offer: {target.review_path}")
+
+
+def _derive_judge_config_and_level(
+    review_file: Path,
+) -> tuple[JudgeConfigId | None, ArtifactLevel | None]:
+    """Best-effort JudgeConfigId + ArtifactLevel for a discovered review file.
+
+    Used only for the offers command's lapse-vs-exhausted distinction; a
+    file that fails to parse is skipped (returns None), matching
+    discover_judge_results' own tolerant-skip convention.
+    """
+    try:
+        frontmatter = read_review_frontmatter(review_file)
+        judge_config = derive_judge_config_id(review_file)
+    except MetrologyTargetError:
+        return None, None
+    raw_type = frontmatter.get("reviewType")
+    level = derive_artifact_level(raw_type) if isinstance(raw_type, str) else ArtifactLevel.UNCLASSIFIED
+    return judge_config, level
