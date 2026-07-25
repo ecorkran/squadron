@@ -30,11 +30,11 @@ status: not_started
 
 ### T1: Narrow the template content hash to exclude thresholds
 
-- [ ] **Edit `src/squadron/metrology/identity.py`, function `_template_content_hash`** ([identity.py:298-323](../../../src/squadron/metrology/identity.py#L298-L323))
-  - [ ] Remove `"judge": template.judge` from the `behavior` dict that gets hashed
-  - [ ] Update the function's docstring to state the hash now covers only the judged behavior (`name`, `description`, `system_prompt`, `model`, `prompt_template`) and deliberately excludes the threshold block — thresholds are calibration's output, not part of the instrument
-  - [ ] Do not touch `derive_result_ref` / `_canonical_projection` (the judge-*result* hash) — this change is scoped to the judge-*configuration* hash only
-- [ ] Success: `_template_content_hash` for two templates differing only in `judge.pass_floor` returns the **same** hash; for two templates differing in `system_prompt` returns **different** hashes
+- [x] **Edit `src/squadron/metrology/identity.py`, function `_template_content_hash`** ([identity.py:298-323](../../../src/squadron/metrology/identity.py#L298-L323))
+  - [x] Remove `"judge": template.judge` from the `behavior` dict that gets hashed
+  - [x] Update the function's docstring to state the hash now covers only the judged behavior (`name`, `description`, `system_prompt`, `model`, `prompt_template`) and deliberately excludes the threshold block — thresholds are calibration's output, not part of the instrument
+  - [x] Do not touch `derive_result_ref` / `_canonical_projection` (the judge-*result* hash) — this change is scoped to the judge-*configuration* hash only
+- [x] Success: `_template_content_hash` for two templates differing only in `judge.pass_floor` returns the **same** hash; for two templates differing in `system_prompt` returns **different** hashes
 
 **Commit:** `fix(metrology): narrow template content hash to exclude threshold block`
 
@@ -42,12 +42,12 @@ status: not_started
 
 ### T2: Tests for the hash-narrowing regression
 
-- [ ] **Extend `tests/metrology/test_identity.py`** (or add if 320 didn't create a dedicated file — check first)
-  - [ ] **Threshold-only edit does not re-key:** two `ReviewTemplate` fixtures identical except `judge={"pass_floor": 78}` vs `judge={"pass_floor": 85}` → `_template_content_hash` returns the same value for both
-  - [ ] **Prompt or model edit does re-key:** a fixture differing in `system_prompt` (holding `judge` constant) → different hash; a fixture differing in `model` → different hash
-  - [ ] **`derive_judge_config_id` end-to-end:** a review file's `JudgeConfigId.template_content_hash` is unchanged after a template's threshold-only edit, and changes after a prompt edit — the actual regression this slice fixes, exercised through the public entry point, not just the private helper
-  - [ ] **Missing template unchanged:** a `reviewType` that doesn't map to a known template still returns `None` (verify no accidental behavior change from removing the `judge` key)
-- [ ] Success: `uv run pytest tests/metrology/test_identity.py` passes
+- [x] **Extend `tests/metrology/test_identity.py`** (or add if 320 didn't create a dedicated file — check first)
+  - [x] **Threshold-only edit does not re-key:** two `ReviewTemplate` fixtures identical except `judge={"pass_floor": 78}` vs `judge={"pass_floor": 85}` → `_template_content_hash` returns the same value for both
+  - [x] **Prompt or model edit does re-key:** a fixture differing in `system_prompt` (holding `judge` constant) → different hash; a fixture differing in `model` → different hash
+  - [x] **`derive_judge_config_id` end-to-end:** a review file's `JudgeConfigId.template_content_hash` is unchanged after a template's threshold-only edit, and changes after a prompt edit — the actual regression this slice fixes, exercised through the public entry point, not just the private helper
+  - [x] **Missing template unchanged:** a `reviewType` that doesn't map to a known template still returns `None` (verify no accidental behavior change from removing the `judge` key)
+- [x] Success: `uv run pytest tests/metrology/test_identity.py` passes
 
 **Commit:** `test(metrology): cover hash-narrowing regression on both edit directions`
 
