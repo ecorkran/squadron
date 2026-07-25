@@ -296,13 +296,19 @@ def derive_result_ref(
 
 
 def _template_content_hash(template_name: str) -> str | None:
-    """Hash the resolved template's behavior-defining content.
+    """Hash the resolved template's judged behavior, excluding thresholds.
 
     Never fabricates: a ``reviewType`` that doesn't map cleanly to a known
     template yields ``None`` (322 decides how the version key is finalized).
     ``ReviewTemplate`` holds no raw-YAML field, so the hash is taken over the
-    template's identity-bearing fields (the prompt, model, and judge block
+    template's identity-bearing fields (the prompt, model, and description
     that define its scoring behavior), not the file bytes.
+
+    Deliberately excludes ``judge`` (``pass_floor``/``concerns_floor``):
+    thresholds are calibration's output, not part of the instrument being
+    calibrated. Including them would re-key the config every time an
+    operator acted on a calibration recommendation, resetting accumulated
+    evidence back to zero (322's self-defeating-loop fix).
     """
     # Imported lazily: the review.templates package pulls in the review
     # subsystem, which the metrology core otherwise does not need.
@@ -317,7 +323,6 @@ def _template_content_hash(template_name: str) -> str | None:
         "system_prompt": template.system_prompt,
         "model": template.model,
         "prompt_template": template.prompt_template,
-        "judge": template.judge,
     }
     canonical = json.dumps(behavior, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
