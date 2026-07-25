@@ -4,20 +4,33 @@ Pydantic models, not console text: ``--json`` emits these verbatim. Mirrors
 ``report_models.py``'s pattern (321). A ``ThresholdRecommendation`` is
 advisory only — a direction and the evidence for it, never a computed
 numeric floor the operator must accept.
+
+``EvidenceSnapshot`` and ``GraduatedConfig`` live in ``models.py``, not
+here: ``GraduatedConfig`` is a ``MetrologyRecord`` envelope payload
+(alongside ``SampleVerdict``), and defining it there avoids a circular
+import between the envelope and this module.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel
 
-from squadron.metrology.levels import ArtifactLevel
-from squadron.metrology.models import JudgeConfigId
+from squadron.metrology.models import EvidenceSnapshot, GraduatedConfig, JudgeConfigId
 from squadron.metrology.report_models import ExclusionSummary, GroupKey
 from squadron.pipeline.actions.judge import JudgeThresholds
+
+__all__ = [
+    "EvidenceSnapshot",
+    "GraduatedConfig",
+    "OfferTarget",
+    "RecommendationDirection",
+    "RecommendationReport",
+    "ThresholdRecommendation",
+    "ThresholdTarget",
+]
 
 
 class RecommendationDirection(StrEnum):
@@ -33,15 +46,6 @@ class RecommendationDirection(StrEnum):
     HOLD = "hold"
     TIGHTEN = "tighten"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
-
-
-class EvidenceSnapshot(BaseModel):
-    """The evidence a direction was classified from, always stated in full."""
-
-    n: int
-    match_rate: float
-    floor_applied: int
-    below_floor: bool
 
 
 class ThresholdTarget(BaseModel):
@@ -76,22 +80,6 @@ class RecommendationReport(BaseModel):
     cells: list[ThresholdRecommendation]
     excluded: ExclusionSummary
     floor_applied: int
-
-
-class GraduatedConfig(BaseModel):
-    """A persisted record of an operator's graduation decision.
-
-    Carries the **full** ``JudgeConfigId`` (template_name + model +
-    template_content_hash), not just the looser ``(template_name, model)``
-    pair — this is what makes a graduation version-scoped: it survives a
-    threshold-only edit (which does not change the hash) but lapses on a
-    prompt/model edit (which does).
-    """
-
-    judge_config: JudgeConfigId
-    artifact_level: ArtifactLevel
-    evidence: EvidenceSnapshot
-    graduated_at: datetime
 
 
 class OfferTarget(BaseModel):

@@ -17,12 +17,15 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from squadron.metrology.levels import ArtifactLevel
 from squadron.review.models import Verdict
 
-#: Record types the store envelope may carry. ``sample`` is written by this
-#: slice; ``audit_finding`` is reserved for 323's tech-debt-audit oracle so it
-#: can extend the store behind the same discriminator without a migration.
+#: Record types the store envelope may carry. ``sample`` is written by 320;
+#: ``graduated_config`` is written by 322's graduation registry;
+#: ``audit_finding`` is reserved for 323's tech-debt-audit oracle so it can
+#: extend the store behind the same discriminator without a migration.
 RECORD_TYPE_SAMPLE = "sample"
+RECORD_TYPE_GRADUATED_CONFIG = "graduated_config"
 RECORD_TYPE_AUDIT_FINDING = "audit_finding"
 
 
@@ -97,15 +100,47 @@ class SampleVerdict(BaseModel):
     blind: bool = True
 
 
+class EvidenceSnapshot(BaseModel):
+    """The evidence a calibration direction was classified from.
+
+    Lives here (not ``calibration_models.py``) because ``GraduatedConfig``
+    — an envelope payload — embeds it; keeping both payload types in one
+    module avoids a circular import between the envelope and 322's output
+    shapes.
+    """
+
+    n: int
+    match_rate: float
+    floor_applied: int
+    below_floor: bool
+
+
+class GraduatedConfig(BaseModel):
+    """A persisted record of an operator's graduation decision (322).
+
+    Carries the **full** ``JudgeConfigId`` (template_name + model +
+    template_content_hash), not just the looser ``(template_name, model)``
+    pair — this is what makes a graduation version-scoped: it survives a
+    threshold-only edit (which does not change the hash) but lapses on a
+    prompt/model edit (which does).
+    """
+
+    judge_config: JudgeConfigId
+    artifact_level: ArtifactLevel
+    evidence: EvidenceSnapshot
+    graduated_at: datetime
+
+
 class MetrologyRecord(BaseModel):
     """The on-disk envelope: one JSON file per record in the store.
 
-    ``record_type`` discriminates the payload. This slice writes only
-    ``"sample"`` records (``sample`` set, other payloads absent); the
-    envelope reserves room for 323's ``"audit_finding"`` behind the same
-    discriminator, so a second record type needs no store migration.
+    ``record_type`` discriminates the payload. 320 writes ``"sample"``
+    records; 322 writes ``"graduated_config"`` records behind the same
+    envelope; the envelope also reserves room for 323's
+    ``"audit_finding"`` — extending it needs no store migration.
     """
 
     schema_version: int
     record_type: str = RECORD_TYPE_SAMPLE
     sample: SampleVerdict | None = None
+    graduated_config: GraduatedConfig | None = None

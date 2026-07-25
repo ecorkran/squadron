@@ -143,13 +143,13 @@ status: not_started
 
 ### T9: `recommend_thresholds` — the full recommendation report
 
-- [ ] **Extend `calibration.py`** with `recommend_thresholds(agreement: AgreementReport, *, floor: int, graduate_rate: float, tighten_rate: float) -> RecommendationReport`
-  - [ ] For each `AgreementCell` in `agreement.cells`: classify its direction (T7), read its template's current thresholds, build a `ThresholdRecommendation` carrying the cell's `GroupKey`, an `EvidenceSnapshot` (`n`, `match_rate`, `floor_applied=floor`, `below_floor` from the cell), the `ThresholdTarget` (current thresholds + `model_dimension_note`), and a short `rationale` string naming the direction and evidence
-  - [ ] `model_dimension_note` states plainly that the recommendation holds for **this template paired with this model**, and that acting on it means choosing model and threshold together at config time — this is not optional per-cell text, every cell gets one
-  - [ ] Pass `agreement.excluded` through verbatim into `RecommendationReport.excluded` (321's convention — exclusions are never mistaken for absence of evidence)
-  - [ ] An empty `agreement.cells` list yields an empty `RecommendationReport` with the `excluded` summary and `floor_applied` still stated — honest, not an error
-  - [ ] **No mutation:** this function reads `AgreementReport` and template state; it must not write to the store, a template file, or config — this is asserted by test (T10) and is the architecture's core discipline for this slice
-- [ ] Success: a fixture `AgreementReport` with cells at multiple levels/configs yields one `ThresholdRecommendation` per cell, each with a non-empty `model_dimension_note`; an empty agreement report yields an empty `RecommendationReport`, not a crash
+- [x] **Extend `calibration.py`** with `recommend_thresholds(agreement: AgreementReport, *, floor: int, graduate_rate: float, tighten_rate: float) -> RecommendationReport`
+  - [x] For each `AgreementCell` in `agreement.cells`: classify its direction (T7), read its template's current thresholds, build a `ThresholdRecommendation` carrying the cell's `GroupKey`, an `EvidenceSnapshot` (`n`, `match_rate`, `floor_applied=floor`, `below_floor` from the cell), the `ThresholdTarget` (current thresholds + `model_dimension_note`), and a short `rationale` string naming the direction and evidence
+  - [x] `model_dimension_note` states plainly that the recommendation holds for **this template paired with this model**, and that acting on it means choosing model and threshold together at config time — this is not optional per-cell text, every cell gets one
+  - [x] Pass `agreement.excluded` through verbatim into `RecommendationReport.excluded` (321's convention — exclusions are never mistaken for absence of evidence)
+  - [x] An empty `agreement.cells` list yields an empty `RecommendationReport` with the `excluded` summary and `floor_applied` still stated — honest, not an error
+  - [x] **No mutation:** this function reads `AgreementReport` and template state; it must not write to the store, a template file, or config — this is asserted by test (T10) and is the architecture's core discipline for this slice
+- [x] Success: a fixture `AgreementReport` with cells at multiple levels/configs yields one `ThresholdRecommendation` per cell, each with a non-empty `model_dimension_note`; an empty agreement report yields an empty `RecommendationReport`, not a crash
 
 **Commit:** `feat(metrology): add recommend_thresholds producing per-cell advisory recommendations`
 
@@ -157,13 +157,13 @@ status: not_started
 
 ### T10: Tests for `recommend_thresholds`, including the no-mutation assertion
 
-- [ ] **Add `tests/metrology/test_calibration_recommend.py`**
-  - [ ] Multi-cell fixture → one `ThresholdRecommendation` per `AgreementCell`, never a single blended recommendation
-  - [ ] Every recommendation carries a non-empty `model_dimension_note`
-  - [ ] A cell whose template is unregistered → `ThresholdTarget.current is None`, no exception, WARNING logged naming the template
-  - [ ] **No-mutation assertion:** snapshot the template YAML file, any `.squadron.toml` config, and the metrology store directory (bytes) before and after calling `recommend_thresholds` → byte-identical (the architecture's Non-Goal, verified by test per the slice design's explicit call for this)
-  - [ ] Empty `AgreementReport` → empty `RecommendationReport`, `excluded` zeroed, `floor_applied` still set
-- [ ] Success: `uv run pytest tests/metrology/test_calibration_recommend.py` passes
+- [x] **Add `tests/metrology/test_calibration_recommend.py`**
+  - [x] Multi-cell fixture → one `ThresholdRecommendation` per `AgreementCell`, never a single blended recommendation
+  - [x] Every recommendation carries a non-empty `model_dimension_note`
+  - [x] A cell whose template is unregistered → `ThresholdTarget.current is None`, no exception, WARNING logged naming the template
+  - [x] **No-mutation assertion:** snapshot the template YAML file, any `.squadron.toml` config, and the metrology store directory (bytes) before and after calling `recommend_thresholds` → byte-identical (the architecture's Non-Goal, verified by test per the slice design's explicit call for this)
+  - [x] Empty `AgreementReport` → empty `RecommendationReport`, `excluded` zeroed, `floor_applied` still set
+- [x] Success: `uv run pytest tests/metrology/test_calibration_recommend.py` passes
 
 **Commit:** `test(metrology): cover recommendation report shape and no-mutation invariant`
 

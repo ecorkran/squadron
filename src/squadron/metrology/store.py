@@ -19,7 +19,9 @@ from typing import cast
 from squadron.config.manager import get_config
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
+    RECORD_TYPE_GRADUATED_CONFIG,
     RECORD_TYPE_SAMPLE,
+    GraduatedConfig,
     JudgeConfigId,
     MetrologyRecord,
     SampleVerdict,
@@ -59,6 +61,12 @@ def generate_sample_id(now: datetime | None = None) -> str:
     """Return a unique ``sample-{YYYYMMDD}-{uuid8}`` id (mirrors run_id)."""
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
     return f"sample-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def generate_graduation_id(now: datetime | None = None) -> str:
+    """Return a unique ``graduation-{YYYYMMDD}-{uuid8}`` id."""
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
+    return f"graduation-{stamp}-{uuid.uuid4().hex[:8]}"
 
 
 def _judge_config_matches(stored: JudgeConfigId, wanted: JudgeConfigId) -> bool:
@@ -140,6 +148,44 @@ class MetrologyStore:
             json.dumps(record.model_dump(mode="json"), indent=2),
         )
         return sample.sample_id
+
+    def write_graduation(self, graduated: GraduatedConfig, record_id: str | None = None) -> str:
+        """Envelope and persist a graduated-config record; return its record id.
+
+        ``record_id`` lets a caller overwrite an existing record in place
+        (322's idempotent re-graduate: same identity updates the evidence
+        snapshot rather than creating a second record). Omit it to mint a
+        new id.
+        """
+        record_id = record_id or generate_graduation_id()
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_GRADUATED_CONFIG,
+            graduated_config=graduated,
+        )
+        self._write_atomic(
+            self._record_path(record_id),
+            json.dumps(record.model_dump(mode="json"), indent=2),
+        )
+        return record_id
+
+    def list_graduations(self) -> list[tuple[str, GraduatedConfig]]:
+        """Return all stored ``(record_id, GraduatedConfig)`` pairs.
+
+        Tolerantly skips an unreadable sibling with a WARNING (mirrors
+        ``list_samples``) — one corrupt record must not sink the whole scan.
+        """
+        graduations: list[tuple[str, GraduatedConfig]] = []
+        for path in sorted(self._store_dir.glob("*.json")):
+            try:
+                record = self._load_raw(path)
+            except (OSError, ValueError, SchemaVersionError):
+                _logger.warning("Skipping unreadable metrology record: %s", path)
+                continue
+            if record.record_type != RECORD_TYPE_GRADUATED_CONFIG or record.graduated_config is None:
+                continue
+            graduations.append((path.stem, record.graduated_config))
+        return graduations
 
     def load_record(self, sample_id: str) -> MetrologyRecord:
         """Load and validate one record by id.
