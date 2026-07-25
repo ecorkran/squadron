@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
+from squadron.config.manager import get_config
 from squadron.metrology.errors import MetrologyTargetError
 from squadron.metrology.identity import (
     SOURCE_DOC_KEY,
@@ -22,7 +23,13 @@ from squadron.metrology.identity import (
     read_review_frontmatter,
 )
 from squadron.metrology.levels import ArtifactLevel, derive_artifact_level
-from squadron.metrology.models import ProjectId, SampleVerdict
+from squadron.metrology.models import JudgeConfigId, ProjectId, SampleVerdict
+from squadron.metrology.report_models import (
+    AgreementCell,
+    AgreementReport,
+    ExclusionSummary,
+    GroupKey,
+)
 from squadron.review.models import Verdict
 
 _logger = logging.getLogger(__name__)
@@ -170,3 +177,67 @@ def enrich_samples(samples: list[SampleVerdict], cwd: str) -> list[EnrichedSampl
     and the resolved ``source_document`` (dispersion key) — no extra I/O.
     """
     return [_enrich_one(sample, cwd) for sample in samples]
+
+
+def _min_evidence_n(cwd: str) -> int:
+    value = get_config("metrology.min_evidence_n", cwd=cwd)
+    if not isinstance(value, int):
+        raise MetrologyTargetError(
+            f"metrology.min_evidence_n must be an integer, got {value!r}. "
+            "Fix it with 'sq config set metrology.min_evidence_n <n>'."
+        )
+    return value
+
+
+def _comparability_key(judge_config: JudgeConfigId) -> tuple[str, str, str | None]:
+    """The grouping key for comparability: distinct configs are distinct
+    groups; unversioned records group by (name, model) only, so they never
+    silently pool with a hash-bearing same-name record (segregated via
+    ``unversioned``, not merged into it)."""
+    return (judge_config.template_name, judge_config.model, judge_config.template_content_hash)
+
+
+def agreement_report(samples: list[SampleVerdict], cwd: str) -> AgreementReport:
+    """Judge-vs-human match rate, grouped by ``(ArtifactLevel, JudgeConfigId)``.
+
+    Excludes ``stale-judge-result`` samples from the match computation
+    (counted in ``ExclusionSummary``). Unversioned records are grouped
+    separately from hash-bearing same-name+model records — never pooled.
+    """
+    enriched = enrich_samples(samples, cwd)
+    floor = _min_evidence_n(cwd)
+
+    stale_count = sum(1 for item in enriched if item.admissible == "stale-judge-result")
+    unversioned_count = sum(
+        1 for item in enriched if item.admissible == "admissible" and item.unversioned
+    )
+
+    groups: dict[tuple[ArtifactLevel, tuple[str, str, str | None]], list[EnrichedSample]] = {}
+    for item in enriched:
+        if item.admissible != "admissible":
+            continue
+        key = (item.artifact_level, _comparability_key(item.sample.judge_config))
+        groups.setdefault(key, []).append(item)
+
+    cells: list[AgreementCell] = []
+    for (level, _comparability), members in groups.items():
+        n = len(members)
+        matches = sum(1 for item in members if item.sample.human_verdict == item.judge_verdict)
+        match_rate = matches / n if n > 0 else 0.0
+        cells.append(
+            AgreementCell(
+                group=GroupKey(artifact_level=level, judge_config=members[0].sample.judge_config),
+                n=n,
+                match_rate=match_rate,
+                below_floor=n < floor,
+            )
+        )
+
+    return AgreementReport(
+        cells=cells,
+        excluded=ExclusionSummary(
+            total_excluded=stale_count + unversioned_count,
+            stale_judge_result=stale_count,
+            unversioned=unversioned_count,
+        ),
+    )
