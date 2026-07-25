@@ -33,6 +33,16 @@ Internal work log for squadron project development.
 
 **Pending.** Frontmatter `status: not-started`. Next: Phase 5 (task breakdown) for 322. Effort 3/5.
 
+### 322 Slice Review — Addressed (F002 valid, F003 declined)
+
+Slice review (`322-review.slice...`, kimi-k2.7-code): 1 PASS, 1 CONCERN, 1 NOTE.
+
+- **F002 (CONCERN, `GraduatedConfig` omits judge-configuration identity) — correct, and the same bug class as the hash-scope issue: an identity missing its version key.** I keyed graduation on `(template_name, model, artifact_level)`, which is **invariant across a prompt edit** — so a graduation earned under one prompt would silently transfer to a rewritten judge, and `select_residual_offers` would keep drawing spot-checks against it. Version-blending at the one point in the initiative where a *trust* decision is recorded rather than a measurement, with residual sampling then verifying an instrument nobody calibrated. Fixed: `GraduatedConfig` carries the full `JudgeConfigId`; offers match that exact identity; added the *Graduation is version-scoped* decision, a lapsed-graduation failure-mode row (empty offers **with** an explanatory line — an operator who edits a prompt learns the graduation lapsed rather than discovering sampling quietly stopped), a success criterion, walkthrough step 7, and test coverage.
+
+  Worth recording how this composes with the hash narrowing: because the hash **excludes** the threshold block, graduation survives the operator acting on it; because it **includes** prompt and model, graduation expires on genuine drift. The two decisions are what make each other safe — either alone is wrong.
+
+- **F003 (NOTE, low-level I/O failure modes) — declined with rationale.** Asked for rows on store lock contention and read timeouts. Checked the code: these paths are local-filesystem with no lock and no timeout-bearing transport; `store.py:177` already skips unreadable siblings on `(OSError, ValueError, SchemaVersionError)` with a WARNING and reports over what loaded, and writes are atomic write-then-rename. Adding rows for mechanisms that don't exist would document fiction. Recorded the actual inherited behavior instead, and noted that an off-filesystem store (280 convergence) would bring its own transport failure modes and its own rows.
+
 ### cf config hygiene
 
 `custom.recentEvents` (rendered as "Current Project State" in `/cf:build` output) still pointed at the orchestration-v2 initiative (`100-arch`/`100-slices`) while the authoritative `Architecture:`/`Slice Plan:` fields correctly read 320. Updated to the 320 artifacts so the loaded context stops contradicting itself.

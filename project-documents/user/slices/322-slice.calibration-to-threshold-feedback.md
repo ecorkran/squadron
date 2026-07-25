@@ -85,8 +85,8 @@ New surface-agnostic core under `src/squadron/metrology/` (no Typer imports), pl
   - `read_current_thresholds(template_name) -> JudgeThresholds` — reads the *currently configured* template-level floors via `resolve_thresholds(template.judge, None)` so a recommendation is expressed as a delta from reality, not from a constant.
 
 - **`graduation.py`** — the graduated-config registry and residual-offer selection:
-  - `GraduatedConfig` — a persisted record of a `(template, model, artifact_level)` pairing the operator has moved toward auto-gate, with the evidence snapshot that justified it and when.
-  - `select_residual_offers(store, graduated, *, rate, cwd) -> list[OfferTarget]` — for each graduated config, identify persisted judge results that are **not yet sampled** and select a `rate` fraction as offers.
+  - `GraduatedConfig` — a persisted record of a graduation, keyed on the **full `JudgeConfigId`** (not just template+model) plus the artifact level, with the evidence snapshot that justified it and when. Carrying the whole config identity — including `template_content_hash` — is what makes a graduation **version-scoped**: see *Graduation is version-scoped* below.
+  - `select_residual_offers(store, graduated, *, rate, cwd) -> list[OfferTarget]` — for each graduated config, identify persisted judge results **matching that exact `JudgeConfigId`** which are **not yet sampled**, and select a `rate` fraction as offers. Results whose config identity differs (a prompt/model edit since graduation) are **not** offered under that graduation — they belong to a different instrument.
   - Offers are **advisory targets**, not a mutation: the operator drains them with the existing `sq metrology sample <target>`.
 
 - **`calibration_models.py`** — Pydantic output shapes (the typed interface, not console text):
@@ -102,8 +102,11 @@ ThresholdRecommendation   group: GroupKey; direction: RecommendationDirection;
                           rationale: str
 RecommendationReport      cells: list[ThresholdRecommendation];
                           excluded: ExclusionSummary; floor_applied: int
-GraduatedConfig           template_name; model; artifact_level;
+GraduatedConfig           judge_config: JudgeConfigId; artifact_level;
                           evidence: EvidenceSnapshot; graduated_at
+                          (judge_config carries template_name + model +
+                           template_content_hash — graduation is scoped to
+                           the exact instrument the evidence measured)
 OfferTarget               review_path: str; judge_config: JudgeConfigId;
                           reason: Literal["residual-sampling"]
 ```
@@ -160,6 +163,18 @@ The calibration loop would invalidate its own evidence every single time it work
 This is a contained change to one private function in 320's `identity.py`, plus its tests. It does re-key historical records once (their hash changes), which is correct and one-time: those records were keyed on a value that conflated instrument with readout.
 
 *Rejected — a similarity/inherit policy* (the plan's third framing): more machinery and more judgment calls than the problem needs. Excluding thresholds from the hash solves the actual failure precisely, with no policy layer to tune.
+
+### Graduation is version-scoped — it keys on the whole `JudgeConfigId`
+
+A graduation is a statement about **an instrument**, not about a name. `GraduatedConfig` therefore persists the full `JudgeConfigId` (`template_name`, `model`, `template_content_hash`), not just `(template, model)`.
+
+The failure this prevents: `(template_name, model, artifact_level)` is **invariant across a prompt edit**, while `JudgeConfigId` is not. Keyed on the looser triple, a graduation earned by one prompt would silently carry over to a rewritten one — and `select_residual_offers` would keep drawing spot-checks against it as though the evidence still applied. That is precisely the version-blending the architecture forbids ("metrology records must identify the judge configuration they measured"), occurring at the one point in the initiative where a *trust* decision is recorded rather than a measurement. Residual sampling would then be verifying an instrument nobody calibrated.
+
+With the full identity, a prompt or model edit means the graduation **no longer matches** any new results: those results fall outside the graduated config, produce no offers under it, and the pairing must re-earn its evidence — which is the correct behavior, since the instrument changed.
+
+This composes with the narrowed hash above rather than fighting it. Because the hash **excludes** the threshold block, acting on a recommendation does not invalidate the graduation it justified; because it **includes** prompt and model, a real change to the instrument does. Graduation survives its own consequence and expires on genuine drift — the two decisions are what make each other safe.
+
+Consequence for `sq metrology offers`: a graduated config with no matching current results yields an **empty offer set with an explanatory line** naming the config-identity change, not a silent absence. An operator who edits a judge prompt learns that its graduation has lapsed rather than discovering later that sampling quietly stopped.
 
 ### Direction bands — asymmetric, because the risks are asymmetric
 
@@ -229,9 +244,12 @@ Per the Failure-Mode Enumeration rule — each boundary has an enumerated failur
 | **graduate** | pairing already graduated | idempotent — update the evidence snapshot, no duplicate | INFO; one record, not two | re-graduate → single record |
 | **offers** | graduated config has no unsampled results | empty offer list with explanatory line | "no offers due" | exhausted config → honest empty, not fabricated |
 | **offers** | referenced review file gone since graduation | skip that target; count it | WARNING naming the path | pruned review → skipped, counted, no crash |
+| **offers** | judge config edited since graduation (`JudgeConfigId` no longer matches any current result) | offer nothing under that graduation — the graduation is version-scoped and has lapsed | explanatory line naming the config-identity change; empty offer set, never silent | prompt edit post-graduation → no offers drawn against the new config, lapse reported |
 | **hash narrowing** | historical records re-key once | expected and one-time; documented | 321's `unversioned`/segregation reporting unchanged | narrowed hash → threshold edit preserves n; prompt edit re-keys |
 
 No boundary swallows its failure; no path fabricates a threshold, an n, or a graduation.
+
+**On lower-level I/O failures (raised as a review note).** The table above enumerates this slice's *own* boundaries. Store and template reads are local-filesystem operations with no lock and no network: 320's `MetrologyStore.list_samples` already skips an unreadable sibling on `(OSError, ValueError, SchemaVersionError)` with a WARNING and reports over what loaded ([store.py:177](src/squadron/metrology/store.py#L177)), and writes are atomic write-then-rename. 321 inherited that behavior and so does 322 — a corrupt or partially-written record degrades the report by one record, visibly, rather than failing the command. Rows for lock contention or read timeouts are deliberately **not** added: no lock and no timeout-bearing transport exists on these paths, and enumerating failure modes for mechanisms the code does not have would document fiction. If a future slice moves the store off the local filesystem (e.g. the 280 convergence), that transport brings its own failure modes and its own rows.
 
 ## Integration Points
 
@@ -251,13 +269,14 @@ Nothing downstream in this initiative consumes 322 — hence `interfaces: []`. 3
 - Graduating a judge installs a **continued residual sampling rate**; a graduated config with unsampled results yields a non-empty offer set, so **agreement data does not freeze** (asserted by test, per the architecture's explicit commitment).
 - The `(template, model)`-keyed calibration is surfaced as a **config-time model+threshold pairing** on **every** recommendation, and the **runtime-drawn-model limitation is stated where the recommendation is produced** (asserted: the note is present in output, including `--json`).
 - **Version identity ships as the content-hash-at-capture fallback**; un-version-keyable data is excluded from graduation and flagged, never pooled (asserted: unversioned cell cannot produce `GRADUATE`).
+- **Graduation is version-scoped**: `GraduatedConfig` records the full `JudgeConfigId`, and residual offers are drawn only for results matching that exact identity (asserted: after a prompt edit post-graduation, no offers are drawn under the stale graduation and the lapse is reported — a graduation never silently transfers to a re-written judge).
 - **Acting on a recommendation does not reset accumulated evidence**: a threshold-only template edit leaves `JudgeConfigId` unchanged, while a prompt or model edit re-keys it (asserted by test on both directions — the self-defeating-loop regression).
 
 ### Technical Requirements
 - **The judging path (300) is unmodified** and the capture path (320) is unchanged except the contained `_template_content_hash` scope narrowing; the full existing suite passes.
 - Core (`calibration`, `graduation`, `calibration_models`) is **surface-agnostic** — no Typer imports (verified by test, matching 320/321).
 - Strict pyright and ruff clean; Pydantic at boundaries; direction bands and floors are **config keys referenced once**, never scattered literals.
-- Test coverage: each direction band; the floor refusal; the unversioned refusal; the hash-narrowing regression (both directions); residual-offer selection including the exhausted and pruned-file cases; `graduate` refusal and idempotence; the no-mutation assertion.
+- Test coverage: each direction band; the floor refusal; the unversioned refusal; the hash-narrowing regression (both directions); residual-offer selection including the exhausted, pruned-file, and **lapsed-graduation** (config edited post-graduation) cases; `graduate` refusal and idempotence; the no-mutation assertion.
 
 ### Integration Requirements
 - 321 is consumed **unchanged** — no edit to its report models or aggregation.
@@ -295,9 +314,15 @@ Demo script proving delivery. To be executed end-to-end and its actual output pa
    ```
    Expect: graduation recorded (one store record), and `offers` lists residual spot-check targets for that now-graduated config — proving graduation did **not** end sampling. Then drain one with `sq metrology sample <target>` and confirm via `report agreement` that n **increased** for a graduated judge.
 
-7. **Confirm the graduate guard.** *(new)* Attempt `sq metrology graduate` for a pairing whose evidence is below the floor. Expect: non-zero exit naming the observed n and the floor, and **no store record written** — the floor cannot be bypassed by recording a graduation by hand.
+7. **Confirm graduation is version-scoped.** *(new)* With the graduation from step 6 in place, edit the template's `system_prompt` (a real change to the instrument), produce a new judge review under the edited template, then:
+   ```
+   sq metrology offers --cwd <repo>
+   ```
+   Expect: **no offers drawn against the new config** under the old graduation, and an explanatory line reporting that the graduation has lapsed because the judge configuration changed. Contrast with step 5's threshold edit, which left the graduation intact — together these show graduation surviving its own consequence while expiring on genuine drift.
 
-8. **Confirm read-only invariance and no regression.** *(existing)* Run the full suite and confirm 300/320/321 behavior is unchanged.
+8. **Confirm the graduate guard.** *(new)* Attempt `sq metrology graduate` for a pairing whose evidence is below the floor. Expect: non-zero exit naming the observed n and the floor, and **no store record written** — the floor cannot be bypassed by recording a graduation by hand.
+
+9. **Confirm read-only invariance and no regression.** *(existing)* Run the full suite and confirm 300/320/321 behavior is unchanged.
 
 ## Risk Assessment
 
@@ -323,3 +348,11 @@ Suggested order:
 - **Parity is structural** (as in 320/321): no MCP tool ships, but the core is the single source of truth both surfaces call.
 - **No-mutation discipline** is enforced by test, not convention — `recommend` may not write anything, and `graduate` writes exactly one record.
 - **Relative effort:** 3/5 (the dimensional mismatch, the graduation-sampling guarantee, and the hash-scope correction are the substance; no engine change, no new gating).
+
+## Slice review (20260725) — CONCERN addressed
+
+Slice-design review (`322-review.slice.…`, kimi-k2.7-code) returned 1 PASS, 1 CONCERN, 1 NOTE.
+
+- **F001 (PASS, scope)** — feedback stays advisory and read-only over 300's surfaces; no automatic threshold mutation, no new gating mechanism.
+- **F002 (CONCERN, data-model) — valid, fixed.** `GraduatedConfig` was keyed on `(template_name, model, artifact_level)`, omitting `template_content_hash`. That triple is **invariant across a prompt edit**, so a graduation earned by one prompt would silently transfer to a rewritten one and `select_residual_offers` would keep drawing spot-checks against it — version-blending at the exact point a *trust* decision is recorded, and residual sampling verifying an instrument nobody calibrated. **Fixed:** `GraduatedConfig` now carries the full `JudgeConfigId`; `select_residual_offers` matches on that exact identity; added the *Graduation is version-scoped* decision (including how it composes with the narrowed hash — graduation survives its own threshold edit but expires on prompt/model drift), a failure-mode row for the lapsed-graduation case (empty offers **with** an explanatory line, never silent), a success criterion, walkthrough step 7, and the test in coverage.
+- **F003 (NOTE, failure-handling) — reviewed, deliberately not adopted.** The note asks for rows covering store lock contention and read timeouts. These paths are local-filesystem with no lock and no timeout-bearing transport; 320's `list_samples` already skips unreadable siblings with a WARNING and reports over what loaded, and writes are atomic write-then-rename. Enumerating failure modes for mechanisms the code does not have would document fiction. Recorded the actual inherited behavior under the Failure Modes table instead, and noted that a future off-filesystem store (e.g. 280 convergence) brings its own transport failure modes and its own rows.
