@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import ast
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -179,6 +179,58 @@ class TestReportTrend:
         assert result.exit_code == 0, result.output
         assert result.output.strip() != ""
 
+    def test_dispersion_rows_render_in_human_output(
+        self,
+        capture_project: CaptureProject,
+        cli_store: Path,
+    ) -> None:
+        # Same cross-config setup as TestReportDispersion.test_two_config_artifact_prints_cell:
+        # the trend command's human output must surface dispersion, not just agreement.
+        reviews_dir = capture_project.root / "project-documents/user/reviews"
+        second_review = reviews_dir / "501-review.judge.slice-vs-arch.example.md"
+        text = capture_project.review_file.read_text(encoding="utf-8")
+        text = text.replace("aiModel: minimax/minimax-m2.7", "aiModel: model-b")
+        text = text.replace("score: 98.0", "score: 40.0")
+        second_review.write_text(text, encoding="utf-8")
+
+        with patch("squadron.cli.commands.metrology._sample_budget", return_value=10):
+            first = runner.invoke(
+                app,
+                [
+                    "metrology",
+                    "sample",
+                    str(capture_project.review_index),
+                    "--type",
+                    capture_project.review_type,
+                    "--verdict",
+                    "PASS",
+                    "--cwd",
+                    str(capture_project.root),
+                ],
+            )
+            assert first.exit_code == 0, first.output
+            second = runner.invoke(
+                app,
+                [
+                    "metrology",
+                    "sample",
+                    "501",
+                    "--type",
+                    capture_project.review_type,
+                    "--verdict",
+                    "PASS",
+                    "--cwd",
+                    str(capture_project.root),
+                ],
+            )
+            assert second.exit_code == 0, second.output
+
+        result = runner.invoke(
+            app, ["metrology", "report", "trend", "--cwd", str(capture_project.root)]
+        )
+        assert result.exit_code == 0, result.output
+        assert "disagreement_rate=" in result.output
+
 
 class TestReportEmptyStoreHonesty:
     def test_each_report_command_honest_on_empty_store(
@@ -206,6 +258,28 @@ class TestReportStoreError:
             result = runner.invoke(
                 app, ["metrology", "report", "agreement", "--cwd", str(capture_project.root)]
             )
+        assert result.exit_code != 0
+        assert "Traceback" not in result.output
+
+
+class TestReportTargetError:
+    """Agreement must handle MetrologyTargetError the same way trend already
+    does (F007) — a bad config value is a clean exit 1, not a traceback.
+    (Dispersion has no config-reading path today — its handler is added for
+    consistency with agreement/trend but is not independently triggerable.)"""
+
+    def test_bad_min_evidence_n_exits_cleanly(
+        self,
+        capture_project: CaptureProject,
+        cli_store: Path,
+        write_project_config: Callable[[Path, dict[str, object]], Path],
+    ) -> None:
+        _capture(capture_project, verdict="PASS")
+        write_project_config(capture_project.root, {"metrology.min_evidence_n": "not-an-int"})
+
+        result = runner.invoke(
+            app, ["metrology", "report", "agreement", "--cwd", str(capture_project.root)]
+        )
         assert result.exit_code != 0
         assert "Traceback" not in result.output
 

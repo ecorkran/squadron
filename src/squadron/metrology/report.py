@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from squadron.config.manager import get_config
 from squadron.metrology.errors import MetrologyTargetError
@@ -55,7 +56,7 @@ class EnrichedSample:
     artifact_level: ArtifactLevel
     judge_verdict: Verdict | None
     source_document: str | None
-    admissible: str  # "admissible" | "stale-judge-result"
+    admissible: Literal["admissible", "stale-judge-result"]
     unversioned: bool
 
 
@@ -270,6 +271,9 @@ def dispersion_report(samples: list[SampleVerdict], cwd: str) -> DispersionRepor
     unversioned_count = sum(
         1 for item in enriched if item.admissible == "admissible" and item.unversioned
     )
+    missing_source_document_count = sum(
+        1 for item in enriched if item.admissible == "admissible" and item.source_document is None
+    )
 
     groups: dict[tuple[str, str, ArtifactLevel], list[EnrichedSample]] = {}
     for item in enriched:
@@ -311,9 +315,10 @@ def dispersion_report(samples: list[SampleVerdict], cwd: str) -> DispersionRepor
     return DispersionReport(
         cells=cells,
         excluded=ExclusionSummary(
-            total_excluded=stale_count + unversioned_count,
+            total_excluded=stale_count + unversioned_count + missing_source_document_count,
             stale_judge_result=stale_count,
             unversioned=unversioned_count,
+            missing_source_document=missing_source_document_count,
         ),
     )
 

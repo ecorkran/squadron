@@ -179,6 +179,10 @@ def test_missing_source_document_excluded_from_dispersion_but_counted(
     report = dispersion_report([sample], str(repo_with_remote))
 
     assert report.cells == []
+    assert report.excluded.missing_source_document == 1
+    assert report.excluded.stale_judge_result == 0
+    assert report.excluded.unversioned == 1  # the fixture's sample has no template_content_hash
+    assert report.excluded.total_excluded == 2
 
 
 def test_empty_store_yields_empty_report_honestly(repo_with_remote: Path) -> None:

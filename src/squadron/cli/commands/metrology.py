@@ -267,10 +267,10 @@ def _parse_level_filter(raw: str | None) -> ArtifactLevel | None:
 
 
 def _excluded_line(excluded: ExclusionSummary) -> str:
-    return (
-        f"{excluded.total_excluded} excluded "
-        f"({excluded.stale_judge_result} stale-judge-result, {excluded.unversioned} unversioned)"
-    )
+    parts = [f"{excluded.stale_judge_result} stale-judge-result", f"{excluded.unversioned} unversioned"]
+    if excluded.missing_source_document:
+        parts.append(f"{excluded.missing_source_document} missing-source-document")
+    return f"{excluded.total_excluded} excluded ({', '.join(parts)})"
 
 
 @report_app.command("agreement")
@@ -290,6 +290,9 @@ def report_agreement(
         report: AgreementReport = agreement_report(samples, resolved_cwd)
     except MetrologyStoreError as exc:
         rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except MetrologyTargetError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
     cells = [c for c in report.cells if level_filter is None or c.group.artifact_level == level_filter]
@@ -327,6 +330,9 @@ def report_dispersion(
         report: DispersionReport = dispersion_report(samples, resolved_cwd)
     except MetrologyStoreError as exc:
         rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    except MetrologyTargetError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
     cells = [
@@ -379,16 +385,27 @@ def report_trend(
         rprint("[dim]No evidence.[/dim]")
         return
     for entry in report.series:
-        cells = [
+        agreement_cells = [
             c
             for c in entry.agreement.cells
             if level_filter is None or c.group.artifact_level == level_filter
         ]
+        dispersion_cells = [
+            c
+            for c in entry.dispersion.cells
+            if level_filter is None or c.artifact.artifact_level == level_filter
+        ]
         rprint(f"[bold]{entry.bucket_label}[/bold]")
-        for cell in cells:
+        for cell in agreement_cells:
             marker = " [yellow](low-n)[/yellow]" if cell.below_floor else ""
             rprint(
                 f"  {cell.group.artifact_level.value}  "
                 f"{cell.group.judge_config.template_name}/{cell.group.judge_config.model}  "
                 f"match_rate={cell.match_rate:.2f} (n={cell.n}){marker}"
+            )
+        for cell in dispersion_cells:
+            configs = ", ".join(f"{jc.template_name}/{jc.model}" for jc in cell.judge_configs)
+            rprint(
+                f"  {cell.artifact.source_document} ({cell.artifact.artifact_level.value})  "
+                f"[{configs}]  disagreement_rate={cell.disagreement_rate:.2f} (n={cell.n})"
             )

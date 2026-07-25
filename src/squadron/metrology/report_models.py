@@ -56,6 +56,7 @@ class ExclusionSummary(BaseModel):
     total_excluded: int
     stale_judge_result: int
     unversioned: int
+    missing_source_document: int = 0
 
 
 class AgreementReport(BaseModel):
