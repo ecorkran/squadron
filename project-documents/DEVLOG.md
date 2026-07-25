@@ -47,6 +47,22 @@ Slice review (`322-review.slice...`, kimi-k2.7-code): 1 PASS, 1 CONCERN, 1 NOTE.
 
 `custom.recentEvents` (rendered as "Current Project State" in `/cf:build` output) still pointed at the orchestration-v2 initiative (`100-arch`/`100-slices`) while the authoritative `Architecture:`/`Slice Plan:` fields correctly read 320. Updated to the 320 artifacts so the loaded context stops contradicting itself.
 
+### Slice 322: Calibration-to-Threshold Feedback — Phase 5 Task Breakdown Complete
+
+Created `user/tasks/322-tasks.calibration-to-threshold-feedback.md` — 17 tasks, test-with pattern throughout, following the design's suggested implementation order.
+
+**Sequencing follows the design's own reasoning, not just its task list:** the `identity._template_content_hash` narrowing (T1/T2) comes first because everything downstream — the recommendation core, the graduated-config registry — accumulates evidence under the corrected key; doing it later would mean re-deriving fixtures once the hash changed underneath them. Config keys (`metrology.graduate_match_rate`, `metrology.tighten_match_rate`, `metrology.residual_sample_rate`) land (T5/T6) before the calibration-core tasks that read them (T7-T10), same lesson 321 already applied (its F004) to avoid a task hard-coding a temporary default.
+
+**Direction classification (T7/T8) calls out a precedence subtlety explicitly:** the floor gates *loosening* only. A below-floor cell with a low match rate must still resolve to `TIGHTEN`, not fall through to `INSUFFICIENT_EVIDENCE` — implementing the bands as a naive top-to-bottom if-chain gated uniformly by the floor would silently swallow the "flag a bad judge early" case the design calls out as the asymmetry's whole point. Wrote the task to spell out the precedence order and require a test for exactly this boundary (below-floor + low-match-rate → `TIGHTEN`).
+
+**Graduation registry (T11-T14) carries the slice-review's F002 fix as a first-class regression test, not an afterthought:** T12 requires two `JudgeConfigId`s sharing `template_name`+`model` but differing `template_content_hash` to *not* cross-match in `find_graduation` — the version-blending bug the review caught, now pinned by a test before implementation is written against it.
+
+**One task (T13, offer selection) carries a deliberate escape hatch:** selecting unsampled judge results matching a graduated config's exact identity may need a result-discovery surface 320 doesn't currently expose (list_samples finds *captured* samples, not all persisted judge results). The task instructs against inventing a new file-walk and to flag the gap to the Project Manager if 320's surface doesn't already support it, rather than guessing at an implementation.
+
+**Not re-litigated:** all three plan-level open questions the design resolved (content-hash version identity, the hash-scope correctness fix, residual-sampling-as-policy) are carried into the task file's context summary as settled facts, per the task-breakdown guide's "don't re-guess at task time" instruction — none reopened here.
+
+Task file is 288 lines, well within the ~450-line guideline. Frontmatter `status: not_started`; slice design frontmatter remains `status: not-started` (Phase 6 implementation not yet started). Coverage-checked against the design's Failure Modes table and Success Criteria — all rows traced to a task.
+
 ---
 
 ## 20260718
