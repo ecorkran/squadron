@@ -2,13 +2,57 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260722
+dateUpdated: 20260723
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260723 (1)
+
+### Slice 321 task breakdown (Phase 5)
+
+Converted the PASS-reviewed 321 slice design into a sequential, test-with task
+list: `project-documents/user/tasks/321-tasks.agreement-dispersion-reporting.md`,
+`status: not_started`, 17 tasks (T1–T17), 249 lines.
+
+Structure mirrors the 320 task file: front matter + context summary, granular
+T-tasks with L1/L2 checkboxes, a per-task success line and commit message, and
+a design→tasks coverage check. Test tasks are paired immediately after each
+implementation task (levels T1→T2, models T3→T4, enrichment T5→T6, agreement
+T7→T8, dispersion T9→T10, trend T11→T12, config T13→T14, CLI T15→T16), with a
+final full-suite/read-only-regression gate (T17).
+
+The two load-bearing LLD facts are carried into the tasks so a junior AI can't
+re-guess them: `artifact_level` derived **at report time** from `reviewType`
+(T1) since 320 leaves it always-None; the judge verdict joined by
+**re-reading + content-hash-verifying** the referenced review file (T5/T6),
+excluding stale results. The slice-review F001 fix is pinned as an explicit
+regression assertion (T10): two configs' review files for one artifact must
+share **one** dispersion cell — proving dispersion keys on artifact identity
+`(project_id, source_document, artifact_level)`, not per-config `result_ref`.
+The no-`fan_out`-import constraint and read-only invariance are both asserted.
+
+**Tasks review: CONCERNS → addressed.** Review (kimi-k2.7-code) returned
+CONCERNS: 3 PASS, 3 concerns, 2 notes. Fixed all five actionable findings —
+F004 (config-key task T13 was sequenced *after* T7/T11 which read its keys →
+moved config keys to T5/T6, before any report computation, renumbering the
+rest); F005 (added a malformed/unparseable-frontmatter enrichment test to T8);
+F006 (added explicit empty-store honest-render tests across agreement/
+dispersion/trend, T10/T12/T14 + CLI T16); F007 (added a corrupt-sibling
+store-read regression on the report path, T16); F008 (a slice-design
+inconsistency, not a task gap — the design prose claimed report commands take
+`--judge-config`; reconciled the design text to the actual API contract where
+`--judge-config` is a `list`-command filter, and fixed a stale `result_ref`
+dispersion-grouping sentence left over from the earlier F001 fix). Task file
+still 17 tasks, within length budget.
+
+Next: PM approval, then Phase 6 implementation on branch
+`321-slice.agreement-dispersion-reporting`.
 
 ---
 
@@ -57,6 +101,17 @@ thin shells; report models are the typed interface 322 consumes.
   stale verdict). This is the load-bearing correctness point.
 - **Comparability enforced:** group on `JudgeConfigId`; unversioned records
   (`template_content_hash` None) are flagged/segregated, never pooled.
+
+**Slice review: FAIL → PASS.** First slice-design review (kimi-k2.7-code)
+returned FAIL on F001: dispersion grouped by `result_ref` (a review-file
+instance whose path + content hash both vary per judge config), so two
+configs on one artifact could never share a dispersion group — making the
+cross-config dispersion the slice claims to ship impossible. Fixed by keying
+dispersion on **artifact identity** `(project_id, source_document,
+artifact_level)` via the review's `sourceDocument` frontmatter (agreement
+keeps `result_ref`, correct for its own join). Also narrowed frontmatter
+`interfaces` to `[322]` (F002 note) — 323/324 relate via the shared 320
+spine, not 321's report path. Re-review returned **PASS** (8/8 findings PASS).
 
 Relative effort 3/5. Dependencies: [320] (complete). Next: PM approval, then
 Phase 5 task breakdown for 321.

@@ -33,7 +33,7 @@ Developer / operator value. The trust gradient 300 *asserts* (high for tasks-vs-
 **Included:**
 - A canonical **artifact-level vocabulary** (an `ArtifactLevel` enum) and a **read-time derivation** that maps each stored sample's recorded review type to an artifact level — because 320 left `SampleVerdict.artifact_level` a reserved, currently-always-`None` hook (see Dependencies → *State of the 320 store*).
 - An **agreement** computation: judge-verdict-vs-human-verdict match rate, grouped by `(artifact_level, judge_config)`, carrying n. Metric is naive **percent agreement with its n exposed** (small-n honesty is "show the n and a wide-interval flag," not a chance-corrected statistic that misbehaves at small n — see Technical Decisions).
-- A **dispersion** computation: judge-vs-judge disagreement on the *same* `result_ref` artifact across **distinct judge configurations**, grouped by `(artifact_level, set-of-judge-configs)`, carrying n.
+- A **dispersion** computation: judge-vs-judge disagreement on the *same artifact* across **distinct judge configurations**, grouped by **artifact identity** `(project_id, source_document, artifact_level)` — not by review-file `result_ref` (see *Artifact identity vs. result-file identity*) — carrying n.
 - A **trend** view: the agreement and dispersion figures bucketed over time on the same grain.
 - **Configuration comparability enforcement:** the aggregation groups by judge-configuration identity and never pools measurements from incompatible configs; un-version-keyable records are **flagged and segregated**, never silently blended.
 - A **minimum-evidence floor** value, *representable and reported* here (a figure below the floor is marked low-confidence); 322 *consumes* it to gate recommendations. This slice defines the config key and surfaces the flag; it does not make a graduation decision.
@@ -96,7 +96,7 @@ A new reporting core under the existing `src/squadron/metrology/` package (surfa
 
 - **`report_models.py`** — Pydantic report models: `GroupKey(artifact_level, judge_config)`, `AgreementCell(group, n, match_rate, below_floor: bool)`, `DispersionCell(group, judge_configs, n, disagreement_rate)`, `AgreementReport`/`DispersionReport`/`TrendReport` (a list of cells + an `excluded` summary carrying counts of `stale-judge-result` / `unversioned` records so exclusions are always visible). These are the **interface 322 consumes** — a stable, typed report shape, not console text.
 
-- **`cli/commands/metrology.py`** (extended) — add a `report` sub-group: `sq metrology report agreement | dispersion | trend`, each a thin shell rendering the corresponding report model. Reuses the `--cwd` / `--project` / `--judge-config` conventions 320 established. Rendering is a table; `--json` emits the report model verbatim for scripting and for 322's consumption.
+- **`cli/commands/metrology.py`** (extended) — add a `report` sub-group: `sq metrology report agreement | dispersion | trend`, each a thin shell rendering the corresponding report model. Reuses the `--cwd` / `--project` conventions 320 established (the report commands also take `--level`, `--json`, and `--bucket` for trend — see API Contracts; `--judge-config` is a `list`-command filter, not a report flag). Rendering is a table; `--json` emits the report model verbatim for scripting and for 322's consumption.
 
 Config: new entries in `config.keys.CONFIG_KEYS` (see Technical Decisions).
 
