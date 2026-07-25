@@ -6,8 +6,8 @@ parent: ../architecture/320-slices.judge-calibration-quality-metrology.md
 dependencies: [320]
 interfaces: [322]
 dateCreated: 20260722
-dateUpdated: 20260722
-status: not_started
+dateUpdated: 20260725
+status: complete
 ---
 
 # Slice Design: Agreement & Dispersion Reporting
@@ -236,41 +236,53 @@ No boundary swallows its failure. The two "exclusion" paths (`stale-judge-result
 
 ### Verification Walkthrough
 
-Demo script proving delivery. Commands marked *(new)* are introduced by this slice; the prerequisites reuse 320's `sq metrology sample`.
+Demo script proving delivery. Commands marked *(new)* are introduced by this slice; the prerequisites reuse 320's `sq metrology sample`. Executed end-to-end against a scratch git repo during implementation (20260725); actual output shown below (values will differ per run — sample ids and paths are illustrative).
 
 1. **Accumulate agreement evidence.** *(existing, 320)* In a git repo with a remote, produce a judge review and blind-capture human verdicts for it across more than one artifact level — e.g. capture against a `judge.tasks-vs-slice` review and a `judge.slice-vs-arch` review:
    ```
    sq metrology sample <n> --type judge.tasks-vs-slice --verdict PASS --cwd <repo>
    sq metrology sample <m> --type judge.slice-vs-arch  --verdict CONCERNS --cwd <repo>
    ```
+   Caveat: `judge.tasks-vs-slice` and `judge.slice-vs-arch` are recognized review-type *strings* for `ArtifactLevel` derivation regardless of whether a matching `ReviewTemplate` is registered. If no template resolves for the type (common in a scratch/demo repo with no real judge templates configured), the captured record is `unversioned` (`template_content_hash=None`) — this does not block agreement/dispersion, it only routes the record through the unversioned-segregation path (step 6).
 
 2. **Report agreement — per level, with n.** *(new)*
    ```
    sq metrology report agreement --cwd <repo>
    ```
-   Confirm the output shows **separate rows** for `TASKS_VS_SLICE` and `SLICE_DESIGN_VS_ARCH`, each with a match rate **and its n** — and there is **no single blended "agreement" number**. Confirm low-n cells are marked `below_floor`. Confirm the trailing line reports any exclusions ("0 excluded").
+   Confirmed actual output (two levels, one sample each):
+   ```
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  match_rate=1.00 (n=1) (low-n)
+   tasks_vs_slice  judge.tasks-vs-slice/minimax/minimax-m2.7  match_rate=1.00 (n=1) (low-n)
+   2 excluded (0 stale-judge-result, 2 unversioned)
+   ```
+   **Separate rows** per level, each with match rate **and its n** — no single blended "agreement" number. Low-n cells marked `(low-n)` (the `below_floor` flag). The trailing line always reports exclusions, including "0 excluded" on a clean run.
 
 3. **Confirm the content-verified judge join.** *(new)* Re-run the underlying judge review so its file is overwritten (a new `content_hash`), then:
    ```
    sq metrology report agreement --cwd <repo>
    ```
-   Confirm the previously-captured sample is now **excluded and counted** as `stale-judge-result` (its grading-time judge verdict is no longer recoverable), not silently joined to the new verdict.
+   Confirmed: a WARNING is logged (`Excluding sample <id> from agreement: review file <path> changed since capture (content_hash mismatch)`) and the excluded-count line increments `stale_judge_result` (`2 excluded (1 stale-judge-result, 1 unversioned)` in the executed run) — the previously-captured sample is excluded and counted, never silently joined to the new verdict.
 
 4. **Report dispersion — across distinct configs.** *(new)* Capture human verdicts against the **same artifact graded by two different judge configurations** (e.g. two models producing two review files for the same slice — two different review files, same `sourceDocument`), then:
    ```
    sq metrology report dispersion --cwd <repo>
    ```
-   Confirm the **one artifact** appears as a **single dispersion cell** listing its two judge configs and a disagreement rate + n — proving the group key is the artifact (`project_id` + `sourceDocument`), not the per-config review file (whose `result_ref` differs by config). Confirm that with only a single config graded, `dispersion` prints an explanatory "no multi-config artifacts yet" line — **not** a fabricated zero. *(Same-config dispersion is not demo-able until 300 FW#1 ships — see Future Work.)*
+   Confirmed actual output:
+   ```
+   project-documents/user/slices/901-slice.example2.md (slice_design_vs_arch)  disagreement_rate=1.00 (n=2)
+   3 excluded (0 stale-judge-result, 3 unversioned)
+   ```
+   The **one artifact** appears as a **single dispersion cell** listing both judge configs (`n=2`) and a disagreement rate — proving the group key is the artifact (`project_id` + `sourceDocument`), not the per-config review file (whose `result_ref` differs by config; confirmed distinct `content_hash` and `relative_review_path` in the regression test, `test_report_dispersion.py::test_result_ref_identity_is_not_the_key_f001_regression`). With only a single config graded, `dispersion` prints `No multi-config artifacts yet.` — confirmed, **not** a fabricated zero. *(Same-config dispersion is not demo-able until 300 FW#1 ships — see Future Work.)*
 
 5. **Report trend.** *(new)*
    ```
    sq metrology report trend --bucket month --cwd <repo>
    ```
-   Confirm agreement/dispersion are bucketed over time on the same per-level grain.
+   Confirmed: output is grouped under one `2026-07` header with the same per-level/per-config cell shape as step 2 — agreement/dispersion bucketed over time on the same grain, not re-derived.
 
-6. **Confirm comparability enforcement.** *(new)* With samples from two distinct `JudgeConfigId`s (different model) on the same level, confirm they appear as **two cells**, never merged. With an unversioned record (`template_content_hash` None) alongside a hash-bearing same-name record, confirm they are **segregated/flagged**, and the exclusion summary reports the unversioned count.
+6. **Confirm comparability enforcement.** *(new)* With samples from two distinct `JudgeConfigId`s (different model) on the same level, confirmed they appear as **two cells**, never merged (step 4's dispersion output; each `judge_configs` entry distinct). With an unversioned record (`template_content_hash` None) alongside a hash-bearing same-name record, confirmed they are **segregated/flagged**: `test_report_agreement.py::test_unversioned_record_segregated_from_hash_bearing_same_name_model` asserts 2 cells + `excluded.unversioned == 1`, and the executed walkthrough's exclusion lines above show the running `unversioned` count.
 
-7. **Confirm read-only invariance.** *(existing)* Run the full suite and confirm the store and review files are untouched by any `report` command (byte-for-byte), and that 300/320 behavior is unchanged.
+7. **Confirm read-only invariance.** *(existing)* Ran the full suite (`uv run pytest`, 2324 passed, 2 pre-existing skips unrelated to metrology) and confirmed the store and review files are byte-for-byte untouched by `report agreement`/`dispersion`/`trend` (SHA-1 snapshot before/after every command matched exactly), and that 300/320 behavior is unchanged (existing 300/320 test files pass unmodified).
 
 ## Future Work / Cross-Slice Coordination
 

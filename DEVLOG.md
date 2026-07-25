@@ -2,13 +2,102 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260723
+dateUpdated: 20260725
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260725 (1)
+
+### Slice 321 implemented: agreement & dispersion reporting (Phase 6) — slice complete
+
+Implemented all 17 tasks (T1–T17) of `321-tasks.agreement-dispersion-reporting.md`
+on branch `321-slice.agreement-dispersion-reporting`, forked from `main` after
+fast-forward-merging the completed 320 keystone branch. Each task committed
+separately per its task-file commit marker; full suite green throughout
+(2324 passed, 2 pre-existing skips), strict pyright and ruff clean on every
+commit.
+
+**What shipped**, mirroring the LLD's component structure:
+- `metrology/levels.py` — `ArtifactLevel` enum + `derive_artifact_level`, a
+  single module-level dict mapping the review types the code actually
+  produces (`judge.tasks-vs-slice`/`tasks`, `judge.slice-vs-arch`/`slice`,
+  `arch`) to a level, `UNCLASSIFIED` as the explicit fallthrough.
+- `metrology/report_models.py` — the typed Pydantic report shapes 322 will
+  consume (`GroupKey`, `AgreementCell`, `ArtifactKey`, `DispersionCell`,
+  `ExclusionSummary`, `AgreementReport`/`DispersionReport`/`TrendReport`),
+  all JSON round-trip tested.
+- `config/keys.py` — `metrology.min_evidence_n` (default 5) and
+  `metrology.trend_bucket` (default `month`), added *before* the
+  report-computation tasks that read them (slice-review F004).
+- `metrology/report.py` — the aggregation core, surface-agnostic, no Typer
+  import (asserted by test):
+  - `enrich_samples` — the one join pass. Re-reads each sample's referenced
+    review file, verifies its `content_hash` against a freshly-derived one,
+    and only on a match joins the judge verdict; any mismatch, missing
+    file, or unparseable/verdict-less frontmatter marks the sample
+    `stale-judge-result` with `judge_verdict=None` — never joined to the
+    wrong verdict. The same read yields `sourceDocument` for the dispersion
+    key, at no extra I/O cost.
+  - `agreement_report` — groups admissible samples by
+    `(ArtifactLevel, JudgeConfigId)`; naive percent match rate + n;
+    `below_floor` when n is under the configured floor; unversioned records
+    (`template_content_hash is None`) segregated into their own cell,
+    never pooled with a hash-bearing same-name+model record.
+  - `dispersion_report` — groups by **artifact identity**
+    `(project_id, source_document, ArtifactLevel)`, per the F001 fix from
+    Phase 4; only artifacts graded by ≥2 distinct `JudgeConfigId`s produce a
+    cell (the cross-config dispersion the slice ships); the same-config
+    repeated-measurement path is structurally supported by the same
+    grouping but stays dormant until 300 FW#1 lands.
+  - `trend_report` — buckets by `captured_at` (`day`/`week`/`month`) and
+    reuses `agreement_report`/`dispersion_report` per bucket — the grain is
+    never re-derived.
+- `cli/commands/metrology.py` — a `report` sub-group
+  (`sq metrology report agreement|dispersion|trend`), thin Typer shells with
+  `--project`/`--level`/`--json`/`--cwd` (`--bucket` on `trend`); `--json`
+  emits the report model verbatim via `typer.echo` (not `rprint`, which was
+  found during T16 to corrupt JSON output by line-wrapping it at terminal
+  width — a real bug caught by a CLI round-trip test, not a cosmetic one).
+
+**Bugs found and fixed during implementation** (beyond the planned scope):
+- `rprint(report.model_dump_json())` wrapped long JSON lines at the Rich
+  console width, invalidating the JSON — `--json` output is machine-facing
+  and must never be routed through a wrapping console printer. Switched all
+  three report commands to `typer.echo`, matching the convention already
+  used by `review.py`/`doctor.py` for JSON output. Caught by
+  `test_report_cli.py`'s JSON round-trip assertion, not by a human reading
+  the terminal.
+
+**Verification Walkthrough executed end-to-end** (not just read) against a
+scratch git repo: captured two levels of agreement evidence, confirmed
+per-level rows with n and `below_floor` marking, overwrote a review file and
+confirmed `stale-judge-result` exclusion, captured a second judge config
+against the same artifact and confirmed one dispersion cell (not two, and
+not keyed on the differing `result_ref`s), confirmed the "no multi-config
+artifacts yet" honest-empty line on a single-config store, ran `report
+trend --bucket month` and confirmed grain preservation, and confirmed
+byte-for-byte store/review-file invariance (SHA-1 snapshot before/after)
+across all three report commands. The slice design's Verification
+Walkthrough section was updated in place with the actual commands and
+observed output.
+
+**Full validation (T17):** `uv run pytest` — 2324 passed, 2 pre-existing
+skips (unrelated to metrology); `uv run pyright` — 0 errors repo-wide;
+`uv run ruff check` / `ruff format --check` — clean. Slice 321 marked
+`status: complete` in its slice-design frontmatter; the 320 slice-plan
+entry `(321)` checked off; all 17 task-file items checked off via
+task-checker.
+
+Relative effort 3/5 (matches the design's estimate). Dependencies: [320]
+(complete). Interfaces: [322] — `AgreementReport` (with `below_floor` +
+`ExclusionSummary`) is ready to consume. Next: PM review/merge, then 322
+(Calibration-to-Threshold Feedback).
 
 ---
 
