@@ -157,6 +157,33 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default="month",
         description=("Default time-bucket grain for 'sq metrology report trend' (--bucket overrides)."),
     ),
+    "metrology.graduate_match_rate": ConfigKey(
+        name="metrology.graduate_match_rate",
+        type_=float,
+        default=0.9,
+        description=(
+            "Agreement at or above which, and at or above metrology.min_evidence_n, "
+            "a (template, model) pairing is recommended for GRADUATE."
+        ),
+    ),
+    "metrology.tighten_match_rate": ConfigKey(
+        name="metrology.tighten_match_rate",
+        type_=float,
+        default=0.6,
+        description=(
+            "Agreement at or below which a TIGHTEN warning is emitted, "
+            "regardless of evidence volume (not floor-gated)."
+        ),
+    ),
+    "metrology.residual_sample_rate": ConfigKey(
+        name="metrology.residual_sample_rate",
+        type_=float,
+        default=0.1,
+        description=(
+            "Fraction of a graduated config's unsampled judge results offered "
+            "for continued residual spot-checking via 'sq metrology offers'."
+        ),
+    ),
 }
 
 

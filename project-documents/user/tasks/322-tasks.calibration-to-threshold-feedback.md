@@ -55,16 +55,16 @@ status: not_started
 
 ### T3: Calibration and graduation output models
 
-- [ ] **Add `src/squadron/metrology/calibration_models.py`** (Pydantic, the stable interface — not console text; mirrors 321's `report_models.py` pattern)
-  - [ ] `RecommendationDirection(StrEnum)`: `GRADUATE`, `HOLD`, `TIGHTEN`, `INSUFFICIENT_EVIDENCE`
-  - [ ] `EvidenceSnapshot`: `n: int`, `match_rate: float`, `floor_applied: int`, `below_floor: bool`
-  - [ ] `ThresholdTarget`: `template_name: str`, `current: JudgeThresholds | None` (absent when the template is unresolvable — never fabricated), `model_dimension_note: str`
-  - [ ] `ThresholdRecommendation`: `group: GroupKey` (321's), `direction: RecommendationDirection`, `evidence: EvidenceSnapshot`, `target: ThresholdTarget`, `rationale: str`
-  - [ ] `RecommendationReport`: `cells: list[ThresholdRecommendation]`, `excluded: ExclusionSummary` (321's — pass through verbatim), `floor_applied: int`
-  - [ ] `GraduatedConfig`: `judge_config: JudgeConfigId`, `artifact_level: ArtifactLevel`, `evidence: EvidenceSnapshot`, `graduated_at: datetime` — carries the **full** `JudgeConfigId` (template_name + model + template_content_hash), per the design's version-scoping decision
-  - [ ] `OfferTarget`: `review_path: str`, `judge_config: JudgeConfigId`, `reason: Literal["residual-sampling"]`
-  - [ ] Note: `JudgeThresholds` is a `@dataclass` in `pipeline/actions/judge.py`, not currently a Pydantic model. Either import and use it as-is inside `ThresholdTarget` (dataclasses nest fine in Pydantic v2 models) or wrap it — do not duplicate its fields into a second type
-- [ ] Success: each model round-trips `model_dump(mode="json")` → `model_validate`; `uv run pyright` passes
+- [x] **Add `src/squadron/metrology/calibration_models.py`** (Pydantic, the stable interface — not console text; mirrors 321's `report_models.py` pattern)
+  - [x] `RecommendationDirection(StrEnum)`: `GRADUATE`, `HOLD`, `TIGHTEN`, `INSUFFICIENT_EVIDENCE`
+  - [x] `EvidenceSnapshot`: `n: int`, `match_rate: float`, `floor_applied: int`, `below_floor: bool`
+  - [x] `ThresholdTarget`: `template_name: str`, `current: JudgeThresholds | None` (absent when the template is unresolvable — never fabricated), `model_dimension_note: str`
+  - [x] `ThresholdRecommendation`: `group: GroupKey` (321's), `direction: RecommendationDirection`, `evidence: EvidenceSnapshot`, `target: ThresholdTarget`, `rationale: str`
+  - [x] `RecommendationReport`: `cells: list[ThresholdRecommendation]`, `excluded: ExclusionSummary` (321's — pass through verbatim), `floor_applied: int`
+  - [x] `GraduatedConfig`: `judge_config: JudgeConfigId`, `artifact_level: ArtifactLevel`, `evidence: EvidenceSnapshot`, `graduated_at: datetime` — carries the **full** `JudgeConfigId` (template_name + model + template_content_hash), per the design's version-scoping decision
+  - [x] `OfferTarget`: `review_path: str`, `judge_config: JudgeConfigId`, `reason: Literal["residual-sampling"]`
+  - [x] Note: `JudgeThresholds` is a `@dataclass` in `pipeline/actions/judge.py`, not currently a Pydantic model. Either import and use it as-is inside `ThresholdTarget` (dataclasses nest fine in Pydantic v2 models) or wrap it — do not duplicate its fields into a second type
+- [x] Success: each model round-trips `model_dump(mode="json")` → `model_validate`; `uv run pyright` passes
 
 **Commit:** `feat(metrology): add calibration and graduation output models`
 
@@ -72,12 +72,12 @@ status: not_started
 
 ### T4: Tests for calibration/graduation models
 
-- [ ] **Add `tests/metrology/test_calibration_models.py`**
-  - [ ] Every model round-trips through JSON unchanged, including `GraduatedConfig` and `OfferTarget`
-  - [ ] `ThresholdTarget.current` is `None`-able and the model still validates (the "template no longer registered" case)
-  - [ ] `RecommendationReport.excluded` is always present (never absent), matching 321's `ExclusionSummary` convention
-  - [ ] `GraduatedConfig.judge_config` carries `template_content_hash` (not just `template_name`/`model`) — assert the field exists and round-trips, since this is the version-scoping the design requires
-- [ ] Success: `uv run pytest tests/metrology/test_calibration_models.py` passes
+- [x] **Add `tests/metrology/test_calibration_models.py`**
+  - [x] Every model round-trips through JSON unchanged, including `GraduatedConfig` and `OfferTarget`
+  - [x] `ThresholdTarget.current` is `None`-able and the model still validates (the "template no longer registered" case)
+  - [x] `RecommendationReport.excluded` is always present (never absent), matching 321's `ExclusionSummary` convention
+  - [x] `GraduatedConfig.judge_config` carries `template_content_hash` (not just `template_name`/`model`) — assert the field exists and round-trips, since this is the version-scoping the design requires
+- [x] Success: `uv run pytest tests/metrology/test_calibration_models.py` passes
 
 **Commit:** `test(metrology): cover calibration/graduation model round-trip`
 
