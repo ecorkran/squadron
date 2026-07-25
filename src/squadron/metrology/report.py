@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from squadron.config.manager import get_config
@@ -32,6 +33,8 @@ from squadron.metrology.report_models import (
     DispersionReport,
     ExclusionSummary,
     GroupKey,
+    TrendBucket,
+    TrendReport,
 )
 from squadron.review.models import Verdict
 
@@ -313,3 +316,52 @@ def dispersion_report(samples: list[SampleVerdict], cwd: str) -> DispersionRepor
             unversioned=unversioned_count,
         ),
     )
+
+
+def _default_trend_bucket(cwd: str) -> str:
+    value = get_config("metrology.trend_bucket", cwd=cwd)
+    if not isinstance(value, str) or not value.strip():
+        raise MetrologyTargetError(
+            f"metrology.trend_bucket must be a non-empty string, got {value!r}. "
+            "Fix it with 'sq config set metrology.trend_bucket <bucket>'."
+        )
+    return value.strip()
+
+
+def _bucket_label(captured_at: datetime, bucket: str) -> str:
+    """Map a timestamp to its bucket label. ``month`` -> ``YYYY-MM``,
+    ``week`` -> ISO ``YYYY-Www``, ``day`` -> ``YYYY-MM-DD``."""
+    if bucket == "month":
+        return captured_at.strftime("%Y-%m")
+    if bucket == "week":
+        iso = captured_at.isocalendar()
+        return f"{iso.year}-W{iso.week:02d}"
+    if bucket == "day":
+        return captured_at.strftime("%Y-%m-%d")
+    raise MetrologyTargetError(
+        f"Unsupported trend bucket {bucket!r}. Expected one of: day, week, month."
+    )
+
+
+def trend_report(samples: list[SampleVerdict], cwd: str, bucket: str | None = None) -> TrendReport:
+    """Agreement/dispersion figures bucketed over time on the same
+    per-level/per-config grain as ``agreement_report``/``dispersion_report``
+    (reused per bucket, not re-derived). Series is ordered oldest to newest.
+    """
+    resolved_bucket = bucket if bucket is not None else _default_trend_bucket(cwd)
+
+    buckets: dict[str, list[SampleVerdict]] = {}
+    for sample in samples:
+        label = _bucket_label(sample.captured_at, resolved_bucket)
+        buckets.setdefault(label, []).append(sample)
+
+    series = [
+        TrendBucket(
+            bucket_label=label,
+            agreement=agreement_report(buckets[label], cwd),
+            dispersion=dispersion_report(buckets[label], cwd),
+        )
+        for label in sorted(buckets)
+    ]
+
+    return TrendReport(bucket=resolved_bucket, series=series)
