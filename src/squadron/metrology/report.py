@@ -27,6 +27,9 @@ from squadron.metrology.models import JudgeConfigId, ProjectId, SampleVerdict
 from squadron.metrology.report_models import (
     AgreementCell,
     AgreementReport,
+    ArtifactKey,
+    DispersionCell,
+    DispersionReport,
     ExclusionSummary,
     GroupKey,
 )
@@ -234,6 +237,75 @@ def agreement_report(samples: list[SampleVerdict], cwd: str) -> AgreementReport:
         )
 
     return AgreementReport(
+        cells=cells,
+        excluded=ExclusionSummary(
+            total_excluded=stale_count + unversioned_count,
+            stale_judge_result=stale_count,
+            unversioned=unversioned_count,
+        ),
+    )
+
+
+def dispersion_report(samples: list[SampleVerdict], cwd: str) -> DispersionReport:
+    """Judge-vs-judge disagreement on the same artifact across distinct
+    judge configurations, grouped by **artifact identity**
+    ``(project_id, source_document, ArtifactLevel)`` — not by ``result_ref``,
+    which differs per config and would make cross-config dispersion
+    impossible (slice-review F001).
+
+    A sample with no resolvable ``source_document`` is excluded from
+    dispersion (no stable artifact identity) but still counts for agreement.
+    Only artifacts graded by >=2 distinct ``JudgeConfigId``s produce a cell —
+    this is the cross-config dispersion the slice ships. The same-config
+    repeated-measurement path (multiple judgments under one identical
+    ``JudgeConfigId``) is structurally supported by this same grouping but
+    stays dormant until 300 FW#1 persists repeated same-config results.
+    """
+    enriched = enrich_samples(samples, cwd)
+
+    stale_count = sum(1 for item in enriched if item.admissible == "stale-judge-result")
+    unversioned_count = sum(
+        1 for item in enriched if item.admissible == "admissible" and item.unversioned
+    )
+
+    groups: dict[tuple[str, str, ArtifactLevel], list[EnrichedSample]] = {}
+    for item in enriched:
+        if item.admissible != "admissible" or item.source_document is None:
+            continue
+        key = (item.sample.project_id.value, item.source_document, item.artifact_level)
+        groups.setdefault(key, []).append(item)
+
+    cells: list[DispersionCell] = []
+    for (project_id, source_document, level), members in groups.items():
+        distinct_configs = list(
+            {_comparability_key(item.sample.judge_config): item for item in members}.values()
+        )
+        if len(distinct_configs) < 2:
+            continue
+
+        pairs = 0
+        disagreements = 0
+        for i in range(len(distinct_configs)):
+            for j in range(i + 1, len(distinct_configs)):
+                pairs += 1
+                if distinct_configs[i].judge_verdict != distinct_configs[j].judge_verdict:
+                    disagreements += 1
+        disagreement_rate = disagreements / pairs if pairs > 0 else 0.0
+
+        cells.append(
+            DispersionCell(
+                artifact=ArtifactKey(
+                    project_id=project_id,
+                    source_document=source_document,
+                    artifact_level=level,
+                ),
+                judge_configs=[item.sample.judge_config for item in distinct_configs],
+                n=len(distinct_configs),
+                disagreement_rate=disagreement_rate,
+            )
+        )
+
+    return DispersionReport(
         cells=cells,
         excluded=ExclusionSummary(
             total_excluded=stale_count + unversioned_count,
