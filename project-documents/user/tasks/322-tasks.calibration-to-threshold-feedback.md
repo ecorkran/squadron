@@ -87,12 +87,12 @@ status: not_started
 
 *Sequenced before the calibration-core tasks that read them (matches 321's F004 lesson — no report/calibration task hard-codes a temporary default).*
 
-- [ ] **Add three keys to `CONFIG_KEYS` in `src/squadron/config/keys.py`**
-  - [ ] `metrology.graduate_match_rate` (float) — agreement at/above which, and at/above the evidence floor, a config is recommended `GRADUATE`
-  - [ ] `metrology.tighten_match_rate` (float) — agreement at/below which a `TIGHTEN` warning is emitted regardless of n
-  - [ ] `metrology.residual_sample_rate` (float) — fraction of a graduated config's unsampled results offered for continued spot-checking
-  - [ ] Do **not** redefine `metrology.min_evidence_n` — reuse 321's key as-is (one floor, one definition)
-- [ ] Success: `sq config list` shows all three keys with descriptions and defaults; `uv run pyright` passes
+- [x] **Add three keys to `CONFIG_KEYS` in `src/squadron/config/keys.py`**
+  - [x] `metrology.graduate_match_rate` (float) — agreement at/above which, and at/above the evidence floor, a config is recommended `GRADUATE`
+  - [x] `metrology.tighten_match_rate` (float) — agreement at/below which a `TIGHTEN` warning is emitted regardless of n
+  - [x] `metrology.residual_sample_rate` (float) — fraction of a graduated config's unsampled results offered for continued spot-checking
+  - [x] Do **not** redefine `metrology.min_evidence_n` — reuse 321's key as-is (one floor, one definition)
+- [x] Success: `sq config list` shows all three keys with descriptions and defaults; `uv run pyright` passes
 
 **Commit:** `feat(metrology): register graduate/tighten/residual-sample config keys`
 
@@ -100,10 +100,10 @@ status: not_started
 
 ### T6: Tests for the new config keys
 
-- [ ] **Extend `tests/metrology/test_config.py`** (320/321's file)
-  - [ ] All three keys present in `CONFIG_KEYS` with correct types (`float`) and defaults
-  - [ ] Each reads back as a float; a project-level `.squadron.toml` override is honored (consistent with 320/321's config tests)
-- [ ] Success: `uv run pytest tests/metrology/test_config.py` passes
+- [x] **Extend `tests/metrology/test_config.py`** (320/321's file)
+  - [x] All three keys present in `CONFIG_KEYS` with correct types (`float`) and defaults
+  - [x] Each reads back as a float; a project-level `.squadron.toml` override is honored (consistent with 320/321's config tests)
+- [x] Success: `uv run pytest tests/metrology/test_config.py` passes
 
 **Commit:** `test(metrology): cover graduate/tighten/residual-sample config keys`
 
