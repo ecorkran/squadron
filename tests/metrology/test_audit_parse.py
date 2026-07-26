@@ -46,7 +46,7 @@ The system is a layered service with a thin HTTP surface over a domain core.
 
 | ID | Category | File:Line | Severity | Effort | Description | Recommendation |
 |----|----------|-----------|----------|--------|-------------|----------------|
-| F001 | architectural-decay | src/payments/processor.py:1240 | Critical | L | God class | Extract retry |
+| F001 | architectural-decay | src/payments/processor.py:1240 | Critical | L | God class | Extract |
 | F002 | test-debt | src/payments/refund.py:12 | High | M | No tests on refunds | Add cases |
 
 ## Things that look bad but are actually fine
