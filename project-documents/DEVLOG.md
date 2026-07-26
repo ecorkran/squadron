@@ -10,6 +10,35 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260726
+
+### Slice Design 323: Tech-Debt-Audit Baseline Harness — Phase 4 Complete
+
+**Phase 4 complete.** Created `user/slices/323-slice.tech-debt-audit-baseline-harness.md`; marked the 320 slice-plan entry as designed. First slice of the **audit oracle** — reuses the 320 spine (persistence + trend) but at the project/issue-class grain, with no agreement dimension.
+
+**Reconnaissance changed the design's shape.** Three properties of the `tech-debt-audit` skill were verified against the file rather than assumed:
+- It writes to a **model-chosen path** (`analysis/nnn-analysis.*.md`, `:62`) — capturing response text gets narration, not the audit.
+- **Repeat-run mode** (`:103`) makes run 2 of a variance series read run 1 and emit a diff. This biases a measured noise floor *toward zero* — the worst direction, since it makes every later 324 delta look significant. The unmodified skill is therefore incompatible with the measurement this slice exists to take.
+- **Category is free text** (the 9 dimensions at `:40-56` are prose headings), so cross-project comparison at the issue-class grain is impossible without a closed vocabulary.
+
+**Key decision — fix the fork, do not wrap it.** The initial approach was composing a prompt in Python (strip the Deliverable/repeat-run sections, append a squadron-authored output contract). PM noted the "shipped" skill *is* our fork (`github:ecorkran/tech-debt-audit`), already adapted for cf/squadron. That removes the only reason to wrap: with the contract in the skill file, `/analysis:tech-debt-audit` and the harness consume one artifact, so **no drift is possible between what users run and what the baseline measures**. Strictly less machinery. Makes `[340]` a real coupling — 323 modifies a shipped 340-band artifact — recorded as a decision rather than a discovery.
+
+**Other decisions of consequence:**
+- **Findings block is fenced YAML**, not a markdown pipe table — reuses the known-good frontmatter reader (`identity.py:162`); no table parser exists in the repo. Emitted *in addition to* the human table, mirroring the review system's serialize-twice precedent (`persistence.py:130-186`).
+- **Severity vocabularies stay disjoint.** Audit `Critical/High/Medium/Low` is *not* mapped onto review `PASS/NOTE/CONCERN/FAIL` — different things on different artifacts; a mapping would manufacture equivalence.
+- **Locations recorded, not resolved** — deliberately unlike the review parser's `_check_path_existence`. The count and class are the measurement; a fabricated location does not corrupt a count, and re-verifying across N×M runs is I/O the measurement does not need.
+- **Floor is per-project at a pinned commit**, 3 runs (`metrology.audit_variance_runs`). A project without a measured floor is marked "no floor measured" and never borrows another's. Dirty worktree or mismatched SHAs across a series is *refused, not averaged* — otherwise "unchanged code" is an assumption rather than a verified precondition.
+- **One run = one persisted unit**; series reduction is a separate pure pass. At 12-audit scale, a failure on run 3 must not discard runs 1-2, and the reduction stays unit-testable at zero token cost.
+- **`audit_prompt_hash` on every record** — same discipline 322 canonized for judge templates. Since this slice edits the skill, baselines across that edit are not comparable and are grouped, not pooled.
+
+**Variance set chosen for contrast, sized from the actual repos** (not assumed): squadron (py, ~64k LOC), migratory (py+GPU, ~44k), context-forge (TS, ~61k — isolates language from size), migratory-viewer (TS/UI, ~6.2k — order-of-magnitude smaller). All resolve identity from a git remote, so no `metrology.project_id` prerequisite. `trading-data` recorded as a **stretch case in Future Work**, not the committed set — it is the most likely to expose whether the 9 dimensions fit a database-heavy codebase, which is a question about the instrument rather than a gate on this slice. Note squadron/context-forge both exceed the skill's 50k-LOC subagent threshold (`:97`), making fan-out a plausible variance source — measured, not mitigated, which is why the small repo is in the set.
+
+**Cost is stated, not hidden:** 4 projects × 3 runs = 12 full-repo LLM audits, plus one baseline run each. Dominant cost of the slice and the reason the harness is resumable by design.
+
+**One plan-level open question resolved:** finding-normalization schema + repeated-run count (both recorded in the 320 plan Notes). Four Future Work items opened: human-table fallback parser, `trading-data` stretch run, periodic re-audit cadence, project registry.
+
+---
+
 ## 20260725
 
 ### Slice Design 322: Calibration-to-Threshold Feedback — Phase 4 Complete
