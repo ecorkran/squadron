@@ -120,13 +120,13 @@ status: in_progress
 
 ### T7: Store writers and readers for audit records
 
-- [ ] **Edit `src/squadron/metrology/store.py`**, mirroring `write_graduation` / `list_graduations` ([store.py:152-188](../../../src/squadron/metrology/store.py#L152-L188)) exactly
-  - [ ] `generate_audit_run_id(now=None) -> str` → `audit-{YYYYMMDD}-{uuid8}`, and `generate_noise_floor_id(now=None) -> str` → `floor-{YYYYMMDD}-{uuid8}`, mirroring [store.py:60-70](../../../src/squadron/metrology/store.py#L60-L70)
-  - [ ] `write_audit_run(run: AuditRun) -> str` and `write_noise_floor(floor: AuditNoiseFloor, record_id: str | None = None) -> str` — the `record_id` parameter on the floor writer allows in-place replacement when a floor is recomputed
-  - [ ] `list_audit_runs(project_id=None, audit_prompt_hash=None) -> list[AuditRun]` and `list_noise_floors(project_id=None) -> list[AuditNoiseFloor]` — glob-and-filter, discriminating on `record_type` **and** a non-`None` payload
-  - [ ] Reuse the tolerant-skip convention: catch `(OSError, ValueError, SchemaVersionError)`, log `_logger.warning("Skipping unreadable metrology record: %s", path)`, continue. One corrupt file must not sink a query
-  - [ ] Import the two record-type constants at the top alongside the existing two
-- [ ] Success: writing then listing an `AuditRun` returns it; a corrupt sibling `.json` in the store dir is skipped with a WARNING rather than raising
+- [x] **Edit `src/squadron/metrology/store.py`**, mirroring `write_graduation` / `list_graduations` ([store.py:152-188](../../../src/squadron/metrology/store.py#L152-L188)) exactly
+  - [x] `generate_audit_run_id(now=None) -> str` → `audit-{YYYYMMDD}-{uuid8}`, and `generate_noise_floor_id(now=None) -> str` → `floor-{YYYYMMDD}-{uuid8}`, mirroring [store.py:60-70](../../../src/squadron/metrology/store.py#L60-L70)
+  - [x] `write_audit_run(run: AuditRun) -> str` and `write_noise_floor(floor: AuditNoiseFloor, record_id: str | None = None) -> str` — the `record_id` parameter on the floor writer allows in-place replacement when a floor is recomputed
+  - [x] `list_audit_runs(project_id=None, audit_prompt_hash=None) -> list[AuditRun]` and `list_noise_floors(project_id=None) -> list[AuditNoiseFloor]` — glob-and-filter, discriminating on `record_type` **and** a non-`None` payload
+  - [x] Reuse the tolerant-skip convention: catch `(OSError, ValueError, SchemaVersionError)`, log `_logger.warning("Skipping unreadable metrology record: %s", path)`, continue. One corrupt file must not sink a query
+  - [x] Import the two record-type constants at the top alongside the existing two
+- [x] Success: writing then listing an `AuditRun` returns it; a corrupt sibling `.json` in the store dir is skipped with a WARNING rather than raising
 
 **Commit:** `feat(metrology): add audit run and noise-floor store access`
 
@@ -134,17 +134,17 @@ status: in_progress
 
 ### T8: Tests for models and store extension
 
-- [ ] **Add `tests/metrology/test_audit_models.py`**
-  - [ ] Each enum has exactly its specified values; `AuditCategory` has ten
-  - [ ] `AuditFinding` with `raw_category=None` and with a populated `raw_category` both round-trip
-  - [ ] **Vocabulary isolation:** assert no `AuditSeverity` value equals any `review.models.Severity` value — the disjointness is deliberate and a future edit must not quietly merge them
-- [ ] **Add `tests/metrology/test_audit_store.py`**
-  - [ ] Write + list round-trip for both record types, using the `conftest.py` temp-store fixture pattern
-  - [ ] `list_audit_runs(project_id=...)` filters correctly; two projects' runs do not bleed
-  - [ ] `list_audit_runs(audit_prompt_hash=...)` filters correctly — the comparability guard
-  - [ ] A corrupt `.json` and an unknown-`record_type` record are both skipped without raising
-  - [ ] **Coexistence:** a store containing samples, graduations, and audit runs returns only the right type from each list method
-- [ ] Success: `uv run pytest tests/metrology/test_audit_models.py tests/metrology/test_audit_store.py` passes
+- [x] **Add `tests/metrology/test_audit_models.py`**
+  - [x] Each enum has exactly its specified values; `AuditCategory` has ten
+  - [x] `AuditFinding` with `raw_category=None` and with a populated `raw_category` both round-trip
+  - [x] **Vocabulary isolation:** assert no `AuditSeverity` value equals any `review.models.Severity` value — the disjointness is deliberate and a future edit must not quietly merge them
+- [x] **Add `tests/metrology/test_audit_store.py`**
+  - [x] Write + list round-trip for both record types, using the `conftest.py` temp-store fixture pattern
+  - [x] `list_audit_runs(project_id=...)` filters correctly; two projects' runs do not bleed
+  - [x] `list_audit_runs(audit_prompt_hash=...)` filters correctly — the comparability guard
+  - [x] A corrupt `.json` and an unknown-`record_type` record are both skipped without raising
+  - [x] **Coexistence:** a store containing samples, graduations, and audit runs returns only the right type from each list method
+- [x] Success: `uv run pytest tests/metrology/test_audit_models.py tests/metrology/test_audit_store.py` passes
 
 **Commit:** `test(metrology): cover audit models and store round-trips`
 
@@ -152,14 +152,14 @@ status: in_progress
 
 ### T9: The findings-block parser
 
-- [ ] **Add `src/squadron/metrology/audit_parse.py`** — pure, no I/O, no agent, independently testable
-  - [ ] `parse_audit_findings(raw: str) -> tuple[list[AuditFinding], int]` — locate the block between the two delimiters, strip the ```yaml fence, `yaml.safe_load`, coerce each entry; returns findings plus `unnormalized_count`
-  - [ ] `normalize_category(raw: str) -> tuple[AuditCategory, str | None]` — exact match on the vocabulary returns `(value, None)`; anything else returns `(AuditCategory.OTHER, raw)` so the original string is retained, never discarded
-  - [ ] `normalize_severity(raw: str) -> AuditSeverity | None` — case-insensitive match; an unrecognized severity makes that **finding** unnormalizable (counted, not guessed), since severity is load-bearing for the baseline
-  - [ ] A missing or placeholder `location` normalizes to the existing `unverified` sentinel ([parsers.py:24](../../../src/squadron/review/parsers.py#L24)), reusing the constant rather than redefining it
-  - [ ] **Absent block** and **malformed block** must be distinguishable by the caller — raise distinct typed errors (e.g. `AuditBlockMissingError` / `AuditBlockMalformedError` under `MetrologyError`), because T14 logs them differently
-  - [ ] Do **not** verify that `location` paths exist on disk — deliberate divergence from the review parser's `_check_path_existence` (the count and class are the measurement; re-verifying across N×M runs is I/O the measurement does not need)
-- [ ] Success: a well-formed block yields the expected findings; an out-of-vocabulary category yields `OTHER` with `raw_category` set
+- [x] **Add `src/squadron/metrology/audit_parse.py`** — pure, no I/O, no agent, independently testable
+  - [x] `parse_audit_findings(raw: str) -> tuple[list[AuditFinding], int]` — locate the block between the two delimiters, strip the ```yaml fence, `yaml.safe_load`, coerce each entry; returns findings plus `unnormalized_count`
+  - [x] `normalize_category(raw: str) -> tuple[AuditCategory, str | None]` — exact match on the vocabulary returns `(value, None)`; anything else returns `(AuditCategory.OTHER, raw)` so the original string is retained, never discarded
+  - [x] `normalize_severity(raw: str) -> AuditSeverity | None` — case-insensitive match; an unrecognized severity makes that **finding** unnormalizable (counted, not guessed), since severity is load-bearing for the baseline
+  - [x] A missing or placeholder `location` normalizes to the existing `unverified` sentinel ([parsers.py:24](../../../src/squadron/review/parsers.py#L24)), reusing the constant rather than redefining it
+  - [x] **Absent block** and **malformed block** must be distinguishable by the caller — raise distinct typed errors (e.g. `AuditBlockMissingError` / `AuditBlockMalformedError` under `MetrologyError`), because T14 logs them differently
+  - [x] Do **not** verify that `location` paths exist on disk — deliberate divergence from the review parser's `_check_path_existence` (the count and class are the measurement; re-verifying across N×M runs is I/O the measurement does not need)
+- [x] Success: a well-formed block yields the expected findings; an out-of-vocabulary category yields `OTHER` with `raw_category` set
 
 **Commit:** `feat(metrology): parse the audit findings block`
 
@@ -167,15 +167,15 @@ status: in_progress
 
 ### T10: Parser tests, including the honesty guarantees
 
-- [ ] **Add `tests/metrology/test_audit_parse.py`**
-  - [ ] **Realistic fixture first:** a fixture containing a full audit-file shape — frontmatter, prose sections, the human findings table, *then* the fenced block — not a bare block. Per the project's parser rule, the fixture must be the format the parser actually consumes in production
-  - [ ] Well-formed block with several findings parses; ids, categories, severities, locations, summaries all correct
-  - [ ] **Out-of-vocabulary category** → `AuditCategory.OTHER` with `raw_category` preserving the original string, and the finding is **retained**, not dropped — the success criterion the design commits to
-  - [ ] **Unrecognized severity** → that finding is counted in `unnormalized_count` and excluded from `findings`, never coerced to a guessed severity
-  - [ ] **Absent block** raises `AuditBlockMissingError`; **malformed YAML** inside the delimiters raises `AuditBlockMalformedError` — distinct, since the harness logs them differently
-  - [ ] Missing/placeholder location → the `unverified` sentinel, not `None` or empty string
-  - [ ] Findings table present but block absent still raises missing (the table is not a fallback in this slice — that is Future Work #1)
-- [ ] Success: `uv run pytest tests/metrology/test_audit_parse.py` passes
+- [x] **Add `tests/metrology/test_audit_parse.py`**
+  - [x] **Realistic fixture first:** a fixture containing a full audit-file shape — frontmatter, prose sections, the human findings table, *then* the fenced block — not a bare block. Per the project's parser rule, the fixture must be the format the parser actually consumes in production
+  - [x] Well-formed block with several findings parses; ids, categories, severities, locations, summaries all correct
+  - [x] **Out-of-vocabulary category** → `AuditCategory.OTHER` with `raw_category` preserving the original string, and the finding is **retained**, not dropped — the success criterion the design commits to
+  - [x] **Unrecognized severity** → that finding is counted in `unnormalized_count` and excluded from `findings`, never coerced to a guessed severity
+  - [x] **Absent block** raises `AuditBlockMissingError`; **malformed YAML** inside the delimiters raises `AuditBlockMalformedError` — distinct, since the harness logs them differently
+  - [x] Missing/placeholder location → the `unverified` sentinel, not `None` or empty string
+  - [x] Findings table present but block absent still raises missing (the table is not a fallback in this slice — that is Future Work #1)
+- [x] Success: `uv run pytest tests/metrology/test_audit_parse.py` passes
 
 **Commit:** `test(metrology): cover audit parsing, vocabulary coercion, and retention`
 
