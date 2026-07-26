@@ -19,8 +19,12 @@ from typing import cast
 from squadron.config.manager import get_config
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
+    RECORD_TYPE_AUDIT_FINDING,
+    RECORD_TYPE_AUDIT_NOISE_FLOOR,
     RECORD_TYPE_GRADUATED_CONFIG,
     RECORD_TYPE_SAMPLE,
+    AuditNoiseFloor,
+    AuditRun,
     GraduatedConfig,
     JudgeConfigId,
     MetrologyRecord,
@@ -67,6 +71,18 @@ def generate_graduation_id(now: datetime | None = None) -> str:
     """Return a unique ``graduation-{YYYYMMDD}-{uuid8}`` id."""
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
     return f"graduation-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def generate_audit_run_id(now: datetime | None = None) -> str:
+    """Return a unique ``audit-{YYYYMMDD}-{uuid8}`` id."""
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
+    return f"audit-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def generate_noise_floor_id(now: datetime | None = None) -> str:
+    """Return a unique ``floor-{YYYYMMDD}-{uuid8}`` id."""
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
+    return f"floor-{stamp}-{uuid.uuid4().hex[:8]}"
 
 
 def _judge_config_matches(stored: JudgeConfigId, wanted: JudgeConfigId) -> bool:
@@ -186,6 +202,98 @@ class MetrologyStore:
                 continue
             graduations.append((path.stem, record.graduated_config))
         return graduations
+
+    def write_audit_run(self, run: AuditRun) -> str:
+        """Envelope and persist one complete audit run; return its ``run_id``.
+
+        A run is persisted as a whole or not at all — callers must not write
+        a partially-parsed run, since a truncated audit would enter a noise
+        floor as a spuriously low finding count.
+        """
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_AUDIT_FINDING,
+            audit_run=run,
+        )
+        self._write_atomic(
+            self._record_path(run.run_id),
+            json.dumps(record.model_dump(mode="json"), indent=2),
+        )
+        return run.run_id
+
+    def write_noise_floor(self, floor: AuditNoiseFloor, record_id: str | None = None) -> str:
+        """Envelope and persist a noise-floor record; return its record id.
+
+        ``record_id`` lets a caller replace an existing floor in place — a
+        floor recomputed after more runs are added updates rather than
+        accumulating a second record for the same series. Omit it to mint a
+        new id.
+        """
+        record_id = record_id or generate_noise_floor_id()
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_AUDIT_NOISE_FLOOR,
+            audit_noise_floor=floor,
+        )
+        self._write_atomic(
+            self._record_path(record_id),
+            json.dumps(record.model_dump(mode="json"), indent=2),
+        )
+        return record_id
+
+    def list_audit_runs(
+        self,
+        project_id: str | None = None,
+        audit_prompt_hash: str | None = None,
+    ) -> list[AuditRun]:
+        """Return stored audit runs, optionally filtered in memory.
+
+        ``audit_prompt_hash`` is the comparability guard: runs taken under
+        different instruments are never pooled, so a caller reducing a
+        variance series filters on it explicitly.
+
+        Tolerantly skips an unreadable sibling with a WARNING — one corrupt
+        record must not sink the whole scan.
+        """
+        runs: list[AuditRun] = []
+        for path in sorted(self._store_dir.glob("*.json")):
+            try:
+                record = self._load_raw(path)
+            except (OSError, ValueError, SchemaVersionError):
+                _logger.warning("Skipping unreadable metrology record: %s", path)
+                continue
+            run = record.audit_run
+            if run is None or record.record_type != RECORD_TYPE_AUDIT_FINDING:
+                continue
+            if project_id is not None and run.project_id.value != project_id:
+                continue
+            if audit_prompt_hash is not None and run.audit_prompt_hash != audit_prompt_hash:
+                continue
+            runs.append(run)
+        runs.sort(key=lambda r: r.measured_at, reverse=True)
+        return runs
+
+    def list_noise_floors(self, project_id: str | None = None) -> list[tuple[str, AuditNoiseFloor]]:
+        """Return all stored ``(record_id, AuditNoiseFloor)`` pairs.
+
+        The record id is returned alongside the payload so a caller
+        recomputing a floor can replace it in place via ``write_noise_floor``
+        rather than accumulating duplicates for one series.
+        """
+        floors: list[tuple[str, AuditNoiseFloor]] = []
+        for path in sorted(self._store_dir.glob("*.json")):
+            try:
+                record = self._load_raw(path)
+            except (OSError, ValueError, SchemaVersionError):
+                _logger.warning("Skipping unreadable metrology record: %s", path)
+                continue
+            floor = record.audit_noise_floor
+            if floor is None or record.record_type != RECORD_TYPE_AUDIT_NOISE_FLOOR:
+                continue
+            if project_id is not None and floor.project_id.value != project_id:
+                continue
+            floors.append((path.stem, floor))
+        return floors
 
     def load_record(self, sample_id: str) -> MetrologyRecord:
         """Load and validate one record by id.
