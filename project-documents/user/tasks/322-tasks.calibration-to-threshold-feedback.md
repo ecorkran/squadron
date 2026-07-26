@@ -283,19 +283,19 @@ status: complete
 
 ### T18: Full validation, regression gate, and verification walkthrough
 
-- [ ] **Run the full suite:** `uv run pytest` (entire repo) — 300 judging path, 320 capture path, 321 reporting path, and all existing tests pass unchanged except the deliberate hash-narrowing re-key (T1/T2)
-- [ ] **Run static checks:** `uv run pyright` and `uv run ruff check` — zero errors on new code; `uv run ruff format` before commit
-- [ ] **Execute the LLD Verification Walkthrough** (slice design, steps 1-9) end-to-end in a scratch repo and paste the actual output back into the slice design or a companion note:
-  1. Accumulate agreement evidence *(existing)*
-  2. `recommend` below the floor → `INSUFFICIENT_EVIDENCE` stating n and floor
-  3. `recommend` above the floor → `GRADUATE` with match rate, n, floor, current thresholds, model-dimension note
-  4. SHA-1 template/config/store before and after `recommend` → byte-identical
-  5. **The self-defeating-loop regression:** edit `judge.pass_floor` → same `JudgeConfigId`, same n (re-run `report agreement`); edit `system_prompt` → new `JudgeConfigId`, evidence separates
-  6. `graduate` then `offers` → graduation recorded, residual targets listed; drain one via `sq metrology sample`, confirm n increased for the graduated judge
-  7. **Version-scoping regression:** edit `system_prompt` post-graduation, produce a new judge review under it, `offers` → no offers drawn against the new config under the old graduation, lapse reported
-  8. `graduate` on a below-floor pairing → non-zero exit naming n/floor, no store record written
-  9. Full suite green, 300/320/321 behavior unchanged
-- [ ] Success: all nine walkthrough steps pass with pasted output; full suite green; static checks clean; mark this slice-design's frontmatter `status: complete` and update the 320 slice-plan's `(322)` entry to `[x]` if this completes it
+- [x] **Run the full suite:** `uv run pytest` (entire repo) — 300 judging path, 320 capture path, 321 reporting path, and all existing tests pass unchanged except the deliberate hash-narrowing re-key (T1/T2)
+- [x] **Run static checks:** `uv run pyright` and `uv run ruff check` — zero errors on new code; `uv run ruff format` before commit
+- [x] **Execute the LLD Verification Walkthrough** (slice design, steps 1-9) end-to-end in a scratch repo and paste the actual output back into the slice design or a companion note:
+  - [x] 1. Accumulate agreement evidence *(existing)*
+  - [x] 2. `recommend` below the floor → `INSUFFICIENT_EVIDENCE` stating n and floor
+  - [x] 3. `recommend` above the floor → `GRADUATE` with match rate, n, floor, current thresholds, model-dimension note
+  - [x] 4. SHA-1 template/config/store before and after `recommend` → byte-identical
+  - [x] 5. **The self-defeating-loop regression:** edit `judge.pass_floor` → same `JudgeConfigId`, same n (re-run `report agreement`); edit `system_prompt` → new `JudgeConfigId`, evidence separates
+  - [x] 6. `graduate` then `offers` → graduation recorded, residual targets listed; drain one via `sq metrology sample`, confirm n increased for the graduated judge
+  - [x] 7. **Version-scoping regression:** edit `system_prompt` post-graduation, produce a new judge review under it, `offers` → no offers drawn against the new config under the old graduation, lapse reported
+  - [x] 8. `graduate` on a below-floor pairing → non-zero exit naming n/floor, no store record written
+  - [x] 9. Full suite green, 300/320/321 behavior unchanged
+- [x] Success: all nine walkthrough steps pass with pasted output; full suite green; static checks clean; mark this slice-design's frontmatter `status: complete` and update the 320 slice-plan's `(322)` entry to `[x]` if this completes it
 
 **Commit:** `test(metrology): full validation pass for 322 calibration-to-threshold feedback`
 
