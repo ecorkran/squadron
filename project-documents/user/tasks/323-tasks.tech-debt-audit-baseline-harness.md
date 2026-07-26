@@ -185,13 +185,13 @@ status: in_progress
 
 > **Ordering note:** this task must precede T14/T15. `get_config` raises `KeyError` for a key not in `CONFIG_KEYS`, and T14 reads `metrology.audit_timeout_s` to wrap the agent stream — so registering the keys after the harness would make T14's implementation and T15's timeout test fail outright.
 
-- [ ] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS`
-  - [ ] `metrology.audit_variance_runs` — `int`, default `3`, described as runs per project in a variance series
-  - [ ] `metrology.audit_timeout_s` — `int`, default `3600`, described as the wall-clock cap per audit run (bounds pathology; does not pace normal runs)
-  - [ ] `metrology.audit_profile` — `str`, default `None`, described as the provider profile for audit runs; unset falls back to the review default
-  - [ ] All three are `int`/`str` only — `_coerce_value` ([manager.py:54-61](../../../src/squadron/config/manager.py#L54-L61)) does not handle `float`, so no float key is added here
-  - [ ] Read them via the existing `get_typed_config` helper rather than adding new readers
-- [ ] Success: `sq config get metrology.audit_variance_runs` prints `3`; `sq config set metrology.audit_timeout_s 1800` succeeds and reads back
+- [x] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS`
+  - [x] `metrology.audit_variance_runs` — `int`, default `3`, described as runs per project in a variance series
+  - [x] `metrology.audit_timeout_s` — `int`, default `3600`, described as the wall-clock cap per audit run (bounds pathology; does not pace normal runs)
+  - [x] `metrology.audit_profile` — `str`, default `None`, described as the provider profile for audit runs; unset falls back to the review default
+  - [x] All three are `int`/`str` only — `_coerce_value` ([manager.py:54-61](../../../src/squadron/config/manager.py#L54-L61)) does not handle `float`, so no float key is added here
+  - [x] Read them via the existing `get_typed_config` helper rather than adding new readers
+- [x] Success: `sq config get metrology.audit_variance_runs` prints `3`; `sq config set metrology.audit_timeout_s 1800` succeeds and reads back
 
 **Commit:** `feat(config): add audit harness config keys`
 
@@ -199,11 +199,11 @@ status: in_progress
 
 ### T12: Skill resolution, prompt build, and instrument hash
 
-- [ ] **Add `src/squadron/metrology/audit.py`** (surface-agnostic — no Typer imports)
-  - [ ] `resolve_audit_skill() -> Path` — via `skills.resolver._resolve_bundled("analysis")` + `/ "tech-debt-audit.md"`, so it works whether or not `sq skills install` has been run. Raise a typed error naming the pack if absent
-  - [ ] `audit_prompt_hash(skill_path: Path) -> str` — SHA-256 of the file's bytes. This is the instrument identity; **the hash is taken from the vendored copy actually used for the run**, so fork/squadron divergence lands in the data even if it escapes CI
-  - [ ] `build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str` — the skill body, prefixed with the independent-run marker from T2 when `independent_run=True`. The marker string must be a module constant referenced by both this function and T4's test, defined once
-- [ ] Success: `resolve_audit_skill()` finds the vendored file in an editable install; `audit_prompt_hash` changes when one byte of the skill changes; `build_audit_prompt(independent_run=True)` contains the marker and `independent_run=False` does not
+- [x] **Add `src/squadron/metrology/audit.py`** (surface-agnostic — no Typer imports)
+  - [x] `resolve_audit_skill() -> Path` — via `skills.resolver._resolve_bundled("analysis")` + `/ "tech-debt-audit.md"`, so it works whether or not `sq skills install` has been run. Raise a typed error naming the pack if absent
+  - [x] `audit_prompt_hash(skill_path: Path) -> str` — SHA-256 of the file's bytes. This is the instrument identity; **the hash is taken from the vendored copy actually used for the run**, so fork/squadron divergence lands in the data even if it escapes CI
+  - [x] `build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str` — the skill body, prefixed with the independent-run marker from T2 when `independent_run=True`. The marker string must be a module constant referenced by both this function and T4's test, defined once
+- [x] Success: `resolve_audit_skill()` finds the vendored file in an editable install; `audit_prompt_hash` changes when one byte of the skill changes; `build_audit_prompt(independent_run=True)` contains the marker and `independent_run=False` does not
 
 **Commit:** `feat(metrology): resolve audit skill, hash instrument, build prompt`
 
@@ -211,14 +211,14 @@ status: in_progress
 
 ### T13: Pre-flight checks
 
-- [ ] **Add to `src/squadron/metrology/audit.py`** — all checks run **before** any agent is created, so a misconfigured campaign costs zero tokens
-  - [ ] `preflight_project(project_path: Path, *, require_clean: bool, cwd: str) -> PreflightResult` returning the resolved `ProjectId` and `commit_sha`
-  - [ ] Path exists and is a directory → else `ERROR` naming the path, fail that project
-  - [ ] Is a git repository, and `git rev-parse HEAD` yields a SHA → else `ERROR`, fail that project
-  - [ ] `derive_project_id(cwd=str(project_path))` succeeds → a `MetrologyIdentityError` propagates with its existing `sq config set metrology.project_id` remediation intact, failing that project only
-  - [ ] When `require_clean=True` (variance runs only): `git status --porcelain` is empty → else `ERROR` and **refuse the series**, per Decision 6. This is a refusal, not a warning — a floor measured across a code change is not a floor
-  - [ ] Failing one project must not abort the others in a multi-project campaign
-- [ ] Success: each failure path is detected without creating an agent; a clean repo passes and returns a 40-char SHA
+- [x] **Add to `src/squadron/metrology/audit.py`** — all checks run **before** any agent is created, so a misconfigured campaign costs zero tokens
+  - [x] `preflight_project(project_path: Path, *, require_clean: bool, cwd: str) -> PreflightResult` returning the resolved `ProjectId` and `commit_sha`
+  - [x] Path exists and is a directory → else `ERROR` naming the path, fail that project
+  - [x] Is a git repository, and `git rev-parse HEAD` yields a SHA → else `ERROR`, fail that project
+  - [x] `derive_project_id(cwd=str(project_path))` succeeds → a `MetrologyIdentityError` propagates with its existing `sq config set metrology.project_id` remediation intact, failing that project only
+  - [x] When `require_clean=True` (variance runs only): `git status --porcelain` is empty → else `ERROR` and **refuse the series**, per Decision 6. This is a refusal, not a warning — a floor measured across a code change is not a floor
+  - [x] Failing one project must not abort the others in a multi-project campaign
+- [x] Success: each failure path is detected without creating an agent; a clean repo passes and returns a 40-char SHA
 
 **Commit:** `feat(metrology): pre-flight checks before audit token spend`
 
@@ -226,15 +226,15 @@ status: in_progress
 
 ### T14: The audit run with full failure handling
 
-- [ ] **Add `run_audit(...)` to `src/squadron/metrology/audit.py`**
-  - [ ] Signature per the design: resolve identity + SHA (T13) → build prompt (T12) → execute → parse (T9) → persist one `AuditRun`
-  - [ ] Model the execution on [review_client.py:134-156](../../../src/squadron/review/review_client.py#L134-L156) — per-project `cwd`, tool permissions, and the `sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result")` narration filter — but **do not** call `run_review_with_profile`; it builds review prompts and calls `parse_review_output`
-  - [ ] **Wrap the agent stream in `asyncio.wait_for`** with `metrology.audit_timeout_s`. The precedent supplies no timeout; this slice adds one because the audit is unattended and runs 12+ times
-  - [ ] Catch stream exceptions (disconnect, API error) — shut the agent down in `finally`, persist nothing, return a typed failure result so the caller continues the series
-  - [ ] **Persist nothing on any failure.** A run persists a complete `AuditRun` or nothing at all — there is no partial-run record. This is what prevents a hung or truncated run from entering the floor as a low-count sample
-  - [ ] Log every failure mode at `WARNING` or above per the design's table, distinguishing absent-block from malformed-block
-  - [ ] Add `_logger = logging.getLogger(__name__)` following the `store.py` convention
-- [ ] Success: a successful run persists exactly one record; each simulated failure persists **zero** records and emits a WARNING
+- [x] **Add `run_audit(...)` to `src/squadron/metrology/audit.py`**
+  - [x] Signature per the design: resolve identity + SHA (T13) → build prompt (T12) → execute → parse (T9) → persist one `AuditRun`
+  - [x] Model the execution on [review_client.py:134-156](../../../src/squadron/review/review_client.py#L134-L156) — per-project `cwd`, tool permissions, and the `sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result")` narration filter — but **do not** call `run_review_with_profile`; it builds review prompts and calls `parse_review_output`
+  - [x] **Wrap the agent stream in `asyncio.wait_for`** with `metrology.audit_timeout_s`. The precedent supplies no timeout; this slice adds one because the audit is unattended and runs 12+ times
+  - [x] Catch stream exceptions (disconnect, API error) — shut the agent down in `finally`, persist nothing, return a typed failure result so the caller continues the series
+  - [x] **Persist nothing on any failure.** A run persists a complete `AuditRun` or nothing at all — there is no partial-run record. This is what prevents a hung or truncated run from entering the floor as a low-count sample
+  - [x] Log every failure mode at `WARNING` or above per the design's table, distinguishing absent-block from malformed-block
+  - [x] Add `_logger = logging.getLogger(__name__)` following the `store.py` convention
+- [x] Success: a successful run persists exactly one record; each simulated failure persists **zero** records and emits a WARNING
 
 **Commit:** `feat(metrology): audit harness with timeout and failure handling`
 
@@ -242,15 +242,15 @@ status: in_progress
 
 ### T15: Harness tests — failure modes are the point
 
-- [ ] **Add `tests/metrology/test_audit_harness.py`** — all with a **stubbed agent**, no real tokens
-  - [ ] Happy path: stub returns a well-formed audit → exactly one `AuditRun` persisted, findings populated, `commit_sha` and `audit_prompt_hash` set
-  - [ ] **Timeout:** stub that never yields → `asyncio.wait_for` fires, **zero** records persisted, WARNING emitted (use `caplog`)
-  - [ ] **Mid-stream exception:** stub that raises partway → zero records persisted, WARNING emitted, agent shutdown still called
-  - [ ] **Absent block** and **malformed block:** zero records persisted, WARNING distinguishes the two
-  - [ ] **Pre-flight short-circuits:** a non-existent path / non-git dir / dirty worktree (variance) creates **no agent at all** — assert the stub was never constructed, proving zero token spend
-  - [ ] **Series continues:** in a 3-project run where project 2 fails, projects 1 and 3 still persist
-  - [ ] **Surface-agnostic:** assert `audit.py`, `audit_parse.py`, `audit_variance.py`, `audit_report.py` import no Typer, matching the 320/321/322 parity test
-- [ ] Success: `uv run pytest tests/metrology/test_audit_harness.py` passes; each of the top three failure modes has an asserted observable signal
+- [x] **Add `tests/metrology/test_audit_harness.py`** — all with a **stubbed agent**, no real tokens
+  - [x] Happy path: stub returns a well-formed audit → exactly one `AuditRun` persisted, findings populated, `commit_sha` and `audit_prompt_hash` set
+  - [x] **Timeout:** stub that never yields → `asyncio.wait_for` fires, **zero** records persisted, WARNING emitted (use `caplog`)
+  - [x] **Mid-stream exception:** stub that raises partway → zero records persisted, WARNING emitted, agent shutdown still called
+  - [x] **Absent block** and **malformed block:** zero records persisted, WARNING distinguishes the two
+  - [x] **Pre-flight short-circuits:** a non-existent path / non-git dir / dirty worktree (variance) creates **no agent at all** — assert the stub was never constructed, proving zero token spend
+  - [x] **Series continues:** in a 3-project run where project 2 fails, projects 1 and 3 still persist
+  - [x] **Surface-agnostic:** assert `audit.py`, `audit_parse.py`, `audit_variance.py` (skipped — does not exist yet), `audit_report.py` (skipped — does not exist yet) import no Typer, matching the 320/321/322 parity test
+- [x] Success: `uv run pytest tests/metrology/test_audit_harness.py` passes; each of the top three failure modes has an asserted observable signal
 
 **Commit:** `test(metrology): cover audit harness failure modes and signals`
 
