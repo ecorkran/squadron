@@ -19,12 +19,20 @@ import pytest
 import tomli_w
 
 from squadron.metrology.models import (
+    AuditCategory,
+    AuditEffort,
+    AuditFinding,
+    AuditNoiseFloor,
+    AuditRun,
+    AuditSeverity,
+    FloorStat,
     JudgeConfigId,
     JudgeResultRef,
     ProjectId,
     ProjectIdSource,
     SampleVerdict,
 )
+from squadron.metrology.store import MetrologyStore
 from squadron.review.models import ReviewFinding, ReviewResult, Verdict
 from squadron.review.persistence import SliceInfo, format_review_markdown
 from squadron.review.templates import clear_registry
@@ -72,6 +80,85 @@ def make_sample_verdict(
         artifact_level=artifact_level,
         captured_at=datetime(2026, 7, 22, tzinfo=UTC),
     )
+
+
+def make_audit_finding(
+    *,
+    finding_id: str = "F001",
+    category: AuditCategory = AuditCategory.ARCHITECTURAL_DECAY,
+    raw_category: str | None = None,
+    severity: AuditSeverity = AuditSeverity.HIGH,
+    effort: AuditEffort | None = AuditEffort.M,
+    location: str = "src/example/module.py:120",
+    summary: str = "God module handling routing, validation, and retry.",
+) -> AuditFinding:
+    """One normalized AuditFinding for model/store/report tests."""
+    return AuditFinding(
+        finding_id=finding_id,
+        category=category,
+        raw_category=raw_category,
+        severity=severity,
+        effort=effort,
+        location=location,
+        summary=summary,
+    )
+
+
+def make_audit_run(
+    *,
+    run_id: str = "audit-20260726-abcd1234",
+    project_value: str = "github.com/manta/example-repo",
+    commit_sha: str = "a" * 40,
+    audit_prompt_hash: str = "b" * 64,
+    model: str = "minimax/minimax-m2.7",
+    findings: list[AuditFinding] | None = None,
+    unnormalized_count: int = 0,
+    measured_at: datetime | None = None,
+) -> AuditRun:
+    """A fully-populated AuditRun for store/variance/report tests."""
+    return AuditRun(
+        run_id=run_id,
+        project_id=ProjectId(value=project_value, source=ProjectIdSource.REMOTE),
+        commit_sha=commit_sha,
+        audit_prompt_hash=audit_prompt_hash,
+        model=model,
+        measured_at=measured_at if measured_at is not None else datetime(2026, 7, 26, tzinfo=UTC),
+        findings=findings if findings is not None else [make_audit_finding()],
+        unnormalized_count=unnormalized_count,
+    )
+
+
+def make_noise_floor(
+    *,
+    project_value: str = "github.com/manta/example-repo",
+    commit_sha: str = "a" * 40,
+    audit_prompt_hash: str = "b" * 64,
+    n_runs: int = 3,
+    total: FloorStat | None = None,
+    per_category: dict[AuditCategory, FloorStat] | None = None,
+    measured_at: datetime | None = None,
+) -> AuditNoiseFloor:
+    """A populated AuditNoiseFloor for store/report tests."""
+    default_stat = FloorStat(min=40, max=47, mean=43.6667, stddev=3.5119)
+    return AuditNoiseFloor(
+        project_id=ProjectId(value=project_value, source=ProjectIdSource.REMOTE),
+        commit_sha=commit_sha,
+        audit_prompt_hash=audit_prompt_hash,
+        n_runs=n_runs,
+        total=total if total is not None else default_stat,
+        per_category=(
+            per_category
+            if per_category is not None
+            else {AuditCategory.ARCHITECTURAL_DECAY: FloorStat(min=3, max=6, mean=4.5, stddev=1.5)}
+        ),
+        measured_at=measured_at if measured_at is not None else datetime(2026, 7, 26, tzinfo=UTC),
+    )
+
+
+@pytest.fixture
+def audit_store(tmp_path: Path) -> MetrologyStore:
+    """An isolated MetrologyStore rooted in tmp_path."""
+    return MetrologyStore(store_dir=tmp_path / "metrology-store")
 
 
 def _git(*args: str, cwd: Path) -> None:
