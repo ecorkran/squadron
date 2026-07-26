@@ -7,6 +7,7 @@ same functions with zero duplication.
 
 from __future__ import annotations
 
+import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,7 +15,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
-from squadron.config.manager import get_config
+from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.calibration import read_current_template_content_hash, recommend_thresholds
 from squadron.metrology.calibration_models import RecommendationDirection, RecommendationReport
 from squadron.metrology.capture import (
@@ -29,7 +30,7 @@ from squadron.metrology.errors import (
     MetrologyStoreError,
     MetrologyTargetError,
 )
-from squadron.metrology.graduation import find_graduation, list_graduations, select_residual_offers
+from squadron.metrology.graduation import list_graduations, select_residual_offers
 from squadron.metrology.graduation import write_graduation as write_graduation_record
 from squadron.metrology.identity import derive_judge_config_id, read_review_frontmatter
 from squadron.metrology.levels import ArtifactLevel, derive_artifact_level
@@ -44,6 +45,8 @@ from squadron.metrology.report_models import (
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.review.models import Verdict
 from squadron.review.templates import load_all_templates
+
+_logger = logging.getLogger(__name__)
 
 metrology_app = typer.Typer(
     name="metrology",
@@ -422,20 +425,20 @@ def report_trend(
 
 def _read_float_config(key: str, cwd: str) -> float:
     """Read a float config key, erroring loudly on a non-numeric override."""
-    value = get_config(key, cwd=cwd)
-    if not isinstance(value, (int, float)):
-        raise typer.BadParameter(
-            f"{key} must be a number, got {value!r}. Fix it with 'sq config set {key} <n>'."
-        )
-    return float(value)
+    try:
+        value = get_typed_config(key, float, cwd=cwd)
+    except ValueError as exc:
+        raise typer.BadParameter(f"{exc}. Fix it with 'sq config set {key} <n>'.") from exc
+    assert isinstance(value, float)
+    return value
 
 
 def _read_int_config(key: str, cwd: str) -> int:
-    value = get_config(key, cwd=cwd)
-    if not isinstance(value, int):
-        raise typer.BadParameter(
-            f"{key} must be an integer, got {value!r}. Fix it with 'sq config set {key} <n>'."
-        )
+    try:
+        value = get_typed_config(key, int, cwd=cwd)
+    except ValueError as exc:
+        raise typer.BadParameter(f"{exc}. Fix it with 'sq config set {key} <n>'.") from exc
+    assert isinstance(value, int)
     return value
 
 
@@ -569,13 +572,12 @@ def graduate(
 
     try:
         store = _build_store(resolved_cwd)
-        existing = find_graduation(store, cell.group.judge_config, level_filter)
-        write_graduation_record(store, graduated_config)
+        _record_id, was_update = write_graduation_record(store, graduated_config)
     except MetrologyStoreError as exc:
         rprint(f"[red]Store error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    if existing is not None:
+    if was_update:
         rprint(
             f"[green]Updated existing graduation[/green] for {template}/{model} at {level_filter.value}"
         )
@@ -670,7 +672,12 @@ def _derive_judge_config_and_level(
     try:
         frontmatter = read_review_frontmatter(review_file)
         judge_config = derive_judge_config_id(review_file)
-    except MetrologyTargetError:
+    except MetrologyTargetError as exc:
+        _logger.warning(
+            "Skipping unreadable review file during offer classification: %s (%s)",
+            review_file,
+            exc,
+        )
         return None, None
     raw_type = frontmatter.get("reviewType")
     level = derive_artifact_level(raw_type) if isinstance(raw_type, str) else ArtifactLevel.UNCLASSIFIED

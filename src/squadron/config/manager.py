@@ -91,6 +91,24 @@ def get_config(key: str, cwd: str = ".") -> object:
     return load_config(cwd)[key]
 
 
+def get_typed_config(key: str, type_: type[int] | type[float], cwd: str = ".") -> int | float:
+    """Get a single config value, validated against ``type_``.
+
+    Raises ``ValueError`` on a type mismatch so both core and CLI callers
+    can wrap it in their own domain-appropriate exception — this module
+    sits below ``squadron.metrology`` in the import graph and must not
+    raise metrology-specific error types.
+    """
+    value = get_config(key, cwd=cwd)
+    if type_ is int:
+        if not isinstance(value, int):
+            raise ValueError(f"{key} must be an integer, got {value!r}")
+        return value
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"{key} must be a number, got {value!r}")
+    return float(value)
+
+
 def set_config(
     key: str,
     value: str,

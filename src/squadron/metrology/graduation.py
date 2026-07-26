@@ -47,13 +47,18 @@ def _identity_matches(
     )
 
 
-def write_graduation(store: MetrologyStore, graduated: GraduatedConfig) -> str:
+def write_graduation(store: MetrologyStore, graduated: GraduatedConfig) -> tuple[str, bool]:
     """Persist a graduation, updating an existing exact-identity record in place.
 
     Idempotent: if a ``GraduatedConfig`` for this exact ``(JudgeConfigId,
     artifact_level)`` already exists, its evidence snapshot is updated
     in-place (one record, not two) — INFO logged rather than WARNING, since
     a re-graduation is a normal operator action, not a problem.
+
+    Returns ``(record_id, was_update)`` — the one store scan this function
+    already performs to find a matching record also tells the caller
+    whether this was a create or an update, so callers don't need a
+    separate ``find_graduation`` scan just to report that.
     """
     for record_id, existing in store.list_graduations():
         if _identity_matches(existing, graduated.judge_config, graduated.artifact_level):
@@ -63,8 +68,8 @@ def write_graduation(store: MetrologyStore, graduated: GraduatedConfig) -> str:
                 graduated.artifact_level,
                 record_id,
             )
-            return store.write_graduation(graduated, record_id=record_id)
-    return store.write_graduation(graduated)
+            return store.write_graduation(graduated, record_id=record_id), True
+    return store.write_graduation(graduated), False
 
 
 def find_graduation(

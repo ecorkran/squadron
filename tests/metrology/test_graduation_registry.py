@@ -142,3 +142,19 @@ class TestIdempotentReGraduate:
         all_graduations = list_graduations(store)
         assert len(all_graduations) == 1
         assert all_graduations[0].evidence.n == 50
+
+    def test_write_graduation_reports_create_vs_update(self, tmp_path: Path) -> None:
+        store = MetrologyStore(store_dir=tmp_path)
+        first = _graduated()
+
+        record_id, was_update = write_graduation(store, first)
+        assert was_update is False
+
+        updated = first.model_copy(
+            update={
+                "evidence": EvidenceSnapshot(n=50, match_rate=0.98, floor_applied=5, below_floor=False)
+            }
+        )
+        second_record_id, second_was_update = write_graduation(store, updated)
+        assert second_was_update is True
+        assert second_record_id == record_id

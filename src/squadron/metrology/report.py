@@ -4,8 +4,10 @@ Reads 320's ``MetrologyStore`` and the persisted 300 review files it
 references; never writes either. ``enrich_samples`` is the one join pass
 agreement/dispersion/trend all consume: it derives each sample's
 ``ArtifactLevel``, re-reads and content-verifies the referenced judge
-result, and resolves the artifact's ``source_document`` — one frontmatter
-read serving both the agreement join and the dispersion group key.
+result, and resolves the artifact's ``source_document`` — the initial
+frontmatter read serves both the agreement join and the dispersion group
+key, plus one further re-read to recompute the content hash for
+change detection.
 """
 
 from __future__ import annotations
@@ -16,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from squadron.config.manager import get_config
+from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.errors import MetrologyTargetError
 from squadron.metrology.identity import (
     SOURCE_DOC_KEY,
@@ -180,19 +182,23 @@ def _enrich_one(sample: SampleVerdict, cwd: str) -> EnrichedSample:
 def enrich_samples(samples: list[SampleVerdict], cwd: str) -> list[EnrichedSample]:
     """Join each sample to its judge verdict and classify it for grouping.
 
-    One frontmatter read per sample yields both the judge verdict (agreement)
-    and the resolved ``source_document`` (dispersion key) — no extra I/O.
+    Per sample: one frontmatter read yields both the judge verdict
+    (agreement) and the resolved ``source_document`` (dispersion key),
+    plus a second read inside ``derive_result_ref`` to recompute the
+    content hash from a fresh read — required to detect a file changed
+    since capture, not avoidable I/O.
     """
     return [_enrich_one(sample, cwd) for sample in samples]
 
 
 def _min_evidence_n(cwd: str) -> int:
-    value = get_config("metrology.min_evidence_n", cwd=cwd)
-    if not isinstance(value, int):
+    try:
+        value = get_typed_config("metrology.min_evidence_n", int, cwd=cwd)
+    except ValueError as exc:
         raise MetrologyTargetError(
-            f"metrology.min_evidence_n must be an integer, got {value!r}. "
-            "Fix it with 'sq config set metrology.min_evidence_n <n>'."
-        )
+            f"{exc}. Fix it with 'sq config set metrology.min_evidence_n <n>'."
+        ) from exc
+    assert isinstance(value, int)
     return value
 
 
