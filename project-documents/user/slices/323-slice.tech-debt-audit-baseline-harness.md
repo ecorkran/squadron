@@ -4,7 +4,7 @@ slice: tech-debt-audit-baseline-harness
 project: squadron
 parent: ../architecture/320-slices.judge-calibration-quality-metrology.md
 dependencies: [320, 340]
-interfaces: []
+interfaces: [324]
 dateCreated: 20260726
 dateUpdated: 20260726
 status: not-started
@@ -275,6 +275,34 @@ Modeled on `run_review_with_profile` ([review_client.py:54](src/squadron/review/
 
 The harness does **not** reuse `run_review_with_profile` itself — that function builds review prompts and calls `parse_review_output`. It is a structural template, not a dependency.
 
+### Failure modes of the agent-execution path
+
+The precedent supplies **no** failure handling to inherit, and this must not be assumed otherwise. [review_client.py:134-156](src/squadron/review/review_client.py#L134-L156) wraps the agent stream in a bare `async for` with only `finally: await agent.shutdown()`. There is **no timeout and no exception handling around the agent call**; every `try/except` in that module guards file and git I/O, not the stream. An exception propagates to the caller; a hang hangs indefinitely.
+
+That is acceptable for an interactive, human-watched review. It is **not** acceptable here: the audit is unattended, runs 12+ times per variance campaign, targets an arbitrary external `cwd`, and may fan out into Task subagents ([:97](commands/analysis/tech-debt-audit.md#L97)) whose failures surface as a stalled or truncated parent stream. So this slice specifies handling rather than deferring to a precedent that has none.
+
+The governing rule is Decision 9 — **one run is one persisted unit** — which makes the policy simple and uniform: *a run either persists a complete `AuditRun` or persists nothing and is skipped.* There is no partial-run record. A skipped run reduces the series' `n_runs`; it never corrupts the floor.
+
+| Failure mode | Detection | Response | Observable signal |
+|---|---|---|---|
+| **Hang / no progress** | `metrology.audit_timeout_s` wall-clock cap on the whole run (default `3600`) | Abort the run, `agent.shutdown()` in `finally`, persist nothing | `WARNING` naming project, run index, elapsed |
+| **Timeout mid-generation** | same cap | Same — a truncated audit is discarded, never parsed | `WARNING` with bytes received |
+| **Peer disconnect / API error mid-stream** | exception from `handle_message` | Catch, shut down, persist nothing, continue the series | `WARNING` with exception type and message |
+| **Findings block absent or malformed** | `parse_audit_findings` boundary (Decision 2) | Persist nothing — a run with no parseable findings is not a zero-finding run | `WARNING` distinguishing *absent* from *malformed* |
+| **Subagent tool permission denied** | surfaces as reduced/absent findings, not an exception | No special handling; the run persists if it parsed | `INFO` on tool-narration filtering only |
+| **Project cwd unreadable / not a git repo** | pre-flight, before any token spend | Fail that project fast; other projects continue | `ERROR` naming the path |
+| **Identity underivable** | `MetrologyIdentityError` from `derive_project_id` | Fail that project fast, pre-flight | `ERROR` with the `sq config set` remediation |
+| **Dirty worktree (variance only)** | pre-flight `git status --porcelain` | Refuse the series (Decision 6) | `ERROR`; refusal, not a warning |
+
+Four properties follow, and each is separately assertable:
+
+- **Pre-flight checks precede token spend.** cwd validity, git-repo-ness, identity derivation, and worktree cleanliness are all checked before the agent is created. A campaign misconfigured across four projects fails in seconds, not after hours of audits.
+- **A failed run never silently becomes a data point.** Because nothing is persisted, a hung or truncated run cannot masquerade as a low-finding-count sample — which would bias the floor downward, the same direction Fact 2 warns about.
+- **Series degrade rather than abort.** One failed run out of three leaves two persisted; `reduce_noise_floor` records the actual `n_runs` it reduced. A series that falls below 2 usable runs is **refused**, not reduced, since a spread needs at least two points.
+- **Every failure is observable at `WARNING` or above**, per the project's failure-mode-enumeration rule, and at least one test asserts each of the top three modes emits its signal. `_logger` follows the module convention established in `store.py`.
+
+One new config key follows: `metrology.audit_timeout_s` (`int`, default `3600`). One hour is deliberately generous — a fanned-out audit of a 64k-LOC repo is slow — and it exists to bound pathology, not to pace normal runs.
+
 ## Data Flow
 
 ```
@@ -325,6 +353,7 @@ Registered in `config/keys.py` (a key absent there raises `KeyError` on read):
 |---|---|---|---|
 | `metrology.audit_variance_runs` | `int` | `3` | Runs per project in a variance series |
 | `metrology.audit_profile` | `str` | `None` | Provider profile for audit runs; unset → the review default |
+| `metrology.audit_timeout_s` | `int` | `3600` | Wall-clock cap per audit run; bounds pathology, does not pace normal runs |
 
 Note the existing constraint: `_coerce_value` ([manager.py:54-61](src/squadron/config/manager.py#L54-L61)) handles only `int` and `str`, so both new keys are settable via `sq config set`. No float keys are added.
 
@@ -342,6 +371,9 @@ Restating the slice-plan criteria as verifiable conditions:
 - [ ] The contract edits are present in the canonical fork (`github:ecorkran/tech-debt-audit`), not only in squadron's vendored copy — otherwise other consumers run a different instrument whose audits silently never pool.
 - [ ] Repeated runs in a variance series are **independent** — asserted by a test that the independent-run preamble is present and the repeat-run clause does not apply.
 - [ ] A variance series that spans differing commit SHAs or prompt hashes is **refused**, not averaged.
+- [ ] Each of hang/timeout, mid-stream disconnect, and absent-or-malformed findings block persists **nothing** and emits a `WARNING` — asserted by a test per mode, so a failed run can never enter the floor as a low-count sample.
+- [ ] Pre-flight checks (cwd, git repo, identity, worktree cleanliness) run **before** the agent is created — asserted by a test that a misconfigured project spends no tokens.
+- [ ] A series reduced with fewer runs than requested records its actual `n_runs`; a series with fewer than 2 usable runs is refused.
 - [ ] The full existing suite passes; no judging-path or dispatch-path behavior changes.
 
 ## Verification Walkthrough
