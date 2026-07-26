@@ -9,7 +9,7 @@ dependencies:
 projectState: "Slice 323 design complete and slice-design-reviewed (323-review.slice.*, verdict CONCERNS, all 3 actionable findings fixed: failure-mode enumeration added, interfaces corrected to [324], 340 boundary recorded in the parent architecture). This is the first slice of the AUDIT oracle — it shares 320's spine (persistence) but not the human oracle's report path or grain. Decisions that must not be re-litigated: (1) the tech-debt-audit fork is edited, not wrapped, and the FORK is canonical with squadron vendoring it; (2) findings ship as a fenced YAML block emitted by the skill, not a markdown table parser; (3) audit severity stays Critical/High/Medium/Low and is never mapped onto review PASS/NOTE/CONCERN/FAIL; (4) the noise floor is per-project at a pinned commit, never one global number, and a project without one is marked 'no floor measured' rather than borrowing another's; (5) one run persists a complete AuditRun or nothing at all — there is no partial-run record. No intervention ships here: no pre-emption prompt, no delta report, no dispatch write (that is 324)."
 dateCreated: 20260726
 dateUpdated: 20260726
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -31,14 +31,14 @@ status: not_started
 
 ### T1: Add the machine-readable findings block to the canonical fork
 
-- [ ] **Edit the canonical fork `github:ecorkran/tech-debt-audit`, file `tech-debt-audit.md`, Phase 3 Deliverable section**
-  - [ ] Add a new bullet under **File Contents** instructing the model to emit, at the **end** of the audit file, a fenced findings block delimited by `<!-- squadron:findings:begin v1 -->` and `<!-- squadron:findings:end -->`
-  - [ ] Inside the delimiters, a fenced ```yaml block with a `findings:` list; each entry has `id`, `category`, `location`, `severity`, `effort`, `summary`
-  - [ ] State explicitly that this block is **in addition to** the human findings table, not a replacement — same data, serialized twice (the review system's existing precedent)
-  - [ ] State that `recommendation` is deliberately **not** in the block (it is advice for humans; nothing downstream consumes it) and stays in the table only
-  - [ ] Include one complete worked example entry so the format is unambiguous
-- [ ] Do **not** touch the 9 audit dimensions, the citation rules, or the required "looks bad but is actually fine" section — the instrument keeps measuring what it measures
-- [ ] Success: the skill file contains both delimiters exactly once each, and the example entry's keys match the six field names above
+- [x] **Edit the canonical fork `github:ecorkran/tech-debt-audit`, file `tech-debt-audit.md`, Phase 3 Deliverable section**
+  - [x] Add a new bullet under **File Contents** instructing the model to emit, at the **end** of the audit file, a fenced findings block delimited by `<!-- squadron:findings:begin v1 -->` and `<!-- squadron:findings:end -->`
+  - [x] Inside the delimiters, a fenced ```yaml block with a `findings:` list; each entry has `id`, `category`, `location`, `severity`, `effort`, `summary`
+  - [x] State explicitly that this block is **in addition to** the human findings table, not a replacement — same data, serialized twice (the review system's existing precedent)
+  - [x] State that `recommendation` is deliberately **not** in the block (it is advice for humans; nothing downstream consumes it) and stays in the table only
+  - [x] Include one complete worked example entry so the format is unambiguous
+- [x] Do **not** touch the 9 audit dimensions, the citation rules, or the required "looks bad but is actually fine" section — the instrument keeps measuring what it measures
+- [x] Success: the skill file contains both delimiters exactly once each, and the example entry's keys match the six field names above
 
 **Commit (fork repo):** `feat: add machine-readable findings block for squadron metrology`
 
@@ -46,16 +46,16 @@ status: not_started
 
 ### T2: Add the closed category vocabulary and independent-run mode to the fork
 
-- [ ] **Edit the same fork file, Phase 2 (dimensions) and Phase 3 (deliverable)**
-  - [ ] Enumerate the closed category vocabulary the `category` field must draw from — exactly these ten, kebab-case: `architectural-decay`, `consistency-rot`, `type-contract-debt`, `test-debt`, `dependency-config-debt`, `performance-resource`, `error-handling-observability`, `security-hygiene`, `documentation-drift`, `other`
-  - [ ] Map each of the nine existing prose dimension headings to its vocabulary value so the model does not have to guess the correspondence
-  - [ ] State that `other` is for genuinely unclassifiable findings only, and that using it is not a failure — but that inventing a category outside the list is
-- [ ] **Add independent-run mode**, scoping the existing repeat-run clause ([:103](../../../commands/analysis/tech-debt-audit.md#L103))
-  - [ ] Reword the repeat-run section so it applies **unless** the invocation requests an independent run
-  - [ ] Define the marker the harness passes (a preamble line, e.g. `INDEPENDENT RUN: do not read or update any existing audit file`)
-  - [ ] State why: repeated audits are used to measure the audit's own run-to-run variance, and reading a prior audit would make runs correlated rather than independent
-  - [ ] Interactive users are unaffected — absent the marker, living-document behavior is unchanged
-- [ ] Success: the ten values appear as an explicit list; the repeat-run clause is conditional; the independent-run marker is named exactly once and matches what T13 will send
+- [x] **Edit the same fork file, Phase 2 (dimensions) and Phase 3 (deliverable)**
+  - [x] Enumerate the closed category vocabulary the `category` field must draw from — exactly these ten, kebab-case: `architectural-decay`, `consistency-rot`, `type-contract-debt`, `test-debt`, `dependency-config-debt`, `performance-resource`, `error-handling-observability`, `security-hygiene`, `documentation-drift`, `other`
+  - [x] Map each of the nine existing prose dimension headings to its vocabulary value so the model does not have to guess the correspondence
+  - [x] State that `other` is for genuinely unclassifiable findings only, and that using it is not a failure — but that inventing a category outside the list is
+- [x] **Add independent-run mode**, scoping the existing repeat-run clause ([:103](../../../commands/analysis/tech-debt-audit.md#L103))
+  - [x] Reword the repeat-run section so it applies **unless** the invocation requests an independent run
+  - [x] Define the marker the harness passes (a preamble line, e.g. `INDEPENDENT RUN: do not read or update any existing audit file`)
+  - [x] State why: repeated audits are used to measure the audit's own run-to-run variance, and reading a prior audit would make runs correlated rather than independent
+  - [x] Interactive users are unaffected — absent the marker, living-document behavior is unchanged
+- [x] Success: the ten values appear as an explicit list; the repeat-run clause is conditional; the independent-run marker is named exactly once and matches what T13 will send
 
 **Commit (fork repo):** `feat: closed category vocabulary and independent-run mode`
 
@@ -63,12 +63,12 @@ status: not_started
 
 ### T3: Vendor the updated skill into squadron
 
-- [ ] **Push T1 and T2 to the fork remote first.** The design's success criterion is that the edits are present in `github:ecorkran/tech-debt-audit` — the *remote*, not a local commit. Vendoring from an unpushed local fork would satisfy squadron while leaving every other consumer of the fork on the pre-contract instrument, which is the exact silent-divergence failure Decision 1a exists to prevent
-- [ ] **Copy the updated skill file from the fork to `commands/analysis/tech-debt-audit.md`**
-  - [ ] Byte-for-byte, so `audit_prompt_hash` is meaningful — do not hand-edit the vendored copy
-  - [ ] Preserve the existing attribution comment at the top of the file
-- [ ] Verify the vendored copy is what the wheel ships (`pyproject.toml` force-includes project-root `commands/` as `squadron/commands/`) and what `_resolve_bundled("analysis")` finds in an editable install
-- [ ] Success: `diff` between the fork file and the vendored file is empty; `python -c "from squadron.skills.resolver import _resolve_bundled; print((_resolve_bundled('analysis') / 'tech-debt-audit.md').read_text().count('squadron:findings:begin'))"` prints `1`
+- [x] **Push T1 and T2 to the fork remote first.** The design's success criterion is that the edits are present in `github:ecorkran/tech-debt-audit` — the *remote*, not a local commit. Vendoring from an unpushed local fork would satisfy squadron while leaving every other consumer of the fork on the pre-contract instrument, which is the exact silent-divergence failure Decision 1a exists to prevent
+- [x] **Copy the updated skill file from the fork to `commands/analysis/tech-debt-audit.md`**
+  - [x] Byte-for-byte, so `audit_prompt_hash` is meaningful — do not hand-edit the vendored copy
+  - [x] Preserve the existing attribution comment at the top of the file
+- [x] Verify the vendored copy is what the wheel ships (`pyproject.toml` force-includes project-root `commands/` as `squadron/commands/`) and what `_resolve_bundled("analysis")` finds in an editable install
+- [x] Success: `diff` between the fork file and the vendored file is empty; `python -c "from squadron.skills.resolver import _resolve_bundled; print((_resolve_bundled('analysis') / 'tech-debt-audit.md').read_text().count('squadron:findings:begin'))"` prints `1`
 
 **Commit:** `chore(skills): vendor updated tech-debt-audit skill from canonical fork`
 
@@ -76,13 +76,13 @@ status: not_started
 
 ### T4: Test the fork-sync guard
 
-- [ ] **Add `tests/metrology/test_audit_skill_sync.py`**
-  - [ ] **Category vocabulary matches:** parse the ten kebab-case values out of the vendored `commands/analysis/tech-debt-audit.md` and assert the set equals `{c.value for c in AuditCategory}` — this is the CI guard against fork/squadron drift, and it must fail loudly if either side changes alone
-  - [ ] **Delimiters present:** both `squadron:findings:begin` and `squadron:findings:end` appear exactly once
-  - [ ] **Independent-run marker present:** the exact marker string T13 sends appears in the skill file
-  - [ ] **Repeat-run clause is conditional:** the repeat-run section references the independent-run marker as an explicit exception — asserts that T2's rewording actually landed, not merely that the marker exists somewhere in the file. This is the design's success criterion "the repeat-run clause does not apply," which the marker-presence check alone does not cover
-  - [ ] Locate the skill via `_resolve_bundled("analysis")`, not a hard-coded relative path, so the test exercises the same lookup the harness uses
-- [ ] Success: `uv run pytest tests/metrology/test_audit_skill_sync.py` passes; deleting one vocabulary value from the skill file makes it fail
+- [x] **Add `tests/metrology/test_audit_skill_sync.py`**
+  - [x] **Category vocabulary matches:** parse the ten kebab-case values out of the vendored `commands/analysis/tech-debt-audit.md` and assert the set equals `{c.value for c in AuditCategory}` — this is the CI guard against fork/squadron drift, and it must fail loudly if either side changes alone
+  - [x] **Delimiters present:** both `squadron:findings:begin` and `squadron:findings:end` appear exactly once
+  - [x] **Independent-run marker present:** the exact marker string T13 sends appears in the skill file
+  - [x] **Repeat-run clause is conditional:** the repeat-run section references the independent-run marker as an explicit exception — asserts that T2's rewording actually landed, not merely that the marker exists somewhere in the file. This is the design's success criterion "the repeat-run clause does not apply," which the marker-presence check alone does not cover
+  - [x] Locate the skill via `_resolve_bundled("analysis")`, not a hard-coded relative path, so the test exercises the same lookup the harness uses
+- [x] Success: `uv run pytest tests/metrology/test_audit_skill_sync.py` passes; deleting one vocabulary value from the skill file makes it fail
 
 **Commit:** `test(metrology): guard tech-debt-audit skill/vocabulary sync`
 
@@ -90,17 +90,17 @@ status: not_started
 
 ### T5: Audit models
 
-- [ ] **Add `src/squadron/metrology/audit_models.py`** (mirrors 321's `report_models.py` / 322's `calibration_models.py` pattern)
-  - [ ] `AuditCategory(StrEnum)` — the ten values from T2, kebab-case, `OTHER = "other"` last
-  - [ ] `AuditSeverity(StrEnum)` — `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`. **Do not** reference or map to `review.models.Severity`; the vocabularies are disjoint by design
-  - [ ] `AuditEffort(StrEnum)` — `S`, `M`, `L`
-  - [ ] `AuditFinding` — `finding_id: str`, `category: AuditCategory`, `raw_category: str | None`, `severity: AuditSeverity`, `effort: AuditEffort | None`, `location: str`, `summary: str`
-  - [ ] `FloorStat` — `min: int`, `max: int`, `mean: float`, `stddev: float`
-  - [ ] Re-export `AuditRun` and `AuditNoiseFloor` from `models.py` (they are envelope payloads — see T6)
-- [ ] **Add `AuditRun` and `AuditNoiseFloor` to `src/squadron/metrology/models.py`**, alongside `SampleVerdict` / `GraduatedConfig` — per the 322 layering correction, envelope payloads live in `models.py` to avoid the circular import
-  - [ ] `AuditRun` — `run_id: str`, `project_id: ProjectId`, `commit_sha: str`, `audit_prompt_hash: str`, `model: str`, `measured_at: datetime`, `findings: list[AuditFinding]`, `unnormalized_count: int`
-  - [ ] `AuditNoiseFloor` — `project_id: ProjectId`, `commit_sha: str`, `audit_prompt_hash: str`, `n_runs: int`, `total: FloorStat`, `per_category: dict[AuditCategory, FloorStat]`, `measured_at: datetime`
-- [ ] Success: models import cleanly; `AuditRun(...).model_dump_json()` round-trips through `model_validate_json`
+- [x] **Add `src/squadron/metrology/audit_models.py`** (mirrors 321's `report_models.py` / 322's `calibration_models.py` pattern)
+  - [x] `AuditCategory(StrEnum)` — the ten values from T2, kebab-case, `OTHER = "other"` last
+  - [x] `AuditSeverity(StrEnum)` — `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`. **Do not** reference or map to `review.models.Severity`; the vocabularies are disjoint by design
+  - [x] `AuditEffort(StrEnum)` — `S`, `M`, `L`
+  - [x] `AuditFinding` — `finding_id: str`, `category: AuditCategory`, `raw_category: str | None`, `severity: AuditSeverity`, `effort: AuditEffort | None`, `location: str`, `summary: str`
+  - [x] `FloorStat` — `min: int`, `max: int`, `mean: float`, `stddev: float`
+  - [x] Re-export `AuditRun` and `AuditNoiseFloor` from `models.py` (they are envelope payloads — see T6; note: due to the 322 layering correction, these types are defined in models.py directly to avoid circular imports, with full re-export from audit_models.py for the single-import-site intent)
+- [x] **Add `AuditRun` and `AuditNoiseFloor` to `src/squadron/metrology/models.py`**, alongside `SampleVerdict` / `GraduatedConfig` — per the 322 layering correction, envelope payloads live in `models.py` to avoid the circular import
+  - [x] `AuditRun` — `run_id: str`, `project_id: ProjectId`, `commit_sha: str`, `audit_prompt_hash: str`, `model: str`, `measured_at: datetime`, `findings: list[AuditFinding]`, `unnormalized_count: int`
+  - [x] `AuditNoiseFloor` — `project_id: ProjectId`, `commit_sha: str`, `audit_prompt_hash: str`, `n_runs: int`, `total: FloorStat`, `per_category: dict[AuditCategory, FloorStat]`, `measured_at: datetime`
+- [x] Success: models import cleanly; `AuditRun(...).model_dump_json()` round-trips through `model_validate_json`
 
 **Commit:** `feat(metrology): add audit finding and noise-floor models`
 
@@ -108,11 +108,11 @@ status: not_started
 
 ### T6: Extend the store envelope with the two audit record types
 
-- [ ] **Edit `src/squadron/metrology/models.py`, class `MetrologyRecord`**
-  - [ ] Add `RECORD_TYPE_AUDIT_NOISE_FLOOR = "audit_noise_floor"` next to the existing constants. `RECORD_TYPE_AUDIT_FINDING` **already exists** ([models.py:29](../../../src/squadron/metrology/models.py#L29)) — reuse it, do not redefine
-  - [ ] Add two optional payload fields mirroring the existing optional-sibling pattern: `audit_run: AuditRun | None = None`, `audit_noise_floor: AuditNoiseFloor | None = None`
-  - [ ] Do **not** change `schema_version` — the envelope shape is backward compatible and [test_models.py:44-54](../../../tests/metrology/test_models.py#L44-L54) already asserts an `audit_finding` envelope round-trips
-- [ ] Success: an `audit_finding` envelope with `sample=None` and a populated `audit_run` validates; the existing `test_models.py` suite still passes unchanged
+- [x] **Edit `src/squadron/metrology/models.py`, class `MetrologyRecord`**
+  - [x] Add `RECORD_TYPE_AUDIT_NOISE_FLOOR = "audit_noise_floor"` next to the existing constants. `RECORD_TYPE_AUDIT_FINDING` **already exists** ([models.py:29](../../../src/squadron/metrology/models.py#L29)) — reuse it, do not redefine
+  - [x] Add two optional payload fields mirroring the existing optional-sibling pattern: `audit_run: AuditRun | None = None`, `audit_noise_floor: AuditNoiseFloor | None = None`
+  - [x] Do **not** change `schema_version` — the envelope shape is backward compatible and [test_models.py:44-54](../../../tests/metrology/test_models.py#L44-L54) already asserts an `audit_finding` envelope round-trips
+- [x] Success: an `audit_finding` envelope with `sample=None` and a populated `audit_run` validates; the existing `test_models.py` suite still passes unchanged
 
 **Commit:** `feat(metrology): extend record envelope with audit payload fields`
 
