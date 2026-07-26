@@ -6,8 +6,8 @@ parent: ../architecture/320-slices.judge-calibration-quality-metrology.md
 dependencies: [320, 321]
 interfaces: []
 dateCreated: 20260725
-dateUpdated: 20260725
-status: not-started
+dateUpdated: 20260726
+status: complete
 ---
 
 # Slice Design: Calibration-to-Threshold Feedback
@@ -289,45 +289,97 @@ Nothing downstream in this initiative consumes 322 — hence `interfaces: []`. 3
 
 ### Verification Walkthrough
 
-Demo script proving delivery. To be executed end-to-end and its actual output pasted back at Phase 6 completion (matching 321's practice). Commands marked *(new)* ship in this slice.
+Executed end-to-end 20260726 in a scratch repo (`/tmp/sq-322-walkthrough`, isolated via a project-level `metrology.store_dir` override so nothing touched the real user config). Actual commands and output below. Commands marked *(new)* ship in this slice.
 
-1. **Accumulate agreement evidence.** *(existing, 320/321)* In a scratch repo, blind-capture human verdicts against judge reviews at one artifact level until n is meaningful, then confirm the evidence exists:
+**Setup caveats found during execution** (neither is a slice defect; both are pre-existing conventions this walkthrough had to work around):
+- `.squadron.toml` keys must be written as a single quoted dotted string (`"metrology.store_dir" = "..."`), not a nested TOML table (`metrology.store_dir = "..."` parses as `{metrology: {store_dir: ...}}` and the flat-key config reader won't see it).
+- The metrology store defaults to `~/.config/squadron/metrology/` (user-global, not repo-scoped) — a walkthrough or manual test **must** set `metrology.store_dir` in the scratch repo's `.squadron.toml`, or captures leak into the operator's real store.
+- Mid-walkthrough this surfaced a real gap, since fixed: `sq metrology`'s CLI commands never called `load_all_templates()` (unlike `sq review`'s), so in a real process every record resolved as `unversioned` and `GRADUATE` was unreachable. Fixed in `cli/commands/metrology.py` — see DEVLOG.
+
+1. **Accumulate agreement evidence.** *(existing, 320/321)*
    ```
-   sq metrology report agreement --cwd <repo>
+   $ sq metrology sample 500 --type judge.slice-vs-arch --verdict PASS --cwd <repo>
+   Recorded sample-20260726-80e1aec9
+   $ sq metrology report agreement --cwd <repo>
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  match_rate=1.00 (n=1) (low-n)
+   0 excluded (0 stale-judge-result, 0 unversioned)
    ```
 
-2. **Recommend below the floor — the refusal.** *(new)* With n under `metrology.min_evidence_n`:
+2. **Recommend below the floor — the refusal.** *(new)*
    ```
-   sq metrology recommend --cwd <repo>
+   $ sq metrology recommend --cwd <repo>
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  insufficient_evidence  match_rate=1.00 (n=1, floor=5)
+     current: pass_floor=82.0 concerns_floor=60.0
+     This recommendation holds for 'judge.slice-vs-arch' paired with model 'minimax/minimax-m2.7'. ...
+   0 excluded (0 stale-judge-result, 0 unversioned)
    ```
-   Expect: the cell reports `INSUFFICIENT_EVIDENCE` **stating both the observed n and the floor applied** — no graduation offered, and the shortfall quantified rather than blank.
+   Confirmed: `INSUFFICIENT_EVIDENCE` stating both n=1 and floor=5, current thresholds shown, model-dimension note present.
 
-3. **Recommend above the floor — the graduation.** *(new)* Capture until n crosses the floor with high agreement, re-run `recommend`. Expect: `GRADUATE`, carrying match rate with n, the floor applied, the **currently configured** thresholds read from the template, and the **model-dimension note** naming the model the recommendation is bound to.
-
-4. **Confirm nothing was mutated.** *(new)* SHA-1 the template YAML, config, and store before and after every `recommend` run; expect byte-identical. This is the architecture's "no automatic threshold mutation" Non-Goal, verified rather than asserted.
-
-5. **Confirm the evidence survives acting on it.** *(new — the self-defeating-loop regression)* Edit the template's `judge.pass_floor` (as the operator would when acting on step 3), then re-run:
+3. **Recommend above the floor — the graduation.** *(new)* Captured 4 more matching samples (n=5):
    ```
-   sq metrology report agreement --cwd <repo>
+   $ sq metrology recommend --cwd <repo>
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  graduate  match_rate=1.00 (n=5, floor=5)
+     current: pass_floor=82.0 concerns_floor=60.0
+     This recommendation holds for 'judge.slice-vs-arch' paired with model 'minimax/minimax-m2.7'. ...
+   0 excluded (0 stale-judge-result, 0 unversioned)
    ```
-   Expect: **the same cell with the same n** — the threshold edit did not re-key the config. Then edit the template's `system_prompt` and re-run: expect the cell to **re-key** (new `JudgeConfigId`, evidence separated). Both directions confirm the hash covers the instrument, not its readout.
+   Confirmed: `GRADUATE`, n/floor/match_rate, current thresholds, model-dimension note.
 
-6. **Graduate and confirm residual sampling.** *(new)*
+4. **Confirm nothing was mutated.** *(new)* SHA-1 of every review/slice `.md` file, every store `.json` record, and `.squadron.toml`, before and after `recommend`:
    ```
-   sq metrology graduate --template judge-tasks-vs-slice --model <M> --level tasks_vs_slice --cwd <repo>
-   sq metrology offers --cwd <repo>
+   $ diff before.sha1 after.sha1 && echo "BYTE-IDENTICAL: PASS"
+   BYTE-IDENTICAL: PASS
    ```
-   Expect: graduation recorded (one store record), and `offers` lists residual spot-check targets for that now-graduated config — proving graduation did **not** end sampling. Then drain one with `sq metrology sample <target>` and confirm via `report agreement` that n **increased** for a graduated judge.
 
-7. **Confirm graduation is version-scoped.** *(new)* With the graduation from step 6 in place, edit the template's `system_prompt` (a real change to the instrument), produce a new judge review under the edited template, then:
+5. **Confirm the evidence survives acting on it.** *(new — the self-defeating-loop regression)* Edited `judge.pass_floor: 82 -> 90` via a user-level template override (`~/.config/squadron/templates/`, which shadows the built-in by name):
    ```
-   sq metrology offers --cwd <repo>
+   $ sq metrology report agreement --cwd <repo>
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  match_rate=1.00 (n=5)
    ```
-   Expect: **no offers drawn against the new config** under the old graduation, and an explanatory line reporting that the graduation has lapsed because the judge configuration changed. Contrast with step 5's threshold edit, which left the graduation intact — together these show graduation surviving its own consequence while expiring on genuine drift.
+   Same cell, same n=5 (no longer `low-n` since n now equals the floor with the same evidence) — the threshold edit did **not** re-key. Then edited `system_prompt` and produced a new judge review under it:
+   ```
+   $ sq metrology report agreement --cwd <repo>
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  match_rate=1.00 (n=1) (low-n)
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  match_rate=1.00 (n=5)
+   ```
+   Two distinct cells: the rewritten-prompt instrument at n=1, the original evidence untouched at n=5 — the prompt edit **did** re-key, evidence separated. Both directions confirmed.
 
-8. **Confirm the graduate guard.** *(new)* Attempt `sq metrology graduate` for a pairing whose evidence is below the floor. Expect: non-zero exit naming the observed n and the floor, and **no store record written** — the floor cannot be bypassed by recording a graduation by hand.
+6. **Graduate and confirm residual sampling.** *(new)* Reverted the prompt to the original (current instrument = the n=5 evidence):
+   ```
+   $ sq metrology graduate --template judge.slice-vs-arch --model minimax/minimax-m2.7 --level slice_design_vs_arch --cwd <repo>
+   Graduated judge.slice-vs-arch/minimax/minimax-m2.7 at slice_design_vs_arch
+   $ sq metrology offers --cwd <repo>   # with metrology.residual_sample_rate=1.0 for a deterministic single-item offer
+   judge.slice-vs-arch/minimax/minimax-m2.7 (slice_design_vs_arch): 1 offer(s) due
+     offer: project-documents/user/reviews/505-review.judge.slice-vs-arch.example.md
+   $ sq metrology sample 505 --type judge.slice-vs-arch --verdict PASS --cwd <repo>
+   Recorded sample-20260726-44e5b463
+   $ sq metrology report agreement --cwd <repo>
+   slice_design_vs_arch  judge.slice-vs-arch/minimax/minimax-m2.7  match_rate=1.00 (n=6)
+   ```
+   Graduation recorded (one store record); `offers` listed the residual target; draining it raised n from 5 to 6 for the graduated judge — graduation did **not** end sampling. **Caveat:** the default `metrology.residual_sample_rate` (0.1) rounds a single unsampled match down to zero offers (Python's `round(1 * 0.1) == 0`) — this is expected `rate`-fraction behavior, not a bug, but means a small unsampled pool needs either a higher rate or more accumulated matches before an offer reliably appears.
 
-9. **Confirm read-only invariance and no regression.** *(existing)* Run the full suite and confirm 300/320/321 behavior is unchanged.
+7. **Confirm graduation is version-scoped.** *(new)* Edited `system_prompt` again post-graduation (a second, distinct edit), produced a new judge review under it:
+   ```
+   $ sq metrology offers --cwd <repo>
+   judge.slice-vs-arch/minimax/minimax-m2.7 (slice_design_vs_arch): graduation has lapsed — the judge configuration has changed since this graduation was recorded
+   ```
+   No offers drawn against the new config under the old graduation; the lapse is reported explicitly, never silent. Contrast with step 5's threshold edit, which left the graduation intact.
+
+8. **Confirm the graduate guard.** *(new)* With the rewritten-prompt instrument's evidence still below the floor (n=1):
+   ```
+   $ sq metrology graduate --template judge.slice-vs-arch --model minimax/minimax-m2.7 --level slice_design_vs_arch --cwd <repo>
+   Error: refusing to graduate — direction is insufficient_evidence, not GRADUATE (n=1, floor=5, match_rate=1.00). Nothing written.
+   ```
+   Non-zero exit, message names n=1 and floor=5, store record count unchanged before/after the refused call.
+
+9. **Confirm read-only invariance and no regression.** *(existing)*
+   ```
+   $ uv run pytest        # 2392 passed, 2 skipped (pre-existing, unrelated)
+   $ uv run pyright       # 0 errors, 0 warnings
+   $ uv run ruff check .  # All checks passed
+   ```
+
+**Additional finding fixed during this walkthrough (not in the original 9 steps):** `graduate`'s cell selection filtered only on `(template_name, model, level)` and took the first match. When evidence spans a prompt edit — the exact scenario steps 5-7 exercise — two cells can share that triple while differing in `template_content_hash`; without disambiguation, `graduate` could silently act on stale evidence instead of the currently-configured instrument. Fixed by filtering to the cell whose hash matches the template's currently-resolvable content (new `read_current_template_content_hash` in `calibration.py`); verified directly in step 6 above (graduated the n=5/current cell, not the n=1/stale cell that existed at the same point) and covered by a dedicated regression test (`test_calibration_cli.py::TestGraduateCellDisambiguation`).
 
 ## Risk Assessment
 

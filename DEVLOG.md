@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260725
+dateUpdated: 20260726
 
 ---
 
@@ -11,6 +11,100 @@ dateUpdated: 20260725
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260726 (1)
+
+### Slice 322 implemented: calibration-to-threshold feedback (Phase 6) — slice complete, initiative 320 human-oracle chain closed
+
+Implemented all 18 tasks (T1-T18) of `322-tasks.calibration-to-threshold-feedback.md`
+directly on `main` (no slice branch existed yet at session start; work proceeded
+under the same working tree conventions as the prior planning phases). Full
+suite green throughout, strict pyright and ruff clean on every commit. This
+is the terminal slice of the human-oracle chain 320 -> 321 -> 322; the 320
+slice-plan's `(322)` entry is now `[x]`.
+
+**What shipped**, mirroring the LLD's component structure:
+- `identity.py` — `_template_content_hash` (renamed public
+  `template_content_hash` during T18, see below) narrowed to exclude the
+  `judge:` threshold block, fixing the self-defeating loop: acting on a
+  `GRADUATE` recommendation no longer re-keys the config and resets
+  accumulated evidence to zero. One-time, deliberate historical re-key.
+- `models.py` — `EvidenceSnapshot` and `GraduatedConfig` (version-scoped:
+  carries the full `JudgeConfigId` including `template_content_hash`, not
+  just `template_name`+`model`), plus `RECORD_TYPE_GRADUATED_CONFIG` and a
+  `MetrologyRecord.graduated_config` field behind the existing envelope, no
+  store migration. Landed here rather than `calibration_models.py` (T3's
+  original location) to avoid a circular import — confirmed with PM mid-T11.
+- `calibration_models.py` — `RecommendationDirection`, `ThresholdTarget`,
+  `ThresholdRecommendation`, `RecommendationReport`, `OfferTarget`.
+- `calibration.py` — surface-agnostic core: `classify_direction` (the
+  asymmetric bands — loosening floor-gated, tightening not, precedence
+  fixed per the tasks-review F001 finding), `read_current_thresholds`
+  (degrades a malformed `judge:` block to `None`+WARNING rather than
+  letting `resolve_thresholds`' bare `float()` cast raise — a deviation
+  from the task's original wording, confirmed with PM during T7),
+  `recommend_thresholds` (the full per-cell report, no-mutation verified by
+  test), and `read_current_template_content_hash` (added during T18, see
+  below).
+- `graduation.py` — `write_graduation`/`find_graduation`/`list_graduations`
+  (exact-identity matching, idempotent re-graduate updates in place) and
+  `select_residual_offers` (the non-empty-offers architecture guarantee;
+  lapsed-graduation detection deferred to the CLI layer per the task's own
+  stated allowance).
+- `discovery.py` — `discover_judge_results`, a new whole-project judge-result
+  enumeration surface that 320 never built (confirmed gap, not a runtime
+  choice — resolved at task-breakdown time per tasks-review F003).
+  `capture.py`'s `_REVIEWS_SUBDIR` promoted to public `REVIEWS_SUBDIR` so
+  both modules share one definition.
+- `config/keys.py` — `metrology.graduate_match_rate` (0.9),
+  `metrology.tighten_match_rate` (0.6), `metrology.residual_sample_rate`
+  (0.1); `metrology.min_evidence_n` reused from 321, not redefined.
+- `cli/commands/metrology.py` — `sq metrology recommend`/`graduate`/`offers`,
+  thin Typer shells matching the `sample`/`list`/`report` conventions.
+
+**Two correctness gaps found and fixed during T18's verification walkthrough**
+(neither caught by unit/CLI tests, which register templates in-process and
+never exercise the real load path):
+1. **Templates never loaded in the metrology CLI.** `sq review`'s commands
+   call `load_all_templates()`; `sq metrology`'s never did. In a real
+   separate-process invocation this meant `get_template` always returned
+   `None`, every record resolved `unversioned`, and `GRADUATE` was
+   permanently unreachable — the walkthrough's very first `report agreement`
+   run showed 1 excluded/unversioned sample where 0 was expected, which is
+   what surfaced it. Fixed by calling `load_all_templates()` at the top of
+   `sample`/`recommend`/`graduate`/`offers`. Exposed `identity`'s hash
+   function publicly (`template_content_hash`) since `calibration.py` now
+   needed cross-module access. Added a `tests/metrology/conftest.py`
+   autouse fixture clearing the template registry around every test, since
+   the fix meant `load_all_templates()` now genuinely fires from
+   CLI-invoking tests and would otherwise leak the real built-in
+   `judge.slice-vs-arch` template across test files that use that same name
+   as a hand-built fixture.
+2. **`graduate` cell selection was ambiguous across a prompt edit.** It
+   filtered only on `(template_name, model, level)` and took the first
+   match; when evidence spans a prompt edit (walkthrough steps 5-7's exact
+   scenario), two cells can share that triple while differing in
+   `template_content_hash`, and the wrong (stale) instrument's evidence
+   could be silently graduated. Fixed by filtering to the cell matching the
+   template's currently-resolvable hash (new
+   `read_current_template_content_hash`), refusing with a clear message if
+   none match. Covered by a dedicated regression test
+   (`test_calibration_cli.py::TestGraduateCellDisambiguation`).
+
+Both fixes were confirmed with the Project Manager before implementation
+(neither was in the task list; both were discovered live during the
+walkthrough) rather than patched around silently.
+
+**Verification walkthrough**: all nine steps executed end-to-end against a
+scratch repo with an isolated `metrology.store_dir`; actual commands and
+output pasted into the slice design. Full suite 2392 passed / 2 skipped
+(pre-existing, unrelated) after the two fixes above; pyright and ruff clean
+across the whole repo.
+
+**Deferred, correctly absent**: automatic threshold mutation, a new gating
+mechanism, the coordinated 300 write-path version field (320-plan Future
+Work #1, still open), judge-verdict persistence on the sample (321 Future
+Work #2), audit-oracle work (323/324).
 
 ## 20260725 (1)
 

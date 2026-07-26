@@ -8,8 +8,8 @@ dependencies:
   - 321 agreement-dispersion-reporting (complete) — AgreementReport/AgreementCell/GroupKey/ExclusionSummary, ArtifactLevel, metrology.min_evidence_n
 projectState: "Slice 322 design complete and slice-design-reviewed (322-review.slice.*, 1 PASS / 1 CONCERN fixed / 1 NOTE declined with rationale). This is the terminal slice of the human-oracle chain 320 -> 321 -> 322 (interfaces: []). Three open questions from the 320 plan are resolved in the design and must not be re-litigated: (1) version identity ships as the content-hash-at-capture fallback, no 300 write-path change; (2) the template content hash is narrowed to exclude the judge: threshold block -- a correctness fix, not a preference, since the current hash resets accumulated n every time an operator acts on a recommendation; (3) residual sampling ships as a policy + offer-selection core, CLI-drained through 320's existing pull-based capture. GraduatedConfig is version-scoped: it carries the full JudgeConfigId (including template_content_hash), not just (template_name, model, artifact_level) -- this is what makes a graduation survive a threshold edit but lapse on a prompt/model edit."
 dateCreated: 20260725
-dateUpdated: 20260725
-status: not_started
+dateUpdated: 20260726
+status: complete
 ---
 
 ## Context Summary
