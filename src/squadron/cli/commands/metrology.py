@@ -15,7 +15,7 @@ import typer
 from rich import print as rprint
 
 from squadron.config.manager import get_config
-from squadron.metrology.calibration import recommend_thresholds
+from squadron.metrology.calibration import read_current_template_content_hash, recommend_thresholds
 from squadron.metrology.calibration_models import RecommendationDirection, RecommendationReport
 from squadron.metrology.capture import (
     build_capture_payload,
@@ -43,6 +43,7 @@ from squadron.metrology.report_models import (
 )
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.review.models import Verdict
+from squadron.review.templates import load_all_templates
 
 metrology_app = typer.Typer(
     name="metrology",
@@ -115,6 +116,7 @@ def sample(
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
 ) -> None:
     """Blind-capture a human verdict for one persisted judge result."""
+    load_all_templates()
     if skip:
         rprint("[dim]sample skipped[/dim]")
         return
@@ -458,6 +460,7 @@ def recommend(
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
 ) -> None:
     """Advisory threshold recommendations per (artifact level, judge config). Read-only."""
+    load_all_templates()
     resolved_cwd = _resolve_cwd(cwd)
     level_filter = _parse_level_filter(level)
 
@@ -504,6 +507,7 @@ def graduate(
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
 ) -> None:
     """Record a graduation for a (template, model) pairing. Refuses below GRADUATE."""
+    load_all_templates()
     resolved_cwd = _resolve_cwd(cwd)
     level_filter = _parse_level_filter(level)
     if level_filter is None:
@@ -519,17 +523,26 @@ def graduate(
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
+    # Graduation acts on the template as currently configured on disk, never
+    # on stale evidence from before a prompt/model edit. Filtering on the
+    # currently-resolvable content hash (not just template+model+level)
+    # disambiguates when evidence spans an edit — see the T18 walkthrough's
+    # step 6/7 regression this guards against.
+    current_hash = read_current_template_content_hash(template)
     matching = [
         cell
         for cell in report.cells
         if cell.group.artifact_level == level_filter
         and cell.group.judge_config.template_name == template
         and cell.group.judge_config.model == model
+        and cell.group.judge_config.template_content_hash == current_hash
     ]
     if not matching:
         rprint(
             f"[red]Error: no recommendation cell for template={template!r} "
-            f"model={model!r} level={level_filter.value!r}.[/red]"
+            f"model={model!r} level={level_filter.value!r} matching the "
+            "template's current content (evidence may predate a prompt/model "
+            "edit — run 'sq metrology recommend' to inspect).[/red]"
         )
         raise typer.Exit(code=1)
     cell = matching[0]
@@ -577,6 +590,7 @@ def offers(
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
 ) -> None:
     """List residual-sampling targets for graduated judge configs. Read-only."""
+    load_all_templates()
     resolved_cwd = _resolve_cwd(cwd)
 
     try:

@@ -295,7 +295,7 @@ def derive_result_ref(
     )
 
 
-def _template_content_hash(template_name: str) -> str | None:
+def template_content_hash(template_name: str) -> str | None:
     """Hash the resolved template's judged behavior, excluding thresholds.
 
     Never fabricates: a ``reviewType`` that doesn't map cleanly to a known
@@ -341,5 +341,5 @@ def derive_judge_config_id(review_file: Path) -> JudgeConfigId:
     return JudgeConfigId(
         template_name=template_name,
         model=model,
-        template_content_hash=_template_content_hash(template_name),
+        template_content_hash=template_content_hash(template_name),
     )

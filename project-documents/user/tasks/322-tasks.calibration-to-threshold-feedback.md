@@ -253,13 +253,13 @@ status: not_started
 
 ### T16: CLI — `recommend`, `graduate`, `offers`
 
-- [ ] **Extend `src/squadron/cli/commands/metrology.py`** with three new commands (thin shells, all logic in `calibration.py`/`graduation.py`, matching the existing `report` sub-group pattern)
-  - [ ] `sq metrology recommend [--project ID] [--level LEVEL] [--json] [--cwd .]`: build the store's `AgreementReport` (reuse `agreement_report`, do not re-aggregate), call `recommend_thresholds` with rates read from `metrology.graduate_match_rate` / `metrology.tighten_match_rate` / `metrology.min_evidence_n`, render one row per cell (direction, match rate + n, floor applied, current thresholds, model-dimension note); `INSUFFICIENT_EVIDENCE` cells state both n and floor, never render blank; `--json` emits `RecommendationReport` verbatim
-  - [ ] `sq metrology graduate --template T --model M --level L [--cwd .]`: look up the pairing's current recommendation (re-derive via the same path as `recommend`, filtered to this template/model/level); if the direction is not `GRADUATE`, exit non-zero with a message naming the observed n and floor — **write nothing**; otherwise construct a `GraduatedConfig` (full `JudgeConfigId` including `template_content_hash`, the `EvidenceSnapshot` that justified it, `graduated_at=now`) and call `write_graduation`; if a `GraduatedConfig` for this exact identity already exists, update its evidence snapshot in place (idempotent — one record, not two, log INFO)
-  - [ ] `sq metrology offers [--project ID] [--json] [--cwd .]`: `list_graduations`, call `select_residual_offers` with `rate` from `metrology.residual_sample_rate`, render each `OfferTarget`; when a graduated config yields zero offers **because it has lapsed**, print an explanatory line naming the config-identity change — never a silent empty result indistinguishable from "nothing due"
-  - [ ] All three commands follow the existing `--cwd`/`--project`/store-construction + `MetrologyStoreError`/`MetrologyTargetError` handling already used by `sample`/`list`/`report *` — no new error-handling pattern
-  - [ ] `recommend` and `offers` are read-only; `graduate` writes exactly one record
-- [ ] Success: `sq metrology --help` lists `recommend`, `graduate`, `offers`; `recommend` on a fixture store prints per-cell rows including the model-dimension note; `graduate` on a non-`GRADUATE` pairing exits non-zero and writes nothing; `offers` reports a lapsed graduation with an explanatory line, not silence
+- [x] **Extend `src/squadron/cli/commands/metrology.py`** with three new commands (thin shells, all logic in `calibration.py`/`graduation.py`, matching the existing `report` sub-group pattern)
+  - [x] `sq metrology recommend [--project ID] [--level LEVEL] [--json] [--cwd .]`: build the store's `AgreementReport` (reuse `agreement_report`, do not re-aggregate), call `recommend_thresholds` with rates read from `metrology.graduate_match_rate` / `metrology.tighten_match_rate` / `metrology.min_evidence_n`, render one row per cell (direction, match rate + n, floor applied, current thresholds, model-dimension note); `INSUFFICIENT_EVIDENCE` cells state both n and floor, never render blank; `--json` emits `RecommendationReport` verbatim
+  - [x] `sq metrology graduate --template T --model M --level L [--cwd .]`: look up the pairing's current recommendation (re-derive via the same path as `recommend`, filtered to this template/model/level); if the direction is not `GRADUATE`, exit non-zero with a message naming the observed n and floor — **write nothing**; otherwise construct a `GraduatedConfig` (full `JudgeConfigId` including `template_content_hash`, the `EvidenceSnapshot` that justified it, `graduated_at=now`) and call `write_graduation`; if a `GraduatedConfig` for this exact identity already exists, update its evidence snapshot in place (idempotent — one record, not two, log INFO)
+  - [x] `sq metrology offers [--project ID] [--json] [--cwd .]`: `list_graduations`, call `select_residual_offers` with `rate` from `metrology.residual_sample_rate`, render each `OfferTarget`; when a graduated config yields zero offers **because it has lapsed**, print an explanatory line naming the config-identity change — never a silent empty result indistinguishable from "nothing due"
+  - [x] All three commands follow the existing `--cwd`/`--project`/store-construction + `MetrologyStoreError`/`MetrologyTargetError` handling already used by `sample`/`list`/`report *` — no new error-handling pattern
+  - [x] `recommend` and `offers` are read-only; `graduate` writes exactly one record
+- [x] Success: `sq metrology --help` lists `recommend`, `graduate`, `offers`; `recommend` on a fixture store prints per-cell rows including the model-dimension note; `graduate` on a non-`GRADUATE` pairing exits non-zero and writes nothing; `offers` reports a lapsed graduation with an explanatory line, not silence
 
 **Commit:** `feat(cli): add sq metrology recommend/graduate/offers`
 
@@ -267,15 +267,15 @@ status: not_started
 
 ### T17: CLI tests — commands, `--json`, refusal, idempotence, no-mutation
 
-- [ ] **Add `tests/metrology/test_calibration_cli.py`** using Typer's `CliRunner` (mirrors 321's `test_report_cli.py`)
-  - [ ] `recommend` prints per-cell rows with n, floor, and model-dimension note; `--json` parses back to `RecommendationReport`
-  - [ ] `graduate` on a pairing below the floor exits non-zero, message names n and floor, **store record count unchanged**
-  - [ ] `graduate` on a pairing meeting `GRADUATE` succeeds, writes exactly one `graduated_config` record
-  - [ ] **Idempotent re-graduate:** running `graduate` again for the same pairing updates the evidence snapshot without creating a second record (assert record count stays at 1)
-  - [ ] `offers` on a store with a graduated config and unsampled matches lists at least one offer; on a lapsed graduation prints the explanatory line and zero offers for that config
-  - [ ] **No-mutation regression at the CLI layer:** SHA-1 the template YAML, `.squadron.toml`, and store dir before/after a `recommend` run → byte-identical (mirrors T10's unit-level assertion, re-verified through the CLI entry point)
-  - [ ] **Surface-agnostic core:** assert `squadron.metrology.calibration` / `graduation` / `calibration_models` import no Typer (mirrors 320/321's parity test)
-- [ ] Success: `uv run pytest tests/metrology/test_calibration_cli.py` passes
+- [x] **Add `tests/metrology/test_calibration_cli.py`** using Typer's `CliRunner` (mirrors 321's `test_report_cli.py`)
+  - [x] `recommend` prints per-cell rows with n, floor, and model-dimension note; `--json` parses back to `RecommendationReport`
+  - [x] `graduate` on a pairing below the floor exits non-zero, message names n and floor, **store record count unchanged**
+  - [x] `graduate` on a pairing meeting `GRADUATE` succeeds, writes exactly one `graduated_config` record
+  - [x] **Idempotent re-graduate:** running `graduate` again for the same pairing updates the evidence snapshot without creating a second record (assert record count stays at 1)
+  - [x] `offers` on a store with a graduated config and unsampled matches lists at least one offer; on a lapsed graduation prints the explanatory line and zero offers for that config
+  - [x] **No-mutation regression at the CLI layer:** SHA-1 the template YAML, `.squadron.toml`, and store dir before/after a `recommend` run → byte-identical (mirrors T10's unit-level assertion, re-verified through the CLI entry point)
+  - [x] **Surface-agnostic core:** assert `squadron.metrology.calibration` / `graduation` / `calibration_models` import no Typer (mirrors 320/321's parity test)
+- [x] Success: `uv run pytest tests/metrology/test_calibration_cli.py` passes
 
 **Commit:** `test(metrology): cover recommend/graduate/offers CLI, refusal, idempotence, no-mutation`
 

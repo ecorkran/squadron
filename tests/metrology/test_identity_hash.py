@@ -1,6 +1,6 @@
 """Tests for the T1 hash-narrowing fix (322).
 
-`_template_content_hash` must exclude the `judge:` threshold block so that
+`template_content_hash` must exclude the `judge:` threshold block so that
 acting on a calibration recommendation (editing pass_floor/concerns_floor)
 does not re-key the config and reset accumulated evidence to zero. A prompt
 or model edit must still re-key, since that changes the judged instrument.
@@ -50,37 +50,37 @@ def _clear_template_registry() -> Generator[None]:  # pyright: ignore[reportUnus
 class TestTemplateContentHashExcludesThresholds:
     def test_threshold_only_edit_does_not_rekey(self) -> None:
         register_template(_make_template(judge={"pass_floor": 78, "concerns_floor": 55}))
-        hash_a = identity._template_content_hash("judge.example")  # pyright: ignore[reportPrivateUsage]
+        hash_a = identity.template_content_hash("judge.example")
 
         clear_registry()
         register_template(_make_template(judge={"pass_floor": 85, "concerns_floor": 55}))
-        hash_b = identity._template_content_hash("judge.example")  # pyright: ignore[reportPrivateUsage]
+        hash_b = identity.template_content_hash("judge.example")
 
         assert hash_a is not None
         assert hash_a == hash_b
 
     def test_system_prompt_edit_rekeys(self) -> None:
         register_template(_make_template(system_prompt="You are a judge."))
-        hash_a = identity._template_content_hash("judge.example")  # pyright: ignore[reportPrivateUsage]
+        hash_a = identity.template_content_hash("judge.example")
 
         clear_registry()
         register_template(_make_template(system_prompt="You are a different judge."))
-        hash_b = identity._template_content_hash("judge.example")  # pyright: ignore[reportPrivateUsage]
+        hash_b = identity.template_content_hash("judge.example")
 
         assert hash_a != hash_b
 
     def test_model_edit_rekeys(self) -> None:
         register_template(_make_template(model="minimax/minimax-m2.7"))
-        hash_a = identity._template_content_hash("judge.example")  # pyright: ignore[reportPrivateUsage]
+        hash_a = identity.template_content_hash("judge.example")
 
         clear_registry()
         register_template(_make_template(model="anthropic/claude-sonnet-5"))
-        hash_b = identity._template_content_hash("judge.example")  # pyright: ignore[reportPrivateUsage]
+        hash_b = identity.template_content_hash("judge.example")
 
         assert hash_a != hash_b
 
     def test_missing_template_returns_none(self) -> None:
-        assert identity._template_content_hash("no.such.template") is None  # pyright: ignore[reportPrivateUsage]
+        assert identity.template_content_hash("no.such.template") is None
 
 
 class TestDeriveJudgeConfigIdEndToEnd:

@@ -38,8 +38,16 @@ def cli_store(tmp_path: Path) -> Iterator[Path]:
 
 @pytest.fixture(autouse=True)
 def _clear_template_registry() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    # These tests fully control the template registry via register_template
+    # below, and use "judge.slice-vs-arch" — a name that collides with a
+    # real built-in template. The CLI commands under test call
+    # load_all_templates() (so real invocations resolve templates without
+    # a prior `sq review` call in the same process); patch it to a no-op
+    # here so that call doesn't clobber this test's own fake registration
+    # with the real built-in's different system_prompt/judge block.
     clear_registry()
-    yield
+    with patch("squadron.cli.commands.metrology.load_all_templates"):
+        yield
     clear_registry()
 
 
@@ -166,6 +174,54 @@ class TestGraduateRefusal:
         assert result.exit_code != 0
         assert "n=" in result.output and "floor=" in result.output
         assert len(list(cli_store.glob("*.json"))) == record_count_before
+
+
+class TestGraduateCellDisambiguation:
+    def test_stale_prompt_evidence_is_not_graduated_over_current_evidence(
+        self, project_repo: Path, write_review_file: Callable[..., Path], cli_store: Path
+    ) -> None:
+        # Two cells can share (template_name, model, level) while differing
+        # in template_content_hash: evidence from before a prompt edit,
+        # alongside fresh evidence captured after. graduate must act on the
+        # template as currently configured, never on stale evidence — even
+        # if the stale cell happens to qualify for GRADUATE too.
+        _register_judge_template(system_prompt="Original prompt.")
+        _capture_evidence(project_repo, write_review_file, cli_store, n=6, verdict="PASS")
+
+        clear_registry()
+        _register_judge_template(system_prompt="Rewritten prompt.")
+        reviews_dir = project_repo / "project-documents/user/reviews"
+        for i in range(6):
+            _write_judge_review(write_review_file, reviews_dir, 700 + i)
+            _capture(project_repo, 700 + i, verdict="PASS")
+
+        result = runner.invoke(
+            app,
+            [
+                "metrology",
+                "graduate",
+                "--template",
+                _TEMPLATE_NAME,
+                "--model",
+                _MODEL,
+                "--level",
+                _LEVEL,
+                "--cwd",
+                str(project_repo),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+
+        store = MetrologyStore(store_dir=cli_store)
+        graduations = store.list_graduations()
+        assert len(graduations) == 1
+        graduated_hash = graduations[0][1].judge_config.template_content_hash
+
+        # The graduated identity must be the *current* (rewritten-prompt)
+        # instrument's hash, not the stale original.
+        from squadron.metrology.calibration import read_current_template_content_hash
+
+        assert graduated_hash == read_current_template_content_hash(_TEMPLATE_NAME)
 
 
 class TestGraduateSuccessAndIdempotence:

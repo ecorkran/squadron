@@ -27,6 +27,23 @@ from squadron.metrology.models import (
 )
 from squadron.review.models import ReviewFinding, ReviewResult, Verdict
 from squadron.review.persistence import SliceInfo, format_review_markdown
+from squadron.review.templates import clear_registry
+
+
+@pytest.fixture(autouse=True)
+def _isolated_template_registry() -> Iterator[None]:  # pyright: ignore[reportUnusedFunction]
+    """Clear the process-global template registry around every metrology test.
+
+    ``sq metrology sample``/``recommend``/``graduate``/``offers`` call
+    ``load_all_templates()`` (322), which registers real built-in templates
+    into ``squadron.review.templates``' module-level dict. Without this,
+    one test invoking a CLI command leaks real templates (e.g. the built-in
+    ``judge.slice-vs-arch``) into every test that runs after it in the same
+    process, clobbering that name's use as a hand-built test fixture.
+    """
+    clear_registry()
+    yield
+    clear_registry()
 
 
 def make_sample_verdict(

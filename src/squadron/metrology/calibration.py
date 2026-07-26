@@ -98,6 +98,21 @@ def read_current_thresholds(template_name: str) -> JudgeThresholds | None:
         return None
 
 
+def read_current_template_content_hash(template_name: str) -> str | None:
+    """The template's comparability hash as currently resolvable, or ``None``.
+
+    Thin re-export of ``identity.template_content_hash`` for callers outside
+    ``identity.py`` (e.g. ``graduate``, disambiguating which cell reflects
+    the instrument on disk *right now* when evidence spans a prompt edit)
+    that need the current hash without deriving it from a specific review
+    file, which ``derive_judge_config_id`` requires. ``None`` when the
+    template is unregistered — matches ``read_current_thresholds``.
+    """
+    from squadron.metrology.identity import template_content_hash
+
+    return template_content_hash(template_name)
+
+
 def _model_dimension_note(template_name: str, model: str) -> str:
     """The mandatory per-cell note: config has no model dimension.
 
