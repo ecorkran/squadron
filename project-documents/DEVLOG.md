@@ -10,7 +10,30 @@ Internal work log for squadron project development.
 
 ---
 
-## 20260726
+## 20260726 (2)
+
+### Task Breakdown 323: Tech-Debt-Audit Baseline Harness — Phase 5 Complete
+
+**Phase 5 complete.** Created `user/tasks/323-tasks.tech-debt-audit-baseline-harness.md` — 22 tasks, 370 lines (under the 450 target, no split). Test tasks sit immediately after their implementation task throughout, per the test-with pattern.
+
+**Ordering is driven by one constraint: the instrument must be stable before anything measures with it.** So the fork edits come first (T1-T3: findings block → category vocabulary + independent-run mode → vendor into squadron), with the CI sync guard at T4. Everything downstream hashes the vendored copy, so an unstable instrument early would poison every later comparison.
+
+Sequence: fork + vendor + sync test (T1-T4) → models + store extension (T5-T8) → parser (T9-T10) → harness with failure handling (T11-T14) → variance reduction (T15-T16) → baseline report (T17-T18) → config keys (T19) → CLI (T20-T21) → end-to-end + the real campaign (T22).
+
+**Deliberate cost shaping.** T22 is the *only* task that spends real tokens at scale (the 12-audit campaign). T1-T21 are all testable on fixtures with a stubbed agent at zero token cost, and the task file says so explicitly so an implementer does not casually burn a campaign mid-development. T14's pre-flight test asserts the agent stub was *never constructed* on a misconfigured project — proving zero spend, not just correct behavior.
+
+**Tasks that encode a correctness trap rather than a feature:**
+- **T15 per-category zero-fill** — a category absent from one run counts as 0 for that run, not as missing. Otherwise the spread is computed over the wrong denominator and the floor is silently wrong.
+- **T13/T14 persist-nothing-on-failure** — the design's Decision 9 restated as an assertion: each simulated failure persists *zero* records. A partial record would let a hung run masquerade as a low-finding sample and bias the floor downward, the same direction the repeat-run hazard threatened.
+- **T9 distinct absent-vs-malformed errors** — not stylistic; T13 logs them differently, and conflating them would hide a model that stopped emitting the block at all behind "parse noise."
+- **T8 vocabulary-isolation test** — asserts no `AuditSeverity` value equals any review `Severity` value, so a future edit cannot quietly merge two deliberately disjoint vocabularies.
+- **T20/T21 honest campaign summary** — a campaign with failed runs must not exit 0 as though all succeeded.
+
+**Open item carried into implementation:** the `other`-category share per project is a real output of T22, not just a metric — a high share means the 9 dimensions do not fit that codebase, which is information for 324 rather than something to suppress.
+
+---
+
+## 20260726 (1)
 
 ### Slice Design 323: Tech-Debt-Audit Baseline Harness — Phase 4 Complete
 

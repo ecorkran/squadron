@@ -1,0 +1,370 @@
+---
+docType: tasks
+slice: tech-debt-audit-baseline-harness
+project: squadron
+lld: ../slices/323-slice.tech-debt-audit-baseline-harness.md
+dependencies:
+  - 320 metrology-data-layer-sample-capture-keystone (complete) — MetrologyStore, MetrologyRecord envelope, RECORD_TYPE_AUDIT_FINDING (reserved, unused), derive_project_id, resolve_store_dir, cli/commands/metrology.py sub-app
+  - 340 skill-pack-infrastructure — the `analysis` pack containing `tech-debt-audit`; skills/resolver._resolve_bundled for install-independent lookup
+projectState: "Slice 323 design complete and slice-design-reviewed (323-review.slice.*, verdict CONCERNS, all 3 actionable findings fixed: failure-mode enumeration added, interfaces corrected to [324], 340 boundary recorded in the parent architecture). This is the first slice of the AUDIT oracle — it shares 320's spine (persistence) but not the human oracle's report path or grain. Decisions that must not be re-litigated: (1) the tech-debt-audit fork is edited, not wrapped, and the FORK is canonical with squadron vendoring it; (2) findings ship as a fenced YAML block emitted by the skill, not a markdown table parser; (3) audit severity stays Critical/High/Medium/Low and is never mapped onto review PASS/NOTE/CONCERN/FAIL; (4) the noise floor is per-project at a pinned commit, never one global number, and a project without one is marked 'no floor measured' rather than borrowing another's; (5) one run persists a complete AuditRun or nothing at all — there is no partial-run record. No intervention ships here: no pre-emption prompt, no delta report, no dispatch write (that is 324)."
+dateCreated: 20260726
+dateUpdated: 20260726
+status: not_started
+---
+
+## Context Summary
+
+- **Working on:** slice 323, the audit oracle's data slice. It runs the `tech-debt-audit` skill against projects, normalizes its output into typed `AuditFinding` records keyed on 320's stable project identity, measures the audit's own run-to-run **noise floor**, and reports a cross-project baseline at the project/issue-class grain. It reuses 320's store; it does **not** reuse 321's report path — the audit oracle has no agreement dimension.
+- **The fork edits come first (T1-T3), and the fork is canonical.** The skill's own repeat-run mode ([tech-debt-audit.md:103](../../../commands/analysis/tech-debt-audit.md#L103)) makes run 2 of a variance series read run 1 and emit a diff — biasing a measured floor **toward zero**, the worst direction, since it makes every later 324 delta look significant. The unmodified skill is therefore incompatible with this slice's core measurement. Edits land in `github:ecorkran/tech-debt-audit` first, then are vendored into `commands/analysis/`. A CI test asserts the vendored copy's category list matches `AuditCategory` so drift fails the build.
+- **Parse target is a fenced YAML block, not a markdown table.** The skill emits `<!-- squadron:findings:begin v1 -->` … `<!-- squadron:findings:end -->` around a YAML `findings:` list, *in addition to* the human findings table. This reuses the known-good frontmatter reader pattern; no markdown-table parser exists in the repo and none is written here.
+- **Category is a closed 10-value vocabulary; `other` is load-bearing.** A category the model invents outside the vocabulary normalizes to `other` **with `raw_category` retained**. Nothing is dropped. A rising `other` share is a signal the vocabulary is wrong — information, not noise to hide.
+- **The floor is per-project, at a pinned commit, from ≥2 usable runs.** Variance runs record the commit SHA; a series spanning differing SHAs or `audit_prompt_hash` values is **refused, not averaged**. A dirty worktree is refused pre-flight. A project audited but not variance-measured reports "no floor measured" and never borrows another project's number.
+- **Failure handling is specified here, not inherited.** `run_review_with_profile` supplies **none** — [review_client.py:134-156](../../../src/squadron/review/review_client.py#L134-L156) is a bare `async for` with only `finally: shutdown()`, no timeout, no exception handling around the stream. Every failure mode persists **nothing** and logs at WARNING+, so a hung or truncated run can never enter the floor as a low-count sample.
+- **Parity + discipline:** `audit.py` / `audit_parse.py` / `audit_variance.py` / `audit_report.py` are surface-agnostic (no Typer imports, matching the 320/321/322 pattern verified by test). Strict pyright, ruff clean. No judging path, no dispatch path, no pipeline path is touched.
+- **Dependencies:** 320 (complete), 340 (the pack). **Next slice:** 324, which consumes this slice's persisted baseline and noise floor (`interfaces: [324]`).
+- **Suggested order (from the design, followed here):** fork edits + vendoring + sync test (T1-T4) so the instrument is stable before anything measures with it → models and store extension (T5-T8) → parser (T9-T10) → harness with failure handling (T11-T14) → variance reduction (T15-T16) → baseline report (T17-T18) → CLI shells (T19-T21) → end-to-end verification (T22).
+- **Cost note for the implementer:** T22 is the only task that spends real tokens at scale (12 audits). Everything before it is testable on fixtures at zero token cost — keep it that way.
+
+---
+
+## Tasks
+
+### T1: Add the machine-readable findings block to the canonical fork
+
+- [ ] **Edit the canonical fork `github:ecorkran/tech-debt-audit`, file `tech-debt-audit.md`, Phase 3 Deliverable section**
+  - [ ] Add a new bullet under **File Contents** instructing the model to emit, at the **end** of the audit file, a fenced findings block delimited by `<!-- squadron:findings:begin v1 -->` and `<!-- squadron:findings:end -->`
+  - [ ] Inside the delimiters, a fenced ```yaml block with a `findings:` list; each entry has `id`, `category`, `location`, `severity`, `effort`, `summary`
+  - [ ] State explicitly that this block is **in addition to** the human findings table, not a replacement — same data, serialized twice (the review system's existing precedent)
+  - [ ] State that `recommendation` is deliberately **not** in the block (it is advice for humans; nothing downstream consumes it) and stays in the table only
+  - [ ] Include one complete worked example entry so the format is unambiguous
+- [ ] Do **not** touch the 9 audit dimensions, the citation rules, or the required "looks bad but is actually fine" section — the instrument keeps measuring what it measures
+- [ ] Success: the skill file contains both delimiters exactly once each, and the example entry's keys match the six field names above
+
+**Commit (fork repo):** `feat: add machine-readable findings block for squadron metrology`
+
+---
+
+### T2: Add the closed category vocabulary and independent-run mode to the fork
+
+- [ ] **Edit the same fork file, Phase 2 (dimensions) and Phase 3 (deliverable)**
+  - [ ] Enumerate the closed category vocabulary the `category` field must draw from — exactly these ten, kebab-case: `architectural-decay`, `consistency-rot`, `type-contract-debt`, `test-debt`, `dependency-config-debt`, `performance-resource`, `error-handling-observability`, `security-hygiene`, `documentation-drift`, `other`
+  - [ ] Map each of the nine existing prose dimension headings to its vocabulary value so the model does not have to guess the correspondence
+  - [ ] State that `other` is for genuinely unclassifiable findings only, and that using it is not a failure — but that inventing a category outside the list is
+- [ ] **Add independent-run mode**, scoping the existing repeat-run clause ([:103](../../../commands/analysis/tech-debt-audit.md#L103))
+  - [ ] Reword the repeat-run section so it applies **unless** the invocation requests an independent run
+  - [ ] Define the marker the harness passes (a preamble line, e.g. `INDEPENDENT RUN: do not read or update any existing audit file`)
+  - [ ] State why: repeated audits are used to measure the audit's own run-to-run variance, and reading a prior audit would make runs correlated rather than independent
+  - [ ] Interactive users are unaffected — absent the marker, living-document behavior is unchanged
+- [ ] Success: the ten values appear as an explicit list; the repeat-run clause is conditional; the independent-run marker is named exactly once and matches what T12 will send
+
+**Commit (fork repo):** `feat: closed category vocabulary and independent-run mode`
+
+---
+
+### T3: Vendor the updated skill into squadron
+
+- [ ] **Copy the updated skill file from the fork to `commands/analysis/tech-debt-audit.md`**
+  - [ ] Byte-for-byte, so `audit_prompt_hash` is meaningful — do not hand-edit the vendored copy
+  - [ ] Preserve the existing attribution comment at the top of the file
+- [ ] Verify the vendored copy is what the wheel ships (`pyproject.toml` force-includes project-root `commands/` as `squadron/commands/`) and what `_resolve_bundled("analysis")` finds in an editable install
+- [ ] Success: `diff` between the fork file and the vendored file is empty; `python -c "from squadron.skills.resolver import _resolve_bundled; print((_resolve_bundled('analysis') / 'tech-debt-audit.md').read_text().count('squadron:findings:begin'))"` prints `1`
+
+**Commit:** `chore(skills): vendor updated tech-debt-audit skill from canonical fork`
+
+---
+
+### T4: Test the fork-sync guard
+
+- [ ] **Add `tests/metrology/test_audit_skill_sync.py`**
+  - [ ] **Category vocabulary matches:** parse the ten kebab-case values out of the vendored `commands/analysis/tech-debt-audit.md` and assert the set equals `{c.value for c in AuditCategory}` — this is the CI guard against fork/squadron drift, and it must fail loudly if either side changes alone
+  - [ ] **Delimiters present:** both `squadron:findings:begin` and `squadron:findings:end` appear exactly once
+  - [ ] **Independent-run marker present:** the exact marker string T12 sends appears in the skill file
+  - [ ] Locate the skill via `_resolve_bundled("analysis")`, not a hard-coded relative path, so the test exercises the same lookup the harness uses
+- [ ] Success: `uv run pytest tests/metrology/test_audit_skill_sync.py` passes; deleting one vocabulary value from the skill file makes it fail
+
+**Commit:** `test(metrology): guard tech-debt-audit skill/vocabulary sync`
+
+---
+
+### T5: Audit models
+
+- [ ] **Add `src/squadron/metrology/audit_models.py`** (mirrors 321's `report_models.py` / 322's `calibration_models.py` pattern)
+  - [ ] `AuditCategory(StrEnum)` — the ten values from T2, kebab-case, `OTHER = "other"` last
+  - [ ] `AuditSeverity(StrEnum)` — `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`. **Do not** reference or map to `review.models.Severity`; the vocabularies are disjoint by design
+  - [ ] `AuditEffort(StrEnum)` — `S`, `M`, `L`
+  - [ ] `AuditFinding` — `finding_id: str`, `category: AuditCategory`, `raw_category: str | None`, `severity: AuditSeverity`, `effort: AuditEffort | None`, `location: str`, `summary: str`
+  - [ ] `FloorStat` — `min: int`, `max: int`, `mean: float`, `stddev: float`
+  - [ ] Re-export `AuditRun` and `AuditNoiseFloor` from `models.py` (they are envelope payloads — see T6)
+- [ ] **Add `AuditRun` and `AuditNoiseFloor` to `src/squadron/metrology/models.py`**, alongside `SampleVerdict` / `GraduatedConfig` — per the 322 layering correction, envelope payloads live in `models.py` to avoid the circular import
+  - [ ] `AuditRun` — `run_id: str`, `project_id: ProjectId`, `commit_sha: str`, `audit_prompt_hash: str`, `model: str`, `measured_at: datetime`, `findings: list[AuditFinding]`, `unnormalized_count: int`
+  - [ ] `AuditNoiseFloor` — `project_id: ProjectId`, `commit_sha: str`, `audit_prompt_hash: str`, `n_runs: int`, `total: FloorStat`, `per_category: dict[AuditCategory, FloorStat]`, `measured_at: datetime`
+- [ ] Success: models import cleanly; `AuditRun(...).model_dump_json()` round-trips through `model_validate_json`
+
+**Commit:** `feat(metrology): add audit finding and noise-floor models`
+
+---
+
+### T6: Extend the store envelope with the two audit record types
+
+- [ ] **Edit `src/squadron/metrology/models.py`, class `MetrologyRecord`**
+  - [ ] Add `RECORD_TYPE_AUDIT_NOISE_FLOOR = "audit_noise_floor"` next to the existing constants. `RECORD_TYPE_AUDIT_FINDING` **already exists** ([models.py:29](../../../src/squadron/metrology/models.py#L29)) — reuse it, do not redefine
+  - [ ] Add two optional payload fields mirroring the existing optional-sibling pattern: `audit_run: AuditRun | None = None`, `audit_noise_floor: AuditNoiseFloor | None = None`
+  - [ ] Do **not** change `schema_version` — the envelope shape is backward compatible and [test_models.py:44-54](../../../tests/metrology/test_models.py#L44-L54) already asserts an `audit_finding` envelope round-trips
+- [ ] Success: an `audit_finding` envelope with `sample=None` and a populated `audit_run` validates; the existing `test_models.py` suite still passes unchanged
+
+**Commit:** `feat(metrology): extend record envelope with audit payload fields`
+
+---
+
+### T7: Store writers and readers for audit records
+
+- [ ] **Edit `src/squadron/metrology/store.py`**, mirroring `write_graduation` / `list_graduations` ([store.py:152-188](../../../src/squadron/metrology/store.py#L152-L188)) exactly
+  - [ ] `generate_audit_run_id(now=None) -> str` → `audit-{YYYYMMDD}-{uuid8}`, and `generate_noise_floor_id(now=None) -> str` → `floor-{YYYYMMDD}-{uuid8}`, mirroring [store.py:60-70](../../../src/squadron/metrology/store.py#L60-L70)
+  - [ ] `write_audit_run(run: AuditRun) -> str` and `write_noise_floor(floor: AuditNoiseFloor, record_id: str | None = None) -> str` — the `record_id` parameter on the floor writer allows in-place replacement when a floor is recomputed
+  - [ ] `list_audit_runs(project_id=None, audit_prompt_hash=None) -> list[AuditRun]` and `list_noise_floors(project_id=None) -> list[AuditNoiseFloor]` — glob-and-filter, discriminating on `record_type` **and** a non-`None` payload
+  - [ ] Reuse the tolerant-skip convention: catch `(OSError, ValueError, SchemaVersionError)`, log `_logger.warning("Skipping unreadable metrology record: %s", path)`, continue. One corrupt file must not sink a query
+  - [ ] Import the two record-type constants at the top alongside the existing two
+- [ ] Success: writing then listing an `AuditRun` returns it; a corrupt sibling `.json` in the store dir is skipped with a WARNING rather than raising
+
+**Commit:** `feat(metrology): add audit run and noise-floor store access`
+
+---
+
+### T8: Tests for models and store extension
+
+- [ ] **Add `tests/metrology/test_audit_models.py`**
+  - [ ] Each enum has exactly its specified values; `AuditCategory` has ten
+  - [ ] `AuditFinding` with `raw_category=None` and with a populated `raw_category` both round-trip
+  - [ ] **Vocabulary isolation:** assert no `AuditSeverity` value equals any `review.models.Severity` value — the disjointness is deliberate and a future edit must not quietly merge them
+- [ ] **Add `tests/metrology/test_audit_store.py`**
+  - [ ] Write + list round-trip for both record types, using the `conftest.py` temp-store fixture pattern
+  - [ ] `list_audit_runs(project_id=...)` filters correctly; two projects' runs do not bleed
+  - [ ] `list_audit_runs(audit_prompt_hash=...)` filters correctly — the comparability guard
+  - [ ] A corrupt `.json` and an unknown-`record_type` record are both skipped without raising
+  - [ ] **Coexistence:** a store containing samples, graduations, and audit runs returns only the right type from each list method
+- [ ] Success: `uv run pytest tests/metrology/test_audit_models.py tests/metrology/test_audit_store.py` passes
+
+**Commit:** `test(metrology): cover audit models and store round-trips`
+
+---
+
+### T9: The findings-block parser
+
+- [ ] **Add `src/squadron/metrology/audit_parse.py`** — pure, no I/O, no agent, independently testable
+  - [ ] `parse_audit_findings(raw: str) -> tuple[list[AuditFinding], int]` — locate the block between the two delimiters, strip the ```yaml fence, `yaml.safe_load`, coerce each entry; returns findings plus `unnormalized_count`
+  - [ ] `normalize_category(raw: str) -> tuple[AuditCategory, str | None]` — exact match on the vocabulary returns `(value, None)`; anything else returns `(AuditCategory.OTHER, raw)` so the original string is retained, never discarded
+  - [ ] `normalize_severity(raw: str) -> AuditSeverity | None` — case-insensitive match; an unrecognized severity makes that **finding** unnormalizable (counted, not guessed), since severity is load-bearing for the baseline
+  - [ ] A missing or placeholder `location` normalizes to the existing `unverified` sentinel ([parsers.py:24](../../../src/squadron/review/parsers.py#L24)), reusing the constant rather than redefining it
+  - [ ] **Absent block** and **malformed block** must be distinguishable by the caller — raise distinct typed errors (e.g. `AuditBlockMissingError` / `AuditBlockMalformedError` under `MetrologyError`), because T13 logs them differently
+  - [ ] Do **not** verify that `location` paths exist on disk — deliberate divergence from the review parser's `_check_path_existence` (the count and class are the measurement; re-verifying across N×M runs is I/O the measurement does not need)
+- [ ] Success: a well-formed block yields the expected findings; an out-of-vocabulary category yields `OTHER` with `raw_category` set
+
+**Commit:** `feat(metrology): parse the audit findings block`
+
+---
+
+### T10: Parser tests, including the honesty guarantees
+
+- [ ] **Add `tests/metrology/test_audit_parse.py`**
+  - [ ] **Realistic fixture first:** a fixture containing a full audit-file shape — frontmatter, prose sections, the human findings table, *then* the fenced block — not a bare block. Per the project's parser rule, the fixture must be the format the parser actually consumes in production
+  - [ ] Well-formed block with several findings parses; ids, categories, severities, locations, summaries all correct
+  - [ ] **Out-of-vocabulary category** → `AuditCategory.OTHER` with `raw_category` preserving the original string, and the finding is **retained**, not dropped — the success criterion the design commits to
+  - [ ] **Unrecognized severity** → that finding is counted in `unnormalized_count` and excluded from `findings`, never coerced to a guessed severity
+  - [ ] **Absent block** raises `AuditBlockMissingError`; **malformed YAML** inside the delimiters raises `AuditBlockMalformedError` — distinct, since the harness logs them differently
+  - [ ] Missing/placeholder location → the `unverified` sentinel, not `None` or empty string
+  - [ ] Findings table present but block absent still raises missing (the table is not a fallback in this slice — that is Future Work #1)
+- [ ] Success: `uv run pytest tests/metrology/test_audit_parse.py` passes
+
+**Commit:** `test(metrology): cover audit parsing, vocabulary coercion, and retention`
+
+---
+
+### T11: Skill resolution, prompt build, and instrument hash
+
+- [ ] **Add `src/squadron/metrology/audit.py`** (surface-agnostic — no Typer imports)
+  - [ ] `resolve_audit_skill() -> Path` — via `skills.resolver._resolve_bundled("analysis")` + `/ "tech-debt-audit.md"`, so it works whether or not `sq skills install` has been run. Raise a typed error naming the pack if absent
+  - [ ] `audit_prompt_hash(skill_path: Path) -> str` — SHA-256 of the file's bytes. This is the instrument identity; **the hash is taken from the vendored copy actually used for the run**, so fork/squadron divergence lands in the data even if it escapes CI
+  - [ ] `build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str` — the skill body, prefixed with the independent-run marker from T2 when `independent_run=True`. The marker string must be a module constant referenced by both this function and T4's test, defined once
+- [ ] Success: `resolve_audit_skill()` finds the vendored file in an editable install; `audit_prompt_hash` changes when one byte of the skill changes; `build_audit_prompt(independent_run=True)` contains the marker and `independent_run=False` does not
+
+**Commit:** `feat(metrology): resolve audit skill, hash instrument, build prompt`
+
+---
+
+### T12: Pre-flight checks
+
+- [ ] **Add to `src/squadron/metrology/audit.py`** — all checks run **before** any agent is created, so a misconfigured campaign costs zero tokens
+  - [ ] `preflight_project(project_path: Path, *, require_clean: bool, cwd: str) -> PreflightResult` returning the resolved `ProjectId` and `commit_sha`
+  - [ ] Path exists and is a directory → else `ERROR` naming the path, fail that project
+  - [ ] Is a git repository, and `git rev-parse HEAD` yields a SHA → else `ERROR`, fail that project
+  - [ ] `derive_project_id(cwd=str(project_path))` succeeds → a `MetrologyIdentityError` propagates with its existing `sq config set metrology.project_id` remediation intact, failing that project only
+  - [ ] When `require_clean=True` (variance runs only): `git status --porcelain` is empty → else `ERROR` and **refuse the series**, per Decision 6. This is a refusal, not a warning — a floor measured across a code change is not a floor
+  - [ ] Failing one project must not abort the others in a multi-project campaign
+- [ ] Success: each failure path is detected without creating an agent; a clean repo passes and returns a 40-char SHA
+
+**Commit:** `feat(metrology): pre-flight checks before audit token spend`
+
+---
+
+### T13: The audit run with full failure handling
+
+- [ ] **Add `run_audit(...)` to `src/squadron/metrology/audit.py`**
+  - [ ] Signature per the design: resolve identity + SHA (T12) → build prompt (T11) → execute → parse (T9) → persist one `AuditRun`
+  - [ ] Model the execution on [review_client.py:134-156](../../../src/squadron/review/review_client.py#L134-L156) — per-project `cwd`, tool permissions, and the `sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result")` narration filter — but **do not** call `run_review_with_profile`; it builds review prompts and calls `parse_review_output`
+  - [ ] **Wrap the agent stream in `asyncio.wait_for`** with `metrology.audit_timeout_s`. The precedent supplies no timeout; this slice adds one because the audit is unattended and runs 12+ times
+  - [ ] Catch stream exceptions (disconnect, API error) — shut the agent down in `finally`, persist nothing, return a typed failure result so the caller continues the series
+  - [ ] **Persist nothing on any failure.** A run persists a complete `AuditRun` or nothing at all — there is no partial-run record. This is what prevents a hung or truncated run from entering the floor as a low-count sample
+  - [ ] Log every failure mode at `WARNING` or above per the design's table, distinguishing absent-block from malformed-block
+  - [ ] Add `_logger = logging.getLogger(__name__)` following the `store.py` convention
+- [ ] Success: a successful run persists exactly one record; each simulated failure persists **zero** records and emits a WARNING
+
+**Commit:** `feat(metrology): audit harness with timeout and failure handling`
+
+---
+
+### T14: Harness tests — failure modes are the point
+
+- [ ] **Add `tests/metrology/test_audit_harness.py`** — all with a **stubbed agent**, no real tokens
+  - [ ] Happy path: stub returns a well-formed audit → exactly one `AuditRun` persisted, findings populated, `commit_sha` and `audit_prompt_hash` set
+  - [ ] **Timeout:** stub that never yields → `asyncio.wait_for` fires, **zero** records persisted, WARNING emitted (use `caplog`)
+  - [ ] **Mid-stream exception:** stub that raises partway → zero records persisted, WARNING emitted, agent shutdown still called
+  - [ ] **Absent block** and **malformed block:** zero records persisted, WARNING distinguishes the two
+  - [ ] **Pre-flight short-circuits:** a non-existent path / non-git dir / dirty worktree (variance) creates **no agent at all** — assert the stub was never constructed, proving zero token spend
+  - [ ] **Series continues:** in a 3-project run where project 2 fails, projects 1 and 3 still persist
+  - [ ] **Surface-agnostic:** assert `audit.py`, `audit_parse.py`, `audit_variance.py`, `audit_report.py` import no Typer, matching the 320/321/322 parity test
+- [ ] Success: `uv run pytest tests/metrology/test_audit_harness.py` passes; each of the top three failure modes has an asserted observable signal
+
+**Commit:** `test(metrology): cover audit harness failure modes and signals`
+
+---
+
+### T15: Noise-floor reduction
+
+- [ ] **Add `src/squadron/metrology/audit_variance.py`** — pure reduction, no I/O, no agent
+  - [ ] `reduce_noise_floor(runs: list[AuditRun]) -> AuditNoiseFloor`
+  - [ ] **Validate the series shares `(project_id, commit_sha, audit_prompt_hash)`** — a mismatch raises, it is never averaged. Per Decision 6/10, a floor measured across a code change or an instrument change is not a floor
+  - [ ] **Refuse fewer than 2 usable runs** — a spread needs at least two points. Raise rather than emit a degenerate floor
+  - [ ] `n_runs` records the **actual** number reduced, which may be fewer than requested when runs failed
+  - [ ] Compute `FloorStat` (min/max/mean/stddev) for the total finding count and per `AuditCategory`; a category absent from a run counts as **0** for that run, not as missing — otherwise the spread is computed over the wrong denominator
+  - [ ] Use `statistics.stdev` (sample stddev) and state that n=3 makes this coarse; the design commits to presenting it as such
+- [ ] Success: three runs of 40/47/44 findings yield min=40, max=47, correct mean and stddev; a mismatched-SHA series raises; a 1-run series raises
+
+**Commit:** `feat(metrology): reduce audit runs to a per-project noise floor`
+
+---
+
+### T16: Noise-floor tests
+
+- [ ] **Add `tests/metrology/test_audit_variance.py`**
+  - [ ] Known-value reduction: hand-computed min/max/mean/stddev for a fixed 3-run fixture
+  - [ ] **Per-category zero-fill:** a category present in runs 1 and 3 but absent in run 2 has `min=0` and a spread reflecting the absence — the denominator correctness check
+  - [ ] Mismatched `commit_sha` raises; mismatched `audit_prompt_hash` raises; both messages name the offending field
+  - [ ] Fewer than 2 runs raises
+  - [ ] `n_runs` reflects the actual list length, not a requested count
+- [ ] Success: `uv run pytest tests/metrology/test_audit_variance.py` passes
+
+**Commit:** `test(metrology): cover noise-floor reduction and refusal paths`
+
+---
+
+### T17: The baseline report
+
+- [ ] **Add `src/squadron/metrology/audit_report.py`** — reads the store, writes nothing (mirrors `report.py`'s discipline)
+  - [ ] `baseline_report(store, *, project_filter=None, cwd=".") -> BaselineReport` — group by `(project_id, AuditCategory)`, count findings, attach that project's floor
+  - [ ] **Group by `audit_prompt_hash`**; runs from different instruments are **never pooled**, mirroring `_comparability_key` ([report.py:205](../../../src/squadron/metrology/report.py#L205))
+  - [ ] A project with no `AuditNoiseFloor` for its `(project_id, commit_sha, audit_prompt_hash)` reports **"no floor measured"** — never borrows another project's number
+  - [ ] Carry an exclusion summary so excluded/unpooled data is visible, following 321's `ExclusionSummary` precedent — exclusions must never be mistaken for absence of data
+  - [ ] **Emit no agreement dimension** and no human-comparison figure of any kind
+  - [ ] Add report models (`BaselineCell`, `BaselineReport`) to `audit_models.py`, Pydantic, emitted verbatim under `--json`
+- [ ] Success: two projects with differing floors report each against its own; a project lacking a floor is marked, not defaulted
+
+**Commit:** `feat(metrology): cross-project audit baseline report`
+
+---
+
+### T18: Baseline report tests
+
+- [ ] **Add `tests/metrology/test_audit_report.py`**
+  - [ ] Grouping is correct at the project/issue-class grain across ≥2 projects
+  - [ ] **No-floor project is marked** and does not borrow — assert the marker is present and no other project's stddev appears on it
+  - [ ] **Cross-hash runs are not pooled:** two runs of the same project under different `audit_prompt_hash` values appear separately and are counted in the exclusion summary
+  - [ ] **No agreement dimension:** assert the serialized report contains no agreement/match-rate field — the design's explicit success criterion, asserted structurally rather than by eyeball
+  - [ ] `other`-category share is visible in the output (a rising share is the vocabulary-fit signal)
+- [ ] Success: `uv run pytest tests/metrology/test_audit_report.py` passes
+
+**Commit:** `test(metrology): cover baseline grouping, floor attachment, no-agreement`
+
+---
+
+### T19: Config keys
+
+- [ ] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS` — a key absent here raises `KeyError` on read, so this must precede any code that reads them
+  - [ ] `metrology.audit_variance_runs` — `int`, default `3`, described as runs per project in a variance series
+  - [ ] `metrology.audit_timeout_s` — `int`, default `3600`, described as the wall-clock cap per audit run (bounds pathology; does not pace normal runs)
+  - [ ] `metrology.audit_profile` — `str`, default `None`, described as the provider profile for audit runs; unset falls back to the review default
+  - [ ] All three are `int`/`str` only — `_coerce_value` ([manager.py:54-61](../../../src/squadron/config/manager.py#L54-L61)) does not handle `float`, so no float key is added here
+  - [ ] Read them via the existing `get_typed_config` helper rather than adding new readers
+- [ ] Success: `sq config get metrology.audit_variance_runs` prints `3`; `sq config set metrology.audit_timeout_s 1800` succeeds and reads back
+
+**Commit:** `feat(config): add audit harness config keys`
+
+---
+
+### T20: CLI — `sq metrology audit run` and `audit variance`
+
+- [ ] **Edit `src/squadron/cli/commands/metrology.py`** — thin Typer shells over the core, matching the 320/321/322 conventions exactly
+  - [ ] Add a nested `audit_app` via `metrology_app.add_typer(...)`, mirroring the existing `report_app` pattern
+  - [ ] `sq metrology audit run <project-path>...` — `--profile`, `--json`, `--cwd`. One audit per project, each persisting independently so a mid-campaign failure loses nothing
+  - [ ] `sq metrology audit variance <project-path>...` — `--runs` (defaults to `metrology.audit_variance_runs`), `--profile`, `--cwd`. N independent runs per project at pinned HEAD, then reduce each series
+  - [ ] Both use `_resolve_cwd` and `_build_store`; `--json` emits the Pydantic model verbatim via `model_dump_json()`
+  - [ ] Error handling per convention: `MetrologyStoreError` → `[red]Store error: ...[/red]` exit 1; `MetrologyTargetError` / `MetrologyIdentityError` → `[red]Error: ...[/red]` exit 1
+  - [ ] Print a per-project progress line as each run completes — a 12-audit campaign must not look hung
+  - [ ] Report a campaign summary at the end: how many runs succeeded, how many failed, and which floors were written. **Never** silently report success for a campaign with failed runs
+- [ ] Success: both commands appear in `sq metrology --help`; `audit variance --runs 2` on a dirty worktree exits 1 with a clear refusal
+
+**Commit:** `feat(cli): add sq metrology audit run and variance commands`
+
+---
+
+### T21: CLI — `sq metrology report baseline`, and CLI tests
+
+- [ ] **Add `sq metrology report baseline` to the existing `report_app`**
+  - [ ] `--project`, `--category`, `--json`, `--cwd`
+  - [ ] Present each figure with its floor attached, or the explicit "no floor measured" marker
+  - [ ] Empty store → dim `No audit data.` message and **exit 0**, not an error (matching the existing empty-result convention)
+- [ ] **Add `tests/metrology/test_audit_cli.py`** using the existing CLI-test pattern from `test_report_cli.py`
+  - [ ] `audit run` on a stubbed harness persists and prints; `--json` output parses as the Pydantic model
+  - [ ] `audit variance` refuses a dirty worktree with exit 1 and a message naming the reason
+  - [ ] `report baseline` renders both the floor-present and no-floor-measured cases
+  - [ ] Empty store exits 0 with the dim message
+  - [ ] **Campaign summary is honest:** a campaign with one failed run reports the failure in the summary and does not exit 0 silently as though all succeeded
+- [ ] Success: `uv run pytest tests/metrology/test_audit_cli.py` passes
+
+**Commit:** `feat(cli): add baseline report command with tests`
+
+---
+
+### T22: End-to-end verification and the real variance campaign
+
+- [ ] **Full local verification first (zero token cost)**
+  - [ ] `uv run ruff format` on all changed files, then `uv run ruff check`, then `uv run pyright` — all clean
+  - [ ] `uv run pytest -q` — full suite green, no regressions in the judging, capture, or report paths
+- [ ] **Single-project smoke test** — `sq metrology audit run . --json` against squadron itself. Confirm: findings parse, `project_id` is `github.com/ecorkran/squadron` with `source: remote` (**not** a filesystem path), one record written
+- [ ] **The variance campaign** — this is the task that spends real tokens (12 audits; the two large repos fan out to subagents and are slowest)
+  - [ ] Confirm every worktree is clean before starting; the command refuses otherwise
+  - [ ] `sq metrology audit variance` across the four-project set: `squadron`, `migratory`, `context-forge`, `migratory-viewer`
+  - [ ] Runs are resumable by design — if the campaign is interrupted, completed runs persist and the reduction can be re-run later. Do **not** restart from scratch on a partial failure
+- [ ] **Baseline verification** — `sq metrology report baseline` shows ≥2 projects, each with its own floor. Inspect the `other`-category share per project; a high share means the vocabulary does not fit that codebase, which is a finding about the instrument worth recording
+- [ ] **Comparability check** — confirm runs group by `audit_prompt_hash` and that no cross-hash pooling occurs
+- [ ] Success: all of the design's Success Criteria are demonstrably met; the Verification Walkthrough in the slice design runs start to finish
+
+**Commit:** `test(metrology): end-to-end audit baseline verification`
+
+---
+
+## Notes
+
+- **Do not re-litigate the fork decision.** Edits land in the canonical fork first, then are vendored (T1-T3). Editing only the vendored copy would silently fork the instrument — and because `audit_prompt_hash` correctly refuses to pool audits from differing prompts, the symptom is audits that quietly never compare rather than a visible failure.
+- **The `other` bucket is a signal, not a dumping ground.** Findings that land there keep their `raw_category`. If a project's `other` share is high after T22, that is information about vocabulary fit to carry into 324 — not something to suppress.
+- **Nothing here is an intervention.** No pre-emption prompt, no delta report, no dispatch config write. Those are 324, which ships only after this slice's floor exists (*Variance, then baseline, then intervention*).
+- **Future Work opened by this slice** (recorded in the design, not tasks here): human-table fallback parser; `trading-data` as a stretch variance case; periodic re-audit cadence; a project registry so campaigns need not take explicit paths.
