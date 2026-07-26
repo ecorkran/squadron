@@ -184,6 +184,32 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "for continued residual spot-checking via 'sq metrology offers'."
         ),
     ),
+    "metrology.audit_variance_runs": ConfigKey(
+        name="metrology.audit_variance_runs",
+        type_=int,
+        default=3,
+        description=(
+            "Runs per project in an audit variance series. Three observes a "
+            "spread without claiming statistical rigor; raise it to buy "
+            "confidence in the measured noise floor."
+        ),
+    ),
+    "metrology.audit_timeout_s": ConfigKey(
+        name="metrology.audit_timeout_s",
+        type_=int,
+        default=3600,
+        description=(
+            "Wall-clock cap per audit run, in seconds. Bounds pathology (a "
+            "hung or stalled agent stream); it does not pace normal runs, "
+            "which on a large fanned-out repo are legitimately slow."
+        ),
+    ),
+    "metrology.audit_profile": ConfigKey(
+        name="metrology.audit_profile",
+        type_=str,
+        default=None,
+        description=("Provider profile for audit runs. Unset falls back to the review default."),
+    ),
 }
 
 
