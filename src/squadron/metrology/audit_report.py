@@ -128,6 +128,7 @@ def baseline_report(
                 total_findings=len(run.findings),
                 unnormalized_count=run.unnormalized_count,
                 total_floor=floor.total if floor is not None else None,
+                floor_n_runs=floor.n_runs if floor is not None else None,
                 floor_note=None if floor is not None else NO_FLOOR_MEASURED,
                 cells=cells,
             )

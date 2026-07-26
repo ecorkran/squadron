@@ -7,6 +7,7 @@ same functions with zero duplication.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from datetime import UTC, datetime
@@ -16,6 +17,19 @@ import typer
 from rich import print as rprint
 
 from squadron.config.manager import get_config, get_typed_config
+from squadron.metrology.audit import (
+    AuditPreflightError,
+    AuditRunResult,
+    AuditSkillError,
+    run_audit,
+)
+from squadron.metrology.audit_models import AuditCategory
+from squadron.metrology.audit_report import baseline_report
+from squadron.metrology.audit_variance import (
+    MIN_USABLE_RUNS,
+    AuditVarianceError,
+    reduce_noise_floor,
+)
 from squadron.metrology.calibration import read_current_template_content_hash, recommend_thresholds
 from squadron.metrology.calibration_models import RecommendationDirection, RecommendationReport
 from squadron.metrology.capture import (
@@ -34,7 +48,7 @@ from squadron.metrology.graduation import list_graduations, select_residual_offe
 from squadron.metrology.graduation import write_graduation as write_graduation_record
 from squadron.metrology.identity import derive_judge_config_id, read_review_frontmatter
 from squadron.metrology.levels import ArtifactLevel, derive_artifact_level
-from squadron.metrology.models import EvidenceSnapshot, GraduatedConfig, JudgeConfigId
+from squadron.metrology.models import AuditRun, EvidenceSnapshot, GraduatedConfig, JudgeConfigId
 from squadron.metrology.report import agreement_report, dispersion_report, trend_report
 from squadron.metrology.report_models import (
     AgreementReport,
@@ -60,6 +74,13 @@ report_app = typer.Typer(
     no_args_is_help=True,
 )
 metrology_app.add_typer(report_app)
+
+audit_app = typer.Typer(
+    name="audit",
+    help="Run the tech-debt audit against projects and measure its noise floor.",
+    no_args_is_help=True,
+)
+metrology_app.add_typer(audit_app)
 
 _VERDICT_CHOICES = "/".join(v.value for v in (Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL))
 
@@ -682,3 +703,242 @@ def _derive_judge_config_and_level(
     raw_type = frontmatter.get("reviewType")
     level = derive_artifact_level(raw_type) if isinstance(raw_type, str) else ArtifactLevel.UNCLASSIFIED
     return judge_config, level
+
+
+# ---------------------------------------------------------------------------
+# Audit oracle (323): run audits, measure the noise floor, report the baseline
+# ---------------------------------------------------------------------------
+
+
+def _audit_variance_runs(cwd: str) -> int:
+    """Read the configured runs-per-series, honoring project-level config."""
+    value = get_typed_config("metrology.audit_variance_runs", int, cwd=cwd)
+    return int(value)
+
+
+def _report_run_outcome(outcome: AuditRunResult, *, prefix: str = "") -> None:
+    """Print one run's result. A 12-audit campaign must not look hung."""
+    if outcome.succeeded and outcome.run is not None:
+        run = outcome.run
+        rprint(
+            f"{prefix}[green]ok[/green] {run.project_id.value} "
+            f"@{run.commit_sha[:8]}  {len(run.findings)} findings"
+            + (
+                f" ([yellow]{run.unnormalized_count} unnormalized[/yellow])"
+                if run.unnormalized_count
+                else ""
+            )
+        )
+        return
+    rprint(
+        f"{prefix}[red]failed[/red] {outcome.project_path}  "
+        f"{outcome.failure.value if outcome.failure else 'unknown'}: {outcome.detail or ''}"
+    )
+
+
+def _campaign_summary(succeeded: int, failed: int, floors_written: int | None = None) -> None:
+    """Report the campaign honestly — a failed run is never hidden."""
+    parts = [f"{succeeded} succeeded", f"{failed} failed"]
+    if floors_written is not None:
+        parts.append(f"{floors_written} floor(s) written")
+    style = "yellow" if failed else "dim"
+    rprint(f"[{style}]Campaign: {', '.join(parts)}.[/{style}]")
+
+
+@audit_app.command("run")
+def audit_run(
+    project_paths: list[str] = typer.Argument(help="One or more project directories to audit"),
+    profile: str | None = typer.Option(None, "--profile", help="Provider profile override"),
+    model: str | None = typer.Option(None, "--model", help="Model override"),
+    as_json: bool = typer.Option(False, "--json", help="Emit each AuditRun model verbatim"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Audit each project once, persisting an AuditRun per project.
+
+    Each project persists independently, so a mid-campaign failure loses
+    nothing already measured. Exits 1 if any project failed.
+    """
+    resolved_cwd = _resolve_cwd(cwd)
+    store = _build_store(resolved_cwd)
+
+    succeeded: list[AuditRunResult] = []
+    failed = 0
+    for raw_path in project_paths:
+        project_path = Path(raw_path).expanduser().resolve()
+        try:
+            outcome = asyncio.run(
+                run_audit(
+                    project_path,
+                    store=store,
+                    profile=profile,
+                    model=model,
+                    cwd=resolved_cwd,
+                )
+            )
+        except (AuditPreflightError, AuditSkillError, MetrologyIdentityError) as exc:
+            rprint(f"[red]Error: {exc}[/red]")
+            failed += 1
+            continue
+        except MetrologyStoreError as exc:
+            rprint(f"[red]Store error: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
+
+        if not as_json:
+            _report_run_outcome(outcome)
+        if outcome.succeeded:
+            succeeded.append(outcome)
+        else:
+            failed += 1
+
+    if as_json:
+        for outcome in succeeded:
+            if outcome.run is not None:
+                typer.echo(outcome.run.model_dump_json())
+    else:
+        _campaign_summary(len(succeeded), failed)
+
+    if failed:
+        raise typer.Exit(code=1)
+
+
+@audit_app.command("variance")
+def audit_variance(
+    project_paths: list[str] = typer.Argument(help="One or more project directories to measure"),
+    runs: int | None = typer.Option(None, "--runs", help="Runs per project (default: config)"),
+    profile: str | None = typer.Option(None, "--profile", help="Provider profile override"),
+    model: str | None = typer.Option(None, "--model", help="Model override"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Measure each project's run-to-run noise floor at a pinned commit.
+
+    Refuses a dirty worktree: a floor measured across a code change is not a
+    floor. Runs persist individually, so an interrupted campaign can be
+    reduced later rather than restarted.
+    """
+    resolved_cwd = _resolve_cwd(cwd)
+    store = _build_store(resolved_cwd)
+    n_runs = runs if runs is not None else _audit_variance_runs(resolved_cwd)
+
+    total_succeeded = 0
+    total_failed = 0
+    floors_written = 0
+
+    for raw_path in project_paths:
+        project_path = Path(raw_path).expanduser().resolve()
+        series: list[AuditRun] = []
+
+        for index in range(n_runs):
+            try:
+                outcome = asyncio.run(
+                    run_audit(
+                        project_path,
+                        store=store,
+                        profile=profile,
+                        model=model,
+                        independent_run=True,
+                        require_clean=True,
+                        cwd=resolved_cwd,
+                    )
+                )
+            except (AuditPreflightError, AuditSkillError, MetrologyIdentityError) as exc:
+                rprint(f"[red]Error: {exc}[/red]")
+                total_failed += n_runs - index
+                break
+            except MetrologyStoreError as exc:
+                rprint(f"[red]Store error: {exc}[/red]")
+                raise typer.Exit(code=1) from exc
+
+            _report_run_outcome(outcome, prefix=f"  run {index + 1}/{n_runs}  ")
+            if outcome.succeeded and outcome.run is not None:
+                series.append(outcome.run)
+                total_succeeded += 1
+            else:
+                total_failed += 1
+
+        if len(series) < MIN_USABLE_RUNS:
+            if series:
+                rprint(
+                    f"[yellow]No floor for {project_path}: only {len(series)} usable run(s); "
+                    f"{MIN_USABLE_RUNS} are required. The runs are persisted and can be "
+                    "reduced later once more land.[/yellow]"
+                )
+            continue
+
+        try:
+            floor = reduce_noise_floor(series)
+        except AuditVarianceError as exc:
+            rprint(f"[yellow]No floor for {project_path}: {exc}[/yellow]")
+            continue
+
+        store.write_noise_floor(floor)
+        floors_written += 1
+        rprint(
+            f"[green]floor[/green] {floor.project_id.value} @{floor.commit_sha[:8]}  "
+            f"total {floor.total.min}-{floor.total.max} "
+            f"(mean {floor.total.mean:.1f}, sd {floor.total.stddev:.2f}, n={floor.n_runs})"
+        )
+
+    _campaign_summary(total_succeeded, total_failed, floors_written)
+    if total_failed:
+        raise typer.Exit(code=1)
+
+
+@report_app.command("baseline")
+def report_baseline(
+    project: str | None = typer.Option(None, "--project", help="Filter by project id"),
+    category: str | None = typer.Option(None, "--category", help="Filter by issue class"),
+    as_json: bool = typer.Option(False, "--json", help="Emit the BaselineReport model verbatim"),
+    cwd: str | None = typer.Option(None, "--cwd", help="Working directory"),
+) -> None:
+    """Cross-project audit baseline, every figure carrying its floor."""
+    resolved_cwd = _resolve_cwd(cwd)
+
+    category_filter: AuditCategory | None = None
+    if category is not None:
+        try:
+            category_filter = AuditCategory(category.strip().casefold())
+        except ValueError as exc:
+            choices = ", ".join(c.value for c in AuditCategory)
+            raise typer.BadParameter(
+                f"Unknown category {category!r}. Choose one of: {choices}"
+            ) from exc
+
+    try:
+        store = _build_store(resolved_cwd)
+        report = baseline_report(store, project_filter=project, category_filter=category_filter)
+    except MetrologyStoreError as exc:
+        rprint(f"[red]Store error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if as_json:
+        typer.echo(report.model_dump_json())
+        return
+
+    if not report.projects:
+        rprint("[dim]No audit data.[/dim]")
+        return
+
+    for entry in report.projects:
+        floor_text = (
+            f"floor {entry.total_floor.min}-{entry.total_floor.max} "
+            f"(sd {entry.total_floor.stddev:.2f}, n={entry.floor_n_runs})"
+            if entry.total_floor is not None
+            else f"[yellow]{entry.floor_note}[/yellow]"
+        )
+        rprint(
+            f"\n[bold]{entry.project_id.value}[/bold] @{entry.commit_sha[:8]}  "
+            f"{entry.total_findings} findings  {floor_text}"
+        )
+        if entry.unnormalized_count:
+            rprint(f"  [yellow]{entry.unnormalized_count} finding(s) could not be normalized[/yellow]")
+        for cell in entry.cells:
+            cell_floor = (
+                f"  (floor {cell.floor.min}-{cell.floor.max})" if cell.floor is not None else ""
+            )
+            rprint(f"  {cell.category.value:<32} {cell.count:>4}{cell_floor}")
+
+    rprint(
+        f"\n[dim]{report.excluded.groups_without_floor} group(s) without a measured floor; "
+        f"{report.excluded.projects_with_multiple_instruments} project(s) span multiple "
+        "instruments and are reported separately.[/dim]"
+    )

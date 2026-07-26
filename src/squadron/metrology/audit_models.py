@@ -89,6 +89,10 @@ class ProjectBaseline(BaseModel):
     total_findings: int
     unnormalized_count: int
     total_floor: FloorStat | None = None
+    #: Runs the attached floor was reduced from, or ``None`` when no floor
+    #: was measured. Presented alongside the spread so a coarse n=2 floor is
+    #: never mistaken for a well-evidenced one.
+    floor_n_runs: int | None = None
     floor_note: str | None = None
     cells: list[BaselineCell]
 
