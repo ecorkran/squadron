@@ -40,7 +40,7 @@ The error bar is the actual deliverable. A baseline without a noise floor is wor
 **Included:**
 - An **audit harness** (`squadron.metrology.audit`): run the `tech-debt-audit` skill against a given project cwd via a provider profile, capture output.
 - **Finding normalization**: structured audit output → `AuditFinding` records with a **closed category vocabulary**, severity, location, and honest handling of anything that does not normalize.
-- **Fork edits to `commands/analysis/tech-debt-audit.md`** (see Technical Decisions): a machine-readable findings block, a closed category vocabulary, and an independent-run mode that suppresses repeat-run diffing.
+- **Fork edits to the `tech-debt-audit` skill** (see Technical Decisions): a machine-readable findings block, a closed category vocabulary, and an independent-run mode that suppresses repeat-run diffing. Landed in the canonical fork (`github:ecorkran/tech-debt-audit`) and vendored into `commands/analysis/tech-debt-audit.md`, with the sync enforced by test.
 - **Noise-floor measurement**: N repeated audits at a pinned commit, per project, reduced to a persisted `AuditNoiseFloor` record.
 - **Persistence** on the 320 spine: new `audit_finding` and `audit_noise_floor` record types behind the existing envelope discriminator.
 - **Baseline reporting**: cross-project, per project/issue-class, every figure carrying the applicable floor.
@@ -101,6 +101,22 @@ This makes 323's `[340]` dependency a **real coupling, not a read-only one** —
 - **Independent-run mode** — a documented condition under which the repeat-run clause at [:103](commands/analysis/tech-debt-audit.md#L103) does **not** apply, so a variance series produces independent samples. The harness sets it; interactive users keep the living-document behavior they have today.
 
 The audit's 9 dimensions, its citation rules, and its "looks bad but is actually fine" requirement are **not** touched. The instrument keeps measuring what it measures.
+
+**Fan-out is expected on the large repos and is not suppressed.** [:97](commands/analysis/tech-debt-audit.md#L97) dispatches Task subagents when a repo exceeds 50k LOC or 5 top-level modules; squadron (~64k) and context-forge (~61k) clear it, and migratory may clear the module bar. This is a *prompt instruction, not enforced code*, so fan-out may occur on one run of a series and not the next. That inconsistency is left in deliberately: it is genuine run-to-run noise a user of the skill actually experiences, so it belongs **inside** the measured floor rather than being engineered out of it. A large repo whose floor is dominated by fan-out nondeterminism is a real finding about the instrument. Practical consequence for Phase 6: fanned-out runs are slower and heavier than a per-LOC estimate suggests, since each subagent reads independently.
+
+### 1a. Fork sync — the fork is canonical, squadron vendors it
+
+The skill has three homes and an edit that reaches only one of them silently forks the instrument:
+
+1. `github:ecorkran/tech-debt-audit` — the standalone fork, consumed by any project pointing at it
+2. `commands/analysis/tech-debt-audit.md` in this repo — bundled into the wheel ([pyproject.toml:68](pyproject.toml#L68)), which is what squadron's `source = "bundled"` manifest entry ([data/skills.toml](src/squadron/data/skills.toml)) serves
+3. `~/.claude/commands/analysis/` — installed copies, refreshed by `sq skills install analysis`
+
+**Decision: the fork repo is canonical.** Edits land there first and are synced into squadron's `commands/analysis/` as a vendored snapshot. Installed copies follow from `sq skills install`.
+
+This direction is chosen over developing in squadron and pushing upstream because the skill is a **distributable artifact used beyond squadron**. If squadron were canonical, every other consumer of the fork would run the pre-contract instrument until a push happened — and because `audit_prompt_hash` (Decision 10) correctly refuses to pool audits from differing prompts, the result would be a **silent measurement gap** rather than a loud error: audits that simply never compare, with no failure to notice.
+
+Sync is enforced rather than remembered: the category-vocabulary test (Success Criteria) asserts squadron's vendored copy enumerates exactly `AuditCategory`, so a fork edit that lands without a squadron sync — or a squadron edit that diverges from the fork — fails CI. `audit_prompt_hash` is computed from the **vendored copy actually used for a run**, so any divergence is at minimum recorded in the data even if it escapes CI.
 
 ### 2. Findings block format
 
@@ -322,7 +338,8 @@ Restating the slice-plan criteria as verifiable conditions:
 - [ ] The report is at the project/issue-class grain and emits **no agreement dimension** — asserted by a test that no report path produces a human-comparison figure.
 - [ ] Findings that cannot be normalized are retained and counted (`other` + `raw_category`, `unnormalized_count`), never silently dropped — asserted by a test feeding an out-of-vocabulary category.
 - [ ] Persistence reuses the 320 spine: new record types behind the existing envelope discriminator, no new storage engine, schema version unchanged.
-- [ ] The skill file's enumerated categories exactly match `AuditCategory` — asserted by a test, so fork drift fails CI.
+- [ ] The vendored skill file's enumerated categories exactly match `AuditCategory` — asserted by a test, so drift between the canonical fork and squadron's copy fails CI.
+- [ ] The contract edits are present in the canonical fork (`github:ecorkran/tech-debt-audit`), not only in squadron's vendored copy — otherwise other consumers run a different instrument whose audits silently never pool.
 - [ ] Repeated runs in a variance series are **independent** — asserted by a test that the independent-run preamble is present and the repeat-run clause does not apply.
 - [ ] A variance series that spans differing commit SHAs or prompt hashes is **refused**, not averaged.
 - [ ] The full existing suite passes; no judging-path or dispatch-path behavior changes.
@@ -377,7 +394,8 @@ pytest -q && pyright
 ## Risks
 
 - **The model does not reliably emit the fenced block.** Mitigation: the block is specified in the skill file where the model is already following a detailed protocol, and the parser fails loudly at the boundary rather than half-parsing. If drift proves common in practice, the fallback is parsing the human findings table — noted in Future Work rather than built speculatively.
-- **Subagent fan-out on >50k-LOC repos is itself a variance source.** Not mitigated — it is *measured*. This is why the set spans an order of magnitude in size.
+- **Subagent fan-out on >50k-LOC repos is itself a variance source.** Not mitigated — it is *measured*, and expected on squadron and context-forge. Because `:97` is a prompt instruction rather than enforced code, fan-out may vary *within* a series, which widens that project's floor. Correct behavior: it is noise a real user experiences. This is why the set spans an order of magnitude in size.
+- **A fork edit that skips the squadron sync (or vice versa) forks the instrument silently.** `audit_prompt_hash` refuses to pool across differing prompts, so the symptom is audits that never compare rather than a visible failure. Mitigated by the category-match test (CI) and by hashing the vendored copy actually used, so divergence is recorded in the data even if it escapes CI.
 - **The 9 dimensions may not fit every codebase.** Surfaced via the `other` share rather than hidden; `trading-data` is the named case where this is most likely.
 
 ## Future Work

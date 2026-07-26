@@ -35,6 +35,10 @@ Internal work log for squadron project development.
 
 **Cost is stated, not hidden:** 4 projects × 3 runs = 12 full-repo LLM audits, plus one baseline run each. Dominant cost of the slice and the reason the harness is resumable by design.
 
+**Fork sync made explicit scope (PM decision).** The skill has three homes — the standalone fork, squadron's bundled `commands/analysis/` copy, and installed `~/.claude/commands/` copies. **The fork is canonical**; squadron vendors it. Chosen over squadron-canonical because the skill is distributable beyond squadron: if squadron led, other consumers would run the pre-contract instrument, and since `audit_prompt_hash` correctly refuses to pool audits from differing prompts, the symptom would be a **silent measurement gap** (audits that never compare) rather than a loud error. Sync is enforced by the category-match test rather than remembered, and the hash is computed from the vendored copy actually used so divergence is recorded in the data even if it escapes CI.
+
+**Fan-out on the large repos is expected and deliberately not suppressed.** `:97` dispatches Task subagents above 50k LOC / 5 top-level modules — squadron and context-forge clear it. It is a prompt instruction, not enforced code, so it may vary *within* a series and widen that project's floor. That is correct: it is noise a real user of the skill experiences, so it belongs inside the measured floor rather than engineered out of it.
+
 **One plan-level open question resolved:** finding-normalization schema + repeated-run count (both recorded in the 320 plan Notes). Four Future Work items opened: human-table fallback parser, `trading-data` stretch run, periodic re-audit cadence, project registry.
 
 ---
