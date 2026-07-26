@@ -258,14 +258,14 @@ status: in_progress
 
 ### T16: Noise-floor reduction
 
-- [ ] **Add `src/squadron/metrology/audit_variance.py`** — pure reduction, no I/O, no agent
-  - [ ] `reduce_noise_floor(runs: list[AuditRun]) -> AuditNoiseFloor`
-  - [ ] **Validate the series shares `(project_id, commit_sha, audit_prompt_hash)`** — a mismatch raises, it is never averaged. Per Decision 6/10, a floor measured across a code change or an instrument change is not a floor
-  - [ ] **Refuse fewer than 2 usable runs** — a spread needs at least two points. Raise rather than emit a degenerate floor
-  - [ ] `n_runs` records the **actual** number reduced, which may be fewer than requested when runs failed
-  - [ ] Compute `FloorStat` (min/max/mean/stddev) for the total finding count and per `AuditCategory`; a category absent from a run counts as **0** for that run, not as missing — otherwise the spread is computed over the wrong denominator
-  - [ ] Use `statistics.stdev` (sample stddev) and state that n=3 makes this coarse; the design commits to presenting it as such
-- [ ] Success: three runs of 40/47/44 findings yield min=40, max=47, correct mean and stddev; a mismatched-SHA series raises; a 1-run series raises
+- [x] **Add `src/squadron/metrology/audit_variance.py`** — pure reduction, no I/O, no agent
+  - [x] `reduce_noise_floor(runs: list[AuditRun]) -> AuditNoiseFloor`
+  - [x] **Validate the series shares `(project_id, commit_sha, audit_prompt_hash)`** — a mismatch raises, it is never averaged. Per Decision 6/10, a floor measured across a code change or an instrument change is not a floor
+  - [x] **Refuse fewer than 2 usable runs** — a spread needs at least two points. Raise rather than emit a degenerate floor
+  - [x] `n_runs` records the **actual** number reduced, which may be fewer than requested when runs failed
+  - [x] Compute `FloorStat` (min/max/mean/stddev) for the total finding count and per `AuditCategory`; a category absent from a run counts as **0** for that run, not as missing — otherwise the spread is computed over the wrong denominator
+  - [x] Use `statistics.stdev` (sample stddev) and state that n=3 makes this coarse; the design commits to presenting it as such
+- [x] Success: three runs of 40/47/44 findings yield min=40, max=47, correct mean and stddev; a mismatched-SHA series raises; a 1-run series raises
 
 **Commit:** `feat(metrology): reduce audit runs to a per-project noise floor`
 
@@ -273,13 +273,13 @@ status: in_progress
 
 ### T17: Noise-floor tests
 
-- [ ] **Add `tests/metrology/test_audit_variance.py`**
-  - [ ] Known-value reduction: hand-computed min/max/mean/stddev for a fixed 3-run fixture
-  - [ ] **Per-category zero-fill:** a category present in runs 1 and 3 but absent in run 2 has `min=0` and a spread reflecting the absence — the denominator correctness check
-  - [ ] Mismatched `commit_sha` raises; mismatched `audit_prompt_hash` raises; both messages name the offending field
-  - [ ] Fewer than 2 runs raises
-  - [ ] `n_runs` reflects the actual list length, not a requested count
-- [ ] Success: `uv run pytest tests/metrology/test_audit_variance.py` passes
+- [x] **Add `tests/metrology/test_audit_variance.py`**
+  - [x] Known-value reduction: hand-computed min/max/mean/stddev for a fixed 3-run fixture
+  - [x] **Per-category zero-fill:** a category present in runs 1 and 3 but absent in run 2 has `min=0` and a spread reflecting the absence — the denominator correctness check
+  - [x] Mismatched `commit_sha` raises; mismatched `audit_prompt_hash` raises; both messages name the offending field
+  - [x] Fewer than 2 runs raises
+  - [x] `n_runs` reflects the actual list length, not a requested count
+- [x] Success: `uv run pytest tests/metrology/test_audit_variance.py` passes
 
 **Commit:** `test(metrology): cover noise-floor reduction and refusal paths`
 
@@ -287,14 +287,14 @@ status: in_progress
 
 ### T18: The baseline report
 
-- [ ] **Add `src/squadron/metrology/audit_report.py`** — reads the store, writes nothing (mirrors `report.py`'s discipline)
-  - [ ] `baseline_report(store, *, project_filter=None, cwd=".") -> BaselineReport` — group by `(project_id, AuditCategory)`, count findings, attach that project's floor
-  - [ ] **Group by `audit_prompt_hash`**; runs from different instruments are **never pooled**, mirroring `_comparability_key` ([report.py:205](../../../src/squadron/metrology/report.py#L205))
-  - [ ] A project with no `AuditNoiseFloor` for its `(project_id, commit_sha, audit_prompt_hash)` reports **"no floor measured"** — never borrows another project's number
-  - [ ] Carry an exclusion summary so excluded/unpooled data is visible, following 321's `ExclusionSummary` precedent — exclusions must never be mistaken for absence of data
-  - [ ] **Emit no agreement dimension** and no human-comparison figure of any kind
-  - [ ] Add report models (`BaselineCell`, `BaselineReport`) to `audit_models.py`, Pydantic, emitted verbatim under `--json`
-- [ ] Success: two projects with differing floors report each against its own; a project lacking a floor is marked, not defaulted
+- [x] **Add `src/squadron/metrology/audit_report.py`** — reads the store, writes nothing (mirrors `report.py`'s discipline)
+  - [x] `baseline_report(store, *, project_filter=None, cwd=".") -> BaselineReport` — group by `(project_id, AuditCategory)`, count findings, attach that project's floor
+  - [x] **Group by `audit_prompt_hash`**; runs from different instruments are **never pooled**, mirroring `_comparability_key` ([report.py:205](../../../src/squadron/metrology/report.py#L205))
+  - [x] A project with no `AuditNoiseFloor` for its `(project_id, commit_sha, audit_prompt_hash)` reports **"no floor measured"** — never borrows another project's number
+  - [x] Carry an exclusion summary so excluded/unpooled data is visible, following 321's `ExclusionSummary` precedent — exclusions must never be mistaken for absence of data
+  - [x] **Emit no agreement dimension** and no human-comparison figure of any kind
+  - [x] Add report models (`BaselineCell`, `BaselineReport`) to `audit_models.py`, Pydantic, emitted verbatim under `--json`
+- [x] Success: two projects with differing floors report each against its own; a project lacking a floor is marked, not defaulted
 
 **Commit:** `feat(metrology): cross-project audit baseline report`
 
@@ -302,13 +302,13 @@ status: in_progress
 
 ### T19: Baseline report tests
 
-- [ ] **Add `tests/metrology/test_audit_report.py`**
-  - [ ] Grouping is correct at the project/issue-class grain across ≥2 projects
-  - [ ] **No-floor project is marked** and does not borrow — assert the marker is present and no other project's stddev appears on it
-  - [ ] **Cross-hash runs are not pooled:** two runs of the same project under different `audit_prompt_hash` values appear separately and are counted in the exclusion summary
-  - [ ] **No agreement dimension:** assert the serialized report contains no agreement/match-rate field — the design's explicit success criterion, asserted structurally rather than by eyeball
-  - [ ] `other`-category share is visible in the output (a rising share is the vocabulary-fit signal)
-- [ ] Success: `uv run pytest tests/metrology/test_audit_report.py` passes
+- [x] **Add `tests/metrology/test_audit_report.py`**
+  - [x] Grouping is correct at the project/issue-class grain across ≥2 projects
+  - [x] **No-floor project is marked** and does not borrow — assert the marker is present and no other project's stddev appears on it
+  - [x] **Cross-hash runs are not pooled:** two runs of the same project under different `audit_prompt_hash` values appear separately and are counted in the exclusion summary
+  - [x] **No agreement dimension:** assert the serialized report contains no agreement/match-rate field — the design's explicit success criterion, asserted structurally rather than by eyeball
+  - [x] `other`-category share is visible in the output (a rising share is the vocabulary-fit signal)
+- [x] Success: `uv run pytest tests/metrology/test_audit_report.py` passes
 
 **Commit:** `test(metrology): cover baseline grouping, floor attachment, no-agreement`
 
@@ -316,15 +316,15 @@ status: in_progress
 
 ### T20: CLI — `sq metrology audit run` and `audit variance`
 
-- [ ] **Edit `src/squadron/cli/commands/metrology.py`** — thin Typer shells over the core, matching the 320/321/322 conventions exactly
-  - [ ] Add a nested `audit_app` via `metrology_app.add_typer(...)`, mirroring the existing `report_app` pattern
-  - [ ] `sq metrology audit run <project-path>...` — `--profile`, `--json`, `--cwd`. One audit per project, each persisting independently so a mid-campaign failure loses nothing
-  - [ ] `sq metrology audit variance <project-path>...` — `--runs` (defaults to `metrology.audit_variance_runs`), `--profile`, `--cwd`. N independent runs per project at pinned HEAD, then reduce each series
-  - [ ] Both use `_resolve_cwd` and `_build_store`; `--json` emits the Pydantic model verbatim via `model_dump_json()`
-  - [ ] Error handling per convention: `MetrologyStoreError` → `[red]Store error: ...[/red]` exit 1; `MetrologyTargetError` / `MetrologyIdentityError` → `[red]Error: ...[/red]` exit 1
-  - [ ] Print a per-project progress line as each run completes — a 12-audit campaign must not look hung
-  - [ ] Report a campaign summary at the end: how many runs succeeded, how many failed, and which floors were written. **Never** silently report success for a campaign with failed runs
-- [ ] Success: both commands appear in `sq metrology --help`; `audit variance --runs 2` on a dirty worktree exits 1 with a clear refusal
+- [x] **Edit `src/squadron/cli/commands/metrology.py`** — thin Typer shells over the core, matching the 320/321/322 conventions exactly
+  - [x] Add a nested `audit_app` via `metrology_app.add_typer(...)`, mirroring the existing `report_app` pattern
+  - [x] `sq metrology audit run <project-path>...` — `--profile`, `--json`, `--cwd`. One audit per project, each persisting independently so a mid-campaign failure loses nothing
+  - [x] `sq metrology audit variance <project-path>...` — `--runs` (defaults to `metrology.audit_variance_runs`), `--profile`, `--cwd`. N independent runs per project at pinned HEAD, then reduce each series
+  - [x] Both use `_resolve_cwd` and `_build_store`; `--json` emits the Pydantic model verbatim via `model_dump_json()`
+  - [x] Error handling per convention: `MetrologyStoreError` → `[red]Store error: ...[/red]` exit 1; `MetrologyTargetError` / `MetrologyIdentityError` → `[red]Error: ...[/red]` exit 1
+  - [x] Print a per-project progress line as each run completes — a 12-audit campaign must not look hung
+  - [x] Report a campaign summary at the end: how many runs succeeded, how many failed, and which floors were written. **Never** silently report success for a campaign with failed runs
+- [x] Success: both commands appear in `sq metrology --help`; `audit variance --runs 2` on a dirty worktree exits 1 with a clear refusal
 
 **Commit:** `feat(cli): add sq metrology audit run and variance commands`
 
@@ -332,17 +332,17 @@ status: in_progress
 
 ### T21: CLI — `sq metrology report baseline`, and CLI tests
 
-- [ ] **Add `sq metrology report baseline` to the existing `report_app`**
-  - [ ] `--project`, `--category`, `--json`, `--cwd`
-  - [ ] Present each figure with its floor attached, or the explicit "no floor measured" marker
-  - [ ] Empty store → dim `No audit data.` message and **exit 0**, not an error (matching the existing empty-result convention)
-- [ ] **Add `tests/metrology/test_audit_cli.py`** using the existing CLI-test pattern from `test_report_cli.py`
-  - [ ] `audit run` on a stubbed harness persists and prints; `--json` output parses as the Pydantic model
-  - [ ] `audit variance` refuses a dirty worktree with exit 1 and a message naming the reason
-  - [ ] `report baseline` renders both the floor-present and no-floor-measured cases
-  - [ ] Empty store exits 0 with the dim message
-  - [ ] **Campaign summary is honest:** a campaign with one failed run reports the failure in the summary and does not exit 0 silently as though all succeeded
-- [ ] Success: `uv run pytest tests/metrology/test_audit_cli.py` passes
+- [x] **Add `sq metrology report baseline` to the existing `report_app`**
+  - [x] `--project`, `--category`, `--json`, `--cwd`
+  - [x] Present each figure with its floor attached, or the explicit "no floor measured" marker
+  - [x] Empty store → dim `No audit data.` message and **exit 0**, not an error (matching the existing empty-result convention)
+- [x] **Add `tests/metrology/test_audit_cli.py`** using the existing CLI-test pattern from `test_report_cli.py`
+  - [x] `audit run` on a stubbed harness persists and prints; `--json` output parses as the Pydantic model
+  - [x] `audit variance` refuses a dirty worktree with exit 1 and a message naming the reason
+  - [x] `report baseline` renders both the floor-present and no-floor-measured cases
+  - [x] Empty store exits 0 with the dim message
+  - [x] **Campaign summary is honest:** a campaign with one failed run reports the failure in the summary and does not exit 0 silently as though all succeeded
+- [x] Success: `uv run pytest tests/metrology/test_audit_cli.py` passes
 
 **Commit:** `feat(cli): add baseline report command with tests`
 
