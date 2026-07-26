@@ -14,15 +14,25 @@ templates.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
-from squadron.metrology.errors import MetrologyError
+from squadron.config.manager import get_config, get_typed_config
+from squadron.metrology.audit_parse import parse_audit_findings
+from squadron.metrology.errors import (
+    AuditBlockMalformedError,
+    AuditBlockMissingError,
+    MetrologyError,
+)
 from squadron.metrology.identity import derive_project_id
-from squadron.metrology.models import ProjectId
+from squadron.metrology.models import AuditRun, ProjectId
+from squadron.metrology.store import MetrologyStore, generate_audit_run_id
 from squadron.skills.models import SkillSourceError
 from squadron.skills.resolver import _resolve_bundled  # pyright: ignore[reportPrivateUsage]
 
@@ -103,6 +113,49 @@ def audit_prompt_hash(skill_path: Path) -> str:
         return hashlib.sha256(skill_path.read_bytes()).hexdigest()
     except OSError as exc:
         raise AuditSkillError(f"Could not read the audit skill at {skill_path}: {exc}") from exc
+
+
+#: Tools the audit agent needs in the target repo. The skill runs `rg`,
+#: `git log`, and language-native tooling (`ruff`, `npm audit`, ...), so Bash
+#: is required — this is a strictly larger tool surface than a judge review.
+_AUDIT_ALLOWED_TOOLS = ["Read", "Glob", "Grep", "Bash", "Task", "TodoWrite"]
+
+#: The audit runs unattended against an external repo; the skill's protocol
+#: is the authority on what it may do, so permission prompts are bypassed
+#: exactly as the code-review template does.
+_AUDIT_PERMISSION_MODE = "bypassPermissions"
+
+
+class AuditRunFailure(StrEnum):
+    """Why a run failed, for logging and honest campaign summaries.
+
+    Every value means the same thing for persistence — **nothing was
+    written** — and differs only in what the operator should do about it.
+    """
+
+    TIMEOUT = "timeout"
+    STREAM_ERROR = "stream_error"
+    BLOCK_MISSING = "block_missing"
+    BLOCK_MALFORMED = "block_malformed"
+
+
+@dataclass(frozen=True)
+class AuditRunResult:
+    """The outcome of one attempted audit.
+
+    Exactly one of ``run`` / ``failure`` is set. A failed run persists
+    nothing, so the caller reports it and continues the campaign rather than
+    treating it as a zero-finding data point.
+    """
+
+    project_path: Path
+    run: AuditRun | None = None
+    failure: AuditRunFailure | None = None
+    detail: str | None = None
+
+    @property
+    def succeeded(self) -> bool:
+        return self.run is not None
 
 
 @dataclass(frozen=True)
@@ -206,3 +259,204 @@ def build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str:
     if not independent_run:
         return body
     return f"{INDEPENDENT_RUN_MARKER}\n\n{body}"
+
+
+def resolve_audit_profile(profile: str | None, *, cwd: str = ".") -> str:
+    """Resolve the provider profile for an audit run.
+
+    Explicit argument wins, then ``metrology.audit_profile``, then the
+    review default. No hard-coded provider name at the call site.
+    """
+    if profile is not None:
+        return profile
+    configured = get_config("metrology.audit_profile", cwd=cwd)
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    review_default = get_config("default_review_profile", cwd=cwd)
+    if isinstance(review_default, str) and review_default.strip():
+        return review_default.strip()
+    raise AuditSkillError(
+        "No provider profile for the audit run. Set one with "
+        "'sq config set metrology.audit_profile <profile>' or pass --profile."
+    )
+
+
+async def _collect_audit_output(agent: object, prompt: str, agent_name: str) -> str:
+    """Drive the agent stream and return its prose, tool narration filtered.
+
+    Mirrors the review client's narration filter: SDK providers emit a
+    duplicate ResultMessage plus tool_use/tool_result messages that narrate
+    the agent's work. The audit's findings block sits in the prose, and
+    mixing narration into it would corrupt the parse.
+    """
+    from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
+
+    message = Message(
+        sender="metrology-audit",
+        recipients=[agent_name],
+        content=prompt,
+        message_type=MessageType.chat,
+    )
+    parts: list[str] = []
+    async for response in agent.handle_message(message):  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
+        sdk_type = response.metadata.get("sdk_type")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
+            continue
+        parts.append(response.content)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+    return "\n".join(parts)
+
+
+async def run_audit(
+    project_path: Path,
+    *,
+    store: MetrologyStore,
+    profile: str | None = None,
+    model: str | None = None,
+    independent_run: bool = False,
+    require_clean: bool = False,
+    cwd: str = ".",
+) -> AuditRunResult:
+    """Run one audit against ``project_path`` and persist it, or persist nothing.
+
+    The governing rule is one run = one persisted unit. Every failure path
+    below persists **nothing** and returns a typed failure, so a hung or
+    truncated run can never enter a noise floor as a spuriously low finding
+    count — which would bias the floor downward, the same direction the
+    skill's repeat-run mode would have.
+
+    Pre-flight runs first, before an agent exists, so a bad project costs
+    zero tokens. The caller is expected to continue the campaign on failure.
+    """
+    from squadron.core.models import AgentConfig
+    from squadron.providers.loader import ensure_provider_loaded
+    from squadron.providers.profiles import get_profile
+    from squadron.providers.registry import get_provider
+
+    # --- Pre-flight: everything here precedes token spend --------------
+    preflight = preflight_project(project_path, require_clean=require_clean, cwd=cwd)
+    skill_path = resolve_audit_skill()
+    prompt_hash = audit_prompt_hash(skill_path)
+    prompt = build_audit_prompt(skill_path, independent_run=independent_run)
+    resolved_profile = resolve_audit_profile(profile, cwd=cwd)
+    timeout_s = int(get_typed_config("metrology.audit_timeout_s", int, cwd=cwd))
+
+    provider_profile = get_profile(resolved_profile)
+    ensure_provider_loaded(provider_profile.provider)
+    provider = get_provider(provider_profile.provider)
+
+    agent_name = f"metrology-audit-{preflight.project_id.value.replace('/', '-')}"
+    config = AgentConfig(
+        name=agent_name,
+        agent_type=provider_profile.provider,
+        provider=provider_profile.provider,
+        model=model,
+        instructions="",
+        api_key=None,
+        base_url=provider_profile.base_url,
+        cwd=str(project_path),
+        allowed_tools=_AUDIT_ALLOWED_TOOLS,
+        permission_mode=_AUDIT_PERMISSION_MODE,
+        setting_sources=["project"],
+        credentials={
+            "api_key_env": provider_profile.api_key_env,
+            "default_headers": provider_profile.default_headers,
+            "mode": "client",
+        },
+    )
+
+    _logger.info(
+        "Audit %s (profile=%s, provider=%s, sha=%s, independent=%s, timeout=%ds)",
+        preflight.project_id.value,
+        resolved_profile,
+        provider_profile.provider,
+        preflight.commit_sha[:8],
+        independent_run,
+        timeout_s,
+    )
+
+    # --- Execution: bounded, and failing closed -------------------------
+    agent = await provider.create_agent(config)
+    try:
+        raw_output = await asyncio.wait_for(
+            _collect_audit_output(agent, prompt, agent_name),
+            timeout=timeout_s,
+        )
+    except TimeoutError:
+        _logger.warning(
+            "Audit timed out after %ds for %s (sha %s); persisting nothing.",
+            timeout_s,
+            preflight.project_id.value,
+            preflight.commit_sha[:8],
+        )
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.TIMEOUT,
+            detail=f"exceeded metrology.audit_timeout_s ({timeout_s}s)",
+        )
+    except Exception as exc:
+        # Any stream failure — peer disconnect, API error, provider fault.
+        # Logged with its type so a systematic provider problem is
+        # distinguishable from a one-off, then swallowed so the campaign
+        # continues; nothing is persisted either way.
+        _logger.warning(
+            "Audit stream failed for %s: %s: %s; persisting nothing.",
+            preflight.project_id.value,
+            type(exc).__name__,
+            exc,
+        )
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.STREAM_ERROR,
+            detail=f"{type(exc).__name__}: {exc}",
+        )
+    finally:
+        await agent.shutdown()
+
+    # --- Parse: absent and malformed are different failures -------------
+    try:
+        findings, unnormalized = parse_audit_findings(raw_output)
+    except AuditBlockMissingError as exc:
+        _logger.warning(
+            "Audit for %s emitted no findings block (%d bytes received); persisting nothing. %s",
+            preflight.project_id.value,
+            len(raw_output),
+            exc,
+        )
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.BLOCK_MISSING,
+            detail=str(exc),
+        )
+    except AuditBlockMalformedError as exc:
+        _logger.warning(
+            "Audit for %s emitted a malformed findings block; persisting nothing. %s",
+            preflight.project_id.value,
+            exc,
+        )
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.BLOCK_MALFORMED,
+            detail=str(exc),
+        )
+
+    # --- Persist: a complete run, or nothing ----------------------------
+    run = AuditRun(
+        run_id=generate_audit_run_id(),
+        project_id=preflight.project_id,
+        commit_sha=preflight.commit_sha,
+        audit_prompt_hash=prompt_hash,
+        model=model or provider_profile.provider,
+        measured_at=datetime.now(UTC),
+        findings=findings,
+        unnormalized_count=unnormalized,
+    )
+    store.write_audit_run(run)
+    _logger.info(
+        "Audit persisted %s: %d findings (%d unnormalized) for %s at %s",
+        run.run_id,
+        len(findings),
+        unnormalized,
+        run.project_id.value,
+        run.commit_sha[:8],
+    )
+    return AuditRunResult(project_path=project_path, run=run)
