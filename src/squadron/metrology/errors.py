@@ -39,3 +39,25 @@ class MetrologyStoreError(MetrologyError):
     rename failure). Distinct from identity/target errors so callers can tell
     a broken store from bad input.
     """
+
+
+class AuditBlockMissingError(MetrologyError):
+    """The audit output carried no machine-readable findings block.
+
+    Distinct from ``AuditBlockMalformedError`` because the two mean
+    different things about the run: *missing* says the model never emitted
+    the block (it ignored the contract, or the run was truncated before
+    reaching it), while *malformed* says it tried and produced something
+    unparseable. The harness logs them differently so a systematic contract
+    failure is distinguishable from sporadic YAML damage.
+    """
+
+
+class AuditBlockMalformedError(MetrologyError):
+    """The findings block was present but could not be parsed.
+
+    Raised for unparseable YAML, a non-mapping document, or a missing
+    ``findings`` list. Fails loudly at the boundary rather than
+    half-parsing — a partially-read block would under-count findings and
+    silently bias the measurement.
+    """
