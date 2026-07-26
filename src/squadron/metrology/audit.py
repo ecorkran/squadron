@@ -16,9 +16,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from squadron.metrology.errors import MetrologyError
+from squadron.metrology.identity import derive_project_id
+from squadron.metrology.models import ProjectId
 from squadron.skills.models import SkillSourceError
 from squadron.skills.resolver import _resolve_bundled  # pyright: ignore[reportPrivateUsage]
 
@@ -50,6 +54,16 @@ class AuditSkillError(MetrologyError):
     Names the pack and the expected filename, since the fix is either
     installing the pack or repairing a damaged install — not something the
     caller can infer from a bare path.
+    """
+
+
+class AuditPreflightError(MetrologyError):
+    """A project failed validation before any audit was attempted.
+
+    Raised for a missing path, a non-git directory, an unresolvable HEAD, or
+    (on a variance series) a dirty worktree. Distinct from run-time failures
+    because it is detected at zero token cost and fails only that project —
+    the rest of a campaign continues.
     """
 
 
@@ -89,6 +103,90 @@ def audit_prompt_hash(skill_path: Path) -> str:
         return hashlib.sha256(skill_path.read_bytes()).hexdigest()
     except OSError as exc:
         raise AuditSkillError(f"Could not read the audit skill at {skill_path}: {exc}") from exc
+
+
+@dataclass(frozen=True)
+class PreflightResult:
+    """A project that passed pre-flight: its identity and pinned commit."""
+
+    project_path: Path
+    project_id: ProjectId
+    commit_sha: str
+
+
+def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run a git command in ``cwd``, capturing output. Never raises on exit code."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def preflight_project(
+    project_path: Path,
+    *,
+    require_clean: bool,
+    cwd: str = ".",
+) -> PreflightResult:
+    """Validate a project before any token is spent on it.
+
+    Every check here runs **before** an agent is created, so a campaign
+    misconfigured across four projects fails in seconds rather than after
+    hours of audits. Each failure raises, and the caller is expected to fail
+    that project only and continue the campaign.
+
+    ``require_clean`` is set for variance runs: a floor measured across a
+    code change is not a floor, so a dirty worktree is refused outright
+    rather than warned about.
+
+    Raises:
+        AuditPreflightError: path, git-repo, or worktree-cleanliness failure.
+        MetrologyIdentityError: identity is underivable (message carries its
+            own ``sq config set`` remediation, which is left intact).
+    """
+    if not project_path.exists():
+        raise AuditPreflightError(f"Project path does not exist: {project_path}")
+    if not project_path.is_dir():
+        raise AuditPreflightError(f"Project path is not a directory: {project_path}")
+
+    inside = _run_git(["rev-parse", "--is-inside-work-tree"], cwd=project_path)
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        raise AuditPreflightError(
+            f"Project path is not a git repository: {project_path}. "
+            "The audit pins a commit SHA, so an unversioned directory cannot be measured."
+        )
+
+    head = _run_git(["rev-parse", "HEAD"], cwd=project_path)
+    if head.returncode != 0 or not head.stdout.strip():
+        raise AuditPreflightError(
+            f"Could not resolve HEAD in {project_path}: {head.stderr.strip() or 'no commits?'}"
+        )
+    commit_sha = head.stdout.strip()
+
+    # Propagates with its own remediation text intact — do not wrap it.
+    project_id = derive_project_id(cwd=str(project_path))
+
+    if require_clean:
+        status = _run_git(["status", "--porcelain"], cwd=project_path)
+        if status.returncode != 0:
+            raise AuditPreflightError(
+                f"Could not read git status in {project_path}: {status.stderr.strip()}"
+            )
+        if status.stdout.strip():
+            raise AuditPreflightError(
+                f"Refusing a variance series in {project_path}: the worktree is dirty. "
+                "A noise floor measures repeated audits of unchanged code, so the "
+                "commit must be pinned. Commit or stash your changes first."
+            )
+
+    return PreflightResult(
+        project_path=project_path,
+        project_id=project_id,
+        commit_sha=commit_sha,
+    )
 
 
 def build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str:
