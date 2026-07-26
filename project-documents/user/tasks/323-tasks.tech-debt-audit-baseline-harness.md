@@ -22,7 +22,7 @@ status: not_started
 - **Failure handling is specified here, not inherited.** `run_review_with_profile` supplies **none** — [review_client.py:134-156](../../../src/squadron/review/review_client.py#L134-L156) is a bare `async for` with only `finally: shutdown()`, no timeout, no exception handling around the stream. Every failure mode persists **nothing** and logs at WARNING+, so a hung or truncated run can never enter the floor as a low-count sample.
 - **Parity + discipline:** `audit.py` / `audit_parse.py` / `audit_variance.py` / `audit_report.py` are surface-agnostic (no Typer imports, matching the 320/321/322 pattern verified by test). Strict pyright, ruff clean. No judging path, no dispatch path, no pipeline path is touched.
 - **Dependencies:** 320 (complete), 340 (the pack). **Next slice:** 324, which consumes this slice's persisted baseline and noise floor (`interfaces: [324]`).
-- **Suggested order (from the design, followed here):** fork edits + vendoring + sync test (T1-T4) so the instrument is stable before anything measures with it → models and store extension (T5-T8) → parser (T9-T10) → harness with failure handling (T11-T14) → variance reduction (T15-T16) → baseline report (T17-T18) → CLI shells (T19-T21) → end-to-end verification (T22).
+- **Suggested order (from the design, followed here):** fork edits + vendoring + sync test (T1-T4) so the instrument is stable before anything measures with it → models and store extension (T5-T8) → parser (T9-T10) → **config keys (T11, before anything reads them)** → harness with failure handling (T12-T15) → variance reduction (T16-T17) → baseline report (T18-T19) → CLI shells (T20-T21) → end-to-end verification (T22).
 - **Cost note for the implementer:** T22 is the only task that spends real tokens at scale (12 audits). Everything before it is testable on fixtures at zero token cost — keep it that way.
 
 ---
@@ -55,7 +55,7 @@ status: not_started
   - [ ] Define the marker the harness passes (a preamble line, e.g. `INDEPENDENT RUN: do not read or update any existing audit file`)
   - [ ] State why: repeated audits are used to measure the audit's own run-to-run variance, and reading a prior audit would make runs correlated rather than independent
   - [ ] Interactive users are unaffected — absent the marker, living-document behavior is unchanged
-- [ ] Success: the ten values appear as an explicit list; the repeat-run clause is conditional; the independent-run marker is named exactly once and matches what T12 will send
+- [ ] Success: the ten values appear as an explicit list; the repeat-run clause is conditional; the independent-run marker is named exactly once and matches what T13 will send
 
 **Commit (fork repo):** `feat: closed category vocabulary and independent-run mode`
 
@@ -63,6 +63,7 @@ status: not_started
 
 ### T3: Vendor the updated skill into squadron
 
+- [ ] **Push T1 and T2 to the fork remote first.** The design's success criterion is that the edits are present in `github:ecorkran/tech-debt-audit` — the *remote*, not a local commit. Vendoring from an unpushed local fork would satisfy squadron while leaving every other consumer of the fork on the pre-contract instrument, which is the exact silent-divergence failure Decision 1a exists to prevent
 - [ ] **Copy the updated skill file from the fork to `commands/analysis/tech-debt-audit.md`**
   - [ ] Byte-for-byte, so `audit_prompt_hash` is meaningful — do not hand-edit the vendored copy
   - [ ] Preserve the existing attribution comment at the top of the file
@@ -78,7 +79,8 @@ status: not_started
 - [ ] **Add `tests/metrology/test_audit_skill_sync.py`**
   - [ ] **Category vocabulary matches:** parse the ten kebab-case values out of the vendored `commands/analysis/tech-debt-audit.md` and assert the set equals `{c.value for c in AuditCategory}` — this is the CI guard against fork/squadron drift, and it must fail loudly if either side changes alone
   - [ ] **Delimiters present:** both `squadron:findings:begin` and `squadron:findings:end` appear exactly once
-  - [ ] **Independent-run marker present:** the exact marker string T12 sends appears in the skill file
+  - [ ] **Independent-run marker present:** the exact marker string T13 sends appears in the skill file
+  - [ ] **Repeat-run clause is conditional:** the repeat-run section references the independent-run marker as an explicit exception — asserts that T2's rewording actually landed, not merely that the marker exists somewhere in the file. This is the design's success criterion "the repeat-run clause does not apply," which the marker-presence check alone does not cover
   - [ ] Locate the skill via `_resolve_bundled("analysis")`, not a hard-coded relative path, so the test exercises the same lookup the harness uses
 - [ ] Success: `uv run pytest tests/metrology/test_audit_skill_sync.py` passes; deleting one vocabulary value from the skill file makes it fail
 
@@ -155,7 +157,7 @@ status: not_started
   - [ ] `normalize_category(raw: str) -> tuple[AuditCategory, str | None]` — exact match on the vocabulary returns `(value, None)`; anything else returns `(AuditCategory.OTHER, raw)` so the original string is retained, never discarded
   - [ ] `normalize_severity(raw: str) -> AuditSeverity | None` — case-insensitive match; an unrecognized severity makes that **finding** unnormalizable (counted, not guessed), since severity is load-bearing for the baseline
   - [ ] A missing or placeholder `location` normalizes to the existing `unverified` sentinel ([parsers.py:24](../../../src/squadron/review/parsers.py#L24)), reusing the constant rather than redefining it
-  - [ ] **Absent block** and **malformed block** must be distinguishable by the caller — raise distinct typed errors (e.g. `AuditBlockMissingError` / `AuditBlockMalformedError` under `MetrologyError`), because T13 logs them differently
+  - [ ] **Absent block** and **malformed block** must be distinguishable by the caller — raise distinct typed errors (e.g. `AuditBlockMissingError` / `AuditBlockMalformedError` under `MetrologyError`), because T14 logs them differently
   - [ ] Do **not** verify that `location` paths exist on disk — deliberate divergence from the review parser's `_check_path_existence` (the count and class are the measurement; re-verifying across N×M runs is I/O the measurement does not need)
 - [ ] Success: a well-formed block yields the expected findings; an out-of-vocabulary category yields `OTHER` with `raw_category` set
 
@@ -179,7 +181,23 @@ status: not_started
 
 ---
 
-### T11: Skill resolution, prompt build, and instrument hash
+### T11: Config keys
+
+> **Ordering note:** this task must precede T14/T15. `get_config` raises `KeyError` for a key not in `CONFIG_KEYS`, and T14 reads `metrology.audit_timeout_s` to wrap the agent stream — so registering the keys after the harness would make T14's implementation and T15's timeout test fail outright.
+
+- [ ] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS`
+  - [ ] `metrology.audit_variance_runs` — `int`, default `3`, described as runs per project in a variance series
+  - [ ] `metrology.audit_timeout_s` — `int`, default `3600`, described as the wall-clock cap per audit run (bounds pathology; does not pace normal runs)
+  - [ ] `metrology.audit_profile` — `str`, default `None`, described as the provider profile for audit runs; unset falls back to the review default
+  - [ ] All three are `int`/`str` only — `_coerce_value` ([manager.py:54-61](../../../src/squadron/config/manager.py#L54-L61)) does not handle `float`, so no float key is added here
+  - [ ] Read them via the existing `get_typed_config` helper rather than adding new readers
+- [ ] Success: `sq config get metrology.audit_variance_runs` prints `3`; `sq config set metrology.audit_timeout_s 1800` succeeds and reads back
+
+**Commit:** `feat(config): add audit harness config keys`
+
+---
+
+### T12: Skill resolution, prompt build, and instrument hash
 
 - [ ] **Add `src/squadron/metrology/audit.py`** (surface-agnostic — no Typer imports)
   - [ ] `resolve_audit_skill() -> Path` — via `skills.resolver._resolve_bundled("analysis")` + `/ "tech-debt-audit.md"`, so it works whether or not `sq skills install` has been run. Raise a typed error naming the pack if absent
@@ -191,7 +209,7 @@ status: not_started
 
 ---
 
-### T12: Pre-flight checks
+### T13: Pre-flight checks
 
 - [ ] **Add to `src/squadron/metrology/audit.py`** — all checks run **before** any agent is created, so a misconfigured campaign costs zero tokens
   - [ ] `preflight_project(project_path: Path, *, require_clean: bool, cwd: str) -> PreflightResult` returning the resolved `ProjectId` and `commit_sha`
@@ -206,10 +224,10 @@ status: not_started
 
 ---
 
-### T13: The audit run with full failure handling
+### T14: The audit run with full failure handling
 
 - [ ] **Add `run_audit(...)` to `src/squadron/metrology/audit.py`**
-  - [ ] Signature per the design: resolve identity + SHA (T12) → build prompt (T11) → execute → parse (T9) → persist one `AuditRun`
+  - [ ] Signature per the design: resolve identity + SHA (T13) → build prompt (T12) → execute → parse (T9) → persist one `AuditRun`
   - [ ] Model the execution on [review_client.py:134-156](../../../src/squadron/review/review_client.py#L134-L156) — per-project `cwd`, tool permissions, and the `sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result")` narration filter — but **do not** call `run_review_with_profile`; it builds review prompts and calls `parse_review_output`
   - [ ] **Wrap the agent stream in `asyncio.wait_for`** with `metrology.audit_timeout_s`. The precedent supplies no timeout; this slice adds one because the audit is unattended and runs 12+ times
   - [ ] Catch stream exceptions (disconnect, API error) — shut the agent down in `finally`, persist nothing, return a typed failure result so the caller continues the series
@@ -222,7 +240,7 @@ status: not_started
 
 ---
 
-### T14: Harness tests — failure modes are the point
+### T15: Harness tests — failure modes are the point
 
 - [ ] **Add `tests/metrology/test_audit_harness.py`** — all with a **stubbed agent**, no real tokens
   - [ ] Happy path: stub returns a well-formed audit → exactly one `AuditRun` persisted, findings populated, `commit_sha` and `audit_prompt_hash` set
@@ -238,7 +256,7 @@ status: not_started
 
 ---
 
-### T15: Noise-floor reduction
+### T16: Noise-floor reduction
 
 - [ ] **Add `src/squadron/metrology/audit_variance.py`** — pure reduction, no I/O, no agent
   - [ ] `reduce_noise_floor(runs: list[AuditRun]) -> AuditNoiseFloor`
@@ -253,7 +271,7 @@ status: not_started
 
 ---
 
-### T16: Noise-floor tests
+### T17: Noise-floor tests
 
 - [ ] **Add `tests/metrology/test_audit_variance.py`**
   - [ ] Known-value reduction: hand-computed min/max/mean/stddev for a fixed 3-run fixture
@@ -267,7 +285,7 @@ status: not_started
 
 ---
 
-### T17: The baseline report
+### T18: The baseline report
 
 - [ ] **Add `src/squadron/metrology/audit_report.py`** — reads the store, writes nothing (mirrors `report.py`'s discipline)
   - [ ] `baseline_report(store, *, project_filter=None, cwd=".") -> BaselineReport` — group by `(project_id, AuditCategory)`, count findings, attach that project's floor
@@ -282,7 +300,7 @@ status: not_started
 
 ---
 
-### T18: Baseline report tests
+### T19: Baseline report tests
 
 - [ ] **Add `tests/metrology/test_audit_report.py`**
   - [ ] Grouping is correct at the project/issue-class grain across ≥2 projects
@@ -293,20 +311,6 @@ status: not_started
 - [ ] Success: `uv run pytest tests/metrology/test_audit_report.py` passes
 
 **Commit:** `test(metrology): cover baseline grouping, floor attachment, no-agreement`
-
----
-
-### T19: Config keys
-
-- [ ] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS` — a key absent here raises `KeyError` on read, so this must precede any code that reads them
-  - [ ] `metrology.audit_variance_runs` — `int`, default `3`, described as runs per project in a variance series
-  - [ ] `metrology.audit_timeout_s` — `int`, default `3600`, described as the wall-clock cap per audit run (bounds pathology; does not pace normal runs)
-  - [ ] `metrology.audit_profile` — `str`, default `None`, described as the provider profile for audit runs; unset falls back to the review default
-  - [ ] All three are `int`/`str` only — `_coerce_value` ([manager.py:54-61](../../../src/squadron/config/manager.py#L54-L61)) does not handle `float`, so no float key is added here
-  - [ ] Read them via the existing `get_typed_config` helper rather than adding new readers
-- [ ] Success: `sq config get metrology.audit_variance_runs` prints `3`; `sq config set metrology.audit_timeout_s 1800` succeeds and reads back
-
-**Commit:** `feat(config): add audit harness config keys`
 
 ---
 

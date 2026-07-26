@@ -31,6 +31,14 @@ Sequence: fork + vendor + sync test (T1-T4) → models + store extension (T5-T8)
 
 **Open item carried into implementation:** the `other`-category share per project is a real output of T22, not just a metric — a high share means the 9 dimensions do not fit that codebase, which is information for 324 rather than something to suppress.
 
+**Task review resolved (same day, z-ai/glm-5.2 — a new reviewer model for this project).** Verdict CONCERNS with one **FAIL**, and the FAIL was a real defect I introduced: config-key registration was sequenced *after* the task that reads `metrology.audit_timeout_s`, while that task's own text said "this must precede any code that reads them." A self-contradiction that would have failed at implementation, since `get_config` raises `KeyError` for an unregistered key. Config keys moved to T11 ahead of all `audit.py` work; old T11-T18 renumbered to T12-T19; six internal cross-references updated; an explicit ordering note added so a future edit cannot silently re-break it.
+
+- **F002** — T4 asserted the independent-run *marker* was present but never that T2's rewording of the repeat-run clause landed, leaving the design's success criterion unverified. Assertion added. Higher-stakes than a normal coverage gap: an unconditional repeat-run clause would silently correlate variance runs and bias the floor toward zero.
+- **F003 (T14 sizing)** — acknowledged, no change, using the reviewer's own reasoning: splitting would create an artificial seam, because Decision 9 makes failure handling *part of* the execution contract rather than a wrapper. A basic-execution task that persisted before failure handling landed would be a partial-record path — exactly what the design forbids.
+- **F004** — explicit push-to-remote step added to T3. Vendoring from an unpushed local fork would satisfy squadron while leaving every other fork consumer on the pre-contract instrument.
+
+Worth noting across the three reviews this slice has now had (kimi-k2.7-code and claude-sonnet-5 on the design, glm-5.2 on the tasks): each model found something the others did not, and glm-5.2 was the only one to catch a hard sequencing error — the kind of defect that is invisible when reading a document for sense and obvious when tracing execution order.
+
 ---
 
 ## 20260726 (1)
