@@ -324,6 +324,111 @@ async def test_dirty_worktree_refuses_variance_run_with_no_agent(
 
 
 @pytest.mark.asyncio
+async def test_the_audits_own_output_file_does_not_refuse_the_next_run(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """A variance series must not refuse itself.
+
+    The skill writes ``analysis/nnn-analysis.{project}.md`` into every repo
+    it audits. Counting that as a dirty worktree would refuse runs 2 and 3
+    of every series, so no floor would ever be written — the slice's central
+    deliverable, lost to its own artifact.
+    """
+    analysis_dir = audited_repo / "analysis"
+    analysis_dir.mkdir()
+    (analysis_dir / "940-analysis.example-repo.md").write_text("# prior run\n", encoding="utf-8")
+
+    stub_provider.agent = _StubAgent(output=_audit_output(), raises=None, hang=False)
+
+    result = await run_audit(audited_repo, store=audit_store, require_clean=True, cwd=str(audited_repo))
+
+    assert result.succeeded, "the audit's own output must not refuse the next run"
+
+
+@pytest.mark.asyncio
+async def test_a_real_source_change_still_refuses_a_variance_run(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """The exemption is narrow: actual code changes still refuse.
+
+    Guards against the artifact exemption being over-broad — a floor
+    measured across a source edit is exactly what the check exists to
+    prevent.
+    """
+    from squadron.metrology.audit import AuditPreflightError
+
+    (audited_repo / "src_change.py").write_text("x = 1\n", encoding="utf-8")
+
+    with pytest.raises(AuditPreflightError, match="dirty"):
+        await run_audit(audited_repo, store=audit_store, require_clean=True, cwd=str(audited_repo))
+
+    assert stub_provider.created == []
+
+
+@pytest.mark.asyncio
+async def test_a_modified_tracked_analysis_file_still_refuses(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """Only *untracked* audit output is exempt, not a tracked-file edit."""
+    import subprocess
+
+    from squadron.metrology.audit import AuditPreflightError
+
+    analysis_dir = audited_repo / "analysis"
+    analysis_dir.mkdir()
+    tracked = analysis_dir / "940-analysis.example-repo.md"
+    tracked.write_text("# committed\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=audited_repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "add analysis"], cwd=audited_repo, check=True, capture_output=True
+    )
+    tracked.write_text("# edited after commit\n", encoding="utf-8")
+
+    with pytest.raises(AuditPreflightError, match="dirty"):
+        await run_audit(audited_repo, store=audit_store, require_clean=True, cwd=str(audited_repo))
+
+    assert stub_provider.created == []
+
+
+@pytest.mark.asyncio
+async def test_untracked_source_outside_analysis_still_refuses(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """The exemption is scoped to ``analysis/`` and nothing else."""
+    from squadron.metrology.audit import AuditPreflightError
+
+    (audited_repo / "src").mkdir()
+    (audited_repo / "src" / "new_module.py").write_text("y = 2\n", encoding="utf-8")
+
+    with pytest.raises(AuditPreflightError, match="dirty"):
+        await run_audit(audited_repo, store=audit_store, require_clean=True, cwd=str(audited_repo))
+
+    assert stub_provider.created == []
+
+
+@pytest.mark.asyncio
+async def test_head_moving_mid_series_is_refused(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """A pinned series refuses to continue across a commit."""
+    from squadron.metrology.audit import AuditPreflightError
+
+    stub_provider.agent = _StubAgent(output=_audit_output(), raises=None, hang=False)
+
+    with pytest.raises(AuditPreflightError, match="HEAD moved"):
+        await run_audit(
+            audited_repo,
+            store=audit_store,
+            require_clean=True,
+            expected_sha="0" * 40,
+            cwd=str(audited_repo),
+        )
+
+    assert stub_provider.created == []
+    assert audit_store.list_audit_runs() == []
+
+
+@pytest.mark.asyncio
 async def test_dirty_worktree_is_allowed_for_a_plain_baseline_run(
     audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
 ) -> None:

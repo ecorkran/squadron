@@ -826,6 +826,10 @@ def audit_variance(
     for raw_path in project_paths:
         project_path = Path(raw_path).expanduser().resolve()
         series: list[AuditRun] = []
+        # Pinned from run 1 so later runs assert HEAD has not moved rather
+        # than silently measuring a different commit.
+        pinned_sha: str | None = None
+        rprint(f"[bold]{project_path}[/bold]  ({n_runs} runs)")
 
         for index in range(n_runs):
             try:
@@ -837,6 +841,7 @@ def audit_variance(
                         model=model,
                         independent_run=True,
                         require_clean=True,
+                        expected_sha=pinned_sha,
                         cwd=resolved_cwd,
                     )
                 )
@@ -851,6 +856,7 @@ def audit_variance(
             _report_run_outcome(outcome, prefix=f"  run {index + 1}/{n_runs}  ")
             if outcome.succeeded and outcome.run is not None:
                 series.append(outcome.run)
+                pinned_sha = outcome.run.commit_sha
                 total_succeeded += 1
             else:
                 total_failed += 1

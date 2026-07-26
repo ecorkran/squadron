@@ -173,6 +173,55 @@ def test_audit_variance_writes_a_floor(cli_store: MetrologyStore, tmp_path: Path
     assert "floor" in _normalized(result.output)
 
 
+def test_full_series_succeeds_when_each_run_writes_its_own_audit_file(
+    cli_store: MetrologyStore, audited_repo: Path
+) -> None:
+    """Regression: a variance series must not refuse itself.
+
+    Each run writes ``analysis/nnn-analysis.*.md`` into the target repo, as
+    the real skill does. Before the artifact exemption, run 1 dirtied the
+    tree and runs 2-3 were refused, so **no floor was written for any
+    project** — a whole campaign's spend for nothing. This asserts all three
+    runs land and a floor results.
+    """
+    counter = {"n": 0}
+
+    async def _fake_run_audit(project_path: Path, **kwargs: object) -> AuditRunResult:
+        from squadron.metrology.audit import preflight_project
+
+        counter["n"] += 1
+        # Real pre-flight, so the dirty-worktree logic is genuinely exercised.
+        preflight = preflight_project(
+            project_path,
+            require_clean=bool(kwargs.get("require_clean")),
+            expected_sha=kwargs.get("expected_sha"),  # pyright: ignore[reportArgumentType]
+        )
+        # Then write the artifact the skill would write.
+        analysis = project_path / "analysis"
+        analysis.mkdir(exist_ok=True)
+        (analysis / f"94{counter['n']}-analysis.example-repo.md").write_text(
+            "# audit\n", encoding="utf-8"
+        )
+        run = make_audit_run(
+            run_id=f"audit-20260726-{counter['n']:08d}",
+            commit_sha=preflight.commit_sha,
+            findings=[make_audit_finding(finding_id=f"F{i:03d}") for i in range(counter["n"] + 3)],
+        )
+        cli_store.write_audit_run(run)
+        return AuditRunResult(project_path=project_path, run=run)
+
+    with patch("squadron.cli.commands.metrology.run_audit", _fake_run_audit):
+        result = runner.invoke(
+            app, ["metrology", "audit", "variance", str(audited_repo), "--runs", "3"]
+        )
+
+    assert result.exit_code == 0, f"series should complete; got: {_normalized(result.output)}"
+    assert counter["n"] == 3, "all three runs must execute, not just the first"
+    floors = cli_store.list_noise_floors()
+    assert len(floors) == 1, "a floor must be written"
+    assert floors[0][1].n_runs == 3
+
+
 def test_variance_with_too_few_usable_runs_keeps_them_and_writes_no_floor(
     cli_store: MetrologyStore, tmp_path: Path
 ) -> None:

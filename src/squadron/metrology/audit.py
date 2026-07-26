@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -43,6 +44,16 @@ _logger = logging.getLogger(__name__)
 #: has been run.
 _AUDIT_PACK = "analysis"
 _AUDIT_SKILL_FILENAME = "tech-debt-audit.md"
+
+#: The audit file the skill writes into the repo it audits
+#: (``analysis/nnn-analysis.{project}{.subproject}.md``). Recognized so a
+#: variance series does not refuse itself: this file is a product of the
+#: measurement, not a change to the code under measurement.
+#:
+#: Git collapses a wholly-untracked directory to ``?? analysis/`` rather
+#: than listing its files, so the bare directory form is matched too — the
+#: common case on a first run, when ``analysis/`` did not previously exist.
+_AUDIT_ARTIFACT_PATTERN = re.compile(r"^analysis/(\d+-analysis\..+\.md)?$")
 
 #: Prefixed to the audit prompt to suppress the skill's repeat-run mode.
 #:
@@ -178,10 +189,30 @@ def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _is_audit_artifact(status_line: str) -> bool:
+    """Whether a ``git status --porcelain`` line is the audit's own output.
+
+    The skill writes ``analysis/nnn-analysis.{project}.md`` into the repo it
+    audits. That file is a *product* of the measurement, not a change to the
+    code being measured, so it must not make the next run in a series look
+    like it is auditing changed code.
+
+    Matched narrowly — only untracked (``??``) paths under ``analysis/``. A
+    modification to a tracked file, even under ``analysis/``, is a real
+    change and still refuses.
+    """
+    stripped = status_line.strip()
+    if not stripped.startswith("??"):
+        return False
+    path = stripped[2:].strip().strip('"')
+    return bool(_AUDIT_ARTIFACT_PATTERN.match(path))
+
+
 def preflight_project(
     project_path: Path,
     *,
     require_clean: bool,
+    expected_sha: str | None = None,
     cwd: str = ".",
 ) -> PreflightResult:
     """Validate a project before any token is spent on it.
@@ -192,11 +223,19 @@ def preflight_project(
     that project only and continue the campaign.
 
     ``require_clean`` is set for variance runs: a floor measured across a
-    code change is not a floor, so a dirty worktree is refused outright
-    rather than warned about.
+    code change is not a floor. The check deliberately **ignores the audit's
+    own output file**, because the skill writes one into every repo it
+    audits — without that exemption, run 1 of a series would dirty the tree
+    and every later run would be refused, leaving the floor unmeasurable.
+
+    ``expected_sha`` pins the series after its first run: later runs assert
+    HEAD has not moved rather than re-deriving it. Together these make the
+    precondition precise — unchanged *source* at one commit, not an
+    untouched directory.
 
     Raises:
-        AuditPreflightError: path, git-repo, or worktree-cleanliness failure.
+        AuditPreflightError: path, git-repo, worktree-cleanliness, or a
+            HEAD that moved mid-series.
         MetrologyIdentityError: identity is underivable (message carries its
             own ``sq config set`` remediation, which is left intact).
     """
@@ -219,6 +258,13 @@ def preflight_project(
         )
     commit_sha = head.stdout.strip()
 
+    if expected_sha is not None and commit_sha != expected_sha:
+        raise AuditPreflightError(
+            f"Refusing to continue the variance series in {project_path}: HEAD moved "
+            f"from {expected_sha[:8]} to {commit_sha[:8]} mid-series. A floor measured "
+            "across a commit is not a floor."
+        )
+
     # Propagates with its own remediation text intact — do not wrap it.
     project_id = derive_project_id(cwd=str(project_path))
 
@@ -228,11 +274,16 @@ def preflight_project(
             raise AuditPreflightError(
                 f"Could not read git status in {project_path}: {status.stderr.strip()}"
             )
-        if status.stdout.strip():
+        offending = [
+            line for line in status.stdout.splitlines() if line.strip() and not _is_audit_artifact(line)
+        ]
+        if offending:
+            shown = ", ".join(line.strip() for line in offending[:5])
             raise AuditPreflightError(
-                f"Refusing a variance series in {project_path}: the worktree is dirty. "
-                "A noise floor measures repeated audits of unchanged code, so the "
-                "commit must be pinned. Commit or stash your changes first."
+                f"Refusing a variance series in {project_path}: the worktree is dirty "
+                f"({shown}{', ...' if len(offending) > 5 else ''}). A noise floor measures "
+                "repeated audits of unchanged code, so the commit must be pinned. "
+                "Commit or stash your changes first."
             )
 
     return PreflightResult(
@@ -314,6 +365,7 @@ async def run_audit(
     model: str | None = None,
     independent_run: bool = False,
     require_clean: bool = False,
+    expected_sha: str | None = None,
     cwd: str = ".",
 ) -> AuditRunResult:
     """Run one audit against ``project_path`` and persist it, or persist nothing.
@@ -333,7 +385,12 @@ async def run_audit(
     from squadron.providers.registry import get_provider
 
     # --- Pre-flight: everything here precedes token spend --------------
-    preflight = preflight_project(project_path, require_clean=require_clean, cwd=cwd)
+    preflight = preflight_project(
+        project_path,
+        require_clean=require_clean,
+        expected_sha=expected_sha,
+        cwd=cwd,
+    )
     skill_path = resolve_audit_skill()
     prompt_hash = audit_prompt_hash(skill_path)
     prompt = build_audit_prompt(skill_path, independent_run=independent_run)
