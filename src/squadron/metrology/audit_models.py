@@ -26,6 +26,8 @@ dumping ground — an out-of-vocabulary category is retained on
 
 from __future__ import annotations
 
+from pydantic import BaseModel
+
 from squadron.metrology.models import (
     AuditCategory,
     AuditEffort,
@@ -34,6 +36,7 @@ from squadron.metrology.models import (
     AuditRun,
     AuditSeverity,
     FloorStat,
+    ProjectId,
 )
 
 __all__ = [
@@ -43,5 +46,80 @@ __all__ = [
     "AuditNoiseFloor",
     "AuditRun",
     "AuditSeverity",
+    "BaselineCell",
+    "BaselineExclusionSummary",
+    "BaselineReport",
     "FloorStat",
+    "ProjectBaseline",
 ]
+
+#: Marker for a project audited but never variance-measured. Reported
+#: verbatim so the absence of a floor is visible in output rather than
+#: inferred from a missing field — a project never borrows another's number.
+NO_FLOOR_MEASURED = "no floor measured"
+
+
+class BaselineCell(BaseModel):
+    """One project/issue-class cell: a count, with its floor if measured.
+
+    ``floor`` is the applicable per-category ``FloorStat`` or ``None``. When
+    it is ``None`` the cell carries ``floor_note`` (``"no floor measured"``)
+    instead — never a figure borrowed from another project or another
+    category.
+    """
+
+    category: AuditCategory
+    count: int
+    floor: FloorStat | None = None
+    floor_note: str | None = None
+
+
+class ProjectBaseline(BaseModel):
+    """One project's baseline under one instrument.
+
+    Scoped by ``audit_prompt_hash``: runs taken under different instruments
+    are never pooled, so one project audited across a skill edit appears as
+    two entries rather than one blended figure.
+    """
+
+    project_id: ProjectId
+    commit_sha: str
+    audit_prompt_hash: str
+    run_id: str
+    total_findings: int
+    unnormalized_count: int
+    total_floor: FloorStat | None = None
+    floor_note: str | None = None
+    cells: list[BaselineCell]
+
+    @property
+    def has_floor(self) -> bool:
+        return self.total_floor is not None
+
+
+class BaselineExclusionSummary(BaseModel):
+    """What the report left out, so exclusions are never read as absence.
+
+    Follows 321's ``ExclusionSummary`` precedent: a figure that is missing
+    because data was filtered must be distinguishable from one that is
+    missing because nothing was measured.
+    """
+
+    total_excluded: int = 0
+    #: Projects whose runs span more than one instrument, reported
+    #: separately per hash rather than pooled.
+    projects_with_multiple_instruments: int = 0
+    #: Project/instrument groups with no matching noise floor.
+    groups_without_floor: int = 0
+
+
+class BaselineReport(BaseModel):
+    """The cross-project baseline at the project/issue-class grain.
+
+    Carries **no agreement dimension** and no human-comparison figure of any
+    kind. The audit oracle has no human counterpart; manufacturing one would
+    be the overclaiming this initiative's architecture forbids.
+    """
+
+    projects: list[ProjectBaseline]
+    excluded: BaselineExclusionSummary
