@@ -12,6 +12,8 @@ status: complete
 
 # Slice Design: Agreement & Dispersion Reporting
 
+See [`320-reference...md`](../architecture/320-reference.judge-calibration-quality-metrology.md) for this initiative's glossary and current-state index.
+
 ## Overview
 
 This slice is the human oracle's **headline analysis** over the sample 320 accumulates. It reads the metrology store and reports three figures, always at the **per-artifact-level / per-judge-configuration** grain and never as one blended global number:
@@ -176,7 +178,8 @@ AgreementCell       group: GroupKey; n: int; match_rate: float; below_floor: boo
 ArtifactKey         project_id: str; source_document: str; artifact_level: ArtifactLevel
 DispersionCell      artifact: ArtifactKey; judge_configs: list[JudgeConfigId];
                     n: int; disagreement_rate: float
-ExclusionSummary    total_excluded: int; stale_judge_result: int; unversioned: int
+ExclusionSummary    total_excluded: int; stale_judge_result: int; unversioned: int;
+                    missing_source_document: int = 0
 AgreementReport     cells: list[AgreementCell]; excluded: ExclusionSummary
 DispersionReport    cells: list[DispersionCell]; excluded: ExclusionSummary
 TrendReport         bucket: str; series: list[(bucket_label, AgreementReport|DispersionReport)]
@@ -323,3 +326,7 @@ Suggested order within the slice:
 Slice-design review (`321-review.slice.…`, kimi-k2.7-code) returned **FAIL** on one finding, now resolved; the note is also resolved.
 - **F001 (FAIL, data-model)** — dispersion grouped by `(ArtifactLevel, result_ref)`, but `result_ref` identifies a *review-file instance* (path + content hash both vary per judge config), so two configs on one artifact could never share a dispersion group — making the cross-config dispersion this slice claims to ship impossible, contradicting walkthrough step 4 and 320-arch's cross-judge-comparability goal. **Fixed:** dispersion now groups by **artifact identity `(project_id, source_document, ArtifactLevel)`** using the review frontmatter's `sourceDocument` (already exposed by 320 as `SOURCE_DOC_KEY`), read in the same pass as the agreement join. Added the *Artifact identity vs. result-file identity* subsection making the two distinct join keys explicit, an `ArtifactKey` report model, a `sourceDocument`-missing failure-mode row (excluded from dispersion only), and a success criterion asserting two configs' files for one artifact land in one dispersion cell. Agreement continues to key on `result_ref` (correct for binding a verdict to the exact result graded).
 - **F002 (note, interfaces)** — frontmatter listed `interfaces: [322, 323, 324]` but only 322 was documented. **Fixed:** narrowed to `[322]` and documented that 323/324 relate via the shared 320 spine (a 320 edge), not 321's report path — matching 320-arch's "two oracles, one spine, not one report path."
+
+## Code review (20260722) — F006 addressed
+
+Code review (`321-review.code.…`) returned a CONCERN (F006, error-handling/reporting) resolved during implementation: samples excluded from dispersion for a missing `sourceDocument` (the failure-mode row above, "dispersion artifact key") were not reflected anywhere in `ExclusionSummary` — a reader of `--json` output had no way to distinguish "no cross-config artifacts exist yet" from "some samples were silently dropped for lacking an artifact identity to group by." **Fixed:** added `missing_source_document: int = 0` to `ExclusionSummary` (`report_models.py`), incremented alongside the existing WARNING when `dispersion_report` excludes a sample for this reason. Defaults to `0` so `agreement_report`'s and `trend_report`'s existing `ExclusionSummary` construction sites (which never hit this path) don't need updating. The Report Models table above reflects the shipped shape.

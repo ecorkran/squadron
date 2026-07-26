@@ -12,6 +12,8 @@ status: complete
 
 # Slice Design: Metrology Data Layer & Sample Capture (keystone)
 
+See [`320-reference...md`](../architecture/320-reference.judge-calibration-quality-metrology.md) for this initiative's glossary and current-state index.
+
 ## Overview
 
 This slice builds the durable, user-level home for oracle verdicts and the low-friction human-sample capture surface that writes into it. It is the keystone of initiative 320: every subsequent slice (agreement/dispersion reporting, calibration-to-threshold feedback, the audit baseline harness, and pre-emption delta measurement) reads from this store, keys on the project identity it defines, and depends on its blind-capture guarantee. This slice ships **no reporting, no agreement math, no threshold feedback** — it de-risks the three load-bearing decisions the architecture named (store locality, stable project identity, blind-capture ergonomics) plus the one the architecture surfaced only obliquely and this design must confront head-on: **the persisted judge result has no stable identifier to key against**.

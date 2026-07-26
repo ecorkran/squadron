@@ -3,14 +3,16 @@ docType: slice-plan
 parent: 320-arch.judge-calibration-quality-metrology.md
 project: squadron
 dateCreated: 20260718
-dateUpdated: 20260718
-status: not_started
+dateUpdated: 20260726
+status: in_progress
 ---
 
 # Slice Plan: Judge Calibration & Quality Metrology
 
 ## Parent Document
 `320-arch.judge-calibration-quality-metrology.md` — High-Level Design: Judge Calibration & Quality Metrology
+
+**Picking this up cold?** See [`320-reference.judge-calibration-quality-metrology.md`](320-reference.judge-calibration-quality-metrology.md) for a current-state index and glossary before reading further.
 
 ## Planning Context
 Architecture-level. The parent architecture settles the design across one review round (CONCERNS, all findings addressed). This plan breaks it into vertical slices.

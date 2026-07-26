@@ -12,6 +12,8 @@ status: complete
 
 # Slice Design: Calibration-to-Threshold Feedback
 
+See [`320-reference...md`](../architecture/320-reference.judge-calibration-quality-metrology.md) for this initiative's glossary and current-state index.
+
 ## Overview
 
 This slice closes the loop the initiative exists to close. 321 made judge reliability a **measured, per-level quantity**; 322 turns that measurement into an **advisory threshold recommendation** against 300's judge-threshold config, and installs the safeguards that keep the loop honest once a judge graduates.
@@ -37,7 +39,7 @@ Operator value. 300's escalate-vs-auto-gate decision was made *configurable* but
 - **Direction asymmetry**: loosening is floor-gated; **tightening is not** (see Technical Decisions — a weak judge should be flagged on whatever evidence exists).
 - **Recommendation targets**: resolve the `(template, model)` calibration key onto 300's two real threshold surfaces — the template's `judge:` block (`pass_floor` / `concerns_floor`) and a step's `judge` override — and surface the **(template,model) ↔ (template,step) dimensional mismatch** as first-class output, not a caveat.
 - **Residual sampling**: a `metrology.residual_sample_rate` config key, a **graduated-config registry** (which `(template, model)` pairings the operator has moved toward auto-gate), and an **offer-selection function** producing sampling targets drained through 320's existing pull-based capture.
-- **The comparability key, canonized**: the content-hash fallback becomes *the* version identity, with `_template_content_hash` corrected to exclude the `judge:` threshold block (see Technical Decisions — this is the self-defeating-loop fix).
+- **The comparability key, canonized**: the content-hash fallback becomes *the* version identity, with `template_content_hash` corrected to exclude the `judge:` threshold block (see Technical Decisions — this is the self-defeating-loop fix).
 - CLI: `sq metrology recommend` and `sq metrology offers`, thin Typer shells over the surface-agnostic core (parity by construction, matching 320/321).
 
 **Explicitly excluded:**
@@ -59,7 +61,7 @@ Operator value. 300's escalate-vs-auto-gate decision was made *configurable* but
 - `squadron.metrology.levels.ArtifactLevel` — recommendations are reported per level.
 - `squadron.pipeline.actions.judge` — `JudgeThresholds`, `resolve_thresholds`, and the module defaults. **Read-only**: 322 reads current effective thresholds to express a recommendation as a *delta from what is configured now*, and never calls into the enforcement path.
 - `squadron.review.templates.get_template` / `ReviewTemplate.judge` — the template-level threshold block that is one recommendation target.
-- `squadron.metrology.identity._template_content_hash` — corrected here (scope narrowed); see Technical Decisions.
+- `squadron.metrology.identity.template_content_hash` — corrected here (scope narrowed); see Technical Decisions.
 - `squadron.config.manager` / `config.keys.CONFIG_KEYS` — new config keys.
 - The `metrology` Typer sub-app in `cli/commands/metrology.py`.
 
@@ -118,7 +120,7 @@ GraduatedConfig           judge_config: JudgeConfigId; artifact_level;
 
 - **`cli/commands/metrology.py`** (extended) — `sq metrology recommend` and `sq metrology offers`, plus `sq metrology graduate` to record a graduation. Same `--cwd` / `--project` / `--json` conventions as 320/321.
 
-- **`identity.py`** (one contained correction) — `_template_content_hash` narrows its scope to exclude the `judge:` block.
+- **`identity.py`** (one contained correction) — `template_content_hash` narrows its scope to exclude the `judge:` block. (Made public during T18; originally scoped `_template_content_hash` — see the "Naming correction" note below Technical Decisions.)
 
 ### Data Flow
 
@@ -157,7 +159,7 @@ Consequence, stated honestly: keying is **reliable going forward, not retroactiv
 
 This is the substantive correction this slice makes, and it is a **correctness fix, not a preference**.
 
-`_template_content_hash` currently hashes `{name, description, system_prompt, model, prompt_template, **judge**}`. The `judge` block *is* `pass_floor`/`concerns_floor` — the very thing a recommendation asks the operator to change. So:
+`template_content_hash` currently hashes `{name, description, system_prompt, model, prompt_template, **judge**}`. The `judge` block *is* `pass_floor`/`concerns_floor` — the very thing a recommendation asks the operator to change. So:
 
 > operator acts on a `GRADUATE` recommendation → edits `judge.pass_floor` → template content hash changes → the new config is a **different `JudgeConfigId`** → accumulated n resets to 0 → the cell drops `below_floor` → no further recommendation is possible until evidence re-accumulates from scratch.
 
@@ -165,9 +167,11 @@ The calibration loop would invalidate its own evidence every single time it work
 
 **Decision: narrow the comparability hash to the judged behavior, excluding the threshold block.** The hash covers `{name, description, system_prompt, model, prompt_template}`. Rationale: thresholds are the **output** of calibration, not part of the instrument being calibrated. A judge that scores identically but bands differently is *the same measuring instrument with a different readout* — agreement data collected under it remains valid evidence about how that judge scores. Conversely a prompt or model edit changes what the instrument measures and **must** re-key, which this preserves.
 
-This is a contained change to one private function in 320's `identity.py`, plus its tests. It does re-key historical records once (their hash changes), which is correct and one-time: those records were keyed on a value that conflated instrument with readout.
+This is a contained change to one function in 320's `identity.py` (private at design time; made public during T18 — see the naming-correction note below), plus its tests. It does re-key historical records once (their hash changes), which is correct and one-time: those records were keyed on a value that conflated instrument with readout.
 
 *Rejected — a similarity/inherit policy* (the plan's third framing): more machinery and more judgment calls than the problem needs. Excluding thresholds from the hash solves the actual failure precisely, with no policy layer to tune.
+
+**Naming correction (T18, 20260726):** this function was originally scoped `_template_content_hash` (private to `identity.py`, per its intended use inside `derive_judge_config_id` only). During T18's verification walkthrough, `graduate`'s cell-disambiguation fix (see the "Additional finding" note in the Verification Walkthrough section below) needed to read the current hash from outside `identity.py`, so it was made public as `template_content_hash`. This document uses the current public name throughout; historical references to the old private name (task-review discussion, early commits) are preserved as-is in DEVLOG and git history.
 
 ### Graduation is version-scoped — it keys on the whole `JudgeConfigId`
 
@@ -278,7 +282,7 @@ Nothing downstream in this initiative consumes 322 — hence `interfaces: []`. 3
 - **Acting on a recommendation does not reset accumulated evidence**: a threshold-only template edit leaves `JudgeConfigId` unchanged, while a prompt or model edit re-keys it (asserted by test on both directions — the self-defeating-loop regression).
 
 ### Technical Requirements
-- **The judging path (300) is unmodified** and the capture path (320) is unchanged except the contained `_template_content_hash` scope narrowing; the full existing suite passes.
+- **The judging path (300) is unmodified** and the capture path (320) is unchanged except the contained `template_content_hash` scope narrowing; the full existing suite passes.
 - Core (`calibration`, `graduation`, `calibration_models`) is **surface-agnostic** — no Typer imports (verified by test, matching 320/321).
 - Strict pyright and ruff clean; Pydantic at boundaries; direction bands and floors are **config keys referenced once**, never scattered literals.
 - Test coverage: each direction band; the floor refusal; the unversioned refusal; the hash-narrowing regression (both directions); residual-offer selection including the exhausted, pruned-file, and **lapsed-graduation** (config edited post-graduation) cases; `graduate` refusal and idempotence; the no-mutation assertion.

@@ -7,11 +7,13 @@ project: squadron
 parent: ../project-guides/001-initiative-plan.squadron.md
 dependencies: [100, 140, 300, 340]
 dateCreated: 20260717
-dateUpdated: 20260717
-status: not_started
+dateUpdated: 20260726
+status: in_progress
 ---
 
 # Architecture: Judge Calibration & Quality Metrology
+
+**Picking this up cold?** See [`320-reference.judge-calibration-quality-metrology.md`](320-reference.judge-calibration-quality-metrology.md) for a current-state index and glossary before reading further.
 
 ## Overview
 
