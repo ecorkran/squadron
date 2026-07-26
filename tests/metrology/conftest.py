@@ -161,6 +161,32 @@ def audit_store(tmp_path: Path) -> MetrologyStore:
     return MetrologyStore(store_dir=tmp_path / "metrology-store")
 
 
+@pytest.fixture
+def audited_repo(repo_with_remote: Path) -> Path:
+    """A repo with a remote *and* a commit, so ``rev-parse HEAD`` resolves.
+
+    The audit pins a commit SHA, so its pre-flight requires real history —
+    unlike the identity fixtures, which only need a remote. A repo with no
+    commits is a legitimate pre-flight failure, not a shape to test against.
+    """
+    (repo_with_remote / "README.md").write_text("# fixture\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo_with_remote)
+    _git("commit", "-m", "initial", cwd=repo_with_remote)
+    return repo_with_remote
+
+
+@pytest.fixture
+def second_audited_repo(tmp_path: Path, isolated_user_config: Path) -> Path:
+    """A second committed repo with a distinct remote (multi-project campaigns)."""
+    repo = tmp_path / "repo-remote-b"
+    _init_repo(repo)
+    _git("remote", "add", "origin", "https://github.com/manta/example-repo-b.git", cwd=repo)
+    (repo / "README.md").write_text("# fixture b\n", encoding="utf-8")
+    _git("add", "README.md", cwd=repo)
+    _git("commit", "-m", "initial", cwd=repo)
+    return repo
+
+
 def _git(*args: str, cwd: Path) -> None:
     """Run a git command in ``cwd``, raising on failure (test setup only)."""
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
