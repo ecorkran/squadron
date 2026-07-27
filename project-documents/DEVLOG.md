@@ -14,14 +14,29 @@ Internal work log for squadron project development.
 
 ### Slice 323: Phase 6 Implementation and First Noise Floor
 
-**T1-T21 complete; T22 partially complete (stops 1 and 2 passed, cross-project deferred).** The measurable result: **the audit instrument's finding count varies ~31-35% on unchanged code**, reproduced independently across two models.
+**T1-T21 complete; T22 complete for two projects, two deferred.** Three measurable results.
+
+**The dispersion is a property of the instrument, not a model.**
 
 | Instrument | Runs | Mean | Spread | % of mean |
 |---|---|---|---|---|
 | Opus, hash `d17ac6bf` | 22, 25, 27, 30 | 26.0 | 8 | 31% |
 | Sonnet 5, hash `a5bc5b31` | 19, 22, 27 | 22.7 | 8 | 35% |
 
-Two models, two sessions, two prompt hashes, the same absolute spread of 8 findings. That makes the dispersion a property of the instrument rather than of a model — a claim neither series could support alone. Per-category is where the usable signal is: `architectural-decay` was perfectly stable (7-7-7, sd 0) while `dependency-config-debt` swung 1-6. Dispersion is not uniform, so some categories are gate-worthy and others are not.
+Two models, two sessions, two prompt hashes, the same absolute spread of 8 findings — a claim neither series could support alone.
+
+**It widens with codebase size, worse than proportionally.**
+
+| Project | LOC | Runs | Mean | Spread | % of mean |
+|---|---|---|---|---|---|
+| migratory-viewer | 3.2k | 19, 22, 27 | 22.7 | 8 | 35% |
+| migratory | 44.4k | 49, 60, 82 | 63.7 | 33 | **52%** |
+
+`migratory` clears the fan-out condition (44,359 LOC, 9 top-level dirs — the condition is >50k LOC *or* >5 modules) and run 1 made **360 tool calls** against 60-80 for a viewer run. This confirms the design's stated risk that fan-out is itself a variance source and can vary *within* a series, since the threshold is a prompt instruction rather than enforced code. It is also the concrete justification for the per-project floor decision: a single global threshold would understate large repos badly.
+
+**Per-category dispersion is where the usable signal is.** `architectural-decay` was the most stable category on both projects — 7-7 (sd 0) on viewer, 8-11 on a 14x larger codebase with fan-out — while `type-contract-debt` tripled (1-3 → 4-12). Some categories are plausibly gate-worthy today; totals are not. That distinction is what 324 needs and could not have been guessed from the totals.
+
+The category vocabulary held across both: `other` was 0/22 and 2/49 (~4%).
 
 **Deliberate deviation from the task text.** `AuditCategory`/`AuditSeverity`/`AuditEffort`/`AuditFinding`/`FloorStat`/`AuditRun`/`AuditNoiseFloor` all live in `metrology/models.py`, not `audit_models.py`. `AuditRun.findings` and `AuditNoiseFloor.per_category` embed them, so defining them separately would reintroduce the circular import the 322 layering correction removed. `audit_models.py` re-exports the full set.
 
@@ -53,6 +68,7 @@ All three were invisible in the stored record, and all three can drift:
 - **#30: the SDK pin is now blocking, not hygiene.** Squadron runs the SDK's *bundled* CLI 2.1.47 (July 8) while interactive sessions run 2.1.220 — ~170 versions apart. This invalidated every squadron-vs-manual comparison attempted during the session until it was found, and it is why the parser lacks a `rate_limit_event` case at all.
 - **#33/#36: token and cost capture.** `ResultMessage` carries full usage accounting; `translate_sdk_message` discards all of it. One measured audit: 2.17M cache-read, 137k cache-creation, 15k output, $2.37. Note for whoever implements it — **do not sum per-message `usage`**, it repeats a snapshot within a turn (7.08M summed vs 2.17M authoritative, while understating output 2,174 vs 15,231).
 - **#35: alternative providers.** Cross-model agreement is a stronger quality signal than one model's repeat rate, and unreachable while the harness is Anthropic-only.
+- **#37: the skill emits inline YAML scalars for prose.** `migratory` run 1 needed `_quote_prose_scalars` repair before parsing (`mapping values are not allowed here`). The retry recovered a complete 82-finding audit rather than discarding it, so the fallback works — but block scalars at the source would remove the failure mode. Deliberately not fixed during the campaign: it changes the skill and therefore `audit_prompt_hash`.
 
 #### Process note
 

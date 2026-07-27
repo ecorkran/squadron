@@ -439,9 +439,26 @@ perfectly stable across all three runs (7-7-7, sd 0) while
 `dependency-config-debt` swung 1-6. Dispersion is **not** uniform across
 categories, so some are gate-worthy and others are not.
 
-**5. Cross-project.** Deferred — measured on `migratory-viewer` only. The
-remaining three projects are Future Work rather than a completed step; see
-below.
+**5. Cross-project.**
+```
+uv run sq metrology audit variance /Users/manta/source/repos/manta/migratory --runs 3
+```
+```
+  run 1/3  ok github.com/ecorkran/migratory @2a2d1e4c  82 findings
+  run 2/3  ok github.com/ecorkran/migratory @2a2d1e4c  60 findings
+  run 3/3  ok github.com/ecorkran/migratory @2a2d1e4c  49 findings
+floor github.com/ecorkran/migratory @2a2d1e4c  total 49-82 (mean 63.7, sd 16.80, n=3)
+```
+`migratory` is 44,359 LOC across 9 top-level directories, so it clears the
+skill's fan-out condition (>50k LOC **or** >5 top-level modules) where
+`migratory-viewer` did not. Run 1 made **360 tool calls** against 60-80 for a
+viewer run, consistent with subagent dispatch.
+
+The `other` share was 2/49 (~4%), so the ten-value vocabulary fits a second,
+much larger codebase without becoming a dumping ground.
+
+`context-forge` and `squadron` remain deferred — both are larger still. See
+Future Work.
 
 **6. Comparability is enforced.** Confirmed, and not by a contrived edit. Two
 real instrument changes occurred mid-campaign: pinning the model
@@ -463,8 +480,7 @@ All checks passed!
 
 ### What the walkthrough established
 
-The headline result is that the dispersion **reproduced independently across
-two models**:
+**1. The dispersion is a property of the instrument, not of a model.**
 
 | Instrument | Runs | Mean | Spread | % of mean |
 |---|---|---|---|---|
@@ -472,13 +488,45 @@ two models**:
 | Sonnet 5, hash `a5bc5b31` | 19, 22, 27 | 22.7 | 8 | 35% |
 
 Two models, two sessions, two prompt hashes — the same absolute spread of 8
-findings and near-identical relative dispersion. That makes the ~31-35% figure
-a property of *the instrument*, not of any one model, which neither series
-could establish alone.
+findings and near-identical relative dispersion. Neither series could establish
+that alone.
+
+**2. Dispersion widens with codebase size, and worse than proportionally.**
+
+| Project | LOC | Runs | Mean | Spread | % of mean |
+|---|---|---|---|---|---|
+| migratory-viewer | 3.2k | 19, 22, 27 | 22.7 | 8 | **35%** |
+| migratory | 44.4k | 49, 60, 82 | 63.7 | 33 | **52%** |
+
+This confirms the design's stated risk: subagent fan-out is itself a variance
+source, and because the >50k-LOC / >5-module condition is a prompt instruction
+rather than enforced code, fan-out can vary *within* a series. **This is the
+concrete justification for the per-project floor decision** — a single global
+noise threshold would understate large repos by a wide margin and is not a
+defensible simplification.
+
+**3. Per-category dispersion is where the usable signal is.**
+
+| Category | viewer floor | migratory floor |
+|---|---|---|
+| `architectural-decay` | 7-7 (sd 0) | 8-11 |
+| `consistency-rot` | 2-4 | 7-11 |
+| `type-contract-debt` | 1-3 | 4-12 |
+| `dependency-config-debt` | 1-6 | 4-9 |
+
+`architectural-decay` was the most stable category on both projects — perfectly
+stable on the small one and moving by only 3 on a 14x larger codebase with
+fan-out. `type-contract-debt` tripled. So some categories are plausibly
+gate-worthy today and others are not, which is the distinction 324 needs and
+could not have been guessed from the totals.
+
+**4. The category vocabulary holds.** `other` was 0/22 on viewer and 2/49
+(~4%) on migratory — a 14x size difference and a different language mix, with
+no dumping-ground bucket.
 
 Practical consequence: a gate that treats "the audit found N issues" as a
-stable signal is reading roughly a third noise on unchanged code. Per-category
-floors are where the usable signal is.
+stable signal is reading 35-52% noise on unchanged code, and the figure is
+size-dependent. Totals are not gate-worthy; specific categories may be.
 
 ## Risks
 
