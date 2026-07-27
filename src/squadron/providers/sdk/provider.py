@@ -9,6 +9,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
+from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
 
 if TYPE_CHECKING:
     from squadron.providers.sdk.agent import ClaudeSDKAgent
@@ -36,6 +37,10 @@ class ClaudeSDKProvider:
 
     async def create_agent(self, config: AgentConfig) -> ClaudeSDKAgent:
         """Build ``ClaudeAgentOptions`` from *config* and return agent."""
+        # Must precede any streaming: the pinned parser dies on the CLI's
+        # rate-limit status event, and that kills the whole stream.
+        install_rate_limit_parser_shim()
+
         kwargs: dict[str, object] = {}
 
         # The preset form is the only way to get the CLI's default system

@@ -53,6 +53,58 @@ def is_rate_limit_event(data: dict[str, object] | None) -> bool:
     return bool(data) and data.get("type") == RATE_LIMIT_EVENT_TYPE
 
 
+def install_rate_limit_parser_shim() -> None:
+    """Teach the pinned SDK parser to accept ``rate_limit_event``.
+
+    The SDK calls ``parse_message`` *inside* the ``async for`` that drives
+    the message stream (``_internal/client.py``). An exception there
+    propagates out of that async generator, which **terminates it
+    permanently** — every later ``__anext__`` raises ``StopAsyncIteration``.
+    So a consumer cannot recover by catching ``MessageParseError`` and
+    continuing: the stream is already dead, and the run ends with zero
+    messages and no error.
+
+    The only place to intervene is before the parser raises. This wraps
+    ``parse_message`` to map an informational rate-limit event onto a
+    ``SystemMessage`` the SDK already understands. A ``rejected`` status is
+    left to raise, so genuine throttling still reaches the backoff path.
+
+    Idempotent, and a no-op on an SDK version whose parser knows the type
+    (the wrapper only ever sees payloads the real parser rejected). Remove
+    once the pin moves past a parser with native support.
+    """
+    from claude_agent_sdk._errors import MessageParseError
+    from claude_agent_sdk._internal import message_parser as _parser
+    from claude_agent_sdk.types import SystemMessage
+
+    if getattr(_parser.parse_message, "_squadron_rate_limit_shim", False):
+        return
+
+    inner = _parser.parse_message
+
+    def parse_message(data: dict[str, object]) -> object:
+        try:
+            return inner(data)  # pyright: ignore[reportArgumentType]
+        except MessageParseError:
+            if is_rate_limit_event(data) and not rate_limit_event_blocks(data):
+                return SystemMessage(subtype=RATE_LIMIT_EVENT_TYPE, data=data)
+            raise
+
+    parse_message._squadron_rate_limit_shim = True  # pyright: ignore[reportFunctionMemberAccess]
+
+    # Two call sites, bound differently, so both need patching:
+    #   * ``ClaudeSDKClient`` (client mode) imports inside its receive loop,
+    #     so it picks up a patch to the defining module.
+    #   * ``_internal.client`` (query mode) imports at module scope, so it
+    #     holds the original by value and needs its own binding replaced.
+    # Verified rather than assumed: patching only the defining module left
+    # query mode still dying on the event.
+    _parser.parse_message = parse_message  # pyright: ignore[reportAttributeAccessIssue]
+    from claude_agent_sdk._internal import client as _client
+
+    setattr(_client, "parse_message", parse_message)  # noqa: B010 - see above
+
+
 def rate_limit_event_blocks(data: dict[str, object] | None) -> bool:
     """True when the event says requests are being rejected — a real throttle.
 

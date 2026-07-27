@@ -680,60 +680,86 @@ class TestRateLimitBackoff:
 
         assert len(slept) == 10, "a rejected event must back off, not be skipped"
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize("status", ["allowed", "allowed_warning"])
-    async def test_an_informational_rate_limit_event_is_skipped(
-        self, query_agent: ClaudeSDKAgent, input_message: Message, status: str
-    ) -> None:
-        """Usage-meter updates must not pause a healthy stream.
+    def test_the_shim_absorbs_informational_events(self, status: str) -> None:
+        """Usage-meter updates must never reach the stream as an error.
 
         The CLI emits rate_limit_event whenever rate-limit *info* changes —
         its own SDK adapter ignores the type, and an interactive session
-        shows nothing. Observed before this classification: a heavily-used
-        account emitted these constantly, and squadron slept 2s and
-        restarted the stream on every one, turning a 5-minute audit into a
-        throttle-storm that interactive runs of the same skill never see.
+        shows nothing. A heavily-used account emits these constantly.
+
+        Absorbing them in the parser is the only workable place. The SDK
+        parses inside the ``async for`` driving its message generator, so a
+        raised MessageParseError terminates that generator permanently: a
+        consumer that catches it and continues gets StopAsyncIteration and
+        the run ends with zero messages. Observed exactly that — a 471s
+        audit that wrote its file, reported as "0 bytes of narration".
         """
+        from claude_agent_sdk._internal import message_parser
+        from claude_agent_sdk.types import SystemMessage
+
+        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
+
+        install_rate_limit_parser_shim()
+        payload = {
+            "type": "rate_limit_event",
+            "rate_limit_info": {"status": status, "rateLimitType": "five_hour"},
+            "uuid": "u",
+            "session_id": "s",
+        }
+        parsed = message_parser.parse_message(payload)
+
+        assert isinstance(parsed, SystemMessage), "must parse, not raise"
+        assert parsed.subtype == "rate_limit_event"
+
+    def test_the_shim_lets_a_rejected_event_raise(self) -> None:
+        """A genuine throttle must still reach the backoff path."""
         from claude_agent_sdk._errors import MessageParseError
+        from claude_agent_sdk._internal import message_parser
 
-        slept: list[float] = []
+        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
 
-        async def fake_sleep(seconds: float) -> None:
-            slept.append(seconds)
+        install_rate_limit_parser_shim()
+        with pytest.raises(MessageParseError):
+            message_parser.parse_message(
+                {
+                    "type": "rate_limit_event",
+                    "rate_limit_info": {"status": "rejected"},
+                    "uuid": "u",
+                    "session_id": "s",
+                }
+            )
 
-        class _Stream:
-            def __init__(self) -> None:
-                self._step = 0
+    def test_the_shim_patches_both_sdk_call_sites(self) -> None:
+        """Both bindings must be patched, and re-installing must be safe.
 
-            def __aiter__(self) -> _Stream:
-                return self
+        ``ClaudeSDKClient`` (client mode) imports parse_message inside its
+        receive loop; ``_internal.client`` (query mode) binds it at module
+        scope and so holds the original by value. Patching only the
+        defining module left query mode still dying on the event.
+        """
+        from claude_agent_sdk._internal import client, message_parser
 
-            async def __anext__(self) -> object:
-                self._step += 1
-                if self._step == 1:
-                    return AssistantMessage(content=[TextBlock(text="before")], model="m")
-                if self._step == 2:
-                    raise MessageParseError(
-                        "Unknown message type: rate_limit_event",
-                        {"type": "rate_limit_event", "rate_limit_info": {"status": status}},
-                    )
-                if self._step == 3:
-                    return AssistantMessage(content=[TextBlock(text="after")], model="m")
-                raise StopAsyncIteration
+        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
 
-        def gen(*, prompt: str, options: object = None) -> _Stream:
-            return _Stream()
+        install_rate_limit_parser_shim()
+        install_rate_limit_parser_shim()  # idempotent
 
-        with (
-            patch(_QUERY, side_effect=gen),
-            patch("squadron.providers.sdk.agent.asyncio.sleep", fake_sleep),
-        ):
-            messages = await _collect(query_agent.handle_message(input_message))
+        for module in (message_parser, client):
+            assert getattr(module.parse_message, "_squadron_rate_limit_shim", False), (
+                f"{module.__name__} still holds an unpatched parse_message"
+            )
 
-        assert slept == [], "an informational event must not cost a sleep"
-        assert any("before" in m.content for m in messages)
-        assert any("after" in m.content for m in messages), "stream continues past the event"
-        assert query_agent.state == AgentState.idle
+    def test_the_shim_leaves_other_parse_failures_alone(self) -> None:
+        """Only rate-limit events are absorbed — real errors still raise."""
+        from claude_agent_sdk._errors import MessageParseError
+        from claude_agent_sdk._internal import message_parser
+
+        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
+
+        install_rate_limit_parser_shim()
+        with pytest.raises(MessageParseError):
+            message_parser.parse_message({"type": "telemetry_ping"})
 
     @pytest.mark.asyncio
     async def test_other_unknown_messages_are_still_skipped(

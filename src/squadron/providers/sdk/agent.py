@@ -37,7 +37,6 @@ from squadron.providers.sdk.rate_limit import (
     RateLimitStats,
     is_rate_limit_event,
     rate_limit_backoff_s,
-    rate_limit_event_blocks,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
 
@@ -103,21 +102,21 @@ class ClaudeSDKAgent:
         unrecognized type, which would otherwise kill a working run over a
         message that carries nothing the caller needs.
 
-        Skipping in place is what keeps the run alive: the enclosing retry
-        loops restart the *whole query*, so treating an unknown message as
-        a retryable error would discard everything done so far — on a long
-        audit, tens of tool calls and several minutes of work.
+        **This skip cannot resume the stream.** The SDK parses inside the
+        ``async for`` that drives its message generator, so an exception
+        there terminates that generator permanently — the next
+        ``__anext__`` raises ``StopAsyncIteration`` and the run ends with
+        zero messages. The ``continue`` below therefore only ends the
+        iteration cleanly rather than propagating; anything that must
+        actually keep streaming has to be handled before the parser raises
+        (see ``install_rate_limit_parser_shim``).
 
-        A ``rate_limit_event`` is classified by its payload, not skipped
-        blindly: it is the CLI's usage-status event, fired whenever
-        rate-limit *info* changes, and an interactive session ignores it
-        entirely. Only a ``rejected`` status means the provider is actually
-        blocking requests — that one is re-raised so the retry loop backs
-        off. Treating every event as a throttle made the agent sleep and
-        restart the stream on each usage change while nothing was wrong.
+        A ``rate_limit_event`` reaching this point means ``rejected`` — a
+        genuine throttle — because informational ones are absorbed by that
+        shim. It is re-raised so the retry loop backs off.
 
-        Other parse failures are swallowed. Connection errors, process
-        failures, and every other ``ClaudeSDKError`` propagate untouched.
+        Connection errors, process failures, and every other
+        ``ClaudeSDKError`` propagate untouched.
         """
         iterator = stream.__aiter__()
         while True:
@@ -127,13 +126,12 @@ class ClaudeSDKAgent:
                 return
             except MessageParseError as exc:
                 if is_rate_limit_event(exc.data):
-                    if rate_limit_event_blocks(exc.data):
-                        raise
-                    self._log.debug(
-                        "Rate-limit status update (%s); stream continues.",
-                        exc.data.get("rate_limit_info") if exc.data else None,
-                    )
-                    continue
+                    # Only a rejected status reaches here — informational
+                    # events are absorbed by the parser shim, because the
+                    # SDK's generator is already dead by the time we see the
+                    # exception and cannot be resumed. See
+                    # ``install_rate_limit_parser_shim``.
+                    raise
                 self._log.warning(
                     "Skipping SDK message this version cannot parse (%s); stream continues.",
                     exc,

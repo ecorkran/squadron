@@ -23,9 +23,6 @@ from claude_agent_sdk import (
     ProcessError,
     ResultMessage,
 )
-from claude_agent_sdk._errors import (  # pyright: ignore[reportPrivateUsage]
-    MessageParseError,
-)
 
 from squadron.core.models import SDK_RESULT_TYPE
 from squadron.providers.errors import (
@@ -36,9 +33,8 @@ from squadron.providers.errors import (
 from squadron.providers.sdk.rate_limit import (
     MAX_RATE_LIMIT_RETRIES,
     RATE_LIMIT_MARKER,
-    is_rate_limit_event,
+    install_rate_limit_parser_shim,
     rate_limit_backoff_s,
-    rate_limit_event_blocks,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
 
@@ -97,6 +93,11 @@ class SDKExecutionSession:
         runtime ``set_permission_mode("bypassPermissions")`` calls, so we
         do not attempt one here.
         """
+        # Must precede any streaming: the pinned parser dies on the CLI's
+        # rate-limit status event, and that kills the whole stream. Applied
+        # here because pipeline clients are constructed in several places
+        # but all of them connect through this method.
+        install_rate_limit_parser_shim()
         await self.client.connect()
         _logger.debug("SDKExecutionSession: connected")
 
@@ -172,20 +173,13 @@ class SDKExecutionSession:
                                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    # The CLI's rate-limit *status* event arrives as a parse
-                    # failure on this SDK version. Informational unless it
-                    # says rejected — restart the stream without sleeping or
-                    # spending a retry; an interactive session ignores the
-                    # identical event. A rejected status falls through to
-                    # the backoff below.
-                    if (
-                        isinstance(exc, MessageParseError)
-                        and is_rate_limit_event(exc.data)
-                        and not rate_limit_event_blocks(exc.data)
-                    ):
-                        _logger.debug("Rate-limit status update; stream continues.")
-                        continue
-                    # See the agent's client mode: a throttle after work came
+                    # Informational rate-limit events never reach here: the
+                    # parser shim absorbs them, because a parse failure has
+                    # already killed the SDK's generator and no amount of
+                    # retrying can resume it. Only a genuine throttle does.
+                    # See ``install_rate_limit_parser_shim``.
+                    #
+                    # A throttle after work came
                     # through is a fresh event, so the budget bounds
                     # consecutive failures rather than throttles-per-run.
                     if progressed:
