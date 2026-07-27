@@ -318,8 +318,66 @@ def preflight_project(
     )
 
 
+def extract_audit_protocol(body: str) -> str:
+    """Return just the executable protocol from the skill file.
+
+    The file is a *skill definition*, not a prompt. It opens with YAML
+    frontmatter (including ``disable-model-invocation: true``) and closes
+    with a "Project documentation" half addressed to humans installing or
+    contributing to the skill. The file states the boundary itself:
+    everything through the ``---`` divider is the protocol Claude executes;
+    the rest is documentation.
+
+    Sending the whole file reads as "here is a document" rather than "do
+    this now" — which produced a ~2KB acknowledgement instead of an audit.
+    So the frontmatter and the human half are stripped, and only the
+    protocol is sent.
+
+    Falls back to the full body if the expected structure is absent, since a
+    reworded skill should degrade to the old behavior rather than send an
+    empty prompt.
+    """
+    remainder = body
+    if remainder.lstrip().startswith("<!--"):
+        _, _, remainder = remainder.partition("-->")
+
+    stripped = remainder.lstrip()
+    if stripped.startswith("---"):
+        # Drop the YAML frontmatter block.
+        after_open = stripped[3:]
+        _, sep, after_close = after_open.partition("\n---")
+        if sep:
+            remainder = after_close
+
+    # The protocol runs until the divider that introduces the human docs.
+    # If that divider is absent the whole remainder is protocol — the
+    # frontmatter strip above still stands, since a skill with no human
+    # half is not a reason to send its YAML header to the model.
+    marker = "\n# Project documentation"
+    protocol, sep, _ = remainder.partition(marker)
+    if not sep:
+        return remainder.strip() or body.strip()
+
+    # That divider is preceded by a bare '---' rule; trim it.
+    protocol = protocol.rstrip()
+    if protocol.endswith("---"):
+        protocol = protocol[: -len("---")].rstrip()
+    return protocol.strip()
+
+
+#: Framing that turns the protocol document into an instruction to execute.
+#: Without it the model treats a pasted protocol as reference material.
+_EXECUTE_INSTRUCTION = (
+    "Perform a tech debt audit of the repository in your current working "
+    "directory, following the protocol below exactly. Execute it now — the "
+    "protocol is your instruction, not a document to summarize. Complete "
+    "every phase, including the machine-readable findings block, which is "
+    "mandatory and must be the last thing in the audit file you write."
+)
+
+
 def build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str:
-    """Return the audit prompt: the skill body, plus a run-mode preamble.
+    """Return the audit prompt: an execute instruction plus the protocol.
 
     When ``independent_run`` is True the prompt is prefixed with
     ``INDEPENDENT_RUN_MARKER``, which the skill documents as the condition
@@ -332,9 +390,12 @@ def build_audit_prompt(skill_path: Path, *, independent_run: bool) -> str:
     except OSError as exc:
         raise AuditSkillError(f"Could not read the audit skill at {skill_path}: {exc}") from exc
 
+    protocol = extract_audit_protocol(body)
+    prompt = f"{_EXECUTE_INSTRUCTION}\n\n---\n\n{protocol}"
+
     if not independent_run:
-        return body
-    return f"{INDEPENDENT_RUN_MARKER}\n\n{body}"
+        return prompt
+    return f"{INDEPENDENT_RUN_MARKER}\n\n{prompt}"
 
 
 def resolve_audit_profile(profile: str | None, *, cwd: str = ".") -> str:

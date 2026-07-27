@@ -86,6 +86,58 @@ def test_independent_run_marker_matches_harness_constant(skill_text: str) -> Non
     assert INDEPENDENT_RUN_MARKER in skill_text
 
 
+def test_prompt_sends_the_protocol_not_the_whole_skill_file() -> None:
+    """The prompt must be an instruction, not a pasted document.
+
+    The skill file is a *definition*: YAML frontmatter (including
+    ``disable-model-invocation: true``) wrapping the protocol, followed by a
+    "Project documentation" half addressed to humans installing the skill.
+    Sending it whole produced a ~2KB acknowledgement instead of an audit —
+    the model read it as reference material.
+    """
+    from squadron.metrology.audit import build_audit_prompt, resolve_audit_skill
+
+    skill_path = resolve_audit_skill()
+    prompt = build_audit_prompt(skill_path, independent_run=False)
+
+    # Framing: an explicit instruction comes first.
+    assert prompt.lstrip().startswith("Perform a tech debt audit")
+
+    # The human-facing half is excluded.
+    assert "# Project documentation" not in prompt
+    assert "## Installation" not in prompt
+    assert "## Contributing" not in prompt
+    assert "disable-model-invocation" not in prompt
+
+    # The executable protocol and its output contract survive intact.
+    assert "Phase 1: Orient" in prompt
+    assert "Phase 2: Audit across these dimensions" in prompt
+    assert "squadron:findings:begin" in prompt
+    assert "architectural-decay" in prompt
+    assert "actually fine" in prompt, "the required section must not be stripped"
+
+    assert len(prompt) < len(skill_path.read_text(encoding="utf-8"))
+
+
+def test_protocol_extraction_falls_back_when_structure_is_absent() -> None:
+    """A reworded skill degrades to the full body, never to an empty prompt."""
+    from squadron.metrology.audit import extract_audit_protocol
+
+    plain = "Just do an audit. No frontmatter, no divider."
+    assert extract_audit_protocol(plain) == plain
+
+
+def test_protocol_extraction_strips_frontmatter_without_a_docs_divider() -> None:
+    """Frontmatter alone is still handled when the human half is absent."""
+    from squadron.metrology.audit import extract_audit_protocol
+
+    body = "---\nname: x\ndisable-model-invocation: true\n---\n\n# Protocol\n\nDo the thing."
+    extracted = extract_audit_protocol(body)
+
+    assert "disable-model-invocation" not in extracted
+    assert "Do the thing." in extracted
+
+
 def test_repeat_run_clause_is_conditional(skill_text: str) -> None:
     """Repeat-run mode is scoped by an explicit independent-run exception.
 
