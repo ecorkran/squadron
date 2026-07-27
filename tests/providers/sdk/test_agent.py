@@ -404,3 +404,87 @@ class TestClientShutdown:
     async def test_shutdown_without_client_is_safe(self, client_agent: ClaudeSDKAgent) -> None:
         await client_agent.shutdown()
         assert client_agent.state == AgentState.terminated
+
+
+# ---------------------------------------------------------------------------
+# Unparseable-message tolerance
+# ---------------------------------------------------------------------------
+
+
+class TestUnparseableMessages:
+    """The bundled CLI may emit message types the installed SDK cannot parse.
+
+    ``rate_limit_event`` is the observed case: an informational notice the
+    CLI handles its own backoff for. The SDK's parser raises on any
+    unrecognized type, which previously killed a working run — an audit was
+    lost after 30 tool calls to a message that carried no failure at all.
+
+    Skipping in place matters more than it looks: both handlers retry the
+    *whole query*, so treating this as retryable would discard every tool
+    call already made rather than continuing past a notice.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unparseable_message_does_not_kill_the_stream(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        from claude_agent_sdk._errors import MessageParseError
+
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="before")], model="claude")
+            raise MessageParseError(
+                "Unknown message type: rate_limit_event", {"type": "rate_limit_event"}
+            )
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        # The prose emitted before the unparseable message survives, and the
+        # run completes normally rather than raising.
+        assert any("before" in msg.content for msg in messages)
+        assert query_agent.state == AgentState.idle
+
+    @pytest.mark.asyncio
+    async def test_content_after_an_unparseable_message_still_arrives(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """The stream continues past the notice — this is the whole point."""
+        from claude_agent_sdk._errors import MessageParseError
+
+        class _Flaky:
+            def __init__(self) -> None:
+                self._step = 0
+
+            def __aiter__(self) -> _Flaky:
+                return self
+
+            async def __anext__(self) -> object:
+                self._step += 1
+                if self._step == 1:
+                    return AssistantMessage(content=[TextBlock(text="before")], model="claude")
+                if self._step == 2:
+                    raise MessageParseError("Unknown message type: rate_limit_event", {})
+                if self._step == 3:
+                    return AssistantMessage(content=[TextBlock(text="after")], model="claude")
+                raise StopAsyncIteration
+
+        def gen(*, prompt: str, options: object = None) -> _Flaky:
+            return _Flaky()
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        text = " ".join(msg.content for msg in messages)
+        assert "before" in text
+        assert "after" in text, "work after the unparseable notice must not be lost"
+
+    @pytest.mark.asyncio
+    async def test_real_errors_still_propagate(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """Only parse failures are swallowed; genuine failures still raise."""
+        gen = _make_error_gen(CLIConnectionError("connection lost"))
+        with patch(_QUERY, side_effect=gen):
+            with pytest.raises(ProviderError):
+                await _collect(query_agent.handle_message(input_message))
+            assert query_agent.state == AgentState.failed

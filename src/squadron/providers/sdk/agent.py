@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from claude_agent_sdk import (
     ClaudeAgentOptions,
@@ -15,6 +16,9 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk import (
     query as sdk_query,
+)
+from claude_agent_sdk._errors import (  # pyright: ignore[reportPrivateUsage]
+    MessageParseError,
 )
 
 from squadron.core.models import AgentState, Message
@@ -70,6 +74,37 @@ class ClaudeSDKAgent:
             async for msg in self._handle_query_mode(message):
                 yield msg
 
+    async def _skip_unparseable(self, stream: AsyncIterator[Any]) -> AsyncIterator[Any]:
+        """Yield SDK messages, skipping ones this SDK version cannot parse.
+
+        The bundled CLI emits message types newer than the installed SDK's
+        parser knows — ``rate_limit_event`` is the observed case, an
+        informational notice the CLI handles its own backoff for. The parser
+        raises ``MessageParseError`` on any unrecognized type, which would
+        otherwise kill a working run.
+
+        Skipping in place is what keeps the run alive: the enclosing retry
+        loops restart the *whole query*, so treating this as a retryable
+        error would discard everything done so far — on a long audit, tens
+        of tool calls and several minutes of work.
+
+        Only parse failures are swallowed. Connection errors, process
+        failures, and every other ``ClaudeSDKError`` propagate untouched.
+        """
+        iterator = stream.__aiter__()
+        while True:
+            try:
+                sdk_msg = await iterator.__anext__()
+            except StopAsyncIteration:
+                return
+            except MessageParseError as exc:
+                self._log.warning(
+                    "Skipping SDK message this version cannot parse (%s); stream continues.",
+                    exc,
+                )
+                continue
+            yield sdk_msg
+
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:
         """One-shot execution via ``sdk_query``.
 
@@ -81,7 +116,8 @@ class ClaudeSDKAgent:
         retries = 0
         while True:
             try:
-                async for sdk_msg in sdk_query(prompt=message.content, options=self._options):
+                stream = sdk_query(prompt=message.content, options=self._options)
+                async for sdk_msg in self._skip_unparseable(stream):
                     for translated in translate_sdk_message(sdk_msg, sender=self._name):
                         yield translated
                 self._state = AgentState.idle
@@ -122,7 +158,7 @@ class ClaudeSDKAgent:
             retries = 0
             while True:
                 try:
-                    async for sdk_msg in self._client.receive_response():
+                    async for sdk_msg in self._skip_unparseable(self._client.receive_response()):
                         for translated in translate_sdk_message(sdk_msg, sender=self._name):
                             yield translated
                     break  # normal completion
