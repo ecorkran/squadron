@@ -14,6 +14,8 @@ numbers by discarding inconvenient input.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from squadron.metrology.audit_parse import (
@@ -350,3 +352,70 @@ def test_normalize_severity_accepts_the_skills_casing(raw: str, expected: AuditS
 
 def test_normalize_severity_returns_none_for_unknown() -> None:
     assert normalize_severity("Catastrophic") is None
+
+
+# ---------------------------------------------------------------------------
+# Real production output
+# ---------------------------------------------------------------------------
+
+_REAL_AUDIT = Path(__file__).parent / "fixtures" / "real-audit-migratory-viewer.md"
+
+
+def test_parses_a_real_audit_file() -> None:
+    """The actual output of a real run against migratory-viewer.
+
+    Hand-written fixtures used clean prose and passed happily; this file
+    broke the parser on first contact. Per the project's parser rule, the
+    fixture must be the format production actually produces — so the real
+    31KB audit is committed and parsed here.
+    """
+    findings, unnormalized = parse_audit_findings(_REAL_AUDIT.read_text(encoding="utf-8"))
+
+    assert len(findings) == 27
+    assert unnormalized == 0
+    assert {f.category for f in findings} <= set(AuditCategory)
+    assert all(f.finding_id.startswith("F") for f in findings)
+    assert all(f.summary for f in findings), "every finding carries prose"
+
+
+def test_real_audit_summaries_with_quotes_survive() -> None:
+    """Model prose contains quotes and colons — invalid as bare YAML scalars.
+
+    Three of the 27 summaries in the real file carry embedded double quotes
+    (e.g. ``"import.meta.env.VITE_SERVER_URL as string" cast suppresses``).
+    Discarding a complete audit over punctuation would be the wrong trade,
+    so prose fields are re-quoted and the parse retried.
+    """
+    findings, _ = parse_audit_findings(_REAL_AUDIT.read_text(encoding="utf-8"))
+
+    quoted = [f for f in findings if '"' in f.summary]
+    assert quoted, "the fixture must retain its quote-bearing summaries"
+    assert any("VITE_SERVER_URL" in f.summary for f in quoted)
+
+
+def test_scalar_repair_leaves_valid_yaml_untouched() -> None:
+    """Repair is a fallback, not a rewrite: clean blocks parse unchanged."""
+    findings, unnormalized = parse_audit_findings(_WELL_FORMED)
+
+    assert len(findings) == 3
+    assert unnormalized == 0
+    assert findings[0].summary.startswith("1400-line god class")
+
+
+def test_repair_preserves_single_quotes_in_prose() -> None:
+    """A summary containing single quotes round-trips through the repair."""
+    raw = _audit_file(
+        """findings:
+  - id: F001
+    category: test-debt
+    location: src/x.py:1
+    severity: Low
+    effort: S
+    summary: the "foo" flag isn't validated: it can be 'anything'
+"""
+    )
+    findings, _ = parse_audit_findings(raw)
+
+    assert len(findings) == 1
+    assert "isn't validated" in findings[0].summary
+    assert "'anything'" in findings[0].summary

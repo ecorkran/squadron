@@ -43,13 +43,41 @@ class _StubResponse:
 
 
 class _StubAgent:
-    """An agent that replays a scripted outcome instead of calling a provider."""
+    """An agent that replays a scripted outcome instead of calling a provider.
 
-    def __init__(self, *, output: str | None, raises: Exception | None, hang: bool) -> None:
+    Crucially it writes ``output`` to an **audit file**, not to the response
+    stream, because that is what the real skill does — the stream carries
+    tool narration and a short closing remark. A stub that returned findings
+    in the stream would validate a harness that cannot work in production;
+    an earlier version of these tests did exactly that and passed while the
+    real run failed.
+
+    Pass ``writes_file=False`` to model an agent that talks but produces no
+    audit.
+    """
+
+    def __init__(
+        self,
+        *,
+        output: str | None,
+        raises: Exception | None,
+        hang: bool,
+        writes_file: bool = True,
+        cwd: Path | None = None,
+    ) -> None:
         self._output = output
         self._raises = raises
         self._hang = hang
+        self._writes_file = writes_file
+        self._cwd = cwd
         self.shutdown_called = False
+
+    def _write_audit_file(self) -> None:
+        if not self._writes_file or self._output is None or self._cwd is None:
+            return
+        target = self._cwd / "project-documents/user/analysis/940-analysis.example.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(self._output, encoding="utf-8")
 
     async def handle_message(self, message: Message) -> AsyncIterator[_StubResponse]:
         if self._raises is not None:
@@ -60,7 +88,8 @@ class _StubAgent:
             import asyncio
 
             await asyncio.sleep(3600)
-        yield _StubResponse(content=self._output or "")
+        self._write_audit_file()
+        yield _StubResponse(content="Audit complete. See the analysis file.")
 
     async def shutdown(self) -> None:
         self.shutdown_called = True
@@ -75,6 +104,12 @@ class _StubProvider:
 
     async def create_agent(self, config: object) -> _StubAgent:
         agent = self.agent if self.agent is not None else _StubAgent(output="", raises=None, hang=False)
+        # The harness sets cwd to the audited repo; hand it to the stub so it
+        # writes its audit file where the real skill would. Re-set on every
+        # creation so a stub reused across projects follows each one.
+        cwd = getattr(config, "cwd", None)
+        if cwd is not None:
+            agent._cwd = Path(cwd)  # pyright: ignore[reportPrivateUsage]
         self.created.append(agent)
         return agent
 
@@ -339,9 +374,10 @@ async def test_progress_is_reported_while_the_run_works(
         async def handle_message(self, message: Message) -> AsyncIterator[_StubResponse]:
             for _ in range(25):
                 yield _StubResponse(content="", metadata={"sdk_type": "tool_use"})
-            yield _StubResponse(content=_audit_output())
+            self._write_audit_file()
+            yield _StubResponse(content="Audit complete.")
 
-    stub_provider.agent = _ToolNarratingAgent(output=None, raises=None, hang=False)
+    stub_provider.agent = _ToolNarratingAgent(output=_audit_output(), raises=None, hang=False)
     seen: list[AuditProgress] = []
 
     result = await run_audit(
@@ -577,3 +613,161 @@ def test_audit_modules_are_surface_agnostic() -> None:
                 imported.add(node.module.split(".")[0])
         assert "typer" not in imported, f"{module}.py must not import typer"
         assert "rich" not in imported, f"{module}.py must not import rich"
+
+
+# --------------------------------------------------------------------------
+# The findings live in a file, not in the response stream
+# --------------------------------------------------------------------------
+
+
+class _FileWritingAgent(_StubAgent):
+    """An agent that writes an audit file, as the real skill does.
+
+    The real skill's response stream carries tool narration and a short
+    closing remark — the findings go to disk. A stub that returned findings
+    in the stream would test a harness that cannot work in production.
+    """
+
+    def __init__(self, target: Path, body: str) -> None:
+        super().__init__(output=None, raises=None, hang=False, writes_file=False)
+        self._target = target
+        self._body = body
+
+    async def handle_message(self, message: Message) -> AsyncIterator[_StubResponse]:
+        self._target.parent.mkdir(parents=True, exist_ok=True)
+        self._target.write_text(self._body, encoding="utf-8")
+        yield _StubResponse(content="Audit complete. See the analysis file.")
+
+
+@pytest.mark.asyncio
+async def test_findings_are_read_from_the_audit_file_not_the_stream(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """The stream carries ~70 bytes of pleasantries; the audit is on disk.
+
+    This is the design's own recorded ground truth (fact 1: "The skill
+    writes a file; it does not return findings"). A harness that parsed the
+    response would see a closing remark and report a missing block.
+    """
+    target = audited_repo / "project-documents/user/analysis/940-analysis.example.md"
+    stub_provider.agent = _FileWritingAgent(target, _audit_output())
+
+    result = await run_audit(audited_repo, store=audit_store, cwd=str(audited_repo))
+
+    assert result.succeeded, "findings must be read from the file the skill wrote"
+    assert result.run is not None
+    assert len(result.run.findings) == 2
+
+
+@pytest.mark.asyncio
+async def test_audit_file_in_the_bare_analysis_dir_is_also_found(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """Non-cf projects write to ``analysis/`` — both locations are real."""
+    target = audited_repo / "analysis/940-analysis.example.md"
+    stub_provider.agent = _FileWritingAgent(target, _audit_output())
+
+    result = await run_audit(audited_repo, store=audit_store, cwd=str(audited_repo))
+
+    assert result.succeeded
+
+
+@pytest.mark.asyncio
+async def test_no_audit_file_written_persists_nothing(
+    audited_repo: Path,
+    audit_store: MetrologyStore,
+    stub_provider: _StubProvider,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An agent that chats but writes nothing is a failed run."""
+    stub_provider.agent = _StubAgent(
+        output="I had a look around.", raises=None, hang=False, writes_file=False
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = await run_audit(audited_repo, store=audit_store, cwd=str(audited_repo))
+
+    assert result.failure is AuditRunFailure.BLOCK_MISSING
+    assert audit_store.list_audit_runs() == []
+    assert "wrote no audit file" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_stale_audit_file_is_not_mistaken_for_this_run(
+    audited_repo: Path,
+    audit_store: MetrologyStore,
+    stub_provider: _StubProvider,
+) -> None:
+    """A previous session's audit must never persist under a new run id.
+
+    Without the mtime guard, a run that produced nothing would silently
+    re-persist old findings — the same run appearing twice in a variance
+    series, which would understate the measured spread.
+    """
+    import os
+    import time
+
+    stale = audited_repo / "project-documents/user/analysis/940-analysis.old.md"
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text(_audit_output(), encoding="utf-8")
+    old = time.time() - 86_400
+    os.utime(stale, (old, old))
+
+    stub_provider.agent = _StubAgent(
+        output="Nothing to report.", raises=None, hang=False, writes_file=False
+    )
+
+    result = await run_audit(audited_repo, store=audit_store, cwd=str(audited_repo))
+
+    assert result.failure is AuditRunFailure.BLOCK_MISSING
+    assert audit_store.list_audit_runs() == []
+
+
+@pytest.mark.asyncio
+async def test_audit_output_under_project_documents_does_not_dirty_a_series(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """The real output path must be exempt from the dirty-worktree check.
+
+    The earlier fix matched ``analysis/`` only; production writes to
+    ``project-documents/user/analysis/``, so a variance series would still
+    have refused its own second run.
+    """
+    prior = audited_repo / "project-documents/user/analysis/940-analysis.example.md"
+    prior.parent.mkdir(parents=True, exist_ok=True)
+    prior.write_text("# a previous run\n", encoding="utf-8")
+
+    target = audited_repo / "project-documents/user/analysis/941-analysis.example.md"
+    stub_provider.agent = _FileWritingAgent(target, _audit_output())
+
+    result = await run_audit(audited_repo, store=audit_store, require_clean=True, cwd=str(audited_repo))
+
+    assert result.succeeded, "the audit's own output must not refuse the next run"
+
+
+@pytest.mark.parametrize(
+    ("path", "exempt"),
+    [
+        # Git collapses a wholly-untracked tree to its shallowest ancestor,
+        # so every prefix of an output location must be recognized.
+        ("project-documents/", True),
+        ("project-documents/user/", True),
+        ("project-documents/user/analysis/", True),
+        ("project-documents/user/analysis/940-analysis.example.md", True),
+        ("analysis/", True),
+        ("analysis/940-analysis.example.md", True),
+        # Real work under the same tree still refuses — the exemption is for
+        # the audit's own product, not for project documents generally.
+        ("project-documents/user/slices/323-slice.foo.md", False),
+        ("project-documents/user/tasks/323-tasks.foo.md", False),
+        ("src/main.py", False),
+        ("README.md", False),
+    ],
+)
+def test_audit_artifact_exemption_is_scoped(path: str, exempt: bool) -> None:
+    """Only the audit's own output is exempt from the dirty-worktree check."""
+    from squadron.metrology.audit import _is_audit_artifact  # pyright: ignore[reportPrivateUsage]
+
+    assert _is_audit_artifact(f"?? {path}") is exempt
+    # A tracked-file modification is never exempt, wherever it lives.
+    assert _is_audit_artifact(f" M {path}") is False

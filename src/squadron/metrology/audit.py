@@ -19,6 +19,7 @@ import hashlib
 import logging
 import re
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,15 +47,31 @@ _logger = logging.getLogger(__name__)
 _AUDIT_PACK = "analysis"
 _AUDIT_SKILL_FILENAME = "tech-debt-audit.md"
 
-#: The audit file the skill writes into the repo it audits
-#: (``analysis/nnn-analysis.{project}{.subproject}.md``). Recognized so a
-#: variance series does not refuse itself: this file is a product of the
-#: measurement, not a change to the code under measurement.
+#: Where the skill writes its audit file. It specifies
+#: ``analysis/nnn-analysis.{project}.md`` but also cites
+#: ``file-naming-conventions``, so in a cf-managed project the model
+#: resolves that to ``project-documents/user/analysis/``. Both are real
+#: locations and both are searched — observed in practice, not assumed.
+_AUDIT_FILE_GLOBS = (
+    "project-documents/user/analysis/*-analysis.*.md",
+    "analysis/*-analysis.*.md",
+)
+
+#: Untracked paths that are the audit's own output rather than a change to
+#: the code under measurement. Recognized so a variance series does not
+#: refuse itself on the second run.
 #:
-#: Git collapses a wholly-untracked directory to ``?? analysis/`` rather
-#: than listing its files, so the bare directory form is matched too — the
-#: common case on a first run, when ``analysis/`` did not previously exist.
-_AUDIT_ARTIFACT_PATTERN = re.compile(r"^analysis/(\d+-analysis\..+\.md)?$")
+#: Git collapses a wholly-untracked directory to a single ``?? dir/`` entry
+#: instead of listing its files, and it collapses to the *shallowest*
+#: untracked ancestor — so a repo where ``project-documents/`` itself is new
+#: reports ``?? project-documents/``, not the analysis path beneath it.
+#: Every prefix of both output locations is therefore matched.
+_AUDIT_ARTIFACT_PATTERN = re.compile(
+    r"^(?:"
+    r"project-documents/(?:user/(?:analysis/(?:\d+-analysis\..+\.md)?)?)?"
+    r"|analysis/(?:\d+-analysis\..+\.md)?"
+    r")$"
+)
 
 #: Prefixed to the audit prompt to suppress the skill's repeat-run mode.
 #:
@@ -212,6 +229,33 @@ def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         check=False,
     )
+
+
+def find_audit_file(project_path: Path, *, newer_than: float | None = None) -> Path | None:
+    """Return the audit file the skill just wrote, or ``None``.
+
+    The skill writes its findings to a **file**, not to the response stream
+    — the stream carries tool narration and a brief closing remark. Reading
+    the file is therefore the only way to obtain the audit; a harness that
+    parsed the response would see a few dozen bytes of pleasantries.
+
+    ``newer_than`` (a Unix mtime) restricts the search to files written by
+    *this* run, so a stale audit from a previous session can never be
+    mistaken for a fresh result — which would silently persist old findings
+    under a new run id.
+    """
+    candidates: list[Path] = []
+    for pattern in _AUDIT_FILE_GLOBS:
+        candidates.extend(project_path.glob(pattern))
+
+    fresh = [
+        path
+        for path in candidates
+        if path.is_file() and (newer_than is None or path.stat().st_mtime >= newer_than)
+    ]
+    if not fresh:
+        return None
+    return max(fresh, key=lambda path: path.stat().st_mtime)
 
 
 def _is_audit_artifact(status_line: str) -> bool:
@@ -538,6 +582,10 @@ async def run_audit(
     )
 
     # --- Execution: bounded, and failing closed -------------------------
+    # Stamped before the agent starts so only a file this run wrote counts;
+    # a stale audit from a previous session must never be persisted under a
+    # fresh run id. One second of slack absorbs filesystem mtime coarseness.
+    started_at = time.time() - 1.0
     agent = await provider.create_agent(config)
     try:
         raw_output = await asyncio.wait_for(
@@ -574,6 +622,32 @@ async def run_audit(
         )
     finally:
         await agent.shutdown()
+
+    # --- Locate the audit file: the findings live there, not in the stream
+    audit_file = find_audit_file(project_path, newer_than=started_at)
+    if audit_file is None:
+        _logger.warning(
+            "Audit for %s wrote no audit file (%d bytes of narration received); "
+            "persisting nothing. Expected one of: %s",
+            preflight.project_id.value,
+            len(raw_output),
+            ", ".join(_AUDIT_FILE_GLOBS),
+        )
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.BLOCK_MISSING,
+            detail=f"no audit file written under {' or '.join(_AUDIT_FILE_GLOBS)}",
+        )
+
+    try:
+        raw_output = audit_file.read_text(encoding="utf-8")
+    except OSError as exc:
+        _logger.warning("Could not read audit file %s: %s; persisting nothing.", audit_file, exc)
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.BLOCK_MISSING,
+            detail=f"audit file unreadable: {exc}",
+        )
 
     # --- Parse: absent and malformed are different failures -------------
     try:

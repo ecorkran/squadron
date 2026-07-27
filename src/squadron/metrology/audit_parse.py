@@ -139,6 +139,43 @@ def _extract_block_body(raw: str) -> str:
     return fenced.group("inner") if fenced is not None else body
 
 
+#: Fields whose values are free prose and therefore routinely contain
+#: characters an unquoted YAML scalar cannot carry — quotes, colons,
+#: brackets, code fragments. Repaired before a retry parse.
+_PROSE_FIELDS = ("summary", "location", "recommendation", "description")
+
+_PROSE_LINE = re.compile(
+    r"^(?P<indent>\s*)(?P<key>" + "|".join(_PROSE_FIELDS) + r"):[ \t]+(?P<value>\S.*?)[ \t]*$"
+)
+
+
+def _quote_prose_scalars(body: str) -> str:
+    """Re-quote prose field values so YAML can carry them verbatim.
+
+    Model-written summaries contain quotes (``"foo" cast suppresses...``),
+    colons, and bracketed code. Emitting those as bare scalars is invalid
+    YAML, and the audit that produced them is otherwise complete — so the
+    value is wrapped in a single-quoted scalar (with internal single quotes
+    doubled per the YAML spec) rather than the whole run being discarded.
+
+    Values that are already quoted, or that begin a block scalar (``|``,
+    ``>``), are left alone.
+    """
+    repaired: list[str] = []
+    for line in body.splitlines():
+        match = _PROSE_LINE.match(line)
+        if match is None:
+            repaired.append(line)
+            continue
+        value = match.group("value")
+        if value[0] in "|>" or (value[0] in "'\"" and value[-1] == value[0] and len(value) > 1):
+            repaired.append(line)
+            continue
+        escaped = value.replace("'", "''")
+        repaired.append(f"{match.group('indent')}{match.group('key')}: '{escaped}'")
+    return "\n".join(repaired)
+
+
 def _coerce_str(value: object) -> str | None:
     """Return a stripped string for a scalar YAML value, else ``None``.
 
@@ -173,7 +210,20 @@ def parse_audit_findings(raw: str) -> tuple[list[AuditFinding], int]:
     try:
         loaded: object = yaml.safe_load(body)
     except yaml.YAMLError as exc:
-        raise AuditBlockMalformedError(f"Findings block is not valid YAML: {exc}") from exc
+        # Real model output routinely puts quotes, colons, and code
+        # fragments in prose fields — an unquoted YAML scalar cannot carry
+        # those. Rather than discard a complete audit over a punctuation
+        # detail, repair the prose fields and retry once.
+        repaired = _quote_prose_scalars(body)
+        try:
+            loaded = yaml.safe_load(repaired)
+        except yaml.YAMLError:
+            raise AuditBlockMalformedError(f"Findings block is not valid YAML: {exc}") from exc
+        _logger.warning(
+            "Findings block required scalar repair before parsing (%s). "
+            "The skill should emit block scalars for prose fields.",
+            str(exc).splitlines()[0],
+        )
 
     if loaded is None:
         raise AuditBlockMalformedError("Findings block is empty.")
