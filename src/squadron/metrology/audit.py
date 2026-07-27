@@ -487,6 +487,23 @@ def resolve_audit_profile(profile: str | None, *, cwd: str = ".") -> str:
     )
 
 
+def resolve_audit_model(model: str | None, *, cwd: str = ".") -> str | None:
+    """Resolve the model for an audit run: explicit argument, then config.
+
+    ``None`` means send no ``--model`` and let the CLI choose — which it
+    does expensively (a 1M-context Opus, measured) and silently. Returning
+    ``None`` is therefore a real answer, not a failure: some callers do want
+    the CLI default. It is simply not a good default for *measurement*,
+    where an unpinned model means the instrument can drift between runs.
+    """
+    if model is not None:
+        return model
+    configured = get_config("metrology.audit_model", cwd=cwd)
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    return None
+
+
 async def _collect_audit_output(
     agent: object,
     prompt: str,
@@ -578,6 +595,7 @@ async def run_audit(
     prompt_hash = audit_prompt_hash(skill_path)
     prompt = build_audit_prompt(skill_path, independent_run=independent_run)
     resolved_profile = resolve_audit_profile(profile, cwd=cwd)
+    resolved_model = resolve_audit_model(model, cwd=cwd)
     timeout_s = int(get_typed_config("metrology.audit_timeout_s", int, cwd=cwd))
     rate_limit_retries = int(get_typed_config("metrology.audit_rate_limit_retries", int, cwd=cwd))
     rate_limit_cap_s = int(get_typed_config("metrology.audit_rate_limit_cap_s", int, cwd=cwd))
@@ -591,7 +609,7 @@ async def run_audit(
         name=agent_name,
         agent_type=provider_profile.provider,
         provider=provider_profile.provider,
-        model=model,
+        model=resolved_model,
         instructions=None,
         # The audit is the same protocol a human runs interactively, where the
         # CLI supplies its own system prompt. Sending an empty one strips the
@@ -750,7 +768,7 @@ async def run_audit(
         project_id=preflight.project_id,
         commit_sha=preflight.commit_sha,
         audit_prompt_hash=prompt_hash,
-        model=model or provider_profile.provider,
+        model=resolved_model or provider_profile.provider,
         measured_at=datetime.now(UTC),
         findings=findings,
         unnormalized_count=unnormalized,

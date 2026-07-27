@@ -239,6 +239,18 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default=None,
         description=("Provider profile for audit runs. Unset falls back to the review default."),
     ),
+    "metrology.audit_model": ConfigKey(
+        name="metrology.audit_model",
+        type_=str,
+        default=None,
+        description=(
+            "Model for audit runs. Unset sends no --model, so the CLI picks "
+            "its own default — measured as a 1M-context Opus, the most "
+            "expensive option available. Pin it: an unpinned model is not a "
+            "fixed instrument, so a floor measured today is not comparable "
+            "to one measured after that default shifts."
+        ),
+    ),
 }
 
 

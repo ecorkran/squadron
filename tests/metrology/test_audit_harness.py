@@ -791,3 +791,24 @@ def test_audit_can_write_its_own_product() -> None:
     # Read and Bash are load-bearing for the protocol's own steps.
     assert "Read" in _AUDIT_ALLOWED_TOOLS
     assert "Bash" in _AUDIT_ALLOWED_TOOLS
+
+
+def test_resolve_audit_model_precedence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicit argument wins; config supplies the pin; unset stays None.
+
+    ``None`` is a real answer, not a failure — it means "send no --model and
+    let the CLI choose". That is a poor default for measurement (the CLI
+    picks a 1M-context Opus, and an unpinned model lets the instrument
+    drift), but it is the documented behaviour when nothing is configured.
+    """
+    from squadron.metrology.audit import resolve_audit_model
+
+    cwd = str(tmp_path)
+    assert resolve_audit_model(None, cwd=cwd) is None
+
+    (tmp_path / ".squadron.toml").write_text(
+        '"metrology.audit_model" = "claude-sonnet-5"\n', encoding="utf-8"
+    )
+    assert resolve_audit_model(None, cwd=cwd) == "claude-sonnet-5"
+    # An explicit argument overrides the configured pin.
+    assert resolve_audit_model("claude-haiku-4-5", cwd=cwd) == "claude-haiku-4-5"
