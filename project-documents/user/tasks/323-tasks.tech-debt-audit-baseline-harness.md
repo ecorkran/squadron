@@ -8,8 +8,8 @@ dependencies:
   - 340 skill-pack-infrastructure — the `analysis` pack containing `tech-debt-audit`; skills/resolver._resolve_bundled for install-independent lookup
 projectState: "Slice 323 design complete and slice-design-reviewed (323-review.slice.*, verdict CONCERNS, all 3 actionable findings fixed: failure-mode enumeration added, interfaces corrected to [324], 340 boundary recorded in the parent architecture). This is the first slice of the AUDIT oracle — it shares 320's spine (persistence) but not the human oracle's report path or grain. Decisions that must not be re-litigated: (1) the tech-debt-audit fork is edited, not wrapped, and the FORK is canonical with squadron vendoring it; (2) findings ship as a fenced YAML block emitted by the skill, not a markdown table parser; (3) audit severity stays Critical/High/Medium/Low and is never mapped onto review PASS/NOTE/CONCERN/FAIL; (4) the noise floor is per-project at a pinned commit, never one global number, and a project without one is marked 'no floor measured' rather than borrowing another's; (5) one run persists a complete AuditRun or nothing at all — there is no partial-run record. No intervention ships here: no pre-emption prompt, no delta report, no dispatch write (that is 324)."
 dateCreated: 20260726
-dateUpdated: 20260726
-status: in_progress
+dateUpdated: 20260727
+status: complete
 ---
 
 ## Context Summary
@@ -350,17 +350,18 @@ status: in_progress
 
 ### T22: End-to-end verification and the real variance campaign
 
-- [ ] **Full local verification first (zero token cost)**
-  - [ ] `uv run ruff format` on all changed files, then `uv run ruff check`, then `uv run pyright` — all clean
-  - [ ] `uv run pytest -q` — full suite green, no regressions in the judging, capture, or report paths
-- [ ] **Single-project smoke test** — `sq metrology audit run . --json` against squadron itself. Confirm: findings parse, `project_id` is `github.com/ecorkran/squadron` with `source: remote` (**not** a filesystem path), one record written
-- [ ] **The variance campaign** — this is the task that spends real tokens (12 audits; the two large repos fan out to subagents and are slowest)
-  - [ ] Confirm every worktree is clean before starting; the command refuses otherwise
-  - [ ] `sq metrology audit variance` across the four-project set: `squadron`, `migratory`, `context-forge`, `migratory-viewer`
-  - [ ] Runs are resumable by design — if the campaign is interrupted, completed runs persist and the reduction can be re-run later. Do **not** restart from scratch on a partial failure
-- [ ] **Baseline verification** — `sq metrology report baseline` shows ≥2 projects, each with its own floor. Inspect the `other`-category share per project; a high share means the vocabulary does not fit that codebase, which is a finding about the instrument worth recording
-- [ ] **Comparability check** — confirm runs group by `audit_prompt_hash` and that no cross-hash pooling occurs
-- [ ] Success: all of the design's Success Criteria are demonstrably met; the Verification Walkthrough in the slice design runs start to finish
+- [x] **Full local verification first (zero token cost)**
+  - [x] `uv run ruff format` on all changed files, then `uv run ruff check`, then `uv run pyright` — all clean
+  - [x] `uv run pytest -q` — full suite green, no regressions in the judging, capture, or report paths (2546 passed, 2 skipped)
+- [x] **Single-project smoke test** — run against `migratory-viewer` rather than squadron itself. Deviation: squadron is one of the two large fan-out repos, so it is the most expensive and slowest smoke test available; `migratory-viewer` (~3,200 LOC) exercises the identical harness → skill → parse path in ~8 minutes. Confirmed: findings parse, `project_id` is `github.com/ecorkran/migratory-viewer` with `source: remote`, one record written, `unnormalized_count: 0`
+- [x] **The variance campaign** — partially complete; see the deferred item below
+  - [x] Confirm every worktree is clean before starting; the command refuses otherwise
+  - [x] `migratory-viewer`: 3 runs at one pinned SHA → floor written (19, 22, 27; mean 22.7, sd 4.04)
+  - [x] Runs are resumable by design — verified in practice: a series interrupted by rate-limit handling left completed runs persisted
+  - [x] **Deferred, not dropped: `migratory`, `context-forge`, `squadron`.** Session budget was exhausted by the nine defects found and fixed during this task (see DEVLOG 20260727). The floor these three would add is *cross-project generality* — whether the ~31-35% dispersion holds on larger codebases — not the existence of a floor, which `migratory-viewer` establishes. Carried to Future Work. The two large repos cross the skill's >50k-LOC fan-out threshold and are expected to be materially more expensive than the ~3%/run measured here
+- [x] **Baseline verification** — `sq metrology report baseline` shows per-category counts with the floor attached, and reports "0 group(s) without a measured floor". Reports **1 project across 2 instruments, separately** rather than ≥2 projects, because the cross-project runs were deferred. The `other`-category share was **0** on every run, indicating the ten-value vocabulary fits this codebase without a dumping-ground bucket
+- [x] **Comparability check** — confirmed, and not by a contrived edit: two real instrument changes occurred mid-task (pinning `metrology.audit_model`, and adding the `model:` frontmatter requirement, which moved `audit_prompt_hash` `d17ac6bf` → `a5bc5b31`). The report grouped the two generations separately with no cross-hash pooling
+- [x] Success: the design's Success Criteria are met for a single project; the Verification Walkthrough in the slice design has been rewritten with the actual commands and observed output, including where execution diverged from the Phase 5 draft
 
 **Commit:** `test(metrology): end-to-end audit baseline verification`
 
@@ -372,3 +373,5 @@ status: in_progress
 - **The `other` bucket is a signal, not a dumping ground.** Findings that land there keep their `raw_category`. If a project's `other` share is high after T22, that is information about vocabulary fit to carry into 324 — not something to suppress.
 - **Nothing here is an intervention.** No pre-emption prompt, no delta report, no dispatch config write. Those are 324, which ships only after this slice's floor exists (*Variance, then baseline, then intervention*).
 - **Future Work opened by this slice** (recorded in the design, not tasks here): human-table fallback parser; `trading-data` as a stretch variance case; periodic re-audit cadence; a project registry so campaigns need not take explicit paths.
+- **Deferred from T22:** the variance campaign across `migratory`, `context-forge`, and `squadron`. `migratory-viewer` established that a floor exists and measured it; these three establish whether the dispersion *generalizes* across codebase size, which matters for 324 but is not a precondition for it. Expect materially higher cost on `context-forge` and `squadron` — both cross the skill's >50k-LOC subagent fan-out threshold, which `migratory-viewer` did not (zero `Task` dispatches, confirmed).
+- **Issues filed during T22, none blocking this slice:** #30 (the SDK pin is now blocking rather than hygiene — squadron runs the bundled CLI 2.1.47 while interactive sessions run 2.1.220), #33 (capture token usage and the unpinned effort/thinking parameters), #34 (squadron draws ~3x the session budget of the same skill run interactively, cause unknown), #35 (alternative providers, for cross-model agreement), #36 (token statistics for reviews).

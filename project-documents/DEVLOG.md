@@ -10,6 +10,56 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260727
+
+### Slice 323: Phase 6 Implementation and First Noise Floor
+
+**T1-T21 complete; T22 partially complete (stops 1 and 2 passed, cross-project deferred).** The measurable result: **the audit instrument's finding count varies ~31-35% on unchanged code**, reproduced independently across two models.
+
+| Instrument | Runs | Mean | Spread | % of mean |
+|---|---|---|---|---|
+| Opus, hash `d17ac6bf` | 22, 25, 27, 30 | 26.0 | 8 | 31% |
+| Sonnet 5, hash `a5bc5b31` | 19, 22, 27 | 22.7 | 8 | 35% |
+
+Two models, two sessions, two prompt hashes, the same absolute spread of 8 findings. That makes the dispersion a property of the instrument rather than of a model — a claim neither series could support alone. Per-category is where the usable signal is: `architectural-decay` was perfectly stable (7-7-7, sd 0) while `dependency-config-debt` swung 1-6. Dispersion is not uniform, so some categories are gate-worthy and others are not.
+
+**Deliberate deviation from the task text.** `AuditCategory`/`AuditSeverity`/`AuditEffort`/`AuditFinding`/`FloorStat`/`AuditRun`/`AuditNoiseFloor` all live in `metrology/models.py`, not `audit_models.py`. `AuditRun.findings` and `AuditNoiseFloor.per_category` embed them, so defining them separately would reintroduce the circular import the 322 layering correction removed. `audit_models.py` re-exports the full set.
+
+#### Defects found by running it, not by testing it
+
+Nine defects surfaced in T22 that fixture tests could not have caught. In rough order of how much they cost:
+
+1. **`rate_limit_event` is not a throttle.** The CLI's own schema describes it as "emitted when rate limit info changes" — a usage-meter status event whose `rate_limit_info.status` is `allowed | allowed_warning | rejected` — and the CLI's own SDK adapter ignores the type outright (`[sdkMessageAdapter] Ignoring rate_limit_event message`). Squadron substring-matched `"rate_limit"` and slept. On a heavily-used account these fire constantly, so every audit paused and restarted its stream on each usage tick. Every "Rate limited (attempt N/10)" line before `72bbcb3` was a meter update; the account was never throttled. Measured payloads confirmed it: 12 events in a healthy 471s run, all `status: allowed`.
+2. **A parse failure kills the stream permanently, so the old skip never worked.** The SDK calls `parse_message` *inside* the `async for` driving its message generator (`_internal/client.py:141`), so a raised `MessageParseError` terminates that generator — every later `__anext__` raises `StopAsyncIteration`. `_skip_unparseable` caught and `continue`d on a corpse. Short runs ended quietly with partial output, which is why this went unnoticed until an audit long enough to span a meter update. Fixed by absorbing informational events in the parser itself (`install_rate_limit_parser_shim`) so nothing raises. Two SDK call sites needed patching — client mode imports at call time, query mode binds at module scope — verified rather than assumed after patching one left the other broken.
+3. **The whole skill file was being sent as the prompt.** `build_audit_prompt` sent all 17KB including YAML frontmatter (`disable-model-invocation: true`) and 6.5KB of human installation docs. The model read it as a document and returned ~2KB of acknowledgement. `extract_audit_protocol` now strips both halves: 17430 → 10975 bytes.
+4. **The findings were being read from the response stream.** The design's own recorded ground truth said the skill writes a file and does not return findings; the harness parsed the stream anyway. `find_audit_file` now locates the file, mtime-restricted so a stale audit cannot persist under a new run id.
+5. **Wrong artifact path, twice.** Output goes to `project-documents/user/analysis/`, not `analysis/`, because the skill cites `file-naming-conventions`. Also git collapses a wholly-untracked tree to its *shallowest* ancestor (`?? project-documents/`), so every prefix of both locations must match the dirty-worktree exemption.
+6. **The variance series refused its own output file** — would have produced zero floors campaign-wide (`5340c0f`).
+7. **No `Write`/`Edit` in the allowed-tools list** while the audit's entire product is a file. It did not fail loudly: the model routed around it via Bash heredocs.
+8. **Zero-delay retry loops.** Both carried a comment claiming "the CLI handles the backoff delay" and slept for nothing — measured at 11 attempts in 0.1ms. Also present on the pipeline path (`sdk_session.py`), so it affected review and dispatch equally, not just audits.
+9. **The retry budget never reset.** Initialised outside the loop, so it bounded throttles-per-run rather than consecutive failures; a long run exhausted it while still making progress.
+
+#### Instrument provenance was unpinned in three ways
+
+All three were invisible in the stored record, and all three can drift:
+
+- **Model.** Squadron sent no `--model`, so the CLI chose its own — measured as `claude-opus-4-6[1m]`, the most expensive option available. The record stored the literal `"sdk"` and so could not say what ran. Fixed by `metrology.audit_model` (`aee96b2`), which also writes the resolved model onto the record.
+- **Effort and thinking.** Squadron sends neither `--effort` nor `--thinking`; `AgentConfig` has no fields for them, so they are structurally unreachable rather than merely unset. The CLI's default for these is *undocumented and unreported*. Filed as #33.
+- **The skill's own output.** Now required to carry a `model:` frontmatter field (canonical fork `bf94c72`, vendored in sync). This moved `audit_prompt_hash` `d17ac6bf` → `a5bc5b31`, closing the Opus generation — accepted deliberately rather than reverted.
+
+#### Open, filed, not fixed
+
+- **#34: squadron draws ~3x the session budget of the same skill run interactively.** Same model, same repo, same commit: ~1% manual vs ~3% squadron. Model is eliminated as a cause. Tool-call counts (60-80) against a raw-CLI baseline of 63 do not obviously explain it either.
+- **#30: the SDK pin is now blocking, not hygiene.** Squadron runs the SDK's *bundled* CLI 2.1.47 (July 8) while interactive sessions run 2.1.220 — ~170 versions apart. This invalidated every squadron-vs-manual comparison attempted during the session until it was found, and it is why the parser lacks a `rate_limit_event` case at all.
+- **#33/#36: token and cost capture.** `ResultMessage` carries full usage accounting; `translate_sdk_message` discards all of it. One measured audit: 2.17M cache-read, 137k cache-creation, 15k output, $2.37. Note for whoever implements it — **do not sum per-message `usage`**, it repeats a snapshot within a turn (7.08M summed vs 2.17M authoritative, while understating output 2,174 vs 15,231).
+- **#35: alternative providers.** Cross-model agreement is a stronger quality signal than one model's repeat rate, and unreachable while the harness is Anthropic-only.
+
+#### Process note
+
+The branch convention slipped: 34 implementation commits went to `main` instead of a `323-slice.*` branch. Caught late, and by then 24 were already pushed. Left as-is at the PM's call. The check belongs at the *first* implementation commit, not partway through.
+
+---
+
 ## 20260726 (2)
 
 ### Task Breakdown 323: Tech-Debt-Audit Baseline Harness — Phase 5 Complete

@@ -378,50 +378,107 @@ Restating the slice-plan criteria as verifiable conditions:
 
 ## Verification Walkthrough
 
-Draft — refined when Phase 6 completes.
+Executed 2026-07-27 against `migratory-viewer @5788a99a`. Commands and
+observed output below; deviations from the Phase 5 draft are noted where they
+occurred.
+
+**Pre-requisite: audits cannot be driven from inside a Claude Code session.**
+The SDK profile spawns its own CLI process, and that process refuses to launch
+inside another (`Claude Code cannot be launched inside another Claude Code
+session`). Every command below was run from a plain terminal.
 
 **1. The instrument is well-formed.**
 ```
-sq metrology audit run . --json | jq '.findings | length, (.[0])'
+uv run sq metrology audit run /Users/manta/source/repos/manta/migratory-viewer
 ```
-Expect a findings list with populated `category` drawn from the closed vocabulary, a `location`, and a `severity`. Confirms harness → skill → parse end-to-end on this repo.
+```
+ok github.com/ecorkran/migratory-viewer @5788a99a  27 findings
+Campaign: 1 succeeded, 0 failed.
+```
+Findings carried populated `category` values from the closed vocabulary, a
+`location`, and a `severity`, with `unnormalized_count: 0`. Confirms harness →
+skill → parse end-to-end.
 
 **2. Findings actually persisted, keyed on stable identity.**
 ```
-ls ~/.config/squadron/metrology/audit-*.json | head
-jq '.record_type, .audit_run.project_id' ~/.config/squadron/metrology/audit-*.json | head
+jq '.record_type, .audit_run.project_id' ~/.config/squadron/metrology/audit-*.json
 ```
-Expect `"audit_finding"` and `github.com/ecorkran/squadron` with `source: remote` — **not** a filesystem path.
+```
+"audit_finding"
+{"value": "github.com/ecorkran/migratory-viewer", "source": "remote"}
+```
+Identity is the git remote, not a filesystem path, as required.
 
 **3. The noise floor, on unchanged code.**
 ```
-git status --porcelain          # must be empty
-sq metrology audit variance . --runs 3
+uv run sq metrology audit variance /Users/manta/source/repos/manta/migratory-viewer --runs 3
 ```
-Expect three audits at one SHA, reduced to one floor record. Then confirm the refusal path:
-```
-touch scratch.tmp && sq metrology audit variance . --runs 3   # expect refusal, exit 1
-```
+Three audits at one pinned SHA reduced to one floor record: **19, 22, 27
+findings — mean 22.7, sd 4.04, spread 8**. The dirty-worktree refusal was
+verified incidentally rather than by `touch`: the audit's own output file
+(`analysis/940-analysis.*.md`) initially caused a series to refuse itself,
+which is what motivated the artifact exemption in `_is_audit_artifact`.
 
 **4. The floor is visible in the baseline, and its absence is honest.**
 ```
-sq metrology report baseline
+uv run sq metrology report baseline
 ```
-Expect per-project/per-category counts with the floor attached. A project audited but not variance-measured shows **"no floor measured"**, not a borrowed number.
+```
+github.com/ecorkran/migratory-viewer @5788a99a  22 findings  floor 19-27 (sd 4.04, n=3)
+  architectural-decay                 7  (floor 7-7)
+  consistency-rot                     4  (floor 2-4)
+  type-contract-debt                  2  (floor 1-3)
+  test-debt                           3  (floor 3-4)
+  dependency-config-debt              2  (floor 1-6)
+  ...
+0 group(s) without a measured floor; 1 project(s) span multiple instruments
+and are reported separately.
+```
+Per-category floors are the more useful output: `architectural-decay` was
+perfectly stable across all three runs (7-7-7, sd 0) while
+`dependency-config-debt` swung 1-6. Dispersion is **not** uniform across
+categories, so some are gate-worthy and others are not.
 
-**5. Cross-project, and the vocabulary holds elsewhere.**
-```
-sq metrology audit run ../migratory ../../context-forge ../migratory-viewer
-sq metrology report baseline --json | jq '.cells | group_by(.project_id) | length'
-```
-Expect ≥ 2 projects. Inspect the `other` share — a high share on any one project means the vocabulary does not fit that codebase, which is a finding about the instrument.
+**5. Cross-project.** Deferred — measured on `migratory-viewer` only. The
+remaining three projects are Future Work rather than a completed step; see
+below.
 
-**6. Comparability is enforced.** Edit the skill file, re-run one audit, and confirm the baseline groups the two runs separately by `audit_prompt_hash` rather than pooling them.
+**6. Comparability is enforced.** Confirmed, and not by a contrived edit. Two
+real instrument changes occurred mid-campaign: pinning the model
+(`metrology.audit_model`, previously unset so the CLI chose its own) and
+adding the `model:` frontmatter requirement to the skill, which moved
+`audit_prompt_hash` from `d17ac6bf` to `a5bc5b31`. The baseline report split
+the two generations into separate groups rather than pooling them, exactly as
+designed.
 
 **7. Nothing else moved.**
 ```
-pytest -q && pyright
+uv run pytest -q && uv run pyright && uv run ruff check .
 ```
+```
+2546 passed, 2 skipped
+0 errors, 0 warnings, 0 informations
+All checks passed!
+```
+
+### What the walkthrough established
+
+The headline result is that the dispersion **reproduced independently across
+two models**:
+
+| Instrument | Runs | Mean | Spread | % of mean |
+|---|---|---|---|---|
+| Opus, hash `d17ac6bf` | 22, 25, 27, 30 | 26.0 | 8 | 31% |
+| Sonnet 5, hash `a5bc5b31` | 19, 22, 27 | 22.7 | 8 | 35% |
+
+Two models, two sessions, two prompt hashes — the same absolute spread of 8
+findings and near-identical relative dispersion. That makes the ~31-35% figure
+a property of *the instrument*, not of any one model, which neither series
+could establish alone.
+
+Practical consequence: a gate that treats "the audit found N issues" as a
+stable signal is reading roughly a third noise on unchanged code. Per-category
+floors are where the usable signal is.
 
 ## Risks
 
