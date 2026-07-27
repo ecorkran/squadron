@@ -45,6 +45,11 @@ class AgentConfig(BaseModel):
     provider: str  # "sdk", "anthropic", "openai", etc.
     model: str | None = None  # None for SDK agents (uses Claude Code default)
     instructions: str | None = None  # system prompt, optional
+    # SDK agents: use the CLI's own default system prompt instead of sending
+    # one. Distinct from instructions=None/"" — both of those send an *empty*
+    # system prompt, stripping the tool-use discipline the CLI normally
+    # supplies. Set this when a run should behave like an interactive session.
+    use_default_system_prompt: bool = False
     api_key: str | None = None
     auth_token: str | None = None
     base_url: str | None = None

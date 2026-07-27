@@ -499,15 +499,17 @@ class TestRateLimitBackoff:
     """
 
     def test_backoff_grows_exponentially_and_is_capped(self) -> None:
-        from squadron.providers.sdk.agent import (
-            _RATE_LIMIT_MAX_BACKOFF_S,  # pyright: ignore[reportPrivateUsage]
-            _rate_limit_backoff_s,  # pyright: ignore[reportPrivateUsage]
+        from squadron.providers.sdk.rate_limit import (
+            RATE_LIMIT_MAX_BACKOFF_S,
+            rate_limit_backoff_s,
         )
 
-        assert _rate_limit_backoff_s(1) == 2.0
-        assert _rate_limit_backoff_s(2) == 4.0
-        assert _rate_limit_backoff_s(3) == 8.0
-        assert _rate_limit_backoff_s(20) == _RATE_LIMIT_MAX_BACKOFF_S
+        assert rate_limit_backoff_s(1) == 2.0
+        assert rate_limit_backoff_s(2) == 4.0
+        assert rate_limit_backoff_s(3) == 8.0
+        assert rate_limit_backoff_s(20) == RATE_LIMIT_MAX_BACKOFF_S
+        # An explicit cap overrides the default for heavier workloads.
+        assert rate_limit_backoff_s(20, 120.0) == 120.0
 
     @pytest.mark.asyncio
     async def test_retries_actually_sleep(

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -855,6 +856,7 @@ def audit_variance(
     resolved_cwd = _resolve_cwd(cwd)
     store = _build_store(resolved_cwd)
     n_runs = runs if runs is not None else _audit_variance_runs(resolved_cwd)
+    cooldown_s = int(get_typed_config("metrology.audit_run_cooldown_s", int, cwd=resolved_cwd))
 
     total_succeeded = 0
     total_failed = 0
@@ -870,6 +872,12 @@ def audit_variance(
         rprint(f"[bold]{project_path}[/bold]  ({n_runs} runs)")
 
         for index in range(n_runs):
+            # Spacing between runs lowers the request rate the series presents,
+            # rather than absorbing throttles after they fire. Not before the
+            # first run — nothing has been spent yet.
+            if index > 0 and cooldown_s > 0:
+                rprint(f"  [dim]cooling down {cooldown_s}s before run {index + 1}[/dim]")
+                time.sleep(cooldown_s)
             try:
                 outcome = asyncio.run(
                     run_audit(

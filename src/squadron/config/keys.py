@@ -204,6 +204,35 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "which on a large fanned-out repo are legitimately slow."
         ),
     ),
+    "metrology.audit_rate_limit_retries": ConfigKey(
+        name="metrology.audit_rate_limit_retries",
+        type_=int,
+        default=10,
+        description=(
+            "How many times a rate-limited audit retries before giving up. "
+            "Ten was exactly sufficient on a small repo, so larger repos with "
+            "subagent fan-out may need more."
+        ),
+    ),
+    "metrology.audit_rate_limit_cap_s": ConfigKey(
+        name="metrology.audit_rate_limit_cap_s",
+        type_=int,
+        default=60,
+        description=(
+            "Ceiling on the exponential rate-limit backoff, in seconds. The "
+            "delay doubles per attempt until it reaches this value."
+        ),
+    ),
+    "metrology.audit_run_cooldown_s": ConfigKey(
+        name="metrology.audit_run_cooldown_s",
+        type_=int,
+        default=60,
+        description=(
+            "Pause between runs in a variance series, in seconds. Lowers the "
+            "request rate a campaign presents rather than absorbing throttles "
+            "after the fact. Not applied before the first run or after the last."
+        ),
+    ),
     "metrology.audit_profile": ConfigKey(
         name="metrology.audit_profile",
         type_=str,

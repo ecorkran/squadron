@@ -30,32 +30,13 @@ from squadron.providers.errors import (
     ProviderError,
     ProviderRateLimitError,
 )
+from squadron.providers.sdk.rate_limit import (
+    MAX_RATE_LIMIT_RETRIES,
+    RATE_LIMIT_MARKER,
+    RATE_LIMIT_MAX_BACKOFF_S,
+    rate_limit_backoff_s,
+)
 from squadron.providers.sdk.translation import translate_sdk_message
-
-_MAX_RATE_LIMIT_RETRIES = 10
-
-#: Exponential backoff between rate-limit retries, in seconds: 2, 4, 8, ...
-#: capped at ``_RATE_LIMIT_MAX_BACKOFF_S``.
-#:
-#: This previously did not exist. The retry loops carried a comment saying
-#: "the CLI handles the backoff delay" and slept for nothing — measured at
-#: 11 attempts in 0.1ms, which hammers the rate limiter rather than waiting
-#: for it and can *cause* the limit it is trying to survive.
-_RATE_LIMIT_BASE_BACKOFF_S = 2.0
-_RATE_LIMIT_MAX_BACKOFF_S = 60.0
-
-#: Substring identifying a rate-limit notice, wherever it surfaces. The CLI
-#: emits it as a ``rate_limit_event`` message; on an SDK version without a
-#: case for that type it arrives as a ``MessageParseError`` naming it. One
-#: constant so the skip path and the retry path cannot disagree about what
-#: counts as throttling — they previously did, and the skip silently
-#: disabled the backoff.
-_RATE_LIMIT_MARKER = "rate_limit"
-
-
-def _rate_limit_backoff_s(attempt: int) -> float:
-    """Seconds to wait before rate-limit retry ``attempt`` (1-based)."""
-    return min(_RATE_LIMIT_BASE_BACKOFF_S * (2 ** (attempt - 1)), _RATE_LIMIT_MAX_BACKOFF_S)
 
 
 class ClaudeSDKAgent:
@@ -66,10 +47,14 @@ class ClaudeSDKAgent:
         name: str,
         options: ClaudeAgentOptions,
         mode: str = "query",
+        max_rate_limit_retries: int = MAX_RATE_LIMIT_RETRIES,
+        rate_limit_cap_s: float = RATE_LIMIT_MAX_BACKOFF_S,
     ) -> None:
         self._name = name
         self._options = options
         self._mode = mode
+        self._max_rate_limit_retries = max_rate_limit_retries
+        self._rate_limit_cap_s = rate_limit_cap_s
         self._state = AgentState.idle
         self._client: ClaudeSDKClient | None = None
         self._log = get_logger(f"squadron.providers.sdk.agent.{name}")
@@ -128,7 +113,7 @@ class ClaudeSDKAgent:
             except StopAsyncIteration:
                 return
             except MessageParseError as exc:
-                if _RATE_LIMIT_MARKER in str(exc):
+                if RATE_LIMIT_MARKER in str(exc):
                     raise
                 self._log.warning(
                     "Skipping SDK message this version cannot parse (%s); stream continues.",
@@ -162,19 +147,19 @@ class ClaudeSDKAgent:
                 self._state = AgentState.failed
                 raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
             except ClaudeSDKError as exc:
-                if _RATE_LIMIT_MARKER in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
+                if RATE_LIMIT_MARKER in str(exc) and retries < self._max_rate_limit_retries:
                     retries += 1
-                    delay = _rate_limit_backoff_s(retries)
+                    delay = rate_limit_backoff_s(retries, self._rate_limit_cap_s)
                     self._log.warning(
                         "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
                         retries,
-                        _MAX_RATE_LIMIT_RETRIES,
+                        self._max_rate_limit_retries,
                         delay,
                     )
                     await asyncio.sleep(delay)
                     continue
                 self._state = AgentState.failed
-                if _RATE_LIMIT_MARKER in str(exc):
+                if RATE_LIMIT_MARKER in str(exc):
                     raise ProviderRateLimitError(str(exc)) from exc
                 raise ProviderError(str(exc)) from exc
 
@@ -185,7 +170,7 @@ class ClaudeSDKAgent:
         ``rate_limit_event`` the SDK raises ``ClaudeSDKError``. We wait an
         exponentially increasing delay, then restart ``receive_response()``
         on the same session (the underlying channel remains intact), up to
-        ``_MAX_RATE_LIMIT_RETRIES`` times.
+        ``MAX_RATE_LIMIT_RETRIES`` times.
         """
         self._state = AgentState.processing
         try:
@@ -201,13 +186,13 @@ class ClaudeSDKAgent:
                             yield translated
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    if _RATE_LIMIT_MARKER in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
+                    if RATE_LIMIT_MARKER in str(exc) and retries < self._max_rate_limit_retries:
                         retries += 1
-                        delay = _rate_limit_backoff_s(retries)
+                        delay = rate_limit_backoff_s(retries, self._rate_limit_cap_s)
                         self._log.warning(
                             "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
                             retries,
-                            _MAX_RATE_LIMIT_RETRIES,
+                            self._max_rate_limit_retries,
                             delay,
                         )
                         await asyncio.sleep(delay)

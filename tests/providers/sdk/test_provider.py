@@ -80,6 +80,62 @@ class TestCreateAgent:
             assert opts.permission_mode == "bypassPermissions"
 
     @pytest.mark.asyncio
+    async def test_default_system_prompt_uses_preset(self, provider: ClaudeSDKProvider) -> None:
+        """The preset form is the only way to get the CLI's own system prompt.
+
+        A str (including "") and None both make the SDK emit
+        ``--system-prompt ""`` — an *empty* prompt, which strips the tool-use
+        discipline the CLI normally supplies. Only the preset makes it omit
+        the flag so the CLI falls back to its default.
+        """
+        config = AgentConfig(
+            name="audit",
+            agent_type="sdk",
+            provider="sdk",
+            instructions=None,
+            use_default_system_prompt=True,
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            opts = mock_cls.call_args.kwargs["options"]
+            assert opts.system_prompt == {"type": "preset", "preset": "claude_code"}
+
+    @pytest.mark.asyncio
+    async def test_default_system_prompt_wins_over_instructions(
+        self, provider: ClaudeSDKProvider
+    ) -> None:
+        config = AgentConfig(
+            name="audit",
+            agent_type="sdk",
+            provider="sdk",
+            instructions="ignored",
+            use_default_system_prompt=True,
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            opts = mock_cls.call_args.kwargs["options"]
+            assert opts.system_prompt == {"type": "preset", "preset": "claude_code"}
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_overrides_reach_the_agent(self, provider: ClaudeSDKProvider) -> None:
+        config = AgentConfig(
+            name="audit",
+            agent_type="sdk",
+            provider="sdk",
+            credentials={"max_rate_limit_retries": 25, "rate_limit_cap_s": 120},
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            assert mock_cls.call_args.kwargs["max_rate_limit_retries"] == 25
+            assert mock_cls.call_args.kwargs["rate_limit_cap_s"] == 120.0
+
+    @pytest.mark.asyncio
     async def test_default_permission_mode(self, provider: ClaudeSDKProvider) -> None:
         config = AgentConfig(name="noperm", agent_type="sdk", provider="sdk")
         with patch(

@@ -9,6 +9,7 @@ inside a Claude Code session). Reviews and non-SDK actions are unaffected.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 
@@ -29,11 +30,14 @@ from squadron.providers.errors import (
     ProviderAuthError,
     ProviderError,
 )
+from squadron.providers.sdk.rate_limit import (
+    MAX_RATE_LIMIT_RETRIES,
+    RATE_LIMIT_MARKER,
+    rate_limit_backoff_s,
+)
 from squadron.providers.sdk.translation import translate_sdk_message
 
 _logger = logging.getLogger(__name__)
-
-_MAX_RATE_LIMIT_RETRIES = 10
 
 __all__ = ["SDKExecutionSession", "frame_summary_for_seed"]
 
@@ -161,13 +165,16 @@ class SDKExecutionSession:
                                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
+                    if RATE_LIMIT_MARKER in str(exc) and retries < MAX_RATE_LIMIT_RETRIES:
                         retries += 1
-                        _logger.debug(
-                            "Rate limit event %d/%d (CLI handles backoff)",
+                        delay = rate_limit_backoff_s(retries)
+                        _logger.warning(
+                            "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
                             retries,
-                            _MAX_RATE_LIMIT_RETRIES,
+                            MAX_RATE_LIMIT_RETRIES,
+                            delay,
                         )
+                        await asyncio.sleep(delay)
                         continue
                     raise
             return "\n".join(response_parts)

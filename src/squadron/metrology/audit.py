@@ -552,6 +552,8 @@ async def run_audit(
     prompt = build_audit_prompt(skill_path, independent_run=independent_run)
     resolved_profile = resolve_audit_profile(profile, cwd=cwd)
     timeout_s = int(get_typed_config("metrology.audit_timeout_s", int, cwd=cwd))
+    rate_limit_retries = int(get_typed_config("metrology.audit_rate_limit_retries", int, cwd=cwd))
+    rate_limit_cap_s = int(get_typed_config("metrology.audit_rate_limit_cap_s", int, cwd=cwd))
 
     provider_profile = get_profile(resolved_profile)
     ensure_provider_loaded(provider_profile.provider)
@@ -563,7 +565,11 @@ async def run_audit(
         agent_type=provider_profile.provider,
         provider=provider_profile.provider,
         model=model,
-        instructions="",
+        instructions=None,
+        # The audit is the same protocol a human runs interactively, where the
+        # CLI supplies its own system prompt. Sending an empty one strips the
+        # tool-use discipline and the model reads file-by-file.
+        use_default_system_prompt=True,
         api_key=None,
         base_url=provider_profile.base_url,
         cwd=str(project_path),
@@ -574,6 +580,8 @@ async def run_audit(
             "api_key_env": provider_profile.api_key_env,
             "default_headers": provider_profile.default_headers,
             "mode": "client",
+            "max_rate_limit_retries": rate_limit_retries,
+            "rate_limit_cap_s": rate_limit_cap_s,
         },
     )
 

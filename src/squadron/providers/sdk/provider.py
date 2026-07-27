@@ -38,7 +38,13 @@ class ClaudeSDKProvider:
         """Build ``ClaudeAgentOptions`` from *config* and return agent."""
         kwargs: dict[str, object] = {}
 
-        if config.instructions is not None:
+        # The preset form is the only way to get the CLI's default system
+        # prompt: the SDK emits no --system-prompt flag for it, so the CLI
+        # falls back to its own. A str (including "") or None both send
+        # --system-prompt "", which is an *empty* prompt, not the default.
+        if config.use_default_system_prompt:
+            kwargs["system_prompt"] = {"type": "preset", "preset": "claude_code"}
+        elif config.instructions is not None:
             kwargs["system_prompt"] = config.instructions
         if config.model is not None:
             kwargs["model"] = config.model
@@ -64,7 +70,14 @@ class ClaudeSDKProvider:
         from squadron.providers.sdk.agent import ClaudeSDKAgent
 
         _log.debug("Creating SDK agent %r (mode=%s)", config.name, mode)
-        return ClaudeSDKAgent(name=config.name, options=options, mode=mode)
+        agent_kwargs: dict[str, object] = {}
+        retries = config.credentials.get("max_rate_limit_retries")
+        if retries is not None:
+            agent_kwargs["max_rate_limit_retries"] = int(retries)  # pyright: ignore[reportArgumentType]
+        cap_s = config.credentials.get("rate_limit_cap_s")
+        if cap_s is not None:
+            agent_kwargs["rate_limit_cap_s"] = float(cap_s)  # pyright: ignore[reportArgumentType]
+        return ClaudeSDKAgent(name=config.name, options=options, mode=mode, **agent_kwargs)  # pyright: ignore[reportArgumentType]
 
     async def validate_credentials(self) -> bool:
         """Return ``True`` if ``claude_agent_sdk`` is importable."""
