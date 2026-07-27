@@ -519,11 +519,19 @@ async def _collect_audit_output(
     async for response in agent.handle_message(message):  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
         sdk_type = response.metadata.get("sdk_type")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         if sdk_type in ("tool_use", "tool_result"):
-            tool_events += 1
-            if on_progress is not None and tool_events % _PROGRESS_EVERY_N_TOOL_EVENTS == 0:
-                on_progress(
-                    AuditProgress(tool_events=tool_events, bytes_received=sum(len(p) for p in parts))
-                )
+            # Count only the calls, not their results. Every tool_use is
+            # followed by a matching tool_result, so counting both doubled
+            # the reported figure and made a normal audit (63 calls,
+            # measured) look like a runaway one.
+            if sdk_type == "tool_use":
+                tool_events += 1
+                if on_progress is not None and tool_events % _PROGRESS_EVERY_N_TOOL_EVENTS == 0:
+                    on_progress(
+                        AuditProgress(
+                            tool_events=tool_events,
+                            bytes_received=sum(len(p) for p in parts),
+                        )
+                    )
             continue
         if sdk_type == SDK_RESULT_TYPE:
             continue
