@@ -176,6 +176,52 @@ $ sq config path
   Project: ./.squadron.toml                not found
 ```
 
+### Metrology keys
+
+Settings for judge calibration and the tech-debt audit harness. Run
+`sq config list` to see resolved values and their source.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `metrology.store_dir` | string | `~/.config/squadron/metrology` | Where records are written |
+| `metrology.project_id` | string | derived from git remote | Overrides the project identity on records |
+| `metrology.sample_budget` | int | 20 | Samples retained per judge configuration |
+| `metrology.min_evidence_n` | int | 5 | Samples required before a recommendation is offered |
+| `metrology.trend_bucket` | string | `month` | Bucket size for trend reporting |
+| `metrology.graduate_match_rate` | float | 0.9 | Agreement rate at which a config is offered for graduation |
+| `metrology.tighten_match_rate` | float | 0.6 | Agreement rate below which tightening is suggested |
+| `metrology.residual_sample_rate` | float | 0.1 | Sampling rate retained after graduation |
+| `metrology.audit_profile` | string | review default | Provider profile for audit runs |
+| `metrology.audit_model` | string | *(unset)* | **Model for audit runs — see below** |
+| `metrology.audit_variance_runs` | int | 3 | Runs per project in a variance series |
+| `metrology.audit_timeout_s` | int | 3600 | Wall-clock cap per audit run |
+| `metrology.audit_run_cooldown_s` | int | 60 | Pause between runs in a series |
+| `metrology.audit_rate_limit_retries` | int | 10 | Retries before a rate-limited run gives up |
+| `metrology.audit_rate_limit_cap_s` | int | 60 | Ceiling on exponential rate-limit backoff |
+
+#### Pinning the audit model
+
+`metrology.audit_model` is unset by default, which means squadron sends no
+model to the CLI and the CLI picks its own — measured as a 1M-context Opus,
+the most expensive option available, chosen silently and subject to change
+when the CLI updates.
+
+Pin it for two reasons:
+
+- **Cost.** The default is the priciest model, selected without being asked for.
+- **Comparability.** Models produce systematically different finding counts on
+  identical code. Measured on one unchanged repository: Opus returned 22-30
+  findings across four runs, Sonnet 5 returned 12-16. An unpinned model is not
+  a fixed instrument, so a noise floor measured today is not comparable to one
+  measured after the default shifts.
+
+```bash
+sq config set metrology.audit_model claude-sonnet-5 --project
+```
+
+An explicit `--model` on the command still overrides the pin. The resolved
+model is stored on each record, so an audit can say what produced it.
+
 ## spawn
 
 Spawn a new agent instance.

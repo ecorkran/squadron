@@ -80,6 +80,12 @@ Every finding's `Category` — in the findings table and in the machine-readable
 
 - Create markdown file `analysis/nnn-analysis.{project-name}{.subproject?}.md` where nnn starts at 940 (analysis range).  This file is known as the audit file.
 - Use existing file naming conventions *and required YAML frontmatter* from `file-naming-conventions.md`.
+- Add a `model:` field to the frontmatter naming the model that produced the
+  audit. Report your own model identifier as precisely as you know it. If you
+  cannot determine it, write `model: unknown` — do not guess a plausible name.
+  Audits from different models are not comparable: finding counts differ
+  systematically between them, so an audit that cannot say what produced it
+  cannot be compared to any other.
 
 ### File Contents
 - **Executive summary** — max 10 bullets, ranked by impact.
