@@ -35,7 +35,9 @@ from squadron.providers.sdk.rate_limit import (
     RATE_LIMIT_MARKER,
     RATE_LIMIT_MAX_BACKOFF_S,
     RateLimitStats,
+    is_rate_limit_event,
     rate_limit_backoff_s,
+    rate_limit_event_blocks,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
 
@@ -106,11 +108,13 @@ class ClaudeSDKAgent:
         a retryable error would discard everything done so far — on a long
         audit, tens of tool calls and several minutes of work.
 
-        A ``rate_limit_event`` is deliberately **not** skipped. It arrives
-        as a parse failure only because this SDK version lacks a case for
-        it, but it carries real meaning — the provider is throttling — and
-        the caller must back off rather than continue into a stream that has
-        stopped producing work. It is re-raised for the retry loop.
+        A ``rate_limit_event`` is classified by its payload, not skipped
+        blindly: it is the CLI's usage-status event, fired whenever
+        rate-limit *info* changes, and an interactive session ignores it
+        entirely. Only a ``rejected`` status means the provider is actually
+        blocking requests — that one is re-raised so the retry loop backs
+        off. Treating every event as a throttle made the agent sleep and
+        restart the stream on each usage change while nothing was wrong.
 
         Other parse failures are swallowed. Connection errors, process
         failures, and every other ``ClaudeSDKError`` propagate untouched.
@@ -122,8 +126,14 @@ class ClaudeSDKAgent:
             except StopAsyncIteration:
                 return
             except MessageParseError as exc:
-                if RATE_LIMIT_MARKER in str(exc):
-                    raise
+                if is_rate_limit_event(exc.data):
+                    if rate_limit_event_blocks(exc.data):
+                        raise
+                    self._log.debug(
+                        "Rate-limit status update (%s); stream continues.",
+                        exc.data.get("rate_limit_info") if exc.data else None,
+                    )
+                    continue
                 self._log.warning(
                     "Skipping SDK message this version cannot parse (%s); stream continues.",
                     exc,

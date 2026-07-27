@@ -645,15 +645,15 @@ class TestRateLimitBackoff:
                 await _collect(query_agent.handle_message(input_message))
 
     @pytest.mark.asyncio
-    async def test_a_rate_limit_notice_reaches_the_backoff_not_the_skip(
+    async def test_a_rejected_rate_limit_event_reaches_the_backoff(
         self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
-        """Regression: the skip must not swallow the signal backoff needs.
+        """Only a ``rejected`` status is a real throttle — that one backs off.
 
         A rate_limit_event arrives as MessageParseError only because this
-        SDK version lacks a case for it. Skipping it silently disabled the
-        backoff entirely — the run continued into a stream that had stopped
-        producing work, ended with ~70 bytes, and never waited once.
+        SDK version lacks a case for it. When its payload says requests are
+        being rejected, skipping it would disable the backoff entirely — the
+        run would continue into a stream that had stopped producing work.
         """
         from claude_agent_sdk._errors import MessageParseError
 
@@ -663,7 +663,10 @@ class TestRateLimitBackoff:
             slept.append(seconds)
 
         async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
-            raise MessageParseError("Unknown message type: rate_limit_event", {})
+            raise MessageParseError(
+                "Unknown message type: rate_limit_event",
+                {"type": "rate_limit_event", "rate_limit_info": {"status": "rejected"}},
+            )
             yield  # pragma: no cover - unreachable, defines the generator
 
         with (
@@ -675,8 +678,62 @@ class TestRateLimitBackoff:
             with pytest.raises(ProviderRateLimitError):
                 await _collect(query_agent.handle_message(input_message))
 
-        assert slept, "a rate-limit notice must trigger backoff, not be skipped"
-        assert len(slept) == 10
+        assert len(slept) == 10, "a rejected event must back off, not be skipped"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", ["allowed", "allowed_warning"])
+    async def test_an_informational_rate_limit_event_is_skipped(
+        self, query_agent: ClaudeSDKAgent, input_message: Message, status: str
+    ) -> None:
+        """Usage-meter updates must not pause a healthy stream.
+
+        The CLI emits rate_limit_event whenever rate-limit *info* changes —
+        its own SDK adapter ignores the type, and an interactive session
+        shows nothing. Observed before this classification: a heavily-used
+        account emitted these constantly, and squadron slept 2s and
+        restarted the stream on every one, turning a 5-minute audit into a
+        throttle-storm that interactive runs of the same skill never see.
+        """
+        from claude_agent_sdk._errors import MessageParseError
+
+        slept: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            slept.append(seconds)
+
+        class _Stream:
+            def __init__(self) -> None:
+                self._step = 0
+
+            def __aiter__(self) -> _Stream:
+                return self
+
+            async def __anext__(self) -> object:
+                self._step += 1
+                if self._step == 1:
+                    return AssistantMessage(content=[TextBlock(text="before")], model="m")
+                if self._step == 2:
+                    raise MessageParseError(
+                        "Unknown message type: rate_limit_event",
+                        {"type": "rate_limit_event", "rate_limit_info": {"status": status}},
+                    )
+                if self._step == 3:
+                    return AssistantMessage(content=[TextBlock(text="after")], model="m")
+                raise StopAsyncIteration
+
+        def gen(*, prompt: str, options: object = None) -> _Stream:
+            return _Stream()
+
+        with (
+            patch(_QUERY, side_effect=gen),
+            patch("squadron.providers.sdk.agent.asyncio.sleep", fake_sleep),
+        ):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert slept == [], "an informational event must not cost a sleep"
+        assert any("before" in m.content for m in messages)
+        assert any("after" in m.content for m in messages), "stream continues past the event"
+        assert query_agent.state == AgentState.idle
 
     @pytest.mark.asyncio
     async def test_other_unknown_messages_are_still_skipped(

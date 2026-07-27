@@ -10,6 +10,7 @@ One home for all three so the paths cannot drift apart again.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 #: Default retry budget. Callers that know their workload is heavier (the
 #: metrology audit, whose subagent fan-out multiplies request rate) override
@@ -26,13 +27,48 @@ MAX_RATE_LIMIT_RETRIES = 10
 RATE_LIMIT_BASE_BACKOFF_S = 2.0
 RATE_LIMIT_MAX_BACKOFF_S = 60.0
 
-#: Substring identifying a rate-limit notice, wherever it surfaces. The CLI
-#: emits it as a ``rate_limit_event`` message; on an SDK version without a
-#: case for that type it arrives as a ``MessageParseError`` naming it. One
-#: constant so the skip path and the retry path cannot disagree about what
-#: counts as throttling — they previously did, and the skip silently
-#: disabled the backoff.
+#: Substring identifying a rate-limit notice in a plain SDK error's text
+#: (e.g. a genuine 429 surfaced as ``ClaudeSDKError``). Parse failures carry
+#: a payload and are classified structurally below — never by this string.
 RATE_LIMIT_MARKER = "rate_limit"
+
+#: The CLI message type behind most "rate limit" sightings. Its own schema
+#: description reads "Rate limit event emitted when rate limit info
+#: changes" — it is a *status* event feeding the usage indicator, fired on
+#: any change, and the CLI's own SDK adapter ignores it
+#: (``[sdkMessageAdapter] Ignoring rate_limit_event message``). Payload:
+#: ``{type, rate_limit_info: {status: allowed|allowed_warning|rejected,
+#: resetsAt?, rateLimitType?, utilization?, ...}, uuid, session_id}``.
+#: Only ``rejected`` means requests are actually being blocked. Treating
+#: every event as a throttle made squadron pause and restart the stream on
+#: each usage-info change — an interactive session receives the identical
+#: events and shows nothing.
+RATE_LIMIT_EVENT_TYPE = "rate_limit_event"
+
+_STATUS_REJECTED = "rejected"
+
+
+def is_rate_limit_event(data: dict[str, object] | None) -> bool:
+    """True when a parse-failure payload is the CLI's rate-limit status event."""
+    return bool(data) and data.get("type") == RATE_LIMIT_EVENT_TYPE
+
+
+def rate_limit_event_blocks(data: dict[str, object] | None) -> bool:
+    """True when the event says requests are being rejected — a real throttle.
+
+    ``allowed`` and ``allowed_warning`` are usage-meter updates; only
+    ``rejected`` warrants backing off. A malformed payload is treated as
+    informational: the failure mode of guessing "throttled" is pausing and
+    restarting a healthy stream on every usage change, which is the exact
+    defect this classification exists to remove.
+    """
+    if not data:
+        return False
+    info = data.get("rate_limit_info")
+    if not isinstance(info, dict):
+        return False
+    status: object = cast("dict[str, object]", info).get("status")
+    return status == _STATUS_REJECTED
 
 
 def rate_limit_backoff_s(attempt: int, cap_s: float = RATE_LIMIT_MAX_BACKOFF_S) -> float:
