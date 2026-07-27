@@ -324,6 +324,54 @@ async def test_dirty_worktree_refuses_variance_run_with_no_agent(
 
 
 @pytest.mark.asyncio
+async def test_progress_is_reported_while_the_run_works(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """A long run must show it is alive, not just report when it finishes.
+
+    An audit takes 5-20 minutes and emits no prose until the end, so without
+    a liveness signal a working run is indistinguishable from a hang — and
+    an operator watching a 12-audit campaign has no way to tell.
+    """
+    from squadron.metrology.audit import AuditProgress
+
+    class _ToolNarratingAgent(_StubAgent):
+        async def handle_message(self, message: Message) -> AsyncIterator[_StubResponse]:
+            for _ in range(25):
+                yield _StubResponse(content="", metadata={"sdk_type": "tool_use"})
+            yield _StubResponse(content=_audit_output())
+
+    stub_provider.agent = _ToolNarratingAgent(output=None, raises=None, hang=False)
+    seen: list[AuditProgress] = []
+
+    result = await run_audit(
+        audited_repo,
+        store=audit_store,
+        on_progress=seen.append,
+        cwd=str(audited_repo),
+    )
+
+    assert result.succeeded
+    assert seen, "a run doing tool work must emit at least one progress event"
+    assert seen[-1].tool_events >= 20
+    # Narration is still filtered out of the parsed text.
+    assert result.run is not None
+    assert len(result.run.findings) == 2
+
+
+@pytest.mark.asyncio
+async def test_progress_callback_is_optional(
+    audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
+) -> None:
+    """A programmatic caller passing no callback still works."""
+    stub_provider.agent = _StubAgent(output=_audit_output(), raises=None, hang=False)
+
+    result = await run_audit(audited_repo, store=audit_store, cwd=str(audited_repo))
+
+    assert result.succeeded
+
+
+@pytest.mark.asyncio
 async def test_the_audits_own_output_file_does_not_refuse_the_next_run(
     audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
 ) -> None:

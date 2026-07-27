@@ -19,6 +19,7 @@ import hashlib
 import logging
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -135,6 +136,30 @@ _AUDIT_ALLOWED_TOOLS = ["Read", "Glob", "Grep", "Bash", "Task", "TodoWrite"]
 #: is the authority on what it may do, so permission prompts are bypassed
 #: exactly as the code-review template does.
 _AUDIT_PERMISSION_MODE = "bypassPermissions"
+
+
+#: How often to emit a liveness update while an audit runs. The audit does
+#: tens to hundreds of tool calls, so reporting every one would be noise;
+#: reporting none at all makes a 20-minute run look hung.
+_PROGRESS_EVERY_N_TOOL_EVENTS = 10
+
+
+@dataclass(frozen=True)
+class AuditProgress:
+    """Liveness signal emitted while an audit is still working.
+
+    Carries only what a surface needs to show the run is alive. The core
+    emits these; rendering them is the CLI's job, so this module stays
+    surface-agnostic.
+    """
+
+    tool_events: int
+    bytes_received: int
+
+
+#: Called with an ``AuditProgress`` as the run proceeds. Optional — an
+#: unattended or programmatic caller passes nothing and sees no output.
+ProgressCallback = Callable[[AuditProgress], None]
 
 
 class AuditRunFailure(StrEnum):
@@ -332,13 +357,24 @@ def resolve_audit_profile(profile: str | None, *, cwd: str = ".") -> str:
     )
 
 
-async def _collect_audit_output(agent: object, prompt: str, agent_name: str) -> str:
+async def _collect_audit_output(
+    agent: object,
+    prompt: str,
+    agent_name: str,
+    on_progress: ProgressCallback | None = None,
+) -> str:
     """Drive the agent stream and return its prose, tool narration filtered.
 
     Mirrors the review client's narration filter: SDK providers emit a
     duplicate ResultMessage plus tool_use/tool_result messages that narrate
     the agent's work. The audit's findings block sits in the prose, and
     mixing narration into it would corrupt the parse.
+
+    Those filtered narration events are, however, the only evidence the
+    agent is alive — a full audit takes 5-20 minutes and emits no prose
+    until it finishes. So they are *counted* and reported through
+    ``on_progress`` rather than simply discarded: an unattended run that
+    prints nothing for twenty minutes is indistinguishable from a hang.
     """
     from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
 
@@ -349,9 +385,17 @@ async def _collect_audit_output(agent: object, prompt: str, agent_name: str) -> 
         message_type=MessageType.chat,
     )
     parts: list[str] = []
+    tool_events = 0
     async for response in agent.handle_message(message):  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
         sdk_type = response.metadata.get("sdk_type")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-        if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
+        if sdk_type in ("tool_use", "tool_result"):
+            tool_events += 1
+            if on_progress is not None and tool_events % _PROGRESS_EVERY_N_TOOL_EVENTS == 0:
+                on_progress(
+                    AuditProgress(tool_events=tool_events, bytes_received=sum(len(p) for p in parts))
+                )
+            continue
+        if sdk_type == SDK_RESULT_TYPE:
             continue
         parts.append(response.content)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
     return "\n".join(parts)
@@ -366,6 +410,7 @@ async def run_audit(
     independent_run: bool = False,
     require_clean: bool = False,
     expected_sha: str | None = None,
+    on_progress: ProgressCallback | None = None,
     cwd: str = ".",
 ) -> AuditRunResult:
     """Run one audit against ``project_path`` and persist it, or persist nothing.
@@ -435,7 +480,7 @@ async def run_audit(
     agent = await provider.create_agent(config)
     try:
         raw_output = await asyncio.wait_for(
-            _collect_audit_output(agent, prompt, agent_name),
+            _collect_audit_output(agent, prompt, agent_name, on_progress),
             timeout=timeout_s,
         )
     except TimeoutError:

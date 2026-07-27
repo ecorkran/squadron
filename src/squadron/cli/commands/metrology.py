@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from rich import print as rprint
 from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.audit import (
     AuditPreflightError,
+    AuditProgress,
     AuditRunResult,
     AuditSkillError,
     run_audit,
@@ -716,8 +718,30 @@ def _audit_variance_runs(cwd: str) -> int:
     return int(value)
 
 
+def _make_progress_reporter(label: str) -> Callable[[AuditProgress], None]:
+    """Return a callback that keeps a live audit visibly alive.
+
+    A full audit takes 5-20 minutes and emits no prose until it finishes, so
+    without this the command looks hung — and an operator cannot tell a
+    working run from a stalled one. Writes to stderr on a single rewritten
+    line so ``--json`` on stdout stays machine-readable.
+    """
+
+    def _report(progress: AuditProgress) -> None:
+        typer.echo(
+            f"\r  {label} working… {progress.tool_events} tool calls, "
+            f"{progress.bytes_received:,} bytes",
+            err=True,
+            nl=False,
+        )
+
+    return _report
+
+
 def _report_run_outcome(outcome: AuditRunResult, *, prefix: str = "") -> None:
     """Print one run's result. A 12-audit campaign must not look hung."""
+    # Clear the in-place progress line before printing the durable result.
+    typer.echo("\r" + " " * 78 + "\r", err=True, nl=False)
     if outcome.succeeded and outcome.run is not None:
         run = outcome.run
         rprint(
@@ -765,6 +789,8 @@ def audit_run(
     failed = 0
     for raw_path in project_paths:
         project_path = Path(raw_path).expanduser().resolve()
+        if not as_json:
+            rprint(f"[dim]Auditing {project_path.name}… (5-20 min, no output until done)[/dim]")
         try:
             outcome = asyncio.run(
                 run_audit(
@@ -772,6 +798,7 @@ def audit_run(
                     store=store,
                     profile=profile,
                     model=model,
+                    on_progress=None if as_json else _make_progress_reporter(project_path.name),
                     cwd=resolved_cwd,
                 )
             )
@@ -842,6 +869,9 @@ def audit_variance(
                         independent_run=True,
                         require_clean=True,
                         expected_sha=pinned_sha,
+                        on_progress=_make_progress_reporter(
+                            f"{project_path.name} run {index + 1}/{n_runs}"
+                        ),
                         cwd=resolved_cwd,
                     )
                 )
