@@ -21,6 +21,7 @@ from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.audit import (
     AuditPreflightError,
     AuditProgress,
+    AuditRunFailure,
     AuditRunResult,
     AuditSkillError,
     run_audit,
@@ -816,6 +817,15 @@ def audit_run(
             succeeded.append(outcome)
         else:
             failed += 1
+            if outcome.failure is AuditRunFailure.RATE_LIMITED:
+                # Every remaining project would fail identically until the
+                # limit resets. Stopping preserves the work already done and
+                # spares the operator a wall of identical failures.
+                rprint(
+                    "[yellow]Stopping the campaign: the provider is rate limiting. "
+                    "Completed runs are persisted; re-run later to continue.[/yellow]"
+                )
+                break
 
     if as_json:
         for outcome in succeeded:
@@ -849,6 +859,7 @@ def audit_variance(
     total_succeeded = 0
     total_failed = 0
     floors_written = 0
+    rate_limited = False
 
     for raw_path in project_paths:
         project_path = Path(raw_path).expanduser().resolve()
@@ -890,7 +901,17 @@ def audit_variance(
                 total_succeeded += 1
             else:
                 total_failed += 1
+                if outcome.failure is AuditRunFailure.RATE_LIMITED:
+                    rate_limited = True
+                    rprint(
+                        "[yellow]Stopping: the provider is rate limiting. Completed runs "
+                        "are persisted — re-run later and the series can be reduced then."
+                        "[/yellow]"
+                    )
+                    break
 
+        if rate_limited and not series:
+            break
         if len(series) < MIN_USABLE_RUNS:
             if series:
                 rprint(

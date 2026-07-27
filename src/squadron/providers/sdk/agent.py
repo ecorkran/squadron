@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -27,10 +28,26 @@ from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
     ProviderError,
+    ProviderRateLimitError,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
 
 _MAX_RATE_LIMIT_RETRIES = 10
+
+#: Exponential backoff between rate-limit retries, in seconds: 2, 4, 8, ...
+#: capped at ``_RATE_LIMIT_MAX_BACKOFF_S``.
+#:
+#: This previously did not exist. The retry loops carried a comment saying
+#: "the CLI handles the backoff delay" and slept for nothing — measured at
+#: 11 attempts in 0.1ms, which hammers the rate limiter rather than waiting
+#: for it and can *cause* the limit it is trying to survive.
+_RATE_LIMIT_BASE_BACKOFF_S = 2.0
+_RATE_LIMIT_MAX_BACKOFF_S = 60.0
+
+
+def _rate_limit_backoff_s(attempt: int) -> float:
+    """Seconds to wait before rate-limit retry ``attempt`` (1-based)."""
+    return min(_RATE_LIMIT_BASE_BACKOFF_S * (2 ** (attempt - 1)), _RATE_LIMIT_MAX_BACKOFF_S)
 
 
 class ClaudeSDKAgent:
@@ -108,9 +125,10 @@ class ClaudeSDKAgent:
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:
         """One-shot execution via ``sdk_query``.
 
-        Retries the full query when a ``rate_limit_event`` surfaces as a
-        ``ClaudeSDKError`` — the CLI handles the backoff delay, so retrying
-        the query is safe.
+        Retries the full query on a ``rate_limit_event``, waiting an
+        exponentially increasing delay first. The delay is not optional:
+        retrying immediately hammers the limiter and can cause the very
+        limit it is trying to survive.
         """
         self._state = AgentState.processing
         retries = 0
@@ -131,22 +149,27 @@ class ClaudeSDKAgent:
             except ClaudeSDKError as exc:
                 if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                     retries += 1
-                    self._log.debug(
-                        "Rate limit event %d/%d (retrying query)",
+                    delay = _rate_limit_backoff_s(retries)
+                    self._log.warning(
+                        "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
                         retries,
                         _MAX_RATE_LIMIT_RETRIES,
+                        delay,
                     )
+                    await asyncio.sleep(delay)
                     continue
                 self._state = AgentState.failed
+                if "rate_limit" in str(exc):
+                    raise ProviderRateLimitError(str(exc)) from exc
                 raise ProviderError(str(exc)) from exc
 
     async def _handle_client_mode(self, message: Message) -> AsyncIterator[Message]:
         """Multi-turn execution via ``ClaudeSDKClient``.
 
         Includes rate-limit retry logic: when the CLI emits a
-        ``rate_limit_event`` the SDK raises ``ClaudeSDKError``.
-        We restart ``receive_response()`` on the same session
-        (the underlying channel remains intact) up to
+        ``rate_limit_event`` the SDK raises ``ClaudeSDKError``. We wait an
+        exponentially increasing delay, then restart ``receive_response()``
+        on the same session (the underlying channel remains intact), up to
         ``_MAX_RATE_LIMIT_RETRIES`` times.
         """
         self._state = AgentState.processing
@@ -165,11 +188,14 @@ class ClaudeSDKAgent:
                 except ClaudeSDKError as exc:
                     if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                         retries += 1
-                        self._log.debug(
-                            "Rate limit event %d/%d (CLI handles backoff)",
+                        delay = _rate_limit_backoff_s(retries)
+                        self._log.warning(
+                            "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
                             retries,
                             _MAX_RATE_LIMIT_RETRIES,
+                            delay,
                         )
+                        await asyncio.sleep(delay)
                         continue
                     raise
             self._state = AgentState.idle

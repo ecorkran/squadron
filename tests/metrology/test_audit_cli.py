@@ -332,3 +332,67 @@ def test_report_baseline_filters_by_category(cli_store: MetrologyStore) -> None:
     cells = payload["projects"][0]["cells"]
     assert len(cells) == 1
     assert cells[0]["category"] == "test-debt"
+
+
+def test_rate_limited_campaign_stops_instead_of_grinding(
+    cli_store: MetrologyStore, tmp_path: Path
+) -> None:
+    """A rate limit stops the campaign; it does not fail every project.
+
+    Rate limiting says nothing about any particular project — every
+    remaining run would fail identically until the limit resets. Continuing
+    would produce a wall of identical failures and consume whatever capacity
+    remains.
+    """
+    calls: list[Path] = []
+
+    async def _fake_run_audit(project_path: Path, **_: object) -> AuditRunResult:
+        calls.append(project_path)
+        if len(calls) == 2:
+            return AuditRunResult(
+                project_path=project_path,
+                failure=AuditRunFailure.RATE_LIMITED,
+                detail="rate_limit_event: quota",
+            )
+        run = make_audit_run(run_id=f"audit-2026072{len(calls)}-aaaaaaaa")
+        cli_store.write_audit_run(run)
+        return AuditRunResult(project_path=project_path, run=run)
+
+    projects = [str(tmp_path / name) for name in ("a", "b", "c", "d")]
+    for path in projects:
+        Path(path).mkdir()
+
+    with patch("squadron.cli.commands.metrology.run_audit", _fake_run_audit):
+        result = runner.invoke(app, ["metrology", "audit", "run", *projects])
+
+    assert result.exit_code == 1
+    assert len(calls) == 2, "the campaign must stop, not attempt the remaining projects"
+    output = _normalized(result.output)
+    assert "rate limiting" in output.lower()
+    assert "Completed runs are persisted" in output
+    # The work already done survives for a later resume.
+    assert len(cli_store.list_audit_runs()) == 1
+
+
+def test_rate_limit_is_reported_distinctly_from_a_bad_run(
+    cli_store: MetrologyStore, tmp_path: Path
+) -> None:
+    """`rate_limited` must not read as `block_missing`.
+
+    Reporting throttling as a missing findings block would send an operator
+    chasing a model or protocol problem that does not exist.
+    """
+
+    async def _fake_run_audit(project_path: Path, **_: object) -> AuditRunResult:
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.RATE_LIMITED,
+            detail="rate_limit_event: quota",
+        )
+
+    with patch("squadron.cli.commands.metrology.run_audit", _fake_run_audit):
+        result = runner.invoke(app, ["metrology", "audit", "run", str(tmp_path)])
+
+    output = _normalized(result.output)
+    assert "rate_limited" in output
+    assert "block_missing" not in output

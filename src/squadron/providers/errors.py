@@ -19,5 +19,15 @@ class ProviderAPIError(ProviderError):
         self.status_code = status_code
 
 
+class ProviderRateLimitError(ProviderError):
+    """The provider rate-limited the request and retries were exhausted.
+
+    Distinct from a generic ``ProviderError`` so callers can tell "slow
+    down and try later" from "this run was malformed". A long unattended
+    campaign should pause on this rather than burning its remaining work
+    on requests that will fail identically.
+    """
+
+
 class ProviderTimeoutError(ProviderError):
     """Request timeout errors."""

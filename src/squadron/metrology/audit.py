@@ -36,6 +36,7 @@ from squadron.metrology.errors import (
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.models import AuditRun, ProjectId
 from squadron.metrology.store import MetrologyStore, generate_audit_run_id
+from squadron.providers.errors import ProviderRateLimitError
 from squadron.skills.models import SkillSourceError
 from squadron.skills.resolver import _resolve_bundled  # pyright: ignore[reportPrivateUsage]
 
@@ -190,6 +191,11 @@ class AuditRunFailure(StrEnum):
     STREAM_ERROR = "stream_error"
     BLOCK_MISSING = "block_missing"
     BLOCK_MALFORMED = "block_malformed"
+    #: The provider rate-limited the run and retries were exhausted.
+    #: Distinct because it says nothing about the audit or the project —
+    #: every remaining run in a campaign will fail the same way until the
+    #: limit resets, so the caller should stop rather than continue.
+    RATE_LIMITED = "rate_limited"
 
 
 @dataclass(frozen=True)
@@ -603,6 +609,20 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.TIMEOUT,
             detail=f"exceeded metrology.audit_timeout_s ({timeout_s}s)",
+        )
+    except ProviderRateLimitError as exc:
+        # Says nothing about this project or this audit — the provider is
+        # throttling. Reported distinctly so a campaign can stop instead of
+        # burning its remaining projects on runs that will fail identically.
+        _logger.warning(
+            "Audit rate limited for %s after provider retries; persisting nothing. %s",
+            preflight.project_id.value,
+            exc,
+        )
+        return AuditRunResult(
+            project_path=project_path,
+            failure=AuditRunFailure.RATE_LIMITED,
+            detail=str(exc),
         )
     except Exception as exc:
         # Any stream failure — peer disconnect, API error, provider fault.

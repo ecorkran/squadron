@@ -488,3 +488,71 @@ class TestUnparseableMessages:
             with pytest.raises(ProviderError):
                 await _collect(query_agent.handle_message(input_message))
             assert query_agent.state == AgentState.failed
+
+
+class TestRateLimitBackoff:
+    """Rate-limit retries must wait, not hammer.
+
+    The retry loops previously carried a comment claiming "the CLI handles
+    the backoff delay" and slept for nothing — measured at 11 attempts in
+    0.1ms. That does not survive a rate limit; it *causes* one.
+    """
+
+    def test_backoff_grows_exponentially_and_is_capped(self) -> None:
+        from squadron.providers.sdk.agent import (
+            _RATE_LIMIT_MAX_BACKOFF_S,  # pyright: ignore[reportPrivateUsage]
+            _rate_limit_backoff_s,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        assert _rate_limit_backoff_s(1) == 2.0
+        assert _rate_limit_backoff_s(2) == 4.0
+        assert _rate_limit_backoff_s(3) == 8.0
+        assert _rate_limit_backoff_s(20) == _RATE_LIMIT_MAX_BACKOFF_S
+
+    @pytest.mark.asyncio
+    async def test_retries_actually_sleep(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """Each retry awaits a delay — asserted on the calls, not wall-clock."""
+        from claude_agent_sdk import ClaudeSDKError
+
+        slept: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            slept.append(seconds)
+
+        gen = _make_error_gen(ClaudeSDKError("rate_limit_event: slow down"))
+        with (
+            patch(_QUERY, side_effect=gen),
+            patch("squadron.providers.sdk.agent.asyncio.sleep", fake_sleep),
+        ):
+            with pytest.raises(ProviderError):
+                await _collect(query_agent.handle_message(input_message))
+
+        assert len(slept) == 10, "every retry must wait before re-issuing"
+        assert slept[0] < slept[-1], "the delay must grow"
+        assert sum(slept) > 60, "cumulative backoff must be meaningful, not token"
+
+    @pytest.mark.asyncio
+    async def test_exhausted_rate_limit_raises_a_distinct_error(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """Callers must be able to tell throttling from a malformed run.
+
+        A campaign should pause on this rather than burn its remaining work
+        on requests that will fail the same way.
+        """
+        from claude_agent_sdk import ClaudeSDKError
+
+        from squadron.providers.errors import ProviderRateLimitError
+
+        async def no_sleep(seconds: float) -> None:
+            return None
+
+        gen = _make_error_gen(ClaudeSDKError("rate_limit_event: quota"))
+        with (
+            patch(_QUERY, side_effect=gen),
+            patch("squadron.providers.sdk.agent.asyncio.sleep", no_sleep),
+        ):
+            with pytest.raises(ProviderRateLimitError):
+                await _collect(query_agent.handle_message(input_message))
