@@ -34,6 +34,7 @@ from squadron.providers.sdk.rate_limit import (
     MAX_RATE_LIMIT_RETRIES,
     RATE_LIMIT_MARKER,
     RATE_LIMIT_MAX_BACKOFF_S,
+    RateLimitStats,
     rate_limit_backoff_s,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
@@ -58,6 +59,9 @@ class ClaudeSDKAgent:
         self._state = AgentState.idle
         self._client: ClaudeSDKClient | None = None
         self._log = get_logger(f"squadron.providers.sdk.agent.{name}")
+        # Cumulative across the agent's life, so a caller can report what a
+        # run actually cost in throttling rather than leaving it anecdotal.
+        self._rate_limit_stats = RateLimitStats()
 
     # -- Protocol properties ------------------------------------------------
 
@@ -68,6 +72,11 @@ class ClaudeSDKAgent:
     @property
     def agent_type(self) -> str:
         return "sdk"
+
+    @property
+    def rate_limit_stats(self) -> RateLimitStats:
+        """Throttling absorbed so far, for the caller's run summary."""
+        return self._rate_limit_stats
 
     @property
     def state(self) -> AgentState:
@@ -156,6 +165,7 @@ class ClaudeSDKAgent:
                         self._max_rate_limit_retries,
                         delay,
                     )
+                    self._rate_limit_stats.record(delay)
                     await asyncio.sleep(delay)
                     continue
                 self._state = AgentState.failed
@@ -204,6 +214,7 @@ class ClaudeSDKAgent:
                             self._max_rate_limit_retries,
                             delay,
                         )
+                        self._rate_limit_stats.record(delay)
                         await asyncio.sleep(delay)
                         continue
                     raise

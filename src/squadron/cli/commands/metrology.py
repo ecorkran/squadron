@@ -755,11 +755,15 @@ def _report_run_outcome(outcome: AuditRunResult, *, prefix: str = "") -> None:
                 else ""
             )
         )
+        if outcome.rate_limit_summary:
+            rprint(f"{prefix}[dim]{outcome.rate_limit_summary}[/dim]")
         return
     rprint(
         f"{prefix}[red]failed[/red] {outcome.project_path}  "
         f"{outcome.failure.value if outcome.failure else 'unknown'}: {outcome.detail or ''}"
     )
+    if outcome.rate_limit_summary:
+        rprint(f"{prefix}[dim]{outcome.rate_limit_summary}[/dim]")
 
 
 def _campaign_summary(succeeded: int, failed: int, floors_written: int | None = None) -> None:

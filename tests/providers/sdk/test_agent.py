@@ -586,6 +586,40 @@ class TestRateLimitBackoff:
         assert len(messages) == max_throttles + 1, "each attempt's work must reach the caller"
         assert client_agent.state == AgentState.idle
 
+    def test_stats_summarize_cost_not_just_occurrence(self) -> None:
+        """Per-event warnings say throttling happened, not what it cost."""
+        from squadron.providers.sdk.rate_limit import RateLimitStats
+
+        stats = RateLimitStats()
+        assert stats.summary() == "", "a clean run reports nothing"
+
+        stats.record(2.0)
+        stats.record(60.0)
+        assert stats.throttles == 2
+        assert stats.waited_s == 62.0
+        assert "2 rate-limit pauses" in stats.summary()
+        assert "62s" in stats.summary()
+
+    @pytest.mark.asyncio
+    async def test_stats_accumulate_across_retries(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        from claude_agent_sdk import ClaudeSDKError
+
+        async def no_sleep(seconds: float) -> None:
+            return None
+
+        gen = _make_error_gen(ClaudeSDKError("rate_limit_event: slow down"))
+        with (
+            patch(_QUERY, side_effect=gen),
+            patch("squadron.providers.sdk.agent.asyncio.sleep", no_sleep),
+        ):
+            with pytest.raises(ProviderError):
+                await _collect(query_agent.handle_message(input_message))
+
+        assert query_agent.rate_limit_stats.throttles == 10
+        assert query_agent.rate_limit_stats.waited_s > 60
+
     @pytest.mark.asyncio
     async def test_exhausted_rate_limit_raises_a_distinct_error(
         self, query_agent: ClaudeSDKAgent, input_message: Message

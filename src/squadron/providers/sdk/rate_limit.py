@@ -9,6 +9,8 @@ One home for all three so the paths cannot drift apart again.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 #: Default retry budget. Callers that know their workload is heavier (the
 #: metrology audit, whose subagent fan-out multiplies request rate) override
 #: it per agent.
@@ -36,3 +38,28 @@ RATE_LIMIT_MARKER = "rate_limit"
 def rate_limit_backoff_s(attempt: int, cap_s: float = RATE_LIMIT_MAX_BACKOFF_S) -> float:
     """Seconds to wait before rate-limit retry ``attempt`` (1-based)."""
     return min(RATE_LIMIT_BASE_BACKOFF_S * (2 ** (attempt - 1)), cap_s)
+
+
+@dataclass
+class RateLimitStats:
+    """How much throttling a run absorbed.
+
+    Per-event warnings say throttling happened; they do not say what it
+    cost. Without a total, comparing one run to another — or squadron to a
+    manual run of the same skill — stays anecdotal.
+
+    Mutable and cumulative: one instance per agent, updated as retries fire.
+    """
+
+    throttles: int = 0
+    waited_s: float = 0.0
+
+    def record(self, delay_s: float) -> None:
+        self.throttles += 1
+        self.waited_s += delay_s
+
+    def summary(self) -> str:
+        """One line for an operator, or empty when nothing was throttled."""
+        if self.throttles == 0:
+            return ""
+        return f"{self.throttles} rate-limit pauses, {self.waited_s:.0f}s spent waiting"

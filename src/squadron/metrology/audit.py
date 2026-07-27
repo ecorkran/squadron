@@ -211,6 +211,10 @@ class AuditRunResult:
     run: AuditRun | None = None
     failure: AuditRunFailure | None = None
     detail: str | None = None
+    #: What throttling this run absorbed. Reported on success and failure
+    #: alike: a run that finished after ten pauses is a different data point
+    #: from one that finished clean, and the campaign should say so.
+    rate_limit_summary: str = ""
 
     @property
     def succeeded(self) -> bool:
@@ -601,6 +605,12 @@ async def run_audit(
     # fresh run id. One second of slack absorbs filesystem mtime coarseness.
     started_at = time.time() - 1.0
     agent = await provider.create_agent(config)
+
+    def _throttle_summary() -> str:
+        """This run's throttling, or empty when the provider has no counter."""
+        stats = getattr(agent, "rate_limit_stats", None)
+        return stats.summary() if stats is not None else ""
+
     try:
         raw_output = await asyncio.wait_for(
             _collect_audit_output(agent, prompt, agent_name, on_progress),
@@ -617,6 +627,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.TIMEOUT,
             detail=f"exceeded metrology.audit_timeout_s ({timeout_s}s)",
+            rate_limit_summary=_throttle_summary(),
         )
     except ProviderRateLimitError as exc:
         # Says nothing about this project or this audit — the provider is
@@ -631,6 +642,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.RATE_LIMITED,
             detail=str(exc),
+            rate_limit_summary=_throttle_summary(),
         )
     except Exception as exc:
         # Any stream failure — peer disconnect, API error, provider fault.
@@ -647,6 +659,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.STREAM_ERROR,
             detail=f"{type(exc).__name__}: {exc}",
+            rate_limit_summary=_throttle_summary(),
         )
     finally:
         await agent.shutdown()
@@ -665,6 +678,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.BLOCK_MISSING,
             detail=f"no audit file written under {' or '.join(_AUDIT_FILE_GLOBS)}",
+            rate_limit_summary=_throttle_summary(),
         )
 
     try:
@@ -675,6 +689,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.BLOCK_MISSING,
             detail=f"audit file unreadable: {exc}",
+            rate_limit_summary=_throttle_summary(),
         )
 
     # --- Parse: absent and malformed are different failures -------------
@@ -691,6 +706,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.BLOCK_MISSING,
             detail=str(exc),
+            rate_limit_summary=_throttle_summary(),
         )
     except AuditBlockMalformedError as exc:
         _logger.warning(
@@ -702,6 +718,7 @@ async def run_audit(
             project_path=project_path,
             failure=AuditRunFailure.BLOCK_MALFORMED,
             detail=str(exc),
+            rate_limit_summary=_throttle_summary(),
         )
 
     # --- Persist: a complete run, or nothing ----------------------------
@@ -724,4 +741,8 @@ async def run_audit(
         run.project_id.value,
         run.commit_sha[:8],
     )
-    return AuditRunResult(project_path=project_path, run=run)
+    return AuditRunResult(
+        project_path=project_path,
+        run=run,
+        rate_limit_summary=_throttle_summary(),
+    )
