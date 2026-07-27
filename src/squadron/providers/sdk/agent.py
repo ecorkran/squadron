@@ -180,12 +180,21 @@ class ClaudeSDKAgent:
             await self._client.query(prompt=message.content)
             retries = 0
             while True:
+                progressed = False
                 try:
                     async for sdk_msg in self._skip_unparseable(self._client.receive_response()):
+                        progressed = True
                         for translated in translate_sdk_message(sdk_msg, sender=self._name):
                             yield translated
                     break  # normal completion
                 except ClaudeSDKError as exc:
+                    # A throttle that arrives *after* work came through is a
+                    # fresh event, not another attempt at the same blocked
+                    # call. Without this reset the budget is a cap on
+                    # throttles-per-run rather than on consecutive failures,
+                    # so a long audit exhausts it while still making progress.
+                    if progressed:
+                        retries = 0
                     if RATE_LIMIT_MARKER in str(exc) and retries < self._max_rate_limit_retries:
                         retries += 1
                         delay = rate_limit_backoff_s(retries, self._rate_limit_cap_s)

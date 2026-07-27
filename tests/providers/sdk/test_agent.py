@@ -536,6 +536,57 @@ class TestRateLimitBackoff:
         assert sum(slept) > 60, "cumulative backoff must be meaningful, not token"
 
     @pytest.mark.asyncio
+    async def test_budget_resets_when_work_comes_through(
+        self, client_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """The budget bounds *consecutive* throttles, not throttles per run.
+
+        Observed on a real audit: attempts climbed 1..8 of 10 across a single
+        run while tool calls kept accumulating between them. The counter was
+        initialised outside the loop and never reset, so a long run exhausted
+        its budget while still making progress and lost completed work.
+
+        Here every attempt delivers a message before throttling, so the run
+        survives far more than ``max_rate_limit_retries`` throttles.
+        """
+        from claude_agent_sdk import ClaudeSDKError
+
+        throttles = 0
+        max_throttles = 25  # > the budget of 3 below
+
+        async def receive_response() -> AsyncIterator[AssistantMessage]:
+            nonlocal throttles
+            yield AssistantMessage(content=[TextBlock(text="progress")], model="m")
+            if throttles < max_throttles:
+                throttles += 1
+                raise ClaudeSDKError("rate_limit_event: slow down")
+
+        async def no_sleep(seconds: float) -> None:
+            return None
+
+        class _FakeClient:
+            async def connect(self) -> None:
+                return None
+
+            async def query(self, prompt: str) -> None:
+                return None
+
+            def receive_response(self) -> AsyncIterator[AssistantMessage]:
+                return receive_response()
+
+        client_agent._max_rate_limit_retries = 3  # pyright: ignore[reportPrivateUsage]
+
+        with (
+            patch(_CLIENT, return_value=_FakeClient()),
+            patch("squadron.providers.sdk.agent.asyncio.sleep", no_sleep),
+        ):
+            messages = await _collect(client_agent.handle_message(input_message))
+
+        assert throttles == max_throttles, "run must survive throttles beyond the budget"
+        assert len(messages) == max_throttles + 1, "each attempt's work must reach the caller"
+        assert client_agent.state == AgentState.idle
+
+    @pytest.mark.asyncio
     async def test_exhausted_rate_limit_raises_a_distinct_error(
         self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:

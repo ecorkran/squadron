@@ -136,8 +136,10 @@ class SDKExecutionSession:
             retries = 0
             response_parts: list[str] = []
             while True:
+                progressed = False
                 try:
                     async for sdk_msg in self.client.receive_response():
+                        progressed = True
                         # Raise before appending any content so no partial
                         # error text reaches the caller or _check_cli_error.
                         if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
@@ -165,6 +167,11 @@ class SDKExecutionSession:
                                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
                     break  # normal completion
                 except ClaudeSDKError as exc:
+                    # See the agent's client mode: a throttle after work came
+                    # through is a fresh event, so the budget bounds
+                    # consecutive failures rather than throttles-per-run.
+                    if progressed:
+                        retries = 0
                     if RATE_LIMIT_MARKER in str(exc) and retries < MAX_RATE_LIMIT_RETRIES:
                         retries += 1
                         delay = rate_limit_backoff_s(retries)
