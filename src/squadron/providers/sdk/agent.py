@@ -44,6 +44,14 @@ _MAX_RATE_LIMIT_RETRIES = 10
 _RATE_LIMIT_BASE_BACKOFF_S = 2.0
 _RATE_LIMIT_MAX_BACKOFF_S = 60.0
 
+#: Substring identifying a rate-limit notice, wherever it surfaces. The CLI
+#: emits it as a ``rate_limit_event`` message; on an SDK version without a
+#: case for that type it arrives as a ``MessageParseError`` naming it. One
+#: constant so the skip path and the retry path cannot disagree about what
+#: counts as throttling — they previously did, and the skip silently
+#: disabled the backoff.
+_RATE_LIMIT_MARKER = "rate_limit"
+
 
 def _rate_limit_backoff_s(attempt: int) -> float:
     """Seconds to wait before rate-limit retry ``attempt`` (1-based)."""
@@ -95,17 +103,22 @@ class ClaudeSDKAgent:
         """Yield SDK messages, skipping ones this SDK version cannot parse.
 
         The bundled CLI emits message types newer than the installed SDK's
-        parser knows — ``rate_limit_event`` is the observed case, an
-        informational notice the CLI handles its own backoff for. The parser
-        raises ``MessageParseError`` on any unrecognized type, which would
-        otherwise kill a working run.
+        parser knows. The parser raises ``MessageParseError`` on any
+        unrecognized type, which would otherwise kill a working run over a
+        message that carries nothing the caller needs.
 
         Skipping in place is what keeps the run alive: the enclosing retry
-        loops restart the *whole query*, so treating this as a retryable
-        error would discard everything done so far — on a long audit, tens
-        of tool calls and several minutes of work.
+        loops restart the *whole query*, so treating an unknown message as
+        a retryable error would discard everything done so far — on a long
+        audit, tens of tool calls and several minutes of work.
 
-        Only parse failures are swallowed. Connection errors, process
+        A ``rate_limit_event`` is deliberately **not** skipped. It arrives
+        as a parse failure only because this SDK version lacks a case for
+        it, but it carries real meaning — the provider is throttling — and
+        the caller must back off rather than continue into a stream that has
+        stopped producing work. It is re-raised for the retry loop.
+
+        Other parse failures are swallowed. Connection errors, process
         failures, and every other ``ClaudeSDKError`` propagate untouched.
         """
         iterator = stream.__aiter__()
@@ -115,6 +128,8 @@ class ClaudeSDKAgent:
             except StopAsyncIteration:
                 return
             except MessageParseError as exc:
+                if _RATE_LIMIT_MARKER in str(exc):
+                    raise
                 self._log.warning(
                     "Skipping SDK message this version cannot parse (%s); stream continues.",
                     exc,
@@ -147,7 +162,7 @@ class ClaudeSDKAgent:
                 self._state = AgentState.failed
                 raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
             except ClaudeSDKError as exc:
-                if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
+                if _RATE_LIMIT_MARKER in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                     retries += 1
                     delay = _rate_limit_backoff_s(retries)
                     self._log.warning(
@@ -159,7 +174,7 @@ class ClaudeSDKAgent:
                     await asyncio.sleep(delay)
                     continue
                 self._state = AgentState.failed
-                if "rate_limit" in str(exc):
+                if _RATE_LIMIT_MARKER in str(exc):
                     raise ProviderRateLimitError(str(exc)) from exc
                 raise ProviderError(str(exc)) from exc
 
@@ -186,7 +201,7 @@ class ClaudeSDKAgent:
                             yield translated
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    if "rate_limit_event" in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
+                    if _RATE_LIMIT_MARKER in str(exc) and retries < _MAX_RATE_LIMIT_RETRIES:
                         retries += 1
                         delay = _rate_limit_backoff_s(retries)
                         self._log.warning(

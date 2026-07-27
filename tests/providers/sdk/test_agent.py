@@ -414,10 +414,10 @@ class TestClientShutdown:
 class TestUnparseableMessages:
     """The bundled CLI may emit message types the installed SDK cannot parse.
 
-    ``rate_limit_event`` is the observed case: an informational notice the
-    CLI handles its own backoff for. The SDK's parser raises on any
-    unrecognized type, which previously killed a working run — an audit was
-    lost after 30 tool calls to a message that carried no failure at all.
+    The SDK's parser raises on any unrecognized type, which previously
+    killed a working run — an audit was lost to a message that carried no
+    failure at all. Note that ``rate_limit_event`` is deliberately NOT
+    skipped: it means real throttling and must reach the backoff path.
 
     Skipping in place matters more than it looks: both handlers retry the
     *whole query*, so treating this as retryable would discard every tool
@@ -432,9 +432,9 @@ class TestUnparseableMessages:
 
         async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
             yield AssistantMessage(content=[TextBlock(text="before")], model="claude")
-            raise MessageParseError(
-                "Unknown message type: rate_limit_event", {"type": "rate_limit_event"}
-            )
+            # An unknown *informational* type. Not a rate-limit notice: those
+            # deliberately reach the backoff path instead of being skipped.
+            raise MessageParseError("Unknown message type: telemetry_ping", {"type": "telemetry_ping"})
 
         with patch(_QUERY, side_effect=gen):
             messages = await _collect(query_agent.handle_message(input_message))
@@ -463,7 +463,7 @@ class TestUnparseableMessages:
                 if self._step == 1:
                     return AssistantMessage(content=[TextBlock(text="before")], model="claude")
                 if self._step == 2:
-                    raise MessageParseError("Unknown message type: rate_limit_event", {})
+                    raise MessageParseError("Unknown message type: telemetry_ping", {})
                 if self._step == 3:
                     return AssistantMessage(content=[TextBlock(text="after")], model="claude")
                 raise StopAsyncIteration
@@ -556,3 +556,64 @@ class TestRateLimitBackoff:
         ):
             with pytest.raises(ProviderRateLimitError):
                 await _collect(query_agent.handle_message(input_message))
+
+    @pytest.mark.asyncio
+    async def test_a_rate_limit_notice_reaches_the_backoff_not_the_skip(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """Regression: the skip must not swallow the signal backoff needs.
+
+        A rate_limit_event arrives as MessageParseError only because this
+        SDK version lacks a case for it. Skipping it silently disabled the
+        backoff entirely — the run continued into a stream that had stopped
+        producing work, ended with ~70 bytes, and never waited once.
+        """
+        from claude_agent_sdk._errors import MessageParseError
+
+        slept: list[float] = []
+
+        async def fake_sleep(seconds: float) -> None:
+            slept.append(seconds)
+
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            raise MessageParseError("Unknown message type: rate_limit_event", {})
+            yield  # pragma: no cover - unreachable, defines the generator
+
+        with (
+            patch(_QUERY, side_effect=gen),
+            patch("squadron.providers.sdk.agent.asyncio.sleep", fake_sleep),
+        ):
+            from squadron.providers.errors import ProviderRateLimitError
+
+            with pytest.raises(ProviderRateLimitError):
+                await _collect(query_agent.handle_message(input_message))
+
+        assert slept, "a rate-limit notice must trigger backoff, not be skipped"
+        assert len(slept) == 10
+
+    @pytest.mark.asyncio
+    async def test_other_unknown_messages_are_still_skipped(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """The narrow skip still applies to genuinely uninteresting types."""
+        from claude_agent_sdk._errors import MessageParseError
+
+        class _Flaky:
+            def __init__(self) -> None:
+                self._step = 0
+
+            def __aiter__(self) -> _Flaky:
+                return self
+
+            async def __anext__(self) -> object:
+                self._step += 1
+                if self._step == 1:
+                    raise MessageParseError("Unknown message type: telemetry_ping", {})
+                if self._step == 2:
+                    return AssistantMessage(content=[TextBlock(text="work")], model="claude")
+                raise StopAsyncIteration
+
+        with patch(_QUERY, side_effect=lambda **_: _Flaky()):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert any("work" in msg.content for msg in messages)
