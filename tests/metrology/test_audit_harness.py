@@ -771,3 +771,23 @@ def test_audit_artifact_exemption_is_scoped(path: str, exempt: bool) -> None:
     assert _is_audit_artifact(f"?? {path}") is exempt
     # A tracked-file modification is never exempt, wherever it lives.
     assert _is_audit_artifact(f" M {path}") is False
+
+
+def test_audit_can_write_its_own_product() -> None:
+    """The audit's product is a file, so it must be able to create one.
+
+    Omitting Write/Edit did not fail loudly: the model reached for Bash
+    heredocs instead, turning one write into many calls. An interactive run
+    of the same skill uses Edit and finishes in a fraction of the tool
+    calls. The findings live in the file, not the stream, so a tool surface
+    that cannot produce a file cannot produce an audit.
+    """
+    from squadron.metrology.audit import (
+        _AUDIT_ALLOWED_TOOLS,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    assert "Write" in _AUDIT_ALLOWED_TOOLS
+    assert "Edit" in _AUDIT_ALLOWED_TOOLS
+    # Read and Bash are load-bearing for the protocol's own steps.
+    assert "Read" in _AUDIT_ALLOWED_TOOLS
+    assert "Bash" in _AUDIT_ALLOWED_TOOLS

@@ -148,7 +148,22 @@ def audit_prompt_hash(skill_path: Path) -> str:
 #: Tools the audit agent needs in the target repo. The skill runs `rg`,
 #: `git log`, and language-native tooling (`ruff`, `npm audit`, ...), so Bash
 #: is required — this is a strictly larger tool surface than a judge review.
-_AUDIT_ALLOWED_TOOLS = ["Read", "Glob", "Grep", "Bash", "Task", "TodoWrite"]
+#:
+#: ``Write``/``Edit`` are required because the audit's *product* is a file:
+#: the findings live in it, not in the response stream. Omitting them did not
+#: fail loudly — the model reached for Bash heredocs instead, turning one
+#: write into many calls. An interactive run of the same skill uses Edit and
+#: finishes in a fraction of the tool calls.
+_AUDIT_ALLOWED_TOOLS = [
+    "Read",
+    "Glob",
+    "Grep",
+    "Bash",
+    "Task",
+    "TodoWrite",
+    "Write",
+    "Edit",
+]
 
 #: The audit runs unattended against an external repo; the skill's protocol
 #: is the authority on what it may do, so permission prompts are bypassed
