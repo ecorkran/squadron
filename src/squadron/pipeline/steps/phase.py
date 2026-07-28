@@ -116,6 +116,16 @@ class PhaseStepType:
                 )
             )
 
+        fragment = cfg.get("pre_emption_fragment")
+        if fragment is not None and not isinstance(fragment, str):
+            errors.append(
+                ValidationError(
+                    field="pre_emption_fragment",
+                    message="'pre_emption_fragment' must be a string",
+                    action_type=self._phase_name,
+                )
+            )
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -129,11 +139,18 @@ class PhaseStepType:
         # loop item's .index field instead of stringifying the whole record.
         slice_ref = cfg.get("slice", "{slice}")
 
+        dispatch_config: dict[str, object] = {"model": model, "slice": slice_ref}
+        # Conditional, not unconditional: an absent key must leave the
+        # expanded dict byte-identical to its pre-324 shape, which the
+        # existing exact-equality expand() tests assert.
+        if "pre_emption_fragment" in cfg:
+            dispatch_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
+
         actions: list[tuple[str, dict[str, object]]] = [
             ("cf-op", {"operation": "set_phase", "phase": phase}),
             ("cf-op", {"operation": "set_slice", "slice": slice_ref}),
             ("cf-op", {"operation": "build_context"}),
-            ("dispatch", {"model": model, "slice": slice_ref}),
+            ("dispatch", dispatch_config),
         ]
 
         review = cfg.get("review")

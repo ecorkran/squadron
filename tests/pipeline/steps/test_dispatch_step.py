@@ -55,3 +55,17 @@ def test_validate_valid_config() -> None:
 def test_validate_empty_config() -> None:
     errors = _make().validate(_step({}))
     assert errors == []
+
+
+def test_expand_forwards_pre_emption_fragment() -> None:
+    """324: an opted-in fragment path threads through to the action config."""
+    actions = _make().expand(_step({"prompt": "Do something.", "pre_emption_fragment": "/tmp/frag.md"}))
+    assert actions == [
+        ("dispatch", {"prompt": "Do something.", "pre_emption_fragment": "/tmp/frag.md"})
+    ]
+
+
+def test_validate_pre_emption_fragment_non_string() -> None:
+    errors = _make().validate(_step({"pre_emption_fragment": 42}))
+    assert len(errors) == 1
+    assert errors[0].field == "pre_emption_fragment"

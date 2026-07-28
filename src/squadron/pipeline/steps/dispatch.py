@@ -42,6 +42,16 @@ class DispatchStepType:
                 )
             )
 
+        fragment = cfg.get("pre_emption_fragment")
+        if fragment is not None and not isinstance(fragment, str):
+            errors.append(
+                ValidationError(
+                    field="pre_emption_fragment",
+                    message="'pre_emption_fragment' must be a string",
+                    action_type=self.step_type,
+                )
+            )
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -54,6 +64,8 @@ class DispatchStepType:
             action_config["prompt"] = cfg["prompt"]
         if "model" in cfg:
             action_config["model"] = cfg["model"]
+        if "pre_emption_fragment" in cfg:
+            action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
 
         return [("dispatch", action_config)]
 

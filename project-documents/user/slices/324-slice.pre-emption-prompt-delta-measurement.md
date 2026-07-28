@@ -7,7 +7,7 @@ dependencies: [323, 140]
 interfaces: []
 dateCreated: 20260728
 dateUpdated: 20260728
-status: not-started
+status: complete
 ---
 
 # Slice Design: Pre-Emption Prompt & Delta Measurement
@@ -262,44 +262,109 @@ Restating the slice-plan criteria as verifiable conditions:
 
 ## Verification Walkthrough
 
-Draft — to be executed and refined at Phase 6 completion.
+Executed at Phase 6 completion (20260728). Commands below were run as written; observed output is recorded verbatim. Two divergences from the Phase 5 draft are noted inline and explained under *Not verified end-to-end*.
 
-**1. Generate a fragment from an existing baseline.**
+**1. Generate a fragment from an existing baseline.** The draft named `migratory-viewer`; that project turned out to span two audit instruments, which the implementation refuses by design (see step 1a). `squadron`'s own baseline is single-instrument and was used instead.
+```
+uv run sq metrology preempt generate .
+```
+Observed — exit 0:
+```
+Wrote /Users/manta/.config/squadron/metrology/preemption/github.com-ecorkran-squadron.md
+9 issue class(es) named, from baseline a5bc5b31229e measured 2026-07-28T00:10:46.921468+00:00
+```
+The written file carries the machine-parseable header and the fixed guidance lines:
+```
+---
+audit_prompt_hash: a5bc5b31229e8c0ca60bbb266cff3c21869872a8060887a0dc9f9d9289a93d83
+measured_at: 2026-07-28T00:10:46.921468+00:00
+---
+
+The tech-debt audit of this project (baseline measured 2026-07-28T00:10:46.921468+00:00) has repeatedly found the issue classes below. Avoid introducing them in this work:
+- Architectural decay: keep new code behind the existing module boundaries — ...
+- Consistency rot: follow the conventions already present in the files you touch — ...
+  (7 further lines, one per nonzero baseline category)
+```
+
+**1a. A project spanning two audit instruments is refused.** Not in the Phase 5 draft; added because real store data exercised it on the first attempt.
 ```
 uv run sq metrology preempt generate /Users/manta/source/repos/manta/migratory-viewer
 ```
-Expect a written fragment file naming nonzero categories from 323's already-measured migratory-viewer baseline (e.g. `architectural-decay`, `consistency-rot`) with the fixed guidance text, and a header recording the baseline's `audit_prompt_hash`/`measured_at`.
+Observed — exit 1:
+```
+Error: github.com/ecorkran/migratory-viewer has baselines under more than one
+audit instrument (a5bc5b31229e, d17ac6bf5c1a). Re-measure under a single
+instrument before generating a fragment or delta.
+```
+Which audit prompt a fragment rests on is never chosen silently. A project audited at several commits under *one* instrument is not refused — the most recent measurement is used, matching `baseline_report`'s own within-group rule.
 
 **2. Freshness check, current.**
 ```
-uv run sq metrology preempt generate /Users/manta/source/repos/manta/migratory-viewer --check
+uv run sq metrology preempt generate . --check
 ```
-Expect exit 0, "current."
-
-**3. Freshness check, stale.** Re-run a variance/audit series on the same project (changing `audit_prompt_hash` via a skill edit, or simply a new baseline run), then re-check without regenerating:
+Observed — exit 0:
 ```
-uv run sq metrology audit run /Users/manta/source/repos/manta/migratory-viewer
-uv run sq metrology preempt generate /Users/manta/source/repos/manta/migratory-viewer --check
+Current — /Users/manta/.config/squadron/metrology/preemption/github.com-ecorkran-squadron.md
 ```
-Expect exit 1, "stale," naming the mismatched hash/timestamp.
 
-**4. Fragment reaches dispatch, opted-in pipelines only.** Add `pre_emption_fragment: <path>` to a test pipeline's `design` step; run it and confirm (via `--json`/debug log) the prompt sent to the agent is prefixed with the fragment block. Run an unmodified existing pipeline (e.g. `slice.yaml`) and confirm its prompt is byte-identical to a pre-324 run — no fragment text present.
+**3. Freshness check, stale.** *Not executed end-to-end* — see *Not verified end-to-end* below. Covered by `tests/metrology/test_preemption_cli.py::test_check_stale_exits_1_naming_the_mismatch`, which reaches the same state by editing the written fragment's recorded instrument, asserting exit 1 with both the fragment's and the baseline's hashes named.
 
-**4a. Broken fragment degrades to a no-op, not a dispatch failure.** Point `pre_emption_fragment` at a nonexistent path; confirm the dispatch still runs to completion with the unmodified prompt and a `WARNING` is logged naming the missing path. Repeat pointing at an empty file (simulating a partial write); confirm the same degrade-and-warn behavior rather than an exception propagating from `_resolve_prompt`.
+**4. Fragment reaches dispatch, opted-in pipelines only.** Verified directly against the real fragment file written in step 1, driving `DispatchAction._resolve_prompt` with a constructed `ActionContext`:
 
-**5. Delta report, below floor.**
+| Case | Observed |
+| --- | --- |
+| `pre_emption_fragment` set to the real file | Prompt begins `--- Pre-emption: known issue classes for this project ---`, ends with the unmodified base prompt |
+| Param absent (any pre-324 pipeline) | Result byte-identical to the bare prompt — no fragment text, no delimiters |
+
+**4a. Broken fragment degrades to a no-op, not a dispatch failure.** Same harness:
+
+| Failure mode | Prompt | Log |
+| --- | --- | --- |
+| Nonexistent path | Unchanged | `WARNING dispatch: pre-emption fragment not found at /tmp/does-not-exist-324.md — dispatching without it (step design)` |
+| Empty file | Unchanged | `WARNING dispatch: pre-emption fragment at /tmp/empty-324.md is unreadable or has a malformed header — dispatching without it (step design)` |
+
+No exception propagated out of `_resolve_prompt` in either case. A valid-header-but-empty-body file logs a third, distinct message (`empty body`) — asserted in `tests/pipeline/actions/test_dispatch_pre_emption.py`.
+
+**5. Delta report, below floor.** *Not executed end-to-end* — see below.
+
+**5a. Delta refuses to report against a failed audit run.** Not in the Phase 5 draft; verified unintentionally when the real run in step 5 failed.
 ```
-uv run sq metrology audit delta /Users/manta/source/repos/manta/migratory-viewer
+uv run sq metrology audit delta .
 ```
-Given 323's measured floor (19-27, spread 8) and a plausible new count within that range, expect the report to state the delta is within the floor and not distinguishable from noise, with the standing observational disclaimer present.
+Observed — exit 1, no delta printed, no disclaimer printed:
+```
+Error: the audit run failed (stream_error) — no delta computed
+```
+A failed run persists nothing, so no partial delta is computed from it.
 
-**6. Delta report, no floor measured.** Run delta against a project with a baseline but no variance series. Expect the report to state "no floor — delta not interpretable" for that project rather than treating any observed change as significant.
+**6. Delta report, no floor measured.** *Not executed end-to-end* — see below. Covered by `test_delta_without_floor_reports_uninterpretable`, asserting `no floor — delta not interpretable` rather than any significance reading.
 
 **7. Nothing else moved.**
 ```
-uv run pytest -q && uv run pyright && uv run ruff check .
+uv run pytest -q          # 2630 passed, 2 failed, 2 skipped (476s)
+uv run ruff check .       # All checks passed!
+uv run pyright <changed>  # 0 errors, 0 warnings, 0 informations
 ```
-Expect the full suite green, with the existing `test_phase.py`/`test_dispatch_step.py` `expand()` assertions passing unmodified (proving the new field is genuinely additive).
+The two failures are `tests/review/test_content_injection.py::test_large_file_is_truncated` and `::test_large_diff_is_truncated`. Both are **pre-existing and unrelated to 324** — confirmed by `git stash -u` and re-running, where they fail identically with all 324 work removed. The existing `test_phase.py`/`test_dispatch_step.py` `expand()` exact-equality assertions pass **unmodified** (32 pre-existing + 4 new = 36), which was the design's stated success criterion for the new field being genuinely additive.
+
+### Not verified end-to-end
+
+Steps 3, 5, and 6 each require a live audit run against a real project. All three were blocked by an environmental constraint, not by 324's code:
+
+```
+Error: Claude Code cannot be launched inside another Claude Code session.
+Nested sessions share runtime resources and will crash all active sessions.
+To bypass this check, unset the CLAUDECODE environment variable.
+```
+
+The audit harness (323) spawns the Claude Code CLI; the implementation session ran *inside* Claude Code, so the SDK provider refused to nest. This affects `sq metrology audit run` and `audit variance` identically and predates this slice. The guard was **not** bypassed — unsetting `CLAUDECODE` risks crashing the operator's active sessions.
+
+What this leaves unproven: that `compute_delta`'s output renders correctly from a *real* `run_audit` result. The computation itself is covered by 19 fixture tests (`test_audit_delta.py`) and its CLI rendering by 16 stubbed-harness tests (`test_preemption_cli.py`), including the within-floor, outside-floor, and no-floor readings and the disclaimer. To close the gap, run from a plain terminal outside any Claude Code session:
+```
+uv run sq metrology audit run .           # supersede the baseline, then step 3
+uv run sq metrology preempt generate . --check   # expect exit 1, "stale"
+uv run sq metrology audit delta .         # expect a rendered delta + disclaimer
+```
 
 ## Risks
 

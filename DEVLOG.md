@@ -12,6 +12,26 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260728 (3)
+
+**Slice 324 implemented — pre-emption prompt & delta measurement. Initiative 320 closed.**
+
+The audit oracle's intervention half, and the last of initiative 320's five anticipated slices.
+
+**What shipped.** `squadron.metrology.preemption` renders a project's stored 323 baseline into a static guidance fragment from a fixed, human-authored `CATEGORY_GUIDANCE` table (one line per `AuditCategory`) — deliberately not model-generated prose, which would reintroduce the per-run non-determinism 323 spent the slice normalizing away. `audit_delta.py` compares a fresh run to the baseline against the floor's *observed spread* (`max - min`), never a derived confidence interval. `sq metrology preempt generate [--check]` and `sq metrology audit delta` are the surfaces; they live in `cli/commands/metrology_preemption.py` because `metrology.py` had already reached ~1000 lines, and mount onto the existing apps so the command surface is unchanged.
+
+**The injection point.** `DispatchAction._apply_pre_emption_fragment` prepends *after* `_apply_override`, so a checkpoint override stays innermost and nearest the task. `pre_emption_fragment` threads through `DispatchStepType.expand()` and `PhaseStepType.expand()` conditionally, matching the existing `if "prompt" in cfg:` idiom — all 32 pre-existing exact-dict-equality `expand()` assertions pass unmodified, which was the design's stated criterion for the field being genuinely additive.
+
+**Three-state, not boolean.** `within_floor` is `True`/`False`/`None`, where `None` means no floor was measured. An unmeasured floor licenses no claim in either direction, and `False` would read as "measured, and significant." Same discipline in the fragment reader: missing, unreadable, and malformed/empty each degrade to a skipped prepend plus a *distinguishable* WARNING — never a dispatch failure. That asymmetry with 323's audit-run handling (which must persist nothing) is deliberate: a missing fragment has no measurement to poison.
+
+**One model change.** `ProjectBaseline` gained a required `measured_at`, populated from `run.measured_at` at its single construction site. T2/T3 required the fragment to stamp the baseline's timestamp, but `ProjectBaseline` carried only `run_id`; the alternative was re-fetching the `AuditRun` by id — redundant I/O to recover a field `baseline_report` already had in hand. PM approved.
+
+**Two things real data taught us.** The multi-instrument guard fired on the first live attempt: `migratory-viewer` spans two audit instruments, so the fragment refuses rather than silently picking one (a project audited at several commits under *one* instrument is fine — most recent wins). And the live `audit delta` run failed with `Claude Code cannot be launched inside another Claude Code session` — the audit harness spawns the Claude Code CLI and the implementation session ran inside Claude Code. The guard was not bypassed; unsetting `CLAUDECODE` risks crashing active sessions. That failure did verify the refusal path for free: `the audit run failed (stream_error) — no delta computed`, exit 1, no partial delta. The end-to-end delta render remains outstanding and is recorded as such in the slice's Verification Walkthrough rather than quietly marked done.
+
+**Also noted.** Two pre-existing failures in `tests/review/test_content_injection.py` (truncation tests) are unrelated to 324 — confirmed by stashing all 324 work and reproducing them identically. Issue #40 (empty system prompt on one-shot dispatch) stayed out of scope as planned.
+
+---
+
 ## 20260728 (2)
 
 ### Slice 324 task breakdown (Phase 5) — 13 tasks, closes initiative 320 on completion
