@@ -175,8 +175,11 @@ def _cell_interpretation(cell: DeltaCell) -> str:
     if cell.within_floor is None:
         return f"[yellow]{NO_FLOOR_CELL_NOTE}[/yellow]"
     if cell.within_floor:
-        spread = cell.floor.max - cell.floor.min if cell.floor is not None else 0
-        return f"[dim]within floor (spread {spread})[/dim]"
+        # within_floor is True only when a floor was measured — is_within_floor
+        # returns None, not True, when floor is None. Asserting says so rather
+        # than implying True-with-no-floor is a state worth defending against.
+        assert cell.floor is not None
+        return f"[dim]within floor (spread {cell.floor.max - cell.floor.min})[/dim]"
     return "[bold]outside floor[/bold]"
 
 
