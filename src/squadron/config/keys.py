@@ -251,6 +251,17 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "to one measured after that default shifts."
         ),
     ),
+    "metrology.preemption_fragment_dir": ConfigKey(
+        name="metrology.preemption_fragment_dir",
+        type_=str,
+        default="~/.config/squadron/metrology/preemption",
+        description=(
+            "Directory 'sq metrology preempt generate' writes pre-emption "
+            "fragment files into, one per project. A pipeline opts into a "
+            "fragment by naming its path explicitly, so moving this only "
+            "affects where generation writes — never what dispatch reads."
+        ),
+    ),
 }
 
 

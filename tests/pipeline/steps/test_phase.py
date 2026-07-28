@@ -229,3 +229,18 @@ def test_expand_no_review_has_no_review_action(design_step: PhaseStepType) -> No
     actions = design_step.expand(_make_config({"phase": 4}))
     action_types = [a[0] for a in actions]
     assert "review" not in action_types
+
+
+def test_expand_forwards_pre_emption_fragment(design_step: PhaseStepType) -> None:
+    """324: present in step config -> present in the expanded dispatch config."""
+    actions = design_step.expand(_make_config({"phase": 4, "pre_emption_fragment": "/tmp/frag.md"}))
+    assert actions[3] == (
+        "dispatch",
+        {"model": None, "slice": "{slice}", "pre_emption_fragment": "/tmp/frag.md"},
+    )
+
+
+def test_validate_pre_emption_fragment_non_string(design_step: PhaseStepType) -> None:
+    errors = design_step.validate(_make_config({"phase": 4, "pre_emption_fragment": 42}))
+    assert len(errors) == 1
+    assert errors[0].field == "pre_emption_fragment"

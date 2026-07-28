@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from squadron.core.agent_registry import get_registry
 from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
+from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
@@ -250,7 +252,7 @@ class DispatchAction:
                 )
                 raise KeyError(msg)
 
-        return self._apply_override(context, prompt)
+        return self._apply_pre_emption_fragment(context, self._apply_override(context, prompt))
 
     @staticmethod
     def _resolve_prompt_from_prior_review(context: ActionContext) -> str | None:
@@ -300,6 +302,65 @@ class DispatchAction:
             )
             return prefix + prompt
         return prompt
+
+    @staticmethod
+    def _apply_pre_emption_fragment(context: ActionContext, prompt: str) -> str:
+        """Prepend a project's pre-emption fragment, if one is configured.
+
+        Applied *after* ``_apply_override`` so a checkpoint override stays
+        the innermost, most urgent instruction: the fragment is standing
+        background guidance and must not push a just-injected human
+        correction further from the task.
+
+        A fragment problem is never a dispatch failure. All three failure
+        modes (missing path, unreadable file, malformed/empty content)
+        degrade to a skipped prepend plus a WARNING. This is deliberately
+        asymmetric with the audit harness's own failure handling, which
+        must persist nothing on failure: a missing fragment has no
+        measurement to poison, so proceeding without it costs only the
+        guidance, not the integrity of a stored number.
+        """
+        raw_path = str(context.params.get("pre_emption_fragment", "")).strip()
+        if not raw_path:
+            return prompt
+
+        path = Path(raw_path).expanduser()
+        if not path.is_file():
+            _logger.warning(
+                "dispatch: pre-emption fragment not found at %s — dispatching without it (step %s)",
+                path,
+                context.step_name,
+            )
+            return prompt
+
+        # read_fragment_body returns None for an unreadable file and for one
+        # whose header is malformed or whose body is empty; distinguish the
+        # two so the warning names a fixable condition.
+        if read_fragment_header(path) is None:
+            _logger.warning(
+                "dispatch: pre-emption fragment at %s is unreadable or has a "
+                "malformed header — dispatching without it (step %s)",
+                path,
+                context.step_name,
+            )
+            return prompt
+
+        body = read_fragment_body(path)
+        if body is None:
+            _logger.warning(
+                "dispatch: pre-emption fragment at %s has an empty body — "
+                "dispatching without it (step %s)",
+                path,
+                context.step_name,
+            )
+            return prompt
+
+        prefix = (
+            f"--- Pre-emption: known issue classes for this project ---\n"
+            f"{body}\n"
+            f"--- End pre-emption ---\n\n"
+        )
+        return prefix + prompt
 
     def _resolve_model(self, context: ActionContext) -> tuple[str, str | None]:
         """Return (model_id, alias_profile) from the context param cascade."""
