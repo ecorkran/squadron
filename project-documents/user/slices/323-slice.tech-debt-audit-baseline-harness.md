@@ -457,8 +457,24 @@ viewer run, consistent with subagent dispatch.
 The `other` share was 2/49 (~4%), so the ten-value vocabulary fits a second,
 much larger codebase without becoming a dumping ground.
 
-`context-forge` and `squadron` remain deferred — both are larger still. See
-Future Work.
+```
+uv run sq metrology audit variance /Users/manta/source/repos/manta/squadron --runs 3
+```
+```
+  run 1/3  ok github.com/ecorkran/squadron @ad1706f2  79 findings
+  run 2/3  ok github.com/ecorkran/squadron @ad1706f2  17 findings
+  run 3/3  ok github.com/ecorkran/squadron @ad1706f2  71 findings
+floor github.com/ecorkran/squadron @ad1706f2  total 17-79 (mean 55.7, sd 33.72, n=3)
+```
+The 17-finding run was checked for damage and is **valid**: all seven required
+sections present, findings table and YAML block in exact agreement (17/17), a
+coherent executive summary with cited locations. A SIGTERM traceback appeared
+in the terminal during that run's teardown, but the run had already completed
+and persisted — the SDK terminates its own subprocess during `close()`, and the
+error surfaces from an unawaited reader task (#38). It is genuinely a much less
+exhaustive audit of the same code, not a truncated one.
+
+`context-forge` remains deferred. See Future Work.
 
 **6. Comparability is enforced.** Confirmed, and not by a contrived edit. Two
 real instrument changes occurred mid-campaign: pinning the model
@@ -497,6 +513,14 @@ that alone.
 |---|---|---|---|---|---|
 | migratory-viewer | 3.2k | 19, 22, 27 | 22.7 | 8 | **35%** |
 | migratory | 44.4k | 49, 60, 82 | 63.7 | 33 | **52%** |
+| squadron | large | 17, 79, 71 | 55.7 | 62 | **111%** |
+
+On squadron the spread **exceeds its own mean**: the same audit of the same
+unchanged commit returned 17 findings once and 79 another time. Note also that
+squadron's mean (55.7) is *lower* than the smaller `migratory` (63.7) purely
+because one run landed at 17 — with three samples, a single low draw moves the
+mean more than the underlying difference between the codebases does. That is
+itself a caution about n=3.
 
 This confirms the design's stated risk: subagent fan-out is itself a variance
 source, and because the >50k-LOC / >5-module condition is a prompt instruction
@@ -504,6 +528,11 @@ rather than enforced code, fan-out can vary *within* a series. **This is the
 concrete justification for the per-project floor decision** — a single global
 noise threshold would understate large repos by a wide margin and is not a
 defensible simplification.
+
+It is also a caution about the floor's own precision. Three runs is enough to
+demonstrate that dispersion is large and size-dependent; it is not enough to
+state any project's floor tightly. `metrology.audit_variance_runs` exists so
+that number can be raised where a tighter floor is worth the cost.
 
 **3. Per-category dispersion is where the usable signal is.**
 
@@ -525,8 +554,10 @@ could not have been guessed from the totals.
 no dumping-ground bucket.
 
 Practical consequence: a gate that treats "the audit found N issues" as a
-stable signal is reading 35-52% noise on unchanged code, and the figure is
-size-dependent. Totals are not gate-worthy; specific categories may be.
+stable signal is reading 35-111% noise on unchanged code, and the figure grows
+with codebase size. **Totals are not gate-worthy at any size, and are
+worthless on a large repo.** Specific stable categories may be — that is what
+324 has to work with.
 
 ## Risks
 
