@@ -1,0 +1,120 @@
+---
+docType: review
+layer: project
+reviewType: slice
+slice: pre-emption-prompt-delta-measurement
+project: squadron
+verdict: PASS
+sourceDocument: project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md
+aiModel: claude-opus-4-6
+status: complete
+dateCreated: 20260728
+dateUpdated: 20260728
+findings:
+  - id: F001
+    severity: concern
+    category: error-handling
+    summary: "Fragment file-read failure modes at dispatch time not enumerated"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md:158-159
+  - id: F002
+    severity: pass
+    category: dependency-direction
+    summary: "Down-only data flow discipline is structurally enforced"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md#data-flow
+  - id: F003
+    severity: pass
+    category: architectural-alignment
+    summary: "Variance-before-baseline-before-intervention ordering honored"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md:49-53
+  - id: F004
+    severity: pass
+    category: architectural-alignment
+    summary: "Honest statistics at small n consistently maintained"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md#4-delta-report-observational-floor-relative-never-causal
+  - id: F005
+    severity: pass
+    category: scope
+    summary: "No change to judging path or 300's write semantics"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md:42-44
+  - id: F006
+    severity: pass
+    category: integration
+    summary: "Integration points match consuming/providing slice expectations"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md:55-61
+  - id: F007
+    severity: pass
+    category: architectural-alignment
+    summary: "No store writes in the dispatch path"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md#store-interaction
+  - id: F008
+    severity: note
+    category: under-specification
+    summary: "The YAML example's `{project_id}` template variable is not specified"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md:226
+  - id: F009
+    severity: pass
+    category: scope
+    summary: "Scope is tightly bounded with no speculative extensibility"
+    location: /Users/manta/source/repos/manta/squadron/project-documents/user/slices/324-slice.pre-emption-prompt-delta-measurement.md:46
+---
+
+# Review: slice — slice 324
+
+**Verdict:** PASS
+**Model:** claude-opus-4-6
+
+## Findings
+
+### [CONCERN] Fragment file-read failure modes at dispatch time not enumerated
+
+The slice introduces a new I/O path: `DispatchAction._resolve_prompt` reads a fragment **file** from disk at dispatch time (Decision 1 explicitly pushes the file read into `DispatchAction` rather than `expand()`). This is a new runtime I/O operation in a path that currently does none beyond consuming `cf build`'s output. The blast radius section (line 100) claims a "stale or malformed fragment degrades to bad advice… it cannot corrupt `cf build`'s output, crash dispatch, or affect any non-opted-in pipeline" — but no explicit handling strategy is specified for concrete file-read failures:
+
+- **File missing** (operator sets the path in YAML but hasn't run `preempt generate` yet, or the path is wrong): does dispatch skip with a warning, raise a fatal error, or silently produce an empty prepend?
+- **File unreadable** (permissions): same question.
+- **File empty or corrupted** (partial write): same question.
+
+The architecture's Technical Considerations (architecture doc line 99) say "dispatch does **not** query the metrology layer at pipeline runtime — that would… add a new runtime failure mode to every dispatch when the store is absent." A static file read is categorically different from a store query, so this does not violate the prohibition — but it *is* a new I/O path, and the project's failure-mode enumeration standard (demonstrated thoroughly in 323's own failure-mode table) expects each new I/O path to have explicit handling, not implicit "cannot crash" assertions. The 323 table (323 slice lines 286-296) is the positive example of what this slice should provide for its own new I/O boundary.
+
+### [PASS] Down-only data flow discipline is structurally enforced
+
+The architecture's strongest constraint on this slice is that "dispatch does **not** query the metrology layer at pipeline runtime" (architecture line 99). The slice enforces this structurally, not merely by convention: the fragment is generated by a separate command, written to a plain file on disk, and read as static text by `_resolve_prompt`. No code path from `DispatchAction` to `MetrologyStore` exists. The data flow diagram (lines 173-197) makes this explicit, and the success criteria (line 243) require an assertion that the store's absence at dispatch time produces no error. This is exactly the "down-only" discipline the architecture commits to.
+
+### [PASS] Variance-before-baseline-before-intervention ordering honored
+
+The slice correctly declares dependency on 323 (`status: complete`), which provides the baseline and measured noise floor. The delta report (Decision 4) compares against 323's persisted `AuditNoiseFloor`, and the design explicitly references 323's walkthrough-measured spreads (35–111% of the mean) as calibration for what a delta report must respect. This honors the architecture's "Variance, then baseline, then intervention" principle (architecture line 52).
+
+### [PASS] Honest statistics at small n consistently maintained
+
+The architecture requires "honest statistics at small n" (architecture line 60) and states "the pre-emption measurement is an observational before/after, not a controlled experiment" (architecture line 97). The slice design aligns precisely:
+- Delta is floor-relative: `|delta| < (floor.max - floor.min)` → "indistinguishable from noise" (line 135).
+- No p-values or confidence intervals at n=3 (line 47).
+- Every report carries a fixed non-causal disclaimer (line 137).
+- "No floor measured" produces an explicit "delta not interpretable" marker, not a silent treatment as significant (line 135).
+- The one re-run is not a variance series — reusing 323's already-measured floor rather than recomputing it (line 139).
+
+### [PASS] No change to judging path or 300's write semantics
+
+The architecture's Non-Goal "No change to the judging path" (architecture line 120) and principle "Read-side over 300's write path" (architecture line 48) are respected. The slice touches only the dispatch path (140), never the judging path (300). Context-forge is explicitly verified as untouched (Ground-truth fact 2, Decision 1's "Why this doesn't touch context-forge" section). The exclusions list (lines 41-47) systematically names every boundary that is not crossed.
+
+### [PASS] Integration points match consuming/providing slice expectations
+
+The interfaces consumed from 323 — `baseline_report`, `run_audit`, `AuditRun`, `AuditNoiseFloor`, `ProjectBaseline`, `BaselineCell`, `FloorStat` — all match what 323's own Architecture section (323 lines 226-260) exports. 323's frontmatter declares `interfaces: [324]`, confirming it was designed with this consumer in mind. The dispatch-side integration with 140 (`_resolve_prompt`, `expand()`, `config/keys.py`) is verified against the codebase with line-level citations. The new config key (one key, `metrology.preemption_fragment_dir`) follows the 323 convention of registering in `config/keys.py`.
+
+### [PASS] No store writes in the dispatch path
+
+The Store Interaction section (lines 164-165) explicitly states "no new record type" and that `DeltaReport` is not persisted, justified by the spine philosophy "provide what the next slice consumes, not persist everything computable." The delta can be recomputed on demand from the raw `AuditRun` records 323 already persists. This respects the architecture's spine model without adding speculative storage.
+
+### [NOTE] The YAML example's `{project_id}` template variable is not specified
+
+The pipeline YAML usage example shows `pre_emption_fragment: "~/.config/squadron/metrology/preemption/{project_id}.md"` with a `{project_id}` token. It is not specified whether this is a runtime template variable (resolved by `expand()` or `DispatchAction`), or simply an illustrative placeholder the operator manually replaces with the actual project ID. Since the `generate` command writes fragments "named by project id" (line 120), the operator likely substitutes the literal path. This is a minor documentation clarity issue, not an architectural concern — but at task time an implementer could reasonably read the YAML as implying a template resolution mechanism that the design does not describe.
+
+### [PASS] Scope is tightly bounded with no speculative extensibility
+
+The exclusion "A general 'prompt fragment' or 'prompt chaining' framework" (line 46) and the explicit rejection of the compaction-template-style mechanism (Decision 1, line 96) demonstrate that the slice adds only the minimum surface needed. Future Work items (lines 296-299) are properly deferred, not built speculatively. The fragment content is a fixed mapping (Decision 2, line 112), not model-generated prose — avoiding reintroducing the non-determinism 323 measured. This discipline is exactly what the architecture means by "provide what the next slice consumes."
+
+## Disposition
+
+Both findings addressed in the slice design. Verdict left as PASS — this section records disposition only, not a re-review.
+
+- **F001 (fragment file-read failure modes)** — Added a *Failure modes of the new file-read path* section, mirroring 323's own table. Covers file-missing, unreadable, and empty/malformed-header cases; the governing rule is that a broken fragment degrades to a skipped prepend (dispatch proceeds with the unmodified prompt) plus a `WARNING`, never a dispatch failure — deliberately asymmetric with 323's audit-run failure handling (which must persist nothing to avoid poisoning a measurement), since a missing fragment has no measurement to poison. A success criterion and a walkthrough step (4a) were added for per-mode assertion.
+- **F008 (`{project_id}` template variable)** — Clarified in the Interface Specification: `pre_emption_fragment` is a literal path string, not a template — no template-variable resolution is added to `expand()`. The YAML example now shows a concrete resolved path rather than an ambiguous token.

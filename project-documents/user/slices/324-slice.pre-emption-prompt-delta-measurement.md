@@ -168,6 +168,18 @@ New surface-agnostic core under `src/squadron/metrology/` (no Typer imports), pl
 
 `sq metrology preempt generate` and `sq metrology audit delta` are both read-mostly against the store (list runs/floors) plus, for `delta`, one `run_audit` call — reusing 323's harness and its full failure-mode handling (timeout, disconnect, malformed-findings-block, pre-flight checks) unmodified. No new agent-execution surface is introduced.
 
+### Failure modes of the new file-read path
+
+Decision 1 pushes the fragment file read into `DispatchAction`, at dispatch time — a new I/O boundary in a path that today does no file I/O beyond consuming `cf build`'s already-resolved output string. Per the project's failure-mode-enumeration rule (and following 323's own precedent table), each mode is handled explicitly rather than left to an implicit "cannot crash" claim:
+
+| Failure mode | Detection | Response | Observable signal |
+|---|---|---|---|
+| **`pre_emption_fragment` path set, file missing** (operator configured the path before running `preempt generate`, or a typo) | `Path.exists()` check before read, inside `_resolve_prompt` | Skip the prepend — dispatch proceeds with the unmodified prompt, exactly as if the param were absent | `WARNING` naming the configured path |
+| **File present but unreadable** (permissions) | `OSError` from the read call | Same — skip the prepend, proceed with the unmodified prompt | `WARNING` with the exception message |
+| **File present but empty or missing its header** (partial write, corrupted) | Header-parse failure in `read_fragment_header` | Same — skip the prepend, proceed with the unmodified prompt | `WARNING` distinguishing *empty* from *malformed header* |
+
+One governing rule covers all three: **a fragment problem degrades to "no fragment," never to a dispatch failure.** This mirrors `_apply_override`'s own posture — an empty/absent `override_instructions` is silently a no-op, not an error — and keeps the blast-radius claim in Decision 1 true by construction rather than by assertion: the worst case for a broken fragment is the prompt dispatch would have produced anyway, with a `WARNING` telling the operator to re-run `preempt generate`. This is deliberately asymmetric with 323's own table, where a failed *audit run* must persist nothing (a corrupted measurement would poison the floor) — here a missing fragment has no measurement to poison, so degrading to a no-op is the correct, lower-severity response for this boundary.
+
 ## Data Flow
 
 ```
@@ -217,13 +229,13 @@ sq metrology audit delta <project-path>   [--profile] [--json] [--cwd]
     delta per category and in total, relative to the measured floor.
 ```
 
-Pipeline YAML usage (opt-in, additive to existing dispatch/phase step config):
+Pipeline YAML usage (opt-in, additive to existing dispatch/phase step config). `pre_emption_fragment` is a **literal path string**, not a template — no template-variable resolution is added to `expand()` (Decision 1 keeps `expand()` a pure dict transformation), so the operator writes the concrete path `preempt generate` actually wrote to, e.g.:
 
 ```yaml
 - design:
     phase: 4
     model: opus
-    pre_emption_fragment: "~/.config/squadron/metrology/preemption/{project_id}.md"
+    pre_emption_fragment: "~/.config/squadron/metrology/preemption/github.com-ecorkran-squadron.md"
 ```
 
 ### New config keys
@@ -245,6 +257,7 @@ Restating the slice-plan criteria as verifiable conditions:
 - [ ] A delta smaller than the floor's observed spread (`floor.max - floor.min`) is reported as indistinguishable from noise; a delta report for a category/project with no measured floor states so explicitly rather than treating the delta as significant.
 - [ ] Every delta report carries the fixed observational/non-causal disclaimer text.
 - [ ] `sq metrology preempt generate --check` detects a stale fragment (baseline's current `audit_prompt_hash`/`measured_at` differs from the fragment's recorded header) and reports it, rather than the fragment silently diverging.
+- [ ] Each of missing/unreadable/malformed fragment file at dispatch time degrades to a skipped prepend (dispatch proceeds with the unmodified prompt) and emits a `WARNING` — asserted by a test per mode, so a broken fragment can never fail or silently corrupt a dispatch.
 - [ ] The full existing test suite passes, including every current `expand()` test unmodified — no judging-path, dispatch-path, or cf-op-path behavior changes for pipelines that do not opt in.
 
 ## Verification Walkthrough
@@ -271,6 +284,8 @@ uv run sq metrology preempt generate /Users/manta/source/repos/manta/migratory-v
 Expect exit 1, "stale," naming the mismatched hash/timestamp.
 
 **4. Fragment reaches dispatch, opted-in pipelines only.** Add `pre_emption_fragment: <path>` to a test pipeline's `design` step; run it and confirm (via `--json`/debug log) the prompt sent to the agent is prefixed with the fragment block. Run an unmodified existing pipeline (e.g. `slice.yaml`) and confirm its prompt is byte-identical to a pre-324 run — no fragment text present.
+
+**4a. Broken fragment degrades to a no-op, not a dispatch failure.** Point `pre_emption_fragment` at a nonexistent path; confirm the dispatch still runs to completion with the unmodified prompt and a `WARNING` is logged naming the missing path. Repeat pointing at an empty file (simulating a partial write); confirm the same degrade-and-warn behavior rather than an exception propagating from `_resolve_prompt`.
 
 **5. Delta report, below floor.**
 ```
