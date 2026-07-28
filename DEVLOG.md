@@ -2,13 +2,76 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260726
+dateUpdated: 20260728
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260728 (1)
+
+### Slice 324 designed: pre-emption prompt & delta measurement (Phase 4) — closes the 320 slice plan
+
+Created `324-slice.pre-emption-prompt-delta-measurement.md`, the fifth and
+last anticipated slice of initiative 320. Depends on 323 (complete,
+20260727): the persisted baseline and its measured noise floor are what
+324's fragment and delta report consume.
+
+**The substantial design question was the injection point, not the delta
+math.** The slice plan left "pre-emption fragment format and regeneration
+cadence" explicitly open. Investigation (two rounds of Explore-agent
+research plus direct verification) found **no static-prompt-injection
+point exists anywhere in dispatch today**: `AgentConfig.system_prompt`
+exists on `DispatchAction` but is never populated by any current
+`expand()` — dead wiring, always resolving to `""`. The production
+design/tasks/implement prompt is assembled entirely by an external `cf
+build` subprocess (`cf_op.py:95-111`), passed through byte-for-byte; the
+only point in squadron's own code that already concatenates onto an
+assembled prompt is `DispatchAction._apply_override` (`dispatch.py:291-302`,
+the checkpoint-override prepend). Decision: extend that same prepend
+pattern with a new opt-in `pre_emption_fragment` param, threaded through
+`DispatchStepType.expand()`/`PhaseStepType.expand()` only when a pipeline
+explicitly sets it — additive by construction, verified safe against the
+existing exact-dict-equality `expand()` tests, and never touching
+`cf_op.py` or context-forge.
+
+**A pre-existing bug surfaced and was filed separately, not folded in.**
+Tracing `system_prompt`'s dead wiring found that `one_shot_dispatch`
+always sends `instructions=""` (not `None`), which per `AgentConfig`'s own
+docstring sends a literal empty `--system-prompt ""` to the Claude Code
+CLI — stripping the CLI's default tool-use discipline on every one-shot
+dispatch today, independent of 324. Further verified this has no
+equivalent fix for non-SDK providers: `use_default_system_prompt` is read
+only by `sdk/provider.py`; the `openai`-backed profiles (`openrouter`,
+`gemini`, `local`, plain `openai`) and `codex` never read it at all, and
+have no analogous "use your own default persona" concept to fall back to.
+Filed as [#40](https://github.com/ecorkran/squadron/issues/40), split
+into the fixable SDK-profile case and the genuinely open non-SDK-provider
+design question — not addressed in 324's scope.
+
+**What the design commits to:** a fixed (not model-generated) ten-line
+category-to-guidance mapping rendered from 323's `ProjectBaseline.cells`,
+written to a static file by an explicit `sq metrology preempt generate`
+command (never auto-regenerated), with a `--check` freshness mode
+comparing the fragment's recorded `audit_prompt_hash` against the current
+baseline. The delta report (`sq metrology audit delta`) re-runs one audit
+(not a variance series) and compares to the stored baseline, flagging any
+delta smaller than the floor's observed spread as indistinguishable from
+noise, with a fixed observational/non-causal disclaimer on every report.
+No new store record type — the delta is computed on demand from existing
+`AuditRun` records, not persisted.
+
+Updated `320-slices...md` (324 entry annotated `*(designed — see
+...)*`) and `320-reference...md` (status table and glossary — also
+corrected 323's row, which still read "not started" despite being
+`status: complete` since 20260727; the reference doc's own stated
+authority rule is the slice design's frontmatter wins over this table).
+
+**Next:** Phase 6 implementation of 324, the initiative's terminal slice.
 
 ---
 
