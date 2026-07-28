@@ -94,6 +94,10 @@ class ProjectBaseline(BaseModel):
     commit_sha: str
     audit_prompt_hash: str
     run_id: str
+    #: When the source run was taken. Carried so a downstream artifact
+    #: generated from this baseline (a 324 pre-emption fragment) can stamp
+    #: its provenance without re-reading the run it was reduced from.
+    measured_at: datetime
     total_findings: int
     unnormalized_count: int
     total_floor: FloorStat | None = None

@@ -9,7 +9,7 @@ dependencies:
 projectState: "Slice 324 design complete and slice-design-reviewed (324-review.slice.*, verdict PASS, 1 concern + 1 note both fixed: failure-mode table for the new file-read path added, YAML example clarified as a literal path not a template). This is the intervention slice that closes initiative 320's loop — the last of the five anticipated slices. Ground truth verified against the current code (not re-guessed): no static-prompt-injection point exists anywhere in dispatch today; system_prompt on AgentConfig is dead wiring (separate bug, filed as #40, out of scope here); the only existing concatenation point is DispatchAction._apply_override, called from the tail of _resolve_prompt; StepConfig.config/ActionContext.params are permissive plain dicts, so a new key is safe only when inserted conditionally, matching the existing 'if \"prompt\" in cfg: ...' idiom in steps/dispatch.py and steps/phase.py. Decisions that must not be re-litigated: (1) the fragment is generated once and frozen as a static file — dispatch never queries the metrology store at runtime; (2) fragment content is a fixed, human-authored category-to-guidance mapping, not model-generated prose; (3) regeneration is an explicit operator command, never automatic; (4) the delta report compares one fresh run to the stored baseline, relative to the stored floor's observed spread (floor.max - floor.min), never a derived confidence interval; (5) a broken/missing/malformed fragment file degrades to a skipped prepend plus a WARNING, never a dispatch failure."
 dateCreated: 20260728
 dateUpdated: 20260728
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -30,13 +30,13 @@ status: not_started
 
 ### T1: Fragment and delta models
 
-- [ ] **Add to `src/squadron/metrology/audit_models.py`** (alongside `BaselineCell`/`ProjectBaseline`/`BaselineReport`)
-  - [ ] `PreemptionFragment` (Pydantic): `project_id: ProjectId`, `audit_prompt_hash: str`, `measured_at: datetime`, `text: str`
-  - [ ] `FreshnessResult` (Pydantic): `is_current: bool`, `fragment_audit_prompt_hash: str | None`, `current_audit_prompt_hash: str | None`, `fragment_measured_at: datetime | None`, `note: str` (human-readable: current / stale / fragment absent)
-  - [ ] `DeltaCell` (Pydantic): `category: AuditCategory`, `baseline_count: int`, `new_count: int`, `delta: int`, `floor: FloorStat | None = None`, `within_floor: bool | None` (`None` when no floor measured)
-  - [ ] `DeltaReport` (Pydantic): `project_id: ProjectId`, `baseline_commit_sha: str`, `new_commit_sha: str`, `baseline_total: int`, `new_total: int`, `total_delta: int`, `total_within_floor: bool | None`, `cells: list[DeltaCell]`, `disclaimer: str` (fixed observational/non-causal text, Decision 4)
-  - [ ] Define the fixed disclaimer text once as a module constant (e.g. `DELTA_DISCLAIMER`) and reference it from `DeltaReport`'s default/construction — never restate the string at each call site
-- [ ] Success: all four models import cleanly; each round-trips `model_dump_json()` → `model_validate_json()`; `DeltaReport(...).disclaimer` equals the `DELTA_DISCLAIMER` constant
+- [x] **Add to `src/squadron/metrology/audit_models.py`** (alongside `BaselineCell`/`ProjectBaseline`/`BaselineReport`)
+  - [x] `PreemptionFragment` (Pydantic): `project_id: ProjectId`, `audit_prompt_hash: str`, `measured_at: datetime`, `text: str`
+  - [x] `FreshnessResult` (Pydantic): `is_current: bool`, `fragment_audit_prompt_hash: str | None`, `current_audit_prompt_hash: str | None`, `fragment_measured_at: datetime | None`, `note: str` (human-readable: current / stale / fragment absent)
+  - [x] `DeltaCell` (Pydantic): `category: AuditCategory`, `baseline_count: int`, `new_count: int`, `delta: int`, `floor: FloorStat | None = None`, `within_floor: bool | None` (`None` when no floor measured)
+  - [x] `DeltaReport` (Pydantic): `project_id: ProjectId`, `baseline_commit_sha: str`, `new_commit_sha: str`, `baseline_total: int`, `new_total: int`, `total_delta: int`, `total_within_floor: bool | None`, `cells: list[DeltaCell]`, `disclaimer: str` (fixed observational/non-causal text, Decision 4)
+  - [x] Define the fixed disclaimer text once as a module constant (e.g. `DELTA_DISCLAIMER`) and reference it from `DeltaReport`'s default/construction — never restate the string at each call site
+- [x] Success: all four models import cleanly; each round-trips `model_dump_json()` → `model_validate_json()`; `DeltaReport(...).disclaimer` equals the `DELTA_DISCLAIMER` constant
 
 **Commit:** `feat(metrology): add pre-emption fragment and delta report models`
 

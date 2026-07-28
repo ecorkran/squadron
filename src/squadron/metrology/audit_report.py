@@ -125,6 +125,7 @@ def baseline_report(
                 commit_sha=run.commit_sha,
                 audit_prompt_hash=run.audit_prompt_hash,
                 run_id=run.run_id,
+                measured_at=run.measured_at,
                 total_findings=len(run.findings),
                 unnormalized_count=run.unnormalized_count,
                 total_floor=floor.total if floor is not None else None,
