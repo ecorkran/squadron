@@ -67,7 +67,7 @@ def test_pool_prefix_at_action_level() -> None:
 def test_resolves_known_alias() -> None:
     resolver = ModelResolver(pipeline_model="sonnet")
     model_id, profile = resolver.resolve()
-    assert model_id == "claude-sonnet-4-6"
+    assert model_id == "claude-sonnet-5"
     assert profile == "sdk"
 
 

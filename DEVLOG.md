@@ -12,6 +12,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260728 (4)
+
+**Released v0.8.0.** First tag since v0.7.0 on 20260714 — 179 commits over two weeks.
+
+The headline is **initiative 320 (Judge Calibration & Quality Metrology) landing whole**: all five slices, from the metrology store and blind human-sample capture (320), through agreement/dispersion/trend reporting (321) and the calibration-to-threshold feedback loop (322), to the tech-debt-audit oracle's data half (323) and its intervention (324). Alongside it: the `gate` step, the `judge-cycle` reference pipeline, substantial provider rate-limit handling, and a long run of review-correctness fixes (#18-#24).
+
+Minor bump rather than major: everything is additive. No CLI surface was removed or renamed, and pipelines that don't opt into the new steps behave exactly as before — the 324 work in particular was built so that a pipeline without `pre_emption_fragment` produces a byte-identical prompt.
+
+**CHANGELOG housekeeping.** The `[Unreleased]` section had accumulated *two* separate `### Fixed` blocks from incremental appends across the initiative; merged into one under `[0.8.0]`. Three user-facing items had also never been written up despite shipping: the rate-limit backoff work, audit liveness reporting, and the new model aliases (Fable 5, Opus/Sonnet 5, Kimi K2.7, GLM 5.2, MiniMax M3, Trinity). Added. `docs/COMMANDS.md` gained the `metrology.preemption_fragment_dir` row it was missing.
+
+**Known gaps carried into the release**, none blocking: 324's live `audit delta` was never run end-to-end (the audit harness spawns the Claude Code CLI, which refuses to nest inside a Claude Code session) and is covered by fixture plus stubbed-harness tests; two pre-existing failures in `tests/review/test_content_injection.py` are unrelated and reproduce with all 324 work stashed; slice 344 remains `deprecated` with its plan entry checked; and the 322 review verdict still parses as `UNKNOWN` (issue #28).
+
+---
+
 ## 20260728 (3)
 
 **Slice 324 implemented — pre-emption prompt & delta measurement. Initiative 320 closed.**

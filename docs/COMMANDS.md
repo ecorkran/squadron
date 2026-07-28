@@ -198,6 +198,7 @@ Settings for judge calibration and the tech-debt audit harness. Run
 | `metrology.audit_run_cooldown_s` | int | 60 | Pause between runs in a series |
 | `metrology.audit_rate_limit_retries` | int | 10 | Retries before a rate-limited run gives up |
 | `metrology.audit_rate_limit_cap_s` | int | 60 | Ceiling on exponential rate-limit backoff |
+| `metrology.preemption_fragment_dir` | string | `~/.config/squadron/metrology/preemption` | Where `preempt generate` writes fragment files |
 
 #### Pinning the audit model
 

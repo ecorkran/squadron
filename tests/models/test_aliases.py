@@ -20,9 +20,9 @@ from squadron.models.aliases import (
 
 
 def test_resolve_opus() -> None:
-    """opus resolves to claude-opus-4-6 on sdk profile."""
+    """opus resolves to claude-opus-5 on sdk profile."""
     model, profile = resolve_model_alias("opus")
-    assert model == "claude-opus-4-6"
+    assert model == "claude-opus-5"
     assert profile == "sdk"
 
 
@@ -41,9 +41,9 @@ def test_resolve_unknown_passthrough() -> None:
 
 
 def test_resolve_sonnet() -> None:
-    """sonnet resolves to claude-sonnet-4-6 on sdk profile."""
+    """sonnet resolves to claude-sonnet-5 on sdk profile."""
     model, profile = resolve_model_alias("sonnet")
-    assert model == "claude-sonnet-4-6"
+    assert model == "claude-sonnet-5"
     assert profile == "sdk"
 
 
