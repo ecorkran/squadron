@@ -44,11 +44,11 @@ status: in_progress
 
 ### T2: The fixed category-to-guidance mapping and fragment renderer
 
-- [ ] **Add `src/squadron/metrology/preemption.py`** (surface-agnostic — no Typer imports)
-  - [ ] `CATEGORY_GUIDANCE: dict[AuditCategory, str]` — exactly one short, fixed instruction line per each of the ten `AuditCategory` values (`architectural-decay`, `consistency-rot`, `type-contract-debt`, `test-debt`, `dependency-config-debt`, `performance-resource`, `error-handling-observability`, `security-hygiene`, `documentation-drift`, `other`). Each line names the class of issue and a short corrective instruction, following the two examples already given in the design's Decision 2 (`architectural-decay`, `type-contract-debt`) for tone and length. Do not draw text from any audit's `summary` field
-  - [ ] `render_fragment(baseline: ProjectBaseline) -> PreemptionFragment` — select cells from `baseline.cells` with `count > 0`; for each, emit one line pairing the category with its `CATEGORY_GUIDANCE` entry; join into the fragment body under a header line naming the baseline's `measured_at`; stamp `project_id`, `audit_prompt_hash`, `measured_at` from the input `ProjectBaseline`
-  - [ ] A `ProjectBaseline` with zero nonzero-count cells renders a fragment whose body states plainly that no issue classes were present at baseline — never an empty string (an empty prepend would be indistinguishable from "no fragment" at the dispatch side)
-- [ ] Success: a baseline with 2 nonzero cells and 8 zero cells renders exactly 2 guidance lines; the header carries the baseline's `measured_at`; a rendered fragment for every one of the ten categories exercises every `CATEGORY_GUIDANCE` entry without a `KeyError`
+- [x] **Add `src/squadron/metrology/preemption.py`** (surface-agnostic — no Typer imports)
+  - [x] `CATEGORY_GUIDANCE: dict[AuditCategory, str]` — exactly one short, fixed instruction line per each of the ten `AuditCategory` values (`architectural-decay`, `consistency-rot`, `type-contract-debt`, `test-debt`, `dependency-config-debt`, `performance-resource`, `error-handling-observability`, `security-hygiene`, `documentation-drift`, `other`). Each line names the class of issue and a short corrective instruction, following the two examples already given in the design's Decision 2 (`architectural-decay`, `type-contract-debt`) for tone and length. Do not draw text from any audit's `summary` field
+  - [x] `render_fragment(baseline: ProjectBaseline) -> PreemptionFragment` — select cells from `baseline.cells` with `count > 0`; for each, emit one line pairing the category with its `CATEGORY_GUIDANCE` entry; join into the fragment body under a header line naming the baseline's `measured_at`; stamp `project_id`, `audit_prompt_hash`, `measured_at` from the input `ProjectBaseline`
+  - [x] A `ProjectBaseline` with zero nonzero-count cells renders a fragment whose body states plainly that no issue classes were present at baseline — never an empty string (an empty prepend would be indistinguishable from "no fragment" at the dispatch side)
+- [x] Success: a baseline with 2 nonzero cells and 8 zero cells renders exactly 2 guidance lines; the header carries the baseline's `measured_at`; a rendered fragment for every one of the ten categories exercises every `CATEGORY_GUIDANCE` entry without a `KeyError`
 
 **Commit:** `feat(metrology): add pre-emption fragment generation`
 
@@ -56,11 +56,11 @@ status: in_progress
 
 ### T3: Fragment file I/O — write, header read, and freshness check
 
-- [ ] **Add to `src/squadron/metrology/preemption.py`**
-  - [ ] `write_fragment(fragment: PreemptionFragment, *, dir: Path) -> Path` — writes the fragment to `{dir}/{project_id-sanitized}.md`, with a header (containing `audit_prompt_hash` and `measured_at`, machine-parseable) followed by `fragment.text`. Reuse an existing project-id-to-filename sanitization helper if one exists in `metrology/`; otherwise define one narrowly here (no filesystem-unsafe characters). Creates `dir` if absent
-  - [ ] `read_fragment_header(path: Path) -> tuple[str, datetime] | None` — reads only the header, not the full body; returns `None` if the file is absent, empty, or the header cannot be parsed (distinct from raising — this function is also used by T9's dispatch-time read, where a parse failure must degrade, not raise)
-  - [ ] `check_freshness(fragment_path: Path, current_baseline: ProjectBaseline) -> FreshnessResult` — calls `read_fragment_header`; if `None`, returns a `FreshnessResult` noting the fragment is absent; otherwise compares the header's `audit_prompt_hash`/`measured_at` against `current_baseline.audit_prompt_hash`/its own most-recent-run timestamp, returning `is_current=True` only on an exact hash match
-- [ ] Success: `write_fragment` then `read_fragment_header` round-trips the same hash/timestamp; `read_fragment_header` on a nonexistent path and on a zero-byte file both return `None` without raising; `check_freshness` against a baseline with a differing `audit_prompt_hash` returns `is_current=False` with a note identifying the mismatch
+- [x] **Add to `src/squadron/metrology/preemption.py`**
+  - [x] `write_fragment(fragment: PreemptionFragment, *, dir: Path) -> Path` — writes the fragment to `{dir}/{project_id-sanitized}.md`, with a header (containing `audit_prompt_hash` and `measured_at`, machine-parseable) followed by `fragment.text`. Reuse an existing project-id-to-filename sanitization helper if one exists in `metrology/`; otherwise define one narrowly here (no filesystem-unsafe characters). Creates `dir` if absent
+  - [x] `read_fragment_header(path: Path) -> tuple[str, datetime] | None` — reads only the header, not the full body; returns `None` if the file is absent, empty, or the header cannot be parsed (distinct from raising — this function is also used by T9's dispatch-time read, where a parse failure must degrade, not raise)
+  - [x] `check_freshness(fragment_path: Path, current_baseline: ProjectBaseline) -> FreshnessResult` — calls `read_fragment_header`; if `None`, returns a `FreshnessResult` noting the fragment is absent; otherwise compares the header's `audit_prompt_hash`/`measured_at` against `current_baseline.audit_prompt_hash`/its own most-recent-run timestamp, returning `is_current=True` only on an exact hash match
+- [x] Success: `write_fragment` then `read_fragment_header` round-trips the same hash/timestamp; `read_fragment_header` on a nonexistent path and on a zero-byte file both return `None` without raising; `check_freshness` against a baseline with a differing `audit_prompt_hash` returns `is_current=False` with a note identifying the mismatch
 
 **Commit:** `feat(metrology): fragment file write, header read, and freshness check`
 
@@ -68,14 +68,14 @@ status: in_progress
 
 ### T4: Tests for fragment generation and file I/O
 
-- [ ] **Add `tests/metrology/test_preemption.py`**
-  - [ ] `CATEGORY_GUIDANCE` has exactly ten entries, one per `AuditCategory` value — a parametrized test over `AuditCategory` fails loudly if a category is ever added to the enum without a matching guidance line
-  - [ ] `render_fragment` on a fixture `ProjectBaseline` with a mix of zero and nonzero cells includes only the nonzero categories, in a stable order
-  - [ ] `render_fragment` on an all-zero-cells baseline still produces non-empty fragment text (the explicit "no issue classes at baseline" case)
-  - [ ] `write_fragment` + `read_fragment_header` round-trip on a temp directory (use the existing store temp-dir fixture pattern from `conftest.py`)
-  - [ ] `read_fragment_header` returns `None`, not an exception, for: nonexistent path, empty file, file with a malformed/truncated header
-  - [ ] `check_freshness`: matching hash → current; differing hash → stale, with the differing values visible in the result; absent fragment → reported absent (never conflated with "stale")
-- [ ] Success: `uv run pytest tests/metrology/test_preemption.py` passes
+- [x] **Add `tests/metrology/test_preemption.py`**
+  - [x] `CATEGORY_GUIDANCE` has exactly ten entries, one per `AuditCategory` value — a parametrized test over `AuditCategory` fails loudly if a category is ever added to the enum without a matching guidance line
+  - [x] `render_fragment` on a fixture `ProjectBaseline` with a mix of zero and nonzero cells includes only the nonzero categories, in a stable order
+  - [x] `render_fragment` on an all-zero-cells baseline still produces non-empty fragment text (the explicit "no issue classes at baseline" case)
+  - [x] `write_fragment` + `read_fragment_header` round-trip on a temp directory (use the existing store temp-dir fixture pattern from `conftest.py`)
+  - [x] `read_fragment_header` returns `None`, not an exception, for: nonexistent path, empty file, file with a malformed/truncated header
+  - [x] `check_freshness`: matching hash → current; differing hash → stale, with the differing values visible in the result; absent fragment → reported absent (never conflated with "stale")
+- [x] Success: `uv run pytest tests/metrology/test_preemption.py` passes
 
 **Commit:** `test(metrology): cover fragment generation, file I/O, and freshness`
 
@@ -83,12 +83,12 @@ status: in_progress
 
 ### T5: Delta computation
 
-- [ ] **Add `src/squadron/metrology/audit_delta.py`** — pure, no I/O, no agent, independently testable on fixtures (mirrors 323's `audit_variance.py` discipline)
-  - [ ] `compute_delta(baseline: ProjectBaseline, new_run: AuditRun) -> DeltaReport` — per-category: pair `baseline.cells` (keyed by `AuditCategory`) against `new_run.findings` counted by category; a category present in one but not the other counts as 0 on the absent side (matching 323's per-category zero-fill precedent in `audit_variance.py`, T16)
-  - [ ] For each `DeltaCell`, `within_floor` is `True` when a floor exists for that category and `abs(delta) < (floor.max - floor.min)`; `False` when a floor exists and the delta meets or exceeds that spread; `None` when no floor was measured for that category (`baseline.cells[i].floor is None`) — never silently treated as significant
-  - [ ] `total_delta` and `total_within_floor` apply the identical floor-spread rule against `baseline.total_floor`
-  - [ ] `DeltaReport.disclaimer` is always set to the `DELTA_DISCLAIMER` constant from T1 — every report carries it unconditionally, never gated on any condition
-- [ ] Success: a baseline/new-run pair with a known per-category floor and a computed delta smaller than the floor's spread reports `within_floor=True`; a pair with no floor for one category reports `within_floor=None` for that cell only; the disclaimer is present on every returned `DeltaReport`
+- [x] **Add `src/squadron/metrology/audit_delta.py`** — pure, no I/O, no agent, independently testable on fixtures (mirrors 323's `audit_variance.py` discipline)
+  - [x] `compute_delta(baseline: ProjectBaseline, new_run: AuditRun) -> DeltaReport` — per-category: pair `baseline.cells` (keyed by `AuditCategory`) against `new_run.findings` counted by category; a category present in one but not the other counts as 0 on the absent side (matching 323's per-category zero-fill precedent in `audit_variance.py`, T16)
+  - [x] For each `DeltaCell`, `within_floor` is `True` when a floor exists for that category and `abs(delta) < (floor.max - floor.min)`; `False` when a floor exists and the delta meets or exceeds that spread; `None` when no floor was measured for that category (`baseline.cells[i].floor is None`) — never silently treated as significant
+  - [x] `total_delta` and `total_within_floor` apply the identical floor-spread rule against `baseline.total_floor`
+  - [x] `DeltaReport.disclaimer` is always set to the `DELTA_DISCLAIMER` constant from T1 — every report carries it unconditionally, never gated on any condition
+- [x] Success: a baseline/new-run pair with a known per-category floor and a computed delta smaller than the floor's spread reports `within_floor=True`; a pair with no floor for one category reports `within_floor=None` for that cell only; the disclaimer is present on every returned `DeltaReport`
 
 **Commit:** `feat(metrology): compute floor-relative audit delta`
 
@@ -96,14 +96,14 @@ status: in_progress
 
 ### T6: Delta computation tests
 
-- [ ] **Add `tests/metrology/test_audit_delta.py`**
-  - [ ] Known-value delta: hand-computed per-category and total deltas against a fixed baseline/new-run fixture pair
-  - [ ] **Within-floor case:** delta smaller than `floor.max - floor.min` → `within_floor=True`
-  - [ ] **Outside-floor case:** delta at or beyond the floor spread → `within_floor=False`
-  - [ ] **No-floor case:** a category (and separately, the total) with no measured floor → `within_floor=None`, never `True` or `False`
-  - [ ] **Zero-fill correctness:** a category present in the baseline but absent from the new run's findings (and vice versa) computes a correct nonzero delta rather than being skipped
-  - [ ] Disclaimer text is present and matches `DELTA_DISCLAIMER` on every constructed `DeltaReport` in the test set
-- [ ] Success: `uv run pytest tests/metrology/test_audit_delta.py` passes
+- [x] **Add `tests/metrology/test_audit_delta.py`**
+  - [x] Known-value delta: hand-computed per-category and total deltas against a fixed baseline/new-run fixture pair
+  - [x] **Within-floor case:** delta smaller than `floor.max - floor.min` → `within_floor=True`
+  - [x] **Outside-floor case:** delta at or beyond the floor spread → `within_floor=False`
+  - [x] **No-floor case:** a category (and separately, the total) with no measured floor → `within_floor=None`, never `True` or `False`
+  - [x] **Zero-fill correctness:** a category present in the baseline but absent from the new run's findings (and vice versa) computes a correct nonzero delta rather than being skipped
+  - [x] Disclaimer text is present and matches `DELTA_DISCLAIMER` on every constructed `DeltaReport` in the test set
+- [x] Success: `uv run pytest tests/metrology/test_audit_delta.py` passes
 
 **Commit:** `test(metrology): cover delta computation, floor comparison, and zero-fill`
 
@@ -111,10 +111,10 @@ status: in_progress
 
 ### T7: Config key
 
-- [ ] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS`
-  - [ ] `metrology.preemption_fragment_dir` — `str`, default `~/.config/squadron/metrology/preemption`, described as the directory `sq metrology preempt generate` writes fragment files into
-  - [ ] Follow the existing `metrology.audit_*` key entries immediately above/below for format and description style
-- [ ] Success: `sq config get metrology.preemption_fragment_dir` prints the default path; `sq config set metrology.preemption_fragment_dir /tmp/x` succeeds and reads back
+- [x] **Edit `src/squadron/config/keys.py`**, adding to `CONFIG_KEYS`
+  - [x] `metrology.preemption_fragment_dir` — `str`, default `~/.config/squadron/metrology/preemption`, described as the directory `sq metrology preempt generate` writes fragment files into
+  - [x] Follow the existing `metrology.audit_*` key entries immediately above/below for format and description style
+- [x] Success: `sq config get metrology.preemption_fragment_dir` prints the default path; `sq config set metrology.preemption_fragment_dir /tmp/x` succeeds and reads back
 
 **Commit:** `feat(config): add pre-emption fragment directory config key`
 
@@ -122,14 +122,14 @@ status: in_progress
 
 ### T8: Dispatch injection point — `_resolve_prompt` prepend and failure handling
 
-- [ ] **Edit `src/squadron/pipeline/actions/dispatch.py`**
-  - [ ] Add a new method (e.g. `_apply_pre_emption_fragment`), called from the tail of `_resolve_prompt` **after** `self._apply_override(context, prompt)` returns — so the fragment wraps outside the checkpoint override, per Decision 1's ordering
-  - [ ] Reads `context.params.get("pre_emption_fragment")` — a path string. If absent or empty, no-op, returning the prompt unchanged (identical to `_apply_override`'s own no-op-when-absent posture)
-  - [ ] If present, attempts the read via `preemption.read_fragment_header`-adjacent full-body read (add a `read_fragment_body(path: Path) -> str | None` to `preemption.py` in this task if T3 did not already cover a full-text read — check T3's output before adding a duplicate). Returns `None` on: path does not exist, `OSError` on read, or empty/malformed content — never raises out of this method
-  - [ ] On a successful read, prepend using the same delimited-block shape as `_apply_override`: `"--- Pre-emption: known issue classes for this project ---\n{fragment text}\n--- End pre-emption ---\n\n"` ahead of the (already override-prepended) prompt
-  - [ ] On any of the three failure modes (missing / unreadable / malformed), skip the prepend — return the prompt unchanged — and log at `WARNING`, naming the configured path and which of the three modes occurred (distinguish empty from malformed header per the design's failure-mode table)
-  - [ ] Add `_logger = logging.getLogger(__name__)` to `dispatch.py` if not already present, following the `store.py` convention
-- [ ] Success: a valid fragment path prepends the delimited block ahead of the prompt (and ahead of any override block); a missing/unreadable/empty/malformed path each produce the unmodified prompt plus one `WARNING` distinguishing the mode; no exception ever escapes `_resolve_prompt` due to a fragment problem
+- [x] **Edit `src/squadron/pipeline/actions/dispatch.py`**
+  - [x] Add a new method (e.g. `_apply_pre_emption_fragment`), called from the tail of `_resolve_prompt` **after** `self._apply_override(context, prompt)` returns — so the fragment wraps outside the checkpoint override, per Decision 1's ordering
+  - [x] Reads `context.params.get("pre_emption_fragment")` — a path string. If absent or empty, no-op, returning the prompt unchanged (identical to `_apply_override`'s own no-op-when-absent posture)
+  - [x] If present, attempts the read via `preemption.read_fragment_header`-adjacent full-body read (add a `read_fragment_body(path: Path) -> str | None` to `preemption.py` in this task if T3 did not already cover a full-text read — check T3's output before adding a duplicate). Returns `None` on: path does not exist, `OSError` on read, or empty/malformed content — never raises out of this method
+  - [x] On a successful read, prepend using the same delimited-block shape as `_apply_override`: `"--- Pre-emption: known issue classes for this project ---\n{fragment text}\n--- End pre-emption ---\n\n"` ahead of the (already override-prepended) prompt
+  - [x] On any of the three failure modes (missing / unreadable / malformed), skip the prepend — return the prompt unchanged — and log at `WARNING`, naming the configured path and which of the three modes occurred (distinguish empty from malformed header per the design's failure-mode table)
+  - [x] Add `_logger = logging.getLogger(__name__)` to `dispatch.py` if not already present, following the `store.py` convention
+- [x] Success: a valid fragment path prepends the delimited block ahead of the prompt (and ahead of any override block); a missing/unreadable/empty/malformed path each produce the unmodified prompt plus one `WARNING` distinguishing the mode; no exception ever escapes `_resolve_prompt` due to a fragment problem
 
 **Commit:** `feat(pipeline): prepend pre-emption fragment at dispatch, degrade-on-failure`
 
@@ -137,13 +137,13 @@ status: in_progress
 
 ### T9: Thread `pre_emption_fragment` through `DispatchStepType.expand()` and `PhaseStepType.expand()`
 
-- [ ] **Edit `src/squadron/pipeline/steps/dispatch.py`**
-  - [ ] In `expand()`, add `if "pre_emption_fragment" in cfg: action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]`, matching the existing `prompt`/`model` conditional-forwarding lines exactly
-  - [ ] In `validate()`, add the same string-type check pattern used for `prompt`/`model` (non-`None` value must be a `str`)
-- [ ] **Edit `src/squadron/pipeline/steps/phase.py`**
-  - [ ] In `expand()`, add `pre_emption_fragment = cfg.get("pre_emption_fragment")` and thread it into the existing `("dispatch", {"model": model, "slice": slice_ref})` tuple's dict, conditionally (only when present in `cfg`) — do not unconditionally add the key, since the dict is asserted exactly by existing tests
-  - [ ] Add the matching `validate()` string-type check if `PhaseStepType.validate()` validates `model`/other optional keys the same way (match whatever pattern already exists there for optional string fields)
-- [ ] Success: `expand()` for both step types, when `pre_emption_fragment` is absent from `cfg`, produces output byte-identical to before this task (verified by T10 re-running the existing test files unmodified); when present, `action_config["pre_emption_fragment"]` carries the value through
+- [x] **Edit `src/squadron/pipeline/steps/dispatch.py`**
+  - [x] In `expand()`, add `if "pre_emption_fragment" in cfg: action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]`, matching the existing `prompt`/`model` conditional-forwarding lines exactly
+  - [x] In `validate()`, add the same string-type check pattern used for `prompt`/`model` (non-`None` value must be a `str`)
+- [x] **Edit `src/squadron/pipeline/steps/phase.py`**
+  - [x] In `expand()`, add `pre_emption_fragment = cfg.get("pre_emption_fragment")` and thread it into the existing `("dispatch", {"model": model, "slice": slice_ref})` tuple's dict, conditionally (only when present in `cfg`) — do not unconditionally add the key, since the dict is asserted exactly by existing tests
+  - [x] Add the matching `validate()` string-type check if `PhaseStepType.validate()` validates `model`/other optional keys the same way (match whatever pattern already exists there for optional string fields)
+- [x] Success: `expand()` for both step types, when `pre_emption_fragment` is absent from `cfg`, produces output byte-identical to before this task (verified by T10 re-running the existing test files unmodified); when present, `action_config["pre_emption_fragment"]` carries the value through
 
 **Commit:** `feat(pipeline): thread pre_emption_fragment through dispatch and phase step expand()`
 
@@ -151,15 +151,15 @@ status: in_progress
 
 ### T10: Tests for the injection point and step threading
 
-- [ ] **Add `tests/pipeline/actions/test_dispatch_pre_emption.py`** (or extend the existing dispatch action test file if one already covers `_apply_override` — check for `test_dispatch_action.py` or similar before creating a new file)
-  - [ ] A valid fragment file, referenced via `pre_emption_fragment`, is prepended ahead of both the base prompt and an `override_instructions` block (asserting the exact ordering from Decision 1)
-  - [ ] Absent `pre_emption_fragment` param → prompt unchanged from today's behavior
-  - [ ] Missing file path → prompt unchanged, one `WARNING` logged naming the path (use `caplog`)
-  - [ ] Unreadable file (permissions) → prompt unchanged, `WARNING` logged
-  - [ ] Empty file and malformed-header file → prompt unchanged, `WARNING` logged, and the two cases are distinguishable in the log message
-- [ ] **Run the existing `tests/pipeline/steps/test_dispatch_step.py` and `tests/pipeline/steps/test_phase.py` unmodified** and confirm every exact-dict-equality `expand()` assertion still passes — this is a success criterion from the design, not just a regression check
-- [ ] **Extend `test_dispatch_step.py` and `test_phase.py`** with one new case each: `pre_emption_fragment` present in step config → present in the expanded action config
-- [ ] Success: `uv run pytest tests/pipeline/actions/test_dispatch_pre_emption.py tests/pipeline/steps/test_dispatch_step.py tests/pipeline/steps/test_phase.py` passes, including every pre-existing assertion unmodified
+- [x] **Add `tests/pipeline/actions/test_dispatch_pre_emption.py`** (or extend the existing dispatch action test file if one already covers `_apply_override` — check for `test_dispatch_action.py` or similar before creating a new file)
+  - [x] A valid fragment file, referenced via `pre_emption_fragment`, is prepended ahead of both the base prompt and an `override_instructions` block (asserting the exact ordering from Decision 1)
+  - [x] Absent `pre_emption_fragment` param → prompt unchanged from today's behavior
+  - [x] Missing file path → prompt unchanged, one `WARNING` logged naming the path (use `caplog`)
+  - [x] Unreadable file (permissions) → prompt unchanged, `WARNING` logged
+  - [x] Empty file and malformed-header file → prompt unchanged, `WARNING` logged, and the two cases are distinguishable in the log message
+- [x] **Run the existing `tests/pipeline/steps/test_dispatch_step.py` and `tests/pipeline/steps/test_phase.py` unmodified** and confirm every exact-dict-equality `expand()` assertion still passes — this is a success criterion from the design, not just a regression check
+- [x] **Extend `test_dispatch_step.py` and `test_phase.py`** with one new case each: `pre_emption_fragment` present in step config → present in the expanded action config
+- [x] Success: `uv run pytest tests/pipeline/actions/test_dispatch_pre_emption.py tests/pipeline/steps/test_dispatch_step.py tests/pipeline/steps/test_phase.py` passes, including every pre-existing assertion unmodified
 
 **Commit:** `test(pipeline): cover pre-emption fragment injection and step threading`
 
@@ -226,3 +226,15 @@ status: in_progress
 - **A fragment problem is never a dispatch failure.** All three failure modes (missing, unreadable, malformed) in T8 degrade to a skipped prepend plus a `WARNING` — this is asymmetric with 323's audit-run failure handling by design (a missing fragment has no measurement to poison), not an oversight.
 - **Issue #40 (empty system prompt on one-shot dispatch) is explicitly out of scope** for this slice and is not touched by any task above.
 - **This is the initiative's final slice.** T13's completion, once its checklist and the slice's own Success Criteria are verified, closes out initiative 320 (320-arch/320-slices/320-reference) entirely — no further slice follows 324.
+
+## Implementation Notes
+
+The following deviations from the original task text were approved during implementation and should be noted for future reference:
+
+1. **ProjectBaseline gained a required `measured_at: datetime` field** — Added to `audit_models.py` and populated from `run.measured_at` at the single construction site in `audit_report.py`. T2/T3 required the fragment to stamp the baseline's `measured_at`, but `ProjectBaseline` carried no timestamp — only `run_id`. The alternative (re-fetching the `AuditRun` by `run_id`) was redundant I/O and rejected in favor of the explicit `measured_at` field.
+
+2. **`write_fragment` parameter named `directory=` rather than `dir=`** — The task text specified `dir=`, but `dir` shadows the Python builtin. The implementation uses `directory=` to avoid this shadowing.
+
+3. **`read_fragment_body(path: Path) -> str | None` added in T3** — Not deferred to T8 as the task allowed. This function was implemented alongside `read_fragment_header` to provide a clean separation of concerns. T8 reused this existing function rather than implementing its own full-body read.
+
+4. **T7-T9 landed as a single commit (5f72549) rather than three** — A pre-commit hook stages all modified files, causing the configuration key (T7), dispatch injection (T8), and step threading (T9) to be committed together. The commit message covers all three tasks while preserving their semantic separation in the task checklist.
