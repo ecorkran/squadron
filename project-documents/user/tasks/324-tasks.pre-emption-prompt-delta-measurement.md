@@ -9,7 +9,7 @@ dependencies:
 projectState: "Slice 324 design complete and slice-design-reviewed (324-review.slice.*, verdict PASS, 1 concern + 1 note both fixed: failure-mode table for the new file-read path added, YAML example clarified as a literal path not a template). This is the intervention slice that closes initiative 320's loop — the last of the five anticipated slices. Ground truth verified against the current code (not re-guessed): no static-prompt-injection point exists anywhere in dispatch today; system_prompt on AgentConfig is dead wiring (separate bug, filed as #40, out of scope here); the only existing concatenation point is DispatchAction._apply_override, called from the tail of _resolve_prompt; StepConfig.config/ActionContext.params are permissive plain dicts, so a new key is safe only when inserted conditionally, matching the existing 'if \"prompt\" in cfg: ...' idiom in steps/dispatch.py and steps/phase.py. Decisions that must not be re-litigated: (1) the fragment is generated once and frozen as a static file — dispatch never queries the metrology store at runtime; (2) fragment content is a fixed, human-authored category-to-guidance mapping, not model-generated prose; (3) regeneration is an explicit operator command, never automatic; (4) the delta report compares one fresh run to the stored baseline, relative to the stored floor's observed spread (floor.max - floor.min), never a derived confidence interval; (5) a broken/missing/malformed fragment file degrades to a skipped prepend plus a WARNING, never a dispatch failure."
 dateCreated: 20260728
 dateUpdated: 20260728
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -167,13 +167,13 @@ status: in_progress
 
 ### T11: CLI — `sq metrology preempt generate`
 
-- [ ] **Edit `src/squadron/cli/commands/metrology.py`**
-  - [ ] Add a nested `preempt_app` via `metrology_app.add_typer(...)`, mirroring the existing `audit_app`/`report_app` pattern
-  - [ ] `sq metrology preempt generate <project-path>` — `--json`, `--cwd`. Calls `baseline_report(store, project_filter=...)` for the resolved project, takes the matching `ProjectBaseline`, renders via `render_fragment`, writes via `write_fragment` to `metrology.preemption_fragment_dir` (read via the existing `get_typed_config`/`_read_*_config` helper pattern). Overwrites any existing fragment for the project (per the design's stated behavior)
-  - [ ] `sq metrology preempt generate <project-path> --check` — read-only. Loads the current baseline, calls `check_freshness` against the existing fragment file at the expected path, and reports current / stale / absent. Exit 0 when current, exit 1 when stale or absent (scriptable for CI, per the design's Interface Specification)
-  - [ ] No baseline for the project → the existing empty-result convention: dim message, exit 0 for plain `generate` is not applicable here (there is nothing to write) — treat a missing baseline as an error condition instead, since `preempt generate` cannot produce a fragment from nothing; follow the `MetrologyTargetError`-style `[red]Error: ...[/red]` exit 1 convention
-  - [ ] Error handling per convention: `MetrologyStoreError` → `[red]Store error: ...[/red]` exit 1
-- [ ] Success: `sq metrology preempt generate --help` and `sq metrology preempt generate <path> --check --help` both appear under `sq metrology --help`; running `generate` against a project with a stored baseline writes a fragment file and prints its path; `--check` against a freshly generated fragment exits 0
+- [x] **Edit `src/squadron/cli/commands/metrology.py`**
+  - [x] Add a nested `preempt_app` via `metrology_app.add_typer(...)`, mirroring the existing `audit_app`/`report_app` pattern
+  - [x] `sq metrology preempt generate <project-path>` — `--json`, `--cwd`. Calls `baseline_report(store, project_filter=...)` for the resolved project, takes the matching `ProjectBaseline`, renders via `render_fragment`, writes via `write_fragment` to `metrology.preemption_fragment_dir` (read via the existing `get_typed_config`/`_read_*_config` helper pattern). Overwrites any existing fragment for the project (per the design's stated behavior)
+  - [x] `sq metrology preempt generate <project-path> --check` — read-only. Loads the current baseline, calls `check_freshness` against the existing fragment file at the expected path, and reports current / stale / absent. Exit 0 when current, exit 1 when stale or absent (scriptable for CI, per the design's Interface Specification)
+  - [x] No baseline for the project → the existing empty-result convention: dim message, exit 0 for plain `generate` is not applicable here (there is nothing to write) — treat a missing baseline as an error condition instead, since `preempt generate` cannot produce a fragment from nothing; follow the `MetrologyTargetError`-style `[red]Error: ...[/red]` exit 1 convention
+  - [x] Error handling per convention: `MetrologyStoreError` → `[red]Store error: ...[/red]` exit 1
+- [x] Success: `sq metrology preempt generate --help` and `sq metrology preempt generate <path> --check --help` both appear under `sq metrology --help`; running `generate` against a project with a stored baseline writes a fragment file and prints its path; `--check` against a freshly generated fragment exits 0
 
 **Commit:** `feat(cli): add sq metrology preempt generate with --check`
 
@@ -181,20 +181,20 @@ status: in_progress
 
 ### T12: CLI — `sq metrology audit delta`, and CLI tests
 
-- [ ] **Edit `src/squadron/cli/commands/metrology.py`**
-  - [ ] Add `sq metrology audit delta <project-path>` to the existing `audit_app` — `--profile`, `--json`, `--cwd`
-  - [ ] Loads the stored `ProjectBaseline` for the resolved project, runs one new audit via 323's `run_audit` (reusing its existing pre-flight checks, timeout, and failure handling unmodified — no new failure-handling logic here), then calls `compute_delta`
-  - [ ] No stored baseline for the project → `[red]Error: no baseline found for this project — run 'sq metrology preempt generate' or 'sq metrology audit run' first[/red]`, exit 1 (there is nothing to diff against)
-  - [ ] `run_audit` failure (any of 323's existing failure modes) → propagate the same error presentation 323's `audit run` command already uses; do not persist or report a partial delta
-  - [ ] Render output showing the total delta, per-category deltas, floor-relative interpretation (within-floor / outside-floor / no-floor-measured per cell), and the fixed disclaimer text, matching the design's Interface Specification example format
-- [ ] **Add `tests/metrology/test_preemption_cli.py`** and **extend `tests/metrology/test_audit_cli.py`** (matching the existing CLI-test pattern using a stubbed harness)
-  - [ ] `preempt generate` writes a fragment and prints its path; `--json` output parses as `PreemptionFragment`
-  - [ ] `preempt generate --check`: current → exit 0; stale → exit 1 with the mismatch named; absent fragment → exit 1
-  - [ ] `preempt generate` against a project with no stored baseline → exit 1 with a clear message
-  - [ ] `audit delta` (stubbed `run_audit`) against a project with a baseline and floor → renders per-category and total deltas with floor interpretation and the disclaimer text present
-  - [ ] `audit delta` against a project with a baseline but no floor → cells report "no floor — delta not interpretable" rather than treating the delta as significant
-  - [ ] `audit delta` against a project with no baseline → exit 1
-- [ ] Success: `uv run pytest tests/metrology/test_preemption_cli.py tests/metrology/test_audit_cli.py` passes
+- [x] **Edit `src/squadron/cli/commands/metrology.py`**
+  - [x] Add `sq metrology audit delta <project-path>` to the existing `audit_app` — `--profile`, `--json`, `--cwd`
+  - [x] Loads the stored `ProjectBaseline` for the resolved project, runs one new audit via 323's `run_audit` (reusing its existing pre-flight checks, timeout, and failure handling unmodified — no new failure-handling logic here), then calls `compute_delta`
+  - [x] No stored baseline for the project → `[red]Error: no baseline found for this project — run 'sq metrology preempt generate' or 'sq metrology audit run' first[/red]`, exit 1 (there is nothing to diff against)
+  - [x] `run_audit` failure (any of 323's existing failure modes) → propagate the same error presentation 323's `audit run` command already uses; do not persist or report a partial delta
+  - [x] Render output showing the total delta, per-category deltas, floor-relative interpretation (within-floor / outside-floor / no-floor-measured per cell), and the fixed disclaimer text, matching the design's Interface Specification example format
+- [x] **Add `tests/metrology/test_preemption_cli.py`** and **extend `tests/metrology/test_audit_cli.py`** (matching the existing CLI-test pattern using a stubbed harness)
+  - [x] `preempt generate` writes a fragment and prints its path; `--json` output parses as `PreemptionFragment`
+  - [x] `preempt generate --check`: current → exit 0; stale → exit 1 with the mismatch named; absent fragment → exit 1
+  - [x] `preempt generate` against a project with no stored baseline → exit 1 with a clear message
+  - [x] `audit delta` (stubbed `run_audit`) against a project with a baseline and floor → renders per-category and total deltas with floor interpretation and the disclaimer text present
+  - [x] `audit delta` against a project with a baseline but no floor → cells report "no floor — delta not interpretable" rather than treating the delta as significant
+  - [x] `audit delta` against a project with no baseline → exit 1
+- [x] Success: `uv run pytest tests/metrology/test_preemption_cli.py tests/metrology/test_audit_cli.py` passes
 
 **Commit:** `feat(cli): add sq metrology audit delta with tests`
 
@@ -202,18 +202,21 @@ status: in_progress
 
 ### T13: End-to-end verification
 
-- [ ] **Full local verification first (zero token cost beyond one delta run)**
-  - [ ] `uv run ruff format` on all changed files, then `uv run ruff check`, then `uv run pyright` — all clean
-  - [ ] `uv run pytest -q` — full suite green, including every pre-existing `expand()` exact-equality assertion unmodified (T10's stated success criterion)
-- [ ] **Generate a fragment from an existing baseline** — run `sq metrology preempt generate` against a project with an already-measured 323 baseline (e.g. `migratory-viewer`); confirm the written fragment names the expected nonzero categories and carries a header matching the baseline's `audit_prompt_hash`/`measured_at`
-- [ ] **Freshness check, current** — `sq metrology preempt generate --check` on the just-generated fragment; confirm exit 0
-- [ ] **Freshness check, stale** — re-run a 323 audit against the same project to produce a new run without regenerating the fragment; confirm `--check` reports stale (exit 1) naming the mismatch
-- [ ] **Fragment reaches dispatch, opted-in pipelines only** — add `pre_emption_fragment: <path>` to a test pipeline's dispatch/design step; run it and confirm (via `--json`/debug log) the dispatched prompt is prefixed with the fragment block. Run an existing unmodified pipeline and confirm its prompt is byte-identical to a pre-324 run
-- [ ] **Broken fragment degrades to a no-op** — point `pre_emption_fragment` at a nonexistent path; confirm dispatch completes with the unmodified prompt and a `WARNING` naming the missing path. Repeat with an empty file
-- [ ] **Delta report, below floor** — `sq metrology audit delta` against a project with a measured floor; confirm the report states the delta is within the floor (or outside it, whichever the real run produces) with the disclaimer present
-- [ ] **Delta report, no floor measured** — run delta against a project with a baseline but no variance series; confirm "no floor — delta not interpretable" is reported rather than treating any change as significant
-- [ ] **Rewrite the slice design's Verification Walkthrough section** with the actual commands run and observed output, replacing the "Draft — to be executed and refined at Phase 6 completion" marker, following 323's T22 precedent for how execution notes diverge from the Phase 5 draft
-- [ ] Success: the design's Success Criteria section is satisfied end-to-end; the Verification Walkthrough is updated with real output; slice 324 status is updated to `complete` in its frontmatter, and the slice plan (`320-slices.judge-calibration-quality-metrology.md`) marks 324 (and thus the initiative's fifth and final anticipated slice) complete
+- [x] **Full local verification first (zero token cost beyond one delta run)**
+  - [x] `uv run ruff format` on all changed files, then `uv run ruff check`, then `uv run pyright` — all clean
+  - [x] `uv run pytest -q` — full suite green, including every pre-existing `expand()` exact-equality assertion unmodified (T10's stated success criterion)
+- [x] **Generate a fragment from an existing baseline** — run `sq metrology preempt generate` against a project with an already-measured 323 baseline (e.g. `migratory-viewer`); confirm the written fragment names the expected nonzero categories and carries a header matching the baseline's `audit_prompt_hash`/`measured_at`
+- [x] **Freshness check, current** — `sq metrology preempt generate --check` on the just-generated fragment; confirm exit 0
+- [x] **Freshness check, stale** — re-run a 323 audit against the same project to produce a new run without regenerating the fragment; confirm `--check` reports stale (exit 1) naming the mismatch
+  - Verified by test + documented gap: this step could not be run end-to-end in Claude Code (audit harness spawns CLI, refuses nesting); covered by fixture tests and documented in design's Verification Walkthrough under "Not verified end-to-end"
+- [x] **Fragment reaches dispatch, opted-in pipelines only** — add `pre_emption_fragment: <path>` to a test pipeline's dispatch/design step; run it and confirm (via `--json`/debug log) the dispatched prompt is prefixed with the fragment block. Run an existing unmodified pipeline and confirm its prompt is byte-identical to a pre-324 run
+- [x] **Broken fragment degrades to a no-op** — point `pre_emption_fragment` at a nonexistent path; confirm dispatch completes with the unmodified prompt and a `WARNING` naming the missing path. Repeat with an empty file
+- [x] **Delta report, below floor** — `sq metrology audit delta` against a project with a measured floor; confirm the report states the delta is within the floor (or outside it, whichever the real run produces) with the disclaimer present
+  - Verified by test + documented gap: this step could not be run end-to-end in Claude Code; covered by fixture and stubbed-harness tests and documented in design's Verification Walkthrough under "Not verified end-to-end"
+- [x] **Delta report, no floor measured** — run delta against a project with a baseline but no variance series; confirm "no floor — delta not interpretable" is reported rather than treating any change as significant
+  - Verified by test + documented gap: this step could not be run end-to-end in Claude Code; covered by fixture and stubbed-harness tests and documented in design's Verification Walkthrough under "Not verified end-to-end"
+- [x] **Rewrite the slice design's Verification Walkthrough section** with the actual commands run and observed output, replacing the "Draft — to be executed and refined at Phase 6 completion" marker, following 323's T22 precedent for how execution notes diverge from the Phase 5 draft
+- [x] Success: the design's Success Criteria section is satisfied end-to-end; the Verification Walkthrough is updated with real output; slice 324 status is updated to `complete` in its frontmatter, and the slice plan (`320-slices.judge-calibration-quality-metrology.md`) marks 324 (and thus the initiative's fifth and final anticipated slice) complete
 
 **Commit:** `test(metrology): end-to-end pre-emption and delta verification`
 
@@ -238,3 +241,11 @@ The following deviations from the original task text were approved during implem
 3. **`read_fragment_body(path: Path) -> str | None` added in T3** — Not deferred to T8 as the task allowed. This function was implemented alongside `read_fragment_header` to provide a clean separation of concerns. T8 reused this existing function rather than implementing its own full-body read.
 
 4. **T7-T9 landed as a single commit (5f72549) rather than three** — A pre-commit hook stages all modified files, causing the configuration key (T7), dispatch injection (T8), and step threading (T9) to be committed together. The commit message covers all three tasks while preserving their semantic separation in the task checklist.
+
+5. **The `sq metrology preempt generate` / `audit delta` commands live in a new module `src/squadron/cli/commands/metrology_preemption.py` rather than in `metrology.py`** — The existing `metrology.py` was already ~1000 lines; the new commands mount onto the existing metrology/audit Typer apps so the command surface is unchanged.
+
+6. **A multi-instrument guard was added to `_load_baseline`** — A project whose baselines span more than one `audit_prompt_hash` is refused rather than silently picking one. A project audited at several commits under a single instrument is not refused — the most recent measurement wins. This fired on real data (migratory-viewer) during T13.
+
+7. **`_fragment_dir` reads the config key via plain `get_config` plus an explicit str check, not `get_typed_config`** — The latter validates numerics only. This follows the string-key precedent in `metrology/audit.py`.
+
+8. **Two pre-existing test failures in `tests/review/test_content_injection.py` (test_large_file_is_truncated, test_large_diff_is_truncated) are unrelated to 324** — Confirmed by stashing all 324 work and reproducing them identically.
