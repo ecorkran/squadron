@@ -244,7 +244,12 @@ class AuditRun(BaseModel):
     project_id: ProjectId
     commit_sha: str
     audit_prompt_hash: str
-    model: str
+    #: The model that produced this run, or ``None`` when it was not pinned
+    #: and the CLI chose its own. ``None`` is deliberate: it is honest about
+    #: an unknown instrument, where substituting the provider name ("sdk")
+    #: would make two runs under *different* CLI defaults look identical —
+    #: masking exactly the drift ``audit_prompt_hash`` exists to catch.
+    model: str | None
     measured_at: datetime
     findings: list[AuditFinding]
     unnormalized_count: int = 0

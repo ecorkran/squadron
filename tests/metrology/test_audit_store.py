@@ -169,3 +169,26 @@ def test_audit_runs_sort_newest_first(audit_store: MetrologyStore) -> None:
     audit_store.write_audit_run(newer)
 
     assert [run.run_id for run in audit_store.list_audit_runs()] == [newer.run_id, older.run_id]
+
+
+def test_list_noise_floors_returns_newest_first(audit_store: MetrologyStore) -> None:
+    """Ordering must match ``list_audit_runs``, not filesystem glob order.
+
+    Glob order sorts by path, so a caller reaching for "the latest floor"
+    would otherwise get whichever record id happened to sort last — a
+    non-deterministic answer that looks correct. Reported by an external code
+    review of this slice (F004).
+    """
+    from datetime import UTC, datetime
+
+    older = make_noise_floor(measured_at=datetime(2026, 1, 1, tzinfo=UTC))
+    newer = make_noise_floor(measured_at=datetime(2026, 6, 1, tzinfo=UTC))
+
+    # Written so that glob order is the *opposite* of chronological order:
+    # "floor-aaa" sorts first by path but holds the older floor.
+    audit_store.write_noise_floor(older, "floor-aaa")
+    audit_store.write_noise_floor(newer, "floor-zzz")
+
+    listed = audit_store.list_noise_floors()
+    assert [record_id for record_id, _ in listed] == ["floor-zzz", "floor-aaa"]
+    assert listed[0][1].measured_at > listed[1][1].measured_at

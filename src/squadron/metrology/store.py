@@ -293,6 +293,10 @@ class MetrologyStore:
             if project_id is not None and floor.project_id.value != project_id:
                 continue
             floors.append((path.stem, floor))
+        # Newest first, matching ``list_audit_runs``. Glob order sorts by
+        # path, so a caller reaching for "the latest floor" would otherwise
+        # get whichever record id happened to sort last.
+        floors.sort(key=lambda pair: pair[1].measured_at, reverse=True)
         return floors
 
     def load_record(self, sample_id: str) -> MetrologyRecord:

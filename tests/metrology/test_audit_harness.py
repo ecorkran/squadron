@@ -812,3 +812,29 @@ def test_resolve_audit_model_precedence(tmp_path: Path, monkeypatch: pytest.Monk
     assert resolve_audit_model(None, cwd=cwd) == "claude-sonnet-5"
     # An explicit argument overrides the configured pin.
     assert resolve_audit_model("claude-haiku-4-5", cwd=cwd) == "claude-haiku-4-5"
+
+
+def test_unpinned_model_is_recorded_as_none_not_the_provider_name() -> None:
+    """An unknown instrument must be recorded as unknown.
+
+    Substituting the provider name ("sdk") would make two runs taken under
+    *different* CLI defaults carry identical `model` values — masking exactly
+    the instrument drift the record exists to expose. Reported by an external
+    code review of this slice (F003).
+    """
+    from datetime import UTC, datetime
+
+    from squadron.metrology.models import AuditRun, ProjectId
+
+    run = AuditRun(
+        run_id="audit-1",
+        project_id=ProjectId(value="github.com/x/y", source="remote"),
+        commit_sha="a" * 40,
+        audit_prompt_hash="b" * 64,
+        model=None,
+        measured_at=datetime.now(UTC),
+        findings=[],
+    )
+    assert run.model is None
+    # Round-trips through serialization rather than being coerced to a string.
+    assert AuditRun.model_validate(run.model_dump()).model is None

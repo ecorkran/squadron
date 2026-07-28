@@ -686,15 +686,19 @@ async def run_audit(
             rate_limit_summary=_throttle_summary(),
         )
     except Exception as exc:
-        # Any stream failure — peer disconnect, API error, provider fault.
-        # Logged with its type so a systematic provider problem is
-        # distinguishable from a one-off, then swallowed so the campaign
-        # continues; nothing is persisted either way.
-        _logger.warning(
-            "Audit stream failed for %s: %s: %s; persisting nothing.",
+        # Deliberately broad: this is a process boundary. One project's
+        # failure — peer disconnect, API fault, or a bug in this harness —
+        # must not abort a multi-project campaign, and nothing is persisted
+        # on any path through here.
+        #
+        # Logged via ``exception`` at ERROR so the traceback survives. A
+        # programming error (TypeError, AttributeError) reaches this handler
+        # too, and converting it to a typed failure without its traceback
+        # would make it effectively undebuggable.
+        _logger.exception(
+            "Audit stream failed for %s: %s; persisting nothing.",
             preflight.project_id.value,
             type(exc).__name__,
-            exc,
         )
         return AuditRunResult(
             project_path=project_path,
@@ -768,7 +772,10 @@ async def run_audit(
         project_id=preflight.project_id,
         commit_sha=preflight.commit_sha,
         audit_prompt_hash=prompt_hash,
-        model=resolved_model or provider_profile.provider,
+        # Deliberately not falling back to the provider name: an unpinned
+        # model is genuinely unknown, and recording "sdk" would make runs
+        # under differing CLI defaults indistinguishable.
+        model=resolved_model,
         measured_at=datetime.now(UTC),
         findings=findings,
         unnormalized_count=unnormalized,
