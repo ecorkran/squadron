@@ -2,11 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_user_config(tmp_path: Path) -> Iterator[Path]:
+    """Redirect the user-level config file to an empty temp file.
+
+    Without this, a developer's real ``~/.config/squadron/config.toml``
+    leaks into every test that reads config. The size-cap tests are the
+    ones that actually break: they size their fixtures from the *default*
+    ``review.max_file_size_bytes`` while the code resolves the user's
+    override, so a raised local cap silently stops the file from being
+    large enough to truncate. Mirrors the same fixture in
+    ``tests/metrology/conftest.py``.
+    """
+    user_file = tmp_path / "user-config" / "config.toml"
+    user_file.parent.mkdir(parents=True, exist_ok=True)
+    with patch("squadron.config.manager.user_config_path", return_value=user_file):
+        yield user_file
 
 
 @pytest.fixture
