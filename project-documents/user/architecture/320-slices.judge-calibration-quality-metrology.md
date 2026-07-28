@@ -4,7 +4,7 @@ parent: 320-arch.judge-calibration-quality-metrology.md
 project: squadron
 dateCreated: 20260718
 dateUpdated: 20260726
-status: in_progress
+status: complete
 ---
 
 # Slice Plan: Judge Calibration & Quality Metrology
