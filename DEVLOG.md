@@ -12,6 +12,44 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260728 (2)
+
+### Slice 324 task breakdown (Phase 5) — 13 tasks, closes initiative 320 on completion
+
+Created `324-tasks.pre-emption-prompt-delta-measurement.md` (228 lines) from
+the Phase 4 design, verified against current code rather than re-derived
+from the design's prose alone: confirmed `_apply_override`,
+`DispatchStepType.expand()`/`PhaseStepType.expand()`'s conditional-forward
+idiom, and `audit_report.baseline_report`/`ProjectBaseline`/`BaselineCell`
+signatures all still match what the design cites, and that
+`metrology.preemption_fragment_dir` is not yet registered in
+`config/keys.py`.
+
+**Sequencing:** fragment/delta Pydantic models (T1) → fragment generator
+and its fixed `CATEGORY_GUIDANCE` mapping (T2-T4, test-with) → delta
+computation (T5-T6, test-with) → the one new config key (T7, ordered before
+anything reads it) → the dispatch injection point itself, extending
+`_apply_override`'s prepend with full failure-mode handling (T8) → threading
+`pre_emption_fragment` through both `expand()` methods (T9) → tests proving
+every pre-existing exact-dict-equality `expand()` assertion still passes
+unmodified (T10) → CLI shells for `preempt generate [--check]` and `audit
+delta` (T11-T12) → end-to-end verification (T13).
+
+**Notes carried into the task file, not to be re-litigated:** the injection
+point is `DispatchAction._resolve_prompt`, strictly after `_apply_override`,
+never touching `cf_op.py`; `expand()` stays a pure dict transformation with
+no new file I/O; a broken/missing/malformed fragment file always degrades
+to a skipped prepend plus a `WARNING`, never a dispatch failure; issue #40
+(empty system prompt) stays out of scope.
+
+T13, once complete, is where 324's own frontmatter status and the 320
+slice plan both get marked complete — closing initiative 320's fifth and
+final anticipated slice. Not done yet; tasks are `not_started`.
+
+**Next:** Phase 6 implementation of `324-tasks.pre-emption-prompt-delta-measurement.md`.
+
+---
+
 ## 20260728 (1)
 
 ### Slice 324 designed: pre-emption prompt & delta measurement (Phase 4) — closes the 320 slice plan
