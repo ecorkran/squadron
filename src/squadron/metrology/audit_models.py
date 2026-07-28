@@ -26,6 +26,8 @@ dumping ground — an out-of-vocabulary category is retained on
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from squadron.metrology.models import (
@@ -40,6 +42,8 @@ from squadron.metrology.models import (
 )
 
 __all__ = [
+    "DELTA_DISCLAIMER",
+    "NO_FLOOR_MEASURED",
     "AuditCategory",
     "AuditEffort",
     "AuditFinding",
@@ -49,7 +53,11 @@ __all__ = [
     "BaselineCell",
     "BaselineExclusionSummary",
     "BaselineReport",
+    "DeltaCell",
+    "DeltaReport",
     "FloorStat",
+    "FreshnessResult",
+    "PreemptionFragment",
     "ProjectBaseline",
 ]
 
@@ -127,3 +135,84 @@ class BaselineReport(BaseModel):
 
     projects: list[ProjectBaseline]
     excluded: BaselineExclusionSummary
+
+
+class PreemptionFragment(BaseModel):
+    """Static guidance text generated once from a project's baseline.
+
+    Frozen at generation: dispatch reads the written file, never the
+    metrology store. The stamped ``audit_prompt_hash``/``measured_at`` are
+    the *source baseline's*, which is what makes staleness detectable — a
+    fragment generated under one instrument is not silently reused under
+    another.
+    """
+
+    project_id: ProjectId
+    audit_prompt_hash: str
+    measured_at: datetime
+    text: str
+
+
+class FreshnessResult(BaseModel):
+    """Whether a written fragment still matches the current baseline.
+
+    "Absent" and "stale" are distinct states carried in ``note`` and
+    distinguishable by ``fragment_audit_prompt_hash is None`` — a fragment
+    that was never generated is not the same condition as one that has
+    fallen behind, and conflating them would hide which corrective action
+    is needed.
+    """
+
+    is_current: bool
+    fragment_audit_prompt_hash: str | None
+    current_audit_prompt_hash: str | None
+    fragment_measured_at: datetime | None
+    note: str
+
+
+#: Fixed observational framing carried by every ``DeltaReport``. A delta is
+#: an observation of two measurements, not evidence that the pre-emption
+#: fragment caused the difference: nothing here controls for code change,
+#: instrument drift, or run-to-run noise beyond the measured floor.
+DELTA_DISCLAIMER = (
+    "Observational only. This compares one fresh audit run against a stored "
+    "baseline; it does not establish that any intervention caused the "
+    "difference. Deltas smaller than the measured noise floor's observed "
+    "spread are indistinguishable from run-to-run variation. Categories with "
+    "no measured floor carry no interpretation at all."
+)
+
+
+class DeltaCell(BaseModel):
+    """One issue class's before/after count, judged against its floor.
+
+    ``within_floor`` is ``None`` — never ``False`` — when no floor was
+    measured for the category. An unmeasured floor cannot license a
+    significance claim in either direction.
+    """
+
+    category: AuditCategory
+    baseline_count: int
+    new_count: int
+    delta: int
+    floor: FloorStat | None = None
+    within_floor: bool | None = None
+
+
+class DeltaReport(BaseModel):
+    """A fresh audit run compared to a stored baseline, floor-relative.
+
+    Computed on demand from existing ``AuditRun``/``ProjectBaseline``
+    records and never persisted — it is a view over measurements, not a
+    measurement of its own.
+    """
+
+    project_id: ProjectId
+    baseline_commit_sha: str
+    new_commit_sha: str
+    baseline_total: int
+    new_total: int
+    total_delta: int
+    total_within_floor: bool | None = None
+    cells: list[DeltaCell]
+    disclaimer: str = DELTA_DISCLAIMER
