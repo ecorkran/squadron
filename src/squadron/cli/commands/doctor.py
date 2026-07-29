@@ -64,7 +64,11 @@ def _render_table(results: list[CheckResult], verbose: bool) -> None:
             line.append(name_col)
             line.append(row.detail)
             console.print(line)
-            if row.fix_hint and row.status != CheckStatus.WARN or (row.fix_hint and verbose):
+            # Any row still being rendered here is one the user should act on:
+            # non-verbose runs already skipped WARN rows above, so a surviving
+            # WARN implies verbose. Show the remedy whenever we have one —
+            # printing a problem while withholding its fix is the worst of both.
+            if row.fix_hint:
                 console.print(f"    [dim]fix: {row.fix_hint}[/dim]")
 
     console.print()

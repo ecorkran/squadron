@@ -12,6 +12,28 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260728 (5)
+
+**Fixed the new-user install path (#29). Released v0.8.1.**
+
+Started from a real report: install via `uv`, discover you have `sq` but no `cf`, and nothing tells you. Issue #29 had it filed. Investigating turned up worse than what was reported.
+
+**The instructions pointed at a package that does not exist.** Every shipped reference — `doctor_checks.py`, `install.sh`, two tests — said `npm i -g @manta-digital/context-forge`. That 404s. Anyone following our own output hit a dead package.
+
+Finding the right name needed care rather than a guess. The obvious candidate, `@context-forge/core`, is **wrong**: it declares no `bin` at all, so installing it leaves the user with no `cf`. The unscoped `context-forge` on npm is an unrelated third party's project — "correcting" to it would install someone else's software. The answer is `@context-forge/cli`, which declares `bin: {cf}` and pulls `core` in transitively; verified by installing into a clean sandbox and running the binary, not by reading metadata.
+
+**`sq doctor` hid the remedy it already knew.** `doctor.py:67` read `fix_hint and status != WARN or (fix_hint and verbose)`. `and` binds tighter than `or`, so a WARN row without `--verbose` printed the problem and swallowed the fix. Missing `cf` was a WARN. The clause was also dead: line 58 already skips WARN rows unless verbose, so any row reaching line 67 should show its hint unconditionally. Simplified to `if row.fix_hint`.
+
+**All seven remediation anchors were dead**, not the one #29 reported — they pointed at `step-N-...` headings that never existed in QUICKSTART. Slug-matched every entry against real headings and added a test that fails if any stops resolving. The provider entries deliberately share one anchor: QUICKSTART documents providers in a table, not per-provider subsections, so giving each its own would recreate the same dead link.
+
+**`sq setup` now installs rather than advises.** It had no execution path at all — 218 lines of renderer, zero `subprocess` calls. It printed `sq install-commands` and `npm i -g ...` and trusted you to run them. Now Enter runs them: `/sq:` commands in-process, `cf` via npm, then `cf install-commands` for `/cf:`. Scope is deliberately narrow — provider credentials stay advisory, because those need a human decision or a secret.
+
+**`cf init` is deliberately not automated.** It writes guides and IDE config *into the current directory*, so it belongs to a project the user picked, not to a global setup pass that might be running anywhere. Setup ends by pointing at it. Verified `cf install-commands` is standalone and user-global (installs all 9 `/cf:*` into a clean fake HOME with no project and no `cf init`) and idempotent, so a later `cf init` cannot conflict.
+
+`cf` also changed from optional to required: Squadron assembles every dispatch prompt through it, so an install without it is broken, not reduced. That reclassification alone would have unhidden the fix hint, since the precedence bug only suppressed WARN.
+
+---
+
 ## 20260728 (4)
 
 **Released v0.8.0.** First tag since v0.7.0 on 20260714 — 179 commits over two weeks.

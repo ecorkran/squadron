@@ -12,6 +12,11 @@ from squadron.cli.commands.doctor_checks import (
     CheckStatus,
     run_all_checks,
 )
+from squadron.cli.commands.setup_install import (
+    CF_INIT_HINT,
+    installer_for,
+    run_install,
+)
 from squadron.cli.commands.setup_steps import (
     SetupStep,
     StepKind,
@@ -108,11 +113,21 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
         if step.kind == StepKind.OPTIONAL and step.recheck is None:
             continue
 
+        # Steps that can install themselves offer to do so. These are all
+        # user-global and idempotent, so making the user retype a command we
+        # already know is friction with no upside.
+        can_install = installer_for(step.check_name) is not None
+        prompt_text = (
+            "\n[Enter] to install, 's' to skip, 'q' to quit"
+            if can_install
+            else "\n[Enter] when done, 's' to skip, 'q' to quit"
+        )
+
         attempt = 0
         while True:
             response = (
                 typer.prompt(
-                    "\n[Enter] when done, 's' to skip, 'q' to quit",
+                    prompt_text,
                     default="",
                     show_default=False,
                 )
@@ -125,6 +140,16 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
 
             if response == "s":
                 break
+
+            if can_install:
+                console.print("  [dim]installing…[/dim]")
+                outcome = run_install(step.check_name)
+                if outcome.succeeded:
+                    console.print(f"  [green]✓ {outcome.message}[/green]")
+                else:
+                    # Fall through to the recheck below rather than looping on
+                    # a failure the user may have just fixed in another shell.
+                    console.print(f"  [yellow]{outcome.message}[/yellow]")
 
             # Empty → recheck
             if step.recheck is not None:
@@ -169,6 +194,10 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
         console.print(f"[red bold]✗ {missing_count} required item(s) still missing.[/red bold]")
     if warn_count:
         console.print(f"  [yellow]{warn_count} optional item(s) skipped.[/yellow]")
+    console.print()
+    # Global setup ends here by design: cf init is per-project, so it is the
+    # user's call where to run it.
+    console.print(CF_INIT_HINT)
     console.print()
     return missing_count
 

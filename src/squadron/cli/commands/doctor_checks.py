@@ -26,6 +26,18 @@ SECTION_CONFIG = "Configuration"
 # from cli.commands.skills) to keep the pure check layer free of CLI coupling.
 _DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
 
+#: The npm package providing the ``cf`` binary. Defined once and referenced
+#: everywhere so a rename cannot leave a stale name in one surface — the
+#: previous value (``@manta-digital/context-forge``) 404'd on npm, so every
+#: user following our own instructions hit a dead package.
+#:
+#: ``@context-forge/cli`` is the package that declares ``bin: {cf}``. Its
+#: sibling ``@context-forge/core`` is a shared library with no binary and
+#: installs as a transitive dependency of this one, and the *unscoped*
+#: ``context-forge`` on npm is an unrelated third party's project.
+CONTEXT_FORGE_PACKAGE = "@context-forge/cli"
+CONTEXT_FORGE_INSTALL_CMD = f"npm i -g {CONTEXT_FORGE_PACKAGE}"
+
 
 class CheckStatus(StrEnum):
     OK = "ok"
@@ -161,7 +173,14 @@ def check_at_least_one_provider(profile_results: list[CheckResult]) -> CheckResu
 
 
 def check_context_forge() -> CheckResult:
-    """Check if context-forge CLI (cf) is on PATH."""
+    """Check if context-forge CLI (cf) is on PATH.
+
+    Required, not optional. Context Forge assembles the prompts every
+    dispatch sends, so ``sq run`` cannot drive a slice without it — an
+    install missing ``cf`` is not a reduced install, it is a broken one.
+    Reporting it as an optional integration understated that and let users
+    reach a half-working state believing they were done.
+    """
     path = shutil.which("cf")
     if path:
         return CheckResult(
@@ -169,16 +188,16 @@ def check_context_forge() -> CheckResult:
             status=CheckStatus.OK,
             detail=f"cf at {path}",
             section=SECTION_INTEGRATIONS,
-            required=False,
+            required=True,
         )
 
     return CheckResult(
         name="context-forge",
-        status=CheckStatus.WARN,
+        status=CheckStatus.MISSING,
         detail="not on PATH",
-        fix_hint="npm i -g @manta-digital/context-forge",
+        fix_hint=CONTEXT_FORGE_INSTALL_CMD,
         section=SECTION_INTEGRATIONS,
-        required=False,
+        required=True,
     )
 
 

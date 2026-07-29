@@ -10,6 +10,8 @@ import pytest
 
 from squadron.cli.commands import doctor_checks
 from squadron.cli.commands.doctor_checks import (
+    CONTEXT_FORGE_INSTALL_CMD,
+    CONTEXT_FORGE_PACKAGE,
     SECTION_CONFIG,
     SECTION_INSTALL,
     SECTION_INTEGRATIONS,
@@ -157,11 +159,24 @@ def test_check_context_forge_present(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_check_context_forge_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Missing cf is a required failure, not an optional warning (#29)."""
     monkeypatch.setattr(shutil, "which", lambda _: None)
     result = check_context_forge()
-    assert result.status == CheckStatus.WARN
+    assert result.status == CheckStatus.MISSING
+    assert result.required is True
     assert result.fix_hint is not None
     assert "npm i -g" in result.fix_hint
+
+
+def test_check_context_forge_fix_hint_names_a_real_package() -> None:
+    """The shipped hint must not point at a package that 404s on npm (#29).
+
+    The previous value, '@manta-digital/context-forge', was not published:
+    every user who followed our own output hit a dead package.
+    """
+    assert CONTEXT_FORGE_PACKAGE == "@context-forge/cli"
+    assert CONTEXT_FORGE_INSTALL_CMD == "npm i -g @context-forge/cli"
+    assert "manta-digital" not in CONTEXT_FORGE_INSTALL_CMD
 
 
 # --- T15: check_codex_cli ---

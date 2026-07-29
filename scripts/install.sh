@@ -6,7 +6,7 @@
 #   1. Detects whether `sq` (squadron-ai) is already installed; if not, installs
 #      it via uv tool install (preferred) or pipx install (fallback).
 #   2. Detects whether `cf` (context-forge) is already installed; if not,
-#      installs it via npm i -g @manta-digital/context-forge.
+#      installs it via npm i -g @context-forge/cli.
 #   3. Hands off to `sq setup` which walks through the remaining configuration
 #      steps interactively.
 #
@@ -125,11 +125,11 @@ if command -v cf > /dev/null 2>&1; then
     echo "  ok: cf already installed at $(command -v cf)"
 else
     if command -v npm > /dev/null 2>&1; then
-        if _confirm "Install @manta-digital/context-forge via npm?"; then
-            _log_call "npm install -g @manta-digital/context-forge"
-            npm install -g @manta-digital/context-forge
+        if _confirm "Install @context-forge/cli via npm?"; then
+            _log_call "npm install -g @context-forge/cli"
+            npm install -g @context-forge/cli
         else
-            echo "  Skipped. Install later with: npm i -g @manta-digital/context-forge" >&2
+            echo "  Skipped. Install later with: npm i -g @context-forge/cli" >&2
         fi
     else
         echo "" >&2
@@ -141,6 +141,14 @@ else
         esac
         echo "Then re-run this script." >&2
     fi
+fi
+
+# Installing the binary alone leaves the user without the /cf:* slash
+# commands, which is a half-finished state they have no reason to expect.
+# Idempotent, so it is safe when cf was already present.
+if command -v cf > /dev/null 2>&1; then
+    _log_call "cf install-commands"
+    cf install-commands || echo "  Warning: cf install-commands failed; run it manually." >&2
 fi
 
 # ---------------------------------------------------------------------------

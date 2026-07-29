@@ -52,12 +52,22 @@ pipx install squadron-ai
 uv tool install squadron-ai
 ```
 
-After install, `sq` is available on PATH:
+This installs Squadron **only**. Squadron drives its pipelines through Context Forge (the `cf` CLI), which ships on npm rather than PyPI, so `pipx`/`uv` cannot pull it in. Run `sq setup` next and it installs the rest for you:
 
 ```bash
 sq --version
-sq install-commands   # Install Claude Code slash commands
+sq setup          # installs cf, /sq: and /cf: slash commands, then checks providers
 ```
+
+`sq setup` is interactive and idempotent — safe to re-run. Use `--non-interactive` to print the commands instead of running them.
+
+Then, inside a project you want to work on:
+
+```bash
+cf init           # per-project: installs AI project guides and IDE config
+```
+
+The one-line `install.sh` above does the same install steps for you; either path ends in the same place.
 
 New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
 

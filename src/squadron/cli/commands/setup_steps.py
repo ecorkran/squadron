@@ -73,14 +73,24 @@ _RECHECK_MAP["at least one provider OK"] = _recheck_aggregate
 
 
 # Anchor map: check name → QUICKSTART section anchor.
-_DOCS_ANCHOR: dict[str, str] = {
-    "slash commands": "docs/QUICKSTART.md#step-3-install-slash-commands",
-    "context-forge": "docs/QUICKSTART.md#step-1-install-context-forge",
-    "codex CLI": "docs/QUICKSTART.md#step-4-codex",
-    "openai": "docs/QUICKSTART.md#step-4-openai",
-    "openrouter": "docs/QUICKSTART.md#step-4-openrouter",
-    "gemini": "docs/QUICKSTART.md#step-4-gemini",
-    "anthropic": "docs/QUICKSTART.md#step-4-anthropic",
+#
+# Every value must resolve to a real heading in docs/QUICKSTART.md;
+# tests/cli/test_setup.py asserts this, because a remediation link that goes
+# nowhere is worse than none at all — it sends a stuck user somewhere and
+# strands them. The previous map pointed at "step-N-..." headings that never
+# existed in that document.
+#
+# The providers all share one anchor deliberately: QUICKSTART documents them
+# in a single comparison table, not per-provider subsections, so pointing
+# each at its own heading would recreate the same dead-link problem.
+DOCS_ANCHOR: dict[str, str] = {
+    "slash commands": "docs/QUICKSTART.md#install",
+    "context-forge": "docs/QUICKSTART.md#prerequisites",
+    "codex CLI": "docs/QUICKSTART.md#configure-a-provider",
+    "openai": "docs/QUICKSTART.md#configure-a-provider",
+    "openrouter": "docs/QUICKSTART.md#configure-a-provider",
+    "gemini": "docs/QUICKSTART.md#configure-a-provider",
+    "anthropic": "docs/QUICKSTART.md#configure-a-provider",
 }
 
 # Explanation strings (1-2 sentences) shown with --verbose in interactive mode.
@@ -209,7 +219,7 @@ def build_steps(results: list[CheckResult], profile: str | None = None) -> list[
             detail=result.detail,
             command=result.fix_hint,
             explanation=_EXPLANATION.get(result.name),
-            docs_anchor=_DOCS_ANCHOR.get(result.name),
+            docs_anchor=DOCS_ANCHOR.get(result.name),
             recheck=recheck,
             check_name=result.name,
         )
