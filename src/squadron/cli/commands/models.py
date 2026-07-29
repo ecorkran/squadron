@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import StrEnum
 
 import httpx
 import typer
@@ -22,6 +23,39 @@ _COST_TIER_LABELS: dict[str, str] = {
     "subscription": "sub",
 }
 
+
+class ModelSort(StrEnum):
+    """Ordering for the alias table."""
+
+    PROFILE = "profile"
+    ALIAS = "alias"
+
+
+#: Display order for profile groups. Deliberately not alphabetical, which
+#: would yield gemini/openai/openai-oauth/openrouter/sdk — burying the
+#: primary profile last and grouping nothing meaningfully. This order
+#: follows how a user reaches for them. Defined once; a profile absent from
+#: this list sorts last rather than being dropped.
+_PROFILE_ORDER: tuple[str, ...] = (
+    "sdk",
+    "openai",
+    "openai-oauth",
+    "gemini",
+    "openrouter",
+    "local",
+)
+
+
+def _profile_rank(profile: str) -> int:
+    """Sort position for a profile, with unknown profiles last."""
+    try:
+        return _PROFILE_ORDER.index(profile)
+    except ValueError:
+        # An unrecognized profile (a user-defined one) still appears — at the
+        # end, grouped with its peers, never silently omitted.
+        return len(_PROFILE_ORDER)
+
+
 models_app = typer.Typer(
     name="models",
     help="View model aliases or query provider endpoints.",
@@ -29,8 +63,14 @@ models_app = typer.Typer(
 )
 
 
-def _show_aliases(*, verbose: bool = False) -> None:
-    """Display the alias table."""
+def _show_aliases(*, verbose: bool = False, sort: ModelSort = ModelSort.PROFILE) -> None:
+    """Display the alias table.
+
+    Grouped by profile by default: with 30-odd aliases across five
+    profiles, a flat alias sort scatters related models — the Gemini
+    variants land apart, and codex/codex-agent/codex-spark split because
+    their profiles differ. ``sort=ALIAS`` restores the flat ordering.
+    """
     all_aliases = get_all_aliases()
     if not all_aliases:
         typer.echo("No model aliases configured.")
@@ -52,7 +92,14 @@ def _show_aliases(*, verbose: bool = False) -> None:
     table.add_column("Source", style="dim")
 
     builtin_aliases = load_builtin_aliases()
-    for name, alias in sorted(all_aliases.items()):
+    if sort is ModelSort.ALIAS:
+        rows = sorted(all_aliases.items())
+    else:
+        rows = sorted(
+            all_aliases.items(),
+            key=lambda item: (_profile_rank(item[1]["profile"]), item[1]["profile"], item[0]),
+        )
+    for name, alias in rows:
         source = "(user)" if name not in builtin_aliases else ""
         if name in builtin_aliases and alias != builtin_aliases[name]:
             source = "(user override)"
@@ -110,6 +157,11 @@ def models_default(
         "--verbose",
         help="Show metadata columns (Private, Cost, Pricing, Notes)",
     ),
+    sort: ModelSort = typer.Option(
+        ModelSort.PROFILE,
+        "--sort",
+        help="Group by profile (default) or sort flat by alias name",
+    ),
 ) -> None:
     """Show model aliases, or query a provider endpoint with --profile/--base-url."""
     # If a subcommand was invoked, let it handle things
@@ -118,7 +170,7 @@ def models_default(
 
     # No flags → show aliases
     if profile is None and base_url is None:
-        _show_aliases(verbose=verbose)
+        _show_aliases(verbose=verbose, sort=sort)
         return
 
     # Flags → query endpoint
@@ -146,9 +198,14 @@ def models_list(
         "--verbose",
         help="Show metadata columns (Private, Cost, Pricing, Notes)",
     ),
+    sort: ModelSort = typer.Option(
+        ModelSort.PROFILE,
+        "--sort",
+        help="Group by profile (default) or sort flat by alias name",
+    ),
 ) -> None:
     """List available model aliases."""
-    _show_aliases(verbose=verbose)
+    _show_aliases(verbose=verbose, sort=sort)
 
 
 async def _fetch_models(base_url: str) -> None:
