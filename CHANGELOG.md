@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 20260729
+
 ### Changed
 - **`sq models list` now groups aliases by profile** instead of sorting them flat A–Z, so related models sit together — all the Claude entries in one block, the Gemini variants adjacent, and `codex`/`codex-agent`/`codex-spark` no longer split apart by their differing profiles. Order is `sdk`, `openai`, `openai-oauth`, `gemini`, `openrouter`, then anything else. Pass `--sort alias` for the previous flat ordering.
 
