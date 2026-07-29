@@ -119,6 +119,26 @@ def _extract_verdict(text: str) -> Verdict:
     return _VERDICT_MAP.get(keyword, Verdict.UNKNOWN)
 
 
+def _verdict_from_findings(findings: list[ReviewFinding]) -> Verdict:
+    """Derive a verdict from parsed finding severities (#28).
+
+    Most-severe-wins over the severity vocabulary the findings already
+    carry: any FAIL yields FAIL, any CONCERN yields CONCERNS, otherwise
+    PASS. Used only to recover a verdict the summary parse lost — never to
+    override one the model actually stated.
+
+    NOTE and PASS findings do not raise the verdict: a review that recorded
+    only observations passed, and treating a NOTE as a concern would invent
+    severity the reviewer did not assign.
+    """
+    severities = {finding.severity for finding in findings}
+    if Severity.FAIL in severities:
+        return Verdict.FAIL
+    if Severity.CONCERN in severities:
+        return Verdict.CONCERNS
+    return Verdict.PASS
+
+
 def _parse_finite_float(raw: str) -> float | None:
     """Parse a string to a finite float, or None.
 
@@ -424,6 +444,46 @@ def parse_review_output(
     verdict = _extract_verdict(raw_output)
     findings = _extract_findings(raw_output, verdict=verdict, template_name=template_name)
     fallback_used = False
+
+    # Reconcile a lost verdict against the findings that did parse (#28).
+    # Finding extraction accepts five heading formats while verdict
+    # extraction requires one '## Summary' shape, so a model that renders
+    # recognizable findings but reshapes its summary loses the verdict and
+    # writes a self-contradictory document — UNKNOWN alongside a [CONCERN].
+    # Deriving from the findings applies the project's lenient-parsing rule
+    # (parse the semantic content, not the formatting) to the same output.
+    if verdict is Verdict.UNKNOWN and findings:
+        derived = _verdict_from_findings(findings)
+        logger.warning(
+            "%s review (model=%s) parsed %d finding(s) but no usable "
+            "'## Summary' verdict; deriving %s from finding severities. "
+            "The model likely reshaped or omitted its summary section.",
+            template_name,
+            model,
+            len(findings),
+            derived.value,
+        )
+        _write_debug_log(
+            template=template_name,
+            model=model,
+            verdict=derived,
+            findings_parsed=len(findings),
+            fallback_used=True,
+            raw_output=raw_output,
+        )
+        verdict = derived
+        fallback_used = True
+    elif verdict is Verdict.UNKNOWN:
+        # Genuinely unknown: no verdict and nothing to derive one from.
+        # Previously silent, which made a failed parse indistinguishable
+        # from a review that legitimately had nothing to say.
+        logger.warning(
+            "%s review (model=%s) produced no usable '## Summary' verdict and "
+            "no parseable findings; verdict left UNKNOWN. See raw_output for "
+            "the model's actual response.",
+            template_name,
+            model,
+        )
 
     mismatch = verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings
     if mismatch:

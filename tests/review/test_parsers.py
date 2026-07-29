@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -167,16 +168,17 @@ class TestMalformedOutput:
         assert result.findings == []
 
     def test_partial_output_findings_only_bracketed(self) -> None:
+        """A lost summary is recovered from the findings, never left UNKNOWN (#28)."""
         text = "### [FAIL] Something wrong\nDescription here.\n"
         result = parse_review_output(text, "code", {})
-        assert result.verdict == Verdict.UNKNOWN
+        assert result.verdict == Verdict.FAIL
         assert len(result.findings) == 1
         assert result.findings[0].severity == Severity.FAIL
 
     def test_partial_output_findings_only_unbracketed(self) -> None:
         text = "### FAIL Something wrong\nDescription here.\n"
         result = parse_review_output(text, "code", {})
-        assert result.verdict == Verdict.UNKNOWN
+        assert result.verdict == Verdict.FAIL
         assert len(result.findings) == 1
         assert result.findings[0].severity == Severity.FAIL
 
@@ -824,3 +826,68 @@ class TestScoreExtraction:
     def test_out_of_range_score_is_not_clamped(self) -> None:
         """Range-checking is NOT done here (slice 301's job)."""
         assert parse_review_output("## Summary\nPASS\nscore: 150\n", "code", {}).score == 150.0
+
+
+class TestVerdictDerivedFromFindings:
+    """Verdict recovery when the summary parse loses it (issue #28).
+
+    Finding extraction accepts five heading formats; verdict extraction
+    requires one '## Summary' shape. A model that renders recognizable
+    findings but reshapes its summary previously wrote a self-contradictory
+    document — UNKNOWN alongside a [CONCERN].
+    """
+
+    def test_concern_finding_derives_concerns(self) -> None:
+        text = "### [CONCERN] GraduatedConfig omits judge-configuration identity\nDetail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.CONCERNS
+
+    def test_fail_dominates_concern(self) -> None:
+        text = "### [CONCERN] Lesser problem\nDetail.\n\n### [FAIL] Worse problem\nDetail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.FAIL
+
+    def test_note_only_derives_pass(self) -> None:
+        """A NOTE is an observation — deriving CONCERNS would invent severity."""
+        text = "### [NOTE] Minor observation\nDetail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.PASS
+
+    def test_stated_verdict_is_never_overridden(self) -> None:
+        """Derivation recovers a lost verdict; it never contradicts a stated one."""
+        text = "## Summary\nPASS\n\n### [CONCERN] Something\nDetail.\n"
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.PASS
+
+    def test_no_findings_stays_unknown(self) -> None:
+        """Nothing to derive from — UNKNOWN is the honest answer."""
+        result = parse_review_output("Unstructured prose with no findings.", "slice", {})
+        assert result.verdict == Verdict.UNKNOWN
+
+    def test_derivation_is_logged(self, caplog: pytest.LogCaptureFixture) -> None:
+        text = "### [CONCERN] Something actionable\nDetail.\n"
+        with caplog.at_level(logging.WARNING):
+            result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.CONCERNS
+        assert "deriving CONCERNS" in caplog.text
+
+    def test_genuine_unknown_is_logged(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Previously silent — a failed parse looked like a quiet success."""
+        with caplog.at_level(logging.WARNING):
+            parse_review_output("Nothing parseable here.", "slice", {})
+        assert "no parseable findings" in caplog.text
+
+    def test_issue_28_artifact_shape(self) -> None:
+        """The real 322 slice review: findings render, summary reshaped."""
+        text = (
+            "# Review: slice 322\n\n"
+            "**Verdict:** CONCERNS\n\n"  # not under a '## Summary' heading
+            "## Findings\n\n"
+            "### [CONCERN] GraduatedConfig omits judge-configuration identity\n"
+            "location: src/squadron/metrology/models.py:120\n"
+            "The record cannot be matched back to the config it graduated.\n"
+        )
+        result = parse_review_output(text, "slice", {})
+        assert result.verdict == Verdict.CONCERNS
+        assert len(result.findings) == 1
+        assert result.findings[0].severity == Severity.CONCERN
