@@ -398,3 +398,88 @@ def test_models_list_verbose() -> None:
     assert result.exit_code == 0
     assert "Priva" in result.output
     assert "Cost" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Issue #41: profile grouping
+# ---------------------------------------------------------------------------
+
+
+def _alias_order(output: str, aliases: list[str]) -> list[str]:
+    """Aliases in the order they appear in table output."""
+    positions = [(output.find(f"│ {a} "), a) for a in aliases]
+    return [a for pos, a in sorted(positions) if pos >= 0]
+
+
+def _profile_column_order(output: str) -> list[str]:
+    """Profile values in row order, de-duplicated to group boundaries."""
+    seen: list[str] = []
+    for line in output.splitlines():
+        for profile in ("sdk", "openai-oauth", "openai", "gemini", "openrouter"):
+            # openai-oauth is checked before openai so the longer name wins.
+            if f"│ {profile} " in line or f"│ {profile} " in line:
+                if not seen or seen[-1] != profile:
+                    seen.append(profile)
+                break
+    return seen
+
+
+def test_default_groups_by_profile() -> None:
+    """Each profile forms one contiguous block, in the declared order."""
+    result = runner.invoke(app, ["models", "list"])
+    assert result.exit_code == 0
+
+    groups = _profile_column_order(result.output)
+    # A profile appearing twice means its rows were split by another profile.
+    assert len(groups) == len(set(groups)), f"profile groups not contiguous: {groups}"
+    assert groups[0] == "sdk", f"sdk should lead, got {groups}"
+
+
+def test_default_keeps_related_models_together() -> None:
+    """The motivating case: codex variants split across profiles under A-Z."""
+    result = runner.invoke(app, ["models", "list"])
+    order = _alias_order(result.output, ["codex", "codex-agent", "codex-spark", "deepseek4"])
+    # deepseek4 (openrouter) must not fall between the codex entries.
+    assert order.index("deepseek4") > order.index("codex-spark")
+
+
+def test_sort_alias_restores_flat_ordering() -> None:
+    """--sort alias reproduces the pre-#41 behavior exactly."""
+    result = runner.invoke(app, ["models", "list", "--sort", "alias"])
+    assert result.exit_code == 0
+
+    order = _alias_order(result.output, ["codex", "deepseek4", "fable", "gpt54"])
+    assert order == sorted(order)
+
+
+def test_sort_alias_interleaves_profiles() -> None:
+    """The flat sort is genuinely different — profiles are not contiguous."""
+    result = runner.invoke(app, ["models", "list", "--sort", "alias"])
+    groups = _profile_column_order(result.output)
+    assert len(groups) != len(set(groups)), "expected interleaved profiles under --sort alias"
+
+
+def test_invalid_sort_is_rejected() -> None:
+    """An unknown value names the valid choices rather than silently defaulting."""
+    result = runner.invoke(app, ["models", "list", "--sort", "bogus"])
+    assert result.exit_code != 0
+    assert "profile" in result.output and "alias" in result.output
+
+
+def test_sort_flag_available_on_bare_models() -> None:
+    """`sq models` and `sq models list` must not disagree on ordering."""
+    bare = runner.invoke(app, ["models", "--sort", "alias"])
+    listed = runner.invoke(app, ["models", "list", "--sort", "alias"])
+    assert bare.exit_code == 0
+    assert _alias_order(bare.output, ["codex", "fable"]) == _alias_order(
+        listed.output, ["codex", "fable"]
+    )
+
+
+def test_unknown_profile_is_listed_not_dropped() -> None:
+    """A user-defined profile sorts last but must still appear."""
+    custom = {"weird": {"profile": "some-custom-profile", "model": "x/y"}}
+    with patch("squadron.cli.commands.models.get_all_aliases", return_value=custom):
+        result = runner.invoke(app, ["models", "list"])
+    assert result.exit_code == 0
+    assert "weird" in result.output
