@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 20260728
+
+### Fixed
+- **The install instructions pointed at a package that doesn't exist.** `sq doctor`, `sq setup`, and `scripts/install.sh` all told you to run `npm i -g @manta-digital/context-forge`, which 404s. The correct package is **`@context-forge/cli`**. If you hit this, that's why.
+- **`sq doctor` hid the fix.** A warning-level row printed the problem but suppressed its `fix:` line unless you passed `--verbose` — and a missing Context Forge was exactly such a row, so the one check most likely to fail was the one whose remedy you couldn't see.
+- **Every "learn more" link in `sq setup` was broken.** All seven pointed at `docs/QUICKSTART.md` headings that never existed. They now resolve, and a test keeps them honest.
+
+### Changed
+- **`sq setup` now installs things instead of just describing them.** Press Enter and it runs the install: Squadron's `/sq:` slash commands, Context Forge itself via npm, and Context Forge's `/cf:` slash commands. Failures are specific — a missing `npm` says so by name, and npm's own error is passed through rather than swallowed. `--non-interactive` still only prints the commands, so scripts are unaffected.
+- **Context Forge is now reported as required, not optional.** Squadron builds every dispatch prompt through `cf`, so an install without it is broken rather than merely reduced. `sq doctor` marks it missing (not a warning) and exits accordingly.
+- **`scripts/install.sh` also installs the `/cf:` commands** — installing the `cf` binary alone left you without them.
+- Install docs in README and QUICKSTART now say plainly that `pipx`/`uv` install Squadron *only*, that `sq setup` finishes the job, and that `cf init` is the per-project step that follows.
+
 ## [0.8.0] - 20260728
 
 ### Added

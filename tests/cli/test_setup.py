@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from unittest.mock import patch
 
 from typer.testing import CliRunner
@@ -15,6 +17,7 @@ from squadron.cli.commands.doctor_checks import (
     CheckResult,
     CheckStatus,
 )
+from squadron.cli.commands.setup_steps import DOCS_ANCHOR
 
 runner = CliRunner()
 
@@ -68,7 +71,7 @@ _ALL_OK_RESULTS = [
 _ALL_MISSING_RESULTS = [
     _ok("squadron", SECTION_INSTALL),
     _missing("slash commands", SECTION_INSTALL, fix_hint="sq install-commands", required=False),
-    _missing("context-forge", SECTION_INTEGRATIONS, fix_hint="npm i -g @manta-digital/context-forge"),
+    _missing("context-forge", SECTION_INTEGRATIONS, fix_hint="npm i -g @context-forge/cli"),
     _missing("at least one provider OK", SECTION_PROVIDERS, fix_hint="configure a profile"),
     _missing("providers.toml", SECTION_CONFIG),
 ]
@@ -111,7 +114,7 @@ def test_non_interactive_shows_commands() -> None:
     with patch("squadron.cli.commands.setup.run_all_checks", return_value=_ALL_MISSING_RESULTS):
         result = runner.invoke(app, ["setup", "--non-interactive"])
     assert result.exit_code == 1
-    assert "$ npm i -g @manta-digital/context-forge" in result.output
+    assert "$ npm i -g @context-forge/cli" in result.output
 
 
 def test_non_interactive_all_ok_exits_0() -> None:
@@ -326,3 +329,41 @@ def test_internal_error_exits_3() -> None:
     assert result.exit_code == 3
     combined = result.output + (result.stderr or "")
     assert "sq doctor" in combined
+
+
+# ---------------------------------------------------------------------------
+# Issue #29: remediation links must resolve
+# ---------------------------------------------------------------------------
+
+
+def _quickstart_anchors() -> set[str]:
+    """GitHub-style anchor slugs for every heading in QUICKSTART.md."""
+    quickstart = Path(__file__).resolve().parents[2] / "docs" / "QUICKSTART.md"
+    anchors: set[str] = set()
+    for line in quickstart.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^#+\s+(.*)$", line)
+        if match is None:
+            continue
+        title = re.sub(r"[`*_]", "", match.group(1).strip().lower())
+        title = re.sub(r"[^\w\s-]", "", title)
+        anchors.add(re.sub(r"\s+", "-", title).strip("-"))
+    return anchors
+
+
+def test_every_docs_anchor_resolves() -> None:
+    """A remediation link that goes nowhere strands the user it was meant to help.
+
+    All seven anchors were dead before #29: they pointed at 'step-N-...'
+    headings that never existed in QUICKSTART.md.
+    """
+    anchors = _quickstart_anchors()
+    assert anchors, "no headings parsed from QUICKSTART.md"
+
+    dead = {name: ref for name, ref in DOCS_ANCHOR.items() if ref.split("#", 1)[1] not in anchors}
+    assert not dead, f"dead QUICKSTART anchors: {dead}"
+
+
+def test_docs_anchors_all_target_quickstart() -> None:
+    """Guard the parsing assumption above: every value is a QUICKSTART link."""
+    for name, ref in DOCS_ANCHOR.items():
+        assert ref.startswith("docs/QUICKSTART.md#"), f"{name} -> {ref}"

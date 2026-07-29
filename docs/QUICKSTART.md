@@ -6,6 +6,12 @@ This guide bridges "installed" to "verified and running." For the actual install
 
 - Python 3.12+
 - `git`
+- **Context Forge (`cf`)** — required, not optional. Squadron assembles every dispatch prompt through it, so `sq run` cannot drive a slice without it. It ships on npm, so it needs Node.js/npm:
+  ```bash
+  npm i -g @context-forge/cli
+  cf install-commands       # /cf: slash commands
+  ```
+  `sq setup` and `install.sh` both do this for you — you only need these commands if you are installing by hand.
 - macOS or Linux for the one-line install (`install.sh`); Windows users install manually — see [Windows](#windows) below.
 
 ## Install
@@ -17,6 +23,14 @@ curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/insta
 ```
 
 This installs Context Forge, Squadron, and slash commands, then hands off to `sq setup` to walk you through provider configuration. See README for the pipx/uv global-install and dev-install alternatives.
+
+If you installed via `pipx`/`uv` instead, you have Squadron but not Context Forge — those installers only see PyPI. Run `sq setup` to finish:
+
+```bash
+sq setup
+```
+
+It installs `cf`, both sets of slash commands (`/sq:` and `/cf:`), and then checks your providers. Finally, run `cf init` inside each project you work on to install that repo's guides and IDE config.
 
 ## Verify your install
 
