@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from unittest.mock import patch
 
@@ -61,17 +62,52 @@ def test_doctor_fresh_system_exits_1(monkeypatch: pytest.MonkeyPatch, tmp_path: 
 
 
 def test_doctor_minimum_viable_exits_0(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """OPENAI_API_KEY set → exit 0, openai OK."""
+    """OPENAI_API_KEY set and cf present → exit 0, openai OK.
+
+    ``cf`` is stubbed present rather than inherited from the host: it is a
+    required check (#29), so leaving it to chance makes this test pass on a
+    developer machine and fail on a clean CI runner.
+    """
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     nonexistent = tmp_path / "providers.toml"
     nonexistent2 = tmp_path / "models.toml"
+    real_which = shutil.which
     with (
+        patch(
+            "squadron.cli.commands.doctor_checks.shutil.which",
+            side_effect=lambda name: "/usr/local/bin/cf" if name == "cf" else real_which(name),
+        ),
         patch("squadron.cli.commands.doctor_checks.providers_toml_path", return_value=nonexistent),
         patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=nonexistent2),
     ):
         result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
     assert "openai" in result.output
+
+
+def test_doctor_missing_context_forge_exits_1(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A credentialed install with no cf is broken, not merely reduced (#29)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    real_which = shutil.which
+    with (
+        patch(
+            "squadron.cli.commands.doctor_checks.shutil.which",
+            side_effect=lambda name: None if name == "cf" else real_which(name),
+        ),
+        patch(
+            "squadron.cli.commands.doctor_checks.providers_toml_path",
+            return_value=tmp_path / "providers.toml",
+        ),
+        patch(
+            "squadron.cli.commands.doctor_checks.models_toml_path",
+            return_value=tmp_path / "models.toml",
+        ),
+    ):
+        result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 1
+    assert "context-forge" in result.output
+    # The remedy must be visible without --verbose (the doctor.py:67 fix).
+    assert "npm i -g @context-forge/cli" in result.output
 
 
 def test_doctor_broken_providers_toml_exits_1(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
