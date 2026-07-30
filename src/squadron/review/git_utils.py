@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
+
+_logger = logging.getLogger(__name__)
+
+#: The diff base used when no integration branch is configured. Slice branches
+#: fork from and merge into this ref by default.
+DEFAULT_DIFF_BASE = "main"
+
+#: CF config key naming an optional long-lived integration branch that work
+#: branches fork from and merge into instead of ``main``.
+INTEGRATION_BRANCH_KEY = "git.integration_branch"
 
 
 class DiffRangeUnresolvedError(Exception):
@@ -42,8 +53,8 @@ def _find_slice_branch(slice_number: int, cwd: str) -> str | None:
     return None
 
 
-def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
-    """Find the merge commit for a slice branch on main.
+def _search_merge_commit(slice_number: int, cwd: str, ref: str) -> str | None:
+    """Search ``ref`` for the newest merge commit naming this slice.
 
     Matches merge commit messages regardless of word order around the
     slice number — e.g. both "Merge slice 303: ..." (message prose,
@@ -68,7 +79,7 @@ def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
                 "--oneline",
                 "--extended-regexp",
                 f"--grep={grep_pattern}",
-                "main",
+                ref,
                 "-1",
             ],
             capture_output=True,
@@ -82,6 +93,47 @@ def _find_merge_commit(slice_number: int, cwd: str) -> str | None:
         return result.stdout.strip().split()[0]
     except (FileNotFoundError, OSError):
         return None
+
+
+def _find_merge_commit(slice_number: int, cwd: str, base: str = DEFAULT_DIFF_BASE) -> str | None:
+    """Find the merge commit for a slice branch, preferring ``base``.
+
+    Searches ``base`` first. Because an integration branch is downstream of
+    ``main``, a slice merged to ``main`` before the integration branch was
+    adopted is still reachable from ``base``, so that search normally
+    succeeds and the fallback never fires.
+
+    The fallback to ``main`` covers the one case reachability does not: an
+    integration branch that forked before the slice's merge and has not been
+    synced since. That path can return a merge whose parent diff spans a
+    batch promotion rather than this slice alone, so it logs at WARNING —
+    a silently over-broad diff is the defect this base plumbing exists to
+    fix (issue #32), and it should be visible if it recurs.
+
+    Returns the commit hash or None if not found on either ref.
+    """
+    found = _search_merge_commit(slice_number, cwd, base)
+    if found is not None:
+        return found
+
+    if base == DEFAULT_DIFF_BASE:
+        return None
+
+    found = _search_merge_commit(slice_number, cwd, DEFAULT_DIFF_BASE)
+    if found is not None:
+        _logger.warning(
+            "slice %d: no merge commit on %r; fell back to %r (commit %s). "
+            "If %r is behind %r, this diff may span a batch promotion rather "
+            "than slice %d alone — verify the range or pass --diff explicitly.",
+            slice_number,
+            base,
+            DEFAULT_DIFF_BASE,
+            found,
+            base,
+            DEFAULT_DIFF_BASE,
+            slice_number,
+        )
+    return found
 
 
 def find_git_root(cwd: str) -> str | None:
@@ -105,6 +157,52 @@ def find_git_root(cwd: str) -> str | None:
     return None
 
 
+def resolve_diff_base(cwd: str, cf_client: object | None = None) -> str:
+    """Return the ref that slice branches fork from and merge into.
+
+    Reads ``git.integration_branch`` from CF config; falls back to
+    ``DEFAULT_DIFF_BASE`` when the key is unset, when ``cf`` is unavailable,
+    or when reading it fails. A missing integration branch is the common
+    case, not an error — and ``sq review --diff`` must keep working on
+    machines with no ``cf`` installed, so this never raises.
+
+    ``cf_client`` is injectable for testing; production callers pass None
+    and get a ``ContextForgeClient``.
+    """
+    from squadron.integrations.context_forge import (
+        ContextForgeClient,
+        ContextForgeError,
+        ContextForgeNotAvailable,
+    )
+
+    if cf_client is None:
+        cf_client = ContextForgeClient()
+
+    getter = getattr(cf_client, "get_config", None)
+    if getter is None:
+        return DEFAULT_DIFF_BASE
+
+    try:
+        value = str(getter(INTEGRATION_BRANCH_KEY)).strip()
+    except (ContextForgeNotAvailable, ContextForgeError) as exc:
+        # cf absent, key unknown, non-zero exit, or non-JSON output all mean
+        # "no integration branch configured here" — degrade to the default
+        # base rather than blocking a review. DEBUG, not WARNING: an absent
+        # cf is the normal case for someone running `sq review --diff`.
+        _logger.debug(
+            "resolve_diff_base: CF config read failed (%s); using %s",
+            exc,
+            DEFAULT_DIFF_BASE,
+        )
+        return DEFAULT_DIFF_BASE
+
+    if not value:
+        return DEFAULT_DIFF_BASE
+
+    _logger.info("resolve_diff_base: using integration branch %r as diff base", value)
+    return value
+
+
 def _resolve_rev(ref: str, cwd: str) -> str | None:
     """Resolve a git ref to its full SHA. Returns None on failure."""
     try:
@@ -122,12 +220,17 @@ def _resolve_rev(ref: str, cwd: str) -> str | None:
     return None
 
 
-def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
+def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = None) -> str:
     """Resolve the git diff range for a slice's commits.
 
+    ``base`` is the ref the slice branch forked from — ``main``, or the
+    configured ``git.integration_branch`` when one is set. Pass None to
+    resolve it from CF config. Taking it as a parameter keeps this module
+    free of config I/O; callers that already know the base can supply it.
+
     Precedence:
-    1. Local branch exists → merge-base three-dot diff
-    2. Merge commit found on main → parent diff of merge
+    1. Local branch exists → merge-base three-dot diff against ``base``
+    2. Merge commit found on ``base`` (or ``main``) → parent diff of merge
 
     Raises ``DiffRangeUnresolvedError`` if neither resolves. A prior
     commit-message-grep fallback (path 3) was removed (issue #14): it
@@ -141,12 +244,19 @@ def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
 
     Returns a diff range string suitable for ``git diff <range>``.
     """
+    if base is None:
+        base = resolve_diff_base(cwd)
+
     branch = _find_slice_branch(slice_number, cwd)
     if branch is not None:
-        # Compute merge-base for three-dot diff
+        # Compute merge-base for three-dot diff. Using `base` rather than a
+        # hardcoded "main" is the fix for issue #32: on a repo with an
+        # integration branch, or where earlier band work was already
+        # promoted, merge-base against main returns the whole accumulated
+        # band instead of this slice's own diff.
         try:
             mb_result = subprocess.run(
-                ["git", "merge-base", "main", branch],
+                ["git", "merge-base", base, branch],
                 capture_output=True,
                 text=True,
                 cwd=cwd,
@@ -159,17 +269,24 @@ def resolve_slice_diff_range(slice_number: int, cwd: str) -> str:
                 # empty. Fall through to merge commit path instead.
                 branch_tip = _resolve_rev(branch, cwd)
                 if branch_tip is None or merge_base != branch_tip:
+                    _logger.debug(
+                        "slice %d: diff range from merge-base(%s, %s)",
+                        slice_number,
+                        base,
+                        branch,
+                    )
                     return f"{merge_base}...{branch}"
         except (FileNotFoundError, OSError):
             pass
         # merge-base failed or branch is merged — fall through
 
-    merge_commit = _find_merge_commit(slice_number, cwd)
+    merge_commit = _find_merge_commit(slice_number, cwd, base)
     if merge_commit is not None:
         return f"{merge_commit}^1..{merge_commit}^2"
 
+    searched = base if base == DEFAULT_DIFF_BASE else f"{base} or {DEFAULT_DIFF_BASE}"
     raise DiffRangeUnresolvedError(
         f"Could not resolve diff range for slice {slice_number}: no local "
         f"branch matching '{slice_number}-slice.*' and no merge commit "
-        f"found on main. Pass --diff explicitly to review a specific range."
+        f"found on {searched}. Pass --diff explicitly to review a specific range."
     )

@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from squadron.review.git_utils import DEFAULT_DIFF_BASE
+
 
 @pytest.fixture(autouse=True)
 def _isolated_user_config(tmp_path: Path) -> Iterator[Path]:
@@ -26,6 +28,28 @@ def _isolated_user_config(tmp_path: Path) -> Iterator[Path]:
     user_file.parent.mkdir(parents=True, exist_ok=True)
     with patch("squadron.config.manager.user_config_path", return_value=user_file):
         yield user_file
+
+
+@pytest.fixture(autouse=True)
+def _pinned_diff_base() -> Iterator[str]:
+    """Pin the slice diff base so tests never read live CF config.
+
+    ``resolve_slice_diff_range(n, cwd)`` resolves its base by shelling out
+    to ``cf config get git.integration_branch``, so without this any test
+    that resolves a diff range inherits whatever the developer's machine
+    has configured — passing on a repo that leaves the key empty and
+    failing on one that sets it. Same class of leak as
+    ``_isolated_user_config`` above.
+
+    Tests that exercise base resolution deliberately either patch
+    ``resolve_diff_base`` themselves or pass ``base=`` explicitly, both of
+    which bypass this fixture.
+    """
+    with patch(
+        "squadron.review.git_utils.resolve_diff_base",
+        return_value=DEFAULT_DIFF_BASE,
+    ):
+        yield DEFAULT_DIFF_BASE
 
 
 @pytest.fixture
