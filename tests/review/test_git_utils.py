@@ -7,10 +7,17 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squadron.integrations.context_forge import (
+    ContextForgeError,
+    ContextForgeNotAvailable,
+)
 from squadron.review.git_utils import (
+    DEFAULT_DIFF_BASE,
+    INTEGRATION_BRANCH_KEY,
     DiffRangeUnresolvedError,
     _find_merge_commit,
     _find_slice_branch,
+    resolve_diff_base,
     resolve_slice_diff_range,
 )
 
@@ -217,3 +224,161 @@ class TestResolveSliceDiffRange:
         ):
             result = resolve_slice_diff_range(122, ".")
         assert result == "def5678^1..def5678^2"
+
+
+class TestDiffBase:
+    """Tests for the diff base used by merge-base (issue #32)."""
+
+    def test_merge_base_uses_integration_branch_not_main(self) -> None:
+        """The merge-base is computed against the configured base, not main.
+
+        This is the #32 defect: a hardcoded "main" returns the whole
+        accumulated band on a repo using an integration branch, so the
+        reviewer fans out over already-merged files and lands on PASS.
+        """
+        mb_result = MagicMock()
+        mb_result.returncode = 0
+        mb_result.stdout = "deadbeef\n"
+
+        with (
+            patch(
+                "squadron.review.git_utils._find_slice_branch",
+                return_value="145-slice.foo",
+            ),
+            patch(_GIT_UTILS_SUBPROCESS, return_value=mb_result) as run_mock,
+            patch("squadron.review.git_utils._resolve_rev", return_value="cafebabe"),
+        ):
+            result = resolve_slice_diff_range(145, ".", base="dev/erik")
+
+        assert result == "deadbeef...145-slice.foo"
+        argv = run_mock.call_args_list[0][0][0]
+        assert argv[:2] == ["git", "merge-base"]
+        assert argv[2] == "dev/erik", f"merge-base ran against {argv[2]!r}, not the base"
+
+    def test_explicit_base_skips_config_read(self) -> None:
+        """Passing base= must not consult CF config at all."""
+        mb_result = MagicMock()
+        mb_result.returncode = 0
+        mb_result.stdout = "deadbeef\n"
+
+        with (
+            patch(
+                "squadron.review.git_utils.resolve_diff_base",
+                side_effect=AssertionError("config must not be read when base is given"),
+            ),
+            patch(
+                "squadron.review.git_utils._find_slice_branch",
+                return_value="145-slice.foo",
+            ),
+            patch(_GIT_UTILS_SUBPROCESS, return_value=mb_result),
+            patch("squadron.review.git_utils._resolve_rev", return_value="cafebabe"),
+        ):
+            result = resolve_slice_diff_range(145, ".", base="dev/erik")
+
+        assert result == "deadbeef...145-slice.foo"
+
+    def test_unresolved_error_names_both_refs_searched(self) -> None:
+        """The error must name what was actually searched, not just 'main'."""
+        with (
+            patch("squadron.review.git_utils._find_slice_branch", return_value=None),
+            patch("squadron.review.git_utils._find_merge_commit", return_value=None),
+        ):
+            with pytest.raises(DiffRangeUnresolvedError) as exc_info:
+                resolve_slice_diff_range(145, ".", base="dev/erik")
+
+        message = str(exc_info.value)
+        assert "dev/erik" in message
+        assert DEFAULT_DIFF_BASE in message
+
+
+class TestResolveDiffBase:
+    """Tests for resolve_diff_base() — CF config read with safe degradation."""
+
+    def test_returns_configured_integration_branch(self) -> None:
+        client = MagicMock()
+        client.get_config.return_value = "dev/erik"
+
+        assert resolve_diff_base(".", cf_client=client) == "dev/erik"
+        client.get_config.assert_called_once_with(INTEGRATION_BRANCH_KEY)
+
+    def test_empty_value_yields_default(self) -> None:
+        """An unset key is the common case, not an error."""
+        client = MagicMock()
+        client.get_config.return_value = ""
+
+        assert resolve_diff_base(".", cf_client=client) == DEFAULT_DIFF_BASE
+
+    def test_whitespace_only_value_yields_default(self) -> None:
+        client = MagicMock()
+        client.get_config.return_value = "   \n"
+
+        assert resolve_diff_base(".", cf_client=client) == DEFAULT_DIFF_BASE
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            ContextForgeNotAvailable("cf not on PATH"),
+            ContextForgeError("unknown key"),
+        ],
+    )
+    def test_cf_failure_degrades_to_default(self, exc: Exception) -> None:
+        """`sq review --diff` must work on a machine with no cf installed."""
+        client = MagicMock()
+        client.get_config.side_effect = exc
+
+        assert resolve_diff_base(".", cf_client=client) == DEFAULT_DIFF_BASE
+
+    def test_client_without_get_config_degrades_to_default(self) -> None:
+        """An older/duck-typed client lacking get_config must not crash."""
+        client = object()
+
+        assert resolve_diff_base(".", cf_client=client) == DEFAULT_DIFF_BASE
+
+
+class TestFindMergeCommitFallback:
+    """Tests for _find_merge_commit's base-then-main search (issue #32)."""
+
+    def test_searches_base_first_and_stops_on_hit(self) -> None:
+        with patch(
+            "squadron.review.git_utils._search_merge_commit",
+            return_value="abc1234",
+        ) as search:
+            result = _find_merge_commit(145, ".", base="dev/erik")
+
+        assert result == "abc1234"
+        search.assert_called_once_with(145, ".", "dev/erik")
+
+    def test_falls_back_to_main_when_base_has_no_merge(self) -> None:
+        """Covers an integration branch that forked before the slice merged."""
+        with patch(
+            "squadron.review.git_utils._search_merge_commit",
+            side_effect=[None, "abc1234"],
+        ) as search:
+            result = _find_merge_commit(145, ".", base="dev/erik")
+
+        assert result == "abc1234"
+        assert [c[0][2] for c in search.call_args_list] == ["dev/erik", DEFAULT_DIFF_BASE]
+
+    def test_fallback_logs_warning(self) -> None:
+        """The fallback can return a batch-promotion diff — it must be visible."""
+        with (
+            patch(
+                "squadron.review.git_utils._search_merge_commit",
+                side_effect=[None, "abc1234"],
+            ),
+            patch("squadron.review.git_utils._logger") as logger,
+        ):
+            _find_merge_commit(145, ".", base="dev/erik")
+
+        assert logger.warning.called
+
+    def test_no_duplicate_search_when_base_is_main(self) -> None:
+        """base == main must not search the same ref twice."""
+        with patch(
+            "squadron.review.git_utils._search_merge_commit",
+            return_value=None,
+        ) as search:
+            result = _find_merge_commit(145, ".", base=DEFAULT_DIFF_BASE)
+
+        assert result is None
+        search.assert_called_once_with(145, ".", DEFAULT_DIFF_BASE)

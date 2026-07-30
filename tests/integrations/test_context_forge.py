@@ -207,6 +207,64 @@ class TestGetProject:
             info = ContextForgeClient().get_project()
             assert info.arch_file == "custom/path/arch.md"
 
+
+#: Real ``cf config get git.integration_branch --json`` output, captured from
+#: the CLI on a repo with the key unset. Description truncated for width; the
+#: shape (key/value/source/description) is verbatim.
+_CONFIG_UNSET_JSON = {
+    "key": "git.integration_branch",
+    "value": "",
+    "source": "default",
+    "description": "Optional long-lived integration branch that work branches "
+    "fork from and merge into instead of main.",
+}
+
+
+class TestGetConfig:
+    def test_get_config_returns_set_value(self) -> None:
+        data = {**_CONFIG_UNSET_JSON, "value": "dev/erik", "source": "project"}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ) as run_mock:
+            value = ContextForgeClient().get_config("git.integration_branch")
+
+        assert value == "dev/erik"
+        argv = run_mock.call_args[0][0]
+        assert argv == ["cf", "config", "get", "git.integration_branch", "--json"]
+
+    def test_get_config_unset_key_returns_empty_string(self) -> None:
+        """An optional key CF reports as source=default yields ""."""
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(_CONFIG_UNSET_JSON)),
+        ):
+            assert ContextForgeClient().get_config("git.integration_branch") == ""
+
+    def test_get_config_null_value_returns_empty_string(self) -> None:
+        data = {**_CONFIG_UNSET_JSON, "value": None}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ):
+            assert ContextForgeClient().get_config("git.integration_branch") == ""
+
+    def test_get_config_missing_value_key_returns_empty_string(self) -> None:
+        data = {k: v for k, v in _CONFIG_UNSET_JSON.items() if k != "value"}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ):
+            assert ContextForgeClient().get_config("git.integration_branch") == ""
+
+    def test_get_config_stringifies_non_string_value(self) -> None:
+        data = {**_CONFIG_UNSET_JSON, "key": "review.max_file_size_bytes", "value": 256000}
+        with patch(
+            "subprocess.run",
+            return_value=_mock_completed(json.dumps(data)),
+        ):
+            assert ContextForgeClient().get_config("review.max_file_size_bytes") == "256000"
+
     def test_get_project_name_populated(self) -> None:
         with patch(
             "subprocess.run",

@@ -170,3 +170,19 @@ class ContextForgeClient:
             slice=slice_index,
             name=str(data.get("name") or "unknown"),
         )
+
+    def get_config(self, key: str) -> str:
+        """Return a CF config value from ``cf config get <key> --json``.
+
+        Returns the raw string value, or ``""`` when the key is unset (CF
+        reports ``source: "default"`` with an empty value for optional keys).
+        Non-string values are stringified; callers wanting another type
+        should convert and validate themselves.
+
+        Raises:
+            ContextForgeNotAvailable: if ``cf`` is not on PATH.
+            ContextForgeError: if the key is unknown or output is not JSON.
+        """
+        data: dict[str, Any] = self._run_json(["config", "get", key, "--json"])
+        value = data.get("value")
+        return "" if value is None else str(value)
