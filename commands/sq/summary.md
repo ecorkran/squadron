@@ -5,6 +5,7 @@ Generate a clipboard summary of this conversation for manual context reset.
 If `$ARGUMENTS` starts with `--restore`:
 - Run the restore flow (Steps R1–R2 below).
 - Skip the normal summary generation flow entirely.
+- If a word follows `--restore`, that word is the **key** of the summary to restore. Pass it to the CLI as `--key <word>` in Step R1. If no word follows, omit `--key` entirely so the most recent summary is used.
 
 Otherwise: the first word of `$ARGUMENTS` is an optional template name. If empty, no template argument is passed to the CLI (it will use the configured default).
 
@@ -12,15 +13,23 @@ Otherwise: the first word of `$ARGUMENTS` is an optional template name. If empty
 
 ## Step R1: Get restore content
 
-Run via Bash:
+Run via Bash — without a key:
 
 ```bash
 sq _summary-instructions --restore
 ```
 
+With a key, append `--key` and the key parsed in "Input parsing" above:
+
+```bash
+sq _summary-instructions --restore --key <key>
+```
+
+Substitute the parsed word for `<key>`. Do not invent a key: if no word followed `--restore`, use the first form.
+
 **CRITICAL: Run this command exactly as written — no redirects (`2>…`, `2>&1`, `2>/dev/null`), no stderr capture, no appended `;`/`&&` suffixes or compound wrappers.** Two reasons: (1) the skill needs stdout (the summary content) and stderr (the `Using:` line, and the picker listing) kept on **separate** channels — merging or discarding either breaks filename extraction in R2; (2) decorating the command changes its literal text, which misses Bash allowlist matching and triggers permission prompts.
 
-If the command exits non-zero, show the error output to the user and **stop** — do not continue.
+If the command exits non-zero, show the error output to the user and **stop** — do not continue. An unknown key exits non-zero and lists the available keys on stderr; surface that list to the user rather than retrying with a guessed key.
 
 ---
 
