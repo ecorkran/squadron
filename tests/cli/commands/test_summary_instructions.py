@@ -145,3 +145,96 @@ class TestRestoreFlag:
 
         assert result.exit_code == 1
         assert "cannot resolve project name" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --restore --key selection
+# ---------------------------------------------------------------------------
+
+
+class TestRestoreKey:
+    """--key selects a specific saved summary instead of the most recent."""
+
+    def _run(self, summaries: Path, *args: str):
+        runner = CliRunner()
+        with (
+            patch(
+                "squadron.cli.commands.summary_instructions.gather_cf_params",
+                return_value={"project": "myproject"},
+            ),
+            patch(
+                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
+                summaries,
+            ),
+        ):
+            return runner.invoke(app, ["_summary-instructions", "--restore", *args])
+
+    def _two_summaries(self, tmp_path: Path) -> Path:
+        """P4 is older; interactive is the most recent."""
+        summaries = tmp_path / "summaries"
+        summaries.mkdir()
+        _write_summary(summaries, "myproject-P4.md", "old p4 summary", 1000.0)
+        _write_summary(summaries, "myproject-interactive.md", "new interactive summary", 2000.0)
+        return summaries
+
+    def test_key_selects_older_summary_over_most_recent(self, tmp_path: Path) -> None:
+        """--key P4 wins over the more recent interactive summary."""
+        result = self._run(self._two_summaries(tmp_path), "--key", "P4")
+
+        assert result.exit_code == 0
+        assert "Using: myproject-P4.md" in result.output
+        assert "old p4 summary" in result.output
+        assert "new interactive summary" not in result.output
+
+    def test_key_matches_case_insensitively(self, tmp_path: Path) -> None:
+        """Lowercase --key resolves a file saved with uppercase key, and vice versa."""
+        summaries = self._two_summaries(tmp_path)
+
+        lowered = self._run(summaries, "--key", "p4")
+        assert lowered.exit_code == 0
+        assert "Using: myproject-P4.md" in lowered.output
+
+        raised = self._run(summaries, "--key", "INTERACTIVE")
+        assert raised.exit_code == 0
+        assert "Using: myproject-interactive.md" in raised.output
+
+    def test_unknown_key_exits_1_and_lists_available(self, tmp_path: Path) -> None:
+        """A key with no matching file fails loudly and names the real options."""
+        result = self._run(self._two_summaries(tmp_path), "--key", "nope")
+
+        assert result.exit_code == 1
+        assert "no summary saved under key 'nope'" in result.output
+        assert "P4" in result.output
+        assert "interactive" in result.output
+        # The unselected content must not leak into the restore stream.
+        assert "old p4 summary" not in result.output
+
+    def test_without_key_still_uses_most_recent(self, tmp_path: Path) -> None:
+        """Default path is unchanged: bare --restore takes the newest summary."""
+        result = self._run(self._two_summaries(tmp_path))
+
+        assert result.exit_code == 0
+        assert "Using: myproject-interactive.md" in result.output
+        assert "new interactive summary" in result.output
+
+    def test_key_with_single_summary(self, tmp_path: Path) -> None:
+        """--key works when only one summary exists (no picker listing shown)."""
+        summaries = tmp_path / "summaries"
+        summaries.mkdir()
+        _write_summary(summaries, "myproject-P4.md", "only summary", 1000.0)
+
+        result = self._run(summaries, "--key", "p4")
+
+        assert result.exit_code == 0
+        assert "only summary" in result.output
+        assert "Found" not in result.output
+
+    def test_unknown_key_with_no_files_reports_missing_files(self, tmp_path: Path) -> None:
+        """No summaries at all: the empty-directory error wins over the key error."""
+        summaries = tmp_path / "summaries"
+        summaries.mkdir()
+
+        result = self._run(summaries, "--key", "p4")
+
+        assert result.exit_code == 1
+        assert "no summary files found" in result.output

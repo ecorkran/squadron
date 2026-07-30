@@ -30,6 +30,12 @@ def summary_instructions(
     cwd: str = typer.Option(".", "--cwd", hidden=True),
     suffix: bool = typer.Option(False, "--suffix", hidden=True),
     restore: bool = typer.Option(False, "--restore", hidden=True),
+    key: str = typer.Option(
+        None,
+        "--key",
+        hidden=True,
+        help="Restore the summary saved under this key instead of the most recent.",
+    ),
     project: bool = typer.Option(False, "--project", hidden=True),
 ) -> None:
     """[hidden] Print rendered compaction template instructions (or suffix)."""
@@ -38,7 +44,7 @@ def summary_instructions(
         return
 
     if restore:
-        _handle_restore(cwd)
+        _handle_restore(cwd, key=key)
         return
 
     # Template name resolution: explicit arg > config > "minimal"
@@ -73,21 +79,31 @@ def _handle_project(cwd: str) -> None:
     print(project)
 
 
-def _handle_restore(cwd: str) -> None:
-    """Find and print the latest summary file for the current project.
+def _summary_key(path: Path, project: str) -> str:
+    """Return the pipeline key a summary file is saved under.
 
-    Resolves the project name via CF, globs the summaries directory, and
-    prints the contents of the most recently modified matching file to stdout.
-    If multiple pipelines have summary files, lists them on stderr and uses
-    the most recent.
+    Files are named ``{project}-{key}.md``; the key is what ``--key`` matches
+    and what the multi-summary picker lists.
+    """
+    return path.stem.removeprefix(f"{project}-")
+
+
+def _handle_restore(cwd: str, key: str | None = None) -> None:
+    """Find and print a saved summary file for the current project.
+
+    Resolves the project name via CF and globs the summaries directory. Without
+    ``key``, prints the most recently modified match. With ``key``, prints the
+    summary saved under that key, matched case-insensitively so the same
+    argument resolves identically on case-sensitive and case-insensitive
+    filesystems. If multiple summaries exist, lists them on stderr.
 
     Exit codes:
         0 — success; file contents printed to stdout.
-        1 — no project resolved, or no matching summary files found.
+        1 — no project resolved, no matching summary files, or unknown key.
     """
     params = gather_cf_params(cwd)
     project = params.get("project")
-    if not project:
+    if not isinstance(project, str) or not project:
         print("Error: cannot resolve project name from CWD.", file=sys.stderr)
         raise typer.Exit(code=1)
 
@@ -106,9 +122,34 @@ def _handle_restore(cwd: str) -> None:
 
     if len(matches) > 1:
         print(f"Found {len(matches)} summaries for '{project}':", file=sys.stderr)
-        for m in matches:
-            pipeline = m.stem.removeprefix(f"{project}-")
-            print(f"  {pipeline}  ({m.name})", file=sys.stderr)
+        for match in matches:
+            print(f"  {_summary_key(match, project)}  ({match.name})", file=sys.stderr)
 
-    print(f"Using: {matches[0].name}", file=sys.stderr)
-    print(matches[0].read_text(encoding="utf-8"), end="")
+    selected = _select_summary(matches, project, key)
+
+    print(f"Using: {selected.name}", file=sys.stderr)
+    print(selected.read_text(encoding="utf-8"), end="")
+
+
+def _select_summary(matches: list[Path], project: str, key: str | None) -> Path:
+    """Pick the summary to restore: the keyed one, else the most recent.
+
+    ``matches`` is ordered most-recent-first. Key comparison is
+    case-insensitive; when several files differ only by case, the most recent
+    wins, consistent with the no-key default.
+    """
+    if not key:
+        return matches[0]
+
+    wanted = key.casefold()
+    for match in matches:
+        if _summary_key(match, project).casefold() == wanted:
+            return match
+
+    available = ", ".join(_summary_key(m, project) for m in matches)
+    print(
+        f"Error: no summary saved under key '{key}' for project '{project}'.\n"
+        f"  Available keys: {available}",
+        file=sys.stderr,
+    )
+    raise typer.Exit(code=1)
