@@ -3,8 +3,8 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260717
-status: complete
+dateUpdated: 20260731
+status: in-progress
 ---
 
 # Slice Plan: Maintenance and Refactoring
@@ -115,6 +115,19 @@ Fixes [issue #15](https://github.com/ecorkran/squadron/issues/15), [issue #16](h
 **Slice design:** `user/slices/909-slice.pipeline-phase-step-correctness.md`
 **Task file:** `user/tasks/909-tasks.pipeline-phase-step-correctness.md`
 **Status:** complete (20260710) · **Risk:** Medium (Part A) / Low (Part B) / Medium (Part C) · **Effort:** 4/5 · **Dependencies:** [149]
+
+8. [ ] **(910) Loop Convergence Correctness — Findings Feedback + Multi-Review Gate + Iteration History + Dry-Run Expansion**
+Fixes [issue #42](https://github.com/ecorkran/squadron/issues/42), [issue #43](https://github.com/ecorkran/squadron/issues/43), [issue #44](https://github.com/ecorkran/squadron/issues/44), and [issue #45](https://github.com/ecorkran/squadron/issues/45). Four defects on the multi-step `loop:` path, bundled because all four sit on the same construct and the first three share a single 60-line function (`_execute_loop_body`) and one test file. Together #42 and #43 make "the loop fixes the findings and re-reviews" false for the demo pipeline; #43 is why `p45b.yaml` currently uses two loops rather than one. Each part is small because the machinery already exists — this is wiring, not new architecture.
+
+**Part A — Loop retries do not feed findings back into the re-run (#42, High).** `_execute_loop_body` (`pipeline/executor.py:1298-1321`) passes the *outer* `prior_outputs` into every `_execute_step_once` call (line 1308) and never updates it; `iteration_action_results` is reset at the top of each round (line 1299) and discarded. Iteration N+1 therefore re-runs a prompt identical to iteration N's — the loop re-rolls the same dice rather than converging. The consumer is already built and correct: `DispatchAction._resolve_prompt_from_prior_review` (`actions/dispatch.py:258`) walks `context.prior_outputs` in reverse for a `REVIEW` result, formats findings into a fix prompt, and already handles the empty-findings case — it is simply never fed. Fix: accumulate each inner step's results into a per-iteration `prior_outputs` copy and pass that down, mirroring the `dict(prior_outputs)` snapshot pattern `_execute_step_once` already uses (`executor.py:1030`). Effort 1/5 for the edit. **Verify during design:** how `step_outputs` interacts with `prior_outputs` inside `_execute_step_once` — the fix touches exactly that boundary and it is the one place a hidden complication could raise the estimate.
+
+**Part B — `until:` reads only the last review in a multi-review body (#43, High).** `_last_with_verdict` (`executor.py:356-360`) returns the first verdict found walking backward, so in a body containing several reviews only the final one gates `until:`. A design review that FAILs while a tasks review PASSes exits the loop successfully. The code change is trivial; the *semantics* are the real work and need an explicit decision before implementation: all-verdicts-must-pass is the obvious reading, but `evaluate_condition` (`executor.py:334`) is shared with the single-step loop path where current behavior is correct, and any change alters behavior for existing multi-review pipelines. Sequence this part first — it determines the loop shape that Part A's tests assert against. Effort 1/5 to implement, 3/5 to decide.
+
+**Part C — Iterations overwrite artifacts with no commit (#44, Medium).** Each iteration overwrites the previous iteration's artifact with no commit between rounds, so a converging loop leaves no way to diff round 2 against round 1 and no way to recover a better earlier attempt. Diagnostically coupled to Part A: with no per-round history there is no evidence available to *prove* the findings actually landed, and a byte-identical output — an empty commit — is precisely the Part A symptom. Land with Part A for that reason. A `commit` step type already exists, so the machinery is present; open questions to resolve in design are whether the loop inserts a commit automatically or it belongs in the body as an explicit step, commit-every-round vs. only-on-change, message format, and whether this is opt-in (`commit_each_iteration: true`) so existing loops do not begin writing history unexpectedly. This is the only part whose scope could grow. Effort 2/5.
+
+**Part D — `sq run --dry-run` does not expand loop bodies (#45, Low).** A `loop:` step prints as a single opaque line (`loop-0 (loop)`), omitting the body's steps and the `max` / `until` / `on_exhaust` configuration — so the construct with the most surprising execution shape and the highest cost when wrong is the one `--dry-run` describes least. Parsing is already correct (`--validate` reports the pipeline valid), making this a display gap only. Independent of Parts A–C: shares no code, can land in any order. Effort 1/5.
+
+**Status:** not started · **Risk:** Medium (Parts A/B) / Low (Parts C/D) · **Effort:** 3/5 · **Dependencies:** none
 
 ---
 
