@@ -154,7 +154,7 @@ for iteration in range(1, loop_config.max + 1):
         )
         iteration_action_results.extend(inner_result.action_results)
         for idx, result in enumerate(inner_result.action_results):
-            running_prior[f"{inner_step.step_type}-{iteration}-{idx}"] = result
+            running_prior[f"{inner_result.action_results[idx].action_type}-{idx}"] = result
         ...
 ```
 
@@ -163,32 +163,50 @@ already used one level down inside `_execute_step_once`
 ([executor.py:1030](src/squadron/pipeline/executor.py#L1030)) — same idea,
 applied at the loop-iteration level instead of the action level.
 
-**Key naming.** `step_prior` inside `_execute_step_once` keys results as
-`f"{action_type}-{action_index}"` — stable only within one step's action
-list. A per-iteration accumulation needs keys that stay unique across
-iterations too (an iteration-1 `review-0` and an iteration-2 `review-0` must
-not collide and silently overwrite each other, since `_resolve_prompt_from_
-prior_review` walks in reverse and wants the *latest* one to win, not an
-arbitrary one). Confirm during implementation whether the iteration number
-needs to be folded into the key, or whether dict insertion order (Python
-dicts preserve it) combined with `reversed()` is sufficient because a later
-`review-0` write naturally overwrites the earlier one at the same key and
-still lands last in iteration order. Recommend keeping the existing
-`{action_type}-{action_index}` key (letting same-key overwrites happen) since
-`_resolve_prompt_from_prior_review` only wants the most recent REVIEW, not a
-full history — full history is slice 911's concern, not this one's.
+**Key naming — resolved, not deferred.** Keep the plain `f"{action_type}-
+{action_index}"` scheme, with no iteration number folded in, and let a later
+iteration's write at the same key overwrite an earlier one. This is safe, not
+merely convenient, for a reason specific to this codebase rather than a
+general assumption: `action_index` is scoped per `_execute_step_once` call
+(it restarts at 0 for every inner step invocation) and `action_type` is a
+bare string like `"review"` with no inner-step qualifier
+([models.py:28-42](src/squadron/pipeline/models.py#L28-L42) — `ActionResult.
+action_type` carries no step identity). That means two *different* inner
+steps in the same loop body could produce colliding keys (e.g. two `review`
+actions both writing `review-0`) — except Part B's validation bans exactly
+that shape (more than one verdict-bearing action per loop body under
+`until:`). Given Part B lands first and enforces that invariant, within one
+iteration `action_type` cannot repeat across verdict-bearing actions, so
+`{action_type}-{action_index}` is unique within an iteration by construction.
+Across iterations, the *same* key intentionally overwriting is the desired
+behavior, not a collision to guard against: `_resolve_prompt_from_prior_
+review` walks in reverse and wants exactly one thing — the most recent
+review — and a same-key overwrite makes "most recent" trivially correct
+without needing the reverse-walk to disambiguate by iteration at all. No
+implementation-time decision remains here. (Retaining full per-iteration
+history, as opposed to latest-wins, is out of scope for this slice — see
+Dependencies below and slice 911.)
 
-**Verify during implementation** (flagged in the slice plan entry as the one
-place effort could rise): how `step_outputs` — a second, separately-threaded
-dict passed alongside `prior_outputs` into `_execute_step_once` — interacts
-with this change. `step_outputs` is used by `GateAction` for `judge_from`/
-`review_from` lookups scoped to the *whole step* (including loop-external
-steps), not just within-loop iteration. Confirm this fix does not need to
-touch `step_outputs` — the working assumption is that `step_outputs` already
-receives fresh entries every call because callers pass a shared mutable dict
-by reference (unlike `prior_outputs`, which is snapshotted), so it likely
-requires no change. If that assumption is wrong, Part A's scope grows to
-cover it.
+**`step_outputs` interaction — resolved, no change needed.** `step_outputs`
+is a *different* mechanism from `prior_outputs`, not a variant of the same
+one, and this fix does not touch it. Traced the full lifecycle: it is
+created once per pipeline run ([executor.py:717](src/squadron/pipeline/executor.py#L717)),
+threaded by reference (never copied) through every layer down to
+`_execute_step_once` ([executor.py:1055](src/squadron/pipeline/executor.py#L1055)),
+and populated exactly once per *top-level* step, after that step (including
+a whole `loop:` step) fully returns
+([executor.py:889-899](src/squadron/pipeline/executor.py#L889-L899)) — keyed
+by the outer step's own `step.name`, via `_last_with_verdict` over that
+step's full `action_results`. Inside a loop, `_execute_loop_body` receives
+`step_outputs` and passes it straight through to each `_execute_step_once`
+call unmodified ([executor.py:1309](src/squadron/pipeline/executor.py#L1309));
+nothing in the loop body writes to it. `GateAction`'s `judge_from`/
+`review_from` lookups therefore only ever see *completed* steps from before
+or after a loop, never a mid-loop iteration — which is the correct scope for
+a gate referencing another named step in the pipeline, and Part A's
+iteration-to-iteration findings-feedback problem is entirely about
+`prior_outputs`, a disjoint dict. No implementation-time decision remains
+here; Part A's effort stays 1/5.
 
 ### Effort: 1/5
 
@@ -260,13 +278,22 @@ new check alongside the nested-loop ban, gated on `until_val is not None`:
    `ValidationError` naming the offending inner steps, with a message
    suggesting the fix: split into sequential loops, one review per loop.
 
-**Note on validation-time expansion:** `expand()` for `dispatch`/`phase`-like
-step types is expected to be side-effect-free (pure function of config to
-action tuples) — confirm this holds for every step type reachable inside a
-loop body before relying on calling `expand()` during validation. If any
-inner step type's `expand()` is not pure, count verdict-bearing actions by
-inspecting each inner step's raw config for `step_type == "review"` or a
-truthy `review:` sub-field instead, without calling `expand()`.
+**Note on validation-time expansion — resolved, purity confirmed.** Read
+every `expand()` implementation reachable inside a loop body (nested `loop:`
+is separately banned, so this is the complete set): `compact`, `devlog`,
+`dispatch`, `gate`, `phase`, `review`, `summary`. Each is a pure dict
+transform over `config.config` — building `action_config`/`review_dict`/
+`gate_dict` literals and returning `list[tuple[str, dict]]`, with no I/O,
+network, filesystem, or external call anywhere in any of them (`each` and
+`fan_out` both return `[]` unconditionally and produce no verdict-bearing
+actions regardless). Calling `.expand()` at validation time is confirmed safe
+for every step type this check can encounter. The raw-config fallback
+described below is retained as documentation of an already-considered
+alternative, not as a live implementation-time question:
+if a future step type's `expand()` ever gains a side effect, count
+verdict-bearing actions by inspecting each inner step's raw config for
+`step_type == "review"`/`"gate"` or a truthy `review:` sub-field instead,
+without calling `expand()`.
 
 ### Sequencing
 
@@ -403,22 +430,6 @@ None.
    `on_exhaust` and each inner step by name and type, not a single opaque
    `loop-N (loop)` line.
 
-## Risk Assessment
-
-### Technical Risks
-- Part A: the `step_outputs` interaction noted above is the one place this
-  slice's effort could rise past the current 1/5 estimate if the assumption
-  that it's already shared-by-reference turns out to be wrong.
-- Part B: if any step type's `expand()` used inside loop bodies turns out not
-  to be side-effect-free, the validation-time approach needs to fall back to
-  raw-config inspection (documented as the fallback above) rather than
-  calling `expand()` directly.
-
-### Mitigation Strategies
-Both risks have a documented fallback already written into the relevant
-Part's design above — implementation should confirm the primary approach
-works before falling back, not assume the fallback is needed.
-
 ## Implementation Notes
 
 ### Development Approach
@@ -427,5 +438,13 @@ one-verdict-per-loop-body invariant that Part A's tests assert against. Part
 C is fully independent of both and can land in any order, including in
 parallel with the others if convenient.
 
+The two design questions this slice originally deferred to implementation —
+Part A's `prior_outputs` key scheme and its `step_outputs` interaction, and
+Part B's reliance on `expand()` purity — were traced against the current code
+and resolved above (see "resolved, not deferred" / "resolved, purity
+confirmed" call-outs in each Part). No open technical risk remains that would
+change either Part's 1/5 effort estimate; there is no separate Risk
+Assessment section for this slice.
+
 ### Special Considerations
-None beyond what's captured in Risk Assessment.
+None.
