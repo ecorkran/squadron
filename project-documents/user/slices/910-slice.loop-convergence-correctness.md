@@ -7,7 +7,7 @@ dependencies: []
 interfaces: [911]
 dateCreated: 20260731
 dateUpdated: 20260731
-status: not_started
+status: complete
 ---
 
 # Slice Design: Loop Convergence Correctness
@@ -400,35 +400,65 @@ None.
 
 ### Verification Walkthrough
 
+**Executed and verified 20260731** during Phase 6 implementation. Two
+corrections to the commands as originally drafted above, both caveats of
+the `sq run` CLI, not of this slice's fix: (1) pipeline names passed to
+`sq run` omit the `.yaml` extension — the loader appends it internally, so
+`p45b.yaml` must be passed as `p45b`; (2) `p45b.yaml` declares a required
+`slice` param, so `sq run --dry-run`/`--validate` against it needs a
+trailing target argument (any placeholder value, e.g. `999`).
+
 1. **Part A — findings actually feed back.**
-   Run (or write a focused test around) a `loop:` pipeline with `max: 2` whose
-   body is `dispatch → review`, where the review is rigged (via a fake/mock
-   provider) to FAIL on iteration 1 with a specific finding and PASS on
-   iteration 2. Capture the prompt text sent to the dispatch action on
-   iteration 2 and confirm it contains the iteration-1 finding's summary text
-   — proving the loop is now feeding results forward instead of re-sending an
-   identical prompt.
+   Verified via automated tests, not a manual run — see
+   `tests/pipeline/test_executor_loop_body.py::test_iteration_2_dispatch_sees_iteration_1_review_in_prior_outputs`
+   and `::test_iteration_2_dispatch_prompt_contains_iteration_1_finding`
+   (T6/T7). A `loop:` pipeline with `max: 3` whose body is `dispatch →
+   review`, where the review FAILs on iteration 1 with a finding and PASSes
+   on iteration 2: the dispatch `ActionContext.prior_outputs` on the second
+   call contains the iteration-1 review result, and the actual resolved
+   prompt text (via `DispatchAction._resolve_prompt_from_prior_review`)
+   contains the iteration-1 finding's summary text. Both tests were
+   confirmed to fail against pre-fix `executor.py` (via `git stash`) and
+   pass after the fix, proving they would have caught the original bug.
 
 2. **Part B — ambiguous loops rejected, unambiguous loops unaffected.**
    ```
-   sq run --validate path/to/pipeline-with-two-reviews-and-until.yaml
+   sq run --validate ambiguous-loop-fixture
    ```
-   Expect a non-zero exit and a validation error naming both verdict-bearing
-   steps. Then:
+   (a throwaway fixture with two `review:` inner steps and `until:
+   review.pass` on the loop) exits 1 with:
    ```
-   sq run --validate p45b.yaml
+   Validation errors for 'ambiguous-loop-fixture':
+     steps: loop body has 2 verdict-bearing actions (review-design, review-tasks)
+   with 'until:' set — this makes 'until:' ambiguous, since only the last
+   verdict-bearing action gates the loop. Split into sequential loops, one
+   review/gate per loop body.
    ```
-   Expect success (0 exit) — `p45b.yaml` already uses the one-review-per-loop
-   shape this slice's rejection enforces, so the existing pipeline must
-   continue to validate cleanly.
+   Then:
+   ```
+   sq run --validate p45b
+   ```
+   exits 0 with `Pipeline 'P45B' is valid.` — confirming the existing
+   already-correct pipeline is unaffected by the new check.
 
 3. **Part C — dry-run shows the loop body.**
    ```
-   sq run --dry-run p45b.yaml
+   sq run --dry-run p45b 999
    ```
-   Expect the `loop:` step(s) in the output to show `max`/`until`/
-   `on_exhaust` and each inner step by name and type, not a single opaque
-   `loop-N (loop)` line.
+   produces:
+   ```
+   Steps:
+     loop-0 (loop)
+       max: 3, until: review.pass, on_exhaust: checkpoint
+       design-0 (design)
+     loop-1 (loop)
+       max: 3, until: review.pass, on_exhaust: checkpoint
+       tasks-0 (tasks)
+     summary-2 (summary)
+   ```
+   — both `loop:` steps show `max`/`until`/`on_exhaust` and their inner
+   step by name and type, in place of the previous opaque `loop-N (loop)`
+   lines.
 
 ## Implementation Notes
 

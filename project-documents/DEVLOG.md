@@ -47,6 +47,24 @@ Updated the slice design in place (Part A and Part B sections rewritten from "co
 
 **Next:** Phase 6 (Implementation) for slice 910, not yet started.
 
+### Slice 910: Loop Convergence Correctness — Implementation Complete
+
+**Phase 6 complete.** Branch `910-slice.loop-convergence-correctness` off `main` (`git.integration_branch` unset). All three parts landed in the design's B → A → C order, one commit per part, each preceded by tests confirmed to fail against pre-fix code and pass after.
+
+- **Part B (`4f62163`, #43):** `LoopStepType.validate()` gained `_validate_verdict_count`, gated on `until_val is not None`, which expands every inner step via its registered `StepType.expand()` and counts `"review"`/`"gate"` actions across the full body. **One deviation from the design worth flagging:** the design's sketch called `expand()` on every inner step unconditionally; in practice an inner step whose own config is invalid (e.g. a bare `{"review": {}}` with no `template:`) makes `expand()` raise `KeyError`, because `validate_pipeline()` has never validated inner loop-body steps and never guaranteed they're well-formed before `expand()` assumes they are. Added a guard: skip verdict-counting for an inner step that fails its own `.validate()` first — its own error is a separate, more specific problem than "how many verdicts does this contribute." 23 new/updated tests across `test_loop.py` and `test_loop_validation.py`.
+- **Part A (`31c0164`, #42):** `_execute_loop_body` now threads a `running_prior` snapshot (seeded from `prior_outputs`, updated after each inner step with `f"{action_type}-{action_index}"` keys) into each iteration instead of the static outer `prior_outputs` — exactly the design's sketch, no deviations. Two new tests in `test_executor_loop_body.py` prove both halves of the design's Success Criteria separately: `prior_outputs` actually contains the prior iteration's review result, and the resolved prompt text (via `DispatchAction._resolve_prompt_from_prior_review`) contains the prior finding's summary. Both confirmed to fail pre-fix via `git stash`.
+- **Part C (`d4fb644`, #45):** single `if step.step_type == "loop"` branch in `run.py`'s `--dry-run` render loop, reusing `unpack_inner_steps` — matches the design exactly. Two new tests in `test_run.py`.
+
+**Verification Walkthrough executed against real artifacts, not just unit tests** (results written into the slice design in place): `sq run --validate p45b` (bare name, no `.yaml`) exits 0 both before and after Part B lands, confirming the existing two-sequential-single-review-loop pipeline is unaffected; a throwaway ambiguous fixture (two `review:` steps + `until:` in one loop body) exits 1 naming both offending steps; `sq run --dry-run p45b 999` (a `slice` target arg is required — the design's walkthrough commands omitted it) shows both loops fully expanded with `max`/`until`/`on_exhaust` and their inner `design`/`tasks` steps.
+
+**Corrections folded back into the slice design's Verification Walkthrough section**, since the original commands as drafted don't work against the real CLI: pipeline names passed to `sq run` omit the `.yaml` extension (the loader appends it), and `p45b.yaml` requires a trailing `slice` target argument.
+
+**Full validation gate:** `ruff format --check .` (397 files, all formatted), `ruff check .` (all checks passed), `pyright` full-project strict (0 errors), full `tests/` suite (2697 passed, 2 skipped, 0 failed — no regressions from any of the three parts).
+
+Slice marked complete: frontmatter `status: complete` in the slice design, slice-plan entry (`900-slices.maintenance-and-refactoring.md` item 8) checked off with completion date. Issues #42, #43, #45 to be closed on merge per the task file's final-validation step.
+
+**Next:** merge `910-slice.loop-convergence-correctness` into `main`. Slice 911 (Loop Iteration Versioning and Review Evidence) is scoped-only and depends on this slice's Part A, now landed — ready to move into Phase 4 (Slice Design) when picked up.
+
 ---
 
 ## 20260727

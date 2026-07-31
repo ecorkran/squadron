@@ -13,7 +13,7 @@ projectState: >
   expansion (#45). Not yet branched.
 dateCreated: 20260731
 dateUpdated: 20260731
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -203,26 +203,26 @@ status: not_started
 
 ## Part C — `--dry-run` Loop-Body Expansion (#45)
 
-- [ ] **T9. Expand `loop:` steps in `--dry-run` output**
-  - [ ] In `src/squadron/cli/commands/run.py`, in the `--dry-run` rendering
+- [x] **T9. Expand `loop:` steps in `--dry-run` output**
+  - [x] In `src/squadron/cli/commands/run.py`, in the `--dry-run` rendering
     loop (~lines 982-983), add a branch for `step.step_type == "loop"`:
     after printing the loop step's own `name (loop)` line, print `max`,
     `until` (or an explicit "no until — completes after first iteration"
     string when absent), and `on_exhaust` read from `step.config`.
-  - [ ] Expand the loop's inner steps via the existing `unpack_inner_steps`
+  - [x] Expand the loop's inner steps via the existing `unpack_inner_steps`
     helper on `step.config.get("steps", [])` and print each on an indented
     line in the same `name (step_type)` format used for top-level steps —
     matching the example format in the slice design's Part C section.
-  - [ ] No new abstraction: this is a single `if` branch inside the existing
+  - [x] No new abstraction: this is a single `if` branch inside the existing
     render loop, not a new rendering function or class, per the design's
     explicit "no new step-type-specific rendering abstraction" note.
-  - [ ] **Success:** `sq run --dry-run` on a pipeline with a `loop:` step
+  - [x] **Success:** `sq run --dry-run` on a pipeline with a `loop:` step
     shows the body's inner steps, `max`, `until`, and `on_exhaust`, indented
     under the loop step's own line.
   - Effort: 2/5
 
-- [ ] **T10. Test `--dry-run` loop expansion** *(test-with T9)*
-  - [ ] Add a test to `tests/cli/commands/test_run.py`, following the
+- [x] **T10. Test `--dry-run` loop expansion** *(test-with T9)*
+  - [x] Add a test to `tests/cli/commands/test_run.py`, following the
     existing `test_dry_run_via_cli_produces_no_state` pattern (patch
     `squadron.cli.commands.run.load_pipeline` and `validate_pipeline`,
     invoke via `runner.invoke(app, ["run", "--dry-run", ...])`, assert on
@@ -231,39 +231,39 @@ status: not_started
     of 2+ inner steps. Assert the CLI output contains each inner step's name
     and type, plus the `max`/`until`/`on_exhaust` values — not just the bare
     `loop-N (loop)` line.
-  - [ ] **Success:** the test fails against pre-fix code and passes after T9.
+  - [x] **Success:** the test fails against pre-fix code and passes after T9.
   - Effort: 1/5
 
-- [ ] **T11. Verify `--dry-run` against the real `p45b.yaml`**
-  - [ ] Run `sq run --dry-run p45b.yaml` (the same real pipeline used in T3)
+- [x] **T11. Verify `--dry-run` against the real `p45b.yaml`**
+  - [x] Run `sq run --dry-run p45b.yaml` (the same real pipeline used in T3)
     and confirm both `loop:` steps show their bodies (`design`/`tasks`
     phase steps with inline `review:`), `max: 3`, `until: review.pass`, and
     `on_exhaust: checkpoint` — not opaque `loop-N (loop)` lines. Manual
     confirmation, not a new automated test (T10 already covers automated
     regression); record output in the commit message or task notes.
-  - [ ] **Success:** `sq run --dry-run p45b.yaml` output shows both loop
+  - [x] **Success:** `sq run --dry-run p45b.yaml` output shows both loop
     bodies expanded.
   - Effort: 1/5
 
-- [ ] **T12. Commit Part C**
-  - [ ] `ruff format`, run Part C tests (T10), then commit
+- [x] **T12. Commit Part C**
+  - [x] `ruff format`, run Part C tests (T10), then commit
     (`feat: expand loop: step bodies in sq run --dry-run output`).
-  - [ ] Reference issue #45 in the commit body.
+  - [x] Reference issue #45 in the commit body.
   - Effort: 1/5
 
 ---
 
 ## Final validation
 
-- [ ] **T13. Full validation gate + verification walkthrough**
-  - [ ] Run the full test suite + `ruff format` + pyright strict; zero
+- [x] **T13. Full validation gate + verification walkthrough**
+  - [x] Run the full test suite + `ruff format` + pyright strict; zero
     errors.
-  - [ ] Execute the design's Verification Walkthrough for all three parts:
+  - [x] Execute the design's Verification Walkthrough for all three parts:
     Part B (T3's `sq run --validate p45b.yaml` plus a deliberately ambiguous
     fixture pipeline failing validation), Part A (T6/T7's iteration-2 prompt
     assertion), Part C (T11's `sq run --dry-run p45b.yaml`).
-  - [ ] Close issues #42, #43, #45 on merge; mark slice 910 complete in the
+  - [x] Close issues #42, #43, #45 on merge; mark slice 910 complete in the
     slice plan (`900-slices.maintenance-and-refactoring.md`) and slice design
     frontmatter (`status: complete`).
-  - [ ] Write the Phase 6 DEVLOG entry.
+  - [x] Write the Phase 6 DEVLOG entry.
   - Effort: 2/5

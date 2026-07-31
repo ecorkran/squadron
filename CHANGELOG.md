@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`loop:` steps now actually converge.** A dispatch-then-review loop was re-sending the exact same prompt on every retry instead of feeding back what the prior review found — so a loop could run its full `max` iterations without ever seeing what needed fixing. Retries now include the previous iteration's findings.
+- **A loop body with two reviews could silently report success while one of them failed.** `sq run --validate`/`--dry-run` now rejects a `loop:` body containing more than one review or gate when `until:` is set, with a message naming the conflicting steps and suggesting the fix (split into sequential loops).
+
+### Changed
+- **`sq run --dry-run` now shows what's inside a `loop:` step** — its `max`, `until`, `on_exhaust`, and each step in its body — instead of a single opaque `loop-N (loop)` line.
+
 ## [0.8.2] - 20260729
 
 ### Changed
