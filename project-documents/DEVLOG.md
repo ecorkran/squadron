@@ -27,6 +27,26 @@ Internal work log for squadron project development.
 
 **Next:** Phase 5 (Task Breakdown) for slice 910, not yet started.
 
+### Slice 910: Loop Convergence Correctness — Review Resolution
+
+**Review verdict PASS with one CONCERN (F001)**, raised against the three items the design deferred to implementation: Part A's `prior_outputs` key scheme, Part A's `step_outputs` interaction, and Part B's reliance on `expand()` purity. Traced all three against the actual code instead of leaving them open:
+
+- **Key naming:** the plain `{action_type}-{action_index}` scheme (no iteration number folded in, same-key overwrite across iterations) is safe by construction, not just convenient — `action_type` carries no inner-step identity, so a same-key collision within one iteration can only happen if two inner steps produce the same action type, which is exactly the shape Part B's validation bans. Once Part B lands first, the collision case cannot occur.
+- **`step_outputs`:** confirmed it's a disjoint mechanism from `prior_outputs` — created once per run, threaded by reference (never copied), written exactly once per top-level step after that step fully returns. Part A's fix never touches it.
+- **`expand()` purity:** read every `expand()` implementation reachable inside a loop body (`compact`, `devlog`, `dispatch`, `gate`, `phase`, `review`, `summary`) — each is a pure dict transform with no I/O. Confirmed safe to call at validation time.
+
+Updated the slice design in place (Part A and Part B sections rewritten from "confirm during implementation" to "resolved, not deferred" / "resolved, purity confirmed"), removed the Risk Assessment section since no open risk remained, and appended a Resolution block to the review file (F001 ACCEPTED, F002 ACKNOWLEDGED, F003/F004 no action) following the same pattern slice 909's review used.
+
+### Slice 910: Loop Convergence Correctness — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/910-tasks.loop-convergence-correctness.md` (13 tasks, 269 lines) from the reviewed slice design. Order: Part B (T1-T4) → Part A (T5-T8) → Part C (T9-T12) → final validation (T13), matching the design's sequencing rationale.
+
+**Found and resolved a design-document defect before writing tasks, not silently:** the slice design's Success Criteria and Verification Walkthrough for Parts B and C repeatedly cite `p45b.yaml` as an existing shipped pipeline demonstrating the two-loop-sequence pattern (design→review, then tasks→review). A full repo search found no such file — `src/squadron/data/pipelines/` contains only `judge-cycle.yaml` and `test-loop.yaml`, both single-loop, neither matching the two-loop shape the design describes. Rather than substitute a different pipeline or silently drop the walkthrough steps, raised this to the PM (AskUserQuestion) per the "stop and request clarifying information" rule in the Phase 5 guide and the project's "don't guess, ask" instruction. **Resolved:** `p45b.yaml` is real, provided directly by the PM, and confirmed present at `~/.config/squadron/pipelines/p45b.yaml` — squadron's user pipeline directory (`_USER_DIR`, `loader.py:23`), which `load_pipeline`/`sq run` already discover automatically. No task creates or moves it; Part B's T3 and Part C's T11 reference it by bare name exactly as the design's walkthrough specifies, and its actual two-sequential-single-review-loop shape is the precedent Part B's validation check is designed to keep valid.
+
+**Test-with applied throughout:** T1 (validation check) → T2 (unit tests in `test_loop.py` + `test_loop_validation.py`) → T3 (manual confirm against real `p45b.yaml`); T5 (accumulate `prior_outputs`) → T6 (loop-body integration test) → T7 (end-to-end prompt-content assertion, closing the gap between "data is threaded" and "the consumer actually uses it"); T9 (`--dry-run` expansion) → T10 (CLI test) → T11 (manual confirm against real `p45b.yaml`). Each part's implementation task is immediately followed by its test task, per the guide.
+
+**Next:** Phase 6 (Implementation) for slice 910, not yet started.
+
 ---
 
 ## 20260727
