@@ -1295,6 +1295,12 @@ async def _execute_loop_body(
     # iteration's results.  Reassigned at the start of each iteration.
     iteration_action_results: list[ActionResult] = []
 
+    # Accumulates each iteration's results so the next iteration's actions
+    # (e.g. DispatchAction's findings-feedback) see what the loop has
+    # actually produced so far, not just prior_outputs as it stood at loop
+    # entry. Mirrors the step_prior snapshot pattern in _execute_step_once.
+    running_prior = dict(prior_outputs)
+
     for iteration in range(1, loop_config.max + 1):
         iteration_action_results = []
 
@@ -1305,7 +1311,7 @@ async def _execute_loop_body(
                 resolved_config=inner_resolved,
                 step_index=step_index,
                 merged_params=merged_params,
-                prior_outputs=prior_outputs,
+                prior_outputs=running_prior,
                 step_outputs=step_outputs,
                 pipeline_name=pipeline_name,
                 run_id=run_id,
@@ -1319,6 +1325,8 @@ async def _execute_loop_body(
                 runs_dir=runs_dir,
             )
             iteration_action_results.extend(inner_result.action_results)
+            for action_index, result in enumerate(inner_result.action_results):
+                running_prior[f"{result.action_type}-{action_index}"] = result
 
             # Checkpoint pause short-circuits the loop immediately
             if inner_result.status == ExecutionStatus.PAUSED:

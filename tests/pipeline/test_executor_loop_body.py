@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 import squadron.pipeline.steps.loop  # noqa: F401 — trigger LoopStepType registration
+from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
-from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
+from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.steps import register_step_type
 
 # ---------------------------------------------------------------------------
@@ -363,3 +365,160 @@ async def test_checkpoint_pause_stops_loop_body() -> None:
     assert result.status == ExecutionStatus.PAUSED
     step_result = result.step_results[0]
     assert step_result.iteration == 1
+
+
+# ---------------------------------------------------------------------------
+# Part A (#42) — findings feedback between iterations
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_iteration_2_dispatch_sees_iteration_1_review_in_prior_outputs() -> None:
+    """dispatch on iteration 2 receives iteration 1's review ActionResult.
+
+    Body is dispatch -> review, review FAILs on iteration 1 (with a finding)
+    and PASSes on iteration 2. Captures the ActionContext passed to each
+    dispatch call and asserts the second call's prior_outputs contains the
+    iteration-1 review result — proving the loop feeds results forward
+    rather than replaying the same prior_outputs every iteration (which the
+    existing retries-to-pass-on-iteration-3 test does not, by itself, prove:
+    it only shows the loop runs the right number of times).
+    """
+    captured_contexts: list[ActionContext] = []
+
+    async def _dispatch_side_effect(ctx: ActionContext) -> ActionResult:
+        captured_contexts.append(ctx)
+        return ActionResult(success=True, action_type="dispatch", outputs={})
+
+    dispatch_action = MagicMock()
+    dispatch_action.execute = AsyncMock(side_effect=_dispatch_side_effect)
+
+    review_results = [
+        ActionResult(
+            success=True,
+            action_type="review",
+            outputs={},
+            verdict="FAIL",
+            findings=[{"severity": "HIGH", "summary": "iteration-1 finding", "location": "x.py"}],
+        ),
+        ActionResult(success=True, action_type="review", outputs={}, verdict="PASS"),
+    ]
+    review_action = _mock_action(review_results)
+
+    dispatch_inner = _mock_step_type([("dispatch", {})])
+    review_inner = _mock_step_type([("review", {})])
+    register_step_type("_lb_dispatch_inner_t6", dispatch_inner)
+    register_step_type("_lb_review_inner_t6", review_inner)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "findings-feedback-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_dispatch_inner_t6": {}},
+                        {"_lb_review_inner_t6": {}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": dispatch_action, "review": review_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert result.step_results[0].iteration == 2
+    assert len(captured_contexts) == 2
+
+    iteration_1_ctx, iteration_2_ctx = captured_contexts
+
+    # Iteration 1's dispatch has nothing to feed back yet.
+    assert not any(r.action_type == "review" for r in iteration_1_ctx.prior_outputs.values())
+
+    # Iteration 2's dispatch sees iteration 1's review result.
+    review_results_seen = [
+        r for r in iteration_2_ctx.prior_outputs.values() if r.action_type == "review"
+    ]
+    assert len(review_results_seen) == 1
+    assert review_results_seen[0].verdict == "FAIL"
+    seen_finding = cast(dict[str, object], review_results_seen[0].findings[0])
+    assert seen_finding["summary"] == "iteration-1 finding"
+
+
+@pytest.mark.asyncio
+async def test_iteration_2_dispatch_prompt_contains_iteration_1_finding() -> None:
+    """The resolved prompt for iteration 2's dispatch contains the iteration-1
+    finding's summary text — closing the gap between "prior_outputs
+    contains the result" (previous test) and "the consumer actually turns
+    it into the right prompt" (this test), per the slice design's Success
+    Criteria and Verification Walkthrough.
+    """
+    captured_prompts: list[str | None] = []
+
+    async def _dispatch_side_effect(ctx: ActionContext) -> ActionResult:
+        # Testing the exact consumer method the slice design names —
+        # accessing it directly, not through the full dispatch execute()
+        # path (which requires spawning an agent).
+        prompt = DispatchAction._resolve_prompt_from_prior_review(ctx)  # pyright: ignore[reportPrivateUsage]
+        captured_prompts.append(prompt)
+        return ActionResult(success=True, action_type="dispatch", outputs={})
+
+    dispatch_action = MagicMock()
+    dispatch_action.execute = AsyncMock(side_effect=_dispatch_side_effect)
+
+    review_results = [
+        ActionResult(
+            success=True,
+            action_type="review",
+            outputs={},
+            verdict="FAIL",
+            findings=[{"severity": "HIGH", "summary": "fix the frobnicator", "location": "x.py"}],
+        ),
+        ActionResult(success=True, action_type="review", outputs={}, verdict="PASS"),
+    ]
+    review_action = _mock_action(review_results)
+
+    dispatch_inner = _mock_step_type([("dispatch", {})])
+    review_inner = _mock_step_type([("review", {})])
+    register_step_type("_lb_dispatch_inner_t7", dispatch_inner)
+    register_step_type("_lb_review_inner_t7", review_inner)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "findings-feedback-prompt-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_dispatch_inner_t7": {}},
+                        {"_lb_review_inner_t7": {}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": dispatch_action, "review": review_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert len(captured_prompts) == 2
+
+    iteration_1_prompt, iteration_2_prompt = captured_prompts
+    assert iteration_1_prompt is None
+    assert iteration_2_prompt is not None
+    assert "fix the frobnicator" in iteration_2_prompt

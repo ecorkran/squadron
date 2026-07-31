@@ -56,31 +56,31 @@ status: not_started
 
 ## Part B — Ambiguous `until:` With Multiple Verdict-Bearing Actions (#43, do first)
 
-- [ ] **T1. Add the multi-verdict validation check to `LoopStepType.validate()`**
-  - [ ] In `src/squadron/pipeline/steps/loop.py`, add a new private helper
+- [x] **T1. Add the multi-verdict validation check to `LoopStepType.validate()`**
+  - [x] In `src/squadron/pipeline/steps/loop.py`, add a new private helper
     (e.g. `_validate_verdict_count`) called from `validate()` alongside the
     existing `_validate_inner_steps` call, gated on `until_val is not None`
     and `steps_val` being a valid non-empty list (i.e. only run this check
     when the existing shape checks above it already passed).
-  - [ ] Convert the raw `steps:` list to `StepConfig` objects via the
+  - [x] Convert the raw `steps:` list to `StepConfig` objects via the
     already-imported `unpack_inner_steps` helper (mirrors `inner_steps()`,
     loop.py:161-166).
-  - [ ] For each inner `StepConfig`, resolve its step type via
+  - [x] For each inner `StepConfig`, resolve its step type via
     `get_step_type(inner.step_type)` and call `.expand(inner)` to get its
     `(action_type, config)` list — this mirrors what the executor does at
     runtime (`_execute_loop_body`, executor.py:1300-1302) and is confirmed
     safe: every `expand()` reachable inside a loop body (`compact`,
     `devlog`, `dispatch`, `gate`, `phase`, `review`, `summary`) is a pure
     dict transform with no I/O (see slice design, Part B "purity confirmed").
-  - [ ] Count actions with `action_type in ("review", "gate")` across the
+  - [x] Count actions with `action_type in ("review", "gate")` across the
     full expanded body (these are the two verdict-producing action types;
     confirmed in the design's Part B "Problem" section).
-  - [ ] If the count is `> 1`, append one `ValidationError` naming every
+  - [x] If the count is `> 1`, append one `ValidationError` naming every
     offending inner step (by name and index) and suggesting the fix in the
     message text: split into sequential loops, one review/gate per loop body.
-  - [ ] If the count is `0` or `1`, no error — this check must not affect any
+  - [x] If the count is `0` or `1`, no error — this check must not affect any
     currently-valid single-verdict loop body, with or without `until:`.
-  - [ ] **Success:** a loop body with `until:` set and two verdict-bearing
+  - [x] **Success:** a loop body with `until:` set and two verdict-bearing
     inner steps produces exactly one `ValidationError` naming both steps; a
     loop body with `until:` set and exactly one verdict-bearing inner step
     (the existing shape, e.g. `judge-cycle.yaml`, `test-loop.yaml`) produces
@@ -89,8 +89,8 @@ status: not_started
     ambiguous case only, per the design).
   - Effort: 3/5
 
-- [ ] **T2. Test the multi-verdict validation check** *(test-with T1)*
-  - [ ] Add tests to `tests/pipeline/steps/test_loop.py`, following the
+- [x] **T2. Test the multi-verdict validation check** *(test-with T1)*
+  - [x] Add tests to `tests/pipeline/steps/test_loop.py`, following the
     existing `test_*_produces_error` naming pattern used for the other
     `LoopStepType.validate()` checks in that file: (a) two `review:` inner
     steps + `until: review.pass` → error naming both; (b) one `phase:` step
@@ -100,31 +100,31 @@ status: not_started
     inner steps but **no** `until:` set → no error; (d) exactly one
     verdict-bearing inner step + `until:` set → no error (regression guard
     for the existing single-review shape).
-  - [ ] Add one test to `tests/pipeline/test_loop_validation.py` (which
+  - [x] Add one test to `tests/pipeline/test_loop_validation.py` (which
     exercises the full `validate_pipeline()` path, not just
     `LoopStepType.validate()` directly, per that file's existing pattern) —
     a pipeline containing a `loop:` step with two reviews and `until:` set
     fails `validate_pipeline()` with a message naming both steps.
-  - [ ] **Success:** all cases pass; case (b) specifically proves the check
+  - [x] **Success:** all cases pass; case (b) specifically proves the check
     is not a step-type-name match.
   - Effort: 2/5
 
-- [ ] **T3. Validate `p45b.yaml` against the new check**
-  - [ ] Run `sq run --validate p45b.yaml` against the real pipeline at
+- [x] **T3. Validate `p45b.yaml` against the new check**
+  - [x] Run `sq run --validate p45b.yaml` against the real pipeline at
     `~/.config/squadron/pipelines/p45b.yaml` (two sequential single-review
     loops — see Context Summary). Confirm it **passes** validation — the new
     check must not produce a false positive on this already-correct shape.
-  - [ ] This is a manual confirmation step, not a new automated test (the
+  - [x] This is a manual confirmation step, not a new automated test (the
     automated regression coverage for "one verdict-bearing action passes" is
     already T2d); record the actual command output in the commit message or
     task notes.
-  - [ ] **Success:** `sq run --validate p45b.yaml` exits 0.
+  - [x] **Success:** `sq run --validate p45b.yaml` exits 0.
   - Effort: 1/5
 
-- [ ] **T4. Commit Part B**
-  - [ ] `ruff format`, run Part B tests (T2), then commit
+- [x] **T4. Commit Part B**
+  - [x] `ruff format`, run Part B tests (T2), then commit
     (`fix: reject loop bodies with ambiguous multi-review until: gating`).
-  - [ ] Reference issue #43 in the commit body.
+  - [x] Reference issue #43 in the commit body.
   - Effort: 1/5
 
 ---
