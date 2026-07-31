@@ -131,6 +131,9 @@ This narrows the part considerably — no semantics decision, no change to `eval
 
 **Part C — `sq run --dry-run` does not expand loop bodies (#45, Low).** A `loop:` step prints as a single opaque line (`loop-0 (loop)`), omitting the body's steps and the `max` / `until` / `on_exhaust` configuration — so the construct with the most surprising execution shape and the highest cost when wrong is the one `--dry-run` describes least. Parsing is already correct (`--validate` reports the pipeline valid), making this a display gap only. Independent of Parts A and B: shares no code, can land in any order. Effort 1/5.
 
+**Slice design:** `user/slices/910-slice.loop-convergence-correctness.md`
+Branch: `910-slice.loop-convergence-correctness`, close issues #42/#43/#45 on merge.
+
 **Status:** not started · **Risk:** Medium (Parts A/B) / Low (Part C) · **Effort:** 2/5 · **Dependencies:** none
 
 9. [ ] **(911) Loop Iteration Versioning and Review Evidence**

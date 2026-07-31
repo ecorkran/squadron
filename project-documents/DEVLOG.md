@@ -10,6 +10,25 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260731
+
+### Slice 910: Loop Convergence Correctness — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/910-slice.loop-convergence-correctness.md` on branch `main` (planning work, no slice branch), from the slice-plan entry in `900-slices.maintenance-and-refactoring.md`. Three defects on the `loop:` execution path bundled into one slice because Parts A and B share `_execute_loop_body` and one test file: Part A findings-feedback gap (#42, High), Part B ambiguous multi-review `until:` gating (#43, High), Part C `--dry-run` loop-body expansion (#45, Low).
+
+**Grounded every anchor against on-disk code, extending the scoping already done in the slice-plan entry:**
+- **Part A:** re-confirmed `_execute_loop_body` (`executor.py:1298-1321`) passes the outer `prior_outputs` unchanged into every iteration, and that `DispatchAction._resolve_prompt_from_prior_review` (`dispatch.py:258-291`) is a complete, already-shipped consumer waiting on real data. Added a design-time decision the plan entry left open: keep the existing `{action_type}-{action_index}` key scheme for the accumulated `prior_outputs` (letting a later iteration's same-key write overwrite the earlier one) rather than folding the iteration number into the key, since the consumer only ever wants the *most recent* review, not a full history — full history is 911's job.
+- **Part B:** traced which step types can actually produce a verdict-bearing action, since the fix counts them at validation time. Confirmed it's not just `StepTypeName.REVIEW` — `PhaseStepType.expand()` (`phase.py:156-169`) appends a `review` action from an inline `review:` sub-field, and `gate` (`actions/gate.py`) also produces a `verdict`. A loop body with two `phase:` steps each carrying inline `review:` is ambiguous under #43 even though neither inner step is literally type `review` — the validation check must expand inner steps and count actions, not pattern-match step-type names. Placed the check inside `LoopStepType.validate()` (`loop.py:30-115`) alongside the existing nested-loop ban, reusing the already-imported `unpack_inner_steps` helper. Flagged a fallback (raw-config inspection instead of calling `expand()`) in case any inner step type's `expand()` isn't side-effect-free.
+- **Part C:** confirmed the exact one-line render site (`run.py:983`) and scoped the fix to a single `if step.step_type == "loop"` branch reusing `unpack_inner_steps` for the indented inner-step listing — no new rendering abstraction, matching Parts A/B's no-new-machinery bar.
+
+**Also recorded, not fixed:** the `on_exhaust: skip` fall-through gap the plan entry already flagged as deferred (verified present at `executor.py:873/881`, `SKIPPED` absent from the run loop's early-return checks) is carried into the slice design as an explicit Known Issue, out of scope for all three parts, unchanged from the plan-entry framing.
+
+**Sequencing:** Part B before Part A (establishes the one-verdict-per-body invariant Part A's tests assert against); Part C independent, any order.
+
+**Next:** Phase 5 (Task Breakdown) for slice 910, not yet started.
+
+---
+
 ## 20260727
 
 ### Slice 323: Phase 6 Implementation and First Noise Floor
