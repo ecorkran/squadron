@@ -10,8 +10,10 @@ from typing import cast
 
 from squadron.pipeline.executor import ExhaustBehavior, LoopCondition
 from squadron.pipeline.models import StepConfig, ValidationError
-from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_type
 from squadron.pipeline.steps.utils import unpack_inner_steps
+
+_VERDICT_BEARING_ACTION_TYPES = frozenset({"review", "gate"})
 
 
 class LoopStepType:
@@ -111,6 +113,8 @@ class LoopStepType:
             )
         else:
             errors.extend(self._validate_inner_steps(cast(list[object], steps_val), step_type))
+            if until_val is not None:
+                errors.extend(self._validate_verdict_count(cast(list[object], steps_val), step_type))
 
         return errors
 
@@ -157,6 +161,52 @@ class LoopStepType:
                     )
                 )
         return errors
+
+    def _validate_verdict_count(
+        self,
+        steps: list[object],
+        step_type: str,
+    ) -> list[ValidationError]:
+        """Reject a loop body with more than one verdict-bearing action.
+
+        A verdict-bearing action ("review" or "gate") gates ``until:`` via
+        ``_last_with_verdict``, which only looks at the last such action in
+        the body. Two or more makes that gating ambiguous, so this is
+        rejected at validation time rather than resolved at runtime.
+        """
+        raw_dicts = [cast(dict[str, object], s) for s in steps if isinstance(s, dict)]
+        inner_configs = unpack_inner_steps(raw_dicts)
+
+        offending_names: list[str] = []
+        verdict_count = 0
+        for inner in inner_configs:
+            step_impl = get_step_type(inner.step_type)
+            # An inner step that fails its own validate() may not have the
+            # fields expand() requires (e.g. review: with no template:) —
+            # skip verdict-counting for it; its own error is reported
+            # separately once inner-step validation exists.
+            if step_impl.validate(inner):
+                continue
+            for action_type, _action_config in step_impl.expand(inner):
+                if action_type in _VERDICT_BEARING_ACTION_TYPES:
+                    verdict_count += 1
+                    offending_names.append(inner.name)
+
+        if verdict_count > 1:
+            return [
+                ValidationError(
+                    field="steps",
+                    message=(
+                        f"loop body has {verdict_count} verdict-bearing actions "
+                        f"({', '.join(offending_names)}) with 'until:' set — this "
+                        f"makes 'until:' ambiguous, since only the last "
+                        f"verdict-bearing action gates the loop. Split into "
+                        f"sequential loops, one review/gate per loop body."
+                    ),
+                    action_type=step_type,
+                )
+            ]
+        return []
 
     def inner_steps(self, config: StepConfig) -> list[StepConfig]:
         raw: object = config.config.get("steps", [])

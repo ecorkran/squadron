@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import squadron.pipeline.steps.loop  # noqa: F401 — trigger registration
 from squadron.pipeline.models import StepConfig
-from squadron.pipeline.steps import get_step_type
+from squadron.pipeline.steps import bootstrap_step_types, get_step_type
 from squadron.pipeline.steps.loop import LoopStepType
+
+bootstrap_step_types()  # registers all step types, including "loop"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -147,3 +148,68 @@ def test_expand_returns_empty_list() -> None:
 def test_get_step_type_returns_loop_step_type_instance() -> None:
     impl = get_step_type("loop")
     assert isinstance(impl, LoopStepType)
+
+
+# ---------------------------------------------------------------------------
+# Multi-verdict validation — ambiguous until: gating (#43)
+# ---------------------------------------------------------------------------
+
+
+def test_two_review_steps_with_until_produces_error() -> None:
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "until": "review.pass",
+                "steps": [
+                    {"review": {"template": "design"}},
+                    {"review": {"template": "tasks"}},
+                ],
+            }
+        )
+    )
+    assert "steps" in _fields(errors)
+    assert any("verdict-bearing" in m for m in _messages(errors))
+
+
+def test_phase_with_inline_review_then_bare_review_with_until_produces_error() -> None:
+    """Proves the check inspects expanded actions, not step-type names."""
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "until": "review.pass",
+                "steps": [
+                    {"design": {"phase": 4, "review": "slice"}},
+                    {"review": {"template": "tasks"}},
+                ],
+            }
+        )
+    )
+    assert "steps" in _fields(errors)
+    assert any("verdict-bearing" in m for m in _messages(errors))
+
+
+def test_two_verdict_steps_without_until_no_error() -> None:
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "steps": [{"review": {}}, {"review": {}}],
+            }
+        )
+    )
+    assert errors == []
+
+
+def test_one_verdict_step_with_until_no_error() -> None:
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "until": "review.pass",
+                "steps": [{"dispatch": {}}, {"review": {}}],
+            }
+        )
+    )
+    assert errors == []

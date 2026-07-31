@@ -84,3 +84,34 @@ def test_inner_loop_step_type_fails_validation() -> None:
     assert any("type 'loop'" in m and "nested" in m for m in messages), (
         f"expected nested-loop type error, got: {messages}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Multi-verdict validation — ambiguous until: gating (#43)
+# ---------------------------------------------------------------------------
+
+
+def test_loop_with_two_reviews_and_until_fails_full_pipeline_validation() -> None:
+    """A loop: body with two reviews and until: fails validate_pipeline().
+
+    Exercises the full validate_pipeline() path (not just
+    LoopStepType.validate() directly), naming both offending steps.
+    """
+    pipeline = _pipeline_with_loop(
+        {
+            "max": 3,
+            "until": "review.pass",
+            "steps": [
+                {"review": {"template": "design"}},
+                {"review": {"template": "tasks"}},
+            ],
+        }
+    )
+
+    errors = validate_pipeline(pipeline)
+
+    assert errors, "expected at least one validation error"
+    messages = [e.message for e in errors]
+    assert any("verdict-bearing" in m for m in messages), (
+        f"expected ambiguous-verdict error, got: {messages}"
+    )
