@@ -12,7 +12,12 @@ import typer
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.cli.commands.run import _assemble_params, _check_cf, _resolve_target
+from squadron.cli.commands.run import (
+    _DRY_RUN_NO_UNTIL_DISPLAY,
+    _assemble_params,
+    _check_cf,
+    _resolve_target,
+)
 from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
@@ -453,7 +458,7 @@ class TestRunPipeline:
         ):
             result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
         assert result.exit_code == 0
-        assert "no until — completes after first iteration" in result.output
+        assert _DRY_RUN_NO_UNTIL_DISPLAY in result.output
 
     def test_missing_pipeline_via_cli_exits_1(self) -> None:
         """sq run <missing> exits 1 with error message."""

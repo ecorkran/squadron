@@ -1304,7 +1304,7 @@ async def _execute_loop_body(
     for iteration in range(1, loop_config.max + 1):
         iteration_action_results = []
 
-        for inner_step in inner_steps:
+        for inner_step_index, inner_step in enumerate(inner_steps):
             inner_resolved = resolve_placeholders(inner_step.config, merged_params)
             inner_result = await _execute_step_once(
                 step=inner_step,
@@ -1325,8 +1325,13 @@ async def _execute_loop_body(
                 runs_dir=runs_dir,
             )
             iteration_action_results.extend(inner_result.action_results)
+            # Fold in the inner step's own position so two different inner
+            # steps producing the same action_type (e.g. two dispatch:
+            # steps) never collide within one iteration — only same-key
+            # writes across iterations are meant to overwrite.
             for action_index, result in enumerate(inner_result.action_results):
-                running_prior[f"{result.action_type}-{action_index}"] = result
+                key = f"{inner_step_index}-{result.action_type}-{action_index}"
+                running_prior[key] = result
 
             # Checkpoint pause short-circuits the loop immediately
             if inner_result.status == ExecutionStatus.PAUSED:

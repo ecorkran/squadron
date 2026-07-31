@@ -64,6 +64,8 @@ _STATUS_COLORS: dict[str, str] = {
     "paused": "yellow",
 }
 
+_DRY_RUN_NO_UNTIL_DISPLAY = "no until — completes after first iteration"
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -984,7 +986,7 @@ def run(
             rprint(f"  {step.name} ({step.step_type})")
             if step.step_type == "loop":
                 max_val = step.config.get("max")
-                until_val = step.config.get("until", "no until — completes after first iteration")
+                until_val = step.config.get("until", _DRY_RUN_NO_UNTIL_DISPLAY)
                 on_exhaust_val = step.config.get("on_exhaust")
                 rprint(f"    max: {max_val}, until: {until_val}, on_exhaust: {on_exhaust_val}")
                 raw_inner: object = step.config.get("steps", [])

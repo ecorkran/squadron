@@ -182,15 +182,19 @@ class LoopStepType:
         for inner in inner_configs:
             step_impl = get_step_type(inner.step_type)
             # An inner step that fails its own validate() may not have the
-            # fields expand() requires (e.g. review: with no template:) —
-            # skip verdict-counting for it; its own error is reported
-            # separately once inner-step validation exists.
+            # fields expand() requires (e.g. review: with no template:).
+            # _validate_inner_steps (above) already reports shape errors for
+            # this inner step; skip it here rather than let expand() raise
+            # on an incomplete config it was never guaranteed to receive.
             if step_impl.validate(inner):
                 continue
+            inner_has_verdict = False
             for action_type, _action_config in step_impl.expand(inner):
                 if action_type in _VERDICT_BEARING_ACTION_TYPES:
                     verdict_count += 1
-                    offending_names.append(inner.name)
+                    inner_has_verdict = True
+            if inner_has_verdict:
+                offending_names.append(inner.name)
 
         if verdict_count > 1:
             return [

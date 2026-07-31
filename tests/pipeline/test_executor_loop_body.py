@@ -454,6 +454,83 @@ async def test_iteration_2_dispatch_sees_iteration_1_review_in_prior_outputs() -
 
 
 @pytest.mark.asyncio
+async def test_two_inner_steps_same_action_type_do_not_collide_within_iteration() -> None:
+    """Two different inner steps producing the same action_type in one
+    iteration must not overwrite each other in running_prior.
+
+    Body is dispatch -> dispatch -> review. Both dispatch inner steps
+    produce an action_type="dispatch" result with action_index 0 (each
+    inner step's own action list restarts its index at 0), so a key scheme
+    that ignores which inner step produced the result would let the second
+    dispatch's result silently overwrite the first's before review even
+    runs. Both inner steps resolve to the same "dispatch" entry in
+    _action_registry (lookup is by action_type only), so a single mock
+    returns each result in call order — first inner step's call gets
+    first_dispatch_result, second inner step's call gets
+    second_dispatch_result. Asserts review's ActionContext.prior_outputs
+    contains both, distinguishable by their outputs.
+    """
+    captured_review_ctx: list[ActionContext] = []
+
+    first_dispatch_result = ActionResult(
+        success=True, action_type="dispatch", outputs={"response": "first"}
+    )
+    second_dispatch_result = ActionResult(
+        success=True, action_type="dispatch", outputs={"response": "second"}
+    )
+    dispatch_action = _mock_action([first_dispatch_result, second_dispatch_result])
+
+    async def _review_side_effect(ctx: ActionContext) -> ActionResult:
+        captured_review_ctx.append(ctx)
+        return ActionResult(success=True, action_type="review", outputs={}, verdict="PASS")
+
+    review_action = MagicMock()
+    review_action.execute = AsyncMock(side_effect=_review_side_effect)
+
+    first_dispatch_inner = _mock_step_type([("dispatch", {})])
+    second_dispatch_inner = _mock_step_type([("dispatch", {})])
+    review_inner = _mock_step_type([("review", {})])
+    register_step_type("_lb_first_dispatch_t_collision", first_dispatch_inner)
+    register_step_type("_lb_second_dispatch_t_collision", second_dispatch_inner)
+    register_step_type("_lb_review_t_collision", review_inner)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "no-collision-loop",
+                {
+                    "max": 1,
+                    "steps": [
+                        {"_lb_first_dispatch_t_collision": {}},
+                        {"_lb_second_dispatch_t_collision": {}},
+                        {"_lb_review_t_collision": {}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": dispatch_action, "review": review_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert len(captured_review_ctx) == 1
+
+    dispatch_results_seen = [
+        r for r in captured_review_ctx[0].prior_outputs.values() if r.action_type == "dispatch"
+    ]
+    responses_seen = {r.outputs.get("response") for r in dispatch_results_seen}
+    assert responses_seen == {"first", "second"}, (
+        f"expected both dispatch results to survive without collision, got: {responses_seen}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_iteration_2_dispatch_prompt_contains_iteration_1_finding() -> None:
     """The resolved prompt for iteration 2's dispatch contains the iteration-1
     finding's summary text — closing the gap between "prior_outputs
