@@ -131,15 +131,15 @@ status: not_started
 
 ## Part A — Findings Feedback Between Iterations (#42)
 
-- [ ] **T5. Accumulate per-iteration `prior_outputs` in `_execute_loop_body`**
-  - [ ] In `src/squadron/pipeline/executor.py`, in `_execute_loop_body`
+- [x] **T5. Accumulate per-iteration `prior_outputs` in `_execute_loop_body`**
+  - [x] In `src/squadron/pipeline/executor.py`, in `_execute_loop_body`
     (~line 1298), introduce a `running_prior = dict(prior_outputs)` snapshot
     before the `for iteration in range(...)` loop, mirroring the existing
     `step_prior = dict(prior_outputs)` pattern in `_execute_step_once`
     (executor.py:1030).
-  - [ ] Pass `running_prior` (not the original `prior_outputs` parameter)
+  - [x] Pass `running_prior` (not the original `prior_outputs` parameter)
     into each `_execute_step_once` call inside the iteration loop.
-  - [ ] After each inner step's call returns, update `running_prior` from
+  - [x] After each inner step's call returns, update `running_prior` from
     that call's `inner_result.action_results`, keyed exactly as
     `_execute_step_once` already keys its own `step_prior`:
     `f"{action_type}-{action_index}"`, where `action_index` is the result's
@@ -149,16 +149,16 @@ status: not_started
     resolved" for why no iteration-number qualifier is needed, made possible
     by Part B (T1-T4) already landing and banning the one shape that would
     make this collide within a single iteration.
-  - [ ] Do **not** modify `step_outputs` handling in this task — traced and
+  - [x] Do **not** modify `step_outputs` handling in this task — traced and
     confirmed disjoint from `prior_outputs` in the design (Part A
     "`step_outputs` interaction — resolved"); no change needed here.
-  - [ ] **Success:** iteration 2's `ActionContext.prior_outputs` (as seen by
+  - [x] **Success:** iteration 2's `ActionContext.prior_outputs` (as seen by
     its `dispatch` action) contains the `review` result from iteration 1,
     not just whatever was in `prior_outputs` before the loop started.
   - Effort: 2/5
 
-- [ ] **T6. Test findings-feedback across iterations** *(test-with T5)*
-  - [ ] Add a test to `tests/pipeline/test_executor_loop_body.py`, following
+- [x] **T6. Test findings-feedback across iterations** *(test-with T5)*
+  - [x] Add a test to `tests/pipeline/test_executor_loop_body.py`, following
     the existing helpers in that file (`_action_result`, `_mock_action`,
     `_mock_step_type`, `_loop_step`, `_pipeline`, `execute_pipeline(...,
     _action_registry=...)`): construct a loop body of `dispatch` + `review`
@@ -166,20 +166,20 @@ status: not_started
     `ActionContext` argument (via `side_effect` or by inspecting
     `call_args_list` after the run), and the `review` mock returns FAIL with
     a specific finding on iteration 1, PASS on iteration 2.
-  - [ ] Assert the dispatch action's `ActionContext.prior_outputs` on the
+  - [x] Assert the dispatch action's `ActionContext.prior_outputs` on the
     **second** call contains the iteration-1 review's `ActionResult`
     (matching on `action_type == "review"` and the finding content), proving
     the loop is feeding results forward — not merely that the loop completed
     in 2 iterations (which the existing `test_loop_body_retries_to_pass_on_
     iteration_3` already covers and does not by itself prove this fix).
-  - [ ] **Success:** the new test fails against pre-fix code (i.e. confirm it
+  - [x] **Success:** the new test fails against pre-fix code (i.e. confirm it
     would have caught the original bug — run it against a stashed/reverted
     `_execute_loop_body` if convenient, or reason through why the assertion
     depends on the fix) and passes after T5.
   - Effort: 2/5
 
-- [ ] **T7. Verify `DispatchAction` findings-feedback end-to-end with a real prompt**
-  - [ ] Extend or add to the T6 test (or a adjacent one in the same file) to
+- [x] **T7. Verify `DispatchAction` findings-feedback end-to-end with a real prompt**
+  - [x] Extend or add to the T6 test (or a adjacent one in the same file) to
     assert on the **prompt text** actually resolved for iteration 2's
     dispatch — i.e. that `DispatchAction._resolve_prompt_from_prior_review`
     (already-shipped code, unchanged by this slice) produces a prompt
@@ -188,15 +188,15 @@ status: not_started
     actually turns it into the right prompt" (this task) — both are called
     out separately in the design's Success Criteria and Verification
     Walkthrough.
-  - [ ] **Success:** the resolved prompt string for iteration 2 contains the
+  - [x] **Success:** the resolved prompt string for iteration 2 contains the
     iteration-1 finding's summary text; iteration 1's prompt does not
     (nothing to feed back yet).
   - Effort: 1/5
 
-- [ ] **T8. Commit Part A**
-  - [ ] `ruff format`, run Part A tests (T6, T7), then commit
+- [x] **T8. Commit Part A**
+  - [x] `ruff format`, run Part A tests (T6, T7), then commit
     (`fix: feed loop iteration findings into next iteration's prior_outputs`).
-  - [ ] Reference issue #42 in the commit body.
+  - [x] Reference issue #42 in the commit body.
   - Effort: 1/5
 
 ---

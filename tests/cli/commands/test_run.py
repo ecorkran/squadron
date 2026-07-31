@@ -399,6 +399,62 @@ class TestRunPipeline:
         assert result.exit_code == 0
         assert not list(tmp_path.glob("*.json"))
 
+    def test_dry_run_expands_loop_step_body(self) -> None:
+        """--dry-run on a loop: step shows body, max, until, on_exhaust."""
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="loop",
+                    name="design-review-loop",
+                    config={
+                        "max": 3,
+                        "until": "review.pass",
+                        "on_exhaust": "checkpoint",
+                        "steps": [
+                            {"design": {"phase": 4}},
+                            {"review": {"template": "slice", "name": "review-design"}},
+                        ],
+                    },
+                )
+            ],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        ):
+            result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
+        assert result.exit_code == 0
+        assert "design-review-loop (loop)" in result.output
+        assert "max: 3" in result.output
+        assert "until: review.pass" in result.output
+        assert "on_exhaust: checkpoint" in result.output
+        assert "design-0 (design)" in result.output
+        assert "review-design (review)" in result.output
+
+    def test_dry_run_loop_without_until_shows_default_message(self) -> None:
+        """--dry-run on a loop: step with no until: shows the no-until fallback."""
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="loop",
+                    name="single-pass-loop",
+                    config={
+                        "max": 1,
+                        "steps": [{"dispatch": {}}],
+                    },
+                )
+            ],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        ):
+            result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
+        assert result.exit_code == 0
+        assert "no until — completes after first iteration" in result.output
+
     def test_missing_pipeline_via_cli_exits_1(self) -> None:
         """sq run <missing> exits 1 with error message."""
         with patch(

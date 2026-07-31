@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import typer
 from rich import print as rprint
@@ -50,6 +50,7 @@ from squadron.pipeline.prompt_renderer import (
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.sdk_session import SDKExecutionSession
 from squadron.pipeline.state import ExecutionMode, SchemaVersionError, StateManager
+from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _logger = logging.getLogger(__name__)
 
@@ -981,6 +982,19 @@ def run(
         rprint("\n[bold]Steps:[/bold]")
         for step in definition.steps:
             rprint(f"  {step.name} ({step.step_type})")
+            if step.step_type == "loop":
+                max_val = step.config.get("max")
+                until_val = step.config.get("until", "no until — completes after first iteration")
+                on_exhaust_val = step.config.get("on_exhaust")
+                rprint(f"    max: {max_val}, until: {until_val}, on_exhaust: {on_exhaust_val}")
+                raw_inner: object = step.config.get("steps", [])
+                if isinstance(raw_inner, list):
+                    raw_inner_list = cast(list[object], raw_inner)
+                    inner_dicts = [
+                        cast(dict[str, object], s) for s in raw_inner_list if isinstance(s, dict)
+                    ]
+                    for inner in unpack_inner_steps(inner_dicts):
+                        rprint(f"    {inner.name} ({inner.step_type})")
         raise typer.Exit(0)
 
     # ---- --resume ----
