@@ -65,6 +65,7 @@ _STATUS_COLORS: dict[str, str] = {
 }
 
 _DRY_RUN_NO_UNTIL_DISPLAY = "no until — completes after first iteration"
+_DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX = ", commit_each_iteration: true"
 
 
 # ---------------------------------------------------------------------------
@@ -988,7 +989,10 @@ def run(
                 max_val = step.config.get("max")
                 until_val = step.config.get("until", _DRY_RUN_NO_UNTIL_DISPLAY)
                 on_exhaust_val = step.config.get("on_exhaust")
-                rprint(f"    max: {max_val}, until: {until_val}, on_exhaust: {on_exhaust_val}")
+                loop_line = f"    max: {max_val}, until: {until_val}, on_exhaust: {on_exhaust_val}"
+                if step.config.get("commit_each_iteration"):
+                    loop_line += _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX
+                rprint(loop_line)
                 raw_inner: object = step.config.get("steps", [])
                 if isinstance(raw_inner, list):
                     raw_inner_list = cast(list[object], raw_inner)

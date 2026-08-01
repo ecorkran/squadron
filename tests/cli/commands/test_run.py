@@ -13,6 +13,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.cli.commands.run import (
+    _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX,
     _DRY_RUN_NO_UNTIL_DISPLAY,
     _assemble_params,
     _check_cf,
@@ -459,6 +460,55 @@ class TestRunPipeline:
             result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
         assert result.exit_code == 0
         assert _DRY_RUN_NO_UNTIL_DISPLAY in result.output
+
+    def test_dry_run_loop_with_commit_each_iteration_shows_line(self) -> None:
+        """--dry-run on a loop: step with commit_each_iteration: true renders it."""
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="loop",
+                    name="commit-each-loop",
+                    config={
+                        "max": 3,
+                        "until": "action.success",
+                        "commit_each_iteration": True,
+                        "steps": [{"dispatch": {}}],
+                    },
+                )
+            ],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        ):
+            result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
+        assert result.exit_code == 0
+        assert _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX in result.output
+
+    def test_dry_run_loop_without_commit_each_iteration_omits_line(self) -> None:
+        """--dry-run on a loop: step without the key renders no such line."""
+        defn = _make_definition(
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="loop",
+                    name="plain-loop",
+                    config={
+                        "max": 3,
+                        "until": "action.success",
+                        "steps": [{"dispatch": {}}],
+                    },
+                )
+            ],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+        ):
+            result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
+        assert result.exit_code == 0
+        assert _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX not in result.output
 
     def test_missing_pipeline_via_cli_exits_1(self) -> None:
         """sq run <missing> exits 1 with error message."""

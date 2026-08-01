@@ -272,23 +272,23 @@ status: not_started
   - [x] The commit result appears in that iteration's `action_results`.
   - [x] Success: all pass.
 
-- [ ] **T16. Warn when an iteration changed nothing**
-  - [ ] In `src/squadron/pipeline/actions/commit.py`, on the clean-tree
+- [x] **T16. Warn when an iteration changed nothing**
+  - [x] In `src/squadron/pipeline/actions/commit.py`, on the clean-tree
     early-return path (lines 37-42), log at WARNING when
     `context.iteration >= 1`, naming pipeline, step, and iteration.
-  - [ ] Message must say what it means: the iteration produced byte-identical
+  - [x] Message must say what it means: the iteration produced byte-identical
     output, i.e. the retry did not change anything.
-  - [ ] Outside a loop (`iteration == 0`) a clean tree is normal — no warning.
-  - [ ] Keep the return value unchanged (`success=True`,
+  - [x] Outside a loop (`iteration == 0`) a clean tree is normal — no warning.
+  - [x] Keep the return value unchanged (`success=True`,
     `outputs={"committed": False}`); this task adds a signal, not a failure.
-  - [ ] Success: `ruff`, `pyright` strict clean.
+  - [x] Success: `ruff`, `pyright` strict clean.
 
-- [ ] **T17. Tests for the no-change warning**
-  - [ ] Clean tree with `iteration == 2` emits a WARNING naming the iteration
+- [x] **T17. Tests for the no-change warning**
+  - [x] Clean tree with `iteration == 2` emits a WARNING naming the iteration
     (assert on the captured log record).
-  - [ ] Clean tree with `iteration == 0` emits no warning.
-  - [ ] The action still returns `success=True` and `committed: False` in both.
-  - [ ] Success: all pass.
+  - [x] Clean tree with `iteration == 0` emits no warning.
+  - [x] The action still returns `success=True` and `committed: False` in both.
+  - [x] Success: all pass.
 
 ---
 
