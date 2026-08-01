@@ -248,29 +248,29 @@ status: not_started
     Pipeline names omit the `.yaml` extension; the loader appends it.
   - [x] Success: all pass.
 
-- [ ] **T14. Append a commit action per iteration in `_execute_loop_body`**
-  - [ ] In `src/squadron/pipeline/executor.py`, in `_execute_loop_body`
+- [x] **T14. Append a commit action per iteration in `_execute_loop_body`**
+  - [x] In `src/squadron/pipeline/executor.py`, in `_execute_loop_body`
     (lines 1251-1370), when `commit_each_iteration` is set, execute one commit
     action after the body's inner steps complete for that iteration — before
     the `until:` evaluation at line 1348.
-  - [ ] Pass `message_prefix: "loop-{step.name}"` and the current `iteration`,
+  - [x] Pass `message_prefix: "loop-{step.name}"` and the current `iteration`,
     so T2's suffix produces a distinguishable message per round.
-  - [ ] Fold its `ActionResult` into `iteration_action_results` and into
+  - [x] Fold its `ActionResult` into `iteration_action_results` and into
     `running_prior` using the same key scheme already in place at lines
     1332-1334 — do not invent a second scheme.
-  - [ ] Staging behavior stays identical to the phase-emitted commit
+  - [x] Staging behavior stays identical to the phase-emitted commit
     (`git add -A`). Do not add scoped staging in one commit path and not the
     other; the inconsistency is worse than the sweep.
-  - [ ] Success: `ruff`, `pyright` strict clean.
+  - [x] Success: `ruff`, `pyright` strict clean.
 
-- [ ] **T15. Tests for per-iteration commits**
-  - [ ] In `tests/pipeline/test_executor_loop_body.py`: with
+- [x] **T15. Tests for per-iteration commits**
+  - [x] In `tests/pipeline/test_executor_loop_body.py`: with
     `commit_each_iteration: true`, a three-iteration loop invokes the commit
     action three times, each with a distinct iteration.
-  - [ ] With the key absent, the commit action is never invoked — existing
+  - [x] With the key absent, the commit action is never invoked — existing
     loops are unaffected.
-  - [ ] The commit result appears in that iteration's `action_results`.
-  - [ ] Success: all pass.
+  - [x] The commit result appears in that iteration's `action_results`.
+  - [x] Success: all pass.
 
 - [ ] **T16. Warn when an iteration changed nothing**
   - [ ] In `src/squadron/pipeline/actions/commit.py`, on the clean-tree

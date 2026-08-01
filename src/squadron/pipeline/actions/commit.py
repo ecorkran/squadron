@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 # Appended to a composed (not explicit) commit message when running inside a
 # loop iteration, so consecutive rounds leave distinguishable git history.
@@ -39,6 +42,16 @@ class CommitAction:
             )
 
         if not status.stdout.strip():
+            if context.iteration >= 1:
+                # #42 symptom made observable: a round that produced
+                # byte-identical output — the retry did not change anything.
+                _logger.warning(
+                    "commit: iteration %d of pipeline=%s step=%s produced no "
+                    "changes — the round was byte-identical to the prior one",
+                    context.iteration,
+                    context.pipeline_name,
+                    context.step_name,
+                )
             return ActionResult(
                 success=True,
                 action_type=self.action_type,

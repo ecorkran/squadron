@@ -195,3 +195,31 @@ async def test_explicit_message_not_suffixed(action: CommitAction, git_repo: Pat
     result = await action.execute(ctx)
 
     assert result.outputs["message"] == "feat: explicit message"
+
+
+@pytest.mark.asyncio
+async def test_no_changes_inside_loop_logs_warning(
+    action: CommitAction, git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ctx = _make_context(str(git_repo), iteration=2)
+
+    with caplog.at_level("WARNING"):
+        result = await action.execute(ctx)
+
+    assert result.success is True
+    assert result.outputs["committed"] is False
+    assert any("iteration 2" in rec.message and "no changes" in rec.message for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_no_changes_outside_loop_no_warning(
+    action: CommitAction, git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ctx = _make_context(str(git_repo), iteration=0)
+
+    with caplog.at_level("WARNING"):
+        result = await action.execute(ctx)
+
+    assert result.success is True
+    assert result.outputs["committed"] is False
+    assert not any("byte-identical" in rec.message for rec in caplog.records)
