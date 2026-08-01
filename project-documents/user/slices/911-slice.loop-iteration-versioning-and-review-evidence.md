@@ -54,12 +54,12 @@ cannot be inspected is a convergence claim taken on faith.
 - **Part A — per-iteration commits.** Make each loop iteration leave a
   distinguishable commit, for loop bodies that commit today and for bodies that
   do not; make a byte-identical round observable rather than silent.
-- **Part B — `version:` on the artifact.** Squadron stamps a monotonic integer
-  `version:` into the frontmatter of the artifact a loop iteration produces,
+- **Part B — `revision_number:` on the artifact.** Squadron stamps a monotonic integer
+  `revision_number:` into the frontmatter of the artifact a loop iteration produces,
   and emits the same field on the review file it authors itself.
 - **Part C — the round contract.** State and document what survives a round
-  (clean regeneration; `version:` is the only carryover) and what an absent
-  `version:` means.
+  (clean regeneration; `revision_number:` is the only carryover) and what an absent
+  `revision_number:` means.
 
 **Excluded:**
 
@@ -149,13 +149,13 @@ and the dispatch-bodied case needs a commit at all.
 | Component | Change |
 |---|---|
 | `pipeline/models.py` — `ActionContext` | New `iteration: int | None = None` field |
-| `pipeline/executor.py` — `_execute_step_once` | Populate `ctx.iteration`; stamp `version:` after the artifact post-condition passes |
+| `pipeline/executor.py` — `_execute_step_once` | Populate `ctx.iteration`; stamp `revision_number:` after the artifact post-condition passes |
 | `pipeline/executor.py` — `_execute_loop_body` | Append a commit action per iteration when `commit_each_iteration` is set |
 | `pipeline/steps/loop.py` — `LoopStepType.validate` | Validate `commit_each_iteration`; reject it when the body already commits |
 | `pipeline/actions/commit.py` — `CommitAction` | Iteration-qualified message; WARNING on a no-change round inside a loop |
 | `documents/frontmatter.py` **(new)** | Generic lenient frontmatter read / update helpers |
 | `metrology/identity.py` — `read_review_frontmatter` | Delegate its parse to the new helper (DRY), keep its review-specific validation |
-| `review/persistence.py` — `format_review_markdown` | Emit `version:` when the caller supplies one |
+| `review/persistence.py` — `format_review_markdown` | Emit `revision_number:` when the caller supplies one |
 | `pipeline/actions/review.py` | Pass `context.iteration` through to persistence |
 | `cli/commands/run.py` | `--dry-run` prints `commit_each_iteration` |
 | `docs/PIPELINES.md` | Replace the "no per-iteration commit" constraint |
@@ -171,8 +171,8 @@ _execute_loop_body(iteration=N)
        ├─ ActionContext(iteration=N)              ← new field
        ├─ dispatch  → agent writes design_file
        │    └─ post-condition passes (909)
-       │         └─ update_frontmatter(design_file, version=prev+1)   ← Part B
-       ├─ review    → format_review_markdown(..., version=N)          ← Part B
+       │         └─ update_frontmatter(design_file, revision_number=prev+1)
+       ├─ review    → format_review_markdown(..., revision_number=N)
        └─ commit    → "chore: phase-4 slice 911 (iteration N)"        ← Part A
             └─ committed == False → WARNING                            ← Part A
 ```
@@ -226,9 +226,9 @@ the #42 symptom; it is currently indistinguishable from success. Per
 `.claude/rules/review-code.md` (failure-mode enumeration) at least one test
 asserts the WARNING is emitted.
 
-### Part B — `version:` in frontmatter
+### Part B — `revision_number:` in frontmatter
 
-**Field.** A plain integer `version: {n}` — deliberately not semver. An
+**Field.** A plain integer `revision_number: {n}` — deliberately not semver. An
 iteration count is a counter, not a compatibility contract.
 
 **Semantics.** Monotonic count of squadron-stamped revisions of that file. On
@@ -237,7 +237,7 @@ write `1`. The value is not the loop's iteration index, so re-running a
 pipeline against an existing artifact continues the count rather than resetting
 it to 1 — which is what "which revision am I looking at" actually means.
 
-#### Field contract — what `version:` means to anyone who reads it
+#### Field contract — what `revision_number:` means to anyone who reads it
 
 Adding a field makes it usable. Once it exists in a document other tools and
 agents read, they will read it, and some will write it. The contract below is
@@ -255,7 +255,7 @@ must accompany the field wherever it is documented, including the eventual
 | What does absent mean? | "Never stamped by squadron." Explicitly **not** round 1, and not a default. Readers must treat absent as *no information*. |
 | Which docTypes? | `slice-design` and `tasks` — the artifacts a phase-step dispatch produces — plus `review`, which squadron authors itself. Undefined elsewhere; do not infer it onto other docTypes. |
 | Does `1` mean the document is new? | No. It means it is the first squadron-tracked revision. It makes no claim about what preceded it. |
-| Can it decrease or reset? | No. It is monotonic per file. A file that loses its `version:` has been hand-edited, not reset. |
+| Can it decrease or reset? | No. It is monotonic per file. A file that loses its `revision_number:` has been hand-edited, not reset. |
 | What is it *for*? | Naming a round so a reader — human or slice 912's findings-addressed check — can say which revision they are looking at. It is an identifier, not a state machine. |
 
 The failure this table is written against: a field named `version` in a
@@ -263,11 +263,18 @@ document header reads, to anything that has not been told otherwise, like a
 compatibility contract it should branch on. It is not one. Nothing should gate
 behavior on its value; the only correct uses are display and diff-labeling.
 
+**Name.** `revision_number`, not `version` (PM decision, 20260731). `version`
+invites exactly the semver misreading above; `revision` alone still leaves room
+for a reader to treat the value as a label rather than a count. The `_number`
+suffix closes that — it cannot be read as anything but an integer counter, so
+nothing downstream can creatively reinterpret it as a draft state, a stage
+name, or a release tag.
+
 **Who writes it.** Squadron, not the dispatched agent. Squadron never authors
 slice designs or task files — `DispatchAction` has no file-write code at all,
 it resolves a prompt and returns the response
 ([actions/dispatch.py:200-205](src/squadron/pipeline/actions/dispatch.py#L200-L205)).
-Instructing the agent to stamp its own version was rejected: it is an LLM
+Instructing the agent to stamp its own revision number was rejected: it is an LLM
 instruction, so it will be missed, and a missed stamp is indistinguishable from
 a pre-field artifact. Squadron post-processing is deterministic.
 
@@ -304,11 +311,11 @@ step to `read_frontmatter` and keeps its own review-specific validation and
 [persistence.py:238](src/squadron/review/persistence.py#L238)), so they lose
 round history exactly as the artifact does. `format_review_markdown`
 ([persistence.py:130-165](src/squadron/review/persistence.py#L130-L165)) gains
-an optional `version` that is emitted only when supplied;
+an optional `revision_number` that is emitted only when supplied;
 `pipeline/actions/review.py` supplies `context.iteration`.
 
 **Interface-parity note.** A CLI-invoked `sq review` has no iteration — there is
-no loop. It therefore emits **no** `version:` key at all, rather than `0` or
+no loop. It therefore emits **no** `revision_number:` key at all, rather than `0` or
 `1`. This is not a parity gap between CLI / slash / MCP surfaces (all three
 behave identically); it is the absence of a concept outside a loop, and it is
 consistent with the absent-means-unstamped rule below.
@@ -316,7 +323,7 @@ consistent with the absent-means-unstamped rule below.
 ### Part C — the round contract
 
 **Clean regeneration.** Each iteration regenerates the artifact from the phase
-prompt. `version:` is the only thing squadron carries across a round. Content
+prompt. `revision_number:` is the only thing squadron carries across a round. Content
 does not accumulate, and no round-specific scaffolding is injected into the
 document. Round-over-round history lives in git (Part A), not inside the file.
 
@@ -324,19 +331,25 @@ Rationale: the artifact is a contract other tools read, and simplest-that-works
 is the right default for a contract. Accumulating content would also make the
 document a second, weaker history mechanism competing with the one Part A adds.
 
-**Absent `version:` means "never stamped by squadron"** — explicitly *not*
+**Absent `revision_number:` means "never stamped by squadron"** — explicitly *not*
 "round 1." Readers must not default it. The first stamp writes `1`, meaning
 "first squadron-tracked revision," which makes no claim about what preceded it.
 This is the migration answer for every artifact written before this slice.
 
 **Cross-repo seam.** `project-documents/ai-project-guide` is a git submodule
 (`ecorkran/ai-project-guide`); its `file-naming-conventions.md` is the canonical
-frontmatter schema that Context Forge also reads. Registering `version:` there
+frontmatter schema that Context Forge also reads. Registering `revision_number:` there
 is a cross-tool contract change and is **out of scope for this slice** by PM
 decision — squadron-side first, guide follow-up second. Until that lands,
-`version:` is a key not present in the canonical schema. This slice changes no
+`revision_number:` is a key not present in the canonical schema. This slice changes no
 CF behavior; whether CF's own frontmatter consumers tolerate unregistered keys
-must be confirmed before the guide change is proposed. Recorded as future work.
+is the open compatibility question.
+
+Filed as [ai-project-guide issue #14](https://github.com/ecorkran/ai-project-guide/issues/14),
+which carries the proposed schema entry, the naming rationale, and the
+unknown-key question. Squadron follows whatever name that issue settles on; if
+it lands as something other than `revision_number`, this slice's field is
+renamed before Phase 6 rather than migrated after.
 
 ## Implementation Details
 
@@ -389,7 +402,7 @@ and `on_exhaust`.
 `docs/PIPELINES.md` currently carries a section titled "Constraint: no
 per-iteration commit" stating that a loop body cannot commit. That becomes
 false. Replace it with the `commit_each_iteration` option, the phase-body
-double-commit rule, and the `version:` contract from Part C.
+double-commit rule, and the `revision_number:` contract from Part C.
 
 ## Integration Points
 
@@ -397,7 +410,7 @@ double-commit rule, and the `version:` contract from Part C.
 
 - **Slice 912 (Part D).** Per-iteration commits give a "were the prior findings
   addressed?" check something to diff (`git diff HEAD~1 HEAD -- <artifact>`),
-  and `version:` gives it a stable way to name the round it is judging. Both are
+  and `revision_number:` gives it a stable way to name the round it is judging. Both are
   prerequisites; 912 designs the review semantics on top of them.
 - **`documents/frontmatter.py`** becomes the shared read/update primitive for
   any future consumer that needs to touch a document header.
@@ -422,10 +435,10 @@ double-commit rule, and the `version:` contract from Part C.
   validation time with a message naming the offending step.
 - A round that changes nothing logs a WARNING identifying pipeline, step, and
   iteration.
-- The artifact a loop iteration produces carries `version: {n}`, incrementing
-  round over round; an artifact with no prior `version:` receives `1`.
+- The artifact a loop iteration produces carries `revision_number: {n}`, incrementing
+  round over round; an artifact with no prior `revision_number:` receives `1`.
 - The review file squadron writes inside a loop carries the same field; one
-  written by `sq review` from the CLI carries no `version:` key.
+  written by `sq review` from the CLI carries no `revision_number:` key.
 - A frontmatter update leaves the document body byte-identical.
 
 ### Technical Requirements
@@ -434,7 +447,7 @@ double-commit rule, and the `version:` contract from Part C.
   clean.
 - New tests for: iteration-qualified messages, the `commit_each_iteration`
   validation rejection, the no-change WARNING, the failed-stamp WARNING,
-  version increment from absent / present / non-int prior values, and body
+  `revision_number` increment from absent / present / non-int prior values, and body
   byte-preservation against a real project document.
 - Each new failure path has a test asserting its observable signal, per
   `.claude/rules/review-code.md`.
@@ -475,7 +488,7 @@ identical subject lines.
 
 **4. The artifact says which round it is.** Run a phase-bodied loop that takes
 more than one round, then read the head of the design file CF reports for the
-slice. Expect `version:` in the frontmatter with a value matching the number of
+slice. Expect `revision_number:` in the frontmatter with a value matching the number of
 rounds squadron stamped.
 
 **5. Round-over-round diff — the thing #44 asked for.**

@@ -147,6 +147,8 @@ Fixes [issue #44](https://github.com/ecorkran/squadron/issues/44) and two adjace
 
 **Part D — split out to slice 912 (20260731).** The original fourth part — do review notes carry forward, and may a reviewer see the prior version — was carved out during Phase 4 design, on the plan's own instruction to split rather than expand. It is the prerequisite consumer of this slice's output, not part of it. See entry 10.
 
+**Field name (20260731).** Part B above proposes a "version indicator." The field is named **`revision_number`**, not `version` — the latter invites a semver misreading, and `revision` alone still allows the value to be treated as a label rather than a count. The slice design carries a full field contract (who writes it, what absent means, which docTypes, and that nothing may branch on its value).
+
 **Design correction (20260731).** Part A above states that "a `commit` step type already exists." It does not: `commit` is an *action* emitted only by phase-step expansion, and is not a registered step type, so it cannot appear as a bare step in a loop body. Consequence, verified during design: a loop whose body is phase steps (`p45b.yaml`) already commits once per iteration — the gap there is that every round's message is identical — while a loop whose body is a bare `dispatch:` (`judge-cycle.yaml`, `test-loop.yaml`) commits nothing. The slice design carries the corrected account.
 
 **Slice design:** `user/slices/911-slice.loop-iteration-versioning-and-review-evidence.md`
@@ -155,7 +157,7 @@ Fixes [issue #44](https://github.com/ecorkran/squadron/issues/44) and two adjace
 10. [ ] **(912) Review Evidence — Prior-Version Access and Findings-Addressed Check**
 Split out of slice 911 during its Phase 4 design (20260731), on 911's own instruction to split rather than expand. An evidence-integrity question rather than a document one. Showing a reviewer the prior version and its findings lets it answer "was this actually addressed?" — exactly what round 2 should ask. But it also anchors: a reviewer handed a list tends to grade against that list, leaving real-but-unlisted problems unfound and accepting "addressed" claims at face value. That is the failure shape of [issue #32](https://github.com/ecorkran/squadron/issues/32) — a confident verdict over work nothing actually examined; different mechanism, same result. Candidate resolution: separate the two questions rather than choosing between them — a clean-eyes review of the artifact as it stands, plus a distinct "were the prior findings addressed?" check that is allowed to see history, so neither contaminates the other. That doubles review cost per iteration, which is a real tradeoff worth measuring.
 
-**This slice needs a design conversation before its Phase 4 design is written.** It depends on 911 for both of its inputs: per-iteration commits give the check something to diff, and the artifact's `version:` field gives it a stable way to name the round it is judging.
+**This slice needs a design conversation before its Phase 4 design is written.** It depends on 911 for both of its inputs: per-iteration commits give the check something to diff, and the artifact's `revision_number:` field gives it a stable way to name the round it is judging.
 
 **Status:** not started · **Risk:** Medium-High · **Effort:** 3/5 provisional · **Dependencies:** [911]
 
