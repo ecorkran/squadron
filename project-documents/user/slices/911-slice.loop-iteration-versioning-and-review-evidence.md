@@ -113,7 +113,23 @@ design depends on the distinction:
   appends `("commit", {"message_prefix": f"phase-{phase}", "slice": slice_ref})`
   unconditionally at the end of every phase step.
 - Therefore a loop whose body is **phase steps** already commits once per
-  iteration. `p45b.yaml`'s two loops are exactly this shape.
+  iteration — *conditionally*. `p45b.yaml`'s two loops are this shape, and the
+  condition matters: the commit is the **last** action in the expansion
+  `[cf-op, cf-op, cf-op, dispatch, review, checkpoint, commit]`, and
+  `_execute_step_once` returns immediately on any action failure
+  ([executor.py:1116-1124](src/squadron/pipeline/executor.py#L1116-L1124)) or
+  on a checkpoint `Exit`
+  ([executor.py:1104-1111](src/squadron/pipeline/executor.py#L1104-L1111)).
+  A review action returns `success=True` regardless of verdict
+  ([actions/review.py:288](src/squadron/pipeline/actions/review.py#L288)), so a
+  `FAIL` alone does not skip the commit — but `checkpoint: on-fail` fires on
+  `FAIL` and `UNKNOWN`
+  ([actions/checkpoint.py:23](src/squadron/pipeline/actions/checkpoint.py#L23)),
+  and it sits *before* the commit
+  ([steps/phase.py:174-176](src/squadron/pipeline/steps/phase.py#L174-L176)).
+  Choosing `Exit` at that prompt therefore discards the round: no commit, and
+  the loop short-circuits to `PAUSED`. The rounds most worth keeping are the
+  ones most likely to be dropped.
 - A loop whose body is a bare **`dispatch:`** step commits nothing.
   `judge-cycle.yaml` and `test-loop.yaml` are this shape.
 - `CommitAction` no-ops when the tree is clean, returning
@@ -220,6 +236,32 @@ stamp: read the existing value; if present and an `int`, write `n+1`; otherwise
 write `1`. The value is not the loop's iteration index, so re-running a
 pipeline against an existing artifact continues the count rather than resetting
 it to 1 — which is what "which revision am I looking at" actually means.
+
+#### Field contract — what `version:` means to anyone who reads it
+
+Adding a field makes it usable. Once it exists in a document other tools and
+agents read, they will read it, and some will write it. The contract below is
+therefore part of the deliverable, not commentary on it — it is the text that
+must accompany the field wherever it is documented, including the eventual
+`ai-project-guide` schema entry.
+
+| Question | Answer |
+|---|---|
+| What does it count? | The number of times **squadron** has stamped this file. Nothing else. |
+| Who writes it? | Squadron's loop-iteration stamping path, only. |
+| Who must **not** write it? | Humans, agents authoring or editing the document, and any other tool. A hand-edit is not a squadron revision, and bumping it by hand makes the count mean nothing. |
+| Is it semver? | No. Not major/minor/patch, no ordering relationship to any release, no compatibility meaning. |
+| Is it the loop's iteration index? | No. Three rounds in run 1 then two in run 2 gives `5`, not `2`. It counts revisions of the document, not position in a loop. |
+| What does absent mean? | "Never stamped by squadron." Explicitly **not** round 1, and not a default. Readers must treat absent as *no information*. |
+| Which docTypes? | `slice-design` and `tasks` — the artifacts a phase-step dispatch produces — plus `review`, which squadron authors itself. Undefined elsewhere; do not infer it onto other docTypes. |
+| Does `1` mean the document is new? | No. It means it is the first squadron-tracked revision. It makes no claim about what preceded it. |
+| Can it decrease or reset? | No. It is monotonic per file. A file that loses its `version:` has been hand-edited, not reset. |
+| What is it *for*? | Naming a round so a reader — human or slice 912's findings-addressed check — can say which revision they are looking at. It is an identifier, not a state machine. |
+
+The failure this table is written against: a field named `version` in a
+document header reads, to anything that has not been told otherwise, like a
+compatibility contract it should branch on. It is not one. Nothing should gate
+behavior on its value; the only correct uses are display and diff-labeling.
 
 **Who writes it.** Squadron, not the dispatched agent. Squadron never authors
 slice designs or task files — `DispatchAction` has no file-write code at all,
