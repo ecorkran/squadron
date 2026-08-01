@@ -1053,6 +1053,7 @@ async def _execute_step_once(
             cwd=cwd,
             sdk_session=sdk_session,
             step_outputs=step_outputs if step_outputs is not None else {},
+            iteration=iteration,
         )
 
         action_impl = get_action_fn(action_type)

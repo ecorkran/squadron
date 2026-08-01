@@ -60,6 +60,8 @@ class ActionContext:
     # read view alongside prior_outputs (which is lossy across same-typed
     # steps); does not change prior_outputs semantics or checkpoint behavior.
     step_outputs: dict[str, ActionResult] = field(default_factory=dict[str, ActionResult])
+    # 0 = not executing inside a loop; >= 1 is the 1-based loop iteration index.
+    iteration: int = 0
 
 
 @dataclass

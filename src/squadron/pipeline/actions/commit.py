@@ -8,6 +8,10 @@ from typing import cast
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 
+# Appended to a composed (not explicit) commit message when running inside a
+# loop iteration, so consecutive rounds leave distinguishable git history.
+_ITERATION_SUFFIX_FORMAT = " (iteration {n})"
+
 
 class CommitAction:
     """Pipeline action that stages files and creates a git commit."""
@@ -60,7 +64,8 @@ class CommitAction:
                 error=stderr,
             )
 
-        # Build commit message
+        # Build commit message. An explicit `message:` param is a caller
+        # contract, not a template — it is used verbatim and never suffixed.
         message = context.params.get("message")
         if not message:
             commit_type = context.params.get("type", "chore")
@@ -73,6 +78,8 @@ class CommitAction:
                     message = f"{commit_type}: {prefix}"
             else:
                 message = f"{commit_type}: {context.step_name} for {context.pipeline_name}"
+            if context.iteration >= 1:
+                message = f"{message}{_ITERATION_SUFFIX_FORMAT.format(n=context.iteration)}"
         message = str(message)
 
         # Commit

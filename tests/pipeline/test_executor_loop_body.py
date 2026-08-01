@@ -599,3 +599,83 @@ async def test_iteration_2_dispatch_prompt_contains_iteration_1_finding() -> Non
     assert iteration_1_prompt is None
     assert iteration_2_prompt is not None
     assert "fix the frobnicator" in iteration_2_prompt
+
+
+@pytest.mark.asyncio
+async def test_action_context_carries_loop_iteration_number() -> None:
+    """ActionContext.iteration inside a loop body matches the 1-based round;
+    the same step type executed outside a loop receives the 0 sentinel.
+    """
+    captured_contexts: list[ActionContext] = []
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        captured_contexts.append(ctx)
+        return ActionResult(success=True, action_type="dispatch", outputs={})
+
+    dispatch_action = MagicMock()
+    dispatch_action.execute = AsyncMock(side_effect=_capture)
+
+    review_results = [
+        ActionResult(success=True, action_type="review", outputs={}, verdict="FAIL"),
+        ActionResult(success=True, action_type="review", outputs={}, verdict="PASS"),
+    ]
+    review_action = _mock_action(review_results)
+
+    dispatch_inner = _mock_step_type([("dispatch", {})])
+    review_inner = _mock_step_type([("review", {})])
+    register_step_type("_lb_dispatch_inner_ctx", dispatch_inner)
+    register_step_type("_lb_review_inner_ctx", review_inner)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "ctx-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_dispatch_inner_ctx": {}},
+                        {"_lb_review_inner_ctx": {}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": dispatch_action, "review": review_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert [ctx.iteration for ctx in captured_contexts] == [1, 2]
+
+    # The same step type executed outside a loop receives the 0 sentinel.
+    outside_contexts: list[ActionContext] = []
+
+    async def _capture_outside(ctx: ActionContext) -> ActionResult:
+        outside_contexts.append(ctx)
+        return ActionResult(success=True, action_type="dispatch", outputs={})
+
+    outside_dispatch_action = MagicMock()
+    outside_dispatch_action.execute = AsyncMock(side_effect=_capture_outside)
+    outside_dispatch_inner = _mock_step_type([("dispatch", {})])
+    register_step_type("_top_level_dispatch_ctx", outside_dispatch_inner)
+
+    outside_pipeline = _pipeline(
+        [StepConfig(step_type="_top_level_dispatch_ctx", name="plain-step", config={})]
+    )
+
+    outside_result = await execute_pipeline(
+        outside_pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": outside_dispatch_action},
+    )
+
+    assert outside_result.status == ExecutionStatus.COMPLETED
+    assert [ctx.iteration for ctx in outside_contexts] == [0]
