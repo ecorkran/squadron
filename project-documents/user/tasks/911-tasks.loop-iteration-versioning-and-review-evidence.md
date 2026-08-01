@@ -69,42 +69,42 @@ status: not_started
 
 ## Part A1 — `ActionContext.iteration` and Iteration-Qualified Commits
 
-- [ ] **T1. Add `iteration` to `ActionContext` and populate it**
-  - [ ] In `src/squadron/pipeline/models.py`, add `iteration: int = 0` to the
+- [x] **T1. Add `iteration` to `ActionContext` and populate it**
+  - [x] In `src/squadron/pipeline/models.py`, add `iteration: int = 0` to the
     `ActionContext` dataclass (line 46). It must go **after** `step_outputs`
     (line 62) — the preceding fields already carry defaults, so a
     non-defaulted field cannot be inserted before them.
-  - [ ] Add a short comment stating the sentinel: `0` means the step is not
+  - [x] Add a short comment stating the sentinel: `0` means the step is not
     executing inside a loop; `>= 1` is the 1-based iteration index.
-  - [ ] In `src/squadron/pipeline/executor.py`, pass `iteration=iteration` into
+  - [x] In `src/squadron/pipeline/executor.py`, pass `iteration=iteration` into
     the `ActionContext(...)` construction at lines 1044-1056. The enclosing
     `_execute_step_once` already declares the parameter (line 995) — no
     signature change is needed anywhere.
-  - [ ] Success: `pyright` strict passes; every existing test still passes; no
+  - [x] Success: `pyright` strict passes; every existing test still passes; no
     caller of `_execute_step_once` is modified.
 
-- [ ] **T2. Qualify the composed commit message with the iteration**
-  - [ ] In `src/squadron/pipeline/actions/commit.py`, after the message is
+- [x] **T2. Qualify the composed commit message with the iteration**
+  - [x] In `src/squadron/pipeline/actions/commit.py`, after the message is
     composed from `type` / `message_prefix` / `slice` (lines 63-76), append
     ` (iteration {n})` when `context.iteration >= 1`.
-  - [ ] An explicit `message:` param (line 64) is used **verbatim** and must
+  - [x] An explicit `message:` param (line 64) is used **verbatim** and must
     **not** be suffixed — an explicit message is a caller contract, not a
     template. Add a comment saying so.
-  - [ ] Do not introduce a second sentinel or a magic literal for the suffix
+  - [x] Do not introduce a second sentinel or a magic literal for the suffix
     format; define the format string once at module level alongside the
     existing module constants.
-  - [ ] Success: outside a loop (`iteration == 0`) the message is byte-identical
+  - [x] Success: outside a loop (`iteration == 0`) the message is byte-identical
     to today's.
 
-- [ ] **T3. Tests for A1** (test-with — must pass before Part B starts)
-  - [ ] In `tests/pipeline/actions/test_commit.py` (create if absent): composed
+- [x] **T3. Tests for A1** (test-with — must pass before Part B starts)
+  - [x] In `tests/pipeline/actions/test_commit.py` (create if absent): composed
     message gains ` (iteration 2)` when `context.iteration == 2`.
-  - [ ] Composed message is unchanged when `context.iteration == 0`.
-  - [ ] Explicit `message:` param is emitted verbatim with `iteration == 2` set.
-  - [ ] In the executor tests, assert the `ActionContext` an action receives
+  - [x] Composed message is unchanged when `context.iteration == 0`.
+  - [x] Explicit `message:` param is emitted verbatim with `iteration == 2` set.
+  - [x] In the executor tests, assert the `ActionContext` an action receives
     inside a loop body carries the loop's iteration number, and that the same
     step executed outside a loop receives `0`.
-  - [ ] Success: all four pass; full `tests/pipeline/` suite green.
+  - [x] Success: all four pass; full `tests/pipeline/` suite green.
 
 ---
 

@@ -22,6 +22,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from squadron.documents.frontmatter import FrontmatterError, read_frontmatter, update_frontmatter
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
@@ -211,6 +212,50 @@ def _dispatch_artifact_post_condition_error(
         cwd=cwd,
         run_started_at=run_started_at,
     )
+
+
+def _stamp_revision_number(
+    *,
+    kind: ArtifactKind,
+    slice_param: object,
+    cf_client: CfClientProtocol,
+    cwd: str,
+) -> None:
+    """Stamp a monotonic ``revision_number`` onto each artifact this dispatch
+    just wrote, called only after the artifact post-condition has passed.
+
+    Value rule: absent or non-int prior value -> 1; present int n -> n + 1.
+    It counts squadron stamps, not the loop iteration. A failed evidence
+    stamp must not fail a converging loop, so any parse/write failure is
+    logged at WARNING (naming the path and reason) and swallowed.
+    """
+    if slice_param is None:
+        return
+    try:
+        slice_index = int(str(slice_param))
+    except ValueError:
+        return
+    try:
+        paths = _expected_artifact_paths(kind, slice_index, cf_client)
+    except (ValueError, TypeError) as exc:
+        _logger.warning(
+            "revision_number stamp: could not resolve %s artifact path for slice %s: %s",
+            kind.value,
+            slice_index,
+            exc,
+        )
+        return
+
+    base_dir = Path(cwd) if cwd else Path(".")
+    for rel_path in paths:
+        full_path = base_dir / rel_path
+        try:
+            existing = read_frontmatter(full_path)
+            prior = existing.get("revision_number") if existing is not None else None
+            next_value = prior + 1 if isinstance(prior, int) else 1
+            update_frontmatter(full_path, {"revision_number": next_value})
+        except (FrontmatterError, OSError) as exc:
+            _logger.warning("revision_number stamp failed for %s: %s", full_path, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1080,6 +1125,13 @@ async def _execute_step_once(
             if artifact_error is not None:
                 result.success = False
                 result.error = artifact_error
+            elif ctx.iteration >= 1:
+                _stamp_revision_number(
+                    kind=expected_kind,
+                    slice_param=ctx.params.get("slice"),
+                    cf_client=cf_client,
+                    cwd=cwd,
+                )
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"

@@ -69,6 +69,16 @@ def mock_step_type(
     return step
 
 
+def phase_action_registry(dispatch_mock: object) -> dict[str, object]:
+    """Action registry for a review-less PhaseStepType.expand() sequence:
+    cf-op(set_phase) -> cf-op(set_slice) -> cf-op(build_context) -> dispatch
+    -> commit."""
+    cf_op_mock = MagicMock()
+    cf_op_mock.execute = AsyncMock(return_value=make_action_result(True, "cf-op"))
+    commit_mock = mock_action([make_action_result(True, "commit")])
+    return {"cf-op": cf_op_mock, "dispatch": dispatch_mock, "commit": commit_mock}
+
+
 # ---------------------------------------------------------------------------
 # T2 — Result types and ExecutionStatus
 # ---------------------------------------------------------------------------
@@ -662,10 +672,7 @@ class TestDispatchArtifactPostCondition:
         cf-op(set_phase) -> cf-op(set_slice) -> cf-op(build_context)
         -> dispatch -> commit (no review/checkpoint since these test
         configs omit "review")."""
-        cf_op_mock = MagicMock()
-        cf_op_mock.execute = AsyncMock(return_value=make_action_result(True, "cf-op"))
-        commit_mock = mock_action([make_action_result(True, "commit")])
-        return {"cf-op": cf_op_mock, "dispatch": dispatch_mock, "commit": commit_mock}
+        return phase_action_registry(dispatch_mock)
 
     @pytest.mark.asyncio
     async def test_fresh_artifact_passes(self, tmp_path: Path) -> None:
@@ -950,6 +957,266 @@ class TestDispatchArtifactPostCondition:
         assert result.step_results[0].step_name == "design-0"
         review_mock.execute.assert_not_called()
         checkpoint_mock.execute.assert_not_called()
+
+
+def _dispatch_writer(path: Path, content: str) -> MagicMock:
+    """A dispatch mock that writes fixed ``content`` to ``path`` and succeeds."""
+
+    async def dispatch_execute(ctx: object) -> ActionResult:
+        path.write_text(content)
+        return make_action_result(True, "dispatch")
+
+    mock = MagicMock()
+    mock.execute = dispatch_execute
+    return mock
+
+
+def _loop_design_pipeline(
+    design_config: dict[str, object], loop_extra: dict[str, object] | None = None
+) -> PipelineDefinition:
+    """A ``loop:`` step wrapping a single review-less design phase step,
+    mirroring the real p45b.yaml shape (loop wraps one phase step)."""
+    loop_config: dict[str, object] = {"max": 3, "until": "action.success"}
+    if loop_extra:
+        loop_config.update(loop_extra)
+    return make_pipeline(
+        [
+            StepConfig(
+                step_type="loop",
+                name="design-loop",
+                config={**loop_config, "steps": [{"design": design_config}]},
+            )
+        ]
+    )
+
+
+class TestRevisionNumberStamping:
+    """Slice 911 Part B — squadron stamps revision_number onto the artifact a
+    loop-iteration dispatch just wrote, after the post-condition passes."""
+
+    def _cf_client(self, slice_index: int, design_file: str, task_file: str) -> MagicMock:
+        from tests.pipeline.conftest import phase_artifact_cf_client
+
+        return phase_artifact_cf_client(slice_index, design_file, task_file)
+
+    def _init_run(self, tmp_path: Path, slice_index: int) -> str:
+        from squadron.pipeline.state import StateManager
+
+        state_mgr = StateManager(runs_dir=tmp_path)
+        return state_mgr.init_run("slice", {"slice": str(slice_index)})
+
+    @pytest.mark.asyncio
+    async def test_absent_prior_value_stamps_1(self, tmp_path: Path) -> None:
+        from squadron.documents.frontmatter import read_frontmatter
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 210)
+        cf_client = self._cf_client(210, "210-slice.stub.md", "210-tasks.stub.md")
+        design_path = tmp_path / "210-slice.stub.md"
+        dispatch_mock = _dispatch_writer(design_path, "---\ndocType: slice-design\n---\n\nbody\n")
+
+        result = await execute_pipeline(
+            _loop_design_pipeline({"phase": 4, "model": "opus"}),
+            {"slice": "210"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=phase_action_registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        frontmatter = read_frontmatter(design_path)
+        assert frontmatter is not None
+        assert frontmatter["revision_number"] == 1
+
+    @pytest.mark.asyncio
+    async def test_existing_int_increments(self, tmp_path: Path) -> None:
+        from squadron.documents.frontmatter import read_frontmatter
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 211)
+        cf_client = self._cf_client(211, "211-slice.stub.md", "211-tasks.stub.md")
+        design_path = tmp_path / "211-slice.stub.md"
+        dispatch_mock = _dispatch_writer(
+            design_path, "---\ndocType: slice-design\nrevision_number: 3\n---\n\nbody\n"
+        )
+
+        result = await execute_pipeline(
+            _loop_design_pipeline({"phase": 4, "model": "opus"}),
+            {"slice": "211"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=phase_action_registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        frontmatter = read_frontmatter(design_path)
+        assert frontmatter is not None
+        assert frontmatter["revision_number"] == 4
+
+    @pytest.mark.asyncio
+    async def test_existing_non_int_resets_to_1(self, tmp_path: Path) -> None:
+        from squadron.documents.frontmatter import read_frontmatter
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 212)
+        cf_client = self._cf_client(212, "212-slice.stub.md", "212-tasks.stub.md")
+        design_path = tmp_path / "212-slice.stub.md"
+        dispatch_mock = _dispatch_writer(
+            design_path, "---\ndocType: slice-design\nrevision_number: not-a-number\n---\n\nbody\n"
+        )
+
+        result = await execute_pipeline(
+            _loop_design_pipeline({"phase": 4, "model": "opus"}),
+            {"slice": "212"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=phase_action_registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        frontmatter = read_frontmatter(design_path)
+        assert frontmatter is not None
+        assert frontmatter["revision_number"] == 1
+
+    @pytest.mark.asyncio
+    async def test_not_stamped_outside_loop(self, tmp_path: Path) -> None:
+        """A design step executed outside any loop has iteration == 0 and
+        must not gain a revision_number key at all."""
+        from squadron.documents.frontmatter import read_frontmatter
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 213)
+        cf_client = self._cf_client(213, "213-slice.stub.md", "213-tasks.stub.md")
+        design_path = tmp_path / "213-slice.stub.md"
+        dispatch_mock = _dispatch_writer(design_path, "---\ndocType: slice-design\n---\n\nbody\n")
+
+        pipeline = make_pipeline(
+            [make_step_config("design", "design-0", {"phase": 4, "model": "opus"})]
+        )
+        result = await execute_pipeline(
+            pipeline,
+            {"slice": "213"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=phase_action_registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        frontmatter = read_frontmatter(design_path)
+        assert frontmatter is not None
+        assert "revision_number" not in frontmatter
+
+    @pytest.mark.asyncio
+    async def test_not_stamped_when_expected_kind_none(self, tmp_path: Path) -> None:
+        """An implement phase step (expected_artifact_kind is None) inside a
+        loop must complete without attempting to stamp anything."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 214)
+        cf_client = MagicMock()  # never consulted — no artifact kind for implement
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        pipeline = make_pipeline(
+            [
+                StepConfig(
+                    step_type="loop",
+                    name="implement-loop",
+                    config={
+                        "max": 3,
+                        "until": "action.success",
+                        "steps": [{"implement": {"phase": 6, "model": "opus"}}],
+                    },
+                )
+            ]
+        )
+        result = await execute_pipeline(
+            pipeline,
+            {"slice": "214"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=phase_action_registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        cf_client.list_slices.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_not_stamped_when_post_condition_failed(self, tmp_path: Path) -> None:
+        """A stale artifact fails the post-condition — the pre-existing
+        revision_number on disk must be left untouched."""
+        import os
+        import time
+
+        from squadron.documents.frontmatter import read_frontmatter
+        from squadron.pipeline.executor import execute_pipeline
+
+        run_id = self._init_run(tmp_path, 215)
+        cf_client = self._cf_client(215, "215-slice.stub.md", "215-tasks.stub.md")
+        design_path = tmp_path / "215-slice.stub.md"
+        design_path.write_text("---\ndocType: slice-design\nrevision_number: 5\n---\n\nbody\n")
+        old_time = time.time() - 3600
+        os.utime(design_path, (old_time, old_time))
+
+        # Dispatch reports success but the artifact predates the run — the
+        # post-condition marks it failed without the dispatch mock rewriting it.
+        dispatch_mock = mock_action([make_action_result(True, "dispatch")])
+
+        await execute_pipeline(
+            _loop_design_pipeline({"phase": 4, "model": "opus"}, {"max": 1, "on_exhaust": "skip"}),
+            {"slice": "215"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=phase_action_registry(dispatch_mock),
+        )
+
+        frontmatter = read_frontmatter(design_path)
+        assert frontmatter is not None
+        assert frontmatter["revision_number"] == 5
+
+    @pytest.mark.asyncio
+    async def test_malformed_target_logs_warning_and_dispatch_still_succeeds(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 216)
+        cf_client = self._cf_client(216, "216-slice.stub.md", "216-tasks.stub.md")
+        design_path = tmp_path / "216-slice.stub.md"
+        # Fresh, existing, but with no YAML frontmatter block at all.
+        dispatch_mock = _dispatch_writer(design_path, "# just a design doc, no frontmatter\n")
+
+        with caplog.at_level("WARNING"):
+            result = await execute_pipeline(
+                _loop_design_pipeline({"phase": 4, "model": "opus"}),
+                {"slice": "216"},
+                resolver=MagicMock(),
+                cf_client=cf_client,
+                cwd=str(tmp_path),
+                run_id=run_id,
+                runs_dir=tmp_path,
+                _action_registry=phase_action_registry(dispatch_mock),
+            )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert any("revision_number stamp failed" in rec.message for rec in caplog.records)
 
 
 # ---------------------------------------------------------------------------

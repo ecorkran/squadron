@@ -16,9 +16,8 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
-import yaml
-
 from squadron.config.manager import get_config
+from squadron.documents.frontmatter import read_frontmatter
 from squadron.metrology.errors import MetrologyIdentityError, MetrologyTargetError
 from squadron.metrology.models import (
     JudgeConfigId,
@@ -164,7 +163,9 @@ def read_review_frontmatter(review_file: Path) -> dict[str, object]:
 
     Nothing else in the codebase reads a persisted review back — the review
     flow parses raw LLM output, not the on-disk file — so this is the reader
-    for the id-less join.
+    for the id-less join. Parsing itself delegates to the generic
+    ``documents.frontmatter`` helper; this function keeps the review-specific
+    file-existence check and error type.
 
     Raises:
         MetrologyTargetError: the file is missing, has no frontmatter block,
@@ -176,24 +177,10 @@ def read_review_frontmatter(review_file: Path) -> dict[str, object]:
             "Produce it (e.g. 'sq review slice <n>') before sampling."
         )
 
-    text = review_file.read_text(encoding="utf-8")
-    # Frontmatter is the first '---'-delimited block. Lenient: tolerate a
-    # leading blank line or BOM before the opening fence.
-    stripped = text.lstrip("﻿ \n")
-    if not stripped.startswith("---"):
-        raise MetrologyTargetError(f"Review file has no YAML frontmatter block: {review_file}")
-    parts = stripped.split("---", 2)
-    if len(parts) < 3:
-        raise MetrologyTargetError(f"Review file frontmatter block is not closed: {review_file}")
-    try:
-        loaded = yaml.safe_load(parts[1])
-    except yaml.YAMLError as exc:
-        raise MetrologyTargetError(
-            f"Review file frontmatter is not valid YAML ({review_file}): {exc}"
-        ) from exc
-    if not isinstance(loaded, dict):
-        raise MetrologyTargetError(f"Review file frontmatter did not parse to a mapping: {review_file}")
-    return {str(key): value for key, value in cast("dict[object, object]", loaded).items()}
+    frontmatter = read_frontmatter(review_file)
+    if frontmatter is None:
+        raise MetrologyTargetError(f"Review file frontmatter could not be parsed: {review_file}")
+    return frontmatter
 
 
 def _canonical_projection(frontmatter: dict[str, object]) -> dict[str, object]:
