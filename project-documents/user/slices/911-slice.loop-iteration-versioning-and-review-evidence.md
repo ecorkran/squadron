@@ -148,7 +148,7 @@ and the dispatch-bodied case needs a commit at all.
 
 | Component | Change |
 |---|---|
-| `pipeline/models.py` — `ActionContext` | New `iteration: int | None = None` field |
+| `pipeline/models.py` — `ActionContext` | New `iteration: int = 0` field (0 = not in a loop) |
 | `pipeline/executor.py` — `_execute_step_once` | Populate `ctx.iteration`; stamp `revision_number:` after the artifact post-condition passes |
 | `pipeline/executor.py` — `_execute_loop_body` | Append a commit action per iteration when `commit_each_iteration` is set |
 | `pipeline/steps/loop.py` — `LoopStepType.validate` | Validate `commit_each_iteration`; reject it when the body already commits |
@@ -185,11 +185,21 @@ a file it has already confirmed the dispatch produced this run.
 ### Part A — per-iteration commits
 
 **A1 — Iteration-qualified commit messages.** `ActionContext` gains
-`iteration: int | None = None`. `_execute_step_once` already receives an
-`iteration` parameter and already constructs the `ActionContext`
+`iteration: int = 0`. `_execute_step_once` already receives an `iteration`
+parameter and already constructs the `ActionContext`
 ([executor.py:1044-1056](src/squadron/pipeline/executor.py#L1044-L1056)); it
 passes the value straight through. `CommitAction` appends ` (iteration {n})` to
-the message it *composes* when `context.iteration is not None`.
+the message it *composes* when `context.iteration >= 1`.
+
+**Sentinel: `0` means "not executing inside a loop."** This is not a new
+convention — `_execute_step_once` already declares `iteration: int = 0`
+([executor.py:995](src/squadron/pipeline/executor.py#L995)), and only the two
+loop paths pass it (`_execute_loop_step` at
+[:1201](src/squadron/pipeline/executor.py#L1201) and `_execute_loop_body` at
+[:1309](src/squadron/pipeline/executor.py#L1309)); the top-level, `each`, and
+`fan_out` callers take the default. Mirroring it on `ActionContext` keeps one
+sentinel in the codebase. Introducing `int | None` here instead would force a
+conversion at the one place the two meet, which is strictly worse.
 
 An explicit `message:` param is used verbatim and is **not** suffixed — an
 explicit message is a caller contract, not a template. Documented, not silent.
@@ -220,7 +230,7 @@ true, it returns an actionable `ValidationError` naming the step. This mirrors
 910 Part B's stance: reject the ambiguity, do not resolve it silently.
 
 **A3 — A no-change round must be observable.** When `CommitAction` finds a
-clean tree and `context.iteration is not None`, it logs at WARNING naming
+clean tree and `context.iteration >= 1`, it logs at WARNING naming
 pipeline, step, and iteration. A round that produced byte-identical output is
 the #42 symptom; it is currently indistinguishable from success. Per
 `.claude/rules/review-code.md` (failure-mode enumeration) at least one test
@@ -280,7 +290,7 @@ a pre-field artifact. Squadron post-processing is deterministic.
 
 **Where it hooks.** Immediately after the dispatch artifact post-condition
 passes ([executor.py:1064-1082](src/squadron/pipeline/executor.py#L1064-L1082)),
-gated on `expected_kind is not None` **and** `ctx.iteration is not None` — i.e.
+gated on `expected_kind is not None` **and** `ctx.iteration >= 1` — i.e.
 a phase step with a known `ArtifactKind`, executing inside a loop. Paths come
 from the existing `_expected_artifact_paths()`.
 
@@ -312,13 +322,15 @@ step to `read_frontmatter` and keeps its own review-specific validation and
 round history exactly as the artifact does. `format_review_markdown`
 ([persistence.py:130-165](src/squadron/review/persistence.py#L130-L165)) gains
 an optional `revision_number` that is emitted only when supplied;
-`pipeline/actions/review.py` supplies `context.iteration`.
+`pipeline/actions/review.py` supplies `context.iteration` **when it is `>= 1`**,
+and supplies nothing when it is `0`.
 
-**Interface-parity note.** A CLI-invoked `sq review` has no iteration — there is
-no loop. It therefore emits **no** `revision_number:` key at all, rather than `0` or
-`1`. This is not a parity gap between CLI / slash / MCP surfaces (all three
-behave identically); it is the absence of a concept outside a loop, and it is
-consistent with the absent-means-unstamped rule below.
+**Two paths produce no `revision_number:` key, both deliberately.** A review
+action running outside a loop has `iteration == 0`, and a CLI-invoked
+`sq review` never goes through the action at all. Neither emits the key —
+not `0`, not `1`. This is not a parity gap between CLI / slash / MCP surfaces
+(all three behave identically); it is the absence of a concept outside a loop,
+and it is exactly consistent with the absent-means-never-stamped rule below.
 
 ### Part C — the round contract
 

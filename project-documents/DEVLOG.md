@@ -92,6 +92,22 @@ Part A therefore splits three ways: A1 iteration-qualified commit messages (add 
 
 **Next:** Phase 5 (Task Breakdown) for slice 911, not yet started. Slice 912 needs its design conversation before Phase 4.
 
+### Slice 911: Loop Iteration Versioning and Review Evidence — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/911-tasks.loop-iteration-versioning-and-review-evidence.md` on `main` — 21 tasks across four groups (A1, B, A2/A3, C), 346 lines, no split needed. Test-with throughout: every implementation task is immediately followed by its test task, and T3's tests gate the start of Part B.
+
+**One design correction found while writing the breakdown, and it was worth the pass.** The design specified `ActionContext.iteration: int | None = None`. The executor already declares `iteration: int = 0` on `_execute_step_once` (`executor.py:995`), and only the two loop paths pass it (`_execute_loop_step` `:1201`, `_execute_loop_body` `:1309`) — the top-level, `each`, and `fan_out` callers take the default. Adding an `int | None` alongside it would have created a second sentinel for the same concept and forced a conversion at the one place they meet. Changed the design to `iteration: int = 0` with `0` meaning "not inside a loop", and rewrote the three gating conditions (A1's message suffix, A3's no-change warning, Part B's stamp gate) from `is not None` to `>= 1`.
+
+Same pass tightened the interface-parity note: there are **two** paths that emit no `revision_number:` key — a review action running outside a loop (`iteration == 0`) and a CLI-invoked `sq review` (never goes through the action at all). The design had only recorded the CLI one.
+
+**Two places where the breakdown deliberately constrains the implementer rather than leaving a choice:**
+- **T12** must factor out and reuse the traversal inside `_validate_verdict_count` (`loop.py:165-213`) instead of writing a second inner-step walk. That helper skips any inner step failing its own `validate()` before calling `expand()` (`loop.py:186-190`) because `expand()` raises `KeyError` on an incomplete config — a fix landed during slice 910 implementation. An independent walk would reintroduce that crash, so T13 carries an explicit regression guard for it.
+- **T14** must keep the loop-appended commit's staging identical to the phase-emitted one (`git add -A`). Scoped staging is tempting, but applying it to one of two commit paths is worse than the sweep it avoids; noted in the design's Risk section as a follow-up, not a change to make inconsistently.
+
+**T21 carries a live external dependency:** re-check ai-project-guide issue #14 before close-out. If it settles on a name other than `revision_number`, rename during Phase 6 rather than shipping a name that needs migrating afterward. The task file also tells the implementer not to change the field name on their own initiative.
+
+**Next:** Phase 6 (Implementation) for slice 911 — branch `911-slice.loop-iteration-versioning-and-review-evidence` off `main`, not yet created.
+
 ---
 
 ## 20260727
