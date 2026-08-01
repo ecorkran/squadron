@@ -193,24 +193,24 @@ status: not_started
     signal and a test asserting it).
   - [x] Success: all pass.
 
-- [ ] **T10. Emit `revision_number` on review files**
-  - [ ] In `src/squadron/review/persistence.py`, give `format_review_markdown`
+- [x] **T10. Emit `revision_number` on review files**
+  - [x] In `src/squadron/review/persistence.py`, give `format_review_markdown`
     an optional `revision_number` parameter, emitted in the frontmatter block
     (lines 130-165) only when supplied. Place it adjacent to the other
     document-identity fields, not among the findings.
-  - [ ] In `src/squadron/pipeline/actions/review.py`, pass
+  - [x] In `src/squadron/pipeline/actions/review.py`, pass
     `context.iteration` when it is `>= 1` and pass nothing when it is `0`.
-  - [ ] Do not touch the CLI review path (`cli/commands/review.py`) — it never
+  - [x] Do not touch the CLI review path (`cli/commands/review.py`) — it never
     runs inside a loop and must keep emitting no such key.
-  - [ ] Success: `ruff`, `pyright` strict clean.
+  - [x] Success: `ruff`, `pyright` strict clean.
 
-- [ ] **T11. Tests for the review-file field**
-  - [ ] `format_review_markdown` omits the key entirely when no
+- [x] **T11. Tests for the review-file field**
+  - [x] `format_review_markdown` omits the key entirely when no
     `revision_number` is supplied — asserts absence, not `0` or `1`.
-  - [ ] The key is present with the right value when supplied.
-  - [ ] A review action inside a loop body produces a file carrying the key; a
+  - [x] The key is present with the right value when supplied.
+  - [x] A review action inside a loop body produces a file carrying the key; a
     review action outside a loop produces one without it.
-  - [ ] Success: full `tests/review/` and `tests/pipeline/` suites green.
+  - [x] Success: full `tests/review/` and `tests/pipeline/` suites green.
 
 ---
 
