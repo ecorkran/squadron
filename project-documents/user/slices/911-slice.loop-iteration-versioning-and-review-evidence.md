@@ -1,0 +1,498 @@
+---
+docType: slice-design
+slice: loop-iteration-versioning-and-review-evidence
+project: squadron
+parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
+dependencies: [910]
+interfaces: [912]
+dateCreated: 20260731
+dateUpdated: 20260731
+status: not_started
+---
+
+# Slice Design: Loop Iteration Versioning and Review Evidence
+
+## Overview
+
+Slice 910 made a `loop:` iteration *converge* — findings from round N now reach
+round N+1's prompt. This slice makes an iteration *legible*: recoverable from
+git, identifiable from the artifact itself, and governed by a stated contract
+about what survives a round.
+
+Fixes [issue #44](https://github.com/ecorkran/squadron/issues/44) (no commit
+between iterations) plus two adjacent problems it does not record: the artifact
+carries no round indicator, and there is no written contract for whether a
+round regenerates or accumulates.
+
+**Part D is not in this slice.** The slice plan scoped a fourth part — whether
+review notes carry forward and whether a reviewer may see the prior version —
+and flagged it as needing a design conversation rather than a design document.
+It is carved out to **slice 912**, which this slice enables: a "were the prior
+findings addressed?" check is only answerable once there is a prior round to
+diff against, which is exactly what Part A creates.
+
+## Value
+
+Evidence integrity for the pipeline's quality-gate construct. Today a
+three-iteration loop leaves one artifact on disk and no way to answer the two
+questions that matter after the fact:
+
+- *Did the loop actually converge, or did it re-roll the same prompt?* Without
+  per-round history there is nothing to diff. This is precisely the symptom
+  910 Part A fixed, and precisely the symptom nothing can currently prove was
+  fixed.
+- *Which round is this artifact, and what verdict did it last survive?* Open a
+  slice design produced by a loop and it is silent on both.
+
+The value is diagnostic and auditable, not user-facing: a converging loop that
+cannot be inspected is a convergence claim taken on faith.
+
+## Technical Scope
+
+**Included:**
+
+- **Part A — per-iteration commits.** Make each loop iteration leave a
+  distinguishable commit, for loop bodies that commit today and for bodies that
+  do not; make a byte-identical round observable rather than silent.
+- **Part B — `version:` on the artifact.** Squadron stamps a monotonic integer
+  `version:` into the frontmatter of the artifact a loop iteration produces,
+  and emits the same field on the review file it authors itself.
+- **Part C — the round contract.** State and document what survives a round
+  (clean regeneration; `version:` is the only carryover) and what an absent
+  `version:` means.
+
+**Excluded:**
+
+- **Part D — review-note carry-forward and reviewer access to prior versions.**
+  Moved to slice 912. Nothing in this slice changes what a reviewer sees.
+- **Registering a `commit` step type.** `commit` is an action, not a step type
+  ([steps/\_\_init\_\_.py:24-38](src/squadron/pipeline/steps/__init__.py#L24-L38)
+  has no `COMMIT` member). Part A adds a loop-level option, not a new step type
+  — see Technical Decisions.
+- **`on_exhaust: skip` fall-through.** The 910 design deferred this; still
+  deferred, and untouched here.
+- **Review file naming.** Review files are still overwritten per run under the
+  same name; Part B makes them self-describing, it does not version their
+  filenames.
+- **Changing the canonical frontmatter schema in `ai-project-guide`.** See
+  Part C — recorded as a cross-repo follow-up, not done here.
+
+## Dependencies
+
+### Prerequisites
+
+- **Slice 910** (complete). Part A of 910 defines what an iteration produces
+  and feeds forward; this slice records it. 910 Part B's one-review-per-body
+  rule is also the shape Part A's commit-message and validation work assume.
+- **Slice 909 Part A** (complete). `_expected_artifact_paths()`
+  ([executor.py:109-121](src/squadron/pipeline/executor.py#L109-L121)) and the
+  dispatch artifact post-condition
+  ([executor.py:1064-1082](src/squadron/pipeline/executor.py#L1064-L1082))
+  are the hook Part B stamps from. Without them squadron would not know which
+  file a dispatch was supposed to write.
+
+### Interfaces Required
+
+- **Context Forge** supplies the artifact paths — `design_file` and
+  `task_files`, read via `resolve_slice_info`
+  ([integrations/context_forge.py:114-135](src/squadron/integrations/context_forge.py#L114-L135)).
+  Part B stamps whatever CF names; it does not compute paths itself.
+- **git**, via the existing `CommitAction` subprocess wrapper
+  ([actions/commit.py:104-114](src/squadron/pipeline/actions/commit.py#L104-L114)).
+
+## Architecture
+
+### Verified current behavior
+
+Issue #44 states that iterations overwrite artifacts "with no commit in
+between." That is true for some loop bodies and false for others, and the
+design depends on the distinction:
+
+- `commit` is emitted **only** by phase-step expansion
+  ([steps/phase.py:176](src/squadron/pipeline/steps/phase.py#L176)), which
+  appends `("commit", {"message_prefix": f"phase-{phase}", "slice": slice_ref})`
+  unconditionally at the end of every phase step.
+- Therefore a loop whose body is **phase steps** already commits once per
+  iteration. `p45b.yaml`'s two loops are exactly this shape.
+- A loop whose body is a bare **`dispatch:`** step commits nothing.
+  `judge-cycle.yaml` and `test-loop.yaml` are this shape.
+- `CommitAction` no-ops when the tree is clean, returning
+  `success=True, outputs={"committed": False}`
+  ([commit.py:37-42](src/squadron/pipeline/actions/commit.py#L37-L42)). So a
+  byte-identical round — the "useful signal" #44 hopes for — currently leaves
+  **no** trace of any kind.
+- `docs/PIPELINES.md` documents the gap as a hard constraint ("Constraint: no
+  per-iteration commit"), which this slice makes obsolete and must update.
+
+Two consequences: the phase-bodied case needs commit messages that *identify*
+the round (three identical `chore: phase-4 slice 911` entries are not history),
+and the dispatch-bodied case needs a commit at all.
+
+### Component Structure
+
+| Component | Change |
+|---|---|
+| `pipeline/models.py` — `ActionContext` | New `iteration: int | None = None` field |
+| `pipeline/executor.py` — `_execute_step_once` | Populate `ctx.iteration`; stamp `version:` after the artifact post-condition passes |
+| `pipeline/executor.py` — `_execute_loop_body` | Append a commit action per iteration when `commit_each_iteration` is set |
+| `pipeline/steps/loop.py` — `LoopStepType.validate` | Validate `commit_each_iteration`; reject it when the body already commits |
+| `pipeline/actions/commit.py` — `CommitAction` | Iteration-qualified message; WARNING on a no-change round inside a loop |
+| `documents/frontmatter.py` **(new)** | Generic lenient frontmatter read / update helpers |
+| `metrology/identity.py` — `read_review_frontmatter` | Delegate its parse to the new helper (DRY), keep its review-specific validation |
+| `review/persistence.py` — `format_review_markdown` | Emit `version:` when the caller supplies one |
+| `pipeline/actions/review.py` | Pass `context.iteration` through to persistence |
+| `cli/commands/run.py` | `--dry-run` prints `commit_each_iteration` |
+| `docs/PIPELINES.md` | Replace the "no per-iteration commit" constraint |
+
+### Data Flow
+
+Per iteration of a `loop:` step, with `commit_each_iteration: true` and a
+phase-shaped body:
+
+```
+_execute_loop_body(iteration=N)
+  └─ _execute_step_once(inner_step, iteration=N)
+       ├─ ActionContext(iteration=N)              ← new field
+       ├─ dispatch  → agent writes design_file
+       │    └─ post-condition passes (909)
+       │         └─ update_frontmatter(design_file, version=prev+1)   ← Part B
+       ├─ review    → format_review_markdown(..., version=N)          ← Part B
+       └─ commit    → "chore: phase-4 slice 911 (iteration N)"        ← Part A
+            └─ committed == False → WARNING                            ← Part A
+```
+
+The stamp happens *after* the post-condition, so squadron only ever writes into
+a file it has already confirmed the dispatch produced this run.
+
+## Technical Decisions
+
+### Part A — per-iteration commits
+
+**A1 — Iteration-qualified commit messages.** `ActionContext` gains
+`iteration: int | None = None`. `_execute_step_once` already receives an
+`iteration` parameter and already constructs the `ActionContext`
+([executor.py:1044-1056](src/squadron/pipeline/executor.py#L1044-L1056)); it
+passes the value straight through. `CommitAction` appends ` (iteration {n})` to
+the message it *composes* when `context.iteration is not None`.
+
+An explicit `message:` param is used verbatim and is **not** suffixed — an
+explicit message is a caller contract, not a template. Documented, not silent.
+
+**A2 — `commit_each_iteration` on `loop:`, opt-in.** A new boolean loop option,
+default false, so no existing pipeline starts writing history unexpectedly.
+When true, `_execute_loop_body` appends one commit action after the body's inner
+steps in each iteration, with `message_prefix: "loop-{step.name}"` and the A1
+iteration suffix.
+
+*Rejected: registering a `commit` step type so it can appear in the body.* That
+is a larger change (a step type carries validation, expansion, and dry-run
+surface) for a strictly weaker guarantee — an in-body commit could be placed
+before the review, capturing the round without its verdict. Loop-level
+placement is unambiguous: after everything the iteration did.
+
+*Rejected: automatic (non-opt-in) commits.* `judge-cycle.yaml` and
+`test-loop.yaml` would begin writing commits into a user's repo on upgrade.
+
+**Validation — reject the double-commit rather than tolerating it.** A
+phase-bodied loop with `commit_each_iteration: true` would commit twice per
+round; the second is a silent no-op today because the tree is already clean.
+`LoopStepType.validate` walks the body with `get_step_type(...).expand(...)` —
+the same machinery `_validate_verdict_count` already uses
+([steps/loop.py:165-213](src/squadron/pipeline/steps/loop.py#L165-L213)) — and
+if any inner step expands to a `commit` action while `commit_each_iteration` is
+true, it returns an actionable `ValidationError` naming the step. This mirrors
+910 Part B's stance: reject the ambiguity, do not resolve it silently.
+
+**A3 — A no-change round must be observable.** When `CommitAction` finds a
+clean tree and `context.iteration is not None`, it logs at WARNING naming
+pipeline, step, and iteration. A round that produced byte-identical output is
+the #42 symptom; it is currently indistinguishable from success. Per
+`.claude/rules/review-code.md` (failure-mode enumeration) at least one test
+asserts the WARNING is emitted.
+
+### Part B — `version:` in frontmatter
+
+**Field.** A plain integer `version: {n}` — deliberately not semver. An
+iteration count is a counter, not a compatibility contract.
+
+**Semantics.** Monotonic count of squadron-stamped revisions of that file. On
+stamp: read the existing value; if present and an `int`, write `n+1`; otherwise
+write `1`. The value is not the loop's iteration index, so re-running a
+pipeline against an existing artifact continues the count rather than resetting
+it to 1 — which is what "which revision am I looking at" actually means.
+
+**Who writes it.** Squadron, not the dispatched agent. Squadron never authors
+slice designs or task files — `DispatchAction` has no file-write code at all,
+it resolves a prompt and returns the response
+([actions/dispatch.py:200-205](src/squadron/pipeline/actions/dispatch.py#L200-L205)).
+Instructing the agent to stamp its own version was rejected: it is an LLM
+instruction, so it will be missed, and a missed stamp is indistinguishable from
+a pre-field artifact. Squadron post-processing is deterministic.
+
+**Where it hooks.** Immediately after the dispatch artifact post-condition
+passes ([executor.py:1064-1082](src/squadron/pipeline/executor.py#L1064-L1082)),
+gated on `expected_kind is not None` **and** `ctx.iteration is not None` — i.e.
+a phase step with a known `ArtifactKind`, executing inside a loop. Paths come
+from the existing `_expected_artifact_paths()`.
+
+**Failure mode.** If the file cannot be parsed or rewritten, log at WARNING and
+continue — a failed *evidence* stamp must not fail a converging loop, and
+raising here would abort a run over a cosmetic write. This is explicit and
+observable, not a silent fallback; a test asserts the WARNING.
+
+**New module — `src/squadron/documents/frontmatter.py`.** No generic
+frontmatter read/modify/write utility exists today. `read_review_frontmatter`
+([metrology/identity.py:162-196](src/squadron/metrology/identity.py#L162-L196))
+is lenient and correct but scoped to reviews, and its docstring asserts it is
+the only reader of a persisted review. The new module provides:
+
+- `read_frontmatter(path) -> dict[str, object] | None` — BOM- and
+  blank-line-tolerant `---` split, `yaml.safe_load`, `None` when there is no
+  block or it is not a mapping.
+- `update_frontmatter(path, fields) -> None` — read/modify/write preserving the
+  body **byte-for-byte** and existing key order; new keys appended to the end of
+  the block.
+
+To avoid two lenient parsers, `read_review_frontmatter` delegates its parse
+step to `read_frontmatter` and keeps its own review-specific validation and
+`MetrologyTargetError` behavior. Its six metrology consumers are unaffected.
+
+**Review files.** Review files are overwritten per run under the same name
+(`{index}-review.{type}.{slice}.md`,
+[persistence.py:238](src/squadron/review/persistence.py#L238)), so they lose
+round history exactly as the artifact does. `format_review_markdown`
+([persistence.py:130-165](src/squadron/review/persistence.py#L130-L165)) gains
+an optional `version` that is emitted only when supplied;
+`pipeline/actions/review.py` supplies `context.iteration`.
+
+**Interface-parity note.** A CLI-invoked `sq review` has no iteration — there is
+no loop. It therefore emits **no** `version:` key at all, rather than `0` or
+`1`. This is not a parity gap between CLI / slash / MCP surfaces (all three
+behave identically); it is the absence of a concept outside a loop, and it is
+consistent with the absent-means-unstamped rule below.
+
+### Part C — the round contract
+
+**Clean regeneration.** Each iteration regenerates the artifact from the phase
+prompt. `version:` is the only thing squadron carries across a round. Content
+does not accumulate, and no round-specific scaffolding is injected into the
+document. Round-over-round history lives in git (Part A), not inside the file.
+
+Rationale: the artifact is a contract other tools read, and simplest-that-works
+is the right default for a contract. Accumulating content would also make the
+document a second, weaker history mechanism competing with the one Part A adds.
+
+**Absent `version:` means "never stamped by squadron"** — explicitly *not*
+"round 1." Readers must not default it. The first stamp writes `1`, meaning
+"first squadron-tracked revision," which makes no claim about what preceded it.
+This is the migration answer for every artifact written before this slice.
+
+**Cross-repo seam.** `project-documents/ai-project-guide` is a git submodule
+(`ecorkran/ai-project-guide`); its `file-naming-conventions.md` is the canonical
+frontmatter schema that Context Forge also reads. Registering `version:` there
+is a cross-tool contract change and is **out of scope for this slice** by PM
+decision — squadron-side first, guide follow-up second. Until that lands,
+`version:` is a key not present in the canonical schema. This slice changes no
+CF behavior; whether CF's own frontmatter consumers tolerate unregistered keys
+must be confirmed before the guide change is proposed. Recorded as future work.
+
+## Implementation Details
+
+### `loop:` config surface (additions)
+
+```yaml
+- loop:
+    max: 3
+    until: review.pass
+    on_exhaust: checkpoint
+    commit_each_iteration: true    # new; optional; default false
+    steps:
+      - dispatch:
+          model: "{model}"
+      - review:
+          template: slice
+          model: "{review-model}"
+```
+
+Validation rules for `commit_each_iteration`:
+
+1. Optional. If present, must be a `bool` (reject non-bool with a field error,
+   matching the existing `max` / `strategy` validators).
+2. If `true` and any inner step expands to a `commit` action → `ValidationError`
+   naming the offending step and stating that phase steps already commit each
+   iteration.
+
+### Frontmatter helper contract
+
+```python
+def read_frontmatter(path: Path) -> dict[str, object] | None: ...
+def update_frontmatter(path: Path, fields: dict[str, object]) -> None: ...
+```
+
+`update_frontmatter` must round-trip a file whose frontmatter it does not
+change without altering a byte of the body. A test asserts this against a real
+slice design document from `project-documents/user/slices/`, not a synthetic
+fixture — per the project rule that a parser's test fixture must be the format
+it consumes in production.
+
+### `--dry-run` surface
+
+910 Part C added loop expansion to `--dry-run`
+([cli/commands/run.py](src/squadron/cli/commands/run.py)). This slice adds one
+line to that block: `commit_each_iteration` when set, alongside `max`, `until`,
+and `on_exhaust`.
+
+### Documentation
+
+`docs/PIPELINES.md` currently carries a section titled "Constraint: no
+per-iteration commit" stating that a loop body cannot commit. That becomes
+false. Replace it with the `commit_each_iteration` option, the phase-body
+double-commit rule, and the `version:` contract from Part C.
+
+## Integration Points
+
+### Provides to Other Slices
+
+- **Slice 912 (Part D).** Per-iteration commits give a "were the prior findings
+  addressed?" check something to diff (`git diff HEAD~1 HEAD -- <artifact>`),
+  and `version:` gives it a stable way to name the round it is judging. Both are
+  prerequisites; 912 designs the review semantics on top of them.
+- **`documents/frontmatter.py`** becomes the shared read/update primitive for
+  any future consumer that needs to touch a document header.
+
+### Consumes from Other Slices
+
+- 910 Part A's `running_prior` threading — unchanged, but it is the reason a
+  round-over-round diff is expected to be non-empty.
+- 909 Part A's artifact post-condition — Part B stamps only when it passes. If
+  CF cannot resolve the artifact path, the post-condition already fails closed
+  with a WARNING and no stamp is attempted.
+
+## Success Criteria
+
+### Functional Requirements
+
+- A `loop:` with `commit_each_iteration: true` and a dispatch-shaped body
+  produces one commit per iteration, each message carrying its iteration number.
+- A phase-shaped loop body's existing commits carry iteration numbers, with no
+  config change required.
+- `commit_each_iteration: true` on a body that already commits is rejected at
+  validation time with a message naming the offending step.
+- A round that changes nothing logs a WARNING identifying pipeline, step, and
+  iteration.
+- The artifact a loop iteration produces carries `version: {n}`, incrementing
+  round over round; an artifact with no prior `version:` receives `1`.
+- The review file squadron writes inside a loop carries the same field; one
+  written by `sq review` from the CLI carries no `version:` key.
+- A frontmatter update leaves the document body byte-identical.
+
+### Technical Requirements
+
+- `ruff format --check .`, `ruff check .`, and full-project strict `pyright`
+  clean.
+- New tests for: iteration-qualified messages, the `commit_each_iteration`
+  validation rejection, the no-change WARNING, the failed-stamp WARNING,
+  version increment from absent / present / non-int prior values, and body
+  byte-preservation against a real project document.
+- Each new failure path has a test asserting its observable signal, per
+  `.claude/rules/review-code.md`.
+- `docs/PIPELINES.md` no longer states that per-iteration commits are impossible.
+
+### Verification Walkthrough
+
+*Draft — to be corrected against real output during Phase 6, as 910's was.*
+
+**1. The new option is visible before spending model calls.**
+
+```bash
+sq run --dry-run p45b 911
+```
+
+Expect the loop block from 910 Part C, now including a `commit_each_iteration`
+line.
+
+**2. Validation rejects the double-commit.** Create a throwaway pipeline whose
+loop body is a phase step and which sets `commit_each_iteration: true`, then:
+
+```bash
+sq run --validate <fixture-name>
+```
+
+Expect a validation error naming the inner step and explaining that phase steps
+already commit each iteration. Delete the fixture afterward.
+
+**3. A dispatch-bodied loop now leaves history.** Add
+`commit_each_iteration: true` to a copy of `test-loop.yaml`, run it, then:
+
+```bash
+git log --oneline -5
+```
+
+Expect one commit per iteration, each naming its iteration number — not three
+identical subject lines.
+
+**4. The artifact says which round it is.** Run a phase-bodied loop that takes
+more than one round, then read the head of the design file CF reports for the
+slice. Expect `version:` in the frontmatter with a value matching the number of
+rounds squadron stamped.
+
+**5. Round-over-round diff — the thing #44 asked for.**
+
+```bash
+git log --oneline -- <artifact path>
+git diff HEAD~1 HEAD -- <artifact path>
+```
+
+Expect a non-empty diff between consecutive rounds. An empty diff, paired with
+the Part A WARNING in the run log, is the honest report that the round did
+nothing — which is the diagnostic this slice exists to make possible.
+
+## Risk Assessment
+
+### Technical Risks
+
+- **`git add -A` scope.** `CommitAction` stages the whole tree when no `paths`
+  are given ([commit.py:52](src/squadron/pipeline/actions/commit.py#L52)). A
+  per-iteration commit therefore sweeps unrelated working-tree changes into the
+  round's commit. This is not new — phase-emitted commits already behave this
+  way — but a loop multiplies how often it happens.
+- **Body-preserving frontmatter rewrite.** Any bug in `update_frontmatter`
+  corrupts a document squadron did not author. Mitigated by the
+  byte-preservation test against a real project document, and by the
+  WARNING-and-continue failure mode rather than a partial write.
+
+### Mitigation Strategies
+
+- Keep the loop-appended commit's staging behavior **identical** to the
+  phase-emitted one (`-A`) rather than inventing a second rule, and document in
+  `docs/PIPELINES.md` that pipeline runs assume a clean working tree. Scoped
+  staging is a candidate follow-up, not a change to make inconsistently in one
+  of two commit paths.
+
+## Implementation Notes
+
+### Development Approach
+
+Sequence: **A1 → B → A2/A3 → C.**
+
+- **A1 first** (`ActionContext.iteration`) because both Part A's messages and
+  Part B's review-file stamping depend on it, and it is the smallest change.
+- **B second** — the frontmatter module and the stamping hook — because it is
+  the only genuinely new code and the only part with a corruption risk worth
+  isolating in its own commit.
+- **A2/A3 third**: the loop option, its validation, and the no-change WARNING.
+- **C last**: documentation, the `--dry-run` line, and recording the
+  `ai-project-guide` schema follow-up as future work.
+
+Each part is independently verifiable and independently committable, matching
+910's structure.
+
+### Special Considerations
+
+- The verdict-counting walk in `LoopStepType._validate_verdict_count` skips
+  inner steps that fail their own `validate()` before calling `expand()`
+  ([steps/loop.py:186-190](src/squadron/pipeline/steps/loop.py#L186-L190)) —
+  because `expand()` raises `KeyError` on an incomplete config. The new
+  commit-detection walk must do the same, and should reuse that traversal rather
+  than adding a second one.
+- Effort: Part A 2/5, Part B 2/5, Part C 1/5. Overall 2/5 with Part D removed.

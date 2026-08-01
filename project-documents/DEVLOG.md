@@ -65,6 +65,29 @@ Slice marked complete: frontmatter `status: complete` in the slice design, slice
 
 **Next:** merge `910-slice.loop-convergence-correctness` into `main`. Slice 911 (Loop Iteration Versioning and Review Evidence) is scoped-only and depends on this slice's Part A, now landed — ready to move into Phase 4 (Slice Design) when picked up.
 
+### Slice 911: Loop Iteration Versioning and Review Evidence — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/911-slice.loop-iteration-versioning-and-review-evidence.md` on `main` (planning work, no slice branch), from slice-plan entry 9 in `900-slices.maintenance-and-refactoring.md`. Three parts: A per-iteration commits (#44), B `version:` frontmatter on the artifact, C the round contract.
+
+**Part D split out to a new slice 912**, per PM decision and on the plan entry's own instruction ("if it grows, split it rather than expanding the slice"). Part D — may a reviewer see the prior version, and do findings carry forward — is the prerequisite *consumer* of 911's output, not part of it: it needs per-iteration commits to diff against and `version:` to name the round it is judging. Added as slice-plan entry 10 with the original framing (anchoring risk, the #32 failure shape, the clean-eyes-plus-addressed-check candidate resolution) preserved verbatim, and the "needs a design conversation before its Phase 4 design is written" flag carried over.
+
+**Corrected the plan entry's central factual premise.** Part A's scoping said "a `commit` step type already exists, so the machinery is present." It does not exist: `commit` is an *action* (`ActionType.COMMIT`), absent from `StepTypeName`, emitted only by phase-step expansion (`phase.py:176`), and `docs/PIPELINES.md` documents "Constraint: no per-iteration commit" as a hard rule. Consequences, verified on disk and now driving the design:
+- A loop whose body is **phase steps** (`p45b.yaml`) **already commits every iteration** — issue #44's premise is false for that shape. The real gap there is that all three rounds emit the identical message `chore: phase-4 slice {n}`, so `git log` cannot tell them apart.
+- A loop whose body is a bare **`dispatch:`** (`judge-cycle.yaml`, `test-loop.yaml`) commits nothing, which is #44 as written.
+- `CommitAction` no-ops on a clean tree, returning `success=True, outputs={"committed": False}` (`commit.py:37-42`). So #44's hoped-for "empty commit is a useful signal" does not happen today — a byte-identical round leaves *no* trace at all. Part A makes that a WARNING, since it is exactly the #42 symptom.
+
+Part A therefore splits three ways: A1 iteration-qualified commit messages (add `iteration` to `ActionContext`, which `_execute_step_once` already receives), A2 opt-in `commit_each_iteration: true` on `loop:` with validation that **rejects** it when the body already commits (mirroring 910 Part B's reject-the-ambiguity stance rather than tolerating a silent double-commit), A3 the no-change WARNING.
+
+**Part B hooks onto 909 Part A's machinery**, which was the useful find: `_expected_artifact_paths()` (`executor.py:109-121`) and the dispatch artifact post-condition (`executor.py:1064-1082`) already resolve and confirm the file a phase-step dispatch was supposed to write. Squadron stamps `version:` immediately after that check passes, so it only ever writes into a file it has confirmed exists from this run. Squadron never authors slice designs or task files itself — `DispatchAction` has no file-write code — so agent-side stamping was rejected as unreliable (a missed stamp is indistinguishable from a pre-field artifact). Also confirmed **no generic frontmatter read/modify/write utility exists**; `read_review_frontmatter` (`metrology/identity.py:162`) is lenient but review-scoped and declares itself the only reader of a persisted review. New `documents/frontmatter.py` provides the general primitive and `read_review_frontmatter` delegates its parse to it, so there is one lenient parser rather than two.
+
+**Part C decisions:** clean regeneration (a round regenerates; `version:` is the only carryover; round history lives in git, not in the document), and absent `version:` means "never stamped by squadron" — explicitly *not* round 1, so readers must not default it. `version:` is monotonic across runs (read prior, write n+1), not the loop's iteration index, since "which revision am I looking at" is the question it answers.
+
+**Cross-repo seam recorded, not crossed.** `project-documents/ai-project-guide` is a git submodule (`ecorkran/ai-project-guide`); its `file-naming-conventions.md` is the canonical frontmatter schema Context Forge also reads. Per PM decision the slice is squadron-side only; registering `version:` in that schema is a follow-up in the guide repo, and whether CF's own frontmatter consumers tolerate an unregistered key must be confirmed before it is proposed. `docs/PIPELINES.md` also needs its "no per-iteration commit" section replaced, tracked as a Part C task.
+
+**Sequencing:** A1 → B → A2/A3 → C. A1 first because both Part A's messages and Part B's review-file stamping depend on `ActionContext.iteration`; B second because it is the only genuinely new code and the only part carrying a document-corruption risk worth isolating in its own commit.
+
+**Next:** Phase 5 (Task Breakdown) for slice 911, not yet started. Slice 912 needs its design conversation before Phase 4.
+
 ---
 
 ## 20260727
