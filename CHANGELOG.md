@@ -15,12 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A `loop:` step can now commit every iteration.** Set `commit_each_iteration: true` and squadron commits after each round, with a message naming the iteration (`chore: loop-{name} (iteration N)`) — useful for dispatch-then-review loops that previously left zero commit history. A phase-shaped loop, which already commits automatically, rejects the option at validation time rather than committing twice.
+- **Artifacts and review files a loop iteration produces now carry a `revision_number:`.** The design/tasks file a round writes, and the review file squadron authors for it, are stamped with a monotonic revision count so you can tell which round you're looking at. Absent means never stamped by squadron — it is not round 1.
+
 ### Fixed
 - **`loop:` steps now actually converge.** A dispatch-then-review loop was re-sending the exact same prompt on every retry instead of feeding back what the prior review found — so a loop could run its full `max` iterations without ever seeing what needed fixing. Retries now include the previous iteration's findings.
 - **A loop body with two reviews could silently report success while one of them failed.** `sq run --validate`/`--dry-run` now rejects a `loop:` body containing more than one review or gate when `until:` is set, with a message naming the conflicting steps and suggesting the fix (split into sequential loops).
+- **A loop iteration that changed nothing left no trace.** Committing inside a loop now logs a warning when the working tree is clean after an iteration — previously this was silent, indistinguishable from a real improvement.
 
 ### Changed
-- **`sq run --dry-run` now shows what's inside a `loop:` step** — its `max`, `until`, `on_exhaust`, and each step in its body — instead of a single opaque `loop-N (loop)` line.
+- **`sq run --dry-run` now shows what's inside a `loop:` step** — its `max`, `until`, `on_exhaust`, `commit_each_iteration` when set, and each step in its body — instead of a single opaque `loop-N (loop)` line.
 
 ## [0.8.2] - 20260729
 

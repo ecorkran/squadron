@@ -10,6 +10,27 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260801
+
+### Slice 911: Loop Iteration Versioning and Review Evidence — Implementation Complete
+
+**Phase 6 complete.** Branch `911-slice.loop-iteration-versioning-and-review-evidence` off `main`. All three parts landed in the design's A1 → B → A2/A3 → C order, one commit per sub-part (`ad5d97b` through `412839c`).
+
+- **A1 (`ad5d97b`):** `ActionContext.iteration: int = 0` added and threaded through `_execute_step_once`; `CommitAction` appends ` (iteration N)` to a composed message when `iteration >= 1`, leaving an explicit `message:` param verbatim.
+- **B (`07db9f1`, `443a2ce`):** new `src/squadron/documents/frontmatter.py` (lenient read/update, byte-preserving body, named exception on malformed input); `read_review_frontmatter` delegates its parse to it. Dispatch's post-condition stamps `revision_number` (n+1 or 1) on the artifact when `expected_kind is not None` and `iteration >= 1`; `format_review_markdown` emits the same field on review files when supplied.
+- **A2/A3 (`36f64ad`, `f330517`, `80a725e`):** `commit_each_iteration: true` validated on `LoopStepType` (rejects a body that already commits, reusing `_validate_verdict_count`'s traversal rather than a second walk); `_execute_loop_body` appends one commit per iteration before the `until:` check; a clean-tree commit inside a loop now logs a WARNING naming the iteration.
+- **C (`ac25cdf`, `412839c`):** `--dry-run` shows `commit_each_iteration` when set; `docs/PIPELINES.md`'s "no per-iteration commit" section replaced with the opt-in contract and the `revision_number` field contract.
+
+**Full validation gate:** `ruff format`/`ruff check` clean, `pyright` strict 0 errors, full `tests/` suite 2745 passed / 2 skipped vs. a `main`-baseline of 2698 passed / 2 skipped (a separate worktree checkout) — the +47 delta is exactly the new tests added across T3/T5/T7/T9/T11/T13/T15/T17/T19, no regressions, no new skips.
+
+**Live smoke test, and what it actually showed.** Ran `commit_each_iteration: true` end-to-end in a disposable scratch repo (`~/source/repos/manta/temp/squadron-smoke-911`, outside this repo, since `sq run`'s SDK-mode dispatch refuses to execute nested inside a Claude Code session — this session couldn't run it itself). Confirmed real: one commit per iteration with a distinguishable message (`chore: loop-{name} (iteration N)`), and a non-empty `git diff HEAD~1 HEAD -- <path>` between rounds. One apparent anomaly — two commits both reading "iteration 1" — was traced to two separate un-resumed `sq run loop-smoke` invocations 28 seconds apart (confirmed via distinct `run_id`s in `~/.config/squadron/runs/`), not a defect: each fresh run numbers its own iterations from 1. Separately, and not a squadron defect: the smoke fixture's dispatch prompt asked the model to write a throwaway `calc.py`, but the coding agent went off-task and copied this repo's own `CLAUDE.md`/`.claude/` scaffolding into the scratch project instead — a smoke-test-prompt problem to note if reused, not something this slice's code caused. The mechanism itself (not this one fixture's prompt-following) is independently covered by `tests/pipeline/test_executor_loop_body.py` and `tests/pipeline/actions/test_commit.py`.
+
+**ai-project-guide issue #14** (registering `revision_number` in the canonical frontmatter schema) is still open with no comments as of close-out — no rename needed; `revision_number` ships as designed.
+
+**Slice marked complete.** Entry 9 in `900-slices.maintenance-and-refactoring.md` checked off. Issue #44 to be closed on merge, not before.
+
+**Next:** slice 912 (Review Evidence — Prior-Version Access) needs its own design conversation before Phase 4.
+
 ## 20260731
 
 ### Slice 910: Loop Convergence Correctness — Slice Design Complete

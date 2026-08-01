@@ -5,14 +5,16 @@ project: squadron
 lld: user/slices/911-slice.loop-iteration-versioning-and-review-evidence.md
 dependencies: [910, 909]
 projectState: >
-  Slice 911 design complete. Part D (reviewer access to prior versions) split
-  out to slice 912 during design. Artifact field named revision_number, not
-  version; ai-project-guide issue #14 filed to register it in the canonical
-  frontmatter schema. Three parts remain: A per-iteration commits (#44),
-  B revision_number stamping, C the round contract and docs. Not yet branched.
+  Slice 911 complete (Phase 6, branch
+  911-slice.loop-iteration-versioning-and-review-evidence). All three parts
+  (A per-iteration commits #44, B revision_number stamping, C the round
+  contract and docs) shipped and validated: ruff/pyright/tests clean, live
+  smoke test confirmed per-iteration commits and round-over-round diffing.
+  ai-project-guide issue #14 still open, no rename needed. Issue #44 closes
+  on merge.
 dateCreated: 20260731
-dateUpdated: 20260731
-status: not_started
+dateUpdated: 20260801
+status: complete
 ---
 
 ## Context Summary
@@ -309,38 +311,38 @@ status: not_started
     not. Assert against the module constant, not a duplicated literal.
   - [x] Success: both pass.
 
-- [ ] **T20. Update `docs/PIPELINES.md`**
-  - [ ] Replace the section titled "Constraint: no per-iteration commit" — it
+- [x] **T20. Update `docs/PIPELINES.md`**
+  - [x] Replace the section titled "Constraint: no per-iteration commit" — it
     becomes false with T14. State instead: `commit_each_iteration` (opt-in,
     default false), that phase-bodied loops already commit and must not set it,
     and that the commit runs after the body and before the `until:` check.
-  - [ ] Document the `revision_number:` contract in the same pass — what it
+  - [x] Document the `revision_number:` contract in the same pass — what it
     counts, that squadron alone writes it, that absent means "never stamped"
     and not round 1, which docTypes it applies to, and that nothing should
     branch on its value. Source the wording from the slice design's **Field
     contract** table so the two do not drift.
-  - [ ] Note the clean-regeneration rule: a round regenerates the artifact and
+  - [x] Note the clean-regeneration rule: a round regenerates the artifact and
     `revision_number:` is the only carryover; round history lives in git.
-  - [ ] Success: no statement in the file contradicts shipped behavior.
+  - [x] Success: no statement in the file contradicts shipped behavior.
 
-- [ ] **T21. Final validation gate and close-out**
-  - [ ] `ruff format .` then `ruff format --check .`, then `ruff check .`.
-  - [ ] `pyright` full-project strict — zero errors is a merge blocker.
-  - [ ] Full `tests/` suite; compare pass/skip counts against the pre-slice
+- [x] **T21. Final validation gate and close-out**
+  - [x] `ruff format .` then `ruff format --check .`, then `ruff check .`.
+  - [x] `pyright` full-project strict — zero errors is a merge blocker.
+  - [x] Full `tests/` suite; compare pass/skip counts against the pre-slice
     baseline and account for every difference.
-  - [ ] Walk the slice design's **Verification Walkthrough** end to end and
+  - [x] Walk the slice design's **Verification Walkthrough** end to end and
     correct it in place against real output — it is a draft written before
     implementation, exactly as 910's was.
-  - [ ] Confirm the artifact-facing claims by hand: run a loop that takes more
+  - [x] Confirm the artifact-facing claims by hand: run a loop that takes more
     than one round, then check `git log --oneline -- <artifact>` shows one
     commit per round with distinguishable messages, and that the artifact's
     frontmatter carries `revision_number:`.
-  - [ ] Re-check ai-project-guide issue #14 before closing: if it settled on a
+  - [x] Re-check ai-project-guide issue #14 before closing: if it settled on a
     different field name, rename now rather than shipping a name that will need
     migrating.
-  - [ ] Delegate task-file checkbox updates to the `task-checker` agent.
-  - [ ] Set `status: complete` in the slice design frontmatter; check off
+  - [x] Delegate task-file checkbox updates to the `task-checker` agent.
+  - [x] Set `status: complete` in the slice design frontmatter; check off
     entry 9 in `900-slices.maintenance-and-refactoring.md` with the completion
     date; add CHANGELOG entries (short, user-facing) and a Phase 6 DEVLOG entry.
   - [ ] Close issue #44 on merge. Do not close anything belonging to slice 912.
-  - [ ] Success: gate fully clean, walkthrough reproduced, slice marked complete.
+  - [x] Success: gate fully clean, walkthrough reproduced, slice marked complete.
