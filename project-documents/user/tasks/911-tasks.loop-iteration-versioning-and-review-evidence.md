@@ -294,20 +294,20 @@ status: not_started
 
 ## Part C — Contract, Dry-Run, and Documentation
 
-- [ ] **T18. Show `commit_each_iteration` in `--dry-run`**
-  - [ ] In `src/squadron/cli/commands/run.py`, extend the loop-expansion block
+- [x] **T18. Show `commit_each_iteration` in `--dry-run`**
+  - [x] In `src/squadron/cli/commands/run.py`, extend the loop-expansion block
     added by slice 910 Part C to print `commit_each_iteration` when set,
     alongside `max`, `until`, and `on_exhaust`.
-  - [ ] Follow the existing convention in that file: hoist any fixed display
+  - [x] Follow the existing convention in that file: hoist any fixed display
     string to a module-level constant next to `_DRY_RUN_NO_UNTIL_DISPLAY`
     rather than inlining a literal.
-  - [ ] Success: `sq run --dry-run p45b 911` renders without error.
+  - [x] Success: `sq run --dry-run p45b 911` renders without error.
 
-- [ ] **T19. Test for the dry-run line**
-  - [ ] In `tests/cli/commands/test_run.py`: a loop with
+- [x] **T19. Test for the dry-run line**
+  - [x] In `tests/cli/commands/test_run.py`: a loop with
     `commit_each_iteration: true` renders the line; a loop without the key does
     not. Assert against the module constant, not a duplicated literal.
-  - [ ] Success: both pass.
+  - [x] Success: both pass.
 
 - [ ] **T20. Update `docs/PIPELINES.md`**
   - [ ] Replace the section titled "Constraint: no per-iteration commit" — it
