@@ -110,88 +110,88 @@ status: not_started
 
 ## Part B — `revision_number` Stamping
 
-- [ ] **T4. New module `src/squadron/documents/frontmatter.py`**
-  - [ ] Create the package `src/squadron/documents/` with `__init__.py`.
-  - [ ] `read_frontmatter(path: Path) -> dict[str, object] | None` — tolerate a
+- [x] **T4. New module `src/squadron/documents/frontmatter.py`**
+  - [x] Create the package `src/squadron/documents/` with `__init__.py`.
+  - [x] `read_frontmatter(path: Path) -> dict[str, object] | None` — tolerate a
     BOM and leading blank lines before the opening `---`, split on the closing
     `---`, `yaml.safe_load` the block. Return `None` when there is no block or
     it does not parse to a mapping. Model the leniency on the existing
     `read_review_frontmatter` (`metrology/identity.py:162-196`), which is the
     reference implementation for this project's real files.
-  - [ ] `update_frontmatter(path: Path, fields: dict[str, object]) -> None` —
+  - [x] `update_frontmatter(path: Path, fields: dict[str, object]) -> None` —
     read, merge `fields` over the existing keys, write back. Existing key order
     is preserved and new keys are appended to the end of the block. **The
     document body must be preserved byte-for-byte.**
-  - [ ] Raise a specific, named exception on a malformed or absent block —
+  - [x] Raise a specific, named exception on a malformed or absent block —
     callers decide whether that is fatal. Do not return a default.
-  - [ ] Success: module is under ~120 lines; `ruff` and `pyright` strict clean.
+  - [x] Success: module is under ~120 lines; `ruff` and `pyright` strict clean.
 
-- [ ] **T5. Tests for the frontmatter helpers**
-  - [ ] New `tests/documents/test_frontmatter.py`.
-  - [ ] `read_frontmatter` handles: normal block, BOM-prefixed file, leading
+- [x] **T5. Tests for the frontmatter helpers**
+  - [x] New `tests/documents/test_frontmatter.py`.
+  - [x] `read_frontmatter` handles: normal block, BOM-prefixed file, leading
     blank lines, no block at all, block that parses to a scalar not a mapping.
-  - [ ] `update_frontmatter` adds a new key, updates an existing key, and
+  - [x] `update_frontmatter` adds a new key, updates an existing key, and
     preserves the order of untouched keys.
-  - [ ] **Byte-preservation test against a real project document** — copy an
+  - [x] **Byte-preservation test against a real project document** — copy an
     actual file from `project-documents/user/slices/` into `tmp_path`, run an
     update that changes one key, and assert everything after the closing `---`
     is byte-identical to the original. A synthetic fixture does not satisfy
     this task (project rule: a parser's fixture must be the format it consumes
     in production).
-  - [ ] Malformed input raises the named exception rather than returning a
+  - [x] Malformed input raises the named exception rather than returning a
     default.
-  - [ ] Success: all pass.
+  - [x] Success: all pass.
 
-- [ ] **T6. Delegate `read_review_frontmatter`'s parse to the new helper**
-  - [ ] In `src/squadron/metrology/identity.py`, replace the inline parse in
+- [x] **T6. Delegate `read_review_frontmatter`'s parse to the new helper**
+  - [x] In `src/squadron/metrology/identity.py`, replace the inline parse in
     `read_review_frontmatter` (lines 162-196) with a call to
     `read_frontmatter`, keeping its review-specific validation and its
     `MetrologyTargetError` behavior exactly as-is.
-  - [ ] Its docstring asserts it is the only reader of a persisted review —
+  - [x] Its docstring asserts it is the only reader of a persisted review —
     that stays true and the docstring stays accurate; update only the sentence
     describing how it parses.
-  - [ ] Goal is one lenient parser in the codebase, not two. Do not change any
+  - [x] Goal is one lenient parser in the codebase, not two. Do not change any
     of its six consumers (`discovery.py`, `capture.py`, `report.py`,
     `graduation.py`).
-  - [ ] Success: the full `tests/metrology/` suite passes unchanged.
+  - [x] Success: the full `tests/metrology/` suite passes unchanged.
 
-- [ ] **T7. Tests for the delegation**
-  - [ ] Assert `read_review_frontmatter` still raises `MetrologyTargetError`
+- [x] **T7. Tests for the delegation**
+  - [x] Assert `read_review_frontmatter` still raises `MetrologyTargetError`
     for each input shape it rejected before the refactor (no block, non-mapping
     block, missing required review keys).
-  - [ ] Success: `tests/metrology/` fully green with no test modified to
+  - [x] Success: `tests/metrology/` fully green with no test modified to
     accommodate the refactor. If a test needs changing, the refactor changed
     behavior — stop and reassess.
 
-- [ ] **T8. Stamp `revision_number` after the dispatch post-condition**
-  - [ ] In `src/squadron/pipeline/executor.py`, extend the existing
+- [x] **T8. Stamp `revision_number` after the dispatch post-condition**
+  - [x] In `src/squadron/pipeline/executor.py`, extend the existing
     post-condition block (lines 1064-1082). After `artifact_error is None`
     confirms the artifact was written this run, stamp each path returned by
     `_expected_artifact_paths()` (lines 109-121).
-  - [ ] Gate on `expected_kind is not None` **and** `ctx.iteration >= 1`. A
+  - [x] Gate on `expected_kind is not None` **and** `ctx.iteration >= 1`. A
     phase step outside a loop is not stamped.
-  - [ ] Value rule: read the existing `revision_number`; if present and an
+  - [x] Value rule: read the existing `revision_number`; if present and an
     `int`, write `n + 1`; otherwise write `1`. It is a count of squadron
     stamps, **not** the loop's iteration index — do not write `ctx.iteration`.
-  - [ ] Failure mode: if the file cannot be parsed or rewritten, log at WARNING
+  - [x] Failure mode: if the file cannot be parsed or rewritten, log at WARNING
     naming the path and the reason, and continue. A failed evidence stamp must
     not fail a converging loop. This is explicit and observable, not a silent
     fallback — do not swallow the exception without logging.
-  - [ ] Extract the stamping into a small named helper rather than inlining it;
+  - [x] Extract the stamping into a small named helper rather than inlining it;
     `_execute_step_once` is already long.
-  - [ ] Success: `ruff`, `pyright` strict clean.
+  - [x] Success: `ruff`, `pyright` strict clean.
 
-- [ ] **T9. Tests for stamping**
-  - [ ] In `tests/pipeline/` (alongside the existing post-condition tests):
+- [x] **T9. Tests for stamping**
+  - [x] In `tests/pipeline/` (alongside the existing post-condition tests):
     absent prior value → `1`; existing `3` → `4`; existing non-int (e.g. a
     string) → `1`.
-  - [ ] Not stamped when `iteration == 0`; not stamped when `expected_kind` is
+  - [x] Not stamped when `iteration == 0`; not stamped when `expected_kind` is
     `None`; not stamped when the post-condition failed.
-  - [ ] An unwritable or malformed target logs a WARNING **and** the dispatch
+  - [x] An unwritable or malformed target logs a WARNING **and** the dispatch
     still reports success (assert on the log record, per
     `.claude/rules/review-code.md` — every failure path needs an observable
     signal and a test asserting it).
-  - [ ] Success: all pass.
+  - [x] Success: all pass.
 
 - [ ] **T10. Emit `revision_number` on review files**
   - [ ] In `src/squadron/review/persistence.py`, give `format_review_markdown`

@@ -245,6 +245,9 @@ class ReviewAction:
         # When slice_info is available, use save_review_result for correct
         # naming (e.g. 154-review.slice.prompt-only-loops.md). Otherwise
         # fall back to save_review_file with step name/index.
+        # revision_number (slice 911 Part B): the loop iteration this review
+        # ran in, supplied only when it actually ran inside a loop.
+        revision_number = context.iteration if context.iteration >= 1 else None
         review_file_path: str | None = None
         try:
             if slice_info is not None:
@@ -255,6 +258,7 @@ class ReviewAction:
                         slice_info,
                         input_file=inputs.get("input"),
                         verdict_override=verdict_override,
+                        revision_number=revision_number,
                     )
                 )
             else:
@@ -263,6 +267,7 @@ class ReviewAction:
                     template_name,
                     source_document=inputs.get("input"),
                     verdict_override=verdict_override,
+                    revision_number=revision_number,
                 )
                 path = save_review_file(
                     md_content,

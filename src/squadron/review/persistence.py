@@ -95,6 +95,7 @@ def format_review_markdown(
     source_document: str | None = None,
     model: str | None = None,
     verdict_override: str | None = None,
+    revision_number: int | None = None,
 ) -> str:
     """Format a ReviewResult as markdown with YAML frontmatter.
 
@@ -112,6 +113,9 @@ def format_review_markdown(
             callers that have already derived a threshold-based verdict
             (``enforce_judge``) pass it here so the persisted file shows the
             real gating decision instead of the always-empty raw parse.
+        revision_number: Squadron's loop-iteration revision count (slice 911
+            Part B). Emitted only when supplied — a review authored outside
+            a loop, or via the CLI, carries no such key.
     """
     today = result.timestamp.strftime("%Y%m%d")
     resolved_model = model or result.model or "unknown"
@@ -141,6 +145,8 @@ def format_review_markdown(
         f"dateCreated: {today}",
         f"dateUpdated: {today}",
     ]
+    if revision_number is not None:
+        lines.append(f"revision_number: {revision_number}")
 
     # Numeric scoring foundation (slice 300): emit score/criteria as top-level
     # frontmatter only when present. A score-less result is byte-for-byte
@@ -257,6 +263,7 @@ def save_review_result(
     input_file: str | None = None,
     name_suffix: str | None = None,
     verdict_override: str | None = None,
+    revision_number: int | None = None,
 ) -> Path:
     """Save a ReviewResult to the reviews directory (CLI compatibility).
 
@@ -275,6 +282,11 @@ def save_review_result(
     output — see their docstrings. Both persist the same threshold-derived
     verdict for judge templates rather than the always-``UNKNOWN`` raw
     parse.
+
+    ``revision_number`` is forwarded to ``format_review_markdown`` for
+    markdown output only (slice 911 Part B); ``as_json`` output carries no
+    equivalent field. The CLI never passes this — only a loop-iteration
+    review action does.
     """
     target = reviews_dir or _REVIEWS_DIR
     target.mkdir(parents=True, exist_ok=True)
@@ -295,6 +307,7 @@ def save_review_result(
                 slice_info,
                 source_document=input_file,
                 verdict_override=verdict_override,
+                revision_number=revision_number,
             )
         )
 
