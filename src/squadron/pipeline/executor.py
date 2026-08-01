@@ -426,6 +426,7 @@ class LoopConfig:
     until: LoopCondition | None = None
     on_exhaust: ExhaustBehavior = ExhaustBehavior.FAIL
     strategy: str | None = None
+    commit_each_iteration: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +573,7 @@ def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
         until=until,
         on_exhaust=on_exhaust,
         strategy=strategy if isinstance(strategy, str) else None,
+        commit_each_iteration=loop_dict.get("commit_each_iteration") is True,
     )
 
 
@@ -1396,6 +1398,33 @@ async def _execute_loop_body(
                     iteration=iteration,
                 )
             # FAILED is transient — continue executing remaining inner steps
+
+        # commit_each_iteration (Part A2, #44): append one commit action
+        # after the body's inner steps for this iteration, before the
+        # until: check, so a dispatch-bodied loop also leaves per-round
+        # history. Validation (LoopStepType) already rejects this option
+        # when the body itself commits, so no double-commit is possible here.
+        if loop_config.commit_each_iteration:
+            commit_ctx = ActionContext(
+                pipeline_name=pipeline_name,
+                run_id=run_id,
+                params={"message_prefix": f"loop-{step.name}"},
+                step_name=step.name,
+                step_index=step_index,
+                prior_outputs=running_prior,
+                resolver=resolver,
+                cf_client=cf_client,
+                cwd=cwd,
+                sdk_session=sdk_session,
+                step_outputs=step_outputs if step_outputs is not None else {},
+                iteration=iteration,
+            )
+            commit_result = await get_action_fn("commit").execute(commit_ctx)
+            iteration_action_results.append(commit_result)
+            # Same key scheme as the inner-step loop above; len(inner_steps)
+            # is one past the last real inner_step_index, so it can't collide.
+            commit_key = f"{len(inner_steps)}-{commit_result.action_type}-0"
+            running_prior[commit_key] = commit_result
 
         # Evaluate until condition after all inner steps complete
         if loop_config.until is not None:

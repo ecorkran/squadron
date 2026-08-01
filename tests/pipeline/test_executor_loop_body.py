@@ -679,3 +679,99 @@ async def test_action_context_carries_loop_iteration_number() -> None:
 
     assert outside_result.status == ExecutionStatus.COMPLETED
     assert [ctx.iteration for ctx in outside_contexts] == [0]
+
+
+# ---------------------------------------------------------------------------
+# commit_each_iteration (slice 911 Part A2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_commit_each_iteration_invokes_commit_per_round() -> None:
+    """commit_each_iteration: true appends one commit action per iteration,
+    each carrying that iteration's number, for a dispatch-bodied loop."""
+    review_results = [
+        _action_result(True, "review", verdict="CONCERNS"),
+        _action_result(True, "review", verdict="CONCERNS"),
+        _action_result(True, "review", verdict="PASS"),
+    ]
+    review_action = _mock_action(review_results)
+
+    captured_contexts: list[ActionContext] = []
+
+    async def _commit_side_effect(ctx: ActionContext) -> ActionResult:
+        captured_contexts.append(ctx)
+        return ActionResult(success=True, action_type="commit", outputs={"committed": True})
+
+    commit_action = MagicMock()
+    commit_action.execute = AsyncMock(side_effect=_commit_side_effect)
+
+    inner_st = _mock_step_type([("review", {})])
+    register_step_type("_lb_commit_each_t15", inner_st)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "commit-loop",
+                {
+                    "max": 5,
+                    "until": "review.pass",
+                    "commit_each_iteration": True,
+                    "steps": [{"_lb_commit_each_t15": {}}],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action, "commit": commit_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert result.step_results[0].iteration == 3
+    assert commit_action.execute.call_count == 3
+    assert [ctx.iteration for ctx in captured_contexts] == [1, 2, 3]
+    # The final iteration's commit result is present in action_results.
+    assert any(ar.action_type == "commit" for ar in result.step_results[0].action_results)
+
+
+@pytest.mark.asyncio
+async def test_commit_each_iteration_absent_never_invokes_commit() -> None:
+    """Absent commit_each_iteration — existing loops are unaffected; commit
+    is never invoked even when registered in the action registry."""
+    review_action = _mock_action([_action_result(True, "review", verdict="PASS")])
+    commit_action = MagicMock()
+    commit_action.execute = AsyncMock(
+        return_value=ActionResult(success=True, action_type="commit", outputs={})
+    )
+
+    inner_st = _mock_step_type([("review", {})])
+    register_step_type("_lb_no_commit_t15", inner_st)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "no-commit-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [{"_lb_no_commit_t15": {}}],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action, "commit": commit_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    commit_action.execute.assert_not_called()

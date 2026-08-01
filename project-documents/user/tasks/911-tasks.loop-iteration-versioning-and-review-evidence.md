@@ -216,37 +216,37 @@ status: not_started
 
 ## Part A2 / A3 — `commit_each_iteration` and the No-Change Warning
 
-- [ ] **T12. Validate `commit_each_iteration` in `LoopStepType.validate()`**
-  - [ ] In `src/squadron/pipeline/steps/loop.py`, validate the new optional key:
+- [x] **T12. Validate `commit_each_iteration` in `LoopStepType.validate()`**
+  - [x] In `src/squadron/pipeline/steps/loop.py`, validate the new optional key:
     if present it must be a `bool`, matching the shape of the existing `max`
     and `strategy` validators (lines 38-86). Note `bool` is a subclass of
     `int` — here that is what we want, but do not accept `0`/`1`.
-  - [ ] When it is `true`, reject a body that already commits: walk the inner
+  - [x] When it is `true`, reject a body that already commits: walk the inner
     steps and return a `ValidationError` naming the offending step if any
     expands to a `commit` action.
-  - [ ] **Reuse the existing traversal in `_validate_verdict_count`
+  - [x] **Reuse the existing traversal in `_validate_verdict_count`
     (lines 165-213) rather than adding a second one.** That helper already
     unpacks inner steps, resolves step types, and — critically — skips any
     inner step that fails its own `validate()` before calling `expand()`,
     because `expand()` raises `KeyError` on an incomplete config
     (lines 186-190). A new independent walk would reintroduce that crash.
     Factor the shared walk out; do not copy it.
-  - [ ] Error message must be actionable: name the inner step and state that
+  - [x] Error message must be actionable: name the inner step and state that
     phase steps already commit each iteration, so `commit_each_iteration`
     should be removed.
-  - [ ] Success: `ruff`, `pyright` strict clean.
+  - [x] Success: `ruff`, `pyright` strict clean.
 
-- [ ] **T13. Tests for the validation**
-  - [ ] In `tests/pipeline/steps/test_loop.py`: non-bool value rejected.
-  - [ ] `commit_each_iteration: true` with a `phase`-typed inner step rejected,
+- [x] **T13. Tests for the validation**
+  - [x] In `tests/pipeline/steps/test_loop.py`: non-bool value rejected.
+  - [x] `commit_each_iteration: true` with a `phase`-typed inner step rejected,
     with the offending step named in the message.
-  - [ ] `commit_each_iteration: true` with a dispatch+review body accepted.
-  - [ ] Absent key accepted (default false) — existing loop pipelines unchanged.
-  - [ ] An inner step with a malformed config does **not** crash the new check
+  - [x] `commit_each_iteration: true` with a dispatch+review body accepted.
+  - [x] Absent key accepted (default false) — existing loop pipelines unchanged.
+  - [x] An inner step with a malformed config does **not** crash the new check
     (regression guard for the `expand()` `KeyError` noted in T12).
-  - [ ] Verify the real `p45b.yaml` still validates: `sq run --validate p45b`.
+  - [x] Verify the real `p45b.yaml` still validates: `sq run --validate p45b`.
     Pipeline names omit the `.yaml` extension; the loader appends it.
-  - [ ] Success: all pass.
+  - [x] Success: all pass.
 
 - [ ] **T14. Append a commit action per iteration in `_execute_loop_body`**
   - [ ] In `src/squadron/pipeline/executor.py`, in `_execute_loop_body`
