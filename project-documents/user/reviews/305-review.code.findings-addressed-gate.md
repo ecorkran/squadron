@@ -127,8 +127,8 @@ Eight commits on `305-slice.findings-addressed-gate`. Full suite 2832 passed /
   `BLE` and `ASYNC` in particular require narrowing exception types and
   moving blocking calls off the event loop, which are behavior changes.
   The gap and its counts are recorded in `pyproject.toml` next to the
-  config, and adoption is left as its own unit of work rather than folded
-  into a review-fix branch.
+  config, and adoption is tracked as issue #50 rather than folded into a
+  review-fix branch.
 - **F010 (pass)** — no action.
 
 ## Findings
