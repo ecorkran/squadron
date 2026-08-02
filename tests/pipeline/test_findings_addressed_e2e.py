@@ -22,7 +22,7 @@ from squadron.pipeline.actions.gate import GateAction
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.steps import register_step_type
-from squadron.review.models import ReviewResult, Verdict
+from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 
 _JUDGE_TRANSPORT = "squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile"
 _TARGET_FILE = "src/x.py"
@@ -52,23 +52,37 @@ def _mock_step_type(action_pairs: list[tuple[str, dict[str, object]]]) -> MagicM
     return step_type
 
 
-def _finding(finding_id: str, severity: str = "CONCERN") -> dict[str, object]:
-    return {
-        "id": finding_id,
-        "severity": severity,
-        "category": "correctness",
-        "summary": f"summary for {finding_id}",
-        "location": f"{_TARGET_FILE}:12",
-    }
+def _finding(severity: Severity = Severity.CONCERN) -> ReviewFinding:
+    return ReviewFinding(
+        severity=severity,
+        title="a recurring problem",
+        description="",
+        category="correctness",
+        location=f"{_TARGET_FILE}:12",
+    )
 
 
-def _review(verdict: str, findings: list[dict[str, object]]) -> ActionResult:
+def _review(verdict: str, findings: list[ReviewFinding]) -> ActionResult:
+    """Build the review ActionResult the way ReviewAction does.
+
+    Findings go through ``ReviewResult.structured_findings`` rather than being
+    written as literal dicts: that property assigns the ``F00n`` ids and
+    lowercases severity, and it is the only shape production ever hands the
+    gate. A hand-built dict would pass tests that the real pipeline fails.
+    """
+    result = ReviewResult(
+        verdict=Verdict.CONCERNS,
+        findings=findings,
+        template_name="review",
+        input_files={},
+        raw_output="",
+    )
     return ActionResult(
         success=True,
         action_type="review",
         outputs={},
         verdict=verdict,
-        findings=list(findings),
+        findings=[sf.__dict__ for sf in result.structured_findings],
     )
 
 
@@ -168,8 +182,8 @@ async def test_three_rounds_screen0_then_fail_then_pass(repo: Path) -> None:
 
     transport = AsyncMock(return_value=_judge_output("F001: addressed"))
     reviews = [
-        _review("FAIL", [_finding("F001")]),
-        _review("CONCERNS", [_finding("F001")]),
+        _review("FAIL", [_finding()]),
+        _review("CONCERNS", [_finding()]),
         _review("PASS", []),
     ]
 
@@ -232,7 +246,7 @@ async def test_judge_failure_fails_closed_and_the_checkpoint_pauses(repo: Path) 
     resumed loop."""
     transport = AsyncMock(side_effect=RuntimeError("provider exploded"))
     reviews = [
-        _review("CONCERNS", [_finding("F001")]),
+        _review("CONCERNS", [_finding()]),
         _review("PASS", []),
     ]
 
@@ -275,7 +289,7 @@ async def test_byte_identical_round_fails_without_consulting_the_judge(repo: Pat
     dispatch.execute = AsyncMock(side_effect=_noop)
 
     reviews = [
-        _review("CONCERNS", [_finding("F001")]),
+        _review("CONCERNS", [_finding()]),
         _review("CONCERNS", []),
         _review("CONCERNS", []),
     ]

@@ -27,7 +27,7 @@ from squadron.pipeline.actions.findings_addressed import (
     screen_no_prior_round,
 )
 from squadron.pipeline.models import ActionResult
-from squadron.review.models import Verdict
+from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 
 _CWD = "/repo"
 
@@ -90,6 +90,45 @@ def test_note_and_pass_findings_are_not_concern_plus() -> None:
     )
     accountable = concern_plus(read_findings(result))
     assert [record.finding_id for record in accountable] == ["F003", "F004"]
+
+
+def test_concern_plus_reads_the_shape_the_review_action_actually_emits() -> None:
+    """The severities the gate is accountable for arrive lowercased.
+
+    ``ReviewAction`` builds ``ActionResult.findings`` as
+    ``[sf.__dict__ for sf in result.structured_findings]``, and that property
+    lowercases ``Severity``. Reading findings must normalize, or every CONCERN+
+    finding is invisible to the gate and the policy silently reduces to the
+    fresh review's verdict.
+    """
+    review = ReviewResult(
+        verdict=Verdict.CONCERNS,
+        findings=[
+            ReviewFinding(
+                severity=severity,
+                title=f"finding {index}",
+                description="",
+                category="correctness",
+                location=f"src/x.py:{index}",
+            )
+            for index, severity in enumerate(
+                (Severity.NOTE, Severity.CONCERN, Severity.FAIL, Severity.PASS), start=1
+            )
+        ],
+        raw_output="",
+        template_name="review",
+        input_files={},
+    )
+    result = ActionResult(
+        success=True,
+        action_type="review",
+        outputs={},
+        findings=[sf.__dict__ for sf in review.structured_findings],
+    )
+
+    accountable = concern_plus(read_findings(result))
+    assert [record.finding_id for record in accountable] == ["F002", "F003"]
+    assert {record.severity for record in accountable} == {"CONCERN", "FAIL"}
 
 
 def test_malformed_finding_is_kept_as_residue_and_logged(
