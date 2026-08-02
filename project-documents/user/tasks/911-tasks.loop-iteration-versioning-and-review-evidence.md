@@ -344,5 +344,5 @@ status: complete
   - [x] Set `status: complete` in the slice design frontmatter; check off
     entry 9 in `900-slices.maintenance-and-refactoring.md` with the completion
     date; add CHANGELOG entries (short, user-facing) and a Phase 6 DEVLOG entry.
-  - [ ] Close issue #44 on merge. Do not close anything belonging to slice 912.
+  - [x] Close issue #44 on merge. Do not close anything belonging to slice 912.
   - [x] Success: gate fully clean, walkthrough reproduced, slice marked complete.
