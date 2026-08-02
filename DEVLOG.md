@@ -2,13 +2,33 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260728
+dateUpdated: 20260802
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260802 (1)
+
+### Slice 305: Findings-Addressed Gate Policy — In Progress
+
+Phase 5 task breakdown. Design (Phase 4) and its slice review were completed and resolved earlier the same day; commits `0917dae`, `2e2c94c`, `534c689`, `84121df`, `221b8c7`, all on `main`, all planning documents. This session produced `305-tasks.findings-addressed-gate-1.md` (Parts A–C, T1–T11) and `-2.md` (Parts D–G, T12–T30) — split because the single file ran 608 lines against a ~450 target.
+
+**Breakdown surfaced three design deltas, all verified on disk.** Each is a claim in the design about what evidence the gate has in hand, and each fails at the point the gate actually executes:
+
+1. `step_outputs` is never populated for steps inside a loop body. The only writer is `executor.py:959`, in the top-level step walk; `_execute_loop_body` passes the dict through but never writes it. A gate inside a loop cannot resolve `review_from` today — for *any* policy, not just this one. This blocks the target loop shape outright.
+2. The prior round's review result is not in `prior_outputs` at gate time. `running_prior` keys are positional (`executor.py:1400-1402`) and overwrite every iteration; round N's review clobbers round N-1's before the gate runs. 910's findings-feedback works only because dispatch is *first* in the body.
+3. Round N's commit SHA does not exist at gate time — `commit_each_iteration` commits after all inner steps (`executor.py:1417-1440`). The design's Screen 1 signal (`committed: False` from `prior_outputs`) describes round N-1 vs N-2, one round stale.
+
+The corrected mechanism is simpler than what the design specified: populate `step_outputs` for inner steps, carry the prior iteration's step outputs on a new `ActionContext` field, and detect a byte-identical round as an empty working-tree diff against `HEAD` — which *is* the prior round's commit at that moment, so no SHA plumbing is needed for the screen at all. Every stated design principle survives. It does add `pipeline/executor.py` and `pipeline/models.py` to the design's "Files touched" table, which is why this is flagged rather than absorbed. **PM confirmation wanted before Part D begins.**
+
+Task ordering follows the design's stated sequence with the plumbing prepended: A (executor evidence) → B (validator refinement) → C (policy config surface) → D (deterministic screens) → E (judge residue) → F (evidence artifact) → G (integration, docs, close-out).
+
+Pending: PM sign-off on the Part A deltas; T27's resume-rehydration question (design decision 5's flagged caveat) is deliberately written as *verify, do not assume* and remains open until Phase 6 reads `state.py`. No code written; no branch created.
 
 ---
 
