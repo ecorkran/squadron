@@ -158,7 +158,9 @@ def test_screen_0_passes_with_annotation_never_unknown(
     caplog: pytest.LogCaptureFixture, no_transport: None
 ) -> None:
     with caplog.at_level(logging.INFO):
-        result = screen_no_prior_round(pipeline_name="p", step_name="settled", iteration=1)
+        result = screen_no_prior_round(
+            pipeline_name="p", step_name="settled", iteration=1, review_from="fresh-review"
+        )
 
     assert result.leg_verdict == Verdict.PASS
     assert result.deciding_screen == SettlingScreen.NO_PRIOR_ROUND
@@ -166,6 +168,23 @@ def test_screen_0_passes_with_annotation_never_unknown(
     assert result.residue == []
     assert "no prior round" in caplog.text
     assert "iteration=1" in caplog.text
+
+
+def test_screen_0_after_the_first_round_is_an_evidence_gap_not_a_pass(
+    caplog: pytest.LogCaptureFixture, no_transport: None
+) -> None:
+    """A later iteration with no prior result means the prior round emitted no
+    verdict — the check could not run, which is UNKNOWN, not an annotated PASS."""
+    with caplog.at_level(logging.WARNING):
+        result = screen_no_prior_round(
+            pipeline_name="p", step_name="settled", iteration=4, review_from="fresh-review"
+        )
+
+    assert result.leg_verdict == Verdict.UNKNOWN
+    assert result.deciding_screen is None
+    assert result.outcomes == []
+    assert "fresh-review" in caplog.text
+    assert "UNKNOWN" in caplog.text
 
 
 # ---------------------------------------------------------------------------

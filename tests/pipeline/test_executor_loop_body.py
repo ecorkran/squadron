@@ -848,6 +848,111 @@ async def test_inner_step_without_verdict_creates_no_step_outputs_entry() -> Non
 
 
 @pytest.mark.asyncio
+async def test_inner_step_output_does_not_survive_into_the_next_iteration() -> None:
+    """Round N's view of an inner step is round N's own, or absent.
+
+    If round N's review emits no verdict, round N-1's result must not still be
+    standing under that name: a gate reading it as this round's evidence would
+    compare the prior round against itself with no way to tell.
+    """
+    seen_step_outputs: list[dict[str, ActionResult]] = []
+
+    review_results = [
+        ActionResult(success=True, action_type="review", outputs={}, verdict="CONCERNS"),
+        ActionResult(success=True, action_type="review", outputs={}),  # no verdict
+    ]
+    review_action = _mock_action(review_results)
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        seen_step_outputs.append(dict(ctx.step_outputs))
+        return ActionResult(success=True, action_type="emit", outputs={})
+
+    capture_action = MagicMock()
+    capture_action.execute = AsyncMock(side_effect=_capture)
+
+    register_step_type("_lb_stale_review", _mock_step_type([("review", {})]))
+    register_step_type("_lb_stale_capture", _mock_step_type([("emit", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "stale-loop",
+                {
+                    "max": 2,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_stale_review": {"name": "fresh-review"}},
+                        {"_lb_stale_capture": {"name": "observer"}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action, "emit": capture_action},
+    )
+
+    assert len(seen_step_outputs) == 2
+    assert seen_step_outputs[0]["fresh-review"].verdict == "CONCERNS"
+    assert "fresh-review" not in seen_step_outputs[1]
+
+
+@pytest.mark.asyncio
+async def test_inner_step_names_do_not_leak_past_the_loop() -> None:
+    """A step after the loop cannot resolve a body step's name.
+
+    The loader rejects such a reference at load time; leaving the entry in the
+    run-wide dict would make it resolvable at runtime to the final iteration's
+    value, which no configuration ever asked for.
+    """
+    seen_step_outputs: list[dict[str, ActionResult]] = []
+
+    review_action = _mock_action(
+        [ActionResult(success=True, action_type="review", outputs={}, verdict="PASS")]
+    )
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        seen_step_outputs.append(dict(ctx.step_outputs))
+        return ActionResult(success=True, action_type="emit", outputs={})
+
+    capture_action = MagicMock()
+    capture_action.execute = AsyncMock(side_effect=_capture)
+
+    register_step_type("_lb_leak_review", _mock_step_type([("review", {})]))
+    register_step_type("_lb_leak_capture", _mock_step_type([("emit", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "leak-loop",
+                {
+                    "max": 2,
+                    "until": "review.pass",
+                    "steps": [{"_lb_leak_review": {"name": "fresh-review"}}],
+                },
+            ),
+            StepConfig(step_type="_lb_leak_capture", name="after", config={}),
+        ]
+    )
+
+    await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action, "emit": capture_action},
+    )
+
+    assert len(seen_step_outputs) == 1
+    assert "fresh-review" not in seen_step_outputs[0]
+
+
+@pytest.mark.asyncio
 async def test_prior_iteration_step_outputs_carries_the_previous_round() -> None:
     """Iteration 1 sees an empty prior_iteration_step_outputs; iteration 2 sees
     iteration 1's entries with iteration 1's findings — not its own round's.

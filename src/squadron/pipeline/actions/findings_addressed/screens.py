@@ -136,12 +136,35 @@ class ScreenResult:
     deciding_screen: SettlingScreen | None = None
 
 
-def screen_no_prior_round(*, pipeline_name: str, step_name: str, iteration: int) -> ScreenResult:
-    """Screen 0 — there is no prior round to hold this one accountable to.
+def screen_no_prior_round(
+    *,
+    pipeline_name: str,
+    step_name: str,
+    iteration: int,
+    review_from: str,
+) -> ScreenResult:
+    """Screen 0 — there is no prior round's review to hold this one accountable to.
 
-    A legitimate first round. Annotated PASS, never UNKNOWN: UNKNOWN would fail
-    every first round closed, and silence would hide that the check did not run.
+    Two states reach here and they are not the same state. Iteration 0 or 1 is
+    a legitimate first round: annotated PASS, never UNKNOWN, since UNKNOWN would
+    fail every first round closed and silence would hide that the check did not
+    run. A *later* iteration with no prior result means the prior round's review
+    failed, was skipped, or emitted no verdict — the check could not run, which
+    is the module's UNKNOWN condition. Deciding screen is left unset there, as
+    on the git-failure path: nothing was settled.
     """
+    if iteration > 1:
+        _logger.warning(
+            "findings-addressed: iteration %d has no prior-round result for '%s' "
+            "(pipeline=%s step=%s) — the prior round produced no verdict; "
+            "addressed leg UNKNOWN",
+            iteration,
+            review_from,
+            pipeline_name,
+            step_name,
+        )
+        return ScreenResult(outcomes=[], residue=[], leg_verdict=Verdict.UNKNOWN)
+
     _logger.info(
         "findings-addressed: no prior round for pipeline=%s step=%s iteration=%d; "
         "addressed leg PASS by annotation",

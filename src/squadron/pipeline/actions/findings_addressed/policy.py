@@ -131,6 +131,7 @@ class FindingsAddressedPolicy:
                     pipeline_name=context.pipeline_name,
                     step_name=context.step_name,
                     iteration=context.iteration,
+                    review_from=review_from,
                 ),
                 _NO_DIFF,
             )

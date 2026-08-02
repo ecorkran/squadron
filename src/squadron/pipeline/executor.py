@@ -1379,9 +1379,21 @@ async def _execute_loop_body(
     # as "the prior round". Empty on iteration 1 (no prior round).
     prior_iteration_step_outputs: dict[str, ActionResult] = {}
 
+    # Steps that ran before the loop, snapshotted once. Each iteration gets a
+    # fresh copy to write its own body outputs into, so an inner step's result
+    # never outlives its iteration.
+    pre_loop_step_outputs = dict(step_outputs) if step_outputs is not None else {}
+
     for iteration in range(1, loop_config.max + 1):
         iteration_action_results = []
         iteration_step_outputs: dict[str, ActionResult] = {}
+        # What the body's actions resolve step names against this round:
+        # pre-loop steps plus this iteration's own body steps, and nothing from
+        # a previous iteration. Writing body results into the run-wide
+        # step_outputs instead would leave round N-1's review standing when
+        # round N's review fails, and a gate would read it as this round's
+        # evidence with no way to tell.
+        visible_step_outputs: dict[str, ActionResult] = dict(pre_loop_step_outputs)
 
         for inner_step_index, inner_step in enumerate(inner_steps):
             inner_resolved = resolve_placeholders(inner_step.config, merged_params)
@@ -1391,7 +1403,7 @@ async def _execute_loop_body(
                 step_index=step_index,
                 merged_params=merged_params,
                 prior_outputs=running_prior,
-                step_outputs=step_outputs,
+                step_outputs=visible_step_outputs,
                 pipeline_name=pipeline_name,
                 run_id=run_id,
                 cwd=cwd,
@@ -1418,11 +1430,13 @@ async def _execute_loop_body(
             # walk never sees inner steps, so without this a `gate` inside a
             # loop body cannot resolve review_from/judge_from — step_outputs is
             # its only resolution mechanism — and emits UNKNOWN every round.
+            # Published into this iteration's view only: the run-wide dict is
+            # left untouched, so inner names neither collide with a top-level
+            # step nor remain resolvable after the loop exits.
             inner_verdict_result = _last_with_verdict(inner_result.action_results)
             if inner_verdict_result is not None:
                 iteration_step_outputs[inner_result.step_name] = inner_verdict_result
-                if step_outputs is not None:
-                    step_outputs[inner_result.step_name] = inner_verdict_result
+                visible_step_outputs[inner_result.step_name] = inner_verdict_result
 
             # Checkpoint pause short-circuits the loop immediately
             if inner_result.status == ExecutionStatus.PAUSED:
@@ -1457,7 +1471,7 @@ async def _execute_loop_body(
                 cf_client=cf_client,
                 cwd=cwd,
                 sdk_session=sdk_session,
-                step_outputs=step_outputs if step_outputs is not None else {},
+                step_outputs=visible_step_outputs,
                 iteration=iteration,
             )
             commit_result = await get_action_fn("commit").execute(commit_ctx)
