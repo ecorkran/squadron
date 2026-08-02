@@ -14,6 +14,7 @@ from typing import Any, cast
 import yaml
 
 from squadron.data import data_dir
+from squadron.pipeline.actions.gate import policy_contract
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
 from squadron.pipeline.schema import PipelineSchema
 
@@ -282,17 +283,28 @@ def _validate_gate_references(
     prior_step_names: set[str],
     errors: list[ValidationError],
 ) -> None:
-    """Check a gate step's judge_from/review_from each name a prior step (F005).
+    """Check a gate step's reference fields each name a prior step (F005).
+
+    Which fields those are depends on the gate's policy, so they come from the
+    policy contract rather than a literal tuple — otherwise a findings-addressed
+    gate's review_from would go silently unchecked.
 
     A step type's own validate() only sees its own config, so this cross-step
     check — the named step must exist and run before this gate — belongs here,
     where all steps are in scope. Fails fast at load time rather than deferring
     to GateAction's execute-time UNKNOWN fallback.
+
+    Walks top-level steps only. Loop bodies are validated by LoopStepType,
+    which is where the body is in scope.
     """
     if step.step_type != "gate":
         return
 
-    for field in ("judge_from", "review_from"):
+    contract = policy_contract(step.config.get("policy"))
+    if contract is None:
+        return  # invalid policy — GateStepType.validate reports it
+
+    for field in contract.required:
         value = step.config.get(field)
         if not isinstance(value, str):
             continue  # missing/non-string is GateStepType.validate's concern
