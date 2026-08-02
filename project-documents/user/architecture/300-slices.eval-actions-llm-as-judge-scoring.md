@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 300-arch.eval-actions-llm-as-judge-scoring.md
 project: squadron
 dateCreated: 20260604
-dateUpdated: 20260717
+dateUpdated: 20260802
 status: complete
 ---
 
@@ -97,6 +97,20 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
    - **Implemented:** 20260802, branch `305-slice.findings-addressed-gate` — seven commits, one per part. Both loop-executor defects are fixed (Part A repairs a gate inside a loop for *every* policy, `most-severe` included). The policy ships as a package under `pipeline/actions/findings_addressed/`; bundled template `judge.findings-addressed` (deliberately not an `is_judge` template); bundled pipeline `findings-addressed-cycle`. The byte-identical screen diffs the working tree against `HEAD`; the recordable audit pair is the prior round's SHA + `revision_number` — round N's own SHA is not recordable, since the evidence artifact predates the commit containing it.
    - **Dependencies:** [911, 910, 304] (911/910 are maintenance-initiative slices — cross-initiative dependency, normal)
    - **Risk Level:** Medium (judge status quality on the genuinely unmeasurable residue; mitigated by fail-closed derivation and contradiction checks)
+   - **Relative Effort:** 3/5
+
+7. [ ] **(306) Review Resolution — Recording That Findings Were Addressed** — [Issue #51](https://github.com/ecorkran/squadron/issues/51). A FAIL review's findings get addressed, the fix lands, and the artifact still reads `verdict: FAIL` — so downstream gating stays closed on a verdict no longer true of the code, with no mechanism to say so. Belongs here because 305 already built the decision procedure; this slice is about making it reachable and recordable outside a pipeline loop.
+
+   **The constraint that shapes the whole slice.** Agents were barred from editing `verdict:` because they did it too readily and invented status values when they did. That call stands: a verdict is a fact about a review run at a moment, and mutating it makes the artifact unfalsifiable — "reviewed clean" becomes indistinguishable from "reviewed FAIL, then edited." The missing thing is not a writable verdict; it is a *second assertion* — these findings have been addressed — which is a different claim from "this review passed" and has nowhere to live. Any design where one word an agent can write unprompted unblocks a gate has rebuilt the original problem under a new name.
+
+   **What exists.** `status:` is a hardcoded literal (`persistence.py:143` always writes `status: complete`, meaning "the review ran"), not a state machine. Nothing in squadron re-reads a persisted review's verdict — the file's consumers are Context Forge's `workflow_check` and humans, so this is a **cross-tool frontmatter contract change** and must be coordinated, not decided unilaterally. Today's convention is a hand-written `## Resolution (YYYYMMDD)` prose section (910, 305): auditable, invisible to tooling.
+
+   **Open contracts, to resolve in design.** (a) Where resolution lives — a frontmatter field on the review, a separate artifact in the shape of 305's `gate-evidence`, or a verdict transition with an audit trail; the artifact form is the one that composes with 305. (b) Who may write it, and against what evidence — 305's derived-not-declared discipline applies, but the interactive path needs something cheaper than a judge call or it will not be used; 305's Screens 1 and 2 (a byte-identical round addressed nothing; a finding re-found at the same location was not addressed) are free and may be enough. (c) What the gate reads — original verdict, resolution state, or both. (d) Lifecycle — whether a later clean review supersedes an unresolved FAIL, and what happens when a re-review finds the same thing again.
+
+   **Explicitly out of scope:** restoring an agent's ability to edit `verdict:`. The original verdict stays as written, whatever else is added.
+
+   - **Dependencies:** [305 (the derivation and the evidence-artifact shape), 300 frontmatter contract]. Coordination dependency on Context Forge for anything `workflow_check` reads.
+   - **Risk Level:** Medium — the risk is not implementation, it is designing a field that agents will not casually write
    - **Relative Effort:** 3/5
 
 ---
