@@ -159,7 +159,10 @@ Split out of slice 911 during its Phase 4 design (20260731), on 911's own instru
 
 **This slice needs a design conversation before its Phase 4 design is written.** It depends on 911 for both of its inputs: per-iteration commits give the check something to diff, and the artifact's `revision_number:` field gives it a stable way to name the round it is judging.
 
-**Status:** not started · **Risk:** Medium-High · **Effort:** 3/5 provisional · **Dependencies:** [911]
+**Design (20260802).** The design conversation reframed the check: it is not a second, history-aware reviewer but a **gate policy** — `findings-addressed`, the second entry in `VALID_GATE_POLICIES` and the first model-capable one. Deterministic screens run first (no prior round; byte-identical round; exact-match recurring findings) and a judge (LLM-as-a-judge role, consulted inside gate execution, never a node type) settles only the residue, emitting per-finding statuses from which the decision is derived, never declared. The clean-eyes review stays structurally blind to prior rounds; the gate is structurally granted them — the candidate resolution above, made a typing rule rather than a prompt convention. Cost concern resolved structurally: screens spend no tokens, round 1 never consults a judge. Also refines 910 Part B's loop guard to count *unconsumed* verdicts, so dispatch + review + gate becomes a valid loop body while the two-reviews-no-gate reject case is preserved.
+
+**Slice design:** `user/slices/912-slice.findings-addressed-gate.md`
+**Status:** design complete (20260802), awaiting task breakdown · **Risk:** Medium · **Effort:** 3/5 · **Dependencies:** [911, 910, 304]
 
 ---
 
