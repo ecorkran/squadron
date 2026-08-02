@@ -71,7 +71,13 @@ packages = ["src/squadron"]
 line-length = 104
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+# The Python guide's baseline is ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"].
+# W is clean and enabled. B (70), BLE (23) and ASYNC (6) have pre-existing
+# violations across modules unrelated to any current slice; adopting them is
+# tracked as its own unit of work, since BLE and ASYNC in particular require
+# narrowing exception types and moving blocking calls off the loop, which are
+# behavior changes rather than mechanical fixes.
+select = ["E", "F", "W", "I", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -81,6 +87,10 @@ markers = [
 ]
 
 [tool.pyright]
+# The guide includes "tests" here — bugs in tests mask bugs in code. Strict mode
+# currently reports 868 errors across the existing test suite, so widening the
+# include is tracked with the ruff rule-set adoption above rather than done
+# piecemeal.
 include = ["src"]
 exclude = ["src/squadron/providers/codex/agent.py"]
 pythonVersion = "3.12"
