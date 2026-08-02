@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A `gate:` step inside a `loop:` body never worked.** It could not see the steps it named, so it reported `UNKNOWN` on every round regardless of what the reviews said. Gates in loop bodies now resolve their named steps normally.
+- **`policy: findings-addressed` passed every round it should have failed.** Review findings arrive with lowercased severities, so the gate saw no CONCERN-or-worse findings to hold a round accountable for and fell through to whatever the fresh review said — the one thing the policy exists to prevent. It now reads the severities the reviewer actually emits.
+- **A round whose review failed could be judged against itself.** If a review step produced no verdict, the previous round's review was still standing under that name and the gate read it as the current round's evidence. A loop iteration now sees only its own round's steps, and a round with no prior evidence reports `UNKNOWN` instead of passing by annotation.
+- **A gate-evidence file could be unparseable.** Finding locations and notes are model-authored text, and a colon, `#`, `-` or newline in one corrupted the file's frontmatter. Frontmatter is now properly serialized.
+- **A gate placed before the step it names is rejected.** Previously only `findings-addressed` gates were ordering-checked; a `most-severe` gate in the wrong position validated fine and was then silently bypassed at runtime.
 
 - **`loop:` steps now actually converge.** A dispatch-then-review loop was re-sending the exact same prompt on every retry instead of feeding back what the prior review found — so a loop could run its full `max` iterations without ever seeing what needed fixing. Retries now include the previous iteration's findings.
 - **A loop body with two reviews could silently report success while one of them failed.** `sq run --validate`/`--dry-run` now rejects a `loop:` body containing more than one review or gate when `until:` is set, with a message naming the conflicting steps and suggesting the fix (split into sequential loops).

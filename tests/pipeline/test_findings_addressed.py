@@ -27,7 +27,7 @@ from squadron.pipeline.actions.findings_addressed import (
     screen_no_prior_round,
 )
 from squadron.pipeline.models import ActionResult
-from squadron.review.models import Verdict
+from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 
 _CWD = "/repo"
 
@@ -92,6 +92,45 @@ def test_note_and_pass_findings_are_not_concern_plus() -> None:
     assert [record.finding_id for record in accountable] == ["F003", "F004"]
 
 
+def test_concern_plus_reads_the_shape_the_review_action_actually_emits() -> None:
+    """The severities the gate is accountable for arrive lowercased.
+
+    ``ReviewAction`` builds ``ActionResult.findings`` as
+    ``[sf.__dict__ for sf in result.structured_findings]``, and that property
+    lowercases ``Severity``. Reading findings must normalize, or every CONCERN+
+    finding is invisible to the gate and the policy silently reduces to the
+    fresh review's verdict.
+    """
+    review = ReviewResult(
+        verdict=Verdict.CONCERNS,
+        findings=[
+            ReviewFinding(
+                severity=severity,
+                title=f"finding {index}",
+                description="",
+                category="correctness",
+                location=f"src/x.py:{index}",
+            )
+            for index, severity in enumerate(
+                (Severity.NOTE, Severity.CONCERN, Severity.FAIL, Severity.PASS), start=1
+            )
+        ],
+        raw_output="",
+        template_name="review",
+        input_files={},
+    )
+    result = ActionResult(
+        success=True,
+        action_type="review",
+        outputs={},
+        findings=[sf.__dict__ for sf in review.structured_findings],
+    )
+
+    accountable = concern_plus(read_findings(result))
+    assert [record.finding_id for record in accountable] == ["F002", "F003"]
+    assert {record.severity for record in accountable} == {"CONCERN", "FAIL"}
+
+
 def test_malformed_finding_is_kept_as_residue_and_logged(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -119,7 +158,9 @@ def test_screen_0_passes_with_annotation_never_unknown(
     caplog: pytest.LogCaptureFixture, no_transport: None
 ) -> None:
     with caplog.at_level(logging.INFO):
-        result = screen_no_prior_round(pipeline_name="p", step_name="settled", iteration=1)
+        result = screen_no_prior_round(
+            pipeline_name="p", step_name="settled", iteration=1, review_from="fresh-review"
+        )
 
     assert result.leg_verdict == Verdict.PASS
     assert result.deciding_screen == SettlingScreen.NO_PRIOR_ROUND
@@ -127,6 +168,23 @@ def test_screen_0_passes_with_annotation_never_unknown(
     assert result.residue == []
     assert "no prior round" in caplog.text
     assert "iteration=1" in caplog.text
+
+
+def test_screen_0_after_the_first_round_is_an_evidence_gap_not_a_pass(
+    caplog: pytest.LogCaptureFixture, no_transport: None
+) -> None:
+    """A later iteration with no prior result means the prior round emitted no
+    verdict — the check could not run, which is UNKNOWN, not an annotated PASS."""
+    with caplog.at_level(logging.WARNING):
+        result = screen_no_prior_round(
+            pipeline_name="p", step_name="settled", iteration=4, review_from="fresh-review"
+        )
+
+    assert result.leg_verdict == Verdict.UNKNOWN
+    assert result.deciding_screen is None
+    assert result.outcomes == []
+    assert "fresh-review" in caplog.text
+    assert "UNKNOWN" in caplog.text
 
 
 # ---------------------------------------------------------------------------

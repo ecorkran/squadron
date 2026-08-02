@@ -16,14 +16,9 @@ from squadron.pipeline.actions.findings_addressed.models import (
 )
 from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 from squadron.review.models import Verdict
-from squadron.review.parsers import UNVERIFIED_LOCATION
+from squadron.review.parsers import UNVERIFIED_LOCATION, location_path
 
 _logger = logging.getLogger(__name__)
-
-
-def _location_path(location: str) -> str:
-    """The path portion of a finding location (``path:line`` → ``path``)."""
-    return location.split(":", 1)[0].split("#", 1)[0].strip()
 
 
 def _diff_touches(location: str, changed_paths: frozenset[str]) -> bool:
@@ -32,8 +27,12 @@ def _diff_touches(location: str, changed_paths: frozenset[str]) -> bool:
     Compared leniently by suffix: git reports repo-relative paths while a
     finding may cite a path relative to a subdirectory. A false "untouched"
     would manufacture a DISPUTED out of honest work.
+
+    How a location is read is the review domain's rule, so ``location_path``
+    is imported rather than reimplemented — a local variant would drift from
+    the one the parser applies when it writes those locations.
     """
-    path = _location_path(location)
+    path = location_path(location)
     if not path:
         return False
     return any(

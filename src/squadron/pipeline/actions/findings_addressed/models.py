@@ -77,6 +77,19 @@ def _as_str(value: object) -> str | None:
     return None
 
 
+def _as_severity(value: object) -> str | None:
+    """Return *value* normalized to the case ``Severity`` uses.
+
+    ``ReviewResult.structured_findings`` lowercases severities on the way out
+    (``f.severity.value.lower()``) while ``Severity`` itself is uppercase.
+    Normalizing here, at the boundary, keeps ``CONCERN_PLUS_SEVERITIES`` tied
+    to the enum: lowercasing the constant instead would let it drift silently
+    the next time a producer changes case.
+    """
+    severity = _as_str(value)
+    return severity.upper() if severity is not None else None
+
+
 def read_findings(result: ActionResult | None) -> list[FindingRecord]:
     """Read every finding out of *result* as a FindingRecord.
 
@@ -111,7 +124,7 @@ def read_findings(result: ActionResult | None) -> list[FindingRecord]:
 
         finding: dict[str, object] = {str(key): value for key, value in raw.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
         finding_id = _as_str(finding.get("id"))
-        severity = _as_str(finding.get("severity"))
+        severity = _as_severity(finding.get("severity"))
         category = _as_str(finding.get("category"))
         location = _as_str(finding.get("location"))
         summary = _as_str(finding.get("summary"))

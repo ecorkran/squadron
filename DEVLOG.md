@@ -12,6 +12,30 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260802 (3)
+
+### Slice 305: Code Review Resolution
+
+Code review returned FAIL with one fail, five concerns and three notes. All nine addressed on `305-slice.findings-addressed-gate`; suite 2832 passed / 2 skipped, ruff and pyright clean.
+
+**The FAIL was real and total.** `CONCERN_PLUS_SEVERITIES` is built from `Severity.CONCERN`/`Severity.FAIL` — uppercase — but `ReviewResult.structured_findings` emits `f.severity.value.lower()`, so the membership test in `concern_plus` was always `False`. Every gate handed `prior_findings=[]` to the screens, took the "prior round raised no CONCERN+ findings" PASS, never ran Screens 1–2, never consulted the judge, and reduced to the fresh review's verdict. The policy was inert on its happy path from the day it shipped. Fixed by normalizing at the boundary (`_as_severity` in `read_findings`) rather than lowercasing the constant, so the constant stays tied to the enum and cannot drift when a producer changes case.
+
+**It survived a full slice because no test used the production shape.** Every fixture wrote `{"severity": "CONCERN", ...}` by hand — exactly the trap CLAUDE.md names. The e2e fixtures now build a `ReviewResult` and take `.structured_findings`, which also means the `F00n` ids come from the property that assigns them rather than from a literal. Two of the e2e round-2 assertions now fail without the fix.
+
+**Loop-body step outputs are scoped to their iteration.** Part A published inner-step results into the run-wide `step_outputs`, which nothing cleared: a round whose review failed left round N-1's result standing under the same name, and the fresh leg read it as this round's evidence with no round stamp to tell them apart. Each iteration now gets a fresh view — a copy of the pre-loop outputs plus its own body steps — and the run-wide dict is left alone. That also closes two effects the review noted in passing: an inner step can no longer overwrite a same-named top-level step, and body step names stop resolving after the loop exits.
+
+**Screen 0 was conflating two states.** `prior_result is None` fires both for a legitimate first round and for a round whose predecessor's review crashed or emitted no verdict — and returned an annotated PASS for both. It now branches on `iteration`: ≤ 1 is the first round (PASS), > 1 is an evidence gap (UNKNOWN, `deciding_screen` unset, WARNING naming the missing step), matching the module's own contract that a check which could not run is UNKNOWN.
+
+**Frontmatter is serialized, not formatted.** `_yaml_scalar` was `str(value)` with no quoting, and notes interpolate finding locations, which `review/parsers.py` returns "stripped, unchanged" — arbitrary model text. `location: src/foo.py: line 45` produced a mapping-value error inside the block. Now built as a dict and dumped with `yaml.safe_dump`, with enum members coerced first (SafeDumper dispatches on exact type, so a `StrEnum` member raises).
+
+**The ordering rule became policy-agnostic.** `_validate_verdict_count`'s consumed-name exclusion assumes `_last_with_verdict` lands on the gate, which holds only if the gate follows the steps it names — but only `findings-addressed` gates were ordering-checked. `[gate(most-severe, review_from: r), review r]` validated while `until:` gated on the review and the gate was discarded. `_validate_gate_ordering` now checks every gate in a body. A referenced name that matches no body step is left alone: it may name a pre-loop step, which consumes nothing.
+
+**Notes.** Judge status parsing switched to `finditer` per line with first-wins accumulation, so several statuses on one line are all read and later prose cannot overwrite an answer already given. `review/parsers._location_path` was promoted to public `location_path` and the copy in `verification` deleted; `screens._match_key` was left alone, since matching on the full location string is a deliberate 911 constraint rather than a third copy of the same rule.
+
+**Not adopted: the lint/type config gap (F009).** The Python guide's baseline also selects `B`, `BLE`, `ASYNC` and includes `tests` in pyright. Measured: 70 `B`, 23 `BLE`, 6 `ASYNC` violations and 868 pyright-strict errors, essentially all pre-existing in modules unrelated to any current slice, and `BLE`/`ASYNC` remediation means narrowing exception types and moving blocking calls off the event loop — behavior changes, not formatting. `W` (zero violations) is enabled; the rest is recorded with its counts in `pyproject.toml` and left as its own unit of work.
+
+---
+
 ## 20260802 (2)
 
 ### Slice 305: Findings-Addressed Gate Policy — Implemented

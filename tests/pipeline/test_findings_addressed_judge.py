@@ -116,6 +116,20 @@ def test_parses_through_leading_prose() -> None:
     assert statuses["F002"].successor_id == "F310"
 
 
+def test_several_statuses_on_one_line_are_all_read() -> None:
+    """A judge that answers inline must not have every answer but the first dropped."""
+    statuses = parse_status_lines("F001: addressed, F002: unaddressed; F003: disputed")
+    assert set(statuses) == {"F001", "F002", "F003"}
+    assert statuses["F002"].status == FindingStatus.UNADDRESSED
+
+
+def test_later_prose_does_not_overwrite_a_stated_status() -> None:
+    """First statement wins: commentary naming a finding again is not a new answer."""
+    raw = "F001: addressed\n\nOn F001: I could not confirm the successor exists.\n"
+    statuses = parse_status_lines(raw)
+    assert statuses["F001"].status == FindingStatus.ADDRESSED
+
+
 def test_unknown_status_token_is_disputed(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING):
         statuses = parse_status_lines("F001: mostly-fixed")

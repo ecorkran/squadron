@@ -165,7 +165,7 @@ def test_gate_naming_a_step_outside_the_body_rejects() -> None:
     errors = validate_pipeline(pipeline)
     messages = [e.message for e in errors]
     assert any("verdict-bearing" in m for m in messages), messages
-    assert any("not an earlier step in this loop body" in m for m in messages), messages
+    assert any("not a step in this loop body" in m for m in messages), messages
 
 
 def test_gate_naming_a_later_step_rejects() -> None:
@@ -186,8 +186,38 @@ def test_gate_naming_a_later_step_rejects() -> None:
     )
 
     errors = validate_pipeline(pipeline)
-    assert any("not an earlier step in this loop body" in e.message for e in errors), (
-        f"expected an earlier-step error, got: {[e.message for e in errors]}"
+    assert any("does not run before it in this loop body" in e.message for e in errors), (
+        f"expected an ordering error, got: {[e.message for e in errors]}"
+    )
+
+
+def test_most_severe_gate_before_its_review_rejects() -> None:
+    """The ordering rule is policy-agnostic.
+
+    The consumed-name exclusion in the verdict count assumes the gate is the
+    last verdict-bearing action. With the gate placed first, `until:` would
+    gate on the review directly and the gate would be bypassed — that must not
+    validate for any policy, not only findings-addressed.
+    """
+    pipeline = _pipeline_with_loop(
+        _target_shape(
+            steps=[
+                {
+                    "gate": {
+                        "name": "settled",
+                        "policy": "most-severe",
+                        "judge_from": "assess",
+                        "review_from": "fresh-review",
+                    }
+                },
+                {"review": {"name": "fresh-review", "template": "design"}},
+            ]
+        )
+    )
+
+    errors = validate_pipeline(pipeline)
+    assert any("does not run before it in this loop body" in e.message for e in errors), (
+        f"expected an ordering error, got: {[e.message for e in errors]}"
     )
 
 
