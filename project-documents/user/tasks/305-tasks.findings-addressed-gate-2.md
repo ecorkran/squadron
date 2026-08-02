@@ -22,8 +22,8 @@ status: not_started
   the design deltas discovered during breakdown, the facts established by
   inspection, and the out-of-scope list. All of it applies here and is not
   repeated.
-- File 1 covers Part A (loop-body evidence plumbing), Part B (loop validation
-  refinement), and Part C (policy config surface), tasks T1–T11.
+- File 1 covers Part A (loop-body evidence plumbing), Part B (policy config
+  surface), and Part C (loop validation), tasks T1–T11.
 - This file covers Part D (deterministic screens), Part E (judge over the
   residue), Part F (gate evidence artifact), and Part G (integration,
   documentation, close-out), tasks T12–T31. Task numbering continues unbroken

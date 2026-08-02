@@ -8,6 +8,7 @@ from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+from squadron.review.git_utils import run_git
 
 _logger = logging.getLogger(__name__)
 
@@ -123,15 +124,7 @@ class CommitAction:
 
 def _git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
     """Run a git command, returning the CompletedProcess or None on error."""
-    try:
-        return subprocess.run(
-            ["git", *args],
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-        )
-    except OSError:
-        return None
+    return run_git(args, cwd=cwd)
 
 
 register_action(ActionType.COMMIT, CommitAction())

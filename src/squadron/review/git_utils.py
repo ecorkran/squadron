@@ -16,6 +16,24 @@ DEFAULT_DIFF_BASE = "main"
 INTEGRATION_BRANCH_KEY = "git.integration_branch"
 
 
+def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+    """Run a git command, returning the CompletedProcess or None on OSError.
+
+    ``None`` means git could not be invoked at all (missing binary, bad cwd);
+    a non-zero ``returncode`` on the returned process means git ran and
+    refused. Callers must distinguish the two — they are different failures.
+    """
+    try:
+        return subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+        )
+    except OSError:
+        return None
+
+
 class DiffRangeUnresolvedError(Exception):
     """Raised when a slice's diff range cannot be resolved from git structure.
 
