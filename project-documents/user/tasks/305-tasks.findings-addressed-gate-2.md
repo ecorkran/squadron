@@ -12,7 +12,7 @@ projectState: >
   every task here references.
 dateCreated: 20260802
 dateUpdated: 20260802
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -304,82 +304,82 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
 
 ## Part G — Integration, Documentation, Close-Out
 
-- [ ] **T27. Example pipeline** (effort 2)
-  - [ ] Add one pipeline under `src/squadron/data/pipelines/` demonstrating the
+- [x] **T27. Example pipeline** (effort 2)
+  - [x] Add one pipeline under `src/squadron/data/pipelines/` demonstrating the
     target loop shape from the design (`dispatch` → named `review` →
     `findings-addressed` gate with `checkpoint: on-concerns`,
     `commit_each_iteration: true`, `until: review.pass`).
-  - [ ] Give each model role its own `params` entry, per the convention stated at
+  - [x] Give each model role its own `params` entry, per the convention stated at
     `docs/PIPELINES.md:308`.
-  - [ ] Success: the pipeline loads and validates clean; `--dry-run` shows the
+  - [x] Success: the pipeline loads and validates clean; `--dry-run` shows the
     expanded action sequence with the gate last.
 
-- [ ] **T28. Resume behavior — pin it, do not design for it** (effort 1)
-  - [ ] Design decision 5's caveat was **resolved during breakdown**, not left
+- [x] **T28. Resume behavior — pin it, do not design for it** (effort 1)
+  - [x] Design decision 5's caveat was **resolved during breakdown**, not left
     open. Two facts, both verified: findings survive state persistence
     (`dataclasses.asdict` at `pipeline/state.py:291` keeps the `findings` field
     and `load_prior_outputs` reconstructs it, `:417-434`), and **squadron has no
     mid-loop resume** — a loop step that pauses is appended to
     `completed_steps` (`state.py:304-309`), so `first_unfinished_step`
     (`state.py:439-446`) skips past it and the loop is never re-entered.
-  - [ ] Therefore: build **no** resume special case into the policy. There is no
+  - [x] Therefore: build **no** resume special case into the policy. There is no
     execution path where the gate runs against a resumed round with the prior
     round missing. Do not add a Screen 0 fallback for it.
-  - [ ] Add one test pinning the second fact — a paused loop step is recorded
+  - [x] Add one test pinning the second fact — a paused loop step is recorded
     completed and resume continues past it — so a future change to resume
     granularity fails here loudly instead of silently reintroducing the case.
-  - [ ] Whether a checkpoint-paused loop *should* be re-enterable on resume is a
+  - [x] Whether a checkpoint-paused loop *should* be re-enterable on resume is a
     real question and **not this slice's**. Do not change resume granularity
     here; if it is worth pursuing, it is a pipeline-foundation item.
-  - [ ] Success: the test pins current behavior; the policy contains no
+  - [x] Success: the test pins current behavior; the policy contains no
     resume-specific branch.
 
-- [ ] **T29. End-to-end and regression pass** (effort 3)
-  - [ ] Integration test over the example pipeline with a stubbed transport:
+- [x] **T29. End-to-end and regression pass** (effort 3)
+  - [x] Integration test over the example pipeline with a stubbed transport:
     round 1 → Screen 0 `PASS`-annotated; round 2 with an unaddressed recurring
     finding → gate `FAIL` and the loop continues; round 3 with everything
     addressed → gate `PASS` and the loop exits.
-  - [ ] Fail-closed path end-to-end: judge transport failure → addressed leg
+  - [x] Fail-closed path end-to-end: judge transport failure → addressed leg
     `UNKNOWN` → gate `UNKNOWN` → the `on-concerns` checkpoint fires. Note that
     the checkpoint firing inside the loop body will pause the run and, per
     issue #48, mark the loop step complete — assert the pause, not that the
     loop resumes.
-  - [ ] Regression: `compose-gate-example.yaml` and every existing `most-severe`
+  - [x] Regression: `compose-gate-example.yaml` and every existing `most-severe`
     gate test produce byte-identical results; no existing pipeline YAML needs a
     config change.
-  - [ ] Run `ruff format`, `ruff check`, `pyright` strict, and the full test
+  - [x] Run `ruff format`, `ruff check`, `pyright` strict, and the full test
     suite. Zero errors is the merge bar.
-  - [ ] Success: all green; the design's Success Criteria list is walked
+  - [x] Success: all green; the design's Success Criteria list is walked
     item-by-item and each one is checked against a real test or run. The "round
     SHAs" criterion reads as prior-SHA + `revision_number` — the design text was
     reconciled to match during breakdown, so this is a literal check, not a
     judgment call.
-  - [ ] **Commit Part G's integration work.** `ruff format`, then commit from
+  - [x] **Commit Part G's integration work.** `ruff format`, then commit from
     the project root — `test: add findings-addressed end-to-end coverage`.
 
-- [ ] **T30. Documentation** (effort 2)
-  - [ ] `docs/PIPELINES.md`: update the `gate` step table (`:245-265`) — `policy`
+- [x] **T30. Documentation** (effort 2)
+  - [x] `docs/PIPELINES.md`: update the `gate` step table (`:245-265`) — `policy`
     is no longer "only `most-severe` exists today"; document
     `findings-addressed`, its per-policy field rules, and the optional `judge:`
     block.
-  - [ ] Add a short section covering the target loop shape, the layered decision
+  - [x] Add a short section covering the target loop shape, the layered decision
     procedure, and the `UNKNOWN`-means-stop contract. Cross-link it from the
     judge-gated-cycle section (`:367`) and correct the standing claim at `:403`
     that a judge-gated cycle's body is `[dispatch, review]` only.
-  - [ ] Note the gate-evidence artifact: where it lands, what it carries, and
+  - [x] Note the gate-evidence artifact: where it lands, what it carries, and
     that it is deliberately outside the `*-review.*` namespace.
-  - [ ] Success: a reader who has never seen this slice can author the target
+  - [x] Success: a reader who has never seen this slice can author the target
     shape from the docs alone.
 
-- [ ] **T31. Close-out** (effort 1)
-  - [ ] CHANGELOG: one short user-facing bullet — a loop can now require that
+- [x] **T31. Close-out** (effort 1)
+  - [x] CHANGELOG: one short user-facing bullet — a loop can now require that
     the prior round's findings were actually addressed, not just that a fresh
     review passed.
-  - [ ] DEVLOG entry per `prompt.ai-project.system.md`, Session State Summary,
+  - [x] DEVLOG entry per `prompt.ai-project.system.md`, Session State Summary,
     including the Part A design deltas and T28's resume finding.
-  - [ ] Mark slice 305 complete in the slice design frontmatter and in
+  - [x] Mark slice 305 complete in the slice design frontmatter and in
     `300-slices.eval-actions-llm-as-judge-scoring.md` entry 6.
-  - [ ] Check off `900-slices` entry 10's pointer if it still reads as open.
-  - [ ] `ruff format` immediately before the commit; commit from the project
+  - [x] Check off `900-slices` entry 10's pointer if it still reads as open.
+  - [x] `ruff format` immediately before the commit; commit from the project
     root; merge the slice branch into the target per the project git rules.
-  - [ ] Success: `cf list slices` shows 305 complete.
+  - [x] Success: `cf list slices` shows 305 complete.
