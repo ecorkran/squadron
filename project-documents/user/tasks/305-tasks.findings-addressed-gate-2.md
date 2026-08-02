@@ -255,49 +255,49 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
 
 ## Part F — Gate Evidence Artifact
 
-- [ ] **T24. Write the gate-evidence artifact** (effort 3)
-  - [ ] Persist one artifact per gate decision under the reviews directory
+- [x] **T24. Write the gate-evidence artifact** (effort 3)
+  - [x] Persist one artifact per gate decision under the reviews directory
     (`project-documents/user/reviews`, the constant already defined at
     `review/persistence.py:17`). Filename pattern
     `{index}-gate.{policy}.{name}-r{revision}.md` — it must **never** match the
     `*-review.*` glob, so every existing and future review-file consumer excludes
     it by construction rather than by filtering. Define the pattern once as a
     module constant.
-  - [ ] Frontmatter carries `docType: gate-evidence` plus: per-finding statuses
+  - [x] Frontmatter carries `docType: gate-evidence` plus: per-finding statuses
     with the settling screen for each, both leg verdicts, the reduced verdict,
     the prior round SHA when known, `revision_number`, and the judge model and
     template when one was consulted.
-  - [ ] Write it **before** the iteration's commit so it enters the round's
+  - [x] Write it **before** the iteration's commit so it enters the round's
     commit alongside the artifact and the fresh review. The gate already runs
     ahead of `commit_each_iteration` (`executor.py:1417-1440`), so this needs no
     ordering change — state that in a comment.
-  - [ ] Persistence failure is non-fatal and logged at WARNING, mirroring the
+  - [x] Persistence failure is non-fatal and logged at WARNING, mirroring the
     review action's treatment (`actions/review.py:281-285`). The gate's verdict
     does not depend on the file being written.
-  - [ ] Success: the artifact is written on every decision, including Screens 0
+  - [x] Success: the artifact is written on every decision, including Screens 0
     and 1 where no judge ran.
 
-- [ ] **T25. Gate metadata parity** (effort 1)
-  - [ ] The returned `ActionResult.metadata` carries the same record in-process:
+- [x] **T25. Gate metadata parity** (effort 1)
+  - [x] The returned `ActionResult.metadata` carries the same record in-process:
     per-finding statuses, settling screens, both leg verdicts, the prior round
     SHA, and `revision_number` — the same pair T15 establishes, not a round-N
     SHA. Keep `policy` on metadata as `most-severe` already does
     (`actions/gate.py:143-151`).
-  - [ ] Success: metadata and the persisted artifact are built from one source
+  - [x] Success: metadata and the persisted artifact are built from one source
     object — no second assembly of the same facts.
 
-- [ ] **T26. Tests for the evidence artifact** (effort 2)
-  - [ ] The written filename does not match `*-review.*` (assert with the same
+- [x] **T26. Tests for the evidence artifact** (effort 2)
+  - [x] The written filename does not match `*-review.*` (assert with the same
     glob `discover_judge_results` uses).
-  - [ ] `discover_judge_results` run over a reviews directory containing a
+  - [x] `discover_judge_results` run over a reviews directory containing a
     gate-evidence artifact returns it in no sample set
     (`tests/metrology/`, alongside the existing discovery tests).
-  - [ ] Frontmatter round-trips: `docType: gate-evidence`, statuses, settling
+  - [x] Frontmatter round-trips: `docType: gate-evidence`, statuses, settling
     screens, leg verdicts, revision number.
-  - [ ] An unwritable reviews directory produces a WARNING and does not change
+  - [x] An unwritable reviews directory produces a WARNING and does not change
     the gate's verdict.
-  - [ ] Success: all pass.
-  - [ ] **Commit Part F.** `ruff format`, then commit from the project root —
+  - [x] Success: all pass.
+  - [x] **Commit Part F.** `ruff format`, then commit from the project root —
     `feat: persist gate-evidence artifact for findings-addressed decisions`.
 
 ---

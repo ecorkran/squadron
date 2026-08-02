@@ -1,0 +1,38 @@
+name: findings-addressed-cycle
+description: Fix-review cycle that exits only when fresh eyes pass AND the prior round's findings were accounted for
+
+params:
+  slice: required
+  model: sonnet
+  review-model: minimax
+  judge-model: sonnet
+
+steps:
+  - loop:
+      max: 3
+      until: review.pass
+      # The policy's evidence source: without a per-round commit there is no
+      # prior round to compare against, and loop validation rejects the shape.
+      commit_each_iteration: true
+      steps:
+        - dispatch:
+            name: revise
+            prompt: "Address the findings from the prior review."
+            model: "{model}"
+
+        # Assessor — structurally blind to prior rounds.
+        - review:
+            name: fresh-review
+            template: slice
+            model: "{review-model}"
+            slice: "{slice}"
+
+        # Decider — sees both rounds. Deterministic screens first; a judge is
+        # consulted only for findings they cannot settle.
+        - gate:
+            name: settled
+            review_from: fresh-review
+            policy: findings-addressed
+            judge:
+              model: "{judge-model}"
+            checkpoint: on-concerns

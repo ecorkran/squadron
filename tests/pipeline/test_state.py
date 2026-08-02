@@ -546,6 +546,39 @@ class TestFirstUnfinishedStep:
         result = state_manager.first_unfinished_step(run_id, defn)
         assert result == "implement"
 
+    def test_paused_loop_step_is_recorded_completed_and_resume_skips_it(
+        self, state_manager: StateManager
+    ) -> None:
+        """Squadron has no mid-loop resume: a loop step that pauses mid-iteration
+        is appended to completed_steps like any other, so resume continues past
+        it rather than re-entering the loop.
+
+        Pinned by slice 305 (T28): the findings-addressed policy deliberately
+        contains no resume special case, because there is no execution path
+        where it runs against a resumed round with the prior round missing. If
+        resume granularity ever changes, this test must fail loudly rather than
+        that assumption silently becoming wrong. Whether a checkpoint-paused
+        loop *should* be re-enterable is a real question — issue #48 — and not
+        this slice's.
+        """
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        cb(
+            _make_step_result(
+                step_name="fix-loop",
+                step_type="loop",
+                status=ExecutionStatus.PAUSED,
+            )
+        )
+
+        state = state_manager.load(run_id)
+        assert [s.step_name for s in state.completed_steps] == ["design", "fix-loop"]
+        assert state.status == ExecutionStatus.PAUSED.value
+
+        defn = _make_definition(["design", "fix-loop", "implement"])
+        assert state_manager.first_unfinished_step(run_id, defn) == "implement"
+
     def test_all_completed_returns_none(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
         cb = state_manager.make_step_callback(run_id)
