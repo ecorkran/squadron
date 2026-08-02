@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260731
+dateUpdated: 20260802
 status: in-progress
 ---
 
@@ -159,6 +159,30 @@ Split out of slice 911 during its Phase 4 design (20260731), on 911's own instru
 
 **Slice design:** `user/slices/305-slice.findings-addressed-gate.md` · see `300-slices.eval-actions-llm-as-judge-scoring.md` entry 6
 **Status:** moved (20260802); checked off here as no further 900-work remains · **Dependencies:** [911, 910, 304]
+
+11. [ ] **(913) Ruff Rule-Set Adoption — `B`, `ASYNC`, `BLE`**
+Closes the first three steps of [issue #50](https://github.com/ecorkran/squadron/issues/50). The Python guide (`.claude/rules/python.md`) requires `select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]`; the project selects `["E", "F", "W", "I", "UP"]`. Raised as F009 in the slice 305 code review, where `W` was enabled (zero violations) and the rest deferred rather than folded into a review-fix branch.
+
+The point is not lint hygiene. `BLE` and `ASYNC` are named in the guide as the *mechanical enforcement* for two rules the project otherwise states only in prose — the exception-handling policy and event-loop discipline. Unenforced, those rules are aspirational, which is how [issue #49](https://github.com/ecorkran/squadron/issues/49) landed: a bare `except` in `cf_op` silently dropping `--embed` for non-SDK models.
+
+**Part A — `B` (70 violations, mostly mechanical).** 13 of the 70 are `B008` on `typer.Option`/`typer.Argument` in CLI signature defaults — the standard Typer idiom, not debt. Those want one `per-file-ignores` entry for `src/squadron/cli/commands/`, not 13 rewrites; do that first, then the remaining 54 `B904` (`raise ... from err`) and three stragglers (`B007`, `B017`, `B905`) are a single mechanical pass with no behavior change. Effort 1/5.
+
+**Part B — `ASYNC` (6 violations).** Four `ASYNC221` (blocking `subprocess.run` inside async functions) are in tests. The two that matter are `ASYNC240` — blocking `pathlib` calls in async functions, one of them in `src/squadron/client/http.py:42`, on a production I/O path. Small, but a real fix rather than an annotation. Effort 1/5.
+
+**Part C — `BLE` (23 violations, all in `src`).** The substantive part. Every site is a decision, not a mechanical edit: narrow the exception type, or keep the broad catch with the justifying comment and explicit `# noqa: BLE001` the guide requires. Expect a few to surface genuinely swallowed errors the way #49 did — that is the return on this slice, and the reason it is worth more than the other two parts combined. Sites cluster in `pipeline/` (executor, prompt_renderer, state, loader, sdk_session, three actions), the CLI commands, and the two provider agents. Effort 2/5.
+
+Sequence A → B → C: A is noise reduction that makes C's diff readable. Deliberately excludes pyright-over-tests (entry 12), which is a sweep of a different character and should not interleave with these.
+
+**Status:** not started · **Risk:** Low (Parts A/B) / Medium (Part C — narrowing an exception type changes what propagates) · **Effort:** 2/5 · **Dependencies:** none
+
+12. [ ] **(914) Strict Type Checking Over the Test Suite**
+Closes the fourth step of [issue #50](https://github.com/ecorkran/squadron/issues/50). `[tool.pyright] include = ["src"]`; the guide specifies `["src", "tests"]`, on the rationale that bugs in tests mask bugs in code. Widening the include reports **868 errors across 234 test files** under `typeCheckingMode = "strict"` — volume rather than difficulty, concentrated in untyped fixtures, `MagicMock` returns, and unannotated helper signatures.
+
+Worth doing on evidence, not principle: slice 305's F001 was a severity-case mismatch that survived a full slice because every test fixture hand-wrote the finding dict instead of routing through the production path, and nothing type-checked the difference. Strict typing over tests would not have caught that specific string-value bug, but the class of drift it belongs to — fixtures that no longer resemble what production emits — is exactly what typed fixtures make visible.
+
+Open questions for design: whether to land it in one sweep or per-directory with a temporary `exclude` list that shrinks; whether some `reportUnknownMemberType` noise on `MagicMock` warrants a narrower rule set for `tests/` rather than full strict; and whether the mock-heavy pipeline tests want typed fixture factories (which would pay for themselves) or just annotations (which would not). Resolve those before estimating tasks — the 868 number is a starting point, not a task count.
+
+**Status:** not started · **Risk:** Low (test-only; no production code changes) · **Effort:** 3/5 · **Dependencies:** [913 — sequencing only, so two large mechanical diffs do not interleave]
 
 ---
 
