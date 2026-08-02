@@ -152,103 +152,103 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
 
 ## Part E — Judge Over the Residue
 
-- [ ] **T18. Bundled template `judge-findings-addressed.yaml`** (effort 3)
-  - [ ] Create `src/squadron/data/templates/judge-findings-addressed.yaml`, named
+- [x] **T18. Bundled template `judge-findings-addressed.yaml`** (effort 3)
+  - [x] Create `src/squadron/data/templates/judge-findings-addressed.yaml`, named
     `judge.findings-addressed`. Model its structure on
     `judge-slice-vs-arch.yaml` (system prompt, `inputs`, `prompt_template`,
     `allowed_tools`, `permission_mode`, `model`).
-  - [ ] **No `judge:` block.** `ReviewTemplate.is_judge` derives from that block
+  - [x] **No `judge:` block.** `ReviewTemplate.is_judge` derives from that block
     (`review/templates/__init__.py:48`), and this template emits statuses, not a
     score — leaving it out is what keeps a stray persisted file out of
     metrology's judge sample set. Add a comment in the YAML stating this.
-  - [ ] Required output shape: exactly one line per prior finding,
+  - [x] Required output shape: exactly one line per prior finding,
     `<finding-id>: <status>` with an optional ` successor=<fresh-finding-id>`
     suffix, statuses drawn from the closed set defined in T12. Instruct the model
     explicitly that it must **not** emit a `## Summary` section, a verdict line,
     or an overall conclusion — the outcome is derived, and anything it asserts is
     discarded (same wording discipline as `judge-slice-vs-arch.yaml:22-28`).
-  - [ ] Instruct that `moved` **must** name a successor, and that `disputed` is
+  - [x] Instruct that `moved` **must** name a successor, and that `disputed` is
     the correct answer whenever it cannot defend a status — guessing between
     addressed and unaddressed is the failure mode this token exists to prevent
     (design decision 7).
-  - [ ] The prompt receives the residue findings, the round diff, and the fresh
+  - [x] The prompt receives the residue findings, the round diff, and the fresh
     findings list. Do not include an example status line with a plausible
     finding id next to the fill-in slot — per project rules, a nearby example is
     a hallucination trap when the real value is absent.
-  - [ ] Success: `load_all_templates()` registers it; `get_template(
+  - [x] Success: `load_all_templates()` registers it; `get_template(
     "judge.findings-addressed").is_judge` is `False`.
 
-- [ ] **T19. Status-line parser** (effort 2)
-  - [ ] Parse the judge's `raw_output` into per-finding statuses over the closed
+- [x] **T19. Status-line parser** (effort 2)
+  - [x] Parse the judge's `raw_output` into per-finding statuses over the closed
     status set from T12. Parse leniently: tolerate surrounding prose, blank
     lines, varying whitespace, and case-insensitive status tokens; anchor on the
     `<id>: <status>` shape rather than requiring an exact layout.
-  - [ ] A finding with no parsable line, or a line naming a status outside the
+  - [x] A finding with no parsable line, or a line naming a status outside the
     closed set, is `DISPUTED` — not dropped, not defaulted to addressed.
-  - [ ] An entirely unparseable response (no recognizable lines at all) is
+  - [x] An entirely unparseable response (no recognizable lines at all) is
     reported as a parse failure so T22 can map it to `UNKNOWN`.
-  - [ ] Success: the parser's tests use the real output shape the template
+  - [x] Success: the parser's tests use the real output shape the template
     instructs, including one messy real-world-style sample with leading prose.
 
-- [ ] **T20. Judge invocation — transport only** (effort 3)
-  - [ ] Call `run_review_with_profile` (`review/review_client.py:54`) directly
+- [x] **T20. Judge invocation — transport only** (effort 3)
+  - [x] Call `run_review_with_profile` (`review/review_client.py:54`) directly
     with the loaded template. **Do not** route through `ReviewAction` and **do
     not** persist a review file — the design's F003 resolution: metrology's
     `discover_judge_results` would otherwise sweep this evidence into the 320
     calibration sample set.
-  - [ ] Model resolution: the `judge:` block's `model:` when supplied, otherwise
+  - [x] Model resolution: the `judge:` block's `model:` when supplied, otherwise
     `context.resolver`'s standard cascade. The judge defaults to the pipeline's
     review-tier model, never the dispatch model (design decision 3).
-  - [ ] Invoke only when the residue is non-empty. Round 1 and byte-identical
+  - [x] Invoke only when the residue is non-empty. Round 1 and byte-identical
     rounds never reach here.
-  - [ ] Transport failure (exception, or a result with no usable output) is
+  - [x] Transport failure (exception, or a result with no usable output) is
     caught narrowly, logged with `logger.exception`, and surfaced as a judge
     failure for T22 to map to `UNKNOWN` — fail-closed, never fail-open.
-  - [ ] Success: a residue of N findings produces exactly one transport call; an
+  - [x] Success: a residue of N findings produces exactly one transport call; an
     empty residue produces zero.
 
-- [ ] **T21. Successor verification and contradiction check** (effort 2)
-  - [ ] `MOVED` must name a successor that exists in the fresh findings set. A
+- [x] **T21. Successor verification and contradiction check** (effort 2)
+  - [x] `MOVED` must name a successor that exists in the fresh findings set. A
     missing or unresolvable successor downgrades to `DISPUTED` with a WARNING
     naming the finding and the claimed successor — an unverifiable relocation
     claim is uncertainty, not a pass.
-  - [ ] `ADDRESSED` for a finding whose cited region the round diff shows
+  - [x] `ADDRESSED` for a finding whose cited region the round diff shows
     untouched downgrades to `DISPUTED` with a WARNING. Match the finding's
     `location` path against the diff's changed paths; a finding located
     `unverified` cannot be contradicted this way and is left as the judge
     reported it.
-  - [ ] Both downgrades record the original judge status on the evidence record
+  - [x] Both downgrades record the original judge status on the evidence record
     so the audit trail shows what was claimed and what was accepted.
-  - [ ] Success: both downgrades observable in logs and in gate metadata.
+  - [x] Success: both downgrades observable in logs and in gate metadata.
 
-- [ ] **T22. Derivation rule** (effort 2)
-  - [ ] Compute the addressed-leg verdict from the per-finding statuses, closed
+- [x] **T22. Derivation rule** (effort 2)
+  - [x] Compute the addressed-leg verdict from the per-finding statuses, closed
     over the enum: all `ADDRESSED` or successor-verified `MOVED` → `PASS`; any
     `DISPUTED`, judge unavailable, or unparseable output → `UNKNOWN`; any
     `UNADDRESSED` → `FAIL`. Evaluate `UNKNOWN` before `FAIL` so a fail-closed
     condition dominates.
-  - [ ] Discard any overall verdict the judge stated — it is derived, never
+  - [x] Discard any overall verdict the judge stated — it is derived, never
     declared (`enforce_judge` precedent, design principle 4).
-  - [ ] Final gate verdict is `reduce_verdicts(addressed_leg,
+  - [x] Final gate verdict is `reduce_verdicts(addressed_leg,
     fresh_review_verdict)` — the existing function, unchanged.
-  - [ ] Success: the derivation is a pure function over statuses with no I/O, so
+  - [x] Success: the derivation is a pure function over statuses with no I/O, so
     it is testable without a transport.
 
-- [ ] **T23. Tests for the judge leg** (effort 3)
-  - [ ] Parser: well-formed lines; lines with `successor=`; case variants;
+- [x] **T23. Tests for the judge leg** (effort 3)
+  - [x] Parser: well-formed lines; lines with `successor=`; case variants;
     leading prose; an unknown status token → `DISPUTED`; a missing line →
     `DISPUTED`; a wholly unparseable response → parse failure.
-  - [ ] Invocation: residue of 2 → exactly one transport call, and the prompt
+  - [x] Invocation: residue of 2 → exactly one transport call, and the prompt
     carries both residue findings and the round diff; empty residue → zero calls.
-  - [ ] Transport raising → leg `UNKNOWN`, `logger.exception` recorded.
-  - [ ] `MOVED` with a successor present in the fresh set stays `MOVED`; with an
+  - [x] Transport raising → leg `UNKNOWN`, `logger.exception` recorded.
+  - [x] `MOVED` with a successor present in the fresh set stays `MOVED`; with an
     absent successor → `DISPUTED` + WARNING.
-  - [ ] `ADDRESSED` over a path absent from the diff → `DISPUTED` + WARNING;
+  - [x] `ADDRESSED` over a path absent from the diff → `DISPUTED` + WARNING;
     `ADDRESSED` over a path present in the diff is accepted.
-  - [ ] Derivation table, parametrized over every status combination that
+  - [x] Derivation table, parametrized over every status combination that
     changes the outcome, including `UNKNOWN` dominating `FAIL`.
-  - [ ] Success: all pass; no test reaches a real provider.
-  - [ ] **Commit Part E.** `ruff format`, then commit from the project root —
+  - [x] Success: all pass; no test reaches a real provider.
+  - [x] **Commit Part E.** `ruff format`, then commit from the project root —
     `feat: add judge residue leg and derivation rule to findings-addressed`.
 
 ---

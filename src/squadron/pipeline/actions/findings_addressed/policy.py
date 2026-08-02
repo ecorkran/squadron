@@ -9,11 +9,10 @@ from __future__ import annotations
 import logging
 
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.actions.findings_addressed.evidence import GateEvidence, save_gate_evidence
 from squadron.pipeline.actions.findings_addressed.judge import JudgeLegResult, judge_residue
 from squadron.pipeline.actions.findings_addressed.models import (
-    FindingOutcome,
     FindingRecord,
-    SettlingScreen,
     concern_plus,
     read_findings,
 )
@@ -85,28 +84,37 @@ class FindingsAddressedPolicy:
             len(outcomes),
         )
 
+        evidence = GateEvidence(
+            policy=GatePolicy.FINDINGS_ADDRESSED.value,
+            reduced_verdict=reduced,
+            addressed_verdict=addressed_verdict,
+            review_verdict=fresh_verdict,
+            outcomes=outcomes,
+            deciding_screen=screen.deciding_screen,
+            prior_round_sha=diff.prior_sha,
+            revision_number=context.iteration if context.iteration >= 1 else None,
+            judge_model=judge.model,
+            judge_template=judge.template,
+        )
+        evidence_path = save_gate_evidence(
+            evidence,
+            step_name=context.step_name,
+            slice_index=context.params.get("slice"),
+            cwd=context.cwd,
+        )
+
+        outputs: dict[str, object] = {"review_from": review_from}
+        if evidence_path is not None:
+            outputs["evidence_file"] = str(evidence_path)
+
         return ActionResult(
             success=True,
             action_type=ActionType.GATE,
-            outputs={"review_from": review_from},
+            outputs=outputs,
             verdict=reduced,
             provenance=Provenance.COMPOSED,
-            metadata={
-                "policy": GatePolicy.FINDINGS_ADDRESSED.value,
-                "addressed_verdict": addressed_verdict,
-                "review_verdict": fresh_verdict,
-                "no_prior_round": screen.deciding_screen == SettlingScreen.NO_PRIOR_ROUND,
-                "deciding_screen": (
-                    screen.deciding_screen.value if screen.deciding_screen is not None else None
-                ),
-                "finding_statuses": [_outcome_record(outcome) for outcome in outcomes],
-                # The prior round's commit — HEAD at gate time. Round N's own
-                # SHA is not recordable here (see RoundDiff.prior_sha).
-                "prior_round_sha": diff.prior_sha,
-                "revision_number": context.iteration if context.iteration >= 1 else None,
-                "judge_model": judge.model,
-                "judge_template": judge.template,
-            },
+            # Same record object as the artifact — the facts are assembled once.
+            metadata=evidence.to_metadata(),
         )
 
     def _run_screens(
@@ -152,14 +160,3 @@ def register() -> None:
     from squadron.pipeline.actions.gate import GatePolicy, register_gate_policy
 
     register_gate_policy(GatePolicy.FINDINGS_ADDRESSED, FindingsAddressedPolicy())
-
-
-def _outcome_record(outcome: FindingOutcome) -> dict[str, object]:
-    """One finding outcome as plain data for metadata and the evidence artifact."""
-    return {
-        "id": outcome.finding_id,
-        "status": outcome.status.value,
-        "screen": outcome.screen.value,
-        "successor": outcome.successor_id,
-        "note": outcome.note,
-    }

@@ -16,6 +16,13 @@ derivation rule), and ``policy`` (which sequences them).
 
 from __future__ import annotations
 
+from squadron.pipeline.actions.findings_addressed.evidence import (
+    GATE_EVIDENCE_DOC_TYPE,
+    GATE_EVIDENCE_FILENAME_FORMAT,
+    GateEvidence,
+    render_gate_evidence,
+    save_gate_evidence,
+)
 from squadron.pipeline.actions.findings_addressed.judge import (
     JUDGE_TEMPLATE_NAME,
     JudgeLegResult,
@@ -54,7 +61,10 @@ from squadron.pipeline.actions.findings_addressed.verification import (
 
 __all__ = [
     "CONCERN_PLUS_SEVERITIES",
+    "GATE_EVIDENCE_DOC_TYPE",
+    "GATE_EVIDENCE_FILENAME_FORMAT",
     "JUDGE_TEMPLATE_NAME",
+    "GateEvidence",
     "FindingOutcome",
     "FindingRecord",
     "FindingStatus",
@@ -71,6 +81,8 @@ __all__ = [
     "judge_residue",
     "parse_status_lines",
     "read_findings",
+    "render_gate_evidence",
+    "save_gate_evidence",
     "run_deterministic_screens",
     "statuses_to_outcomes",
     "verify_outcomes",
