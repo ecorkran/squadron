@@ -46,27 +46,34 @@ def parse_status_lines(raw_output: str) -> dict[str, JudgeStatus]:
     rather than dropped: the judge said something about that finding, and what
     it said was not defensible. Lines that match no finding id the caller cares
     about are filtered later, by the caller.
+
+    Every match on a line is read, not just the first, and the first statement
+    about a finding wins. Prose further down that happens to name the finding
+    again ("F001: I could not confirm this") is commentary on an answer already
+    given, not a replacement for it. Matching stays within a line so a bare
+    ``F001:`` cannot absorb the next line's first word as its status.
     """
     statuses: dict[str, JudgeStatus] = {}
     for line in raw_output.splitlines():
-        match = _STATUS_LINE.search(line)
-        if match is None:
-            continue
-        token = match.group("status").strip().lower()
-        try:
-            status = FindingStatus(token)
-        except ValueError:
-            _logger.warning(
-                "findings-addressed: judge emitted unknown status %r for %r; treating as disputed",
-                token,
-                match.group("id"),
+        for match in _STATUS_LINE.finditer(line):
+            finding_id = match.group("id")
+            if finding_id in statuses:
+                continue
+            token = match.group("status").strip().lower()
+            try:
+                status = FindingStatus(token)
+            except ValueError:
+                _logger.warning(
+                    "findings-addressed: judge emitted unknown status %r for %r; treating as disputed",
+                    token,
+                    finding_id,
+                )
+                status = FindingStatus.DISPUTED
+            statuses[finding_id] = JudgeStatus(
+                finding_id=finding_id,
+                status=status,
+                successor_id=match.group("successor"),
             )
-            status = FindingStatus.DISPUTED
-        statuses[match.group("id")] = JudgeStatus(
-            finding_id=match.group("id"),
-            status=status,
-            successor_id=match.group("successor"),
-        )
     return statuses
 
 

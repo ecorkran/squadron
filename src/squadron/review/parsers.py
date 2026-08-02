@@ -235,13 +235,17 @@ def _normalize_location(
     return location.strip()
 
 
-def _location_path(location: str) -> str | None:
+def location_path(location: str) -> str | None:
     """Extract the path portion of a finding's location string.
 
     Returns the substring before the first ':' or '#' (e.g. 'src/foo.py'
     from 'src/foo.py:42' or 'src/foo.py#sym'). Returns None for the
     UNVERIFIED_LOCATION sentinel and for values that do not begin with a
     plausible path character.
+
+    Public because how a finding location is read is a review-domain concept:
+    consumers outside this module (the findings-addressed gate) need the same
+    answer, and a second implementation would drift from this one.
     """
     if location == UNVERIFIED_LOCATION:
         return None
@@ -266,7 +270,7 @@ def _check_diff_membership(
     for index, finding in enumerate(findings, start=1):
         if finding.location is None:
             continue
-        path = _location_path(finding.location)
+        path = location_path(finding.location)
         if path is None:
             continue
         if path not in diff_files:
@@ -295,7 +299,7 @@ def _check_path_existence(
     for index, finding in enumerate(findings, start=1):
         if finding.location is None:
             continue
-        path = _location_path(finding.location)
+        path = location_path(finding.location)
         if path is None:
             continue
         if not (cwd / path).exists():
