@@ -378,7 +378,11 @@ Gate `ActionResult.metadata` carries the same record in-process.
       `discover_judge_results` over a reviews dir containing one returns it
       in no sample set.
 - [ ] Gate metadata carries per-finding statuses, settling screen, leg
-      verdicts, and round SHAs.
+      verdicts, the **prior** round's SHA, and `revision_number`. Round N's own
+      SHA is deliberately absent and not recordable: the evidence artifact is
+      written before the commit that contains it, so it cannot carry that
+      commit's identity (reconciled during Phase 5 breakdown; round N's commit
+      is discoverable from git as the commit containing the artifact).
 - [ ] Example pipeline runs the target loop shape end-to-end.
 
 ## Risk Assessment

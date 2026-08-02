@@ -26,7 +26,7 @@ status: not_started
   refinement), and Part C (policy config surface), tasks T1–T11.
 - This file covers Part D (deterministic screens), Part E (judge over the
   residue), Part F (gate evidence artifact), and Part G (integration,
-  documentation, close-out), tasks T12–T30. Task numbering continues unbroken
+  documentation, close-out), tasks T12–T31. Task numbering continues unbroken
   across both files.
 
 ---
@@ -65,15 +65,24 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: round 1 of the target shape spends zero tokens and the gate's
     verdict equals the fresh review's verdict.
 
-- [ ] **T14. Round diff and Screen 1 — byte-identical round** (effort 3)
+- [ ] **T14. Extract a shared `run_git` helper** (refactor only, no new behavior) (effort 1)
   - [ ] Add a public `run_git(args: list[str], *, cwd: str)` helper to
     `src/squadron/review/git_utils.py` returning the `CompletedProcess` or
     `None` on `OSError`, matching the existing private runners
-    (`git_utils.py:206-220`, `pipeline/actions/commit.py:123-135`). Rewire
-    `commit.py`'s `_git` to delegate to it — a pure delegation, no behavior
-    change, existing commit tests must stay green unmodified. Do not touch
-    `git_utils._resolve_rev`.
-  - [ ] Compute the round diff at gate time as the **working tree against
+    (`git_utils.py:206-220`, `pipeline/actions/commit.py:123-135`).
+  - [ ] Rewire `commit.py`'s `_git` to delegate to it — a pure delegation, no
+    behavior change. Do not touch `git_utils._resolve_rev`.
+  - [ ] Success: existing commit tests pass **unmodified**; `pyright` strict
+    clean. Nothing in this task depends on the new policy module, so it is
+    independently revertable.
+  - [ ] **Commit before continuing.** `ruff format`, then commit from the project
+    root — `refactor: extract shared run_git helper into git_utils`. The next
+    task builds new logic on this helper; separating the commits keeps a
+    regression attributable to one or the other.
+
+- [ ] **T15. Round diff and Screen 1 — byte-identical round** (effort 3)
+  - [ ] Compute the round diff at gate time, via T14's `run_git`, as the
+    **working tree against
     `HEAD`** (`git diff HEAD -- <paths>`), scoped to the loop's artifact paths
     when the gate config supplies them, plus `git status --porcelain` to catch
     untracked new files. Per delta 3 above, `HEAD` *is* the prior round's commit
@@ -101,7 +110,7 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: an unchanged working tree yields `FAIL` with zero transport
     calls; a git failure yields `UNKNOWN` with the command in the log.
 
-- [ ] **T15. Screen 2 — conservative exact matching** (effort 2)
+- [ ] **T16. Screen 2 — conservative exact matching** (effort 2)
   - [ ] A prior CONCERN+ finding whose (`location`, `category`) pair appears in
     the fresh findings set is `UNADDRESSED` with settling screen `exact_match` —
     the reviewer re-found it, no judgment needed.
@@ -118,7 +127,7 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: a recurring exact-match finding settles without a transport
     call; an `unverified`-located prior finding never settles here.
 
-- [ ] **T16. Tests for the deterministic screens** (effort 3)
+- [ ] **T17. Tests for the deterministic screens** (effort 3)
   - [ ] New `tests/pipeline/test_findings_addressed.py` with a transport spy
     fixture that fails the test if the judge transport is called.
   - [ ] Screen 0: empty `prior_iteration_step_outputs` → leg `PASS`,
@@ -135,12 +144,15 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Prior findings of severity `NOTE`/`PASS` are not part of the CONCERN+
     set and never appear in the residue.
   - [ ] Success: all pass; `pytest tests/pipeline/` green.
+  - [ ] **Commit Part D.** `ruff format`, then commit from the project root —
+    `feat: add findings-addressed deterministic screens`. The screens are
+    useful and testable without the judge leg; this is a real revert point.
 
 ---
 
 ## Part E — Judge Over the Residue
 
-- [ ] **T17. Bundled template `judge-findings-addressed.yaml`** (effort 3)
+- [ ] **T18. Bundled template `judge-findings-addressed.yaml`** (effort 3)
   - [ ] Create `src/squadron/data/templates/judge-findings-addressed.yaml`, named
     `judge.findings-addressed`. Model its structure on
     `judge-slice-vs-arch.yaml` (system prompt, `inputs`, `prompt_template`,
@@ -166,7 +178,7 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: `load_all_templates()` registers it; `get_template(
     "judge.findings-addressed").is_judge` is `False`.
 
-- [ ] **T18. Status-line parser** (effort 2)
+- [ ] **T19. Status-line parser** (effort 2)
   - [ ] Parse the judge's `raw_output` into per-finding statuses over the closed
     status set from T12. Parse leniently: tolerate surrounding prose, blank
     lines, varying whitespace, and case-insensitive status tokens; anchor on the
@@ -174,11 +186,11 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] A finding with no parsable line, or a line naming a status outside the
     closed set, is `DISPUTED` — not dropped, not defaulted to addressed.
   - [ ] An entirely unparseable response (no recognizable lines at all) is
-    reported as a parse failure so T21 can map it to `UNKNOWN`.
+    reported as a parse failure so T22 can map it to `UNKNOWN`.
   - [ ] Success: the parser's tests use the real output shape the template
     instructs, including one messy real-world-style sample with leading prose.
 
-- [ ] **T19. Judge invocation — transport only** (effort 3)
+- [ ] **T20. Judge invocation — transport only** (effort 3)
   - [ ] Call `run_review_with_profile` (`review/review_client.py:54`) directly
     with the loaded template. **Do not** route through `ReviewAction` and **do
     not** persist a review file — the design's F003 resolution: metrology's
@@ -191,11 +203,11 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
     rounds never reach here.
   - [ ] Transport failure (exception, or a result with no usable output) is
     caught narrowly, logged with `logger.exception`, and surfaced as a judge
-    failure for T21 to map to `UNKNOWN` — fail-closed, never fail-open.
+    failure for T22 to map to `UNKNOWN` — fail-closed, never fail-open.
   - [ ] Success: a residue of N findings produces exactly one transport call; an
     empty residue produces zero.
 
-- [ ] **T20. Successor verification and contradiction check** (effort 2)
+- [ ] **T21. Successor verification and contradiction check** (effort 2)
   - [ ] `MOVED` must name a successor that exists in the fresh findings set. A
     missing or unresolvable successor downgrades to `DISPUTED` with a WARNING
     naming the finding and the claimed successor — an unverifiable relocation
@@ -209,7 +221,7 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
     so the audit trail shows what was claimed and what was accepted.
   - [ ] Success: both downgrades observable in logs and in gate metadata.
 
-- [ ] **T21. Derivation rule** (effort 2)
+- [ ] **T22. Derivation rule** (effort 2)
   - [ ] Compute the addressed-leg verdict from the per-finding statuses, closed
     over the enum: all `ADDRESSED` or successor-verified `MOVED` → `PASS`; any
     `DISPUTED`, judge unavailable, or unparseable output → `UNKNOWN`; any
@@ -222,7 +234,7 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: the derivation is a pure function over statuses with no I/O, so
     it is testable without a transport.
 
-- [ ] **T22. Tests for the judge leg** (effort 3)
+- [ ] **T23. Tests for the judge leg** (effort 3)
   - [ ] Parser: well-formed lines; lines with `successor=`; case variants;
     leading prose; an unknown status token → `DISPUTED`; a missing line →
     `DISPUTED`; a wholly unparseable response → parse failure.
@@ -236,12 +248,14 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Derivation table, parametrized over every status combination that
     changes the outcome, including `UNKNOWN` dominating `FAIL`.
   - [ ] Success: all pass; no test reaches a real provider.
+  - [ ] **Commit Part E.** `ruff format`, then commit from the project root —
+    `feat: add judge residue leg and derivation rule to findings-addressed`.
 
 ---
 
 ## Part F — Gate Evidence Artifact
 
-- [ ] **T23. Write the gate-evidence artifact** (effort 3)
+- [ ] **T24. Write the gate-evidence artifact** (effort 3)
   - [ ] Persist one artifact per gate decision under the reviews directory
     (`project-documents/user/reviews`, the constant already defined at
     `review/persistence.py:17`). Filename pattern
@@ -263,16 +277,16 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: the artifact is written on every decision, including Screens 0
     and 1 where no judge ran.
 
-- [ ] **T24. Gate metadata parity** (effort 1)
+- [ ] **T25. Gate metadata parity** (effort 1)
   - [ ] The returned `ActionResult.metadata` carries the same record in-process:
     per-finding statuses, settling screens, both leg verdicts, the prior round
-    SHA, and `revision_number` — the same pair T14 establishes, not a round-N
+    SHA, and `revision_number` — the same pair T15 establishes, not a round-N
     SHA. Keep `policy` on metadata as `most-severe` already does
     (`actions/gate.py:143-151`).
   - [ ] Success: metadata and the persisted artifact are built from one source
     object — no second assembly of the same facts.
 
-- [ ] **T25. Tests for the evidence artifact** (effort 2)
+- [ ] **T26. Tests for the evidence artifact** (effort 2)
   - [ ] The written filename does not match `*-review.*` (assert with the same
     glob `discover_judge_results` uses).
   - [ ] `discover_judge_results` run over a reviews directory containing a
@@ -283,12 +297,14 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] An unwritable reviews directory produces a WARNING and does not change
     the gate's verdict.
   - [ ] Success: all pass.
+  - [ ] **Commit Part F.** `ruff format`, then commit from the project root —
+    `feat: persist gate-evidence artifact for findings-addressed decisions`.
 
 ---
 
 ## Part G — Integration, Documentation, Close-Out
 
-- [ ] **T26. Example pipeline** (effort 2)
+- [ ] **T27. Example pipeline** (effort 2)
   - [ ] Add one pipeline under `src/squadron/data/pipelines/` demonstrating the
     target loop shape from the design (`dispatch` → named `review` →
     `findings-addressed` gate with `checkpoint: on-concerns`,
@@ -298,7 +314,7 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: the pipeline loads and validates clean; `--dry-run` shows the
     expanded action sequence with the gate last.
 
-- [ ] **T27. Resume behavior — pin it, do not design for it** (effort 1)
+- [ ] **T28. Resume behavior — pin it, do not design for it** (effort 1)
   - [ ] Design decision 5's caveat was **resolved during breakdown**, not left
     open. Two facts, both verified: findings survive state persistence
     (`dataclasses.asdict` at `pipeline/state.py:291` keeps the `findings` field
@@ -318,22 +334,30 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: the test pins current behavior; the policy contains no
     resume-specific branch.
 
-- [ ] **T28. End-to-end and regression pass** (effort 3)
+- [ ] **T29. End-to-end and regression pass** (effort 3)
   - [ ] Integration test over the example pipeline with a stubbed transport:
     round 1 → Screen 0 `PASS`-annotated; round 2 with an unaddressed recurring
     finding → gate `FAIL` and the loop continues; round 3 with everything
     addressed → gate `PASS` and the loop exits.
   - [ ] Fail-closed path end-to-end: judge transport failure → addressed leg
-    `UNKNOWN` → gate `UNKNOWN` → the `on-concerns` checkpoint fires.
+    `UNKNOWN` → gate `UNKNOWN` → the `on-concerns` checkpoint fires. Note that
+    the checkpoint firing inside the loop body will pause the run and, per
+    issue #48, mark the loop step complete — assert the pause, not that the
+    loop resumes.
   - [ ] Regression: `compose-gate-example.yaml` and every existing `most-severe`
     gate test produce byte-identical results; no existing pipeline YAML needs a
     config change.
   - [ ] Run `ruff format`, `ruff check`, `pyright` strict, and the full test
     suite. Zero errors is the merge bar.
   - [ ] Success: all green; the design's Success Criteria list is walked
-    item-by-item and each one is checked against a real test or run.
+    item-by-item and each one is checked against a real test or run. The "round
+    SHAs" criterion reads as prior-SHA + `revision_number` — the design text was
+    reconciled to match during breakdown, so this is a literal check, not a
+    judgment call.
+  - [ ] **Commit Part G's integration work.** `ruff format`, then commit from
+    the project root — `test: add findings-addressed end-to-end coverage`.
 
-- [ ] **T29. Documentation** (effort 2)
+- [ ] **T30. Documentation** (effort 2)
   - [ ] `docs/PIPELINES.md`: update the `gate` step table (`:245-265`) — `policy`
     is no longer "only `most-severe` exists today"; document
     `findings-addressed`, its per-policy field rules, and the optional `judge:`
@@ -347,12 +371,12 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: a reader who has never seen this slice can author the target
     shape from the docs alone.
 
-- [ ] **T30. Close-out** (effort 1)
+- [ ] **T31. Close-out** (effort 1)
   - [ ] CHANGELOG: one short user-facing bullet — a loop can now require that
     the prior round's findings were actually addressed, not just that a fresh
     review passed.
   - [ ] DEVLOG entry per `prompt.ai-project.system.md`, Session State Summary,
-    including the Part A design deltas and T27's resume finding.
+    including the Part A design deltas and T28's resume finding.
   - [ ] Mark slice 305 complete in the slice design frontmatter and in
     `300-slices.eval-actions-llm-as-judge-scoring.md` entry 6.
   - [ ] Check off `900-slices` entry 10's pointer if it still reads as open.

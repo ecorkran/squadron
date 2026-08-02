@@ -80,12 +80,12 @@ task in **Part A**.
 by T1 — there is no alternative, and it repairs 304's gate inside a loop as a
 side effect. Item 2 is fixed by T2; there is no resume gap behind it, because
 squadron has no mid-loop resume at all (a paused loop step is recorded
-completed and resume continues past it — see T27, which pins that rather than
+completed and resume continues past it — see T28, which pins that rather than
 designing around it). Item 3's mechanism
-is fixed by T14, but the design's success criterion "gate metadata carries ...
+is fixed by T15, but the design's success criterion "gate metadata carries ...
 the round SHAs" is only half-satisfiable: the evidence artifact is written
 before the commit that contains it, so it can never carry that commit's
-identity. The recordable pair is prior SHA + `revision_number` (T14, T24).
+identity. The recordable pair is prior SHA + `revision_number` (T15, T25).
 
 Part A also touches `pipeline/executor.py` and `pipeline/models.py`, which the
 design's "Files touched" table does not list — both additively, and both to
@@ -133,8 +133,8 @@ repair machinery that is broken independently of this slice.
 
 ## Part A — Loop-Body Evidence Plumbing
 
-Prerequisite for everything after it: without A1 the target shape cannot resolve
-`review_from`, and without A2 the policy has no prior round to compare against.
+Prerequisite for everything after it: without T1 the target shape cannot resolve
+`review_from`, and without T2 the policy has no prior round to compare against.
 
 - [ ] **T1. Populate `step_outputs` for loop-body inner steps** (effort 2)
   - [ ] In `src/squadron/pipeline/executor.py`, inside `_execute_loop_body`'s
@@ -180,46 +180,22 @@ Prerequisite for everything after it: without A1 the target shape cannot resolve
   - [ ] A step executed outside any loop receives an empty
     `prior_iteration_step_outputs`.
   - [ ] Success: all four pass; full `tests/pipeline/` suite green.
+  - [ ] **Commit Part A.** `ruff format`, then commit from the project root —
+    `fix: populate step_outputs and prior-iteration results in loop bodies`.
+    Part A stands alone: it repairs a gate inside a loop for every policy,
+    including 304's `most-severe`, and is worth its own revert point.
 
 ---
 
-## Part B — Loop Validation Refinement
+## Part B — Policy Config Surface
 
-- [ ] **T4. Unconsumed-verdict rule in `_validate_verdict_count`** (effort 2)
-  - [ ] In `src/squadron/pipeline/steps/loop.py:208-242`, change the count from
-    "verdict-bearing actions" to "**unconsumed** verdict-bearing actions": an
-    inner step named by a gate's `judge_from` / `review_from` in the same body is
-    *consumed* and does not count toward the total.
-  - [ ] Collect the consumed names by reading each inner gate step's config
-    (`inner.config`) for whichever reference fields that gate's policy declares —
-    reuse the per-policy field list defined in Task T6, do not duplicate the
-    literal field names here.
-  - [ ] Update the docstring to state the rule and why: the gate is the decider,
-    its legs are inputs to that decision, and `_last_with_verdict`
-    (`executor.py:414-418`) lands on the gate by construction.
-  - [ ] Leave the error message and its wording unchanged — 910 Part B's
-    motivating rejection must fail with the same text.
-  - [ ] Success: `[dispatch, review, gate]` validates; `[review, review]` with no
-    gate still rejects with the existing message.
+Ordered **before** the loop validator deliberately. The unconsumed-verdict rule
+(Part C) consumes this part's per-policy field mapping, and its tests construct a
+`findings-addressed` gate step — which is not a valid policy value, and whose
+`expand()` raises `KeyError`, until T4 and T6 land. Building the vocabulary first
+is the only order in which either part is completable.
 
-- [ ] **T5. Tests for the unconsumed-verdict rule** (effort 2)
-  - [ ] In `tests/pipeline/test_loop_validation.py`: body of
-    `dispatch + review(name=fresh-review) + gate(review_from=fresh-review,
-    policy=findings-addressed)` validates clean.
-  - [ ] Body of two `review:` steps with no gate still rejects, asserting on the
-    existing message text (910 Part B regression pin).
-  - [ ] Body of `review + review + gate` naming **one** of them still rejects —
-    the unnamed review is unconsumed and the gate's verdict makes two.
-  - [ ] Body of `review + gate` where the gate names a step that is **not** in
-    the body still rejects (the reference is unresolvable, so nothing is
-    consumed).
-  - [ ] Success: all four pass; existing loop-validation tests unchanged.
-
----
-
-## Part C — Policy Config Surface
-
-- [ ] **T6. Gate policy enum and per-policy reference fields** (effort 2)
+- [ ] **T4. Gate policy enum and per-policy reference fields** (effort 2)
   - [ ] In `src/squadron/pipeline/actions/gate.py`, replace the bare string
     constants (`:14-15`) with a `GatePolicy(StrEnum)` carrying `MOST_SEVERE` and
     `FINDINGS_ADDRESSED`. Derive `DEFAULT_GATE_POLICY` and `VALID_GATE_POLICIES`
@@ -233,23 +209,26 @@ Prerequisite for everything after it: without A1 the target shape cannot resolve
   - [ ] Success: `pyright` strict passes; existing gate tests green with no
     edits.
 
-- [ ] **T7. Policy dispatch in `GateAction.execute`** (effort 2)
+- [ ] **T5. Policy dispatch in `GateAction.execute`** (effort 2)
   - [ ] In `actions/gate.py`, dispatch on the resolved policy to a policy
     implementation rather than falling through to `reduce_verdicts`
-    unconditionally (`:123-127`). Register the two policies in a small registry
-    keyed by `GatePolicy`; no `if policy == "..."` chains.
+    unconditionally (`:123-127`). Build a small registry keyed by `GatePolicy`;
+    no `if policy == "..."` chains.
   - [ ] The `most-severe` implementation is the existing body, moved verbatim —
     same outputs, same metadata keys, same log lines.
-  - [ ] The `findings-addressed` implementation delegates to the new module from
-    Part D. Import it lazily inside the call if a circular import appears,
-    following the precedent at `metrology/discovery.py:38-40`.
+  - [ ] Register **only** `most-severe` here. The `findings-addressed` entry is
+    registered by the policy module itself when Part D creates it, following the
+    self-registration precedent every action already uses
+    (`register_action(...)` at the foot of each action module). This is what
+    keeps this task free of a forward dependency on a module that does not exist
+    yet — do not stub the entry.
   - [ ] Success: `tests/pipeline/test_gate_action.py`,
     `test_gate_reduce.py`, `test_gate_executor.py`, and `test_gate_step.py` pass
     unmodified.
 
-- [ ] **T8. Policy-dependent step validation and expansion** (effort 3)
+- [ ] **T6. Policy-dependent step validation and expansion** (effort 3)
   - [ ] In `src/squadron/pipeline/steps/gate.py:23-74`, drive the
-    required/forbidden reference-field checks from T6's mapping instead of the
+    required/forbidden reference-field checks from T4's mapping instead of the
     hard-coded `("judge_from", "review_from")` tuple. A `judge_from` on a
     `findings-addressed` gate is an error naming the policy and the field.
   - [ ] Validate the optional `judge:` block: must be a mapping; only `model:`
@@ -264,15 +243,54 @@ Prerequisite for everything after it: without A1 the target shape cannot resolve
     validates and expands to `[gate]` or `[gate, checkpoint]`; a `most-severe`
     gate step expands byte-identically to today.
 
-- [ ] **T9. Loader reference resolution per policy** (effort 2)
+- [ ] **T7. Loader reference resolution per policy** (effort 2)
   - [ ] In `src/squadron/pipeline/loader.py:280-307`, resolve which fields to
-    check from T6's mapping rather than the hard-coded tuple, so a
+    check from T4's mapping rather than the hard-coded tuple, so a
     `findings-addressed` gate is not silently unchecked.
   - [ ] Leave the top-level-only walk as is. Loop-body gates are validated in
     T10, which is where the body is in scope — do **not** add loop descent to
     the loader.
   - [ ] Success: a top-level `findings-addressed` gate whose `review_from` names
     a non-prior step fails at load time with the existing message shape.
+
+- [ ] **T8. Tests for the policy config surface** (effort 2)
+  - [ ] In `tests/pipeline/test_gate_step.py`: `findings-addressed` with only
+    `review_from` validates; with `judge_from` present it errors naming the
+    policy; `most-severe` missing `judge_from` still errors as today.
+  - [ ] `judge:` block cases — well-formed passes; non-mapping, unknown key, and
+    non-string `model:` each error; a `judge:` block on `most-severe` errors.
+  - [ ] `expand()` for `findings-addressed` emits no `judge_from` key and does
+    not raise; `expand()` for `most-severe` is unchanged.
+  - [ ] In `tests/pipeline/test_loader.py`: a top-level `findings-addressed`
+    gate with a forward/misspelled `review_from` fails validation.
+  - [ ] Success: all pass; no existing gate/loader test edited.
+  - [ ] **Commit Part B.** `ruff format`, then commit from the project root —
+    `feat: add findings-addressed gate policy config surface`.
+
+---
+
+## Part C — Loop Validation
+
+Depends on Part B: T9 consumes T4's per-policy field mapping, and T11's tests
+construct `findings-addressed` gate steps that only validate and expand once T4
+and T6 are in place.
+
+- [ ] **T9. Unconsumed-verdict rule in `_validate_verdict_count`** (effort 2)
+  - [ ] In `src/squadron/pipeline/steps/loop.py:208-242`, change the count from
+    "verdict-bearing actions" to "**unconsumed** verdict-bearing actions": an
+    inner step named by a gate's `judge_from` / `review_from` in the same body is
+    *consumed* and does not count toward the total.
+  - [ ] Collect the consumed names by reading each inner gate step's config
+    (`inner.config`) for whichever reference fields that gate's policy declares —
+    reuse T4's per-policy field mapping, do not duplicate the literal field
+    names here.
+  - [ ] Update the docstring to state the rule and why: the gate is the decider,
+    its legs are inputs to that decision, and `_last_with_verdict`
+    (`executor.py:414-418`) lands on the gate by construction.
+  - [ ] Leave the error message and its wording unchanged — 910 Part B's
+    motivating rejection must fail with the same text.
+  - [ ] Success: `[dispatch, review, gate]` validates; `[review, review]` with no
+    gate still rejects with the existing message.
 
 - [ ] **T10. Loop-scoped validation for `findings-addressed`** (effort 3)
   - [ ] In `src/squadron/pipeline/steps/loop.py`, add a validation pass over the
@@ -297,24 +315,26 @@ Prerequisite for everything after it: without A1 the target shape cannot resolve
   - [ ] Success: the target loop shape validates; the same shape without
     `commit_each_iteration` is rejected at load time with an actionable message.
 
-- [ ] **T11. Tests for the policy config surface** (effort 3)
-  - [ ] In `tests/pipeline/test_gate_step.py`: `findings-addressed` with only
-    `review_from` validates; with `judge_from` present it errors naming the
-    policy; `most-severe` missing `judge_from` still errors as today.
-  - [ ] `judge:` block cases — well-formed passes; non-mapping, unknown key, and
-    non-string `model:` each error; a `judge:` block on `most-severe` errors.
-  - [ ] `expand()` for `findings-addressed` emits no `judge_from` key and does
-    not raise; `expand()` for `most-severe` is unchanged.
-  - [ ] In `tests/pipeline/test_loader.py`: a top-level `findings-addressed`
-    gate with a forward/misspelled `review_from` fails validation.
-  - [ ] In `tests/pipeline/test_loop_validation.py`: the target shape without
-    `commit_each_iteration` is rejected; with it, accepted; a body whose gate
-    names a non-existent inner step is rejected; a phase-bodied loop (which
-    commits on its own) satisfies the commit-source requirement.
-  - [ ] Success: all pass; no existing gate/loader test edited.
+- [ ] **T11. Tests for loop validation** (effort 3)
+  - [ ] In `tests/pipeline/test_loop_validation.py`: body of
+    `dispatch + review(name=fresh-review) + gate(review_from=fresh-review,
+    policy=findings-addressed)` validates clean.
+  - [ ] Body of two `review:` steps with no gate still rejects, asserting on the
+    existing message text (910 Part B regression pin).
+  - [ ] Body of `review + review + gate` naming **one** of them still rejects —
+    the unnamed review is unconsumed and the gate's verdict makes two.
+  - [ ] Body of `review + gate` where the gate names a step that is **not** in
+    the body still rejects (the reference is unresolvable, so nothing is
+    consumed).
+  - [ ] The target shape without `commit_each_iteration` is rejected; with it,
+    accepted; a phase-bodied loop (which commits on its own) satisfies the
+    commit-source requirement.
+  - [ ] Success: all pass; existing loop-validation tests unchanged.
+  - [ ] **Commit Part C.** `ruff format`, then commit from the project root —
+    `fix: count unconsumed verdicts in loop body validation`.
 
 ---
 
 **Continued in `305-tasks.findings-addressed-gate-2.md`** — Part D
 (deterministic screens), Part E (judge over the residue), Part F (gate evidence
-artifact), and Part G (integration, documentation, close-out), tasks T12–T30.
+artifact), and Part G (integration, documentation, close-out), tasks T12–T31.
