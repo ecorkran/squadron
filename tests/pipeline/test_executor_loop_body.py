@@ -739,6 +739,217 @@ async def test_commit_each_iteration_invokes_commit_per_round() -> None:
     assert any(ar.action_type == "commit" for ar in result.step_results[0].action_results)
 
 
+# ---------------------------------------------------------------------------
+# Slice 305 Part A — loop-body evidence plumbing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_inner_step_verdict_lands_in_step_outputs_every_iteration() -> None:
+    """An inner review step named `fresh-review` publishes its verdict-bearing
+    result into step_outputs under that name, on every iteration.
+
+    step_outputs is a gate's only mechanism for resolving review_from /
+    judge_from, and the top-level walk never sees inner steps — without this
+    a gate inside a loop resolves nothing and emits UNKNOWN every round.
+    """
+    seen_step_outputs: list[dict[str, ActionResult]] = []
+
+    review_results = [
+        ActionResult(success=True, action_type="review", outputs={}, verdict="CONCERNS"),
+        ActionResult(success=True, action_type="review", outputs={}, verdict="PASS"),
+    ]
+    review_action = _mock_action(review_results)
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        seen_step_outputs.append(dict(ctx.step_outputs))
+        return ActionResult(success=True, action_type="emit", outputs={})
+
+    capture_action = MagicMock()
+    capture_action.execute = AsyncMock(side_effect=_capture)
+
+    register_step_type("_lb_so_review", _mock_step_type([("review", {})]))
+    register_step_type("_lb_so_capture", _mock_step_type([("emit", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "step-outputs-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_so_review": {"name": "fresh-review"}},
+                        {"_lb_so_capture": {"name": "observer"}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action, "emit": capture_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert len(seen_step_outputs) == 2
+    assert [so["fresh-review"].verdict for so in seen_step_outputs] == ["CONCERNS", "PASS"]
+
+
+@pytest.mark.asyncio
+async def test_inner_step_without_verdict_creates_no_step_outputs_entry() -> None:
+    """An inner step whose results carry no verdict is not published into
+    step_outputs — the entry is absent, not present-and-empty."""
+    seen_step_outputs: list[dict[str, ActionResult]] = []
+
+    dispatch_action = _mock_action([ActionResult(success=True, action_type="dispatch", outputs={})])
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        seen_step_outputs.append(dict(ctx.step_outputs))
+        return ActionResult(success=True, action_type="review", outputs={}, verdict="PASS")
+
+    review_action = MagicMock()
+    review_action.execute = AsyncMock(side_effect=_capture)
+
+    register_step_type("_lb_so_noverdict_dispatch", _mock_step_type([("dispatch", {})]))
+    register_step_type("_lb_so_noverdict_review", _mock_step_type([("review", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "no-verdict-loop",
+                {
+                    "max": 2,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_so_noverdict_dispatch": {"name": "implement"}},
+                        {"_lb_so_noverdict_review": {"name": "fresh-review"}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": dispatch_action, "review": review_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert len(seen_step_outputs) == 1
+    assert "implement" not in seen_step_outputs[0]
+
+
+@pytest.mark.asyncio
+async def test_prior_iteration_step_outputs_carries_the_previous_round() -> None:
+    """Iteration 1 sees an empty prior_iteration_step_outputs; iteration 2 sees
+    iteration 1's entries with iteration 1's findings — not its own round's.
+
+    The gate sits late in the body, where running_prior's positional keys have
+    already been overwritten by the current round, so this is the only view of
+    the prior round available to it.
+    """
+    seen_prior: list[dict[str, ActionResult]] = []
+
+    review_results = [
+        ActionResult(
+            success=True,
+            action_type="review",
+            outputs={},
+            verdict="CONCERNS",
+            findings=[{"id": "F001", "severity": "CONCERN", "summary": "round-1 finding"}],
+        ),
+        ActionResult(
+            success=True,
+            action_type="review",
+            outputs={},
+            verdict="PASS",
+            findings=[{"id": "F002", "severity": "NOTE", "summary": "round-2 finding"}],
+        ),
+    ]
+    review_action = _mock_action(review_results)
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        seen_prior.append(dict(ctx.prior_iteration_step_outputs))
+        return ActionResult(success=True, action_type="gate", outputs={})
+
+    gate_action = MagicMock()
+    gate_action.execute = AsyncMock(side_effect=_capture)
+
+    register_step_type("_lb_prior_review", _mock_step_type([("review", {})]))
+    register_step_type("_lb_prior_gate", _mock_step_type([("gate", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "prior-iteration-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [
+                        {"_lb_prior_review": {"name": "fresh-review"}},
+                        {"_lb_prior_gate": {"name": "settled"}},
+                    ],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action, "gate": gate_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert len(seen_prior) == 2
+
+    iteration_1_prior, iteration_2_prior = seen_prior
+    assert iteration_1_prior == {}
+
+    round_1_review = iteration_2_prior["fresh-review"]
+    assert round_1_review.verdict == "CONCERNS"
+    round_1_finding = cast(dict[str, object], round_1_review.findings[0])
+    assert round_1_finding["summary"] == "round-1 finding"
+
+
+@pytest.mark.asyncio
+async def test_step_outside_a_loop_sees_empty_prior_iteration_step_outputs() -> None:
+    """The empty dict is the no-prior-iteration sentinel outside loops too."""
+    seen_prior: list[dict[str, ActionResult]] = []
+
+    async def _capture(ctx: ActionContext) -> ActionResult:
+        seen_prior.append(dict(ctx.prior_iteration_step_outputs))
+        return ActionResult(success=True, action_type="gate", outputs={})
+
+    gate_action = MagicMock()
+    gate_action.execute = AsyncMock(side_effect=_capture)
+
+    register_step_type("_top_level_gate_prior", _mock_step_type([("gate", {})]))
+
+    pipeline = _pipeline([StepConfig(step_type="_top_level_gate_prior", name="settled", config={})])
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"gate": gate_action},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert seen_prior == [{}]
+
+
 @pytest.mark.asyncio
 async def test_commit_each_iteration_absent_never_invokes_commit() -> None:
     """Absent commit_each_iteration — existing loops are unaffected; commit
