@@ -91,6 +91,12 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
    - **Risk Level:** Medium (the one place the additive principle has a real edge; carries a conditional 140 dependency).
    - **Relative Effort:** 3/5
 
+6. [ ] **(305) Findings-Addressed Gate Policy** — First use of the `VALID_GATE_POLICIES` extension seam 304 declared: a second gate policy, `findings-addressed`, that answers "were the prior round's findings actually addressed?" inside a loop. Moved here from the maintenance initiative (was slice 912, entry 10 in `900-slices`) on its own design review's F001 — it is a capability, and this initiative owns the seam. Deterministic screens run first (round 1 → annotated `PASS`; byte-identical round via `committed: False` → `FAIL`, zero tokens; exact-match recurring findings → `unaddressed`); a judge — the LLM-as-a-judge *role*, consulted inside gate execution, never a node type — settles only the residue, emitting per-prior-finding statuses (`addressed`/`unaddressed`/`moved`+successor/`disputed`) from which the addressed-leg verdict is derived by rule (301's derived-not-declared discipline), then reduced with the clean-eyes review leg via 304's `reduce_verdicts`. The clean-eyes review stays structurally blind to prior rounds (anti-anchoring as a typing rule); evidence persists as a `gate-evidence` artifact outside the `*-review.*` namespace so metrology's judge discovery never ingests it. Also refines 910 Part B's loop guard to count *unconsumed* verdicts, making dispatch + review + gate a valid loop body. Consumes 911's per-iteration commits and `revision_number:` as evidence, and 910's accumulated per-iteration `prior_outputs`.
+   - **Slice design:** `user/slices/305-slice.findings-addressed-gate.md` (design complete 20260802; slice review resolved same day)
+   - **Dependencies:** [911, 910, 304] (911/910 are maintenance-initiative slices — cross-initiative dependency, normal)
+   - **Risk Level:** Medium (judge status quality on the genuinely unmeasurable residue; mitigated by fail-closed derivation and contradiction checks)
+   - **Relative Effort:** 3/5
+
 ---
 
 ## Notes

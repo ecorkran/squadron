@@ -4,7 +4,7 @@ slice: loop-iteration-versioning-and-review-evidence
 project: squadron
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [910]
-interfaces: [912]
+interfaces: [305]
 dateCreated: 20260731
 dateUpdated: 20260801
 status: complete
@@ -27,7 +27,9 @@ round regenerates or accumulates.
 **Part D is not in this slice.** The slice plan scoped a fourth part — whether
 review notes carry forward and whether a reviewer may see the prior version —
 and flagged it as needing a design conversation rather than a design document.
-It is carved out to **slice 912**, which this slice enables: a "were the prior
+It is carved out to **slice 912** (renumbered **305** under initiative 300,
+20260802 — prose below keeps the historical number), which this slice
+enables: a "were the prior
 findings addressed?" check is only answerable once there is a prior round to
 diff against, which is exactly what Part A creates.
 

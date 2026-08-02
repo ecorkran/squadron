@@ -2,7 +2,7 @@
 docType: slice-design
 slice: findings-addressed-gate
 project: squadron
-parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
+parent: project-documents/user/architecture/300-slices.eval-actions-llm-as-judge-scoring.md
 dependencies: [911, 910, 304]
 interfaces: []
 dateCreated: 20260802
@@ -19,10 +19,21 @@ Slice 911 made a loop iteration *legible* — per-round commits, a
 the round-over-round question *answerable inside the pipeline*: were the prior
 round's findings actually addressed?
 
-The slice plan scoped this as "Review Evidence — Prior-Version Access and
-Findings-Addressed Check" and required a design conversation before Phase 4.
-That conversation (20260801–20260802) reframed the problem. The plan entry's
-candidate resolution — a second, history-aware reviewer alongside the
+**Initiative home (20260802).** Originally scoped as slice 912 under the
+maintenance initiative (900), whose slice plan entry 10 required a design
+conversation before Phase 4. The design review (F001) flagged that 900's
+scope explicitly excludes new capabilities, and this slice is one: the first
+use of the `VALID_GATE_POLICIES` seam that slice 304 declared. Renumbered to
+**305 under initiative 300** (eval-actions / LLM-as-judge) — the initiative
+that declared the seam and whose Future Work already tracked the adjacent
+gaps. 900's entry 10 remains as a pointer preserving the design-conversation
+record. This is a compromise, not a full cleanup: fixed cleanly, other
+judge-adjacent maintenance work might also move, but those slices have code,
+commits, and closed issues — renumbering is only cheap before implementation
+starts, which is true of this slice alone.
+
+The design conversation (20260801–20260802) reframed the problem. The plan
+entry's candidate resolution — a second, history-aware reviewer alongside the
 clean-eyes review — survives in spirit but not in shape: the
 findings-addressed check is not a reviewer. It is a **gate policy**.
 
@@ -116,7 +127,7 @@ measured.
 | 911 | Per-iteration commits (the diff evidence) and `revision_number:` (names the round). Commit SHAs ride in the commit action's outputs. |
 | 910 | Accumulated per-iteration `prior_outputs` — the prior round's review `ActionResult` (verdict *and* `findings`) is available in-process; no git archaeology needed for findings. |
 | 304 | Gate composition — `reduce_verdicts`, `step_outputs` resolution, checkpoint expansion. Reused unchanged. |
-| 301 | Judge enforcement discipline — the derived-not-declared precedent this policy's derivation rule follows. |
+| 301 | Judge enforcement discipline — the derived-not-declared precedent this policy's derivation rule follows. **Precedent-only**, not a mechanical dependency, hence absent from frontmatter `dependencies:` (design review F006). |
 
 ## Architecture
 
@@ -161,10 +172,27 @@ Evidence in hand before any model call:
 fresh leg alone. Explicit, never silent — and never `UNKNOWN`, which would
 fail a legitimate first round closed forever.
 
-**Screen 1 — byte-identical round.** Empty round diff (the symptom 910 fixed,
-here made load-bearing): nothing was addressed by definition. Every prior
-CONCERN+ finding is `unaddressed`; addressed-leg verdict `FAIL`; zero judge
-tokens spent.
+**Screen 1 — byte-identical round.** Nothing was addressed by definition:
+every prior CONCERN+ finding is `unaddressed`; addressed-leg verdict `FAIL`;
+zero judge tokens spent. Detected **without git**: 911's `CommitAction`
+already reports `committed: False` on a clean tree, and that output is in
+`prior_outputs` — a missing round-N SHA is not an unknown state, it *is* this
+screen's signal (the symptom 910 fixed, here made load-bearing).
+
+**Git-path failure disposition** (design review F002 — enumerated, not
+implicit):
+
+- `findings-addressed` on a loop without per-round commits (neither
+  `commit_each_iteration` nor a committing body): **validation-time
+  rejection** with an actionable message. The policy's evidence source is
+  absent by configuration; that is knowable at load time and must never
+  surface as a runtime verdict.
+- Missing round-N commit at runtime: `committed: False` → Screen 1 `FAIL`,
+  per above.
+- Git subprocess failure (SHA unresolvable after history rewrite, repo in an
+  unexpected state on resume): the diff evidence genuinely cannot be
+  computed → addressed-leg `UNKNOWN` with a WARNING naming the failed
+  command. This is the only git failure that earns `UNKNOWN`.
 
 **Screen 2 — mechanical finding matching, conservative.** A prior finding
 recurring in the fresh set at the same `location` + `category` is
@@ -172,7 +200,12 @@ recurring in the fresh set at the same `location` + `category` is
 Matching is deliberately narrow: with 911 Part C's clean-regeneration
 contract, line numbers shift wholesale between rounds, so fuzzy matching
 would manufacture false resolutions. Anything not exactly matched falls
-through to the judge, not to `addressed`.
+through to the judge, not to `addressed`. **`unverified` locations are
+excluded from match keys** (design review F005): 904 normalizes all
+unknown locations to that one token, so two unrelated findings sharing a
+category would exact-match on it, and a false `unaddressed` traps the loop
+until exhaustion. `unverified`-located findings route to the judge instead —
+conservatism preserved, trap removed.
 
 **Judge — residue only.** For prior CONCERN+ findings not settled by the
 screens, the judge receives: the finding, the round diff, and the fresh
@@ -180,7 +213,12 @@ findings list. It emits one status per finding from a closed set:
 
 - `addressed` — the change substantively resolves it
 - `unaddressed` — no responsive change
-- `moved` — resolved at its location but the issue relocated
+- `moved` — resolved at its location but the issue relocated; **must name
+  its successor** (`successor=<fresh-finding-id>`). The gate verifies the
+  named finding exists in the fresh set; `moved` with a missing or
+  unverifiable successor downgrades to `disputed` with a WARNING (design
+  review F004) — an unverifiable relocation claim is an uncertainty, not a
+  pass.
 - `disputed` — the judge cannot render a status it would defend
 
 **Contradiction check.** A judge status of `addressed` for a finding whose
@@ -206,26 +244,55 @@ the round SHAs — the audit record the slice title promises.
 ### Judge invocation mechanics
 
 The judge call happens *inside* gate execution — it is not a step, so loop
-verdict accounting is untouched. It reuses the review transport
-(`review_client`) with a new bundled template `judge.findings-addressed`
-whose output shape is one finding per prior finding: `category:` carries the
-prior finding id, severity encodes the status (`PASS`=addressed,
-`NOTE`=moved, `CONCERN`=unaddressed, `FAIL`=disputed). This rides the entire
-existing parse/persist machinery — no new parser, and the judge's evidence
-persists as a review file alongside the round's other artifacts, entering the
-next iteration commit for free. The severity↔status mapping is defined once
-in the new module and referenced everywhere (no scattered comparison values).
+verdict accounting is untouched. It reuses the review **transport only**
+(`review_client` provider dispatch) with a new bundled template
+`judge.findings-addressed`; review-file persistence is disabled for this
+call.
+
+An earlier draft encoded statuses as review severities and persisted the
+judge's output through the review machinery. The design review (F003) caught
+this as a hidden cross-consumer contract — and a live one: metrology's
+`discover_judge_results` globs `*-review.*` and keeps anything whose
+`reviewType` maps to an `is_judge` template, so findings-addressed evidence
+(no score, severities meaning status codes) would be swept into the 320
+calibration sample set. Structurally it also violated this design's own
+principle 5: decider evidence dressed in assessor vocabulary. Dropped.
+
+Instead the judge emits one status line per prior finding
+(`<finding-id>: <status>[ successor=<fresh-finding-id>]`), parsed by a small
+dedicated parser over the closed status set — the "no new parser" saving was
+~20 lines and not worth the aliasing. The status enum and its parse tokens
+are defined once in the new module.
+
+### Gate evidence artifact
+
+The gate persists **one evidence artifact per decision** — this is the
+"review evidence" the original slice title promised:
+
+- Filename pattern distinct from reviews (e.g.
+  `{index}-gate.{policy}.{name}-r{revision}.md`) — deliberately **never**
+  matching the `*-review.*` glob, so every existing and future review-file
+  consumer excludes it by construction rather than by filtering.
+- `docType: gate-evidence` frontmatter (provenance-distinct, consistent with
+  304's `composed` provenance precedent), carrying: per-finding statuses and
+  the screen that settled each, both leg verdicts, the round SHAs, revision
+  numbers, and judge model/template when consulted.
+- Written before the iteration's commit, so it enters the round's commit
+  alongside the artifact and the fresh review — the audit trail assembles in
+  git for free.
+
+Gate `ActionResult.metadata` carries the same record in-process.
 
 ### Files touched
 
 | File | Change |
 |---|---|
 | `pipeline/actions/gate.py` | Policy registry entry; dispatch to policy module; `most-severe` path unchanged |
-| `pipeline/actions/findings_addressed.py` (new) | Status enum + severity mapping, screens, matcher, judge invocation, contradiction check, derivation rule |
+| `pipeline/actions/findings_addressed.py` (new) | Status enum + parse tokens, status-line parser, screens, matcher, judge invocation (transport-only), contradiction check, derivation rule, gate-evidence persistence |
 | `pipeline/steps/gate.py` | Policy-dependent validation (`judge_from` required/forbidden by policy; `judge:` block shape) |
-| `pipeline/loader.py` | `_validate_gate_references` fields resolved per policy |
+| `pipeline/loader.py` | `_validate_gate_references` fields resolved per policy; reject `findings-addressed` in a loop with no per-round commit source |
 | `pipeline/steps/loop.py` | `_validate_verdict_count` → unconsumed-verdict rule |
-| `data/templates/judge-findings-addressed.yaml` (new) | Judge template: closed status set, derived-not-declared instructions, `location:` discipline per 904 |
+| `data/templates/judge-findings-addressed.yaml` (new) | Judge template: one status line per prior finding from the closed set, derived-not-declared instructions |
 | `data/pipelines/` | One example pipeline demonstrating the target loop shape |
 
 ## Technical Decisions
@@ -261,6 +328,17 @@ in the new module and referenced everywhere (no scattered comparison values).
    "I cannot defend a status" token routes uncertainty to `UNKNOWN` →
    checkpoint, instead of laundering it into a confident status
    (same reasoning as 904's `unverified` location token).
+8. **`UNKNOWN` discipline.** `UNKNOWN` is reserved for exactly one meaning:
+   *the check could not run, and the system stops* (escalates via
+   checkpoint; post-901 it fails closed and dominates reduction). It is
+   never the disposition for a condition whose right action is knowable —
+   config errors resolve at validation time, known runtime states resolve to
+   their known verdicts (`committed: False` → Screen 1 `FAIL`, round 1 →
+   annotated `PASS`). Mapping a known state to `UNKNOWN` would be doing
+   something without knowing the right action and tagging the result; every
+   `UNKNOWN` this policy can emit (judge transport failure, unparseable
+   judge output, `disputed`, unresolvable SHA) is instead a *refusal to
+   proceed* handed to a human.
 
 ## Success Criteria
 
@@ -279,6 +357,14 @@ in the new module and referenced everywhere (no scattered comparison values).
       with a WARNING (contradiction check observable).
 - [ ] Judge transport failure → addressed-leg `UNKNOWN` → gate `UNKNOWN` →
       `on-concerns` checkpoint fires (fail-closed path end-to-end).
+- [ ] `findings-addressed` on a loop with no per-round commit source is
+      rejected at validation time, never at runtime.
+- [ ] `moved` without a verifiable successor downgrades to `disputed` with a
+      WARNING.
+- [ ] `unverified`-located prior findings are never settled by Screen 2.
+- [ ] Gate-evidence artifact filename never matches `*-review.*`;
+      `discover_judge_results` over a reviews dir containing one returns it
+      in no sample set.
 - [ ] Gate metadata carries per-finding statuses, settling screen, leg
       verdicts, and round SHAs.
 - [ ] Example pipeline runs the target loop shape end-to-end.
