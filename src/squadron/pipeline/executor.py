@@ -22,6 +22,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from squadron.documents.frontmatter import FrontmatterError, read_frontmatter, update_frontmatter
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
@@ -213,6 +214,63 @@ def _dispatch_artifact_post_condition_error(
     )
 
 
+def _stamp_revision_number(
+    *,
+    kind: ArtifactKind,
+    slice_param: object,
+    cf_client: CfClientProtocol,
+    cwd: str,
+) -> None:
+    """Stamp a monotonic ``revision_number`` onto each artifact this dispatch
+    just wrote, called only after the artifact post-condition has passed.
+
+    Value rule: absent or non-int prior value -> 1; present int n -> n + 1.
+    It counts squadron stamps, not the loop iteration. A failed evidence
+    stamp must not fail a converging loop, so any parse/write failure is
+    logged at WARNING (naming the path and reason) and swallowed.
+    """
+    if slice_param is None:
+        return
+    try:
+        slice_index = int(str(slice_param))
+    except ValueError:
+        return
+    try:
+        paths = _expected_artifact_paths(kind, slice_index, cf_client)
+    except Exception as exc:
+        # cf_client is duck-typed (CfClientProtocol); any implementation can
+        # raise its own error type here, not just ValueError/TypeError. The
+        # contract above is unconditional — every resolution failure must be
+        # swallowed and logged, not just the two types the built-in CF client
+        # happens to raise.
+        _logger.warning(
+            "revision_number stamp: could not resolve %s artifact path for slice %s: %s",
+            kind.value,
+            slice_index,
+            exc,
+        )
+        return
+
+    if not paths:
+        _logger.warning(
+            "revision_number stamp: no %s artifact path registered for slice %s",
+            kind.value,
+            slice_index,
+        )
+        return
+
+    base_dir = Path(cwd) if cwd else Path(".")
+    for rel_path in paths:
+        full_path = base_dir / rel_path
+        try:
+            existing = read_frontmatter(full_path)
+            prior = existing.get("revision_number") if existing is not None else None
+            next_value = prior + 1 if isinstance(prior, int) else 1
+            update_frontmatter(full_path, {"revision_number": next_value})
+        except (FrontmatterError, OSError) as exc:
+            _logger.warning("revision_number stamp failed for %s: %s", full_path, exc)
+
+
 # ---------------------------------------------------------------------------
 # Result types and exceptions
 # ---------------------------------------------------------------------------
@@ -381,6 +439,7 @@ class LoopConfig:
     until: LoopCondition | None = None
     on_exhaust: ExhaustBehavior = ExhaustBehavior.FAIL
     strategy: str | None = None
+    commit_each_iteration: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -527,6 +586,7 @@ def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
         until=until,
         on_exhaust=on_exhaust,
         strategy=strategy if isinstance(strategy, str) else None,
+        commit_each_iteration=loop_dict.get("commit_each_iteration") is True,
     )
 
 
@@ -1053,6 +1113,7 @@ async def _execute_step_once(
             cwd=cwd,
             sdk_session=sdk_session,
             step_outputs=step_outputs if step_outputs is not None else {},
+            iteration=iteration,
         )
 
         action_impl = get_action_fn(action_type)
@@ -1079,6 +1140,13 @@ async def _execute_step_once(
             if artifact_error is not None:
                 result.success = False
                 result.error = artifact_error
+            elif ctx.iteration >= 1:
+                _stamp_revision_number(
+                    kind=expected_kind,
+                    slice_param=ctx.params.get("slice"),
+                    cf_client=cf_client,
+                    cwd=cwd,
+                )
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"
@@ -1343,6 +1411,33 @@ async def _execute_loop_body(
                     iteration=iteration,
                 )
             # FAILED is transient — continue executing remaining inner steps
+
+        # commit_each_iteration (Part A2, #44): append one commit action
+        # after the body's inner steps for this iteration, before the
+        # until: check, so a dispatch-bodied loop also leaves per-round
+        # history. Validation (LoopStepType) already rejects this option
+        # when the body itself commits, so no double-commit is possible here.
+        if loop_config.commit_each_iteration:
+            commit_ctx = ActionContext(
+                pipeline_name=pipeline_name,
+                run_id=run_id,
+                params={"message_prefix": f"loop-{step.name}"},
+                step_name=step.name,
+                step_index=step_index,
+                prior_outputs=running_prior,
+                resolver=resolver,
+                cf_client=cf_client,
+                cwd=cwd,
+                sdk_session=sdk_session,
+                step_outputs=step_outputs if step_outputs is not None else {},
+                iteration=iteration,
+            )
+            commit_result = await get_action_fn("commit").execute(commit_ctx)
+            iteration_action_results.append(commit_result)
+            # Same key scheme as the inner-step loop above; len(inner_steps)
+            # is one past the last real inner_step_index, so it can't collide.
+            commit_key = f"{len(inner_steps)}-{commit_result.action_type}-0"
+            running_prior[commit_key] = commit_result
 
         # Evaluate until condition after all inner steps complete
         if loop_config.until is not None:

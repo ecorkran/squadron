@@ -177,6 +177,22 @@ class TestFormatReviewMarkdown:
         assert data["verdict"] == "CONCERNS"
 
 
+class TestFormatReviewMarkdownRevisionNumber:
+    """Slice 911 Part B — revision_number is emitted only when supplied."""
+
+    def test_omitted_when_not_supplied(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+        assert "revision_number" not in data
+
+    def test_present_with_supplied_value(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", _make_slice_info(), revision_number=2)
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["revision_number"] == 2
+
+
 class TestFormatReviewMarkdownScore:
     """Numeric scoring foundation (slice 300): frontmatter score/criteria."""
 

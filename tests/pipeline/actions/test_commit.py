@@ -47,7 +47,7 @@ def git_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _make_context(cwd: str, **params: object) -> ActionContext:
+def _make_context(cwd: str, *, iteration: int = 0, **params: object) -> ActionContext:
     return ActionContext(
         pipeline_name="test-pipeline",
         run_id="run-001",
@@ -58,6 +58,7 @@ def _make_context(cwd: str, **params: object) -> ActionContext:
         resolver=MagicMock(),
         cf_client=MagicMock(),
         cwd=cwd,
+        iteration=iteration,
     )
 
 
@@ -164,3 +165,61 @@ async def test_git_failure_returns_error(action: CommitAction, tmp_path: Path) -
 
     assert result.success is False
     assert result.error is not None
+
+
+@pytest.mark.asyncio
+async def test_composed_message_gains_iteration_suffix(action: CommitAction, git_repo: Path) -> None:
+    (git_repo / "file.txt").write_text("data")
+    ctx = _make_context(str(git_repo), iteration=2)
+
+    result = await action.execute(ctx)
+
+    assert result.outputs["message"] == "chore: commit-step for test-pipeline (iteration 2)"
+
+
+@pytest.mark.asyncio
+async def test_composed_message_unchanged_outside_loop(action: CommitAction, git_repo: Path) -> None:
+    (git_repo / "file.txt").write_text("data")
+    ctx = _make_context(str(git_repo), iteration=0)
+
+    result = await action.execute(ctx)
+
+    assert result.outputs["message"] == "chore: commit-step for test-pipeline"
+
+
+@pytest.mark.asyncio
+async def test_explicit_message_not_suffixed(action: CommitAction, git_repo: Path) -> None:
+    (git_repo / "file.txt").write_text("data")
+    ctx = _make_context(str(git_repo), iteration=2, message="feat: explicit message")
+
+    result = await action.execute(ctx)
+
+    assert result.outputs["message"] == "feat: explicit message"
+
+
+@pytest.mark.asyncio
+async def test_no_changes_inside_loop_logs_warning(
+    action: CommitAction, git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ctx = _make_context(str(git_repo), iteration=2)
+
+    with caplog.at_level("WARNING"):
+        result = await action.execute(ctx)
+
+    assert result.success is True
+    assert result.outputs["committed"] is False
+    assert any("iteration 2" in rec.message and "no changes" in rec.message for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_no_changes_outside_loop_no_warning(
+    action: CommitAction, git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ctx = _make_context(str(git_repo), iteration=0)
+
+    with caplog.at_level("WARNING"):
+        result = await action.execute(ctx)
+
+    assert result.success is True
+    assert result.outputs["committed"] is False
+    assert not any("byte-identical" in rec.message for rec in caplog.records)

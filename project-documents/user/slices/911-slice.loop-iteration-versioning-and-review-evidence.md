@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: [910]
 interfaces: [912]
 dateCreated: 20260731
-dateUpdated: 20260731
-status: not_started
+dateUpdated: 20260801
+status: complete
 ---
 
 # Slice Design: Loop Iteration Versioning and Review Evidence
@@ -467,48 +467,96 @@ double-commit rule, and the `revision_number:` contract from Part C.
 
 ### Verification Walkthrough
 
-*Draft — to be corrected against real output during Phase 6, as 910's was.*
+*Corrected against real output during Phase 6 (implementation branch
+`911-slice.loop-iteration-versioning-and-review-evidence`).*
 
-**1. The new option is visible before spending model calls.**
-
-```bash
-sq run --dry-run p45b 911
-```
-
-Expect the loop block from 910 Part C, now including a `commit_each_iteration`
-line.
-
-**2. Validation rejects the double-commit.** Create a throwaway pipeline whose
-loop body is a phase step and which sets `commit_each_iteration: true`, then:
+**1. The new option is visible before spending model calls.** `p45b.yaml`
+itself is phase-bodied and does not set `commit_each_iteration` (it must not —
+see step 2), so it does not render the new line. Confirmed instead with a
+throwaway loop that does set it:
 
 ```bash
-sq run --validate <fixture-name>
+sq run --dry-run <fixture>.yaml
 ```
 
-Expect a validation error naming the inner step and explaining that phase steps
-already commit each iteration. Delete the fixture afterward.
+Reproduced output:
 
-**3. A dispatch-bodied loop now leaves history.** Add
-`commit_each_iteration: true` to a copy of `test-loop.yaml`, run it, then:
+```
+Steps:
+  loop-0 (loop)
+    max: 2, until: review.pass, on_exhaust: skip, commit_each_iteration: true
+    dispatch-0 (dispatch)
+    review-1 (review)
+```
+
+`p45b.yaml` on its own still dry-runs unchanged
+(`sq run --dry-run p45b 911` — verified against the real pipeline at
+`~/.config/squadron/pipelines/p45b.yaml`), confirming the option is additive
+and does not disturb an existing phase-bodied loop.
+
+**2. Validation rejects the double-commit.** A throwaway pipeline whose loop
+body is a phase step and which sets `commit_each_iteration: true`:
+
+```bash
+sq run --validate <fixture>.yaml
+```
+
+Reproduced output:
+
+```
+Validation errors for 'double-commit-fixture':
+  commit_each_iteration: loop body already commits via design-0 (phase steps
+commit each iteration automatically) — remove 'commit_each_iteration' from the
+loop config
+```
+
+Matches the design: the offending step is named and the fix is stated. Fixture
+deleted after the check.
+
+**3. A dispatch-bodied loop now leaves history.** `commit_each_iteration: true`
+on a `[dispatch, review]` body (`test-loop.yaml`'s shape), run from a standard
+terminal (`sq run`'s SDK mode refuses to execute nested inside a Claude Code
+session — this is an intentional recursion guard, not specific to this slice):
 
 ```bash
 git log --oneline -5
 ```
 
-Expect one commit per iteration, each naming its iteration number — not three
-identical subject lines.
+Expect one commit per iteration, each message
+`chore: loop-{step name} (iteration N)` — not identical subject lines.
 
 **4. The artifact says which round it is.** Run a phase-bodied loop that takes
 more than one round, then read the head of the design file CF reports for the
-slice. Expect `revision_number:` in the frontmatter with a value matching the number of
-rounds squadron stamped.
+slice. Expect `revision_number:` in the frontmatter with a value matching the
+number of rounds squadron stamped. Covered end-to-end by automated tests
+(`tests/pipeline/test_executor.py::TestRevisionNumberStamping`, 7 cases
+including absent → 1, existing int → n+1, existing non-int → 1) rather than a
+separate live CF-backed run, since reproducing it live requires a full Context
+Forge slice-plan/tasks setup beyond a throwaway fixture.
 
 **5. Round-over-round diff — the thing #44 asked for.**
 
-```bash
-git log --oneline -- <artifact path>
-git diff HEAD~1 HEAD -- <artifact path>
-```
+Attempted live in a disposable scratch repo with a dispatch-bodied
+`commit_each_iteration: true` loop (`loop-smoke.yaml`). Mechanically this
+confirmed the feature: each invocation of the pipeline produced one commit per
+iteration with a distinguishable message (`chore: loop-{name} (iteration N)`),
+and `git log --oneline -- <path>` / `git diff HEAD~1 HEAD -- <path>` against
+the file the loop touched showed the expected non-empty round-over-round diff.
+(Two commits both read "iteration 1" on first inspection — traced to two
+separate invocations of `sq run loop-smoke` 28 seconds apart, confirmed via
+their distinct `run_id`s in `~/.config/squadron/runs/`, not a defect: each
+un-resumed run numbers its own iterations from 1.)
+
+The specific fixture used had an unrelated flaw — its dispatch prompt asked
+the model to write a throwaway `calc.py`, but the coding agent went off-task
+and copied this repo's own `CLAUDE.md`/`.claude/` scaffolding into the scratch
+project instead. That's a smoke-test-prompt problem, not a squadron defect;
+tracked separately rather than re-run to convergence here (see project
+DEVLOG). Round-over-round diffing itself — the mechanism, not this one
+fixture's prompt — is otherwise covered by
+`tests/pipeline/test_executor_loop_body.py` (per-iteration commit dispatch)
+and `tests/pipeline/actions/test_commit.py` (message formatting), which assert
+the same invariant without depending on a specific model's task-following.
 
 Expect a non-empty diff between consecutive rounds. An empty diff, paired with
 the Part A WARNING in the run log, is the honest report that the round did

@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+
+_logger = logging.getLogger(__name__)
+
+# Appended to a composed (not explicit) commit message when running inside a
+# loop iteration, so consecutive rounds leave distinguishable git history.
+_ITERATION_SUFFIX_FORMAT = " (iteration {n})"
 
 
 class CommitAction:
@@ -35,6 +42,16 @@ class CommitAction:
             )
 
         if not status.stdout.strip():
+            if context.iteration >= 1:
+                # #42 symptom made observable: a round that produced
+                # byte-identical output — the retry did not change anything.
+                _logger.warning(
+                    "commit: iteration %d of pipeline=%s step=%s produced no "
+                    "changes — the round was byte-identical to the prior one",
+                    context.iteration,
+                    context.pipeline_name,
+                    context.step_name,
+                )
             return ActionResult(
                 success=True,
                 action_type=self.action_type,
@@ -60,7 +77,8 @@ class CommitAction:
                 error=stderr,
             )
 
-        # Build commit message
+        # Build commit message. An explicit `message:` param is a caller
+        # contract, not a template — it is used verbatim and never suffixed.
         message = context.params.get("message")
         if not message:
             commit_type = context.params.get("type", "chore")
@@ -73,6 +91,8 @@ class CommitAction:
                     message = f"{commit_type}: {prefix}"
             else:
                 message = f"{commit_type}: {context.step_name} for {context.pipeline_name}"
+            if context.iteration >= 1:
+                message = f"{message}{_ITERATION_SUFFIX_FORMAT.format(n=context.iteration)}"
         message = str(message)
 
         # Commit

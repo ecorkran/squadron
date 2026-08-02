@@ -279,6 +279,7 @@ Both named steps must appear **earlier** in the pipeline than the `gate` step �
 | `max` | int | yes | The bound — maximum number of iterations. Always explicit; there is no unbounded form |
 | `until` | string | no | Exit condition, evaluated after each iteration completes: `review.pass`, `review.concerns_or_better`, `action.success` |
 | `on_exhaust` | string | no | What happens if `max` is reached without `until` passing: `fail` (mark the step FAILED, default), `checkpoint` (pause for a human), `skip` |
+| `commit_each_iteration` | bool | no | Commit after each iteration's body completes, before `until:` is evaluated. Default `false`. Rejected at validation time if the body already commits — see [`commit_each_iteration` and per-round history](#commit_each_iteration-and-per-round-history) |
 | `steps` | list | yes | Body — an ordered list of step definitions, using any registered step type except `loop` itself |
 
 **Post-test semantics:** `until` is evaluated only *after* an iteration's body finishes, against that iteration's own results — never before the first iteration runs. A `loop` cannot use a pre-loop check to skip iteration 1.
@@ -397,9 +398,35 @@ When a loop exhausts, the step's result carries the last iteration's judge revie
 
 The recommended body is **fix-first** — `[dispatch, review]`, no pre-loop judge. The executor's loop is post-test (see [`loop`](#loop)): `until` is evaluated only after an iteration's body completes. A judge placed *before* the loop is purely informational — it cannot short-circuit iteration 1, because the loop hasn't started evaluating its exit condition yet. Don't design a judge-gated cycle expecting a pre-loop check to skip the first pass.
 
-### Constraint: no per-iteration commit
+### `commit_each_iteration` and per-round history
 
-`commit` is an action emitted by phase steps, not a registered step type — it cannot appear as a bare step inside a loop body. A judge-gated cycle's body is `[dispatch, review]` only. If you need to persist each iteration, commit *after* the loop completes (e.g. a phase step or a standalone `commit`-emitting step following the loop), not inside it.
+`commit` is an action emitted by phase steps, not a registered step type — it cannot appear as a bare step inside a loop body. A judge-gated cycle's body is `[dispatch, review]` only.
+
+- **Phase-shaped body** (`design`, `tasks`, `implement`): the phase step already commits once per iteration automatically, as the last action in its expansion. Do not also set `commit_each_iteration: true` on such a loop — validation rejects it, naming the offending step, because it would attempt to commit twice per round.
+- **Non-phase body** (e.g. `[dispatch, review]`, the judge-gated-cycle convention): commits nothing by default. Set `commit_each_iteration: true` to have squadron commit once after each iteration's body completes, before the `until:` check — this gives a dispatch-bodied loop the same per-round git history a phase-bodied loop already has.
+
+Each loop-appended commit's message is `chore: loop-{step name} (iteration N)`, so consecutive rounds are distinguishable in `git log` rather than emitting byte-identical subject lines. A round that changes nothing still no-ops at the git level (nothing to commit), but squadron logs a WARNING naming the pipeline, step, and iteration — a byte-identical round is now observable in the run log, not silent. `--dry-run` shows `commit_each_iteration` on the loop's summary line when set.
+
+Staging is unscoped (`git add -A`) — the same behavior a phase-emitted commit already has. Pipeline runs assume a clean working tree; an unrelated in-progress change in the working tree gets swept into the round's commit.
+
+### `revision_number:` — per-round artifact provenance
+
+Squadron stamps a plain integer `revision_number:` into the frontmatter of the artifact a loop-iteration dispatch produces (the design or tasks file), and onto the review file it authors itself, immediately after confirming the dispatch actually wrote that artifact this run.
+
+| Question | Answer |
+|---|---|
+| What does it count? | The number of times **squadron** has stamped this file. Nothing else. |
+| Who writes it? | Squadron's loop-iteration stamping path, only — never a hand-edit, never the dispatched agent. |
+| Is it semver? | No. Not major/minor/patch, no ordering relationship to any release, no compatibility meaning. |
+| Is it the loop's iteration index? | No. It counts revisions of the document, not position in a loop — three rounds in one run then two in a later run gives `5`, not `2`. |
+| What does absent mean? | "Never stamped by squadron." Explicitly **not** round 1 — readers must treat absent as *no information*, not a default. |
+| Which docTypes? | `slice-design` and `tasks` (the artifacts a phase-step dispatch produces), plus `review` (which squadron authors itself). Undefined elsewhere. |
+| Can it decrease or reset? | No. Monotonic per file. A file that has lost its `revision_number:` has been hand-edited, not reset. |
+| What is it for? | Naming a round so a reader can say which revision they are looking at. It is an identifier for display and diff-labeling — nothing should branch on its value. |
+
+### Clean regeneration — what survives a round
+
+Each loop iteration regenerates the artifact from the phase prompt. `revision_number:` is the only thing squadron carries across a round — content does not accumulate, and no round-specific scaffolding is injected into the document. Round-over-round history lives in git (via `commit_each_iteration` or a phase step's own commit), not inside the file itself.
 
 ### `each` fan-out caveat
 

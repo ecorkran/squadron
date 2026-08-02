@@ -488,6 +488,48 @@ class TestReviewPersistence:
         assert result.success is True
         assert "review_file" not in result.outputs
 
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_review_file_carries_revision_number_inside_loop(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        await ReviewAction().execute(_make_context(iteration=2))
+
+        assert mock_format.call_args.kwargs["revision_number"] == 2
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_review_file_omits_revision_number_outside_loop(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        await ReviewAction().execute(_make_context())  # iteration defaults to 0
+
+        assert mock_format.call_args.kwargs["revision_number"] is None
+
 
 # ---------------------------------------------------------------------------
 # Execute — error handling

@@ -15,8 +15,12 @@ from unittest.mock import patch
 
 import pytest
 
-from squadron.metrology.errors import MetrologyIdentityError
-from squadron.metrology.identity import derive_project_id, normalize_remote_url
+from squadron.metrology.errors import MetrologyIdentityError, MetrologyTargetError
+from squadron.metrology.identity import (
+    derive_project_id,
+    normalize_remote_url,
+    read_review_frontmatter,
+)
 from squadron.metrology.models import ProjectIdSource
 
 
@@ -107,3 +111,48 @@ class TestDeriveProjectId:
         ):
             with pytest.raises(MetrologyIdentityError):
                 derive_project_id(str(repo_no_remote))
+
+
+class TestReadReviewFrontmatter:
+    """Direct coverage of read_review_frontmatter's own failure shapes, now
+    that its parse delegates to documents.frontmatter.read_frontmatter
+    (slice 911 Part B). Required-judge-field validation is a downstream
+    concern tested in test_result_ref.py::TestResultRefFailures and is not
+    duplicated here.
+    """
+
+    def test_missing_file_raises(self, tmp_path: Path) -> None:
+        missing = tmp_path / "nope.md"
+        with pytest.raises(MetrologyTargetError) as exc:
+            read_review_frontmatter(missing)
+        assert "nope.md" in str(exc.value)
+
+    def test_no_frontmatter_block_raises(self, tmp_path: Path) -> None:
+        review_file = tmp_path / "review.md"
+        review_file.write_text("# Just a heading\n\nno frontmatter", encoding="utf-8")
+        with pytest.raises(MetrologyTargetError):
+            read_review_frontmatter(review_file)
+
+    def test_unclosed_block_raises(self, tmp_path: Path) -> None:
+        review_file = tmp_path / "review.md"
+        review_file.write_text("---\ndocType: review\nno closing fence\n", encoding="utf-8")
+        with pytest.raises(MetrologyTargetError):
+            read_review_frontmatter(review_file)
+
+    def test_invalid_yaml_raises(self, tmp_path: Path) -> None:
+        review_file = tmp_path / "review.md"
+        review_file.write_text("---\ndocType: [unclosed\n---\nbody\n", encoding="utf-8")
+        with pytest.raises(MetrologyTargetError):
+            read_review_frontmatter(review_file)
+
+    def test_non_mapping_block_raises(self, tmp_path: Path) -> None:
+        review_file = tmp_path / "review.md"
+        review_file.write_text("---\njust a scalar string\n---\nbody\n", encoding="utf-8")
+        with pytest.raises(MetrologyTargetError):
+            read_review_frontmatter(review_file)
+
+    def test_valid_frontmatter_returns_dict(self, tmp_path: Path) -> None:
+        review_file = tmp_path / "review.md"
+        review_file.write_text("---\ndocType: review\nverdict: PASS\n---\nbody\n", encoding="utf-8")
+        result = read_review_frontmatter(review_file)
+        assert result == {"docType": "review", "verdict": "PASS"}

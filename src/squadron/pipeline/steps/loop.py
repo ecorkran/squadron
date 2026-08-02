@@ -14,6 +14,7 @@ from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_t
 from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _VERDICT_BEARING_ACTION_TYPES = frozenset({"review", "gate"})
+_COMMIT_ACTION_TYPE = "commit"
 
 
 class LoopStepType:
@@ -85,6 +86,18 @@ class LoopStepType:
                 )
             )
 
+        # commit_each_iteration: optional, must be a bool (0/1 rejected —
+        # bool is a subclass of int, but that is not what's accepted here)
+        commit_each_iteration_val = cfg.get("commit_each_iteration")
+        if commit_each_iteration_val is not None and not isinstance(commit_each_iteration_val, bool):
+            errors.append(
+                ValidationError(
+                    field="commit_each_iteration",
+                    message="'commit_each_iteration' must be a boolean",
+                    action_type=step_type,
+                )
+            )
+
         # steps: required, non-empty list
         steps_val = cfg.get("steps")
         if steps_val is None:
@@ -115,6 +128,10 @@ class LoopStepType:
             errors.extend(self._validate_inner_steps(cast(list[object], steps_val), step_type))
             if until_val is not None:
                 errors.extend(self._validate_verdict_count(cast(list[object], steps_val), step_type))
+            if commit_each_iteration_val is True:
+                errors.extend(
+                    self._validate_commit_each_iteration(cast(list[object], steps_val), step_type)
+                )
 
         return errors
 
@@ -162,6 +179,32 @@ class LoopStepType:
                 )
         return errors
 
+    def _walk_valid_inner_action_types(
+        self,
+        steps: list[object],
+    ) -> list[tuple[StepConfig, list[str]]]:
+        """Return ``(inner_step, action_types)`` for each inner step that
+        passes its own ``validate()``.
+
+        Shared by ``_validate_verdict_count`` and
+        ``_validate_commit_each_iteration``. An inner step that fails its own
+        validate() may not have the fields expand() requires (e.g. review:
+        with no template:) — ``_validate_inner_steps`` already reports shape
+        errors for it, so it is skipped here rather than letting expand()
+        raise on an incomplete config it was never guaranteed to receive.
+        """
+        raw_dicts = [cast(dict[str, object], s) for s in steps if isinstance(s, dict)]
+        inner_configs = unpack_inner_steps(raw_dicts)
+
+        results: list[tuple[StepConfig, list[str]]] = []
+        for inner in inner_configs:
+            step_impl = get_step_type(inner.step_type)
+            if step_impl.validate(inner):
+                continue
+            action_types = [action_type for action_type, _action_config in step_impl.expand(inner)]
+            results.append((inner, action_types))
+        return results
+
     def _validate_verdict_count(
         self,
         steps: list[object],
@@ -174,26 +217,12 @@ class LoopStepType:
         the body. Two or more makes that gating ambiguous, so this is
         rejected at validation time rather than resolved at runtime.
         """
-        raw_dicts = [cast(dict[str, object], s) for s in steps if isinstance(s, dict)]
-        inner_configs = unpack_inner_steps(raw_dicts)
-
         offending_names: list[str] = []
         verdict_count = 0
-        for inner in inner_configs:
-            step_impl = get_step_type(inner.step_type)
-            # An inner step that fails its own validate() may not have the
-            # fields expand() requires (e.g. review: with no template:).
-            # _validate_inner_steps (above) already reports shape errors for
-            # this inner step; skip it here rather than let expand() raise
-            # on an incomplete config it was never guaranteed to receive.
-            if step_impl.validate(inner):
-                continue
-            inner_has_verdict = False
-            for action_type, _action_config in step_impl.expand(inner):
-                if action_type in _VERDICT_BEARING_ACTION_TYPES:
-                    verdict_count += 1
-                    inner_has_verdict = True
-            if inner_has_verdict:
+        for inner, action_types in self._walk_valid_inner_action_types(steps):
+            inner_verdict_count = sum(1 for a in action_types if a in _VERDICT_BEARING_ACTION_TYPES)
+            if inner_verdict_count:
+                verdict_count += inner_verdict_count
                 offending_names.append(inner.name)
 
         if verdict_count > 1:
@@ -206,6 +235,34 @@ class LoopStepType:
                         f"makes 'until:' ambiguous, since only the last "
                         f"verdict-bearing action gates the loop. Split into "
                         f"sequential loops, one review/gate per loop body."
+                    ),
+                    action_type=step_type,
+                )
+            ]
+        return []
+
+    def _validate_commit_each_iteration(
+        self,
+        steps: list[object],
+        step_type: str,
+    ) -> list[ValidationError]:
+        """Reject ``commit_each_iteration: true`` when the body already
+        commits (a phase-shaped inner step commits on every iteration
+        unconditionally), which would otherwise commit twice per round.
+        """
+        offending_names = [
+            inner.name
+            for inner, action_types in self._walk_valid_inner_action_types(steps)
+            if _COMMIT_ACTION_TYPE in action_types
+        ]
+        if offending_names:
+            return [
+                ValidationError(
+                    field="commit_each_iteration",
+                    message=(
+                        f"loop body already commits via {', '.join(offending_names)} "
+                        f"(phase steps commit each iteration automatically) — "
+                        f"remove 'commit_each_iteration' from the loop config"
                     ),
                     action_type=step_type,
                 )

@@ -213,3 +213,70 @@ def test_one_verdict_step_with_until_no_error() -> None:
         )
     )
     assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# commit_each_iteration validation (slice 911 Part A2)
+# ---------------------------------------------------------------------------
+
+
+def test_commit_each_iteration_not_bool_produces_error() -> None:
+    errors = _make().validate(
+        _step({"max": 3, "commit_each_iteration": "yes", "steps": [{"review": {}}]})
+    )
+    assert "commit_each_iteration" in _fields(errors)
+
+
+def test_commit_each_iteration_rejects_int_zero_or_one() -> None:
+    """bool is a subclass of int, but a bare 0/1 literal must still be rejected."""
+    errors = _make().validate(_step({"max": 3, "commit_each_iteration": 1, "steps": [{"review": {}}]}))
+    assert "commit_each_iteration" in _fields(errors)
+
+
+def test_commit_each_iteration_true_with_phase_step_produces_error() -> None:
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "commit_each_iteration": True,
+                "steps": [{"design": {"phase": 4, "model": "opus"}}],
+            }
+        )
+    )
+    assert "commit_each_iteration" in _fields(errors)
+    assert any("already commits" in m and "design" in m for m in _messages(errors))
+
+
+def test_commit_each_iteration_true_with_dispatch_review_body_no_error() -> None:
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "commit_each_iteration": True,
+                "steps": [{"dispatch": {}}, {"review": {}}],
+            }
+        )
+    )
+    assert errors == []
+
+
+def test_commit_each_iteration_absent_no_error() -> None:
+    """Default false — existing loop pipelines are unaffected."""
+    errors = _make().validate(_step({"max": 3, "steps": [{"design": {"phase": 4, "model": "opus"}}]}))
+    assert errors == []
+
+
+def test_commit_each_iteration_true_skips_malformed_inner_step() -> None:
+    """Regression guard: an inner step with an incomplete config (failing its
+    own validate()) must not crash the commit-detection walk via expand()'s
+    KeyError on 'phase' (see LoopStepType._walk_valid_inner_action_types)."""
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "commit_each_iteration": True,
+                "steps": [{"design": {}}],  # missing required "phase"
+            }
+        )
+    )
+    assert "commit_each_iteration" not in _fields(errors)
