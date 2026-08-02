@@ -62,6 +62,14 @@ class ActionContext:
     step_outputs: dict[str, ActionResult] = field(default_factory=dict[str, ActionResult])
     # 0 = not executing inside a loop; >= 1 is the 1-based loop iteration index.
     iteration: int = 0
+    # The previous loop iteration's step_outputs, scoped to the loop body's own
+    # inner steps. An EMPTY dict is the sentinel for "no prior iteration": it is
+    # what every step outside a loop sees, and what iteration 1 sees. Kept
+    # separate from step_outputs (which carries the current round) so a policy
+    # comparing rounds cannot accidentally read its own round's evidence.
+    prior_iteration_step_outputs: dict[str, ActionResult] = field(
+        default_factory=dict[str, ActionResult]
+    )
 
 
 @dataclass

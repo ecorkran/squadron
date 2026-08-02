@@ -7,7 +7,7 @@ dependencies: [911, 910, 304]
 interfaces: []
 dateCreated: 20260802
 dateUpdated: 20260802
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Findings-Addressed Gate Policy
@@ -354,36 +354,146 @@ Gate `ActionResult.metadata` carries the same record in-process.
 
 ## Success Criteria
 
-- [ ] `most-severe` gates behave byte-identically to pre-slice (regression
+Each item names the test that holds it, verified 20260802 on branch
+`305-slice.findings-addressed-gate`.
+
+- [x] `most-severe` gates behave byte-identically to pre-slice (regression
       suite green, no config changes required for existing pipelines).
-- [ ] Loop body dispatch + review + findings-addressed gate validates and
+      — `test_gate_action.py`, `test_gate_reduce.py`, `test_gate_executor.py`,
+      `test_gate_step.py` pass unmodified; `compose-gate-example` and
+      `judge-cycle` still validate.
+- [x] Loop body dispatch + review + findings-addressed gate validates and
       runs; `until:` reads the gate's verdict.
-- [ ] Two reviews with no gate still rejected by loop validation (910 Part B
-      preserved).
-- [ ] Byte-identical round produces addressed-leg `FAIL` with zero judge
+      — `test_loop_validation.py::test_target_shape_validates_clean`,
+      `test_findings_addressed_e2e.py::test_three_rounds_screen0_then_fail_then_pass`.
+- [x] Two reviews with no gate still rejected by loop validation (910 Part B
+      preserved). — `test_loop_with_two_reviews_and_until_fails_full_pipeline_validation`
+      (unedited) and `test_two_reviews_with_gate_naming_one_still_rejects`.
+- [x] Byte-identical round produces addressed-leg `FAIL` with zero judge
       invocations (asserted via transport spy).
-- [ ] Round 1 produces `no_prior_round` metadata + INFO log, never `UNKNOWN`.
-- [ ] Recurring exact-match finding settles as `unaddressed` without a judge
-      call.
-- [ ] Judge `addressed` over an untouched region downgrades to `disputed`
+      — `test_findings_addressed.py::test_screen_1_marks_every_prior_finding_unaddressed`
+      and `test_findings_addressed_e2e.py::test_byte_identical_round_fails_without_consulting_the_judge`.
+- [x] Round 1 produces `no_prior_round` metadata + INFO log, never `UNKNOWN`.
+      — `test_screen_0_passes_with_annotation_never_unknown`; the e2e test
+      asserts `noPriorRound: true` on the round-1 artifact.
+- [x] Recurring exact-match finding settles as `unaddressed` without a judge
+      call. — `test_screen_2_settles_a_recurring_exact_match`.
+- [x] Judge `addressed` over an untouched region downgrades to `disputed`
       with a WARNING (contradiction check observable).
-- [ ] Judge transport failure → addressed-leg `UNKNOWN` → gate `UNKNOWN` →
-      `on-concerns` checkpoint fires (fail-closed path end-to-end).
-- [ ] `findings-addressed` on a loop with no per-round commit source is
+      — `test_findings_addressed_judge.py::test_addressed_over_untouched_path_downgrades`.
+- [x] Judge transport failure → addressed-leg `UNKNOWN` → gate `UNKNOWN` →
+      checkpoint fires (fail-closed path end-to-end).
+      — `test_judge_failure_fails_closed_and_the_checkpoint_pauses`. **Caveat:**
+      that test uses `checkpoint: on-fail` rather than `on-concerns` — an
+      `on-concerns` checkpoint fires on round 1's own CONCERNS verdict, before
+      the judge is ever consulted. `UNKNOWN` fires both triggers, which is the
+      property under test. The test asserts the *pause*, not a resumed loop
+      (issue #48).
+- [x] `findings-addressed` on a loop with no per-round commit source is
       rejected at validation time, never at runtime.
-- [ ] `moved` without a verifiable successor downgrades to `disputed` with a
-      WARNING.
-- [ ] `unverified`-located prior findings are never settled by Screen 2.
-- [ ] Gate-evidence artifact filename never matches `*-review.*`;
+      — `test_findings_addressed_without_commit_source_rejects`.
+- [x] `moved` without a verifiable successor downgrades to `disputed` with a
+      WARNING. — `test_moved_with_absent_successor_downgrades`,
+      `test_moved_without_any_successor_downgrades`.
+- [x] `unverified`-located prior findings are never settled by Screen 2.
+      — `test_unverified_locations_never_settle_in_screen_2`.
+- [x] Gate-evidence artifact filename never matches `*-review.*`;
       `discover_judge_results` over a reviews dir containing one returns it
-      in no sample set.
-- [ ] Gate metadata carries per-finding statuses, settling screen, leg
+      in no sample set. — `test_filename_never_matches_the_review_glob` and
+      `tests/metrology/test_capture_discovery.py::test_gate_evidence_artifact_is_never_a_judge_result`.
+- [x] Gate metadata carries per-finding statuses, settling screen, leg
       verdicts, the **prior** round's SHA, and `revision_number`. Round N's own
       SHA is deliberately absent and not recordable: the evidence artifact is
       written before the commit that contains it, so it cannot carry that
       commit's identity (reconciled during Phase 5 breakdown; round N's commit
       is discoverable from git as the commit containing the artifact).
-- [ ] Example pipeline runs the target loop shape end-to-end.
+      — `test_metadata_and_artifact_carry_the_same_record`; the e2e test asserts
+      `revision_number` and a non-null `prior_round_sha` on the final round.
+- [x] Example pipeline runs the target loop shape end-to-end.
+      — `findings-addressed-cycle` validates and dry-runs; the e2e tests run
+      the same shape over a real git repository.
+
+## Verification Walkthrough
+
+Every command below was run on 20260802 from the project root on branch
+`305-slice.findings-addressed-gate`. Output shown is the actual output.
+
+**1. The example pipeline loads and validates.**
+
+```bash
+uv run sq run findings-addressed-cycle 305 --validate
+```
+
+```
+Pipeline 'findings-addressed-cycle' is valid.
+```
+
+**2. The expanded shape puts the gate last.**
+
+```bash
+uv run sq run findings-addressed-cycle 305 --dry-run
+```
+
+```
+Steps:
+  loop-0 (loop)
+    max: 3, until: review.pass, on_exhaust: None, commit_each_iteration: true
+    revise (dispatch)
+    fresh-review (review)
+    settled (gate)
+```
+
+Caveat: `--dry-run` lists a loop body's *steps*, not the actions each expands
+to, so the `gate` + `checkpoint` action pair is not visible here. That
+expansion is asserted in `test_gate_step.py::TestGateExpandPerPolicy`.
+
+**3. The policy's own suites.**
+
+```bash
+uv run pytest tests/pipeline/test_findings_addressed.py \
+  tests/pipeline/test_findings_addressed_judge.py \
+  tests/pipeline/test_findings_addressed_evidence.py \
+  tests/pipeline/test_findings_addressed_e2e.py -q
+```
+
+```
+50 passed in 1.40s
+```
+
+**4. Config-surface and loop validation.**
+
+```bash
+uv run pytest tests/pipeline/test_loop_validation.py tests/pipeline/test_gate_step.py -q
+```
+
+```
+38 passed in 0.04s
+```
+
+**5. Full suite, lint, and strict typecheck — the merge bar.**
+
+```bash
+uv run ruff check src tests && uv run pyright && uv run pytest tests/ -q
+```
+
+```
+All checks passed!
+0 errors, 0 warnings, 0 informations
+2824 passed, 2 skipped, 3 warnings in 445.69s (0:07:25)
+```
+
+**6. Rejection paths, by hand.** Removing `commit_each_iteration: true` from
+the example pipeline's loop and re-running `--validate` fails at load time
+naming the policy and the fix; adding `judge_from:` to the gate fails naming
+the policy and the field. Both are pinned by tests
+(`test_findings_addressed_without_commit_source_rejects`,
+`test_judge_from_is_rejected_naming_policy_and_field`) rather than requiring a
+manual edit to reproduce.
+
+**Not verified here:** no real model was called at any point. Every test stubs
+the judge transport, and no run in this walkthrough spends tokens. The judge
+leg's *behavior* is covered; the judge's *quality* is the acknowledged future
+work (reviewer error rate, initiative 320).
 
 ## Risk Assessment
 

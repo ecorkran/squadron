@@ -244,18 +244,26 @@ steps:
 
 ### `gate`
 
-**Purpose:** Reduce a named judge result and review result to one verdict, then optionally gate on it. See [Composing a judge and a review at one gate](#composing-a-judge-and-a-review-at-one-gate).
+**Purpose:** Decide one verdict from named prior results, then optionally gate on it. The gate is *where* a decision happens; a judge — a model rendering judgment — is *who* a policy may consult to make it. See [Composing a judge and a review at one gate](#composing-a-judge-and-a-review-at-one-gate) and [Requiring that findings were addressed](#requiring-that-findings-were-addressed).
 
 **Fields:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `judge_from` | string | yes | Name of a prior `review` step whose result is the judge leg |
+| `policy` | string | no | How the gate decides: `most-severe` (default) or `findings-addressed` |
+| `judge_from` | string | policy-dependent | Name of a prior `review` step whose result is the judge leg |
 | `review_from` | string | yes | Name of a prior `review` step whose result is the review leg |
-| `policy` | string | no | Reduction policy; only `most-severe` exists today |
+| `judge` | mapping | no | Model layer for policies that have one — `model:` only |
 | `checkpoint` | string | no | Same triggers as phase/`review` steps — fires on the *reduced* verdict |
 
-Both named steps must appear **earlier** in the pipeline than the `gate` step — the loader validates this at load time and fails fast on a misspelled or forward reference.
+Which reference fields apply depends on the policy, and the wrong one is an error rather than an ignored key:
+
+| Policy | Requires | Forbids | `judge:` block |
+|---|---|---|---|
+| `most-severe` | `judge_from`, `review_from` | — | rejected — no model layer |
+| `findings-addressed` | `review_from` | `judge_from` | accepted |
+
+Named steps must appear **earlier** than the `gate` step. At the top level the loader validates this at load time; inside a loop body the loop step type does, since the loader does not descend into bodies. Either way a misspelled or forward reference fails fast rather than degrading to a runtime `UNKNOWN`.
 
 **Example:**
 
@@ -364,7 +372,7 @@ Item fields are accessed as dotted references: `{slice.index}`, `{slice.title}`,
 
 ## Judge-Gated Cycles
 
-**The convention:** a bounded `loop` whose body is `[dispatch, review]` — fix, then re-review — gated by a `judge.*` template's score-derived verdict, with `until: review.pass` and `on_exhaust: checkpoint`:
+**The convention:** a bounded `loop` whose body is `[dispatch, review]` — fix, then re-review — gated by a `judge.*` template's score-derived verdict, with `until: review.pass` and `on_exhaust: checkpoint`. When the exit condition needs more than a fresh verdict, the body becomes `[dispatch, review, gate]` — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed).
 
 | Element | Role |
 |---|---|
@@ -400,7 +408,7 @@ The recommended body is **fix-first** — `[dispatch, review]`, no pre-loop judg
 
 ### `commit_each_iteration` and per-round history
 
-`commit` is an action emitted by phase steps, not a registered step type — it cannot appear as a bare step inside a loop body. A judge-gated cycle's body is `[dispatch, review]` only.
+`commit` is an action emitted by phase steps, not a registered step type — it cannot appear as a bare step inside a loop body. A judge-gated cycle's body is `[dispatch, review]`, or `[dispatch, review, gate]` when the decision is a gate's (see [Requiring that findings were addressed](#requiring-that-findings-were-addressed)).
 
 - **Phase-shaped body** (`design`, `tasks`, `implement`): the phase step already commits once per iteration automatically, as the last action in its expansion. Do not also set `commit_each_iteration: true` on such a loop — validation rejects it, naming the offending step, because it would attempt to commit twice per round.
 - **Non-phase body** (e.g. `[dispatch, review]`, the judge-gated-cycle convention): commits nothing by default. Set `commit_each_iteration: true` to have squadron commit once after each iteration's body completes, before the `until:` check — this gives a dispatch-bodied loop the same per-round git history a phase-bodied loop already has.
@@ -487,6 +495,52 @@ The gate reduces **exactly two** named sources to **one** verdict, upstream of a
 - You need more than two sources, or N-way composition. The gate is intentionally not generalized past two named legs.
 
 Don't reach for a gate to solve either of these — raise it as a 140 dependency instead.
+
+### Requiring that findings were addressed
+
+`until: review.pass` exits on a fresh verdict alone. A reviewer that simply fails to re-notice a prior concern ends the loop — the work looks done because nobody looked. The `findings-addressed` policy closes that hole: the loop exits only when fresh eyes are satisfied **and** the prior round's CONCERN+ findings are accounted for.
+
+**The shape** (the bundled `findings-addressed-cycle` pipeline):
+
+```yaml
+- loop:
+    max: 3
+    until: review.pass
+    commit_each_iteration: true      # the policy's evidence source
+    steps:
+      - dispatch:
+          name: revise               # producer
+      - review:
+          name: fresh-review         # assessor — blind to prior rounds
+      - gate:
+          name: settled              # decider — sees both rounds
+          review_from: fresh-review
+          policy: findings-addressed
+          judge:
+            model: "{judge-model}"
+          checkpoint: on-concerns
+```
+
+`until:` reads the **gate's** verdict, not the review's: the gate is the last verdict-bearing action in the body, and loop validation counts only *unconsumed* verdicts — a step a gate names is an input to that decision, not a competing answer. Two reviews with no gate is still rejected, for the same reason it always was.
+
+**How the decision is made** — deterministic layers first, a model only for what cannot be measured:
+
+| Layer | Settles | Cost |
+|---|---|---|
+| Screen 0 — no prior round | First iteration: addressed leg `PASS`, annotated `noPriorRound`, never `UNKNOWN` | free |
+| Screen 1 — byte-identical round | The round changed nothing, so every prior finding is `unaddressed`; leg `FAIL` | free |
+| Screen 2 — exact match | A prior finding recurring at the same `location` + `category` is `unaddressed` — the reviewer re-found it | free |
+| Judge | Only the residue the screens could not settle, one status per finding | one model call |
+
+The judge emits `addressed`, `unaddressed`, `moved` (which must name a successor finding), or `disputed`, and nothing else — the outcome is **derived** from those statuses, never taken from the model. A `moved` whose successor is not in the fresh findings, and an `addressed` over a file the round never touched, are downgraded to `disputed` with a WARNING.
+
+**`UNKNOWN` means the check could not run, and the run stops** — it is never the disposition for a state whose right action is knowable. A `findings-addressed` gate in a loop with no per-round commit source is rejected at *validation* time with the fix named, rather than emitting `UNKNOWN` every round. At runtime only three things produce `UNKNOWN`: a git failure that makes the round diff uncomputable, a judge that could not be reached or read, and a `disputed` status. All three reach a human through the checkpoint.
+
+**Cost:** round 1 never consults a judge, byte-identical rounds never consult a judge, and mechanically-settled findings never reach one. The judge's model comes from the `judge:` block, or from the standard cascade — never the dispatch model.
+
+**Evidence artifact.** Every decision writes `{index}-gate.{policy}.{name}-r{revision}.md` into `project-documents/user/reviews/`, carrying `docType: gate-evidence`, the per-finding statuses with the screen that settled each, both leg verdicts, the prior round's SHA, and the judge model when one was consulted. It is written before the round's commit, so it lands in that round's history. The filename deliberately sits outside the `*-review.*` namespace: metrology sweeps that pattern for judge samples, and a gate decision is decider evidence, not an assessment. `ActionResult.metadata` carries the same record in-process.
+
+The prior round's SHA is recorded; round N's own is not, and cannot be — the artifact is written before the commit that contains it. Round N's commit is the one containing the artifact.
 
 ### Gate vs. fan-in: don't confuse the two
 
@@ -595,6 +649,7 @@ sq run --list    # shows all available pipelines with descriptions
 | `design-batch` | Phase 4 for every unfinished slice in a plan | `plan`, `model` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
+| `findings-addressed-cycle` | Fix-review cycle that exits only when fresh eyes pass *and* the prior round's findings were accounted for — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed) | `slice`, `model`, `review-model`, `judge-model` |
 | `P1` | Phase 1 (project vision) with arch review and checkpoint | `slice` |
 | `P2` | Phase 2 (architecture) with arch review and checkpoint | `slice` |
 | `P4` | Phase 4 (slice design) with slice review and checkpoint | `slice`, `model`, `review-model` |

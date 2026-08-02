@@ -90,6 +90,37 @@ class TestDiscoverJudgeResults:
     def test_missing_reviews_directory_returns_empty_list(self, tmp_path: Path) -> None:
         assert discover_judge_results(str(tmp_path)) == []
 
+    def test_gate_evidence_artifact_is_never_a_judge_result(
+        self, tmp_path: Path, write_review_file: Callable[..., Path]
+    ) -> None:
+        """A findings-addressed gate's evidence sits in the reviews directory
+        beside real judge results and must be excluded by its name, not by a
+        filter (slice 305 F003). Written through the real persistence path so
+        a filename-pattern change breaks this test."""
+        from squadron.pipeline.actions.findings_addressed import GateEvidence, save_gate_evidence
+
+        register_template(_make_template("judge.example", is_judge=True))
+        reviews_dir = tmp_path / _REVIEWS_DIR
+        judge_file = write_review_file(
+            reviews_dir,
+            filename="305-review.judge.example.md",
+            review_type="judge.example",
+        )
+        save_gate_evidence(
+            GateEvidence(
+                policy="findings-addressed",
+                reduced_verdict="FAIL",
+                addressed_verdict="FAIL",
+                review_verdict="CONCERNS",
+                revision_number=2,
+            ),
+            step_name="settled",
+            slice_index=305,
+            cwd=str(tmp_path),
+        )
+
+        assert discover_judge_results(str(tmp_path)) == [judge_file]
+
     def test_unresolvable_review_type_skipped(
         self, tmp_path: Path, write_review_file: Callable[..., Path]
     ) -> None:

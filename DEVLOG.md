@@ -12,6 +12,32 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260802 (2)
+
+### Slice 305: Findings-Addressed Gate Policy — Implemented
+
+Phase 6, branch `305-slice.findings-addressed-gate`, seven commits — one per part, each with its own tests green before the next began.
+
+**The two loop-executor defects Phase 5 found are fixed, and the fix stands alone (`59944b6`).** `_execute_loop_body` now writes each inner step's verdict-bearing result into `step_outputs` under its step name, using the same `_last_with_verdict` rule the top-level walk uses — so a gate inside a loop resolves its named legs for *every* policy, including 304's `most-severe`, which had been emitting `UNKNOWN` every round since it shipped. `ActionContext` gained `prior_iteration_step_outputs`, scoped to the loop body's own steps and empty on iteration 1, so a policy comparing rounds cannot read its own round through a positional key that the current iteration has already overwritten. Both changes are additive; the full suite passed unchanged.
+
+**Policy config is now per-policy, from one table.** `GatePolicy` (StrEnum) plus `GATE_POLICY_CONTRACTS` — required fields, forbidden fields, and whether the policy has a model layer — is the single source consumed by `steps/gate.py`, `loader.py`, and `steps/loop.py`. `most-severe` requires both legs and rejects a `judge:` block; `findings-addressed` requires `review_from`, rejects `judge_from`, and accepts `judge: {model:}`. `GateAction` now dispatches to a registered `GatePolicyImplementation` instead of reducing unconditionally; a valid policy with no registered implementation fails closed with an explicit error rather than silently borrowing another policy's answer.
+
+**Loop validation counts unconsumed verdicts.** A step named by a gate in the same body is that gate's input, not a competing answer, so `[dispatch, review, gate]` validates while `[review, review]` still rejects with 910 Part B's original message. Two loop-scoped rejections were added for `findings-addressed`, both at validation time per design decision 8: no per-round commit source (the evidence is absent by configuration), and a `review_from` naming no earlier step in the body (the loader cannot see inside a body, so this is where the reference is resolvable).
+
+**The policy is a package**, not a module — `models`, `screens`, `parsing`, `judge`, `verification`, `evidence`, `policy` — because the single file the design named ran to ~400 lines before the judge leg existed. Layer order: Screen 0 (no prior round → annotated PASS, decided before any git call), Screen 1 (empty working-tree diff against `HEAD` *and* empty `git status --porcelain` → every prior finding unaddressed, leg FAIL), Screen 2 (exact `location`+`category` match, `unverified` locations excluded), then a judge over the residue only. A git failure is the one condition that earns `UNKNOWN`, and the log names the exact failed command.
+
+**Derived, not declared, end to end.** The bundled `judge.findings-addressed` template carries no `judge:` block — deliberately, since `is_judge` derives from it and metrology sweeps `*-review.*` for judge samples. Its output is parsed leniently into per-finding statuses; a finding the judge said nothing about is `disputed`, not dropped. `moved` without a successor present in the fresh findings, and `addressed` over a file the round never touched, are downgraded to `disputed` with a WARNING. The verdict is computed from the surviving statuses with `UNKNOWN` evaluated before `FAIL`, so a check that could not run never reads as a check that ran and failed.
+
+**Evidence artifact:** `{index}-gate.{policy}.{name}-r{revision}.md` under `project-documents/user/reviews/`, `docType: gate-evidence`, written before the round's commit so it lands in that round's history. One `GateEvidence` object backs both the file and `ActionResult.metadata` — the facts are never assembled twice. `discover_judge_results` over a directory containing one returns it in no sample set; that is asserted in `tests/metrology/` against the real discovery function, not against the glob.
+
+**What is recordable, and what is not.** The prior round's SHA (`HEAD` at gate time) plus `revision_number`. Round N's own SHA is not: the artifact is written before the commit that contains it. Round N's commit is discoverable afterwards as the commit containing the artifact.
+
+T28's resume finding is now pinned by a test in `test_state.py`: a paused loop step is appended to `completed_steps` and resume continues past it, so no execution path reaches the gate with a prior round missing — the policy contains no resume branch. Issue #48 (whether a checkpoint-paused loop *should* be re-enterable) is untouched and still open; the fail-closed end-to-end test asserts the pause, not a resumed loop.
+
+End-to-end coverage runs the target shape over a real git repository with only the model call stubbed: round 1 annotated, round 2's recurring finding failing the gate, round 3 judged-addressed and exiting — one transport call across three rounds. Byte-identical rounds and judge-transport failure have their own end-to-end tests.
+
+---
+
 ## 20260802 (1)
 
 ### Slice 305: Findings-Addressed Gate Policy — In Progress

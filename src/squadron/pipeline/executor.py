@@ -1053,6 +1053,7 @@ async def _execute_step_once(
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
+    prior_iteration_step_outputs: dict[str, ActionResult] | None = None,
     runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute a single step's action sequence once. Returns a StepResult."""
@@ -1114,6 +1115,9 @@ async def _execute_step_once(
             sdk_session=sdk_session,
             step_outputs=step_outputs if step_outputs is not None else {},
             iteration=iteration,
+            prior_iteration_step_outputs=(
+                prior_iteration_step_outputs if prior_iteration_step_outputs is not None else {}
+            ),
         )
 
         action_impl = get_action_fn(action_type)
@@ -1369,8 +1373,15 @@ async def _execute_loop_body(
     # entry. Mirrors the step_prior snapshot pattern in _execute_step_once.
     running_prior = dict(prior_outputs)
 
+    # The previous iteration's inner-step outputs, handed down to this
+    # iteration's actions. Scoped to the loop body's own steps — snapshotting
+    # step_outputs wholesale would leak pre-loop steps into what a policy reads
+    # as "the prior round". Empty on iteration 1 (no prior round).
+    prior_iteration_step_outputs: dict[str, ActionResult] = {}
+
     for iteration in range(1, loop_config.max + 1):
         iteration_action_results = []
+        iteration_step_outputs: dict[str, ActionResult] = {}
 
         for inner_step_index, inner_step in enumerate(inner_steps):
             inner_resolved = resolve_placeholders(inner_step.config, merged_params)
@@ -1390,6 +1401,7 @@ async def _execute_loop_body(
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
                 iteration=iteration,
+                prior_iteration_step_outputs=prior_iteration_step_outputs,
                 runs_dir=runs_dir,
             )
             iteration_action_results.extend(inner_result.action_results)
@@ -1401,6 +1413,17 @@ async def _execute_loop_body(
                 key = f"{inner_step_index}-{result.action_type}-{action_index}"
                 running_prior[key] = result
 
+            # Publish the inner step's verdict-bearing result under its step
+            # name, using the same rule the top-level walk uses. The top-level
+            # walk never sees inner steps, so without this a `gate` inside a
+            # loop body cannot resolve review_from/judge_from — step_outputs is
+            # its only resolution mechanism — and emits UNKNOWN every round.
+            inner_verdict_result = _last_with_verdict(inner_result.action_results)
+            if inner_verdict_result is not None:
+                iteration_step_outputs[inner_result.step_name] = inner_verdict_result
+                if step_outputs is not None:
+                    step_outputs[inner_result.step_name] = inner_verdict_result
+
             # Checkpoint pause short-circuits the loop immediately
             if inner_result.status == ExecutionStatus.PAUSED:
                 return StepResult(
@@ -1411,6 +1434,11 @@ async def _execute_loop_body(
                     iteration=iteration,
                 )
             # FAILED is transient — continue executing remaining inner steps
+
+        # This iteration's body outputs become the next iteration's "prior
+        # round". Assigned after the body completes so no step within an
+        # iteration can read its own round through this field.
+        prior_iteration_step_outputs = iteration_step_outputs
 
         # commit_each_iteration (Part A2, #44): append one commit action
         # after the body's inner steps for this iteration, before the
