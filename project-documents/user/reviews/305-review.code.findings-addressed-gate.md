@@ -4,7 +4,7 @@ layer: project
 reviewType: code
 slice: findings-addressed-gate
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 sourceDocument: project-documents/user/slices/305-slice.findings-addressed-gate.md
 aiModel: claude-opus-5
 status: complete
