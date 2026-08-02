@@ -7,7 +7,7 @@ dependencies: [911, 910, 304]
 interfaces: []
 dateCreated: 20260802
 dateUpdated: 20260802
-status: draft
+status: in_progress
 ---
 
 # Slice Design: Findings-Addressed Gate Policy
