@@ -1,12 +1,8 @@
-"""findings-addressed gate policy — did the round address the prior findings?
+"""Vocabulary of the findings-addressed gate policy.
 
-The decision is layered: deterministic screens first (zero tokens), a judge
-only over the residue the screens cannot settle, and a verdict *derived* from
-the per-finding statuses rather than declared by the model.
-
-``UNKNOWN`` here means exactly one thing: the check could not run and the
-system stops. A state whose right action is knowable resolves to that action
-(round 1 → annotated PASS, byte-identical round → FAIL) — never to UNKNOWN.
+The status set, the settling-screen names, and how a finding is read out of a
+review's ``ActionResult`` are defined here, once, and referenced everywhere
+else in the policy.
 """
 
 from __future__ import annotations
