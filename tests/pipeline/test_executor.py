@@ -1218,6 +1218,88 @@ class TestRevisionNumberStamping:
         assert result.status == ExecutionStatus.COMPLETED
         assert any("revision_number stamp failed" in rec.message for rec in caplog.records)
 
+    @pytest.mark.asyncio
+    async def test_cf_client_error_logs_warning_and_dispatch_still_succeeds(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """cf_client is duck-typed (CfClientProtocol) — a real implementation
+        can raise its own error type, not just ValueError/TypeError, when
+        resolving the artifact path for the stamp. That must not fail the
+        dispatch (review F002)."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 217)
+        design_path = tmp_path / "217-slice.stub.md"
+        dispatch_mock = _dispatch_writer(design_path, "---\ndocType: slice-design\n---\n\nbody\n")
+
+        cf_client = self._cf_client(217, "217-slice.stub.md", "217-tasks.stub.md")
+        # First call resolves the artifact post-condition (must succeed so the
+        # dispatch is accepted); second call is the stamp's own resolution,
+        # which raises an error type the built-in CF client actually raises
+        # (ContextForgeError), not ValueError/TypeError.
+        from squadron.integrations.context_forge import ContextForgeError
+
+        good_slices = cf_client.list_slices.return_value
+        cf_client.list_slices.side_effect = [good_slices, ContextForgeError("cf unavailable")]
+
+        with caplog.at_level("WARNING"):
+            result = await execute_pipeline(
+                _loop_design_pipeline({"phase": 4, "model": "opus"}),
+                {"slice": "217"},
+                resolver=MagicMock(),
+                cf_client=cf_client,
+                cwd=str(tmp_path),
+                run_id=run_id,
+                runs_dir=tmp_path,
+                _action_registry=phase_action_registry(dispatch_mock),
+            )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert any("revision_number stamp: could not resolve" in rec.message for rec in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_no_expected_path_logs_warning_and_does_not_stamp(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """`_expected_artifact_paths` resolving to an empty list (no
+        exception) must be observable, not a silent no-op (review F004)."""
+        from squadron.documents.frontmatter import read_frontmatter
+        from squadron.integrations.context_forge import SliceEntry
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 218)
+        design_path = tmp_path / "218-slice.stub.md"
+        dispatch_mock = _dispatch_writer(design_path, "---\ndocType: slice-design\n---\n\nbody\n")
+
+        cf_client = self._cf_client(218, "218-slice.stub.md", "218-tasks.stub.md")
+        # First call (post-condition) sees the real design_file so the
+        # dispatch is accepted; second call (the stamp) sees no design_file
+        # registered at all, so _expected_artifact_paths returns [].
+        good_slices = cf_client.list_slices.return_value
+        empty_slices = [SliceEntry(index=218, name="stub", design_file=None, status="in_progress")]
+        cf_client.list_slices.side_effect = [good_slices, empty_slices]
+
+        with caplog.at_level("WARNING"):
+            result = await execute_pipeline(
+                _loop_design_pipeline({"phase": 4, "model": "opus"}),
+                {"slice": "218"},
+                resolver=MagicMock(),
+                cf_client=cf_client,
+                cwd=str(tmp_path),
+                run_id=run_id,
+                runs_dir=tmp_path,
+                _action_registry=phase_action_registry(dispatch_mock),
+            )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert any(
+            "revision_number stamp: no design artifact path registered" in rec.message
+            for rec in caplog.records
+        )
+        frontmatter = read_frontmatter(design_path)
+        assert frontmatter is not None
+        assert "revision_number" not in frontmatter
+
 
 # ---------------------------------------------------------------------------
 # T6 — Retry loop execution

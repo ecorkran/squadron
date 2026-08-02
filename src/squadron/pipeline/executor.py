@@ -237,12 +237,25 @@ def _stamp_revision_number(
         return
     try:
         paths = _expected_artifact_paths(kind, slice_index, cf_client)
-    except (ValueError, TypeError) as exc:
+    except Exception as exc:
+        # cf_client is duck-typed (CfClientProtocol); any implementation can
+        # raise its own error type here, not just ValueError/TypeError. The
+        # contract above is unconditional — every resolution failure must be
+        # swallowed and logged, not just the two types the built-in CF client
+        # happens to raise.
         _logger.warning(
             "revision_number stamp: could not resolve %s artifact path for slice %s: %s",
             kind.value,
             slice_index,
             exc,
+        )
+        return
+
+    if not paths:
+        _logger.warning(
+            "revision_number stamp: no %s artifact path registered for slice %s",
+            kind.value,
+            slice_index,
         )
         return
 

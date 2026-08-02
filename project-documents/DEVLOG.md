@@ -31,6 +31,19 @@ Internal work log for squadron project development.
 
 **Next:** slice 912 (Review Evidence — Prior-Version Access) needs its own design conversation before Phase 4.
 
+### Slice 911: Loop Iteration Versioning and Review Evidence — Review Resolution
+
+**Verdict CONCERNS**, 5 concerns / 4 pass / 3 note across 13 findings. Verified each concern against the actual code rather than taking the review at face value:
+
+- **F002 (FIXED):** `_stamp_revision_number` caught only `(ValueError, TypeError)` around `_expected_artifact_paths`, but `cf_client` is duck-typed and the real `ContextForgeCLI` raises `ContextForgeError`/`ContextForgeNotAvailable`/`KeyError` on a CF hiccup — none caught. Confirmed this would have propagated uncaught through `_execute_step_once`, violating the function's own "must not fail a converging loop" contract. Widened to `Exception` with a comment tying it to that contract; new test drives the real `ContextForgeError` path via a two-call `side_effect` (post-condition succeeds, stamp call raises).
+- **F004 (FIXED):** confirmed the sibling post-condition function already warns on an empty `_expected_artifact_paths()` result but the stamp function silently no-opped on the same condition. Added the matching WARNING; new test forces an empty-but-non-raising resolution distinct from the post-condition's own call.
+- **F013 (FIXED):** closed by the same fix/test as F002 — the new test exercises the previously-untested non-`FrontmatterError` exception path.
+- **F003 (ACKNOWLEDGED):** the `revision_number` vs. loop-iteration naming tension is the exact tradeoff the design's Field Contract table already decided with the PM — no action.
+- **F001 (ACKNOWLEDGED):** the review's own prose downgrades this to a NOTE; no action.
+- **F005-F012:** pass/note, no action.
+
+Full gate re-run after the fix: 2747 passed / 2 skipped (up from 2745 — the two new regression tests), no regressions. Resolution appended to `911-review.code.loop-iteration-versioning-and-review-evidence.md`.
+
 ## 20260731
 
 ### Slice 910: Loop Convergence Correctness — Slice Design Complete
