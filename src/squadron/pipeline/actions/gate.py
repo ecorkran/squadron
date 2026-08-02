@@ -271,3 +271,14 @@ class GateAction:
 
 register_gate_policy(GatePolicy.MOST_SEVERE, MostSevereGatePolicy())
 register_action(ActionType.GATE, GateAction())
+
+# Imported last, and inside no function: the findings-addressed policy module
+# reads this module's registry API, so it can only be imported once this
+# module is fully defined. Importing the gate action is what guarantees every
+# valid policy has an implementation — the alternative, a bootstrap list
+# elsewhere, lets the two drift apart silently.
+from squadron.pipeline.actions.findings_addressed.policy import (  # noqa: E402
+    register as _register_findings_addressed,
+)
+
+_register_findings_addressed()
