@@ -67,7 +67,18 @@ gate actually executes. Verified on disk; each is a Phase 6 task in **Part A**.
    working-tree diff against `HEAD`, which needs no SHA plumbing and is exactly
    round N's changes.
 
-The corrected mechanism (Part A + Task D3) is strictly simpler than the design's
+**What the correction does and does not settle.** Delta 1 is fully resolved by
+T1 — there is no alternative fix; a gate inside a loop is unimplementable
+without it. Delta 2 is resolved in-process by T2, but **not across a resume**:
+nothing rehydrates the new field from `state.py`, so a run resumed mid-loop
+starts its first post-resume round with no prior round. T27 makes that honest
+(annotated Screen 0, logged) rather than fixed. Delta 3's *mechanism* is
+resolved, but the design's success criterion "gate metadata carries ... the
+round SHAs" is only half-satisfiable: the evidence artifact is written before
+the commit that contains it, so it can never carry that commit's identity. The
+recordable pair is prior SHA + `revision_number` (T14, T24).
+
+The corrected mechanism (Part A + Task T14) is strictly simpler than the design's
 and preserves every stated principle. It does add `pipeline/executor.py` and
 `pipeline/models.py` to the design's "Files touched" table. **Flag this to the
 Project Manager before Part D begins; do not widen it further on your own

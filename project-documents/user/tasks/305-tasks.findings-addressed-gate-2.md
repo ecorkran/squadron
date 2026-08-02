@@ -85,8 +85,19 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Git subprocess failure (non-zero exit, `None` return, unresolvable ref):
     addressed leg `UNKNOWN` with a WARNING naming the exact failed command. This
     is the **only** git condition that earns `UNKNOWN` (design decision 8).
-  - [ ] Record the prior round's commit SHA on the evidence record when it is
-    available for the audit trail, but never make a screen depend on it.
+  - [ ] Record the prior round's commit SHA for the audit trail by resolving
+    `git rev-parse HEAD` at gate time — that ref *is* the prior round's commit.
+    Do **not** read it out of `prior_iteration_step_outputs`: that field carries
+    only verdict-bearing results (T1 populates it via `_last_with_verdict`) and
+    `CommitAction` returns no verdict, so the commit result is never in it. No
+    screen may depend on the SHA either way.
+  - [ ] Round N's own SHA is **not recordable** and must not be attempted. The
+    evidence artifact is written before the commit that contains it, so it
+    cannot carry that commit's identity — the design's "round SHAs" success
+    criterion is satisfiable only for the prior round. Record
+    `revision_number` alongside the prior SHA; round N's commit is discoverable
+    from git as the commit containing this artifact. State this in a comment so
+    a later reader does not try to "complete" the pair.
   - [ ] Success: an unchanged working tree yields `FAIL` with zero transport
     calls; a git failure yields `UNKNOWN` with the command in the log.
 
@@ -254,8 +265,9 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
 
 - [ ] **T24. Gate metadata parity** (effort 1)
   - [ ] The returned `ActionResult.metadata` carries the same record in-process:
-    per-finding statuses, settling screens, both leg verdicts, and the round
-    SHAs. Keep `policy` on metadata as `most-severe` already does
+    per-finding statuses, settling screens, both leg verdicts, the prior round
+    SHA, and `revision_number` — the same pair T14 establishes, not a round-N
+    SHA. Keep `policy` on metadata as `most-severe` already does
     (`actions/gate.py:143-151`).
   - [ ] Success: metadata and the persisted artifact are built from one source
     object — no second assembly of the same facts.
