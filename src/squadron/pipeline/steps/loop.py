@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import cast
 
+from squadron.pipeline.actions.gate import GatePolicy, policy_contract
 from squadron.pipeline.executor import ExhaustBehavior, LoopCondition
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_type
@@ -126,6 +127,9 @@ class LoopStepType:
             )
         else:
             errors.extend(self._validate_inner_steps(cast(list[object], steps_val), step_type))
+            errors.extend(
+                self._validate_findings_addressed_gates(cast(list[object], steps_val), cfg, step_type)
+            )
             if until_val is not None:
                 errors.extend(self._validate_verdict_count(cast(list[object], steps_val), step_type))
             if commit_each_iteration_val is True:
@@ -179,6 +183,97 @@ class LoopStepType:
                 )
         return errors
 
+    def _inner_step_configs(self, steps: list[object]) -> list[StepConfig]:
+        """Unpack the raw body into StepConfigs, preserving body order."""
+        raw_dicts = [cast(dict[str, object], s) for s in steps if isinstance(s, dict)]
+        return unpack_inner_steps(raw_dicts)
+
+    def _gate_reference_names(self, inner: StepConfig) -> list[str]:
+        """Return the step names *inner* consumes as decision inputs.
+
+        Empty for anything that is not a gate step, and for a gate whose
+        policy is unrecognized (GateStepType.validate reports that). The
+        fields are read from the policy's contract — this module does not
+        restate them.
+        """
+        if inner.step_type != StepTypeName.GATE:
+            return []
+        contract = policy_contract(inner.config.get("policy"))
+        if contract is None:
+            return []
+        return [
+            value for field in contract.required if isinstance(value := inner.config.get(field), str)
+        ]
+
+    def _validate_findings_addressed_gates(
+        self,
+        steps: list[object],
+        cfg: dict[str, object],
+        step_type: str,
+    ) -> list[ValidationError]:
+        """Loop-scoped preconditions for a findings-addressed gate in the body.
+
+        Both checks are design decision 8 in force: a config error whose right
+        action is knowable resolves here, at validation time, rather than
+        degrading to a runtime UNKNOWN every round.
+
+        A findings-addressed gate *outside* a loop is not rejected anywhere —
+        that is the legitimate no-prior-round case, which the policy's first
+        screen handles observably. Do not "fix" that by widening this check.
+        """
+        inner_configs = self._inner_step_configs(steps)
+        gate_positions = [
+            index
+            for index, inner in enumerate(inner_configs)
+            if inner.step_type == StepTypeName.GATE
+            and inner.config.get("policy") == GatePolicy.FINDINGS_ADDRESSED
+        ]
+        if not gate_positions:
+            return []
+
+        errors: list[ValidationError] = []
+
+        body_commits = any(
+            _COMMIT_ACTION_TYPE in action_types
+            for _inner, action_types in self._walk_valid_inner_action_types(steps)
+        )
+        if cfg.get("commit_each_iteration") is not True and not body_commits:
+            errors.append(
+                ValidationError(
+                    field="commit_each_iteration",
+                    message=(
+                        f"loop body has a '{GatePolicy.FINDINGS_ADDRESSED}' gate but no "
+                        f"per-round commit source, so the prior round's evidence is "
+                        f"absent by configuration — set 'commit_each_iteration: true' "
+                        f"on the loop, or use a body step that commits each round"
+                    ),
+                    action_type=step_type,
+                )
+            )
+
+        for index in gate_positions:
+            gate = inner_configs[index]
+            earlier_names = {inner.name for inner in inner_configs[:index]}
+            for name in self._gate_reference_names(gate):
+                if "{" in name:
+                    continue  # contains a param placeholder — resolved at runtime
+                if name not in earlier_names:
+                    errors.append(
+                        ValidationError(
+                            field="steps",
+                            message=(
+                                f"gate '{gate.name}' references '{name}', which is not an "
+                                f"earlier step in this loop body. The loader cannot see "
+                                f"inside a loop body, so this is where the reference is "
+                                f"resolvable — an unresolved one would fail closed as "
+                                f"UNKNOWN every round instead of failing at load time."
+                            ),
+                            action_type=step_type,
+                        )
+                    )
+
+        return errors
+
     def _walk_valid_inner_action_types(
         self,
         steps: list[object],
@@ -193,11 +288,8 @@ class LoopStepType:
         errors for it, so it is skipped here rather than letting expand()
         raise on an incomplete config it was never guaranteed to receive.
         """
-        raw_dicts = [cast(dict[str, object], s) for s in steps if isinstance(s, dict)]
-        inner_configs = unpack_inner_steps(raw_dicts)
-
         results: list[tuple[StepConfig, list[str]]] = []
-        for inner in inner_configs:
+        for inner in self._inner_step_configs(steps):
             step_impl = get_step_type(inner.step_type)
             if step_impl.validate(inner):
                 continue
@@ -210,16 +302,28 @@ class LoopStepType:
         steps: list[object],
         step_type: str,
     ) -> list[ValidationError]:
-        """Reject a loop body with more than one verdict-bearing action.
+        """Reject a loop body with more than one *unconsumed* verdict-bearing action.
 
         A verdict-bearing action ("review" or "gate") gates ``until:`` via
         ``_last_with_verdict``, which only looks at the last such action in
         the body. Two or more makes that gating ambiguous, so this is
         rejected at validation time rather than resolved at runtime.
+
+        An inner step named by a gate in the same body is *consumed*: the gate
+        is the decider and that step's verdict is an input to the gate's
+        decision, not a competing answer. ``_last_with_verdict`` lands on the
+        gate by construction, since a gate must follow the steps it names.
         """
+        walked = self._walk_valid_inner_action_types(steps)
+        consumed_names = {
+            name for inner, _action_types in walked for name in self._gate_reference_names(inner)
+        }
+
         offending_names: list[str] = []
         verdict_count = 0
-        for inner, action_types in self._walk_valid_inner_action_types(steps):
+        for inner, action_types in walked:
+            if inner.name in consumed_names:
+                continue
             inner_verdict_count = sum(1 for a in action_types if a in _VERDICT_BEARING_ACTION_TYPES)
             if inner_verdict_count:
                 verdict_count += inner_verdict_count
