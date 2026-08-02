@@ -527,14 +527,18 @@ Don't reach for a gate to solve either of these — raise it as a 140 dependency
 
 | Layer | Settles | Cost |
 |---|---|---|
-| Screen 0 — no prior round | First iteration: addressed leg `PASS`, annotated `noPriorRound`, never `UNKNOWN` | free |
+| Screen 0 — no prior round | First iteration: addressed leg `PASS`, annotated `noPriorRound`. A *later* iteration with no prior result is a different state — see below | free |
 | Screen 1 — byte-identical round | The round changed nothing, so every prior finding is `unaddressed`; leg `FAIL` | free |
 | Screen 2 — exact match | A prior finding recurring at the same `location` + `category` is `unaddressed` — the reviewer re-found it | free |
 | Judge | Only the residue the screens could not settle, one status per finding | one model call |
 
 The judge emits `addressed`, `unaddressed`, `moved` (which must name a successor finding), or `disputed`, and nothing else — the outcome is **derived** from those statuses, never taken from the model. A `moved` whose successor is not in the fresh findings, and an `addressed` over a file the round never touched, are downgraded to `disputed` with a WARNING.
 
-**`UNKNOWN` means the check could not run, and the run stops** — it is never the disposition for a state whose right action is knowable. A `findings-addressed` gate in a loop with no per-round commit source is rejected at *validation* time with the fix named, rather than emitting `UNKNOWN` every round. At runtime only three things produce `UNKNOWN`: a git failure that makes the round diff uncomputable, a judge that could not be reached or read, and a `disputed` status. All three reach a human through the checkpoint.
+**`UNKNOWN` means the check could not run, and the run stops** — it is never the disposition for a state whose right action is knowable. A `findings-addressed` gate in a loop with no per-round commit source is rejected at *validation* time with the fix named, rather than emitting `UNKNOWN` every round. At runtime four things produce `UNKNOWN`: a git failure that makes the round diff uncomputable, a judge that could not be reached or read, a `disputed` status, and a round past the first whose *prior* round produced no verdict at all (its review failed, was skipped, or emitted nothing) — there is no evidence to compare against, which is not the same as a legitimate first round. All four reach a human through the checkpoint.
+
+**Each round sees only its own round.** Inside a loop body, a step name resolves to the steps that ran before the loop plus the steps that have run in *this* iteration — never a previous iteration's result under the same name. A round whose review fails therefore leaves nothing standing for the gate to mistake for this round's evidence, and body step names stop resolving once the loop exits.
+
+**A gate must follow the steps it names.** Any gate inside a loop body — whatever its policy — is rejected at validation time if it names a body step that runs at or after its own position, because `until:` would then gate on that step's raw verdict and the gate's decision would be discarded. A `findings-addressed` gate is held to more: its `review_from` must name a step *in the body*, since the policy compares one round against the previous one and a step outside the body would hand it identical evidence every round.
 
 **Cost:** round 1 never consults a judge, byte-identical rounds never consult a judge, and mechanically-settled findings never reach one. The judge's model comes from the `judge:` block, or from the standard cascade — never the dispatch model.
 

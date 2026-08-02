@@ -57,8 +57,14 @@ sq review tasks 105-tasks.md --against 105-slice.md -v
 Run a code review against the current project.
 
 ```
-sq review code [OPTIONS]
+sq review code [OPTIONS] [SLICE_NUMBER]
 ```
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `SLICE_NUMBER` | int | no* | Slice index to review (e.g. `305`); resolves the slice's own diff |
+
+\* Not required by the parser, but at least one of `SLICE_NUMBER`, `--diff`, or `--files` must be given. Without any of them the review has no code to look at and is rejected rather than run unscoped.
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -66,16 +72,21 @@ sq review code [OPTIONS]
 | `--files` | string | no | — | Glob pattern to scope the review |
 | `--diff` | string | no | — | Git ref to diff against |
 | `--rules` | string | no | config `default_rules` | Path to additional rules file |
+| `--rules-dir` | string | no | — | Rules directory override |
+| `--no-rules` | flag | no | off | Suppress all rule injection |
 | `--model` | string | no | config or template default | Model override (e.g. `opus`, `sonnet`) |
+| `--profile` | string | no | config | Provider profile (`sdk`, `openrouter`, `openai`, `local`, …) |
 | `-v`, `--verbose` | count | no | config or `0` | Verbosity level |
 | `--output` | string | no | `terminal` | Output format |
 | `--output-path` | string | no | — | File path for `--output file` |
+| `--json` | flag | no | off | Output and save as JSON instead of markdown |
+| `--no-save` | flag | no | off | Do not write a review file |
 
 ```bash
-# Review all code in current directory
-sq review code
+# Review a slice's own changes (the common case)
+sq review code 305 -v
 
-# Review changes against main
+# Review changes against an explicit ref
 sq review code --diff main -v
 
 # Review specific files with custom rules
@@ -84,6 +95,10 @@ sq review code --files "src/**/*.py" --rules rules/python.md -vv
 # Output JSON
 sq review code --diff main --output json > review.json
 ```
+
+**How the slice diff is resolved.** With a `SLICE_NUMBER`, squadron finds the slice's merge commit and diffs against a base ref — **`git.integration_branch` from Context Forge when that key is set, otherwise `main`**. If Context Forge is not installed or the key is unset, the base is `main` and everything behaves as before. This matters on repos that promote work through an integration branch: diffing against `main` there returns the whole accumulated band rather than the slice, and a reviewer handed dozens of already-reviewed files will return a confident, meaningless PASS.
+
+**Review files are overwritten in place.** A second `sq review code 305` replaces `project-documents/user/reviews/305-review.code.<slice>.md` with no revision suffix and no prompt. If you have hand-edited that file — a resolution note, an annotation — copy it out before re-running.
 
 ### review list
 

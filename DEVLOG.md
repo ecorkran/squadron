@@ -85,6 +85,30 @@ No code written; no branch created.
 
 ---
 
+## 20260730 (1)
+
+### `/sq:summary --restore <key>` — reaching a specific saved summary (#7)
+
+`--restore` picked the most recent summary by mtime, unconditionally, so once a newer summary was written the older one could not be reached at all — even though the multi-summary picker was already listing it by key. Added an optional `--key` that filters on the same key the picker displays.
+
+Key matching is case-insensitive, so the same argument resolves identically on case-sensitive and case-insensitive filesystems. Key derivation is shared between the picker listing and the filter rather than implemented twice, so the naming rule lives in one place. Bare `--restore` is unchanged — most recent still wins. An unknown key exits 1 and lists what is available; the one behavior deliberately not implemented is falling back to the most recent, which would restore a summary the user did not ask for and give no sign of it.
+
+Closes #7 part (a). Part (b) — interactive runs also writing to the restorable summaries location — remains open in the 140 future-work list.
+
+---
+
+## 20260729 (1)
+
+### `sq review code` computed the diff against the wrong base
+
+`resolve_slice_diff_range` hardcoded `main` as the merge-base ref. On a repo with `git.integration_branch` set — or any repo where earlier band work had already been promoted to main — the three-dot diff returned the entire accumulated band rather than the slice's own changes. The consequence is worse than a noisy diff: the reviewer fanned out over dozens of already-merged, already-reviewed files and converged on PASS, reporting a confident verdict on code that nothing had actually reviewed. A review that examines the wrong input and passes is indistinguishable from one that examined the right input and passed.
+
+Reproduced on a scratch repo before fixing: a slice branch forked from `dev/erik` returns 2 files against `main` (including an unrelated integration-branch commit) and 1 file against `dev/erik`.
+
+`ContextForgeClient.get_config(key)` reads `cf config get <key> --json`; `resolve_diff_base()` resolves `git.integration_branch` and **degrades to `main`** when the key is unset, when cf is absent, or when the read fails — `sq review --diff` has to keep working with no Context Forge installed, so this path never raises. `resolve_slice_diff_range` gained `base=None` (resolve from config) so both existing callers pick up the fix without changing. `_find_merge_commit` searches base first, then main: reachability means a slice merged before the integration branch was adopted is normally still found on base, and the fallback covers the rest.
+
+---
+
 ## 20260728 (5)
 
 **Fixed the new-user install path (#29). Released v0.8.1.**

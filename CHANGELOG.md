@@ -15,13 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 20260802
+
 ### Added
 - **A loop can now require that the prior round's findings were actually addressed, not just that a fresh review passed.** Set `policy: findings-addressed` on a `gate:` step inside the loop body and the round exits only when both hold. Cheap checks run first (a round that changed nothing, or a finding the reviewer re-found at the same place, is settled without a model call); a judge is consulted only for what's left, and only from round 2 on. Every decision writes a gate-evidence file next to the round's review. Try it with the bundled `findings-addressed-cycle` pipeline.
 
 - **A `loop:` step can now commit every iteration.** Set `commit_each_iteration: true` and squadron commits after each round, with a message naming the iteration (`chore: loop-{name} (iteration N)`) — useful for dispatch-then-review loops that previously left zero commit history. A phase-shaped loop, which already commits automatically, rejects the option at validation time rather than committing twice.
 - **Artifacts and review files a loop iteration produces now carry a `revision_number:`.** The design/tasks file a round writes, and the review file squadron authors for it, are stamped with a monotonic revision count so you can tell which round you're looking at. Absent means never stamped by squadron — it is not round 1.
+- **`/sq:summary --restore <key>` can now restore a specific saved summary.** Previously `--restore` always took the most recent one, so an older summary became unreachable as soon as a newer one was written. The key is the one already shown in the picker when several exist; matching is case-insensitive, and an unknown key lists the available ones instead of quietly restoring something you didn't ask for. Bare `--restore` is unchanged.
 
 ### Fixed
+- **`sq review code <N>` reviewed the wrong code on a repo using an integration branch.** The diff was always computed against `main`, so on a repo with `git.integration_branch` set — or any repo where earlier band work had already been promoted — the reviewer received the whole accumulated band instead of the slice's own changes, fanned out over dozens of already-reviewed files, and returned a confident PASS on code nothing had actually reviewed. The diff base now resolves from `git.integration_branch`, falling back to `main` when the key is unset or Context Forge isn't installed.
 - **A `gate:` step inside a `loop:` body never worked.** It could not see the steps it named, so it reported `UNKNOWN` on every round regardless of what the reviews said. Gates in loop bodies now resolve their named steps normally.
 - **`policy: findings-addressed` passed every round it should have failed.** Review findings arrive with lowercased severities, so the gate saw no CONCERN-or-worse findings to hold a round accountable for and fell through to whatever the fresh review said — the one thing the policy exists to prevent. It now reads the severities the reviewer actually emits.
 - **A round whose review failed could be judged against itself.** If a review step produced no verdict, the previous round's review was still standing under that name and the gate read it as the current round's evidence. A loop iteration now sees only its own round's steps, and a round with no prior evidence reports `UNKNOWN` instead of passing by annotation.
