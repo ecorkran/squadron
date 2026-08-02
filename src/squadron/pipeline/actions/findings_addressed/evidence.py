@@ -16,6 +16,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import yaml
+
 from squadron.pipeline.actions.findings_addressed.models import FindingOutcome, SettlingScreen
 
 _logger = logging.getLogger(__name__)
@@ -86,55 +88,74 @@ class GateEvidence:
         }
 
 
-def _yaml_scalar(value: object) -> str:
-    """Render a scalar for frontmatter; None becomes an explicit null."""
-    if value is None:
-        return "null"
-    if isinstance(value, bool):
-        return "true" if value else "false"
+#: Wide enough that safe_dump never folds a long note across lines. Folding is
+#: valid YAML but makes the artifact harder to read and to grep.
+_YAML_LINE_WIDTH = 4096
+
+
+def _yaml_safe(value: object) -> object:
+    """Coerce a value to a type ``yaml.safe_dump`` can represent.
+
+    The enums this record carries (Verdict, SettlingScreen, FindingStatus) are
+    ``str`` subclasses, and SafeDumper dispatches on the exact type — an
+    uncoerced member raises rather than serializing.
+    """
+    if value is None or isinstance(value, bool | int):
+        return value
     return str(value)
+
+
+def gate_evidence_frontmatter(evidence: GateEvidence, *, step_name: str) -> dict[str, object]:
+    """The frontmatter mapping, as data — serialized by yaml, never by f-string.
+
+    Notes and locations embed arbitrary model-authored text: a colon-space, a
+    leading ``#`` or ``-``, or an embedded newline would corrupt hand-rendered
+    frontmatter, and this artifact exists to be machine-readable.
+    """
+    data: dict[str, object] = {
+        "docType": GATE_EVIDENCE_DOC_TYPE,
+        "layer": "project",
+        "gateStep": step_name,
+        "policy": _yaml_safe(evidence.policy),
+        "verdict": _yaml_safe(evidence.reduced_verdict),
+        "addressedVerdict": _yaml_safe(evidence.addressed_verdict),
+        "reviewVerdict": _yaml_safe(evidence.review_verdict),
+        "decidingScreen": _yaml_safe(evidence.deciding_screen),
+        "noPriorRound": evidence.no_prior_round,
+        "priorRoundSha": _yaml_safe(evidence.prior_round_sha),
+        "revision_number": evidence.revision_number,
+        "judgeModel": _yaml_safe(evidence.judge_model),
+        "judgeTemplate": _yaml_safe(evidence.judge_template),
+    }
+    if evidence.outcomes:
+        data["findingStatuses"] = [
+            {key: _yaml_safe(value) for key, value in record.items() if value is not None}
+            for record in evidence.finding_records()
+        ]
+    return data
 
 
 def render_gate_evidence(evidence: GateEvidence, *, step_name: str) -> str:
     """Render the artifact: frontmatter carrying the whole record, then prose."""
+    frontmatter = yaml.safe_dump(
+        gate_evidence_frontmatter(evidence, step_name=step_name),
+        sort_keys=False,
+        default_flow_style=False,
+        allow_unicode=True,
+        width=_YAML_LINE_WIDTH,
+    )
     lines = [
         "---",
-        f"docType: {GATE_EVIDENCE_DOC_TYPE}",
-        "layer: project",
-        f"gateStep: {step_name}",
-        f"policy: {evidence.policy}",
-        f"verdict: {evidence.reduced_verdict}",
-        f"addressedVerdict: {evidence.addressed_verdict}",
-        f"reviewVerdict: {_yaml_scalar(evidence.review_verdict)}",
-        f"decidingScreen: {_yaml_scalar(evidence.deciding_screen)}",
-        f"noPriorRound: {_yaml_scalar(evidence.no_prior_round)}",
-        f"priorRoundSha: {_yaml_scalar(evidence.prior_round_sha)}",
-        f"revision_number: {_yaml_scalar(evidence.revision_number)}",
-        f"judgeModel: {_yaml_scalar(evidence.judge_model)}",
-        f"judgeTemplate: {_yaml_scalar(evidence.judge_template)}",
+        frontmatter.rstrip("\n"),
+        "---",
+        "",
+        f"# Gate Evidence — {step_name} ({evidence.policy})",
+        "",
+        f"Verdict **{evidence.reduced_verdict}** "
+        f"(addressed: {evidence.addressed_verdict}, "
+        f"review: {evidence.review_verdict or 'UNKNOWN'}).",
+        "",
     ]
-    if evidence.outcomes:
-        lines.append("findingStatuses:")
-        for record in evidence.finding_records():
-            lines.append(f"  - id: {record['id']}")
-            lines.append(f"    status: {record['status']}")
-            lines.append(f"    screen: {record['screen']}")
-            if record["successor"] is not None:
-                lines.append(f"    successor: {record['successor']}")
-            if record["note"] is not None:
-                lines.append(f"    note: {record['note']}")
-    lines.extend(
-        [
-            "---",
-            "",
-            f"# Gate Evidence — {step_name} ({evidence.policy})",
-            "",
-            f"Verdict **{evidence.reduced_verdict}** "
-            f"(addressed: {evidence.addressed_verdict}, "
-            f"review: {evidence.review_verdict or 'UNKNOWN'}).",
-            "",
-        ]
-    )
     if evidence.outcomes:
         lines.append("## Prior findings")
         lines.append("")

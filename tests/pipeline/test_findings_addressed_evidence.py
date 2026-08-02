@@ -105,6 +105,34 @@ def test_frontmatter_round_trips(tmp_path: Path) -> None:
     assert statuses[1]["successor"] == "F077"
 
 
+def test_frontmatter_survives_hostile_model_authored_text(tmp_path: Path) -> None:
+    """Notes embed finding locations, which are arbitrary model text.
+
+    A colon-space, a leading '#' or '-', or an embedded newline would break
+    hand-rendered frontmatter — and an artifact that exists to be
+    machine-readable must parse.
+    """
+    hostile = "re-found at src/foo.py: line 45\n# not a comment\n- not a list item"
+    evidence = _evidence(
+        outcomes=[
+            FindingOutcome(
+                finding_id="F001",
+                status=FindingStatus.UNADDRESSED,
+                screen=SettlingScreen.EXACT_MATCH,
+                note=hostile,
+            )
+        ],
+    )
+    path = save_gate_evidence(evidence, step_name="a: step # here", slice_index=305, cwd=str(tmp_path))
+    assert path is not None
+
+    frontmatter = _frontmatter(path)
+    assert frontmatter["gateStep"] == "a: step # here"
+    statuses = frontmatter["findingStatuses"]
+    assert isinstance(statuses, list)
+    assert statuses[0]["note"] == hostile
+
+
 def test_metadata_and_artifact_carry_the_same_record(tmp_path: Path) -> None:
     """One source object backs both — a divergence here means two assemblies."""
     evidence = _evidence()
