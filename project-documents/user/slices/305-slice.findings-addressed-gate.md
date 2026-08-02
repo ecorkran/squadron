@@ -108,9 +108,21 @@ measured.
 
 **Excluded (deliberately):**
 
-- **Generic judge-over-results node.** A gate whose judge reads arbitrary
-  step results is a future instrument; this slice builds the one policy with
-  a concrete consumer.
+- **Generic judge-over-results node.** A gate whose judge reads
+  author-declared step results (`results_from: [...]`) with an
+  author-written question — the shape fan-in adjudication or a
+  did-dispatch-do-the-task check would need. Deferred, not because the
+  consumers aren't real, but because it inverts who chooses the evidence
+  and the question: in this slice the *policy* fixes both in code, which is
+  precisely what makes the deterministic screens, the closed output
+  contract, and the fail-closed derivation possible. A generic node cannot
+  know which parts of an arbitrary question are measurable (so it pays a
+  model by default for what a policy would screen — inviting a principle-2
+  violation the policy structurally prevents), needs a serialization
+  contract for arbitrary `ActionResult.outputs`, and must generalize
+  derived-not-declared to author-supplied rubrics. That abstraction should
+  be extracted from working policy instances, of which this slice is the
+  first.
 - **Reviewer error rate / review scoring against later ground truth.**
   Acknowledged as eventually necessary (design conversation, 20260801); not
   now.
