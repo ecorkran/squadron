@@ -127,6 +127,7 @@ class LoopStepType:
             )
         else:
             errors.extend(self._validate_inner_steps(cast(list[object], steps_val), step_type))
+            errors.extend(self._validate_gate_ordering(cast(list[object], steps_val), step_type))
             errors.extend(
                 self._validate_findings_addressed_gates(cast(list[object], steps_val), cfg, step_type)
             )
@@ -205,6 +206,50 @@ class LoopStepType:
             value for field in contract.required if isinstance(value := inner.config.get(field), str)
         ]
 
+    def _validate_gate_ordering(
+        self,
+        steps: list[object],
+        step_type: str,
+    ) -> list[ValidationError]:
+        """A gate must run after every body step it names — for every policy.
+
+        ``_validate_verdict_count`` excludes a named step from its count on the
+        grounds that the gate is the decider. That holds only while
+        ``_last_with_verdict`` lands on the gate, and it walks the body in
+        order: a gate placed *before* the step it names would leave that step's
+        raw verdict gating ``until:`` with the gate bypassed entirely.
+
+        A name that matches no step in this body is left alone here — it may
+        refer to a step before the loop, which is resolvable and excludes
+        nothing. Requiring the name to be in the body at all is a
+        findings-addressed rule, reported where that rule lives.
+        """
+        inner_configs = self._inner_step_configs(steps)
+        positions: dict[str, int] = {}
+        for index, inner in enumerate(inner_configs):
+            positions.setdefault(inner.name, index)
+
+        errors: list[ValidationError] = []
+        for index, inner in enumerate(inner_configs):
+            for name in self._gate_reference_names(inner):
+                if "{" in name:
+                    continue  # contains a param placeholder — resolved at runtime
+                position = positions.get(name)
+                if position is not None and position >= index:
+                    errors.append(
+                        ValidationError(
+                            field="steps",
+                            message=(
+                                f"gate '{inner.name}' references '{name}', which does not "
+                                f"run before it in this loop body. A gate consumes the "
+                                f"steps it names, so 'until:' would gate on '{name}' "
+                                f"directly and the gate's decision would be discarded."
+                            ),
+                            action_type=step_type,
+                        )
+                    )
+        return errors
+
     def _validate_findings_addressed_gates(
         self,
         steps: list[object],
@@ -251,22 +296,23 @@ class LoopStepType:
                 )
             )
 
+        body_names = {inner.name for inner in inner_configs}
         for index in gate_positions:
             gate = inner_configs[index]
-            earlier_names = {inner.name for inner in inner_configs[:index]}
             for name in self._gate_reference_names(gate):
                 if "{" in name:
                     continue  # contains a param placeholder — resolved at runtime
-                if name not in earlier_names:
+                if name not in body_names:
                     errors.append(
                         ValidationError(
                             field="steps",
                             message=(
-                                f"gate '{gate.name}' references '{name}', which is not an "
-                                f"earlier step in this loop body. The loader cannot see "
-                                f"inside a loop body, so this is where the reference is "
-                                f"resolvable — an unresolved one would fail closed as "
-                                f"UNKNOWN every round instead of failing at load time."
+                                f"gate '{gate.name}' references '{name}', which is not a "
+                                f"step in this loop body. This policy compares one round "
+                                f"against the previous one, so its review must be produced "
+                                f"per round; a step outside the body would hand it the same "
+                                f"evidence every round. Ordering within the body is checked "
+                                f"separately."
                             ),
                             action_type=step_type,
                         )
