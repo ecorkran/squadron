@@ -4,7 +4,7 @@ layer: project
 reviewType: tasks
 slice: findings-addressed-gate
 project: squadron
-verdict: FAIL
+verdict: CONCERN
 sourceDocument: project-documents/user/tasks/305-tasks.findings-addressed-gate-1.md
 aiModel: claude-sonnet-5
 status: complete
