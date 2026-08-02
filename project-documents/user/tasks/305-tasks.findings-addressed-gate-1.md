@@ -39,26 +39,35 @@ status: not_started
   action is knowable — config errors are rejected at validation time, known
   runtime states resolve to their known verdicts.
 
-### Design deltas discovered during breakdown — read this first
+### Loop-executor defects found during breakdown — read this first
 
 Three of the design's evidence-availability claims do not hold at the point the
-gate actually executes. Verified on disk; each is a Phase 6 task in **Part A**.
+gate actually executes. Two of them are **pre-existing defects in the loop
+executor** that 305 is simply the first consumer to expose; the third is an
+ordering fact the design got backwards. All verified on disk; each is a Phase 6
+task in **Part A**.
 
-1. **`step_outputs` is never populated for steps inside a loop body.** The only
-   writer is `executor.py:959`, in the top-level step walk.
-   `_execute_loop_body` passes `step_outputs` through to `_execute_step_once`
-   (`executor.py:1382`) but never writes to it. A gate inside a loop body
-   therefore cannot resolve `review_from` at all today — it would take the
-   `step_outputs.get(...) is None` path and emit `UNKNOWN` every round. This
-   blocks the target loop shape for *any* policy, not just this one.
-2. **The prior round's review result is not in `prior_outputs` at gate time.**
-   `running_prior` keys are `f"{inner_step_index}-{action_type}-{action_index}"`
-   (`executor.py:1400-1402`) and are overwritten every iteration. Iteration N's
-   review overwrites iteration N-1's *before* the gate runs, because the gate is
-   later in the body. 910's findings-feedback works only because dispatch runs
-   **first** in the body and reads the key before it is overwritten. The design's
-   "no git archaeology needed for findings" intent is correct; the mechanism it
-   named is not.
+1. **`step_outputs` is never populated for steps inside a loop body — a gate in
+   a loop is broken today, for every policy.** The only writer is
+   `executor.py:959`, in the top-level step walk. `_execute_loop_body` passes
+   `step_outputs` through to `_execute_step_once` (`executor.py:1382`) but never
+   writes to it. `GateAction` is the only reader of `step_outputs` anywhere in
+   the codebase (`actions/gate.py:95-96`, and its docstring at `:52` names it as
+   *the* resolution mechanism), so a gate inside a loop resolves neither leg and
+   emits `UNKNOWN` every round. This is not a 305 concern: a plain
+   `most-severe` gate from slice 304 fails the same way inside a loop. Fixing it
+   is additive — nothing else reads the dict, so no existing behavior can
+   change.
+2. **What `prior_outputs` means inside a loop depends on where you sit in the
+   body — a latent trap, also pre-existing.** `running_prior` keys are
+   `f"{inner_step_index}-{action_type}-{action_index}"` (`executor.py:1400-1402`)
+   and are overwritten every iteration. A step early in the body reads the prior
+   round; a step late in the body reads the current one, from the same key. 910's
+   findings-feedback is correct only because dispatch happens to run **first**;
+   reorder the body and it silently feeds the current round's findings back into
+   itself. The gate sits late, so it cannot read the prior round this way at all.
+   The design's "no git archaeology needed for findings" intent is right; the
+   mechanism it named is not.
 3. **Round N's commit SHA does not exist at gate time.** `commit_each_iteration`
    appends its commit *after* all inner steps (`executor.py:1417-1440`), so at
    gate time round N is uncommitted and `HEAD` is round N-1's commit. The
@@ -67,22 +76,20 @@ gate actually executes. Verified on disk; each is a Phase 6 task in **Part A**.
    working-tree diff against `HEAD`, which needs no SHA plumbing and is exactly
    round N's changes.
 
-**What the correction does and does not settle.** Delta 1 is fully resolved by
-T1 — there is no alternative fix; a gate inside a loop is unimplementable
-without it. Delta 2 is resolved in-process by T2, but **not across a resume**:
-nothing rehydrates the new field from `state.py`, so a run resumed mid-loop
-starts its first post-resume round with no prior round. T27 makes that honest
-(annotated Screen 0, logged) rather than fixed. Delta 3's *mechanism* is
-resolved, but the design's success criterion "gate metadata carries ... the
-round SHAs" is only half-satisfiable: the evidence artifact is written before
-the commit that contains it, so it can never carry that commit's identity. The
-recordable pair is prior SHA + `revision_number` (T14, T24).
+**What the correction settles, and what it leaves open.** Item 1 is fully fixed
+by T1 — there is no alternative, and it repairs 304's gate inside a loop as a
+side effect. Item 2 is fixed by T2; there is no resume gap behind it, because
+squadron has no mid-loop resume at all (a paused loop step is recorded
+completed and resume continues past it — see T27, which pins that rather than
+designing around it). Item 3's mechanism
+is fixed by T14, but the design's success criterion "gate metadata carries ...
+the round SHAs" is only half-satisfiable: the evidence artifact is written
+before the commit that contains it, so it can never carry that commit's
+identity. The recordable pair is prior SHA + `revision_number` (T14, T24).
 
-The corrected mechanism (Part A + Task T14) is strictly simpler than the design's
-and preserves every stated principle. It does add `pipeline/executor.py` and
-`pipeline/models.py` to the design's "Files touched" table. **Flag this to the
-Project Manager before Part D begins; do not widen it further on your own
-initiative.**
+Part A also touches `pipeline/executor.py` and `pipeline/models.py`, which the
+design's "Files touched" table does not list — both additively, and both to
+repair machinery that is broken independently of this slice.
 
 ### Facts established by inspection (do not re-derive)
 

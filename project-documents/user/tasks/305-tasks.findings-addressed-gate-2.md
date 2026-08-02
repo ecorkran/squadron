@@ -298,19 +298,25 @@ New module `src/squadron/pipeline/actions/findings_addressed.py`. Watch the
   - [ ] Success: the pipeline loads and validates clean; `--dry-run` shows the
     expanded action sequence with the gate last.
 
-- [ ] **T27. Resume rehydration verification** (effort 2)
-  - [ ] Design decision 5's flagged caveat — **verify, do not assume**. Read
-    `StateManager.load_prior_outputs` (`pipeline/state.py:417-418`) and confirm
-    whether a run resumed mid-loop rehydrates findings on the restored
-    `ActionResult`s, and whether the Part A per-iteration snapshot survives a
-    resume.
-  - [ ] If findings do not survive, the honest outcome is Screen 0 semantics on
-    the first post-resume round (annotated `PASS`, logged), **not** a silent
-    empty residue that reads as "all addressed". Implement whichever of the two
-    the evidence supports and write the finding into the DEVLOG entry.
-  - [ ] Add a test asserting the observed behavior either way — a resumed loop
-    must never produce an unannounced `PASS` from missing evidence.
-  - [ ] Success: behavior is stated, tested, and recorded, not inferred.
+- [ ] **T27. Resume behavior — pin it, do not design for it** (effort 1)
+  - [ ] Design decision 5's caveat was **resolved during breakdown**, not left
+    open. Two facts, both verified: findings survive state persistence
+    (`dataclasses.asdict` at `pipeline/state.py:291` keeps the `findings` field
+    and `load_prior_outputs` reconstructs it, `:417-434`), and **squadron has no
+    mid-loop resume** — a loop step that pauses is appended to
+    `completed_steps` (`state.py:304-309`), so `first_unfinished_step`
+    (`state.py:439-446`) skips past it and the loop is never re-entered.
+  - [ ] Therefore: build **no** resume special case into the policy. There is no
+    execution path where the gate runs against a resumed round with the prior
+    round missing. Do not add a Screen 0 fallback for it.
+  - [ ] Add one test pinning the second fact — a paused loop step is recorded
+    completed and resume continues past it — so a future change to resume
+    granularity fails here loudly instead of silently reintroducing the case.
+  - [ ] Whether a checkpoint-paused loop *should* be re-enterable on resume is a
+    real question and **not this slice's**. Do not change resume granularity
+    here; if it is worth pursuing, it is a pipeline-foundation item.
+  - [ ] Success: the test pins current behavior; the policy contains no
+    resume-specific branch.
 
 - [ ] **T28. End-to-end and regression pass** (effort 3)
   - [ ] Integration test over the example pipeline with a stubbed transport:
