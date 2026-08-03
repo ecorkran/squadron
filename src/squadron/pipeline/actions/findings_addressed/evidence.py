@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from squadron.pipeline.actions.findings_addressed.models import FindingOutcome, SettlingScreen
+from squadron.review.addressed.models import FindingOutcome, SettlingScreen
 
 _logger = logging.getLogger(__name__)
 

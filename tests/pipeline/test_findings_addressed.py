@@ -16,17 +16,19 @@ from unittest.mock import patch
 import pytest
 
 from squadron.pipeline.actions.findings_addressed import (
-    FindingRecord,
-    FindingStatus,
     RoundDiff,
-    SettlingScreen,
     compute_round_diff,
-    concern_plus,
-    read_findings,
     run_deterministic_screens,
     screen_no_prior_round,
 )
 from squadron.pipeline.models import ActionResult
+from squadron.review.addressed.models import (
+    FindingRecord,
+    FindingStatus,
+    SettlingScreen,
+    concern_plus,
+    read_findings,
+)
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 
 _CWD = "/repo"

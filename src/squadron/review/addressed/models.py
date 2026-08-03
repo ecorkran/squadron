@@ -10,9 +10,15 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
-from squadron.pipeline.models import ActionResult
 from squadron.review.models import Severity
+
+if TYPE_CHECKING:
+    # Annotation only. Importing ``ActionResult`` at runtime would make the
+    # review package depend on the pipeline package, inverting the established
+    # direction (pipeline consumes review) this module was moved here to keep.
+    from squadron.pipeline.models import ActionResult
 
 _logger = logging.getLogger(__name__)
 

@@ -14,11 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from squadron.pipeline.actions.findings_addressed import (
-    FindingOutcome,
-    FindingRecord,
-    FindingStatus,
     RoundDiff,
-    SettlingScreen,
     derive_addressed_verdict,
     is_parse_failure,
     judge_residue,
@@ -27,6 +23,12 @@ from squadron.pipeline.actions.findings_addressed import (
     verify_outcomes,
 )
 from squadron.pipeline.models import ActionContext
+from squadron.review.addressed.models import (
+    FindingOutcome,
+    FindingRecord,
+    FindingStatus,
+    SettlingScreen,
+)
 from squadron.review.models import ReviewResult, Verdict
 
 _JUDGE_TRANSPORT = "squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile"

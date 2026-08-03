@@ -15,12 +15,14 @@ import yaml
 
 from squadron.pipeline.actions.findings_addressed import (
     GATE_EVIDENCE_DOC_TYPE,
-    FindingOutcome,
-    FindingStatus,
     GateEvidence,
-    SettlingScreen,
     render_gate_evidence,
     save_gate_evidence,
+)
+from squadron.review.addressed.models import (
+    FindingOutcome,
+    FindingStatus,
+    SettlingScreen,
 )
 from squadron.review.models import Verdict
 

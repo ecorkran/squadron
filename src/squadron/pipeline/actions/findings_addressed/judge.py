@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from squadron.pipeline.actions.findings_addressed.models import FindingOutcome, FindingRecord
 from squadron.pipeline.actions.findings_addressed.parsing import (
     is_parse_failure,
     parse_status_lines,
@@ -22,6 +21,7 @@ from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolutionError
 from squadron.providers.base import ProfileName
+from squadron.review.addressed.models import FindingOutcome, FindingRecord
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import get_template, load_all_templates
 
