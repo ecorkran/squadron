@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import logging
+import subprocess
+from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from squadron.review.models import Verdict
 from squadron.review.persistence import REVIEWS_DIR
 from squadron.review.resolution import (
+    DiffBaseSource,
     ResolutionError,
     load_review,
     locate_review,
+    resolve_review_diff_base,
     review_type_of,
 )
 
@@ -132,3 +137,72 @@ class TestLoadReview:
         )
         with pytest.raises(ResolutionError, match="frontmatter"):
             load_review(path)
+
+
+@pytest.fixture
+def committed_review(git_repo: Path) -> Iterator[tuple[Path, Path, str]]:
+    """A review file committed to a real repo: ``(repo, review path, SHA)``."""
+    path = _write_review(git_repo, "305-review.code.findings-addressed.md")
+    subprocess.run(["git", "add", "-A"], cwd=git_repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "add review"], cwd=git_repo, capture_output=True, check=True)
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=git_repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    yield git_repo, path, sha
+
+
+class TestResolveReviewDiffBase:
+    def test_since_overrides_a_present_stamp(self, tmp_path: Path) -> None:
+        path = _write_review(tmp_path, "305-review.code.findings-addressed.md")
+        base, source = resolve_review_diff_base(
+            {"reviewedSha": "abc1234"}, path, since="v1.2.0", cwd=str(tmp_path)
+        )
+        assert (base, source) == ("v1.2.0", DiffBaseSource.SINCE)
+
+    def test_stamp_is_used_when_present(self, tmp_path: Path) -> None:
+        path = _write_review(tmp_path, "305-review.code.findings-addressed.md")
+        base, source = resolve_review_diff_base(
+            {"reviewedSha": "abc1234"}, path, since=None, cwd=str(tmp_path)
+        )
+        assert (base, source) == ("abc1234", DiffBaseSource.FRONTMATTER)
+
+    def test_falls_back_to_file_history_and_warns(
+        self, committed_review: tuple[Path, Path, str], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        repo, path, sha = committed_review
+        with caplog.at_level(logging.WARNING):
+            base, source = resolve_review_diff_base({}, path, since=None, cwd=str(repo))
+
+        assert (base, source) == (sha, DiffBaseSource.FILE_HISTORY)
+        assert "reviewedSha" in caplog.text
+
+    def test_since_wins_with_nothing_to_fall_back_to(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """``--since`` short-circuits before the fallback, not merely over it.
+
+        Distinct from the first case, where a stamp existed to override: here
+        there is none, so a precedence bug would show up as a file-history
+        WARNING rather than as a wrong return value.
+        """
+        path = _write_review(tmp_path, "305-review.code.findings-addressed.md")
+        with (
+            caplog.at_level(logging.WARNING),
+            patch("squadron.review.resolution.run_git") as mock_run_git,
+        ):
+            base, source = resolve_review_diff_base({}, path, since="HEAD~3", cwd=str(tmp_path))
+
+        assert (base, source) == ("HEAD~3", DiffBaseSource.SINCE)
+        mock_run_git.assert_not_called()
+        assert "reviewedSha" not in caplog.text
+
+    def test_file_history_failure_returns_no_base(self, tmp_path: Path) -> None:
+        """An unmanaged path leaves the base unresolved for the caller to classify."""
+        path = _write_review(tmp_path, "305-review.code.findings-addressed.md")
+        base, source = resolve_review_diff_base({}, path, since=None, cwd=str(tmp_path))
+        assert base is None
+        assert source == DiffBaseSource.FILE_HISTORY

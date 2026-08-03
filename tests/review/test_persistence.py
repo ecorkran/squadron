@@ -276,25 +276,6 @@ def _frontmatter(md: str) -> dict[str, object]:
     return cast("dict[str, object]", data)
 
 
-@pytest.fixture
-def git_repo(tmp_path: Path) -> Path:
-    """A temporary git repo with one commit, so HEAD resolves."""
-    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=tmp_path,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=True
-    )
-    (tmp_path / "README.md").write_text("init")
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, capture_output=True, check=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
-    return tmp_path
-
-
 class TestReviewedShaStamp:
     def test_stamped_when_supplied(self) -> None:
         md = format_review_markdown(_make_result(), "code", _make_slice_info(), reviewed_sha="abc123")
