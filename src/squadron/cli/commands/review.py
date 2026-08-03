@@ -12,6 +12,7 @@ from openai import RateLimitError
 from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
 from squadron.config.manager import get_config
@@ -21,6 +22,7 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.models.aliases import resolve_model_alias
+from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     find_git_root,
@@ -33,6 +35,8 @@ from squadron.review.persistence import (
     resolve_slice_info,
     save_review_result,
 )
+from squadron.review.resolution import Resolution, ResolutionResult, resolve_review
+from squadron.review.resolution_evidence import ResolutionError
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
     extract_diff_paths,
@@ -60,6 +64,12 @@ _VERDICT_COLORS: dict[Verdict, str] = {
     Verdict.CONCERNS: "yellow",
     Verdict.FAIL: "red",
     Verdict.UNKNOWN: "dim",
+}
+
+_RESOLUTION_COLORS: dict[Resolution, str] = {
+    Resolution.ADDRESSED: "bright_green",
+    Resolution.UNADDRESSED: "red",
+    Resolution.UNKNOWN: "dim",
 }
 
 _SEVERITY_COLORS: dict[Severity, str] = {
@@ -788,3 +798,112 @@ def review_list() -> None:
     max_name_len = max(len(t.name) for t in templates)
     for t in templates:
         rprint(f"  {t.name:<{max_name_len}}  {t.description}")
+
+
+def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tuple[str | None, str]:
+    """Resolve the resolve-path judge's model and profile from the CLI flags.
+
+    Same cascade every other review command uses — flag → per-template config →
+    global config → template default, with alias expansion — so the judge is
+    selected the same way here as anywhere else.
+    """
+    load_all_templates()
+    template = get_template(JUDGE_TEMPLATE_NAME)
+    raw_model = _resolve_model(model_flag, template, JUDGE_TEMPLATE_NAME)
+
+    alias_model: str | None = None
+    alias_profile: str | None = None
+    if raw_model is not None:
+        alias_model, alias_profile = resolve_model_alias(raw_model)
+
+    return alias_model or raw_model, _resolve_profile(profile_flag or alias_profile, template)
+
+
+def _display_resolution(result: ResolutionResult, verbosity: int) -> None:
+    """Per-finding table, then where the artifact landed and what it concluded."""
+    console = Console()
+    color = _RESOLUTION_COLORS.get(result.resolution, "dim")
+
+    header = Text(f"Resolution: {result.review_path.name}", style="bold")
+    header.append("  ", style="dim")
+    header.append(result.resolution.value, style=f"bold {color}")
+    console.print(Panel(header, expand=False))
+
+    if result.outcomes:
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Finding")
+        table.add_column("Status")
+        table.add_column("Settled by")
+        if verbosity >= 1:
+            table.add_column("Note")
+        for outcome in result.outcomes:
+            row = [outcome.finding_id, outcome.status.value, outcome.screen.value]
+            if verbosity >= 1:
+                row.append(outcome.note or "")
+            table.add_row(*row)
+        console.print(table)
+    else:
+        console.print("  No CONCERN+ findings were in scope.", style="dim")
+
+    base = result.base or "unresolved"
+    source = result.base_source.value if result.base_source is not None else "not needed"
+    console.print(f"  measured against {base} ({source})", style="dim")
+    rprint(f"[green]Wrote resolution to {result.artifact_path}[/green]")
+    rprint(f"resolution: {result.resolution.value}")
+
+
+@review_app.command("resolve")
+def review_resolve(
+    index: int = typer.Argument(..., help="Slice number whose review to resolve (e.g. 305)"),
+    review_type: str | None = typer.Argument(
+        None, help="Review type (e.g. code, slice); inferred when only one review exists"
+    ),
+    cwd: str | None = typer.Option(None, "--cwd", help="Project directory (default: config or .)"),
+    model: str | None = typer.Option(None, "--model", help="Judge model override (e.g. opus)"),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Provider profile (e.g. openrouter, openai, local, sdk)",
+    ),
+    no_judge: bool = typer.Option(
+        False, "--no-judge", help="Run the deterministic screens only; never consult the judge"
+    ),
+    since: str | None = typer.Option(
+        None, "--since", help="Git ref to measure from, overriding the review's reviewedSha"
+    ),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+) -> None:
+    """Record whether a prior review's findings were addressed.
+
+    Writes a resolution artifact beside the review and never edits the review
+    itself. Exits 0 on ADDRESSED so the command composes in a shell; UNADDRESSED
+    and UNKNOWN both exit 1 — an answer that could not be reached is not a pass.
+    """
+    verbosity = _resolve_verbosity(verbose)
+    resolved_cwd = _resolve_cwd(cwd)
+    # The resolve path runs git commands — use the git root so the diff resolves
+    # even when the config cwd points at a subdirectory (mirrors review code).
+    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+
+    model_id, resolved_profile = _resolve_judge_model(model, profile)
+
+    try:
+        result = asyncio.run(
+            resolve_review(
+                index,
+                review_type,
+                model_id=model_id,
+                profile=resolved_profile,
+                no_judge=no_judge,
+                since=since,
+                cwd=review_cwd,
+            )
+        )
+    except (ResolutionError, OSError) as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    _display_resolution(result, verbosity)
+
+    if result.resolution != Resolution.ADDRESSED:
+        raise typer.Exit(code=1)

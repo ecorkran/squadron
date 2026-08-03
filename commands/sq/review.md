@@ -4,7 +4,7 @@ Run a review using squadron.
 
 The first word of `$ARGUMENTS` is the subcommand. The remainder is passed to the CLI unchanged.
 
-Valid subcommands: `code`, `slice`, `tasks`, `arch`
+Valid subcommands: `code`, `slice`, `tasks`, `arch`, `resolve`
 
 If the subcommand is missing or unrecognized, show the usage below and stop.
 
@@ -14,6 +14,7 @@ If the subcommand is missing or unrecognized, show the usage below and stop.
 /sq:review slice [NUMBER | FLAGS]    — slice design review
 /sq:review tasks [NUMBER | FLAGS]    — task plan review
 /sq:review arch [NUMBER | FLAGS]     — architecture review
+/sq:review resolve NUMBER [TYPE]     — were a review's findings addressed?
 ```
 
 ---
@@ -207,3 +208,39 @@ Note: `sq review arch` does not support `--against`. The review is self-containe
 Example: `sq review arch project-documents/user/architecture/140-slices.pipeline-foundation.md`
 
 Show the review results. If the verdict is FAIL or CONCERNS, highlight the key findings.
+
+---
+
+## Subcommand: resolve
+
+Record whether a prior review's findings were addressed by the work done since.
+
+Pass the remainder of `$ARGUMENTS` (after stripping the leading `resolve` word) directly to:
+
+`sq review resolve {remainder}`
+
+Required arguments:
+- Positional: the slice number whose review to resolve (e.g. `305`)
+
+Optional arguments:
+- Positional: the review type (`code`, `slice`, `tasks`, `arch`). Omit it when the index has exactly one review; when several exist the CLI errors and lists them rather than guessing.
+
+Optional flags:
+- `--cwd DIR`: project directory override
+- `--model MODEL`: judge model override — accepts aliases (e.g. `opus`) or full model IDs
+- `--profile PROFILE`: provider profile (e.g. `openrouter`, `openai`, `local`, `sdk`)
+- `--no-judge`: run the deterministic screens only and never consult the judge
+- `--since REF`: git ref to measure from, overriding the review's `reviewedSha`
+- `-v`/`-vv`: verbosity level
+
+The CLI:
+- Locates `project-documents/user/reviews/{nnn}-review.{type}.{slice-name}.md`
+- Measures what changed since the review was authored
+- Writes `project-documents/user/reviews/{nnn}-resolution.{type}.{slice-name}-r{n}.md`, incrementing `{n}` — a resolution is never overwritten
+- **Never edits the review file.** The resolution is evidence about the review, not an amendment to its `verdict:`
+
+Exit codes: `0` for `ADDRESSED`, `1` for `UNADDRESSED` or `UNKNOWN`.
+
+Example: `sq review resolve 305 code -v`
+
+Show the resolution value, the per-finding table, and the artifact path. If the resolution is `UNADDRESSED` or `UNKNOWN`, highlight which findings are unsettled and why.
