@@ -15,7 +15,10 @@ from squadron.review.models import ReviewResult
 
 _logger = logging.getLogger(__name__)
 
-_REVIEWS_DIR = Path("project-documents/user/reviews")
+#: Where review artifacts live, relative to the project root. Public so the
+#: resolve path (slice 306) locates reviews through the same constant that
+#: writes them rather than repeating the literal.
+REVIEWS_DIR = Path("project-documents/user/reviews")
 
 #: Where a review's prior content is preserved before an overwrite, relative
 #: to the reviews directory. Defined once — the guard, its tests, and anything
@@ -24,7 +27,7 @@ _ARCHIVE_SUBDIR = "archive"
 
 #: Directory prefix for task-breakdown files, relative to project root.
 #: SliceInfo["task_files"] entries are bare filenames — join with this to
-#: get the full relative path (mirrors _REVIEWS_DIR's role for reviews).
+#: get the full relative path (mirrors REVIEWS_DIR's role for reviews).
 TASKS_DIR = Path("project-documents/user/tasks")
 
 
@@ -338,7 +341,7 @@ def save_review_file(
         (see :func:`archive_existing_review`).
     """
     base_dir = Path(cwd) if cwd else Path(".")
-    target = base_dir / _REVIEWS_DIR
+    target = base_dir / REVIEWS_DIR
     ext = "json" if as_json else "md"
     filename = f"{slice_index}-review.{review_type}.{slice_name}.{ext}"
     path = target / filename
@@ -396,7 +399,7 @@ def save_review_result(
             existing file is left untouched — losing a review to a silent
             overwrite is the failure this refuses to allow.
     """
-    target = reviews_dir or _REVIEWS_DIR
+    target = reviews_dir or REVIEWS_DIR
     target.mkdir(parents=True, exist_ok=True)
 
     base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
