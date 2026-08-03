@@ -113,6 +113,7 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
 
    **Explicitly out of scope:** restoring an agent's ability to edit `verdict:`. The original verdict stays as written, whatever else is added.
 
+   - **Slice design:** `user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md` (Phase 4 complete 20260802). Shape settled there: `reviewedSha` stamped at review authoring; `sq review resolve <index>` derives per-finding dispositions via 305's screens + judge (transport core extracted context-free) and writes a versioned `{index}-resolution.{type}.{name}-r{n}.md` (`docType: review-resolution`, top-level field `resolution:`, deliberately not `verdict:`); review file never touched; `save_review_file` gains an archive-on-overwrite guard; cf consumption offered as a contract, not assumed.
    - **Dependencies:** [305 (the derivation and the evidence-artifact shape), 300 frontmatter contract]. Coordination dependency on Context Forge for anything `workflow_check` reads.
    - **Risk Level:** Medium — the risk is not implementation, it is designing a field that agents will not casually write
    - **Relative Effort:** 3/5

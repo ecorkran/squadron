@@ -12,6 +12,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260802 (4)
+
+### Slice 306: Review Resolution — Slice Design (Phase 4)
+
+Design complete at `user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md`; slice plan entry 7 updated with the pointer. Issue #51.
+
+The design holds the constraint that motivated the issue: agents stay barred from editing `verdict:`, and nothing one word an agent can write may unblock a gate. Resolution is a *second assertion* in a *second artifact* — `{index}-resolution.{type}.{name}-r{n}.md`, `docType: review-resolution`, top-level field `resolution: ADDRESSED|UNADDRESSED|UNKNOWN` (deliberately not `verdict:`), derived by 305's discipline: screens first, judge over what remains, `verify_outcomes` downgrading unsupportable claims, UNKNOWN evaluated before failure.
+
+Four parts. **A:** `reviewedSha` stamped into review frontmatter at authoring time by both persistence paths — the anchor for "what changed since the review"; file-history fallback with WARNING for legacy reviews, `--since` override. **B:** `sq review resolve <index>` in a new `review/resolution.py`, reusing 305's building blocks with the judge transport extracted context-free (`judge_residue` becomes a thin ActionContext wrapper; 305's tests must pass unchanged). Known asymmetry stated rather than hidden: no fresh review exists on this path, so 305's exact-match screen cannot run — the judge sees all CONCERN+ findings when the diff is non-empty, and `MOVED` always downgrades. **C:** the frontmatter schema as the cf coordination seam (review-gating lives in cf; squadron writes the record, cf owns the gate), plus the interim PM procedure — verdict edits stay manual, now citing machine-derived evidence. **D:** `save_review_file` archives the prior content and warns before overwriting, closing the data-loss hazard found during scoping (a re-review silently destroyed hand-written Resolution sections).
+
+Effort 3/5 (B dominates). Not in scope: cf code changes, running a fresh review inside `resolve`, any squadron-side verdict edit.
+
+---
+
 ## 20260802 (3)
 
 ### Slice 305: Code Review Resolution
