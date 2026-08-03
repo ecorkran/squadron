@@ -96,14 +96,65 @@ def _as_severity(value: object) -> str | None:
     return severity.upper() if severity is not None else None
 
 
+def _unreadable_record(index: int) -> FindingRecord:
+    """A record standing in for an entry that was not a mapping at all."""
+    return FindingRecord(
+        finding_id=f"finding-{index}",
+        severity="",
+        category="",
+        location="",
+        summary="",
+        malformed=True,
+    )
+
+
+def _record_from_mapping(raw: dict[object, object], index: int) -> FindingRecord:
+    """Read one finding mapping into a FindingRecord, defensively.
+
+    Every field is read through ``_as_str``/``_as_severity`` so both producer
+    shapes normalize identically. A finding missing a field this policy needs
+    is logged at WARNING and returned ``malformed`` rather than dropped — a
+    silently discarded finding is a silently passed round.
+    """
+    finding: dict[str, object] = {str(key): value for key, value in raw.items()}
+    finding_id = _as_str(finding.get("id"))
+    severity = _as_severity(finding.get("severity"))
+    category = _as_str(finding.get("category"))
+    location = _as_str(finding.get("location"))
+    summary = _as_str(finding.get("summary"))
+
+    missing = [
+        name
+        for name, value in (
+            ("id", finding_id),
+            ("severity", severity),
+            ("category", category),
+            ("location", location),
+        )
+        if value is None
+    ]
+    if missing:
+        _logger.warning(
+            "findings-addressed: finding %r is missing %s; treating as residue",
+            finding_id or f"finding-{index}",
+            ", ".join(missing),
+        )
+
+    return FindingRecord(
+        finding_id=finding_id or f"finding-{index}",
+        severity=severity or "",
+        category=category or "",
+        location=location or "",
+        summary=summary or "",
+        malformed=bool(missing),
+    )
+
+
 def read_findings(result: ActionResult | None) -> list[FindingRecord]:
     """Read every finding out of *result* as a FindingRecord.
 
     Findings arrive as plain dicts (``[sf.__dict__ for sf in ...]`` in the
-    review action), so every field is read defensively. A finding missing a
-    field this policy needs is logged at WARNING and returned ``malformed``
-    rather than dropped — a silently discarded finding is a silently passed
-    round.
+    review action), so every field is read defensively.
     """
     if result is None:
         return []
@@ -116,52 +167,44 @@ def read_findings(result: ActionResult | None) -> list[FindingRecord]:
                 index,
                 type(raw).__name__,
             )
-            records.append(
-                FindingRecord(
-                    finding_id=f"finding-{index}",
-                    severity="",
-                    category="",
-                    location="",
-                    summary="",
-                    malformed=True,
-                )
-            )
+            records.append(_unreadable_record(index))
             continue
+        records.append(_record_from_mapping(raw, index))  # pyright: ignore[reportUnknownArgumentType]
+    return records
 
-        finding: dict[str, object] = {str(key): value for key, value in raw.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-        finding_id = _as_str(finding.get("id"))
-        severity = _as_severity(finding.get("severity"))
-        category = _as_str(finding.get("category"))
-        location = _as_str(finding.get("location"))
-        summary = _as_str(finding.get("summary"))
 
-        missing = [
-            name
-            for name, value in (
-                ("id", finding_id),
-                ("severity", severity),
-                ("category", category),
-                ("location", location),
-            )
-            if value is None
-        ]
-        if missing:
+def records_from_frontmatter(findings: list[object]) -> list[FindingRecord]:
+    """Read findings out of a *review file's* YAML frontmatter.
+
+    This is a second reader, not a variant of :func:`read_findings`. The two
+    consume different producer shapes: ``read_findings`` reads
+    ``ActionResult.findings`` (``ReviewResult.structured_findings`` dicts,
+    whose ``severity`` is already lowercased on the way out), while this one
+    reads the ``findings:`` block ``format_review_markdown`` writes into the
+    review file (``id``, ``severity``, ``category``, ``summary``, and
+    ``location`` only when the finding carries one).
+
+    The shapes are close but not identical, and 305's F002 lesson — a parser
+    must be exercised against the shape its real producer emits — is the
+    reason both readers exist rather than one lenient reader spanning both.
+    Normalization is shared: both route through ``_as_severity``, so
+    ``CONCERN_PLUS_SEVERITIES`` stays tied to the ``Severity`` enum for either
+    source.
+
+    A finding missing a required field is kept as malformed residue, never
+    dropped — the same rule ``read_findings`` applies, not a new one.
+    """
+    records: list[FindingRecord] = []
+    for index, raw in enumerate(findings):
+        if not isinstance(raw, dict):
             _logger.warning(
-                "findings-addressed: finding %r is missing %s; treating as residue",
-                finding_id or f"finding-{index}",
-                ", ".join(missing),
+                "findings-addressed: frontmatter finding %d is %s, not a mapping; treating as residue",
+                index,
+                type(raw).__name__,
             )
-
-        records.append(
-            FindingRecord(
-                finding_id=finding_id or f"finding-{index}",
-                severity=severity or "",
-                category=category or "",
-                location=location or "",
-                summary=summary or "",
-                malformed=bool(missing),
-            )
-        )
+            records.append(_unreadable_record(index))
+            continue
+        records.append(_record_from_mapping(raw, index))  # pyright: ignore[reportUnknownArgumentType]
     return records
 
 

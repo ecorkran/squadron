@@ -27,6 +27,7 @@ from squadron.review.addressed.models import (
     SettlingScreen,
     concern_plus,
     read_findings,
+    records_from_frontmatter,
 )
 from squadron.review.addressed.parsing import (
     JudgeStatus,
@@ -54,6 +55,7 @@ __all__ = [
     "judge_residue_core",
     "parse_status_lines",
     "read_findings",
+    "records_from_frontmatter",
     "statuses_to_outcomes",
     "verify_outcomes",
 ]
