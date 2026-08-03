@@ -7,7 +7,7 @@ dependencies: [305]
 interfaces: []
 dateCreated: 20260802
 dateUpdated: 20260803
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Review Resolution — Recording That Findings Were Addressed
@@ -346,75 +346,124 @@ aborts the overwrite and leaves the original intact. Effort 1/5.
 
 ## Success Criteria
 
-- [ ] A review authored after this slice carries `reviewedSha:` in
+- [x] A review authored after this slice carries `reviewedSha:` in
       frontmatter, from both the CLI and the pipeline persistence paths.
-- [ ] `sq review resolve 305` against a review whose findings were fixed
+      *(`tests/review/test_persistence.py::TestReviewedShaStamp` — including
+      the real-git-repo case asserting the stamp equals `git rev-parse HEAD`;
+      both paths share `resolve_reviewed_sha`.)*
+- [x] `sq review resolve 305` against a review whose findings were fixed
       produces a `305-resolution.code.*-r1.md` with per-finding statuses and
       `resolution:` derived — and the review file is byte-identical before
-      and after.
-- [ ] An empty diff since `reviewedSha` yields `resolution: UNADDRESSED`
+      and after. *(`TestResolveReviewEndToEnd::test_a_fix_since_the_review_resolves_addressed`
+      — asserts the byte-identity directly, not by inference.)*
+- [x] An empty diff since `reviewedSha` yields `resolution: UNADDRESSED`
       with every CONCERN+ finding `unaddressed`, zero judge calls.
-- [ ] `--no-judge` with a non-empty diff yields `resolution: UNKNOWN`
-      (residue disputed), never ADDRESSED.
-- [ ] A judge claim of `addressed` over a path the diff never touched is
+      *(`TestScreensNeverReachTheJudge::test_nothing_changed_since_the_review_is_unaddressed`;
+      walkthrough step 2.)*
+- [x] `--no-judge` with a non-empty diff yields `resolution: UNKNOWN`
+      (residue disputed), never ADDRESSED. *(`TestJudgeLeg::test_no_judge_leaves_findings_unsettled`
+      and `TestUnsettledFindingsAreRecorded::test_no_judge_records_each_finding_as_disputed`;
+      walkthrough step 5.)*
+- [x] A judge claim of `addressed` over a path the diff never touched is
       downgraded to `disputed` (existing `verify_outcomes`, exercised via
-      the new path).
-- [ ] Legacy review without `reviewedSha` resolves via file-history fallback
+      the new path). *(`TestClaimVerification::test_addressed_over_an_untouched_path_is_downgraded`.)*
+- [x] Legacy review without `reviewedSha` resolves via file-history fallback
       with a WARNING naming the fallback; `--since` overrides both.
-- [ ] Re-running `sq review code <N>` over an edited review file archives
+      *(`TestResolveReviewDiffBase` — four cases, including `--since` winning
+      with nothing to fall back to.)*
+- [x] Re-running `sq review code <N>` over an edited review file archives
       the prior content and warns; nothing is silently destroyed.
-- [ ] A review whose frontmatter verdict is FAIL/CONCERNS but whose parsed
+      *(`tests/review/test_persistence.py::TestArchiveOnOverwrite`; walkthrough
+      step 7 confirmed the hand note survives in `archive/`.)*
+- [x] A review whose frontmatter verdict is FAIL/CONCERNS but whose parsed
       findings contain zero CONCERN+ entries resolves to UNKNOWN with a
       WARNING naming the mismatch — never ADDRESSED (F001; #28 lineage).
-- [ ] Judge transport failure and an unreadable judge response on the
+      *(`TestVerdictConsistencyScreen` — parametrized over FAIL and CONCERNS,
+      plus the PASS case asserting no git and no judge call is made at all.)*
+- [x] Judge transport failure and an unreadable judge response on the
       resolve path yield UNKNOWN with a WARNING; a diff exceeding the
       injection cap yields UNKNOWN naming the cap and the base used (F004).
-- [ ] A failed or unverifiable archive copy aborts the overwrite: the
+      *(`TestJudgeLeg::test_transport_failure_is_unknown_not_a_pass` and
+      `::test_change_set_over_the_injection_cap_never_reaches_the_judge`. Note:
+      305 does not apply this cap to the judge's change-set input — the check
+      was added on this path only, and the gap in 305 is flagged to the PM
+      rather than silently fixed here, per T25.)*
+- [x] A failed or unverifiable archive copy aborts the overwrite: the
       original review file is byte-identical afterward and the save errors
-      loudly (F003).
-- [ ] Metrology `discover_judge_results` and review discovery return no
+      loudly (F003). *(`TestArchiveOnOverwrite` covers copy-cannot-be-created
+      and copy-succeeds-but-verification-fails as separate cases.)*
+- [x] Metrology `discover_judge_results` and review discovery return no
       resolution artifacts (test against the real glob).
-- [ ] 305's full test suite passes unchanged — including after the
-      `review/addressed/` relocation (F002).
-- [ ] Second `resolve` run writes `-r2`, not over `-r1`.
+      *(`TestMetrologyNeverSeesResolutions` — asserts `discover_judge_results`
+      and `metrology.capture.resolve_target` separately, per SC11's "and".)*
+- [x] 305's full test suite passes unchanged — including after the
+      `review/addressed/` relocation (F002). *(No assertion changed; only mock
+      target paths moved with the modules they patch. The relocation went
+      further than planned — `RoundDiff` and the two context-free screens moved
+      to `review/addressed/screens.py` — because T21 needs to construct a
+      `RoundDiff`, which the `TYPE_CHECKING` shim used in Part 0 cannot do.)*
+- [x] Second `resolve` run writes `-r2`, not over `-r1`.
+      *(`TestSaveResolution::test_revisions_increment_and_never_overwrite`, plus
+      `::test_a_collision_raises_rather_than_destroying_a_record`.)*
 
 **Phase 5 note (review F005):** the cf `archive/`-scanning verification in
 Decision 7 must appear as its own checklist task in the breakdown, sequenced
 before Part D lands — it is a go/no-go on the archive filename scheme.
 
-## Verification Walkthrough (draft — refine at Phase 6)
+## Verification Walkthrough
+
+Run against a scratch git repo. Steps 1, 4–7 were executed end to end at Phase 6
+and the `# →` comments below record what actually came back. Step 3 needs a live
+judge call; it is covered instead by
+`tests/review/test_resolution.py::TestResolveReviewEndToEnd::test_a_fix_since_the_review_resolves_addressed`,
+which drives the same path through the real writers with the transport mocked.
 
 ```bash
-# 1. Author a review with the new stamp
+# 1. Author a review; it carries the new stamp
 sq review code 305 -v
 grep reviewedSha project-documents/user/reviews/305-review.code.*.md
+# → reviewedSha: <the HEAD the review was authored against>
+git add -A && git commit -m "review: code review for 305"
 
-# 2. Fix the findings, commit
-#    ... edits ...
-git commit -am "fix: address review findings"
-
-# 3. Derive resolution (type inferred — only one 305 review exists;
-#    `sq review resolve 305 code` to be explicit)
+# 2. Resolve with nothing changed since the review
 sq review resolve 305 -v
-# → per-finding table, resolution: ADDRESSED, artifact path printed
-cat project-documents/user/reviews/305-resolution.code.*-r1.md
+# → WARNING "nothing changed since the review was authored; 1 prior finding(s) unaddressed"
+# → table: F001 | unaddressed | byte_identical
+# → resolution: UNADDRESSED, exit code 1, artifact ...-r1.md
+#   The reviews directory is excluded from the measurement, so the review file
+#   committed after its own reviewedSha does not count as work.
 
-# 4. Prove the review file was not touched
+# 3. Prove the review file was not touched
 git status --porcelain project-documents/user/reviews/305-review.code.*.md
 # → empty
 
-# 5. Negative case: resolve with nothing changed
-sq review resolve 305        # immediately again, no new commits
-# → r2 artifact; findings judged against the same diff (statuses persist)
+# 4. Fix the finding, commit, resolve again
+#    ... edits ...
+git commit -am "fix: address review findings"
+sq review resolve 305 -v
+# → judge consulted over the CONCERN+ residue; ADDRESSED exits 0
+#   (covered by test_a_fix_since_the_review_resolves_addressed)
 
-# 6. Screens-only path
-sq review resolve 305 --no-judge
-# → resolution: UNKNOWN, exit code 1
+# 5. Screens-only path — no model call, no tokens
+sq review resolve 305 --no-judge -v
+# → WARNING "--no-judge was given; 1 CONCERN+ finding(s) left unsettled"
+# → table: F001 | disputed | judge | "the judge did not settle this finding"
+# → resolution: UNKNOWN, exit code 1, next -r{n}
+#   Every accountable finding appears in the artifact even when nothing settled
+#   it — an unsettled finding is recorded as unsettled, never omitted.
+
+# 6. Artifact shape
+cat project-documents/user/reviews/305-resolution.code.*-r1.md
+# → docType: review-resolution, reviewVerdict carried verbatim, resolution:,
+#   reviewedSha/resolvedSha/shaSource, judgeModel, dateCreated (unquoted),
+#   findingStatuses[], and a body line stating this does not change verdict:
 
 # 7. Overwrite guard
 echo "## Hand note" >> project-documents/user/reviews/305-review.code.*.md
 sq review code 305
-# → WARNING + archive/ copy containing the hand note
+# → WARNING "overwriting ...; prior content archived to
+#   project-documents/user/reviews/archive/305-review.code.<slice>.md"
+# → the hand note is in the archived copy; the new review is written in place
 
 # 8. PM procedure (manual, unchanged in mechanism)
 #    verdict edit in review frontmatter, commit message citing the r1 artifact

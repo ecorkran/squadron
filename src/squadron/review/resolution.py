@@ -16,7 +16,13 @@ from enum import StrEnum
 from pathlib import Path
 
 from squadron.review.addressed.judge import JudgeLegResult, judge_residue_core
-from squadron.review.addressed.models import FindingOutcome, FindingRecord, concern_plus
+from squadron.review.addressed.models import (
+    FindingOutcome,
+    FindingRecord,
+    FindingStatus,
+    SettlingScreen,
+    concern_plus,
+)
 from squadron.review.addressed.screens import RoundDiff
 from squadron.review.addressed.verification import (
     derive_addressed_verdict,
@@ -163,6 +169,36 @@ async def _run_judge_leg(
     )
 
 
+#: What an unsettled finding's record says. A finding the judge never spoke
+#: about is disputed by the same rule as one it spoke about indefensibly:
+#: uncertainty, recorded as uncertainty.
+UNSETTLED_NOTE = "the judge did not settle this finding"
+
+
+def _with_unsettled_recorded(
+    outcomes: list[FindingOutcome], accountable: list[FindingRecord]
+) -> list[FindingOutcome]:
+    """Append a DISPUTED outcome for every accountable finding with no outcome.
+
+    A skipped or failed judge leg returns no outcomes at all, which would leave
+    the artifact silent about findings it was supposed to account for — and the
+    artifact exists precisely so a reader can see which findings are unsettled
+    and why. The derivation already reads this state as UNKNOWN, so recording
+    it changes the record rather than the answer.
+    """
+    settled = {outcome.finding_id for outcome in outcomes}
+    return outcomes + [
+        FindingOutcome(
+            finding_id=record.finding_id,
+            status=FindingStatus.DISPUTED,
+            screen=SettlingScreen.JUDGE,
+            note=UNSETTLED_NOTE,
+        )
+        for record in accountable
+        if record.finding_id not in settled
+    ]
+
+
 @dataclass(frozen=True)
 class SettledFindings:
     """What the resolve path concluded, and the evidence it concluded it from."""
@@ -229,11 +265,14 @@ async def settle_findings(
         cwd=cwd,
         no_judge=no_judge,
     )
-    verified = verify_outcomes(
-        leg.outcomes,
-        residue=accountable,
-        fresh_findings=[],
-        diff=diff,
+    verified = _with_unsettled_recorded(
+        verify_outcomes(
+            leg.outcomes,
+            residue=accountable,
+            fresh_findings=[],
+            diff=diff,
+        ),
+        accountable,
     )
     return SettledFindings(
         resolution=_LEG_VERDICT_TO_RESOLUTION[

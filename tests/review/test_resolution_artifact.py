@@ -37,7 +37,7 @@ def _record(**overrides: object) -> ResolutionRecord:
         "project": "squadron",
         "review_verdict": Verdict.CONCERNS,
         "resolution": Resolution.ADDRESSED,
-        "date_created": "20260803",
+        "date_created": 20260803,
         "reviewed_sha": "abc1234",
         "resolved_sha": "abc1234",
         "sha_source": "frontmatter",
@@ -91,7 +91,9 @@ class TestRenderResolution:
         assert parsed["resolvedSha"] == "abc1234"
         assert parsed["shaSource"] == "frontmatter"
         assert parsed["judgeModel"] == "claude-opus-4-5"
-        assert parsed["dateCreated"] == "20260803"
+        # Unquoted, so it parses as the same type every other squadron
+        # frontmatter emits for this key.
+        assert parsed["dateCreated"] == 20260803
 
         statuses = cast("list[dict[str, object]]", parsed["findingStatuses"])
         assert isinstance(statuses, list)

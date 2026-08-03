@@ -39,9 +39,9 @@ FIRST_REVISION = 1
 _DATE_FORMAT = "%Y%m%d"
 
 
-def today_stamp() -> str:
+def today_stamp() -> int:
     """Today as ``YYYYMMDD`` — the date format every artifact frontmatter uses."""
-    return datetime.now().strftime(_DATE_FORMAT)
+    return int(datetime.now().strftime(_DATE_FORMAT))
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,10 @@ class ResolutionRecord:
     #: edits it and never restates it as its own conclusion.
     review_verdict: str
     resolution: str
-    date_created: str
+    #: ``YYYYMMDD`` as an int, matching how every other squadron-written
+    #: frontmatter emits it — quoting it here would hand a cf-side reader a
+    #: different type for this docType than for every review beside it.
+    date_created: int
     #: What the review assessed. None when the review carried no stamp and the
     #: fallback answered instead — ``sha_source`` says which.
     reviewed_sha: str | None = None

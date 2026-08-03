@@ -17,7 +17,12 @@ from squadron.documents.frontmatter import read_frontmatter
 from squadron.review.addressed.models import FindingStatus, SettlingScreen
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 from squadron.review.persistence import REVIEWS_DIR, SliceInfo, save_review_result
-from squadron.review.resolution import Resolution, resolve_review, settle_findings
+from squadron.review.resolution import (
+    UNSETTLED_NOTE,
+    Resolution,
+    resolve_review,
+    settle_findings,
+)
 from squadron.review.resolution_evidence import (
     DiffBaseSource,
     ResolutionError,
@@ -757,3 +762,62 @@ class TestResolveReviewEndToEnd:
         assert frontmatter["resolution"] == Resolution.UNADDRESSED.value
         assert frontmatter["project"] == "squadron"
         assert frontmatter["slice"] == "findings-addressed"
+
+
+class TestUnsettledFindingsAreRecorded:
+    """An unsettled finding must appear in the artifact, not vanish from it."""
+
+    @pytest.fixture
+    def repo_with_change(self, git_repo: Path) -> tuple[Path, Path]:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+        return git_repo, path
+
+    @pytest.mark.asyncio
+    async def test_no_judge_records_each_finding_as_disputed(
+        self, repo_with_change: tuple[Path, Path]
+    ) -> None:
+        repo, path = repo_with_change
+        with patch(_JUDGE_TRANSPORT, AsyncMock()):
+            settled = await settle_findings(
+                load_review(path),
+                model_id=None,
+                profile="sdk",
+                cwd=str(repo),
+                no_judge=True,
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert [outcome.finding_id for outcome in settled.outcomes] == ["F001"]
+        assert settled.outcomes[0].status == FindingStatus.DISPUTED
+        assert settled.outcomes[0].note == UNSETTLED_NOTE
+
+    @pytest.mark.asyncio
+    async def test_transport_failure_records_each_finding_as_disputed(
+        self, repo_with_change: tuple[Path, Path]
+    ) -> None:
+        repo, path = repo_with_change
+        transport = AsyncMock(side_effect=RuntimeError("provider unreachable"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert settled.outcomes[0].status == FindingStatus.DISPUTED
+
+    @pytest.mark.asyncio
+    async def test_a_judge_answer_is_not_overwritten_by_the_backfill(
+        self, repo_with_change: tuple[Path, Path]
+    ) -> None:
+        repo, path = repo_with_change
+        transport = AsyncMock(return_value=_judge_output("F001: addressed — guarded"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+            )
+
+        assert len(settled.outcomes) == 1
+        assert settled.outcomes[0].status == FindingStatus.ADDRESSED

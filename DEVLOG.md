@@ -2,13 +2,35 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260802
+dateUpdated: 20260803
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260803 (4)
+
+### Slice 306: Review Resolution — Implementation (Phase 6)
+
+Both task files complete on `306-slice.review-resolution-recording-that-findings-were-addressed`. `sq review resolve <n> [TYPE]` ships, `reviewedSha:` is stamped at review-authoring time, and re-running a review no longer destroys the previous one.
+
+**The dependency-direction problem Part 0 was built to solve turned out to reach further than the design anticipated.** Design review F002 barred `review/` from importing `pipeline/`, and the relocation moved models, parsing, verification, and the judge transport into `review/addressed/` accordingly. But two of the moved modules annotate `RoundDiff`, which the design left in the pipeline package as loop-specific machinery — resolved in file 1 with `TYPE_CHECKING` imports, which held only because the uses were annotations. T21 needs to *construct* one, and `TYPE_CHECKING` cannot launder that.
+
+Resolved by splitting the screens on the criterion the design itself states — what needs loop context stays. `RoundDiff`, the git measurement, `ScreenResult`, `screen_byte_identical`, and `screen_git_failure` need none of it and moved to `review/addressed/screens.py`; screen 0 (needs an iteration number) and screen 2 (needs a fresh review) stayed. The two `TYPE_CHECKING` shims became plain imports. 305's gate tests pass with only mock-target relocation — no assertion changed.
+
+The measurement itself unified along the way. `compute_round_diff` and the new base-parameterized diff are the same function: `git diff <base>` with a single commit argument spans base→working tree, so `compute_round_diff` is `compute_diff_since("HEAD")` and the gate's failed-command string is unchanged.
+
+**Two gaps the task file did not anticipate, both found by running the thing.** First: a review file is written *after* the commit its own `reviewedSha` names, so it always appears in its own diff — the empty-diff screen would have been unreachable, and every stale review would have gone to the judge with the review itself as its only evidence. The reviews directory is now excluded from the measurement. Second: `review/git_utils` already owns the name `resolve_diff_base` for a different question (which branch slice work forks from), and the conftest patches it autouse; the new one is `resolve_review_diff_base`.
+
+**T25's injection cap.** 305 enforces `review.max_total_injection_bytes` on file injections but does not apply it to the judge's change-set input. Per T25's instruction, the check was added on this path only and the gap in 305 is flagged rather than silently fixed here.
+
+Scope notes. T13's guard grew to both persistence paths with PM approval (file 1). `_yaml_safe` and the `safe_dump` pattern were promoted out of `evidence.py` into `documents/frontmatter.py` as `yaml_safe`/`render_frontmatter_block`, both call sites updated; `evidence.py`'s duplicate reviews-dir constant now points at `persistence.REVIEWS_DIR`. `resolution.py` hit 613 lines and was split at the evidence/decision seam into `resolution_evidence.py` (locate, load, diff base, measure, screens) and `resolution.py` (decide, orchestrate), with `resolution_artifact.py` holding render and the versioned writer. T31/T32 landed inside T29/T30's commit rather than their own — the writer was needed to lint the module it lives in.
+
+Still open: T39's Context Forge coordination note has no agreed delivery mechanism (issue, message, or shared doc) — a question for the PM, not something to guess at.
 
 ---
 
