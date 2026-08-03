@@ -12,6 +12,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (3)
+
+### Slice 306: Task Breakdown Review (Part 2) — Resolved
+
+File 2's task-breakdown review returned CONCERNS — three concerns, two notes. All fixed. One of the three concerns (F005, the Phase 5 cf-archive-scanning checklist item) turned out to already be resolved: this reviewer flagged it as unconfirmable from file 2 alone ("I can only review file 2"), and file 1's own review had independently caught the same gap as its F002 and fixed it before this review was read — both reviewers converged on the same real gap from different files.
+
+The other two concerns were genuine coverage holes. F004: `metrology/capture.py` has its own index-scoped review-discovery glob, distinct from `discover_judge_results` — confirmed by reading the source — and T32 only tested the latter; SC11's own wording says "and," so both now get asserted separately. F006: T33's "no swallowed WARNING/ERROR" requirement had no test anywhere; T34 gained a `caplog` assertion using the file-history-fallback WARNING as a convenient, already-set-up case.
+
+File 2 is now 502 lines, 52 over the ~450 guideline — inside the "don't split under ~100 overrun" threshold, left as one file.
+
+---
+
 ## 20260803 (2)
 
 ### Slice 306: Task Breakdown Review (Part 1) — Resolved

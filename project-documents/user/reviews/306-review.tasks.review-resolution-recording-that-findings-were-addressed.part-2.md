@@ -58,6 +58,35 @@ findings:
 **Verdict:** CONCERNS
 **Model:** minimax/minimax-m3
 
+## Resolution (20260803)
+
+All three concerns fixed; both notes fixed as well (both were cheap and correct).
+
+- **F004 (concern, FIXED)** — Confirmed by reading the source:
+  `metrology/capture.py` has its own index-scoped review-discovery function
+  (`reviews_dir.glob(f"{index}-review.*")`), distinct from
+  `discover_judge_results`'s `*-review.*` pattern — exactly the gap
+  flagged. T32 gained a second bullet requiring that function be called
+  and asserted separately, per SC11's own "and" wording, rather than
+  inferring its exclusion from `discover_judge_results`'s test alone.
+- **F005 (concern, ALREADY RESOLVED)** — Confirmed: file 1's own review
+  (part-1) independently caught the same gap as its F002, and its fix
+  (reordering the cf-scanning checkpoint to T12, structurally before the
+  archive guard) landed in file 1 before this review was read. No further
+  action here; cross-checked that file 1 now satisfies the slice design's
+  Phase 5 note.
+- **F006 (concern, FIXED)** — Added a `caplog`-based assertion to T34
+  requiring one WARNING (the file-history-fallback case, reusing T19/T20's
+  setup) to be observed propagating through `resolve_review` at WARNING
+  level — testing T33's no-swallowed-log requirement directly rather than
+  by inference from the e2e tests' other assertions.
+- **F007 (note, FIXED)** — T20 gained the missing `--since` +
+  absent-`reviewedSha` test case, with a note distinguishing it from the
+  `--since`-overrides-a-present-value case already covered.
+- **F008 (note, FIXED)** — T29 now names both call sites that must move to
+  the promoted `_yaml_safe` if that path is chosen:
+  `gate_evidence_frontmatter` and the new `render_resolution`.
+
 ## Findings
 
 ### [PASS] Full coverage of SC2 through SC13 across Parts B and C

@@ -131,6 +131,12 @@ status: not_started
         exact SHA returned.
   - [ ] Test: `reviewedSha` absent, no `--since` — `source="file-history"`,
         WARNING logged, SHA resolved via `git log -1`.
+  - [ ] Test: `--since` given **and** `reviewedSha` absent — `source="since"`,
+        the given ref is used directly, and **no** file-history fallback
+        WARNING is logged (a distinct fixture from the first bullet above,
+        which has `reviewedSha` present: this one confirms `--since`'s
+        precedence holds even when there is nothing to fall back to, not
+        just when it is overriding a real value).
   - Commit: `feat: add diff-base resolution with reviewedSha and file-history fallback`
   - Effort: 1/5
 
@@ -282,6 +288,11 @@ status: not_started
         code actually looks like once file 1's T5–T7 have landed, but do not
         hand-roll a third unescaped-string frontmatter writer (305 F005's
         lesson applies identically: notes embed arbitrary model text).
+        **If promoting `_yaml_safe`, update both call sites**:
+        `pipeline/actions/findings_addressed/evidence.py`'s
+        `gate_evidence_frontmatter` (existing caller) and this task's own
+        new `render_resolution` (below) — both must import the promoted
+        version, not one importing it and the other keeping a local copy.
   - [ ] Build `render_resolution(index, review_type, slice_name, project,
         review_verdict, resolution, reviewed_sha, resolved_sha, sha_source,
         judge_model, finding_statuses) -> str` producing the frontmatter
@@ -331,6 +342,18 @@ status: not_started
         `*-review.*` pattern (verify this is true by construction: the
         filename format is `{index}-resolution.{type}.{name}-r{n}.md`, which
         contains no `-review.` substring).
+  - [ ] **Second, separate glob is a distinct function — test it too.**
+        `metrology/capture.py` has its own index-scoped review-discovery
+        function using `reviews_dir.glob(f"{index}-review.*")` (a different
+        pattern shape than `discover_judge_results`'s `*-review.*`, though
+        the same "no `-review.` substring" proof applies to both). Add a
+        second assertion — call that function (find its current name by
+        reading `metrology/capture.py`, since this task file predates it
+        and should not guess at an API) against the same fixture directory
+        and assert it also returns no resolution artifacts. Do not assume
+        one glob's exclusion implies the other's — assert both explicitly,
+        per SC11's own wording ("`discover_judge_results` **and** review
+        discovery").
   - Commit: `feat: add versioned resolution-artifact writer with no-overwrite guarantee`
   - Effort: 1/5
 
@@ -361,6 +384,18 @@ status: not_started
         directly, do not infer it).
   - [ ] Test the full negative chain in one fixture: empty diff → UNADDRESSED
         → fix nothing, resolve again → still UNADDRESSED, `-r2` written.
+  - [ ] **Test T33's no-swallowed-log requirement directly, not by
+        inference.** T33 states every WARNING/ERROR a called step emits
+        must actually surface through `resolve_review`. Nothing else in
+        this file asserts that — without it, the F001 mismatch WARNING
+        (T23/T24), the injection-cap WARNING (T25/T26), or the
+        file-history-fallback WARNING (T19/T20) could be silently dropped
+        by the orchestration layer with no test catching it. Using
+        `caplog`, drive `resolve_review` through one path that a called
+        function is known to WARNING on (the file-history-fallback case
+        from T19/T20 is a convenient one — no mocking beyond what T20
+        already sets up) and assert the WARNING text appears in `caplog`
+        at `WARNING` level, not `INFO` or below, not absent.
   - Commit: `feat: add end-to-end review-resolution orchestration`
   - Effort: 2/5
 
