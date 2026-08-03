@@ -31,7 +31,7 @@ from squadron.review.addressed.models import (
 )
 from squadron.review.models import ReviewResult, Verdict
 
-_JUDGE_TRANSPORT = "squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile"
+_JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
 
 
 def _finding(

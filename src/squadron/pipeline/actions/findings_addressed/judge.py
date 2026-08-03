@@ -1,59 +1,31 @@
-"""Consult a judge on the residue the deterministic screens could not settle.
+"""Resolve the gate step's judge model, then delegate to the shared transport.
 
-Transport only: the call goes through ``run_review_with_profile`` and its
-output is never persisted as a review file. Metrology's
-``discover_judge_results`` globs ``*-review.*`` and keeps anything whose
-template is a judge template, so a persisted file here would be swept into the
-calibration sample set — decider evidence counted as assessor evidence.
+The transport itself lives in ``squadron.review.addressed.judge`` — it is
+review-domain logic with no pipeline dependency. What stays here is exactly
+what is loop-specific: reading the gate step's ``judge:`` block and the
+resolver cascade off an ``ActionContext``.
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 
 from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolutionError
 from squadron.providers.base import ProfileName
-from squadron.review.addressed.models import FindingOutcome, FindingRecord
-from squadron.review.addressed.parsing import (
-    is_parse_failure,
-    parse_status_lines,
-    statuses_to_outcomes,
+from squadron.review.addressed.judge import (
+    JUDGE_TEMPLATE_NAME,
+    JudgeLegResult,
+    judge_residue_core,
 )
-from squadron.review.review_client import run_review_with_profile
+from squadron.review.addressed.models import FindingRecord
 from squadron.review.templates import get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
 
-#: The bundled template this policy consults. Deliberately not a judge
-#: template (no ``judge:`` block) — it emits statuses, not a score.
-JUDGE_TEMPLATE_NAME = "judge.findings-addressed"
-
 #: Config key of the gate step's optional ``judge:`` block.
 JUDGE_BLOCK_PARAM = "judge"
-
-
-@dataclass(frozen=True)
-class JudgeLegResult:
-    """What the judge leg produced, and whether it could run at all."""
-
-    outcomes: list[FindingOutcome] = field(default_factory=list[FindingOutcome])
-    failed: bool = False
-    model: str | None = None
-    template: str | None = None
-
-
-def _render_findings(records: list[FindingRecord]) -> str:
-    """One finding per line, ids exactly as the judge must echo them back."""
-    if not records:
-        return "(none)"
-    return "\n".join(
-        f"- {record.finding_id}: [{record.severity}] {record.category} at "
-        f"{record.location} — {record.summary}"
-        for record in records
-    )
 
 
 def _resolve_model(context: ActionContext, template_model: str | None) -> tuple[str | None, str]:
@@ -93,66 +65,32 @@ async def judge_residue(
     fresh_findings: list[FindingRecord],
     diff: RoundDiff,
 ) -> JudgeLegResult:
-    """Ask the judge for one status per residue finding.
+    """Resolve model and profile from *context*, then run the shared transport.
 
-    Invoked only when the residue is non-empty — round 1 and byte-identical
-    rounds never reach here, which is what keeps the token cost proportional
-    to genuine uncertainty. Any transport failure is a judge failure, which
-    the derivation maps to UNKNOWN: fail-closed, never fail-open.
+    A model that cannot be resolved is a judge failure, which the derivation
+    maps to UNKNOWN: fail-closed, never fail-open. The template lookup here is
+    only for the resolver's fallback model — an unregistered template is
+    reported by the transport, once.
     """
     if not residue:
         return JudgeLegResult()
 
     load_all_templates()
     template = get_template(JUDGE_TEMPLATE_NAME)
-    if template is None:
-        _logger.error(
-            "findings-addressed: judge template %r is not registered; leg fails closed",
-            JUDGE_TEMPLATE_NAME,
-        )
-        return JudgeLegResult(failed=True, template=JUDGE_TEMPLATE_NAME)
 
     try:
-        model_id, profile_name = _resolve_model(context, template.model)
+        model_id, profile_name = _resolve_model(
+            context, template.model if template is not None else None
+        )
     except ModelResolutionError:
         _logger.exception("findings-addressed: could not resolve a judge model; leg fails closed")
         return JudgeLegResult(failed=True, template=JUDGE_TEMPLATE_NAME)
 
-    inputs = {
-        "cwd": context.cwd,
-        "prior_findings": _render_findings(residue),
-        "round_diff": "\n".join(sorted(diff.changed_paths)) or "(no changed paths reported)",
-        "fresh_findings": _render_findings(fresh_findings),
-    }
-
-    try:
-        result = await run_review_with_profile(
-            template,
-            inputs,
-            profile=profile_name,
-            model=model_id,
-        )
-    except Exception:
-        # Any transport failure is fail-closed: the gate reports UNKNOWN and a
-        # human decides, rather than the round passing on an absent answer.
-        _logger.exception(
-            "findings-addressed: judge transport failed for %d residue finding(s)",
-            len(residue),
-        )
-        return JudgeLegResult(failed=True, model=model_id, template=JUDGE_TEMPLATE_NAME)
-
-    raw_output = result.raw_output or ""
-    statuses = parse_status_lines(raw_output)
-    if is_parse_failure(residue, statuses):
-        _logger.warning(
-            "findings-addressed: judge output carried no readable status line for any of "
-            "%d residue finding(s); leg fails closed",
-            len(residue),
-        )
-        return JudgeLegResult(failed=True, model=model_id, template=JUDGE_TEMPLATE_NAME)
-
-    return JudgeLegResult(
-        outcomes=statuses_to_outcomes(residue, statuses),
-        model=model_id,
-        template=JUDGE_TEMPLATE_NAME,
+    return await judge_residue_core(
+        residue=residue,
+        fresh_findings=fresh_findings,
+        diff=diff,
+        model_id=model_id,
+        profile=profile_name,
+        cwd=context.cwd,
     )

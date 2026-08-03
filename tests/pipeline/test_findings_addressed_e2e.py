@@ -24,7 +24,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefini
 from squadron.pipeline.steps import register_step_type
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 
-_JUDGE_TRANSPORT = "squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile"
+_JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
 _TARGET_FILE = "src/x.py"
 
 
