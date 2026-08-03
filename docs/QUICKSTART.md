@@ -138,7 +138,7 @@ The `sdk` profile (and the `haiku`/`sonnet`/`opus` aliases that route through it
 
 ## Your first review
 
-See [README.md § Quickstart](../README.md#quickstart) for a full walkthrough — configuring credentials, then running your first `sq review slice`, `sq review tasks`, and `sq review code`.
+See [README.md § Quickstart](../README.md#quickstart) for a full walkthrough — configuring credentials, then running your first `sq review slice`, `sq review tasks`, and `sq review code`, and closing the loop with `sq review resolve` once you've fixed what a review found.
 
 ## Your first pipeline run
 
