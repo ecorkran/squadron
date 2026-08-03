@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from squadron.review.addressed.models import FindingOutcome, FindingRecord
 from squadron.review.addressed.parsing import (
@@ -24,14 +23,9 @@ from squadron.review.addressed.parsing import (
     parse_status_lines,
     statuses_to_outcomes,
 )
+from squadron.review.addressed.screens import RoundDiff
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import get_template, load_all_templates
-
-if TYPE_CHECKING:
-    # Annotation only — ``screens`` is loop-specific and stays in the pipeline
-    # package. Importing it at runtime would invert the pipeline-consumes-review
-    # direction this package exists to preserve.
-    from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 
 _logger = logging.getLogger(__name__)
 

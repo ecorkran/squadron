@@ -8,21 +8,15 @@ rule. Whatever conclusion the judge stated is never read.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from squadron.review.addressed.models import (
     FindingOutcome,
     FindingRecord,
     FindingStatus,
 )
+from squadron.review.addressed.screens import RoundDiff
 from squadron.review.models import Verdict
 from squadron.review.parsers import UNVERIFIED_LOCATION, location_path
-
-if TYPE_CHECKING:
-    # Annotation only — ``screens`` is loop-specific and stays in the pipeline
-    # package. Importing it at runtime would invert the pipeline-consumes-review
-    # direction this relocation exists to preserve.
-    from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 
 _logger = logging.getLogger(__name__)
 

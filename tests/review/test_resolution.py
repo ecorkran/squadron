@@ -6,20 +6,36 @@ import logging
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from squadron.review.models import Verdict
+from squadron.review.addressed.models import FindingStatus, SettlingScreen
+from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import REVIEWS_DIR
 from squadron.review.resolution import (
     DiffBaseSource,
+    Resolution,
     ResolutionError,
     load_review,
     locate_review,
     resolve_review_diff_base,
     review_type_of,
+    settle_findings,
 )
+
+_JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
+
+
+def _judge_output(raw_output: str) -> ReviewResult:
+    return ReviewResult(
+        verdict=Verdict.UNKNOWN,
+        findings=[],
+        template_name="judge.findings-addressed",
+        input_files={},
+        raw_output=raw_output,
+    )
+
 
 _REVIEW_WITH_FINDINGS = """\
 ---
@@ -206,3 +222,121 @@ class TestResolveReviewDiffBase:
         base, source = resolve_review_diff_base({}, path, since=None, cwd=str(tmp_path))
         assert base is None
         assert source == DiffBaseSource.FILE_HISTORY
+
+
+def _commit(repo: Path, message: str) -> str:
+    subprocess.run(["git", "add", "-A"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", message], cwd=repo, capture_output=True, check=True)
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
+def _commit_work(repo: Path, body: str = "def save(): ...\n") -> str:
+    """Commit a source file, so there is something for the review to be about."""
+    source = repo / "src" / "foo.py"
+    source.parent.mkdir(exist_ok=True)
+    source.write_text(body)
+    return _commit(repo, "work under review")
+
+
+def _stamped_review(repo: Path, sha: str) -> Path:
+    """Write a review stamped with *sha*, then commit it."""
+    path = _write_review(
+        repo,
+        "305-review.code.findings-addressed.md",
+        _REVIEW_WITH_FINDINGS.replace("reviewedSha: abc1234", f"reviewedSha: {sha}"),
+    )
+    _commit(repo, "add review")
+    return path
+
+
+class TestScreensNeverReachTheJudge:
+    @pytest.mark.asyncio
+    async def test_nothing_changed_since_the_review_is_unaddressed(
+        self, git_repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The review file is committed after its own base — and must not count."""
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+
+        transport = AsyncMock()
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+            )
+
+        assert settled.resolution == Resolution.UNADDRESSED
+        assert settled.base == base_sha
+        assert settled.base_source == DiffBaseSource.FRONTMATTER
+        assert [outcome.finding_id for outcome in settled.outcomes] == ["F001"]
+        assert settled.outcomes[0].status == FindingStatus.UNADDRESSED
+        assert settled.outcomes[0].screen == SettlingScreen.BYTE_IDENTICAL
+        transport.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_git_failure_is_unknown_and_names_the_command(
+        self, git_repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+
+        transport = AsyncMock()
+        with (
+            patch("squadron.review.addressed.screens.run_git", return_value=None),
+            patch(_JUDGE_TRANSPORT, transport),
+            caplog.at_level(logging.WARNING),
+        ):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert settled.diff.failed_command == f"git diff {base_sha} --name-only"
+        assert settled.diff.failed_command in caplog.text
+        assert settled.outcomes == []
+        transport.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unresolvable_base_is_a_named_git_failure(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """No stamp and no file history — reported as the command that failed."""
+        path = _write_review(
+            tmp_path,
+            "305-review.code.findings-addressed.md",
+            _REVIEW_WITH_FINDINGS.replace("reviewedSha: abc1234\n", ""),
+        )
+
+        transport = AsyncMock()
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert settled.diff.failed_command is not None
+        assert "git log -1" in settled.diff.failed_command
+        transport.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_real_work_since_the_review_reaches_the_judge(self, git_repo: Path) -> None:
+        """The complement: a real change is not screened out before the judge."""
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed — guarded"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+            )
+
+        transport.assert_called_once()
+        assert settled.diff.changed_paths == frozenset({"src/foo.py"})
+        assert settled.resolution == Resolution.ADDRESSED
