@@ -12,6 +12,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (1)
+
+### Slice 306: Review Resolution — Task Breakdown (Phase 5)
+
+Task breakdown complete: `user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md` (Parts 0/A/D, T1–T14) and `-2.md` (Parts B/C + Closeout, T15–T40), 306 and 461 lines — split at the natural infrastructure/feature seam rather than a mechanical line-count cut, since Part B's every task imports from what Part 0 relocates. Slice design's `status:` moved to `in_progress`; no branch created yet.
+
+40 tasks, each paired with its test task per the test-with rule. Three sequencing notes worth keeping in mind at Phase 6: **Part 0 (the `review/addressed/` relocation) must land first** — every task in file 2 imports from the new location, and it is verified purely by re-running 305's existing suite unchanged, with no new tests written for code that only moved. **Part D (the overwrite guard) is independent of Part B** and fixes a live data-loss bug on its own, so it does not need to wait on the interactive command; T14's cf-archive-scanning check (design review F005) gates T12's completion in practice, even though it is numbered after it — the task file says so explicitly rather than relying on numbering to imply it. **Three design-review-added failure-closed rules got their own dedicated task pairs** rather than being folded into general error handling: the verdict-consistency screen (T23/T24, F001 — an empty CONCERN+ set against a FAIL/CONCERNS verdict is inconsistent evidence, not a pass, citing issue #28's parser-drop lineage directly in the task text), the judge-leg failure modes and injection cap (T25/T26, F004), and the archive-copy failure path (T12/T13, F003).
+
+One judgment call surfaced while breaking down T25: 305's architecture states an injection-cap constraint, but the breakdown does not know whether 305 enforces it in code today. Rather than assume and rather than silently expanding this slice's scope to add the check to 305 if it's missing there too, T25 instructs whoever implements it to add the same check on this path and separately flag the gap to the Project Manager if 305 turns out not to enforce it — scope stays bounded to 306, the fact surfaces either way.
+
+---
+
 ## 20260802 (4)
 
 ### Slice 306: Review Resolution — Slice Design (Phase 4)
