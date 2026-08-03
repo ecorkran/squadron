@@ -525,3 +525,104 @@ class TestJudgeLeg:
             pytest.raises(TypeError, match="max_total_injection_bytes"),
         ):
             await settle_findings(load_review(path), model_id=None, profile="sdk", cwd=str(git_repo))
+
+
+_TWO_CONCERNS_REVIEW = _REVIEW_WITH_FINDINGS.replace("severity: note", "severity: concern")
+
+
+class TestClaimVerification:
+    """The judge is consulted, not obeyed — on this path as on the gate's."""
+
+    @pytest.fixture
+    def repo_with_review(self, git_repo: Path) -> tuple[Path, Path]:
+        """A repo whose review cites ``src/foo.py`` and ``src/bar.py``."""
+        base_sha = _commit_work(git_repo)
+        path = _write_review(
+            git_repo,
+            "305-review.code.findings-addressed.md",
+            _TWO_CONCERNS_REVIEW.replace("reviewedSha: abc1234", f"reviewedSha: {base_sha}"),
+        )
+        _commit(git_repo, "add review")
+        return git_repo, path
+
+    @staticmethod
+    def _change(repo: Path, name: str) -> None:
+        (repo / "src" / name).write_text("changed\n")
+        _commit(repo, f"touch {name}")
+
+    @pytest.mark.asyncio
+    async def test_addressed_over_an_untouched_path_is_downgraded(
+        self, repo_with_review: tuple[Path, Path], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        repo, path = repo_with_review
+        self._change(repo, "bar.py")
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed\nF002: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+            )
+
+        statuses = {outcome.finding_id: outcome.status for outcome in settled.outcomes}
+        assert statuses["F001"] == FindingStatus.DISPUTED
+        assert statuses["F002"] == FindingStatus.ADDRESSED
+        assert settled.resolution == Resolution.UNKNOWN
+        assert "src/foo.py:10" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_moved_is_always_downgraded_with_no_fresh_findings(
+        self, repo_with_review: tuple[Path, Path], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Decision 3's stated consequence, confirmed rather than assumed."""
+        repo, path = repo_with_review
+        self._change(repo, "foo.py")
+        self._change(repo, "bar.py")
+
+        transport = AsyncMock(return_value=_judge_output("F001: moved successor=F009\nF002: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+            )
+
+        statuses = {outcome.finding_id: outcome.status for outcome in settled.outcomes}
+        assert statuses["F001"] == FindingStatus.DISPUTED
+        assert settled.resolution == Resolution.UNKNOWN
+        assert "F009" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_one_disputed_outranks_the_rest_being_addressed(
+        self, repo_with_review: tuple[Path, Path]
+    ) -> None:
+        """UNKNOWN is evaluated before a would-be pass — 305's ordering, here."""
+        repo, path = repo_with_review
+        self._change(repo, "foo.py")
+        self._change(repo, "bar.py")
+
+        transport = AsyncMock(return_value=_judge_output("F001: disputed\nF002: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+            )
+
+        statuses = {outcome.finding_id: outcome.status for outcome in settled.outcomes}
+        assert statuses == {
+            "F001": FindingStatus.DISPUTED,
+            "F002": FindingStatus.ADDRESSED,
+        }
+        assert settled.resolution == Resolution.UNKNOWN
+
+    @pytest.mark.asyncio
+    async def test_one_unaddressed_among_addressed_is_unaddressed(
+        self, repo_with_review: tuple[Path, Path]
+    ) -> None:
+        repo, path = repo_with_review
+        self._change(repo, "foo.py")
+        self._change(repo, "bar.py")
+
+        transport = AsyncMock(return_value=_judge_output("F001: unaddressed\nF002: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+            )
+
+        assert settled.resolution == Resolution.UNADDRESSED
