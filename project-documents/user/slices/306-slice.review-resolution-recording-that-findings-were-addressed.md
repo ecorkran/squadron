@@ -141,9 +141,11 @@ it imports the policy's building blocks, not the policy. The gate policy
 ### Data Flow
 
 ```
-sq review resolve 305 [--type code] [--model X] [--no-judge] [--since REF]
+sq review resolve 305 [TYPE] [--model X] [--no-judge] [--since REF]
   │
-  ├─ locate review artifact  project-documents/user/reviews/305-review.code.{name}.md
+  ├─ locate review artifact  project-documents/user/reviews/305-review.{type}.{name}.md
+  │    TYPE omitted → glob 305-review.*.md; exactly one match → inferred,
+  │    several → error listing them (never guess)
   ├─ parse frontmatter → verdict, findings[] → FindingRecord[] (severity
   │    normalized at the boundary, per 305 F001)
   ├─ CONCERN+ subset = what resolution is accountable for
@@ -279,10 +281,14 @@ unavailable → key omitted, WARNING (never a placeholder value). Effort 1/5.
 normalized via the existing `_as_severity`; malformed entries kept as
 residue, 305 rule). Judge-core extraction per Decision 4. Diff computation
 reuses `run_git` with base..HEAD `--name-only` plus `status --porcelain`
-(the working tree counts — an uncommitted fix is still a fix). CLI flags:
-`--type` (default `code`), `--model`, `--profile`, `--no-judge`, `--since`,
-`--cwd`, `-v`. Exit code 0 on ADDRESSED, 1 on UNADDRESSED/UNKNOWN, so the
-command composes in shell. Effort 3/5.
+(the working tree counts — an uncommitted fix is still a fix). CLI shape:
+`sq review resolve INDEX [TYPE]` — the type is a positional word like the
+rest of the review family (`sq review code 305`), not a `--type` flag.
+Omitted, it is inferred from `{index}-review.*.md`: exactly one match →
+that type; several → error listing the matches (never guess). Flags:
+`--model`, `--profile`, `--no-judge`, `--since`, `--cwd`, `-v`. Exit code 0
+on ADDRESSED, 1 on UNADDRESSED/UNKNOWN, so the command composes in shell.
+Effort 3/5.
 
 **Part C — contract + docs.** Schema above lands in `docs/COMMANDS.md`
 (`review resolve` section) and the PM procedure in the same section.
@@ -340,7 +346,8 @@ grep reviewedSha project-documents/user/reviews/305-review.code.*.md
 #    ... edits ...
 git commit -am "fix: address review findings"
 
-# 3. Derive resolution
+# 3. Derive resolution (type inferred — only one 305 review exists;
+#    `sq review resolve 305 code` to be explicit)
 sq review resolve 305 -v
 # → per-finding table, resolution: ADDRESSED, artifact path printed
 cat project-documents/user/reviews/305-resolution.code.*-r1.md
