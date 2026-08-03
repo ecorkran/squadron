@@ -121,22 +121,38 @@ it.
 
 ```
 review/
+  addressed/             NEW package — the context-free core, RELOCATED
+    models.py             FindingRecord/FindingStatus vocabulary,
+                           read_findings, records_from_frontmatter (new)
+    parsing.py             judge status-line parsing (moved verbatim)
+    verification.py        verify_outcomes, derivation rule (moved verbatim)
+    judge.py               context-free transport core (extracted + moved)
   resolution.py          NEW — orchestration: load review, compute diff,
-                          run screens, judge residue, derive, persist
+                          screen, judge residue, derive, persist
   persistence.py         Part A: reviewedSha stamp; Part D: overwrite guard
 cli/commands/review.py   NEW subcommand: review resolve
 pipeline/actions/findings_addressed/
-  judge.py               refactor: extract context-free transport core
-  models.py              NEW reader: records_from_frontmatter()
-  evidence.py            extract shared frontmatter-dump helper (reused
-                          by ResolutionEvidence)
+  screens.py, evidence.py, policy.py   stay — loop-specific machinery
+  judge.py               becomes a thin ActionContext wrapper over
+                          review/addressed/judge.py
 commands/sq/review.md    add `resolve` subcommand
 ```
 
-The new `review/resolution.py` lives in the **review** package, not in
-`pipeline/actions/` — it is a CLI-facing workflow over review artifacts, and
-it imports the policy's building blocks, not the policy. The gate policy
-(`FindingsAddressedPolicy`) is untouched.
+**Dependency direction (review F002).** The established direction is
+pipeline (140) consumes the review subsystem — and every module in
+`findings_addressed/` already imports `squadron.review.*`. Having
+`review/resolution.py` import `pipeline/actions/` internals would invert
+that and create a review ↔ pipeline package-level cycle. So the
+context-free core *moves* into `review/addressed/` rather than being
+imported across the boundary: models, parsing, verification, and the
+extracted judge transport are review-domain logic (they reason about
+findings and judge output, not about pipeline execution). What stays in
+`pipeline/actions/findings_addressed/` is exactly what is loop-specific:
+the screens that need a fresh review, the gate-evidence artifact, and the
+policy that plugs into the gate registry — each importing the moved core
+in the already-established direction. The moves are mechanical
+(import-path updates; 305's tests must pass unchanged), and the gate
+policy's behavior is untouched.
 
 ### Data Flow
 
@@ -149,8 +165,10 @@ sq review resolve 305 [TYPE] [--model X] [--no-judge] [--since REF]
   ├─ parse frontmatter → verdict, findings[] → FindingRecord[] (severity
   │    normalized at the boundary, per 305 F001)
   ├─ CONCERN+ subset = what resolution is accountable for
-  │    (empty → resolution artifact with `resolution: ADDRESSED`, annotated
-  │     "no CONCERN+ findings"; nothing to judge)
+  │    empty AND review verdict PASS        → ADDRESSED, annotated, no judge
+  │    empty BUT review verdict FAIL/CONCERNS → UNKNOWN + WARNING naming the
+  │      mismatch — the parser is known to drop findings (#28 lineage), and
+  │      inconsistent evidence is a check that could not run, not a pass
   ├─ diff base = frontmatter reviewedSha
   │    │  absent (legacy review) → last commit touching the review file
   │    │    (`git log -1 --format=%H -- <file>`), WARNING naming the fallback
@@ -162,6 +180,11 @@ sq review resolve 305 [TYPE] [--model X] [--no-judge] [--since REF]
   ├─ Judge over all remaining findings (there is no fresh review, so 305's
   │    exact-match screen cannot run — see Decision 3)
   │    --no-judge → residue stays disputed → UNKNOWN
+  │    judge transport failure, timeout, or unreadable response → UNKNOWN
+  │      + WARNING (305's semantics, restated here, not left to inference)
+  │    diff over the injection cap (--since can reach arbitrarily far back)
+  │      → UNKNOWN + WARNING naming the cap and the base used — the
+  │      architecture's cap constraint applies to this path unchanged
   ├─ verify_outcomes: ADDRESSED over an untouched path → disputed (reused
   │    verbatim); MOVED always downgraded (no fresh findings to verify a
   │    successor against — documented, not special-cased)
@@ -204,15 +227,18 @@ stated in the artifact's rendering so a reader knows which machinery ran.
 Running a fresh review inside `resolve` to restore Screen 2 was rejected:
 it duplicates `sq review code` and reintroduces the overwrite hazard.
 
-**Decision 4 — the judge transport is extracted, not duplicated.**
-`judge_residue` is coupled to `ActionContext` (resolver, params, cwd). Part
-B extracts a context-free core — `judge_residue_core(residue,
-fresh_findings, diff, *, model_id, profile, cwd)` — with the existing
-`judge_residue(context, …)` becoming a thin wrapper that resolves
-model/profile from the context and delegates. No behavior change; the
-existing 305 test suite must pass unchanged against the wrapper. CLI model
-resolution follows the review commands' existing cascade (`--model` flag →
-config defaults → template default).
+**Decision 4 — the judge transport is extracted, not duplicated, and the
+context-free core relocates to `review/addressed/`.** `judge_residue` is
+coupled to `ActionContext` (resolver, params, cwd). Part B extracts a
+context-free core — `judge_residue_core(residue, fresh_findings, diff, *,
+model_id, profile, cwd)` — and moves it, together with the models, parsing,
+and verification modules it depends on, into `review/addressed/` (see
+Dependency direction above). The existing `judge_residue(context, …)`
+becomes a thin wrapper in `pipeline/actions/findings_addressed/` that
+resolves model/profile from the context and delegates. No behavior change;
+the existing 305 test suite must pass unchanged against the wrapper. CLI
+model resolution follows the review commands' existing cascade (`--model`
+flag → config defaults → template default).
 
 **Decision 5 — derivation vocabulary is reused, with a distinct top-level
 field.** Per-finding statuses are 305's `FindingStatus` enum, unchanged.
@@ -295,10 +321,17 @@ Effort 3/5.
 Coordination item filed against context-forge referencing the schema.
 Effort 1/5.
 
-**Part D — overwrite guard.** In `save_review_file`: target exists →
-`archive/` copy + WARNING, then write proceeds. One test: re-save over an
-edited review preserves the edited content in `archive/` byte-for-byte.
-Effort 1/5.
+**Part D — overwrite guard, fail-closed.** In `save_review_file`: target
+exists → copy to `archive/`, **verify the copy** (read back, compare
+size/content), then overwrite. If the archive copy cannot be made or
+verified — permissions, missing directory, disk full — the overwrite is
+**aborted**: the review content is still printed to the terminal, the save
+returns None with an ERROR naming both paths, and the original file is
+untouched. A guard that fails open would destroy exactly the content it
+exists to protect. Two tests: (1) re-save over an edited review preserves
+the edited content in `archive/` byte-for-byte; (2) an unwritable
+`archive/` (a file where the directory should be, the existing test idiom)
+aborts the overwrite and leaves the original intact. Effort 1/5.
 
 ## Cross-Slice Dependencies
 
@@ -330,10 +363,24 @@ Effort 1/5.
       with a WARNING naming the fallback; `--since` overrides both.
 - [ ] Re-running `sq review code <N>` over an edited review file archives
       the prior content and warns; nothing is silently destroyed.
+- [ ] A review whose frontmatter verdict is FAIL/CONCERNS but whose parsed
+      findings contain zero CONCERN+ entries resolves to UNKNOWN with a
+      WARNING naming the mismatch — never ADDRESSED (F001; #28 lineage).
+- [ ] Judge transport failure and an unreadable judge response on the
+      resolve path yield UNKNOWN with a WARNING; a diff exceeding the
+      injection cap yields UNKNOWN naming the cap and the base used (F004).
+- [ ] A failed or unverifiable archive copy aborts the overwrite: the
+      original review file is byte-identical afterward and the save errors
+      loudly (F003).
 - [ ] Metrology `discover_judge_results` and review discovery return no
       resolution artifacts (test against the real glob).
-- [ ] 305's full test suite passes unchanged.
+- [ ] 305's full test suite passes unchanged — including after the
+      `review/addressed/` relocation (F002).
 - [ ] Second `resolve` run writes `-r2`, not over `-r1`.
+
+**Phase 5 note (review F005):** the cf `archive/`-scanning verification in
+Decision 7 must appear as its own checklist task in the breakdown, sequenced
+before Part D lands — it is a go/no-go on the archive filename scheme.
 
 ## Verification Walkthrough (draft — refine at Phase 6)
 
