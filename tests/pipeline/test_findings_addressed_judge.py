@@ -13,16 +13,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from squadron.pipeline.actions.findings_addressed import (
-    RoundDiff,
+from squadron.pipeline.actions.findings_addressed import RoundDiff, judge_residue
+from squadron.pipeline.models import ActionContext
+from squadron.review.addressed import (
     derive_addressed_verdict,
     is_parse_failure,
-    judge_residue,
     parse_status_lines,
     statuses_to_outcomes,
     verify_outcomes,
 )
-from squadron.pipeline.models import ActionContext
 from squadron.review.addressed.models import (
     FindingOutcome,
     FindingRecord,
