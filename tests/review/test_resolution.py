@@ -423,3 +423,105 @@ class TestVerdictConsistencyScreen:
 
         assert settled.resolution == Resolution.UNKNOWN
         assert "CONCERNS" in caplog.text
+
+
+class TestJudgeLeg:
+    @pytest.mark.asyncio
+    async def test_judge_claiming_addressed_over_a_touched_path_resolves_addressed(
+        self, git_repo: Path
+    ) -> None:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+            )
+
+        assert settled.resolution == Resolution.ADDRESSED
+        assert settled.outcomes[0].status == FindingStatus.ADDRESSED
+
+    @pytest.mark.asyncio
+    async def test_no_judge_leaves_findings_unsettled(
+        self, git_repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+
+        transport = AsyncMock()
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path),
+                model_id=None,
+                profile="sdk",
+                cwd=str(git_repo),
+                no_judge=True,
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert "--no-judge" in caplog.text
+        transport.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_transport_failure_is_unknown_not_a_pass(
+        self, git_repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+
+        transport = AsyncMock(side_effect=RuntimeError("provider unreachable"))
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.ERROR):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert "judge transport failed" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_change_set_over_the_injection_cap_never_reaches_the_judge(
+        self, git_repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """``--since`` can reach arbitrarily far back; the cap is what bounds it."""
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        for index in range(40):
+            (git_repo / f"file-with-a-long-name-{index:04d}.py").write_text("x = 1\n")
+        _commit(git_repo, "many files")
+
+        transport = AsyncMock()
+        with (
+            patch(_JUDGE_TRANSPORT, transport),
+            patch("squadron.review.resolution.get_config", return_value=100),
+            caplog.at_level(logging.WARNING),
+        ):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert "review.max_total_injection_bytes" in caplog.text
+        assert "100 bytes" in caplog.text
+        assert base_sha in caplog.text
+        transport.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_non_int_cap_is_an_error_not_an_unbounded_prompt(self, git_repo: Path) -> None:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("changed\n")
+        _commit(git_repo, "change")
+
+        with (
+            patch(_JUDGE_TRANSPORT, AsyncMock()),
+            patch("squadron.review.resolution.get_config", return_value="lots"),
+            pytest.raises(TypeError, match="max_total_injection_bytes"),
+        ):
+            await settle_findings(load_review(path), model_id=None, profile="sdk", cwd=str(git_repo))

@@ -15,8 +15,9 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.config.manager import get_config
 from squadron.documents.frontmatter import read_frontmatter
-from squadron.review.addressed.judge import judge_residue_core
+from squadron.review.addressed.judge import JudgeLegResult, judge_residue_core
 from squadron.review.addressed.models import (
     FindingOutcome,
     FindingRecord,
@@ -240,6 +241,38 @@ def resolve_review_diff_base(
     return completed.stdout.strip() or None, DiffBaseSource.FILE_HISTORY
 
 
+#: The config key the injection cap is read from. The judge's change-set input
+#: is injected content like any other, so it is measured against the same cap
+#: rather than a second one invented here.
+INJECTION_CAP_KEY = "review.max_total_injection_bytes"
+
+
+def _injection_cap(cwd: str) -> int:
+    """The configured injection cap in bytes.
+
+    Raises:
+        TypeError: If the configured value is not an int — the same failure the
+            review client raises, rather than a silent fallback that would let
+            an unbounded change set reach the judge.
+    """
+    cap = get_config(INJECTION_CAP_KEY, cwd=cwd)
+    if not isinstance(cap, int):
+        raise TypeError(f"{INJECTION_CAP_KEY} config value is not an int: {cap!r}")
+    return cap
+
+
+def exceeds_injection_cap(diff: RoundDiff, *, cwd: str) -> int | None:
+    """The cap, when the change set is too large to hand the judge; else None.
+
+    ``--since`` can name a ref arbitrarily far back, so the change set is not
+    bounded by anything the caller has already agreed to. Measured on the
+    rendered change-set text — the same bytes the judge prompt would carry.
+    """
+    cap = _injection_cap(cwd)
+    measured = len("\n".join(sorted(diff.changed_paths)).encode("utf-8"))
+    return cap if measured > cap else None
+
+
 def _file_history_command(review_path: Path) -> str:
     """The fallback command, verbatim, for reporting when it could not answer."""
     return f"git log -1 --format=%H -- {review_path}"
@@ -336,6 +369,62 @@ def screen_verdict_consistency(
     return Resolution.UNKNOWN
 
 
+async def _run_judge_leg(
+    accountable: list[FindingRecord],
+    diff: RoundDiff,
+    *,
+    base: str | None,
+    model_id: str | None,
+    profile: str,
+    cwd: str,
+    no_judge: bool,
+) -> JudgeLegResult:
+    """Consult the judge over the residue, or record why it was not consulted.
+
+    Two conditions skip the call, and both are reported as a judge failure
+    rather than as an answer: the caller asked for no judge, and a change set
+    too large to inject. Skipping fails closed by construction — the residue
+    stays unsettled, which the derivation reads as UNKNOWN.
+
+    The residue is the *entire* CONCERN+ set. 305's exact-match screen cannot
+    narrow it here: that screen needs a fresh review to compare against, and
+    this path has none (Decision 3).
+    """
+    if no_judge:
+        _logger.warning(
+            "review-resolve: --no-judge was given; %d CONCERN+ finding(s) left unsettled, "
+            "resolution %s",
+            len(accountable),
+            Resolution.UNKNOWN,
+        )
+        return JudgeLegResult(failed=True)
+
+    cap = exceeds_injection_cap(diff, cwd=cwd)
+    if cap is not None:
+        _logger.warning(
+            "review-resolve: the change set since %s exceeds the %s cap of %d bytes; "
+            "not consulting the judge, resolution %s",
+            base,
+            INJECTION_CAP_KEY,
+            cap,
+            Resolution.UNKNOWN,
+        )
+        return JudgeLegResult(failed=True)
+
+    return await judge_residue_core(
+        residue=accountable,
+        # No fresh review exists on this path, so there is no finding set to
+        # compare successors against. verify_outcomes will therefore downgrade
+        # every MOVED claim to disputed — the documented consequence of
+        # Decision 3, not a defect.
+        fresh_findings=[],
+        diff=diff,
+        model_id=model_id,
+        profile=profile,
+        cwd=cwd,
+    )
+
+
 @dataclass(frozen=True)
 class SettledFindings:
     """What the resolve path concluded, and the evidence it concluded it from."""
@@ -357,6 +446,7 @@ async def settle_findings(
     profile: str,
     cwd: str,
     since: str | None = None,
+    no_judge: bool = False,
 ) -> SettledFindings:
     """Decide each CONCERN+ finding's fate, cheapest evidence first.
 
@@ -392,13 +482,14 @@ async def settle_findings(
             base_source=base_source,
         )
 
-    leg = await judge_residue_core(
-        residue=accountable,
-        fresh_findings=[],
-        diff=diff,
+    leg = await _run_judge_leg(
+        accountable,
+        diff,
+        base=base,
         model_id=model_id,
         profile=profile,
         cwd=cwd,
+        no_judge=no_judge,
     )
     verified = verify_outcomes(
         leg.outcomes,
