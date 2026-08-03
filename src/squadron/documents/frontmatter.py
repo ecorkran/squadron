@@ -56,6 +56,41 @@ def read_frontmatter(path: Path) -> dict[str, object] | None:
     return {str(key): value for key, value in cast("dict[object, object]", loaded).items()}
 
 
+#: Wide enough that safe_dump never folds a long value across lines. Folding is
+#: valid YAML but makes an artifact harder to read and to grep.
+FRONTMATTER_LINE_WIDTH = 4096
+
+
+def yaml_safe(value: object) -> object:
+    """Coerce a value to a type ``yaml.safe_dump`` can represent.
+
+    The enums these artifacts carry (Verdict, Resolution, SettlingScreen,
+    FindingStatus) are ``str`` subclasses, and SafeDumper dispatches on the
+    exact type — an uncoerced member raises rather than serializing.
+    """
+    if value is None or isinstance(value, bool | int):
+        return value
+    return str(value)
+
+
+def render_frontmatter_block(data: dict[str, object]) -> str:
+    """The fenced YAML frontmatter block for *data*, without a trailing newline.
+
+    Serialization goes through ``yaml.safe_dump``, never an f-string. These
+    artifacts embed arbitrary model-authored text — a colon-space, a leading
+    ``#`` or ``-``, or an embedded newline would corrupt a hand-rendered block,
+    and the whole point of the block is that a machine can read it back.
+    """
+    dumped = yaml.safe_dump(
+        data,
+        sort_keys=False,
+        default_flow_style=False,
+        allow_unicode=True,
+        width=FRONTMATTER_LINE_WIDTH,
+    )
+    return f"---\n{dumped.rstrip(chr(10))}\n---"
+
+
 def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
     """Merge ``fields`` into the frontmatter block of ``path``.
 

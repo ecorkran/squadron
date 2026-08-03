@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,25 @@ def _pinned_diff_base() -> Iterator[str]:
         return_value=DEFAULT_DIFF_BASE,
     ):
         yield DEFAULT_DIFF_BASE
+
+
+@pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    """A temporary git repo with one commit, so HEAD resolves."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=True
+    )
+    (tmp_path / "README.md").write_text("init")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
+    return tmp_path
 
 
 @pytest.fixture

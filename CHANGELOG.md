@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 20260803
+
+### Added
+- **`sq review resolve <n>` records whether a review's findings were actually addressed.** Point it at a slice whose review raised CONCERN-or-worse findings and it measures what changed since the review was written, settles what it can without a model call, consults a judge only for the rest, and writes a `{n}-resolution.{type}.{slice}-r{n}.md` file beside the review. It never edits the review — the resolution is evidence about the review, not an amendment to it. Exits 0 on `ADDRESSED`, 1 on `UNADDRESSED` or `UNKNOWN`, so it composes in a shell. `--no-judge` runs the free checks only; `--since REF` measures from a ref you pick instead of the review's own anchor. Also available as `/sq:review resolve`.
+- **Review files now record the commit they assessed.** New reviews carry `reviewedSha:` in their frontmatter, which is what `sq review resolve` diffs against. Reviews written before this (or on a machine where git could not answer) carry no key and fall back to the review file's own commit history, with a warning saying the base is approximate.
+
+### Fixed
+- **Re-running a review no longer destroys the previous one.** `sq review code 305` still overwrites `305-review.code.<slice>.md`, but the existing content is first copied to `project-documents/user/reviews/archive/`, read back, and compared byte-for-byte; only then is the overwrite allowed. If the archive cannot be written or does not verify, the review is not saved and the command says so, leaving the original untouched. Hand-written notes in a review file previously vanished with no trace.
+
+### Changed
+- **A review that runs but cannot be saved now exits 1 instead of 0.** You still see the review — it is displayed before the save is attempted — but the file is what Context Forge and every other tool reads, so a run that leaves nothing on disk no longer reports success. A `FAIL` verdict still exits 2. If you have CI gating on `sq review` exit codes, a previously-silent save failure will now fail the job, which is the point.
+
 ## [0.9.0] - 20260802
 
 ### Added

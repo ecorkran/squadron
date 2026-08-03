@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import logging
 
-from squadron.pipeline.actions.findings_addressed.models import (
+from squadron.review.addressed.models import (
     FindingOutcome,
     FindingRecord,
     FindingStatus,
 )
-from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
+from squadron.review.addressed.screens import RoundDiff
 from squadron.review.models import Verdict
 from squadron.review.parsers import UNVERIFIED_LOCATION, location_path
 

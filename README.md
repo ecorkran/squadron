@@ -139,6 +139,16 @@ sq review tasks 118 -v
 sq review code --diff main -v
 ```
 
+### 4. After you fix the findings, record that you did
+
+A review is a fact about the code at a moment. Once you've fixed what it found, the file still says `verdict: FAIL` — correctly, because editing it would make the record unfalsifiable. So squadron writes a *second* record instead:
+
+```bash
+sq review resolve 118 -v
+```
+
+It measures what changed since the review was written, settles what it can for free, asks a judge only about the rest, and writes a `118-resolution.*.md` beside the review. The review file is never touched. Exits 0 on `ADDRESSED`, 1 otherwise, so it composes in CI.
+
 ## Using different models
 
 Use `--model` with a built-in alias to run reviews through any supported provider:
@@ -239,6 +249,28 @@ sq review code --files "src/**/*.py"
 # Changes to Python files since main
 sq review code --diff main --files "src/**/*.py"
 ```
+
+### Recording that findings were addressed
+
+`sq review resolve <n>` answers "did the work actually fix what the review found?" — derived from evidence, not asserted:
+
+```bash
+# The common case: resolve the only review for slice 118
+sq review resolve 118 -v
+
+# Disambiguate when several reviews exist for one slice
+sq review resolve 118 code
+
+# Deterministic checks only — no model call, no tokens
+sq review resolve 118 --no-judge
+
+# Measure from a ref you pick instead of the review's own anchor
+sq review resolve 118 --since v1.4.0
+```
+
+Three outcomes. `ADDRESSED` means every CONCERN-or-worse finding was settled *and* each claim survived checking against the real diff — a judge that claims it fixed a file the diff never touched is overruled. `UNADDRESSED` means at least one finding demonstrably wasn't. `UNKNOWN` means the check couldn't run or couldn't be trusted, and is never treated as a soft pass.
+
+Each run writes a new `-r{n}` file; resolutions are append-only. See [docs/COMMANDS.md](docs/COMMANDS.md) for the frontmatter schema.
 
 ### Adding project-specific rules
 
@@ -342,10 +374,14 @@ sq shutdown my-agent
 | Code | Meaning |
 |------|---------|
 | 0 | Success (PASS or CONCERNS verdict) |
-| 1 | Error (invalid arguments, missing files, runtime error) |
+| 1 | Error (invalid arguments, missing files, runtime error), or a review that ran but could not be saved |
 | 2 | Review verdict is FAIL |
 
 CONCERNS returns exit code 0 — it's informational, not a failure. This makes `sq` usable in CI pipelines where you want to gate on FAIL but not on warnings.
+
+A review that ran but whose file could not be written exits 1 even though you saw the output: the artifact is what tooling reads, so reporting success with nothing on disk would be a silent failure.
+
+`sq review resolve` uses its own two codes — 0 for `ADDRESSED`, 1 for `UNADDRESSED` or `UNKNOWN`.
 
 ## Pipelines (`sq run`)
 

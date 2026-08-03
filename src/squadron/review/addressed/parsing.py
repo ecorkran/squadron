@@ -13,7 +13,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from squadron.pipeline.actions.findings_addressed.models import (
+from squadron.review.addressed.models import (
     FindingOutcome,
     FindingRecord,
     FindingStatus,

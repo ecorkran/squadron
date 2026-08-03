@@ -2,13 +2,53 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260802
+dateUpdated: 20260803
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260803 (5)
+
+### Slice 306: Code Review — Resolved
+
+`306-review.code...md` returned **PASS** — four PASS findings, six notes, no CONCERN+. Four of the six notes were acted on; two were not, for stated reasons.
+
+**F009 was the one worth having.** `_save_and_report` catches the archive guard's `OSError`, prints the refusal, and returned — so a review that ran, displayed, and then could not be written exited 0. Downstream readers gate on the file, not on terminal output, so that is a silent failure of exactly the class Part D exists to prevent. Save failures now exit 1, with a `FAIL` verdict keeping its more specific exit 2; the tasks command still saves every part before exiting, since the reviews have already been paid for. Documented in the exit-code table.
+
+**F007 was more than cosmetic.** `_render_findings` promises the judge one finding per line, but finding text is model-authored and arrives through YAML, where a block scalar carries real newlines — and `records_from_frontmatter` does not strip them. A multi-line summary would not merely look untidy: it would present as an extra finding, and a line shaped like `F002: addressed` would read as a status. Every field is now collapsed to one line at render time, which is the seam that owns the format.
+
+**F006** renamed `exceeds_injection_cap` → `injection_cap_if_exceeded`; the old name promised a boolean and the function returns the cap value, which the caller needs in order to name it in the warning.
+
+**F005/F010** added CLI-layer tests for `--since` (including a bad ref, which must be a named git failure rather than a crash), `--model`/`--profile` passthrough asserted at the transport, and `-v`'s note column.
+
+**F008 left as-is.** `resolution.py` is 384 lines against a ~300 guideline the project states as "where practical"; the reviewer called it an observation rather than a violation, and the file is already the second half of a split made during implementation. Splitting again would trade one over-long orchestrator for three modules whose seams are less obvious than the first cut's.
+
+---
+
+## 20260803 (4)
+
+### Slice 306: Review Resolution — Implementation (Phase 6)
+
+Both task files complete on `306-slice.review-resolution-recording-that-findings-were-addressed`. `sq review resolve <n> [TYPE]` ships, `reviewedSha:` is stamped at review-authoring time, and re-running a review no longer destroys the previous one.
+
+**The dependency-direction problem Part 0 was built to solve turned out to reach further than the design anticipated.** Design review F002 barred `review/` from importing `pipeline/`, and the relocation moved models, parsing, verification, and the judge transport into `review/addressed/` accordingly. But two of the moved modules annotate `RoundDiff`, which the design left in the pipeline package as loop-specific machinery — resolved in file 1 with `TYPE_CHECKING` imports, which held only because the uses were annotations. T21 needs to *construct* one, and `TYPE_CHECKING` cannot launder that.
+
+Resolved by splitting the screens on the criterion the design itself states — what needs loop context stays. `RoundDiff`, the git measurement, `ScreenResult`, `screen_byte_identical`, and `screen_git_failure` need none of it and moved to `review/addressed/screens.py`; screen 0 (needs an iteration number) and screen 2 (needs a fresh review) stayed. The two `TYPE_CHECKING` shims became plain imports. 305's gate tests pass with only mock-target relocation — no assertion changed.
+
+The measurement itself unified along the way. `compute_round_diff` and the new base-parameterized diff are the same function: `git diff <base>` with a single commit argument spans base→working tree, so `compute_round_diff` is `compute_diff_since("HEAD")` and the gate's failed-command string is unchanged.
+
+**Two gaps the task file did not anticipate, both found by running the thing.** First: a review file is written *after* the commit its own `reviewedSha` names, so it always appears in its own diff — the empty-diff screen would have been unreachable, and every stale review would have gone to the judge with the review itself as its only evidence. The reviews directory is now excluded from the measurement. Second: `review/git_utils` already owns the name `resolve_diff_base` for a different question (which branch slice work forks from), and the conftest patches it autouse; the new one is `resolve_review_diff_base`.
+
+**T25's injection cap.** 305 enforces `review.max_total_injection_bytes` on file injections but does not apply it to the judge's change-set input. Per T25's instruction, the check was added on this path only; the gap in 305 is logged as issue #53 (low priority) rather than silently fixed here. 305's gate measures a round against `HEAD`, so its change set is bounded in practice — the resolve path's `--since` is what makes the cap load-bearing.
+
+Scope notes. T13's guard grew to both persistence paths with PM approval (file 1). `_yaml_safe` and the `safe_dump` pattern were promoted out of `evidence.py` into `documents/frontmatter.py` as `yaml_safe`/`render_frontmatter_block`, both call sites updated; `evidence.py`'s duplicate reviews-dir constant now points at `persistence.REVIEWS_DIR`. `resolution.py` hit 613 lines and was split at the evidence/decision seam into `resolution_evidence.py` (locate, load, diff base, measure, screens) and `resolution.py` (decide, orchestrate), with `resolution_artifact.py` holding render and the versioned writer. T31/T32 landed inside T29/T30's commit rather than their own — the writer was needed to lint the module it lives in.
+
+Still open: T39's Context Forge coordination note has no agreed delivery mechanism (issue, message, or shared doc) — a question for the PM, not something to guess at.
 
 ---
 

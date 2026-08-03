@@ -16,17 +16,19 @@ from unittest.mock import patch
 import pytest
 
 from squadron.pipeline.actions.findings_addressed import (
-    FindingRecord,
-    FindingStatus,
-    RoundDiff,
-    SettlingScreen,
     compute_round_diff,
-    concern_plus,
-    read_findings,
     run_deterministic_screens,
     screen_no_prior_round,
 )
 from squadron.pipeline.models import ActionResult
+from squadron.review.addressed.models import (
+    FindingRecord,
+    FindingStatus,
+    SettlingScreen,
+    concern_plus,
+    read_findings,
+)
+from squadron.review.addressed.screens import RoundDiff
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 
 _CWD = "/repo"
@@ -196,7 +198,7 @@ def test_screen_1_marks_every_prior_finding_unaddressed(
     caplog: pytest.LogCaptureFixture, no_transport: None
 ) -> None:
     with patch(
-        "squadron.pipeline.actions.findings_addressed.screens.run_git",
+        "squadron.review.addressed.screens.run_git",
         _fake_git({"diff": _completed(), "status": _completed(), "rev-parse": _completed("abc123\n")}),
     ):
         diff = compute_round_diff(cwd=_CWD)
@@ -223,7 +225,7 @@ def test_screen_1_marks_every_prior_finding_unaddressed(
 def test_untracked_file_alone_is_not_a_byte_identical_round(no_transport: None) -> None:
     """git diff misses untracked files; porcelain is why the screen is honest."""
     with patch(
-        "squadron.pipeline.actions.findings_addressed.screens.run_git",
+        "squadron.review.addressed.screens.run_git",
         _fake_git(
             {
                 "diff": _completed(),
@@ -247,7 +249,7 @@ def test_git_failure_yields_unknown_naming_the_command(
     caplog: pytest.LogCaptureFixture, no_transport: None
 ) -> None:
     with patch(
-        "squadron.pipeline.actions.findings_addressed.screens.run_git",
+        "squadron.review.addressed.screens.run_git",
         _fake_git({"diff": _completed(returncode=128)}),
     ):
         diff = compute_round_diff(cwd=_CWD)
@@ -267,7 +269,7 @@ def test_git_failure_yields_unknown_naming_the_command(
 def test_git_unavailable_yields_unknown(no_transport: None) -> None:
     """run_git returning None (git not invocable) is a failure, not an empty diff."""
     with patch(
-        "squadron.pipeline.actions.findings_addressed.screens.run_git",
+        "squadron.review.addressed.screens.run_git",
         _fake_git({"diff": None}),
     ):
         diff = compute_round_diff(cwd=_CWD)
@@ -292,7 +294,7 @@ def _changed_diff() -> Any:
 
 
 def test_screen_2_settles_a_recurring_exact_match(no_transport: None) -> None:
-    with patch("squadron.pipeline.actions.findings_addressed.screens.run_git", _changed_diff()):
+    with patch("squadron.review.addressed.screens.run_git", _changed_diff()):
         diff = compute_round_diff(cwd=_CWD)
 
     result = run_deterministic_screens(
@@ -309,7 +311,7 @@ def test_screen_2_settles_a_recurring_exact_match(no_transport: None) -> None:
 
 
 def test_screen_2_leaves_an_unmatched_finding_as_residue(no_transport: None) -> None:
-    with patch("squadron.pipeline.actions.findings_addressed.screens.run_git", _changed_diff()):
+    with patch("squadron.review.addressed.screens.run_git", _changed_diff()):
         diff = compute_round_diff(cwd=_CWD)
 
     result = run_deterministic_screens(
@@ -325,7 +327,7 @@ def test_screen_2_leaves_an_unmatched_finding_as_residue(no_transport: None) -> 
 def test_unverified_locations_never_settle_in_screen_2(no_transport: None) -> None:
     """904 normalizes every unknown location to one token; matching on it would
     collide two unrelated findings and trap the loop until exhaustion."""
-    with patch("squadron.pipeline.actions.findings_addressed.screens.run_git", _changed_diff()):
+    with patch("squadron.review.addressed.screens.run_git", _changed_diff()):
         diff = compute_round_diff(cwd=_CWD)
 
     result = run_deterministic_screens(

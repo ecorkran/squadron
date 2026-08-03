@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 from squadron.review.models import (
@@ -19,6 +23,7 @@ from squadron.review.persistence import (
     SliceInfo,
     format_review_markdown,
     save_review_file,
+    save_review_result,
     yaml_escape,
 )
 
@@ -257,3 +262,236 @@ class TestSaveReviewFile:
         result = save_review_file(content, "code", "my-slice", 146, cwd=str(tmp_path), as_json=True)
         assert result is not None
         assert result.suffix == ".json"
+
+
+# ---------------------------------------------------------------------------
+# reviewedSha stamp (slice 306 Part A)
+# ---------------------------------------------------------------------------
+
+
+def _frontmatter(md: str) -> dict[str, object]:
+    """Parse a rendered review's YAML frontmatter."""
+    data = yaml.safe_load(md.split("---")[1])
+    assert isinstance(data, dict)
+    return cast("dict[str, object]", data)
+
+
+class TestReviewedShaStamp:
+    def test_stamped_when_supplied(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info(), reviewed_sha="abc123")
+        assert "reviewedSha: abc123" in md
+        assert _frontmatter(md)["reviewedSha"] == "abc123"
+
+    def test_key_absent_when_not_supplied(self) -> None:
+        """Absent, not ``null`` — a fabricated anchor is worse than none."""
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+        assert "reviewedSha" not in md
+        assert "reviewedSha" not in _frontmatter(md)
+
+    def test_save_review_result_stamps_head(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(git_repo)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=git_repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert _frontmatter(path.read_text())["reviewedSha"] == head
+
+    def test_git_unavailable_omits_key_and_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """``run_git`` returning None means git could not be invoked at all."""
+        monkeypatch.chdir(tmp_path)
+        with (
+            caplog.at_level(logging.WARNING, logger="squadron.review.persistence"),
+            patch("squadron.review.persistence.run_git", return_value=None),
+        ):
+            path = save_review_result(_make_result(), "code", _make_slice_info())
+
+        assert "reviewedSha" not in _frontmatter(path.read_text())
+        assert any("reviewedSha will not be stamped" in r.message for r in caplog.records)
+
+    def test_git_nonzero_omits_key_and_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """git ran and refused — a different failure from git being absent."""
+        monkeypatch.chdir(tmp_path)
+        refused = subprocess.CompletedProcess(
+            args=["git", "rev-parse", "HEAD"], returncode=128, stdout="", stderr="not a repository"
+        )
+        with (
+            caplog.at_level(logging.WARNING, logger="squadron.review.persistence"),
+            patch("squadron.review.persistence.run_git", return_value=refused),
+        ):
+            path = save_review_result(_make_result(), "code", _make_slice_info())
+
+        assert "reviewedSha" not in _frontmatter(path.read_text())
+        assert any("reviewedSha will not be stamped" in r.message for r in caplog.records)
+
+    def test_findings_block_shape_is_unchanged_by_the_stamp(self) -> None:
+        """Bind the frontmatter findings shape ``records_from_frontmatter`` reads.
+
+        Part B parses this block out of real review artifacts. Nothing else
+        pins its shape, so a change to ``format_review_markdown`` could alter
+        it silently and only surface as a broken resolve against production
+        files. Rendered through the real formatter, with the new parameter set.
+        """
+        result = ReviewResult(
+            verdict=Verdict.FAIL,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.FAIL,
+                    title="Unhandled write failure",
+                    description="write_text can raise.",
+                    category="error-handling",
+                    location="src/a.py:10",
+                ),
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Duplicated parse",
+                    description="Two parsers.",
+                    category="duplication",
+                    location="src/b.py:42",
+                ),
+                ReviewFinding(
+                    severity=Severity.NOTE,
+                    title="Vague name",
+                    description="x is vague.",
+                    category="naming",
+                ),
+            ],
+            raw_output="raw",
+            template_name="code",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 4, 1, 12, 0, 0),
+            model="claude-opus-4-5",
+        )
+        md = format_review_markdown(result, "code", _make_slice_info(), reviewed_sha="deadbeef")
+        findings = _frontmatter(md)["findings"]
+
+        assert isinstance(findings, list)
+        assert len(findings) == 3
+        assert [f["severity"] for f in findings] == ["fail", "concern", "note"]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        for entry in findings:  # pyright: ignore[reportUnknownVariableType]
+            assert set(entry) >= {"id", "severity", "category", "summary"}  # pyright: ignore[reportUnknownArgumentType]
+        # ``location`` is emitted only when the finding carries one.
+        assert findings[0]["location"] == "src/a.py:10"  # pyright: ignore[reportUnknownVariableType]
+        assert "location" not in findings[2]  # pyright: ignore[reportUnknownArgumentType]
+
+
+# ---------------------------------------------------------------------------
+# Overwrite guard (slice 306 Part D)
+# ---------------------------------------------------------------------------
+
+
+_MARKER = "\n## Hand note — added after the review was authored\n"
+
+
+class TestArchiveOnOverwrite:
+    """A re-review must never silently destroy hand-written content."""
+
+    def test_prior_content_is_archived_byte_for_byte(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        edited = path.read_text() + _MARKER
+        path.write_text(edited)
+
+        path = save_review_result(_make_result(verdict=Verdict.PASS), "code", _make_slice_info())
+
+        archived = path.parent / "archive" / path.name
+        assert archived.read_text() == edited
+        assert _MARKER in archived.read_text()
+        # The new save landed on the original path.
+        assert _frontmatter(path.read_text())["verdict"] == "PASS"
+        assert _MARKER not in path.read_text()
+
+    def test_first_save_creates_no_archive_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        assert not (path.parent / "archive").exists()
+
+    def test_unwritable_archive_dir_aborts_and_leaves_original_intact(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Copy cannot be created — a file sits where the directory must go."""
+        reviews = tmp_path / "project-documents" / "user" / "reviews"
+        reviews.mkdir(parents=True)
+        path = reviews / "146-review.code.my-slice.md"
+        path.write_text("original content")
+        (reviews / "archive").write_text("not a directory")
+
+        with caplog.at_level(logging.ERROR, logger="squadron.review.persistence"):
+            result = save_review_file("replacement content", "code", "my-slice", 146, cwd=str(tmp_path))
+
+        assert result is None
+        assert path.read_text() == "original content"
+        assert any("could not archive" in r.message for r in caplog.records)
+
+    def test_unverifiable_copy_aborts_and_leaves_original_intact(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Copy succeeds but reads back wrong — a distinct path from no copy.
+
+        The archive file really is written here; only the verification read
+        disagrees, which is the corruption case the guard exists to catch.
+        """
+        reviews = tmp_path / "project-documents" / "user" / "reviews"
+        reviews.mkdir(parents=True)
+        path = reviews / "146-review.code.my-slice.md"
+        path.write_text("original content")
+
+        real_read_bytes = Path.read_bytes
+        calls: list[Path] = []
+
+        def _corrupt_read_back(self: Path) -> bytes:
+            calls.append(self)
+            data = real_read_bytes(self)
+            # First call reads the original; the second is the verification
+            # read of the freshly written archive copy.
+            return data if len(calls) == 1 else data + b"corrupted"
+
+        with (
+            caplog.at_level(logging.ERROR, logger="squadron.review.persistence"),
+            patch.object(Path, "read_bytes", _corrupt_read_back),
+        ):
+            result = save_review_file("replacement content", "code", "my-slice", 146, cwd=str(tmp_path))
+
+        assert result is None
+        assert path.read_text() == "original content"
+        # The copy itself was made — this is verification failure, not a
+        # failure to write.
+        assert (reviews / "archive" / path.name).read_text() == "original content"
+        assert any("does not match the original" in r.message for r in caplog.records)
+
+    def test_save_review_result_raises_rather_than_overwriting(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The CLI path fails loudly; its signature has no None to return."""
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        edited = path.read_text() + _MARKER
+        path.write_text(edited)
+
+        with (
+            patch("squadron.review.persistence.archive_existing_review", return_value=False),
+            pytest.raises(OSError, match="refusing to overwrite"),
+        ):
+            save_review_result(_make_result(), "code", _make_slice_info())
+
+        assert path.read_text() == edited

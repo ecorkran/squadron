@@ -12,6 +12,7 @@ from openai import RateLimitError
 from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
 from squadron.config.manager import get_config
@@ -21,6 +22,7 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.models.aliases import resolve_model_alias
+from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     find_git_root,
@@ -33,6 +35,8 @@ from squadron.review.persistence import (
     resolve_slice_info,
     save_review_result,
 )
+from squadron.review.resolution import Resolution, ResolutionResult, resolve_review
+from squadron.review.resolution_evidence import ResolutionError
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
     extract_diff_paths,
@@ -60,6 +64,12 @@ _VERDICT_COLORS: dict[Verdict, str] = {
     Verdict.CONCERNS: "yellow",
     Verdict.FAIL: "red",
     Verdict.UNKNOWN: "dim",
+}
+
+_RESOLUTION_COLORS: dict[Resolution, str] = {
+    Resolution.ADDRESSED: "bright_green",
+    Resolution.UNADDRESSED: "red",
+    Resolution.UNKNOWN: "dim",
 }
 
 _SEVERITY_COLORS: dict[Severity, str] = {
@@ -161,6 +171,54 @@ def _resolve_cwd(cwd: str | None) -> str:
     if isinstance(config_val, str):
         return config_val
     return "."
+
+
+def _save_and_report(
+    result: ReviewResult,
+    review_type: str,
+    slice_info: SliceInfo,
+    *,
+    as_json: bool = False,
+    input_file: str | None = None,
+    name_suffix: str | None = None,
+) -> bool:
+    """Persist a review, reporting either where it landed or why it did not.
+
+    Returns whether the file was written. ``save_review_result`` refuses to
+    overwrite an existing review whose prior content it could not archive
+    (slice 306 Part D). That refusal is reported here rather than surfacing as
+    a traceback — the review itself has already been displayed, so the run is
+    not lost — but the caller must still exit non-zero: an unwritten review is
+    a review Context Forge and every other downstream reader cannot see, and
+    reporting success for it would be a silent failure.
+    """
+    try:
+        path = save_review_result(
+            result,
+            review_type,
+            slice_info,
+            as_json=as_json,
+            input_file=input_file,
+            name_suffix=name_suffix,
+        )
+    except OSError as exc:
+        rprint(f"[red]Review not saved: {exc}[/red]")
+        return False
+    rprint(f"[green]Saved review to {path}[/green]")
+    return True
+
+
+def _exit_on(verdict: Verdict, saved: bool) -> None:
+    """Exit with the code the run earned: 2 for a FAIL verdict, 1 for an unsaved review.
+
+    A FAIL verdict keeps precedence — it is the more specific signal, and both
+    codes are non-zero — but a review that could not be written must never exit
+    0. Downstream readers gate on the file, not on the terminal output.
+    """
+    if verdict == Verdict.FAIL:
+        raise typer.Exit(code=2)
+    if not saved:
+        raise typer.Exit(code=1)
 
 
 def _resolve_verbosity(verbose: int) -> int:
@@ -447,12 +505,11 @@ def review_slice(
         rules_dir=resolved_rules_dir,
     )
 
+    saved = True
     if slice_info and not no_save:
-        path = save_review_result(result, "slice", slice_info, as_json=use_json, input_file=input_file)
-        rprint(f"[green]Saved review to {path}[/green]")
+        saved = _save_and_report(result, "slice", slice_info, as_json=use_json, input_file=input_file)
 
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(result.verdict, saved)
 
 
 @review_app.command("arch")
@@ -499,6 +556,7 @@ def review_arch(
         rules_dir=resolved_rules_dir,
     )
 
+    saved = True
     if arch_index is not None and not no_save:
         # Build a minimal SliceInfo for save — arch reviews use initiative index
         arch_name = (
@@ -520,13 +578,11 @@ def review_arch(
             arch_file=input_file,
             project=project_name,
         )
-        path = save_review_result(
+        saved = _save_and_report(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
         )
-        rprint(f"[green]Saved review to {path}[/green]")
 
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(result.verdict, saved)
 
 
 @review_app.command("tasks")
@@ -582,6 +638,7 @@ def review_tasks(
     resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
+    saved = True
     multi_part = len(task_file_paths) > 1
     for part_idx, task_path in enumerate(task_file_paths, start=1):
         if multi_part:
@@ -607,19 +664,21 @@ def review_tasks(
 
         if slice_info and not no_save:
             suffix = f"part-{part_idx}" if multi_part else None
-            path = save_review_result(
-                result,
-                "tasks",
-                slice_info,
-                as_json=use_json,
-                input_file=task_path,
-                name_suffix=suffix,
+            # Every part is saved before exiting: the reviews have already been
+            # paid for, so one unwritable part must not cost the others.
+            saved = (
+                _save_and_report(
+                    result,
+                    "tasks",
+                    slice_info,
+                    as_json=use_json,
+                    input_file=task_path,
+                    name_suffix=suffix,
+                )
+                and saved
             )
-            rprint(f"[green]Saved review to {path}[/green]")
 
-    worst = _aggregate_verdicts([r for _, r in results])
-    if worst == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(_aggregate_verdicts([r for _, r in results]), saved)
 
 
 @review_app.command("code")
@@ -742,12 +801,11 @@ def review_code(
         rules_dir=None,
     )
 
+    saved = True
     if slice_info and not no_save:
-        path = save_review_result(result, "code", slice_info, as_json=use_json)
-        rprint(f"[green]Saved review to {path}[/green]")
+        saved = _save_and_report(result, "code", slice_info, as_json=use_json)
 
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(result.verdict, saved)
 
 
 @review_app.command("list")
@@ -763,3 +821,112 @@ def review_list() -> None:
     max_name_len = max(len(t.name) for t in templates)
     for t in templates:
         rprint(f"  {t.name:<{max_name_len}}  {t.description}")
+
+
+def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tuple[str | None, str]:
+    """Resolve the resolve-path judge's model and profile from the CLI flags.
+
+    Same cascade every other review command uses — flag → per-template config →
+    global config → template default, with alias expansion — so the judge is
+    selected the same way here as anywhere else.
+    """
+    load_all_templates()
+    template = get_template(JUDGE_TEMPLATE_NAME)
+    raw_model = _resolve_model(model_flag, template, JUDGE_TEMPLATE_NAME)
+
+    alias_model: str | None = None
+    alias_profile: str | None = None
+    if raw_model is not None:
+        alias_model, alias_profile = resolve_model_alias(raw_model)
+
+    return alias_model or raw_model, _resolve_profile(profile_flag or alias_profile, template)
+
+
+def _display_resolution(result: ResolutionResult, verbosity: int) -> None:
+    """Per-finding table, then where the artifact landed and what it concluded."""
+    console = Console()
+    color = _RESOLUTION_COLORS.get(result.resolution, "dim")
+
+    header = Text(f"Resolution: {result.review_path.name}", style="bold")
+    header.append("  ", style="dim")
+    header.append(result.resolution.value, style=f"bold {color}")
+    console.print(Panel(header, expand=False))
+
+    if result.outcomes:
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Finding")
+        table.add_column("Status")
+        table.add_column("Settled by")
+        if verbosity >= 1:
+            table.add_column("Note")
+        for outcome in result.outcomes:
+            row = [outcome.finding_id, outcome.status.value, outcome.screen.value]
+            if verbosity >= 1:
+                row.append(outcome.note or "")
+            table.add_row(*row)
+        console.print(table)
+    else:
+        console.print("  No CONCERN+ findings were in scope.", style="dim")
+
+    base = result.base or "unresolved"
+    source = result.base_source.value if result.base_source is not None else "not needed"
+    console.print(f"  measured against {base} ({source})", style="dim")
+    rprint(f"[green]Wrote resolution to {result.artifact_path}[/green]")
+    rprint(f"resolution: {result.resolution.value}")
+
+
+@review_app.command("resolve")
+def review_resolve(
+    index: int = typer.Argument(..., help="Slice number whose review to resolve (e.g. 305)"),
+    review_type: str | None = typer.Argument(
+        None, help="Review type (e.g. code, slice); inferred when only one review exists"
+    ),
+    cwd: str | None = typer.Option(None, "--cwd", help="Project directory (default: config or .)"),
+    model: str | None = typer.Option(None, "--model", help="Judge model override (e.g. opus)"),
+    profile: str | None = typer.Option(
+        None,
+        "--profile",
+        help="Provider profile (e.g. openrouter, openai, local, sdk)",
+    ),
+    no_judge: bool = typer.Option(
+        False, "--no-judge", help="Run the deterministic screens only; never consult the judge"
+    ),
+    since: str | None = typer.Option(
+        None, "--since", help="Git ref to measure from, overriding the review's reviewedSha"
+    ),
+    verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+) -> None:
+    """Record whether a prior review's findings were addressed.
+
+    Writes a resolution artifact beside the review and never edits the review
+    itself. Exits 0 on ADDRESSED so the command composes in a shell; UNADDRESSED
+    and UNKNOWN both exit 1 — an answer that could not be reached is not a pass.
+    """
+    verbosity = _resolve_verbosity(verbose)
+    resolved_cwd = _resolve_cwd(cwd)
+    # The resolve path runs git commands — use the git root so the diff resolves
+    # even when the config cwd points at a subdirectory (mirrors review code).
+    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+
+    model_id, resolved_profile = _resolve_judge_model(model, profile)
+
+    try:
+        result = asyncio.run(
+            resolve_review(
+                index,
+                review_type,
+                model_id=model_id,
+                profile=resolved_profile,
+                no_judge=no_judge,
+                since=since,
+                cwd=review_cwd,
+            )
+        )
+    except (ResolutionError, OSError) as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    _display_resolution(result, verbosity)
+
+    if result.resolution != Resolution.ADDRESSED:
+        raise typer.Exit(code=1)
