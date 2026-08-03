@@ -12,6 +12,78 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (6)
+
+### Slice 171: Post-Action Hooks — Phase 4 Slice Design Complete
+
+Design written for slice 171 (initiative 140, Pipeline Foundation), issue #52.
+Provider-independent post-action hooks: the equivalent of Claude Code's
+`PostToolUse` at the layer squadron owns, since Claude hooks reach exactly one
+of the seven provider profiles squadron runs.
+
+Framed as a generalization, not a new mechanism. Squadron already has two
+hardcoded post-action hooks sitting below the single action-execution site at
+`executor.py:1124` — the 909 dispatch artifact post-condition (which can fail
+an action) and the 911 `revision_number` stamp (which must never fail one).
+Migrating both onto the mechanism is the acceptance test, with the binding
+constraint that **no assertion in an existing 909/911 test may change** —
+only mock target paths move, the same discipline slice 306 used when
+relocating `run_git`.
+
+Contracts settled:
+
+- **What a hook is** — a registered Python callable behind a
+  `runtime_checkable` Protocol, mirroring the `Action` registry and
+  `bootstrap_step_types()` idiom. Not arbitrary shell: that is what makes
+  Claude's hooks a security surface, and it can be added later but not
+  removed later. `check()` is `async` so `asyncio.wait_for` is the timeout
+  mechanism.
+- **What a hook may do** — `PASS` / `WARN` / `FAIL`, on **one** declared
+  severity axis that governs both the outcome and the breakage case. The
+  runner clamps a `WARN`-severity hook that returns `FAIL`, which is what
+  keeps the revision stamp from ever failing a converging loop. Hooks may
+  write files; they may not otherwise mutate `ActionResult`.
+- **Trigger granularity** — `HookTrigger` carries action types and
+  success-only, and deliberately cannot express pipeline structure. Step-derived
+  facts (`expected_artifact_kind`, `run_started_at`, `iteration`) go into
+  `HookContext` and the hook self-selects — which is today's `expected_kind is
+  not None` guard relocated to the hook that cares.
+- **Ordering** — registration order, stated in one place; a `FAIL` stops the
+  chain, which expresses the existing stamp-after-post-condition dependency
+  as ordering rather than an `elif`.
+- **Activation** — `hooks.disabled` (str, comma-separated; the config type
+  system supports only `int`/`str`) unioned with a per-pipeline YAML
+  `hooks: {disable: [...]}` block. No re-enable override, so no precedence
+  puzzle.
+- **Failure modes** — raise, timeout, disabled, clamp, chain-stop each have a
+  defined outcome and an observable signal; every non-`PASS` outcome lands in
+  `result.metadata["hooks"]` and logs at WARNING+.
+
+Two decisions worth recording because they were not in the issue:
+
+**Prompt-only parity is closed, not inherited.** The 909 post-condition runs
+only in the in-process executor today — prompt-only mode has no post-action
+moment, so a `/sq:run` P4 whose dispatch wrote no design advances anyway. The
+design runs the same hooks at `sq run --step-done`, and a `FAIL` there refuses
+to record the step and exits non-zero. That is a real break in a scripted
+command's exit-code contract, flagged for CHANGELOG. It is also why hooks are
+barred from reading `result.outputs` — there are none in prompt-only, so a
+hook depending on them would work in one mode and silently no-op in the other,
+which is the exact failure this slice exists to remove.
+
+**The frontmatter status validator is `WARN`, not `FAIL`.** A bad `status:`
+is a metadata defect, not a broken artifact; failing an action over it would
+block work on a pre-existing bad file the run did not create. Escalating later
+is a one-line change, de-escalating after it has blocked a pipeline is a bug
+report. The validator needs a mechanical definition of the canonical set,
+which squadron does not have — so the slice adds `DocumentStatus(StrEnum)`,
+mirroring the prose in `file-naming-conventions.md` with the drift risk stated
+rather than hidden.
+
+Slice-plan entry 28 marked Design Complete. No code written; Phase 4 only.
+
+---
+
 ## 20260803 (5)
 
 ### Slice 306: Code Review — Resolved

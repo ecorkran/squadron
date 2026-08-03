@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
-dateUpdated: 20260802
+dateUpdated: 20260803
 status: in-progress
 ---
 
@@ -88,7 +88,7 @@ Two facts make it smaller than it sounds. There is exactly **one** action-execut
 
 **Out of scope for a first cut:** pre-action hooks that rewrite an action's input (much larger blast radius, no current consumer), and replacing Claude Code's hooks where they are better positioned — they see individual tool calls, squadron sees actions, and the two are complementary.
 
-Dependencies: [149 executor, 142 action protocol, 909 (the hardcoded post-condition being generalized)]. Risk: Medium — the mechanism is small; deciding what a hook may do to a running pipeline is not. Effort: 3/5
+Dependencies: [149 executor, 142 action protocol, 909 (the hardcoded post-condition being generalized)]. Risk: Medium — the mechanism is small; deciding what a hook may do to a running pipeline is not. Effort: 3/5. **Design Complete: [171-slice.post-action-hooks-provider-independent-extension-point.md](../slices/171-slice.post-action-hooks-provider-independent-extension-point.md)**
 
 ---
 
