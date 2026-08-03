@@ -296,6 +296,46 @@ def screen_review_diff(findings: list[FindingRecord], diff: RoundDiff) -> Screen
     return None
 
 
+def screen_verdict_consistency(
+    review: LoadedReview, accountable: list[FindingRecord]
+) -> Resolution | None:
+    """Settle the leg when there is nothing to hold the work accountable for.
+
+    Zero CONCERN+ findings only means "addressed" if the review itself says
+    nothing was wrong. Against a failing verdict it means the opposite: the
+    evidence disagrees with itself. The review parser is known to drop findings
+    while still recording a verdict (issue #28), so a ``FAIL`` review with an
+    empty findings list is far more likely a parse loss than a clean slate —
+    and reading it as a pass would launder that bug into an approval.
+
+    Runs before any diff work: inconsistent evidence needs no measurement to
+    justify UNKNOWN, and a review with no findings has nothing to measure
+    against.
+    """
+    if accountable:
+        return None
+
+    if review.verdict == Verdict.PASS:
+        _logger.info(
+            "review-resolve: %s raised no CONCERN+ findings and its verdict is %s; "
+            "resolution %s by annotation",
+            review.path.name,
+            Verdict.PASS,
+            Resolution.ADDRESSED,
+        )
+        return Resolution.ADDRESSED
+
+    _logger.warning(
+        "review-resolve: %s has verdict %s but 0 CONCERN+ findings were parsed — "
+        "treating as inconsistent evidence, not a pass (the review parser is known "
+        "to drop findings while recording a verdict, issue #28); resolution %s",
+        review.path.name,
+        review.verdict,
+        Resolution.UNKNOWN,
+    )
+    return Resolution.UNKNOWN
+
+
 @dataclass(frozen=True)
 class SettledFindings:
     """What the resolve path concluded, and the evidence it concluded it from."""
@@ -303,8 +343,10 @@ class SettledFindings:
     resolution: Resolution
     outcomes: list[FindingOutcome]
     diff: RoundDiff
+    #: Both None when the leg was settled before any diff base was needed —
+    #: the verdict-consistency screen never measures anything.
     base: str | None
-    base_source: DiffBaseSource
+    base_source: DiffBaseSource | None
     judge_model: str | None = None
 
 
@@ -326,6 +368,17 @@ async def settle_findings(
     run and ``fresh_findings`` is empty everywhere below — see Decision 3.
     """
     accountable = concern_plus(review.findings)
+
+    consistency = screen_verdict_consistency(review, accountable)
+    if consistency is not None:
+        return SettledFindings(
+            resolution=consistency,
+            outcomes=[],
+            diff=RoundDiff(changed_paths=frozenset(), is_empty=True, prior_sha=None),
+            base=None,
+            base_source=None,
+        )
+
     base, base_source = resolve_review_diff_base(review.frontmatter, review.path, since=since, cwd=cwd)
     diff = compute_review_diff(base, review.path, cwd=cwd)
 

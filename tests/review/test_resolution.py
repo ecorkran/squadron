@@ -340,3 +340,86 @@ class TestScreensNeverReachTheJudge:
         transport.assert_called_once()
         assert settled.diff.changed_paths == frozenset({"src/foo.py"})
         assert settled.resolution == Resolution.ADDRESSED
+
+
+_NO_FINDINGS_REVIEW = """\
+---
+docType: review
+reviewType: code
+slice: findings-addressed
+verdict: {verdict}
+reviewedSha: abc1234
+---
+
+# Review: code — slice 305
+"""
+
+
+class TestVerdictConsistencyScreen:
+    """Design review F001 — empty findings mean different things per verdict."""
+
+    @pytest.mark.asyncio
+    async def test_passing_review_with_no_findings_is_addressed(self, tmp_path: Path) -> None:
+        path = _write_review(
+            tmp_path,
+            "305-review.code.findings-addressed.md",
+            _NO_FINDINGS_REVIEW.format(verdict="PASS"),
+        )
+
+        transport = AsyncMock()
+        with (
+            patch(_JUDGE_TRANSPORT, transport),
+            patch("squadron.review.resolution.run_git") as resolution_git,
+            patch("squadron.review.addressed.screens.run_git") as screens_git,
+        ):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+            )
+
+        assert settled.resolution == Resolution.ADDRESSED
+        assert settled.outcomes == []
+        transport.assert_not_called()
+        resolution_git.assert_not_called()
+        screens_git.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("verdict", ["FAIL", "CONCERNS"])
+    async def test_failing_review_with_no_findings_is_inconsistent_evidence(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture, verdict: str
+    ) -> None:
+        """The exact shape a parser-drop bug like issue #28 produces."""
+        path = _write_review(
+            tmp_path,
+            "305-review.code.findings-addressed.md",
+            _NO_FINDINGS_REVIEW.format(verdict=verdict),
+        )
+
+        transport = AsyncMock()
+        with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert verdict in caplog.text
+        assert "inconsistent evidence" in caplog.text
+        transport.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_note_only_findings_do_not_count_as_concern_plus(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A NOTE is not something the work is held accountable for."""
+        path = _write_review(
+            tmp_path,
+            "305-review.code.findings-addressed.md",
+            _REVIEW_WITH_FINDINGS.replace("severity: fail", "severity: note"),
+        )
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock()), caplog.at_level(logging.WARNING):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+            )
+
+        assert settled.resolution == Resolution.UNKNOWN
+        assert "CONCERNS" in caplog.text
