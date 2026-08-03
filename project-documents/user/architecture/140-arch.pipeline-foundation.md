@@ -5,8 +5,8 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20260411
-status: in-progress
+dateUpdated: 20260803
+status: in_progress
 ---
 
 # Architecture: Pipeline Foundation
@@ -114,6 +114,21 @@ Each action implementation lives in `src/squadron/pipeline/actions/`. The execut
 ### Action Extensibility
 
 Users (and future squadron slices) can register custom action types. The action registry is open. This is how 160's convergence loop strategy will plug in — as a specialized action type that wraps the review action with iteration logic.
+
+### Post-Action Hooks (171)
+
+A third registry, alongside step types and actions: hooks that run after each action completes, at the executor's single action-execution site. This is squadron's provider-independent answer to Claude Code's `PostToolUse`, which reaches exactly one of the seven provider profiles squadron runs.
+
+A hook declares a trigger (which action types, success-only or not) and a **severity** — the maximum authority it holds. That severity is one axis, and it governs both what the hook may return and what happens when the hook itself breaks:
+
+- `WARN` — may observe and warn, and may never fail an action. A `WARN` hook that returns a failure is clamped and the overreach logged; a `WARN` hook that raises or times out does not fail the action.
+- `FAIL` — may turn a reported success into a failure. A `FAIL` hook that raises or times out fails the action, closed.
+
+Hooks run in registration order and a failure stops the chain. They may write files; they may not otherwise mutate an `ActionResult`, and may not read `result.outputs` — prompt-only mode has none, and a hook that depended on them would work in one execution mode and silently no-op in the other.
+
+The registry is open in-process but has no file-based discovery and no shell hooks. Shell is the security surface that makes Claude's hooks risky and is the least portable across CI, MCP, IDE, and bare CLI; it can be added later and cannot be removed later.
+
+Slice 171 establishes the mechanism by generalizing two checks the executor had already accreted in-place (the 909 dispatch artifact post-condition, which fails an action, and the 911 `revision_number` stamp, which must never fail one) and migrating both onto it.
 
 ---
 
@@ -232,6 +247,12 @@ steps:
       checkpoint: on-fail
 
   - devlog: auto                 # auto-generate from pipeline state
+
+# Post-action hooks (171): opt-out only. Built-in hooks run by default;
+# this block names hooks to skip for this pipeline. Unioned with the
+# `hooks.disabled` config key.
+hooks:
+  disable: [frontmatter-status]
 ```
 
 ### Step Types
@@ -513,6 +534,11 @@ Slice 125 (Conversation Persistence) remains deferred to initiative 160. That wo
 │  │              Action Registry                           │   │
 │  │  dispatch │ review │ summary │ checkpoint │ cf-op │ …  │   │
 │  └────────────────────────┼──────────────────────────────┘   │
+│                           │ after each action                 │
+│  ┌────────────────────────┼──────────────────────────────┐   │
+│  │         Post-Action Hook Registry (171)                │   │
+│  │  observe │ warn │ fail the action — severity-clamped   │   │
+│  └────────────────────────┼──────────────────────────────┘   │
 │                           │                                   │
 │  ┌────────────────────────┼──────────────────────────────┐   │
 │  │              Model Resolver                            │   │
@@ -559,6 +585,15 @@ src/squadron/pipeline/
 │   ├── review.py            # standalone review step type
 │   ├── collection.py        # each/collection loop step type
 │   └── devlog.py            # devlog step type
+├── hooks/                   # post-action hooks (171)
+│   ├── __init__.py          # PostActionHook protocol, registry, bootstrap
+│   ├── runner.py            # the single hook-invocation path
+│   └── builtin/             # dispatch-artifact, revision-stamp, frontmatter-status
+
+src/squadron/documents/      # document-level primitives shared across subsystems
+├── frontmatter.py           # read/update/render frontmatter
+├── paths.py                 # USER_DOCS_ROOT (171)
+└── status.py                # DocumentStatus canonical enum (171)
 
 src/squadron/data/
 └── pipelines/               # built-in pipeline definitions (slice 141 establishes this)

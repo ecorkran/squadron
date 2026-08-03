@@ -12,6 +12,45 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (7)
+
+### Slice 171: Design Review — Resolved
+
+`171-review.slice...md` returned **CONCERNS** — two concerns, two notes, four
+PASS. All four acted on.
+
+- **F001** — frontmatter `dependencies` omitted 911, which the Prerequisites
+  section, the migration plan, and success criteria #13/#17 all lean on.
+  Now `[142, 149, 909, 911]`.
+- **F002** — the slice introduces architecture-level surface (a third
+  registry, a new pipeline-YAML block, two config keys) at slice level. Chose
+  to update the parent architecture rather than record a deferral:
+  `140-arch.pipeline-foundation.md` gains the hook registry in its Component
+  Architecture diagram and Package Structure, the `hooks:` block in its
+  Grammar, and a "Post-Action Hooks" section under Action Extensibility
+  carrying the authority model — trigger, severity as a single axis, the
+  clamp, chain-stop, and the `result.outputs` bar. Initiative 180's
+  convergence strategies need to know this extension point exists and what
+  authority it holds. Slice design gained success criterion #24 so the
+  architecture update is a deliverable, not a courtesy.
+- **F003** — recorded the trigger condition for widening the config type
+  system: a **third** list-valued config key. Two keys do not justify
+  touching a shared type system; three do. Fixing it on a count rather than
+  on irritation.
+- **F004** — the dedup set's lifetime is the process, not the run, and those
+  coincide only under the in-process executor. In prompt-only mode each
+  `--step-done` is a fresh process, so a recurring warning surfaces once per
+  invocation. That is right for a mode whose steps are separated by human
+  turns — a warning suppressed in a process the user has walked away from is
+  a warning lost — but "once per run" was not true as written. Success
+  criterion #10 restated in per-process terms so it is testable.
+
+Also corrected `status: in-progress` → `in_progress` in both the 140 slice
+plan and the 140 architecture frontmatter. Outside the canonical set, and
+precisely what this slice's `frontmatter-status` hook is being built to catch.
+
+---
+
 ## 20260803 (6)
 
 ### Slice 171: Post-Action Hooks — Phase 4 Slice Design Complete

@@ -3,7 +3,7 @@ docType: slice-design
 slice: post-action-hooks-provider-independent-extension-point
 project: squadron
 parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
-dependencies: [142, 149, 909]
+dependencies: [142, 149, 909, 911]
 interfaces: []
 dateCreated: 20260803
 dateUpdated: 20260803
@@ -91,6 +91,19 @@ for all of it. This slice ships the validator.
 - **Per-step activation.** No consumer wants it.
 - Replacing Claude Code's hooks where they are better positioned. They see
   individual tool calls; squadron sees actions. The two are complementary.
+
+### Parent architecture
+
+This slice introduces architecture-level surface — a third registry, a new
+pipeline-YAML block, two config keys — so the parent
+[140-arch.pipeline-foundation.md](../architecture/140-arch.pipeline-foundation.md)
+is updated as part of this slice rather than left to drift: the hooks registry
+appears in the Component Architecture diagram and Package Structure, the
+`hooks:` block in the Grammar, and the authority model (trigger, severity,
+clamp, chain-stop, the `result.outputs` bar) in a new "Post-Action Hooks"
+section under Action Extensibility. Initiative 180's convergence strategies
+and any future custom step type need to know this extension point exists and
+what authority it carries.
 
 ## Dependencies
 
@@ -250,6 +263,13 @@ the config type system in this slice. YAML is where a list is natural, and
 that is where the list form lives. Second key: `hooks.timeout_seconds`
 (`int`, default `30`).
 
+This does leave two encodings of one concept, and it is a workaround, not a
+preference. **Trigger condition for fixing it properly: a third list-valued
+config key.** At that point `_coerce_value` gains a `list[str]` branch and
+`hooks.disabled` migrates to it — two keys do not justify widening a shared
+type system; three do. Recorded so the decision is made on a count rather
+than on whoever next finds the comma-splitting annoying.
+
 ### Data Flow
 
 ```
@@ -376,10 +396,19 @@ actions write documents, and guessing a set would be exactly the fragile
 label-as-logic pattern the project rules ban.
 
 **Duplicate suppression.** A 12-step pipeline would otherwise emit the same
-warning 40 times, and a noisy hook is an ignored hook. The runner keeps a
-per-run in-memory set keyed `(hook_name, message)` and logs each distinct
-outcome once; suppressed repeats are logged at DEBUG. The `metadata["hooks"]`
-record is still written every time — the log is deduped, the evidence is not.
+warning 40 times, and a noisy hook is an ignored hook. The runner keeps an
+in-memory set keyed `(hook_name, message)` and logs each distinct outcome
+once; suppressed repeats are logged at DEBUG. The `metadata["hooks"]` record
+is still written every time — the log is deduped, the evidence is not.
+
+The set's lifetime is **the process**, not the run, and the two coincide only
+in the in-process executor. In prompt-only mode each `sq run --step-done` is a
+fresh process, so a recurring warning surfaces once per `--step-done`
+invocation rather than once per run. That is the correct behavior for a mode
+whose steps are separated by human turns — a warning suppressed in a process
+the user is no longer looking at would be a warning lost — but it means
+"once per run" is only true of the executor. Success criterion #10 is stated
+in those terms so it is testable as written.
 
 ### The canonical status set lives in squadron code
 
@@ -465,8 +494,9 @@ shape and the design is what gets revised — not the test.
    identically to a raise.
 9. Every non-`PASS` outcome appends to `result.metadata["hooks"]` and is
    logged at WARNING or above, prefixed with the hook name.
-10. Duplicate `(hook_name, message)` outcomes are logged once per run;
-    metadata records every occurrence.
+10. Duplicate `(hook_name, message)` outcomes are logged once per **process**
+    — once per run under the executor, once per `--step-done` invocation in
+    prompt-only mode. Metadata records every occurrence.
 11. `hooks.disabled` and pipeline `hooks: {disable: [...]}` each skip a named
     hook; the effective set is their union.
 12. `dispatch-artifact` reproduces the 909 post-condition exactly, including
@@ -500,6 +530,9 @@ shape and the design is what gets revised — not the test.
 23. CHANGELOG entry noting the prompt-only `--step-done` behavior change —
     a step that previously advanced can now block. This is a real break for
     anyone scripting `--step-done`.
+24. `140-arch.pipeline-foundation.md` carries the hooks registry in its
+    Component Architecture and Package Structure, the `hooks:` block in its
+    Grammar, and the authority model under Action Extensibility.
 
 ## Verification Walkthrough
 
