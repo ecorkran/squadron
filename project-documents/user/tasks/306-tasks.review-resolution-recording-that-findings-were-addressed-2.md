@@ -235,7 +235,7 @@ status: complete
         WARNING naming the cap value and the resolved diff base, no judge
         call made.
   - Effort: 3/5
-  - Note: Verified against source — 305 enforces `review.max_total_injection_bytes` on *file injections* only (`review/review_client.py`), and does **not** apply it to the judge's change-set input. Per T25's instruction, the cap check was added on the resolve path only, and the gap in 305 is flagged to the Project Manager rather than fixed here.
+  - Note: Verified against source — 305 enforces `review.max_total_injection_bytes` on *file injections* only (`review/review_client.py`), and does **not** apply it to the judge's change-set input. Per T25's instruction, the cap check was added on the resolve path only, and the gap in 305 is flagged to the Project Manager rather than fixed here. Logged as issue #53 (low priority).
 
 - [x] **T26. Test — judge leg, `--no-judge`, transport failure, and injection cap**
   - [x] Test: non-empty diff, CONCERN+ findings present, judge transport

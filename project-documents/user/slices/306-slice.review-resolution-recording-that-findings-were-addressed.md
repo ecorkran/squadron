@@ -386,8 +386,8 @@ aborts the overwrite and leaves the original intact. Effort 1/5.
       *(`TestJudgeLeg::test_transport_failure_is_unknown_not_a_pass` and
       `::test_change_set_over_the_injection_cap_never_reaches_the_judge`. Note:
       305 does not apply this cap to the judge's change-set input — the check
-      was added on this path only, and the gap in 305 is flagged to the PM
-      rather than silently fixed here, per T25.)*
+      was added on this path only, and the gap in 305 is tracked as issue #53
+      (low priority) rather than silently fixed here, per T25.)*
 - [x] A failed or unverifiable archive copy aborts the overwrite: the
       original review file is byte-identical afterward and the save errors
       loudly (F003). *(`TestArchiveOnOverwrite` covers copy-cannot-be-created
