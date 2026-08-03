@@ -3,25 +3,28 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import subprocess
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from squadron.documents.frontmatter import read_frontmatter
 from squadron.review.addressed.models import FindingStatus, SettlingScreen
-from squadron.review.models import ReviewResult, Verdict
-from squadron.review.persistence import REVIEWS_DIR
-from squadron.review.resolution import (
+from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
+from squadron.review.persistence import REVIEWS_DIR, SliceInfo, save_review_result
+from squadron.review.resolution import Resolution, resolve_review, settle_findings
+from squadron.review.resolution_evidence import (
     DiffBaseSource,
-    Resolution,
     ResolutionError,
     load_review,
     locate_review,
     resolve_review_diff_base,
     review_type_of,
-    settle_findings,
 )
 
 _JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
@@ -208,7 +211,7 @@ class TestResolveReviewDiffBase:
         path = _write_review(tmp_path, "305-review.code.findings-addressed.md")
         with (
             caplog.at_level(logging.WARNING),
-            patch("squadron.review.resolution.run_git") as mock_run_git,
+            patch("squadron.review.resolution_evidence.run_git") as mock_run_git,
         ):
             base, source = resolve_review_diff_base({}, path, since="HEAD~3", cwd=str(tmp_path))
 
@@ -369,7 +372,7 @@ class TestVerdictConsistencyScreen:
         transport = AsyncMock()
         with (
             patch(_JUDGE_TRANSPORT, transport),
-            patch("squadron.review.resolution.run_git") as resolution_git,
+            patch("squadron.review.resolution_evidence.run_git") as resolution_git,
             patch("squadron.review.addressed.screens.run_git") as screens_git,
         ):
             settled = await settle_findings(
@@ -499,7 +502,7 @@ class TestJudgeLeg:
         transport = AsyncMock()
         with (
             patch(_JUDGE_TRANSPORT, transport),
-            patch("squadron.review.resolution.get_config", return_value=100),
+            patch("squadron.review.resolution_evidence.get_config", return_value=100),
             caplog.at_level(logging.WARNING),
         ):
             settled = await settle_findings(
@@ -521,7 +524,7 @@ class TestJudgeLeg:
 
         with (
             patch(_JUDGE_TRANSPORT, AsyncMock()),
-            patch("squadron.review.resolution.get_config", return_value="lots"),
+            patch("squadron.review.resolution_evidence.get_config", return_value="lots"),
             pytest.raises(TypeError, match="max_total_injection_bytes"),
         ):
             await settle_findings(load_review(path), model_id=None, profile="sdk", cwd=str(git_repo))
@@ -626,3 +629,131 @@ class TestClaimVerification:
             )
 
         assert settled.resolution == Resolution.UNADDRESSED
+
+
+class TestResolveReviewEndToEnd:
+    """The whole path, against a real repo and the real persistence writers."""
+
+    def _author_review(self, repo: Path, findings: list[ReviewFinding]) -> Path:
+        """Write the review through the real ``save_review_result`` path."""
+        result = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=findings,
+            raw_output="raw review output",
+            template_name="code",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 8, 3, 12, 0, 0),
+            model="claude-opus-4-5",
+        )
+        slice_info = SliceInfo(
+            index=305,
+            name="findings-addressed",
+            slice_name="findings-addressed",
+            design_file="project-documents/user/slices/305-slice.findings-addressed.md",
+            task_files=["305-tasks.findings-addressed.md"],
+            arch_file="project-documents/user/architecture/300-arch.md",
+            project="squadron",
+        )
+        cwd = Path.cwd()
+        try:
+            os.chdir(repo)
+            # save_review_result returns a path relative to the process cwd;
+            # resolve it before chdir'ing back or it dangles.
+            return save_review_result(result, "code", slice_info).resolve()
+        finally:
+            os.chdir(cwd)
+
+    @staticmethod
+    def _finding() -> ReviewFinding:
+        return ReviewFinding(
+            severity=Severity.FAIL,
+            title="Unhandled OSError on write",
+            description="save() never guards the write.",
+            category="error-handling",
+            location="src/foo.py:10",
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_fix_since_the_review_resolves_addressed(self, git_repo: Path) -> None:
+        _commit_work(git_repo)
+        review_path = self._author_review(git_repo, [self._finding()])
+        _commit(git_repo, "add review")
+        review_before = review_path.read_bytes()
+
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed — guarded"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            result = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+
+        assert result.resolution == Resolution.ADDRESSED
+        assert result.artifact_path.name.endswith("-r1.md")
+        assert result.artifact_path.is_file()
+        # The design's primary success criterion — asserted, never inferred.
+        assert review_path.read_bytes() == review_before
+
+    @pytest.mark.asyncio
+    async def test_no_work_stays_unaddressed_and_writes_a_second_revision(self, git_repo: Path) -> None:
+        _commit_work(git_repo)
+        review_path = self._author_review(git_repo, [self._finding()])
+        _commit(git_repo, "add review")
+
+        transport = AsyncMock()
+        with patch(_JUDGE_TRANSPORT, transport):
+            first = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+            second = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+
+        assert first.resolution == Resolution.UNADDRESSED
+        assert second.resolution == Resolution.UNADDRESSED
+        assert first.artifact_path.name.endswith("-r1.md")
+        assert second.artifact_path.name.endswith("-r2.md")
+        assert first.artifact_path.is_file()
+        transport.assert_not_called()
+        assert review_path.is_file()
+
+    @pytest.mark.asyncio
+    async def test_warnings_from_inner_steps_surface_through_the_orchestrator(
+        self, git_repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """T33's no-swallowed-log requirement, asserted rather than assumed.
+
+        Drives the file-history-fallback path — a step known to WARNING — and
+        checks the record reaches the caller at WARNING level. Without this, the
+        F001 mismatch, injection-cap, and fallback warnings could all be
+        silently dropped by the orchestration layer with nothing to catch it.
+        """
+        _commit_work(git_repo)
+        review_path = self._author_review(git_repo, [self._finding()])
+        # Strip the stamp the real writer just produced, forcing the fallback.
+        review_path.write_text(
+            re.sub(r"^reviewedSha: .*\n", "", review_path.read_text(), flags=re.MULTILINE)
+        )
+        _commit(git_repo, "add review")
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock()), caplog.at_level(logging.WARNING):
+            result = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+
+        assert result.base_source == DiffBaseSource.FILE_HISTORY
+        fallback_warnings = [
+            record
+            for record in caplog.records
+            if "reviewedSha" in record.message and record.levelno == logging.WARNING
+        ]
+        assert fallback_warnings, caplog.text
+
+    @pytest.mark.asyncio
+    async def test_artifact_records_the_review_verdict_untouched(self, git_repo: Path) -> None:
+        _commit_work(git_repo)
+        self._author_review(git_repo, [self._finding()])
+        _commit(git_repo, "add review")
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock()):
+            result = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+
+        frontmatter = read_frontmatter(result.artifact_path)
+        assert frontmatter is not None
+        assert frontmatter["reviewVerdict"] == Verdict.CONCERNS.value
+        assert frontmatter["resolution"] == Resolution.UNADDRESSED.value
+        assert frontmatter["project"] == "squadron"
+        assert frontmatter["slice"] == "findings-addressed"
