@@ -9,7 +9,8 @@ projectState: >
   are in 306-tasks.review-resolution-recording-that-findings-were-addressed-1.md
   and must be complete before starting here — T15 onward assumes
   `review/addressed/` exists (Part 0) and imports from it, and Part D's
-  overwrite guard (T12–T14) is independent but should already be merged.
+  overwrite guard (T13/T14, gated by T12's cf-scanning check) is
+  independent but should already be merged.
 dateCreated: 20260803
 dateUpdated: 20260803
 status: not_started
@@ -58,6 +59,11 @@ status: not_started
         the docstring instead, citing 305 F002 (fixtures must match the
         real producer shape) as the reason two readers exist rather than one
         lenient one.
+  - [ ] File 1's T11 already pinned that `format_review_markdown` emits this
+        shape unchanged after the `reviewedSha` addition — if that task's
+        round-trip assertion needed adjusting to pass, re-read this shape
+        assumption before writing this reader; do not silently reconcile a
+        shape mismatch by loosening this function instead.
   - Effort: 2/5
 
 - [ ] **T16. Test — `records_from_frontmatter` against a real rendered review**

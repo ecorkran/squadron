@@ -12,6 +12,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (2)
+
+### Slice 306: Task Breakdown Review (Part 1) — Resolved
+
+File 1's task-breakdown review (306-review.tasks...part-1.md) returned CONCERNS — four concerns, three notes, no fails. All fixed in the task file, no scope or numbering left inconsistent.
+
+The structural fix (F002) reordered Part D: the cf-archive-scanning checkpoint is now T12, placed *before* the archive-guard implementation and its test (renumbered T13/T14) rather than after with a "don't mark done until" note — the reviewer's point was that a forward-referencing gate is fragile in practice, and reordering makes it structural instead. The two coverage gaps (F001: the read-back-verification-fails branch had no test distinct from copy-cannot-be-created; F004: no task confirmed `format_review_markdown`'s findings shape survives the `reviewedSha` addition, which file 2's frontmatter reader depends on) both got dedicated test bullets rather than being folded into existing ones. F003 added explicit NOTEs to T2/T4/T6 clarifying that Part 0's intermediate verification steps are focused subsets, not the full-suite gate — T8 remains that gate.
+
+---
+
 ## 20260803 (1)
 
 ### Slice 306: Review Resolution — Task Breakdown (Phase 5)

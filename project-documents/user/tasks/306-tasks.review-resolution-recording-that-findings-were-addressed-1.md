@@ -52,18 +52,18 @@ status: not_started
   loop-specific — `screens.py`, `evidence.py`, `policy.py` — and its
   `judge.py` becomes a thin `ActionContext`-resolving wrapper over the moved
   core.
-- **Two failure-closed rules covered in this file (F003 from the design
+- **One failure-closed rule covered in this file (F003 from the design
   review) must not be treated as optional polish:** a failed archive copy
-  aborts the overwrite rather than proceeding (T12/T13). The remaining two
+  aborts the overwrite rather than proceeding (T13/T14). The remaining two
   design-review rules (F001, F004) live in file 2's Part B.
 - Read the slice design (all sections) before starting, especially Decisions
   1–7 and the Data Flow diagram — this breakdown implements that diagram
   node by node and does not restate its reasoning.
-- **cf coordination checklist item (design review F005, binding):** T14
+- **cf coordination checklist item (design review F005, binding):** T12
   below verifies whether Context Forge's artifact scanning recurses into
-  `project-documents/user/reviews/archive/`. This must be answered before
-  T12 (Part D implementation) is considered complete — it decides whether
-  the archived filename needs mangling.
+  `project-documents/user/reviews/archive/`, and is placed **before** the
+  archive-guard implementation (T13/T14) so the gating is structural rather
+  than a note asking the implementer to check back later.
 
 ### Test-with discipline for this breakdown
 
@@ -96,6 +96,12 @@ unchanged — no new tests are written for code that only moved.
         — all pass, same count as before the move.
   - [ ] `uv run pyright` — zero errors (import-path updates are the only
         change; strict mode must not regress).
+  - **NOTE:** this is a *focused* subset, not the full-suite check — it
+        confirms this move did not break the findings-addressed package's
+        own tests, but a regression in an importer outside this subset
+        (elsewhere in `src`/`tests`) will not surface until T8's
+        `uv run pytest -q`. Commit here regardless; T8 is the full-suite
+        gate for all of Part 0.
   - Commit: `refactor: relocate findings-addressed models to review/addressed/`
   - Effort: 1/5
 
@@ -118,6 +124,9 @@ unchanged — no new tests are written for code that only moved.
 - [ ] **T4. Verify T3 — full findings-addressed suite passes unchanged**
   - [ ] Same command as T2. All pass, same count.
   - [ ] `uv run pyright` — zero errors.
+  - **NOTE:** same caveat as T2 — this is the focused subset, not the
+        full-suite gate. T8 is what confirms this commit did not regress
+        anything outside the findings-addressed package.
   - Commit: `refactor: relocate findings-addressed parsing and verification to review/addressed/`
   - Effort: 1/5
 
@@ -149,6 +158,11 @@ unchanged — no new tests are written for code that only moved.
   - [ ] Confirm no test needed rewriting to pass (if one did, the extraction
         changed behavior — stop and reconcile with the design before
         continuing).
+  - **NOTE:** same caveat as T2/T4 — these two files are the tests that
+        specifically exercise `judge_residue`, not the full suite. Their
+        unchanged pass is the proof this extraction preserved behavior for
+        the judge leg specifically; T8 remains the gate for the whole
+        project.
   - Commit: `refactor: extract context-free judge-transport core to review/addressed/judge.py`
   - Effort: 1/5
 
@@ -223,6 +237,22 @@ unchanged — no new tests are written for code that only moved.
   - [ ] Test the git-unavailable path (mock `run_git` returning `None`): the
         saved file has no `reviewedSha` key and a WARNING is logged — reuse
         the existing `caplog` idiom from the 305 test suite.
+  - [ ] **Findings round-trip test (binding — this is the only place in
+        file 1 that verifies the shape file 2's `records_from_frontmatter`
+        depends on):** build a `ReviewResult` with several
+        `ReviewFinding`s covering multiple severities, render it through
+        the real `format_review_markdown` (with the new `reviewed_sha`
+        parameter set), parse the frontmatter back out with
+        `yaml.safe_load`, and assert the `findings:` block's shape is
+        exactly what it was before this task's changes — same keys
+        (`id`, `severity`, `category`, `summary`, `location`), same
+        lowercase severity values. This task changes
+        `format_review_markdown`; if it inadvertently altered how findings
+        serialize, file 2's frontmatter reader would silently break
+        against real artifacts with no test anywhere catching it (per the
+        305 F001/F002 lesson: a hand-rolled fixture would not have caught
+        F001 either). Confirming here — at the point of the change — is
+        cheaper than discovering it while implementing file 2.
   - Commit: `feat: stamp reviewedSha into review frontmatter at authoring time`
   - Effort: 2/5
 
@@ -230,7 +260,34 @@ unchanged — no new tests are written for code that only moved.
 
 ## Part D — Overwrite guard
 
-- [ ] **T12. Add archive-on-overwrite to `save_review_file`, fail-closed**
+- [ ] **T12. Verification checkpoint — cf archive-scanning (design review F005, blocking)**
+  - [ ] Determine how Context Forge's artifact/review scanning enumerates
+        `project-documents/user/reviews/` — check whether it globs
+        non-recursively (matching squadron's own
+        `discover_judge_results`, `reviews_dir.glob("*-review.*")`,
+        verified non-recursive) or walks recursively. Consult
+        `ai-project-guide/tool-guides/context-forge/` first; if the guide
+        does not answer this, ask the Project Manager directly rather than
+        guessing — this is exactly the class of external-tool fact the
+        project's "do not guess or assume" rule exists for.
+  - [ ] **If non-recursive (expected, matching squadron's own pattern):**
+        no further action needed for the archived filename — record the
+        finding in this task's checkbox notes and proceed to T13 as
+        written below.
+  - [ ] **If recursive:** the archived filename must not match whatever
+        pattern cf keys on. Apply the design's stated fallback — strip or
+        alter the `-review.` segment in the archived copy's filename (e.g.
+        `{original}.archived` suffix, or replace `-review.` with
+        `-archived.`) — and incorporate that filename scheme into T13/T14
+        below as written, before either is implemented.
+  - [ ] This task is placed **before** T13/T14 (rather than after, as an
+        earlier draft of this file had it) precisely so the gating is
+        structural: whoever picks up T13 already knows the answer this
+        task produces, instead of discovering a rework requirement after
+        implementing against the wrong assumption.
+  - Effort: 1/5
+
+- [ ] **T13. Add archive-on-overwrite to `save_review_file`, fail-closed**
   - [ ] In `review/persistence.py`, before `save_review_file` writes to an
         existing `path`: copy the existing file's current bytes to
         `project-documents/user/reviews/archive/{original filename}`
@@ -250,12 +307,13 @@ unchanged — no new tests are written for code that only moved.
   - [ ] Log a WARNING (not ERROR) on the success path naming the file that
         was archived, so an overwrite is visible in normal operation even
         when nothing failed.
-  - [ ] **Do not mark this task done until T14's verification outcome is
-        known** — if T14 finds cf scans recursively, the archived filename
-        scheme here must incorporate T14's fallback before this is complete.
+  - [ ] Use the archived-filename scheme T12 settled — plain
+        `{original filename}` if T12 found non-recursive scanning, or T12's
+        mangled scheme if it found recursive scanning. T12 must be complete
+        before this task starts.
   - Effort: 2/5
 
-- [ ] **T13. Test — overwrite guard preserves content and fails closed**
+- [ ] **T14. Test — overwrite guard preserves content and fails closed**
   - [ ] Test: save a review, hand-edit the saved file (append a marker
         string), save again over the same path — assert the archived copy in
         `archive/` contains the marker string byte-for-byte, and the new
@@ -266,40 +324,26 @@ unchanged — no new tests are written for code that only moved.
         `test_unwritable_reviews_directory_warns_and_returns_none`) — assert
         `save_review_file` returns `None`, the original file's content is
         **unchanged** from before the attempted overwrite, and an ERROR is
-        logged.
+        logged. This covers the copy-cannot-be-created failure mode.
+  - [ ] Test the **second** failure mode T12 enumerates — copy succeeds but
+        read-back verification fails: mock or monkeypatch the verification
+        step (e.g. the read-back comparison) to report a mismatch after a
+        real, successful copy — assert the overwrite is still aborted,
+        `save_review_file` returns `None`, the original file is unchanged,
+        and an ERROR is logged. Do not treat the unwritable-directory test
+        above as covering this case — a successful copy that fails
+        verification is a distinct code path from a copy that never
+        happened.
   - [ ] Test: saving to a path with no pre-existing file writes directly,
         with no archive directory created as a side effect.
   - Commit: `fix: archive prior review content before overwrite, fail closed on archive failure`
   - Effort: 2/5
 
-- [ ] **T14. Verification checkpoint — cf archive-scanning (design review F005, blocking)**
-  - [ ] Determine how Context Forge's artifact/review scanning enumerates
-        `project-documents/user/reviews/` — check whether it globs
-        non-recursively (matching squadron's own
-        `discover_judge_results`, `reviews_dir.glob("*-review.*")`,
-        verified non-recursive) or walks recursively. Consult
-        `ai-project-guide/tool-guides/context-forge/` first; if the guide
-        does not answer this, ask the Project Manager directly rather than
-        guessing — this is exactly the class of external-tool fact the
-        project's "do not guess or assume" rule exists for.
-  - [ ] **If non-recursive (expected, matching squadron's own pattern):**
-        no further action — `archive/` is already invisible to it. Record
-        the finding in this task's checkbox notes.
-  - [ ] **If recursive:** the archived filename must not match whatever
-        pattern cf keys on. Apply the design's stated fallback — strip or
-        alter the `-review.` segment in the archived copy's filename (e.g.
-        `{original}.archived` suffix, or replace `-review.` with `-archived.`)
-        — and update T12/T13 accordingly before T12 is considered complete.
-  - [ ] This task gates T12 in practice even though it is numbered after it:
-        do not mark T12 "done" in the checklist until this verification's
-        outcome is known and, if the recursive case applies, incorporated.
-  - Effort: 1/5
-
 ---
 
 ## Handoff to file 2
 
-Parts 0/A/D complete and verified (T8's full-suite pass, T14's cf-scanning
+Parts 0/A/D complete and verified (T8's full-suite pass, T12's cf-scanning
 answer known) is the entry condition for
 `306-tasks.review-resolution-recording-that-findings-were-addressed-2.md`,
 which builds `sq review resolve` (Part B) and its documentation (Part C) on
