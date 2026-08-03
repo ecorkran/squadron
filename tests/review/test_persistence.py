@@ -408,3 +408,109 @@ class TestReviewedShaStamp:
         # ``location`` is emitted only when the finding carries one.
         assert findings[0]["location"] == "src/a.py:10"  # pyright: ignore[reportUnknownVariableType]
         assert "location" not in findings[2]  # pyright: ignore[reportUnknownArgumentType]
+
+
+# ---------------------------------------------------------------------------
+# Overwrite guard (slice 306 Part D)
+# ---------------------------------------------------------------------------
+
+
+_MARKER = "\n## Hand note — added after the review was authored\n"
+
+
+class TestArchiveOnOverwrite:
+    """A re-review must never silently destroy hand-written content."""
+
+    def test_prior_content_is_archived_byte_for_byte(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        edited = path.read_text() + _MARKER
+        path.write_text(edited)
+
+        path = save_review_result(_make_result(verdict=Verdict.PASS), "code", _make_slice_info())
+
+        archived = path.parent / "archive" / path.name
+        assert archived.read_text() == edited
+        assert _MARKER in archived.read_text()
+        # The new save landed on the original path.
+        assert _frontmatter(path.read_text())["verdict"] == "PASS"
+        assert _MARKER not in path.read_text()
+
+    def test_first_save_creates_no_archive_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        assert not (path.parent / "archive").exists()
+
+    def test_unwritable_archive_dir_aborts_and_leaves_original_intact(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Copy cannot be created — a file sits where the directory must go."""
+        reviews = tmp_path / "project-documents" / "user" / "reviews"
+        reviews.mkdir(parents=True)
+        path = reviews / "146-review.code.my-slice.md"
+        path.write_text("original content")
+        (reviews / "archive").write_text("not a directory")
+
+        with caplog.at_level(logging.ERROR, logger="squadron.review.persistence"):
+            result = save_review_file("replacement content", "code", "my-slice", 146, cwd=str(tmp_path))
+
+        assert result is None
+        assert path.read_text() == "original content"
+        assert any("could not archive" in r.message for r in caplog.records)
+
+    def test_unverifiable_copy_aborts_and_leaves_original_intact(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Copy succeeds but reads back wrong — a distinct path from no copy.
+
+        The archive file really is written here; only the verification read
+        disagrees, which is the corruption case the guard exists to catch.
+        """
+        reviews = tmp_path / "project-documents" / "user" / "reviews"
+        reviews.mkdir(parents=True)
+        path = reviews / "146-review.code.my-slice.md"
+        path.write_text("original content")
+
+        real_read_bytes = Path.read_bytes
+        calls: list[Path] = []
+
+        def _corrupt_read_back(self: Path) -> bytes:
+            calls.append(self)
+            data = real_read_bytes(self)
+            # First call reads the original; the second is the verification
+            # read of the freshly written archive copy.
+            return data if len(calls) == 1 else data + b"corrupted"
+
+        with (
+            caplog.at_level(logging.ERROR, logger="squadron.review.persistence"),
+            patch.object(Path, "read_bytes", _corrupt_read_back),
+        ):
+            result = save_review_file("replacement content", "code", "my-slice", 146, cwd=str(tmp_path))
+
+        assert result is None
+        assert path.read_text() == "original content"
+        # The copy itself was made — this is verification failure, not a
+        # failure to write.
+        assert (reviews / "archive" / path.name).read_text() == "original content"
+        assert any("does not match the original" in r.message for r in caplog.records)
+
+    def test_save_review_result_raises_rather_than_overwriting(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The CLI path fails loudly; its signature has no None to return."""
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        edited = path.read_text() + _MARKER
+        path.write_text(edited)
+
+        with (
+            patch("squadron.review.persistence.archive_existing_review", return_value=False),
+            pytest.raises(OSError, match="refusing to overwrite"),
+        ):
+            save_review_result(_make_result(), "code", _make_slice_info())
+
+        assert path.read_text() == edited

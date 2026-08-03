@@ -163,6 +163,37 @@ def _resolve_cwd(cwd: str | None) -> str:
     return "."
 
 
+def _save_and_report(
+    result: ReviewResult,
+    review_type: str,
+    slice_info: SliceInfo,
+    *,
+    as_json: bool = False,
+    input_file: str | None = None,
+    name_suffix: str | None = None,
+) -> None:
+    """Persist a review, reporting either where it landed or why it did not.
+
+    ``save_review_result`` refuses to overwrite an existing review whose prior
+    content it could not archive (slice 306 Part D). That refusal is reported
+    here rather than surfacing as a traceback — the review itself has already
+    been displayed, so the run is not lost.
+    """
+    try:
+        path = save_review_result(
+            result,
+            review_type,
+            slice_info,
+            as_json=as_json,
+            input_file=input_file,
+            name_suffix=name_suffix,
+        )
+    except OSError as exc:
+        rprint(f"[red]Review not saved: {exc}[/red]")
+        return
+    rprint(f"[green]Saved review to {path}[/green]")
+
+
 def _resolve_verbosity(verbose: int) -> int:
     """Resolve verbosity: CLI flag overrides config default."""
     if verbose > 0:
@@ -448,8 +479,7 @@ def review_slice(
     )
 
     if slice_info and not no_save:
-        path = save_review_result(result, "slice", slice_info, as_json=use_json, input_file=input_file)
-        rprint(f"[green]Saved review to {path}[/green]")
+        _save_and_report(result, "slice", slice_info, as_json=use_json, input_file=input_file)
 
     if result.verdict == Verdict.FAIL:
         raise typer.Exit(code=2)
@@ -520,10 +550,7 @@ def review_arch(
             arch_file=input_file,
             project=project_name,
         )
-        path = save_review_result(
-            result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
-        )
-        rprint(f"[green]Saved review to {path}[/green]")
+        _save_and_report(result, "arch", arch_slice_info, as_json=use_json, input_file=input_file)
 
     if result.verdict == Verdict.FAIL:
         raise typer.Exit(code=2)
@@ -607,7 +634,7 @@ def review_tasks(
 
         if slice_info and not no_save:
             suffix = f"part-{part_idx}" if multi_part else None
-            path = save_review_result(
+            _save_and_report(
                 result,
                 "tasks",
                 slice_info,
@@ -615,7 +642,6 @@ def review_tasks(
                 input_file=task_path,
                 name_suffix=suffix,
             )
-            rprint(f"[green]Saved review to {path}[/green]")
 
     worst = _aggregate_verdicts([r for _, r in results])
     if worst == Verdict.FAIL:
@@ -743,8 +769,7 @@ def review_code(
     )
 
     if slice_info and not no_save:
-        path = save_review_result(result, "code", slice_info, as_json=use_json)
-        rprint(f"[green]Saved review to {path}[/green]")
+        _save_and_report(result, "code", slice_info, as_json=use_json)
 
     if result.verdict == Verdict.FAIL:
         raise typer.Exit(code=2)

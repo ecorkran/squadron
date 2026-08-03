@@ -17,6 +17,11 @@ _logger = logging.getLogger(__name__)
 
 _REVIEWS_DIR = Path("project-documents/user/reviews")
 
+#: Where a review's prior content is preserved before an overwrite, relative
+#: to the reviews directory. Defined once — the guard, its tests, and anything
+#: that later reads archived reviews all reference this.
+_ARCHIVE_SUBDIR = "archive"
+
 #: Directory prefix for task-breakdown files, relative to project root.
 #: SliceInfo["task_files"] entries are bare filenames — join with this to
 #: get the full relative path (mirrors _REVIEWS_DIR's role for reviews).
@@ -262,6 +267,53 @@ def format_review_markdown(
     return "\n".join(lines)
 
 
+def archive_existing_review(path: Path) -> bool:
+    """Preserve an existing review's content before it is overwritten.
+
+    Re-running a review over a file someone hand-edited used to destroy that
+    content silently (slice 306 Part D). The prior bytes are copied to
+    ``<reviews>/archive/`` under the original filename — both Context Forge's
+    artifact scanning and squadron's own metrology globs enumerate the reviews
+    directory non-recursively and skip entries that are not ``.md`` files, so
+    an ``archive/`` subdirectory is invisible to them and needs no name
+    mangling.
+
+    Returns ``True`` when the caller may write: either nothing was there, or a
+    verified copy now exists. Returns ``False`` when the copy could not be
+    made *or could not be verified* — the caller must then abort, because a
+    guard that proceeds after a failed copy destroys exactly the content it
+    exists to protect (design review F003).
+    """
+    if not path.exists():
+        return True
+
+    archived = path.parent / _ARCHIVE_SUBDIR / path.name
+    try:
+        original = path.read_bytes()
+        archived.parent.mkdir(parents=True, exist_ok=True)
+        archived.write_bytes(original)
+        read_back = archived.read_bytes()
+    except OSError:
+        _logger.exception(
+            "review: could not archive %s to %s; refusing to overwrite it", path, archived
+        )
+        return False
+
+    if read_back != original:
+        _logger.error(
+            "review: archived copy of %s at %s does not match the original "
+            "(%d bytes read back, %d expected); refusing to overwrite it",
+            path,
+            archived,
+            len(read_back),
+            len(original),
+        )
+        return False
+
+    _logger.warning("review: overwriting %s; prior content archived to %s", path, archived)
+    return True
+
+
 def save_review_file(
     content: str,
     review_type: str,
@@ -281,13 +333,18 @@ def save_review_file(
         as_json: If True, use ``.json`` extension instead of ``.md``.
 
     Returns:
-        The path of the saved file, or ``None`` on write failure.
+        The path of the saved file, or ``None`` on write failure — which now
+        includes an existing file whose content could not be archived first
+        (see :func:`archive_existing_review`).
     """
     base_dir = Path(cwd) if cwd else Path(".")
     target = base_dir / _REVIEWS_DIR
     ext = "json" if as_json else "md"
     filename = f"{slice_index}-review.{review_type}.{slice_name}.{ext}"
     path = target / filename
+
+    if not archive_existing_review(path):
+        return None
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -332,6 +389,12 @@ def save_review_result(
     markdown output only (slice 911 Part B); ``as_json`` output carries no
     equivalent field. The CLI never passes this — only a loop-iteration
     review action does.
+
+    Raises:
+        OSError: If a file already exists at the target path and its content
+            could not be archived (see :func:`archive_existing_review`). The
+            existing file is left untouched — losing a review to a silent
+            overwrite is the failure this refuses to allow.
     """
     target = reviews_dir or _REVIEWS_DIR
     target.mkdir(parents=True, exist_ok=True)
@@ -342,21 +405,26 @@ def save_review_result(
 
     if as_json:
         path = target / f"{base}.json"
-        path.write_text(json.dumps(result.to_dict(verdict_override=verdict_override), indent=2))
+        content = json.dumps(result.to_dict(verdict_override=verdict_override), indent=2)
     else:
         path = target / f"{base}.md"
         # The reviews directory is resolved relative to the process working
         # directory, so HEAD is resolved against the same root.
-        path.write_text(
-            format_review_markdown(
-                result,
-                review_type,
-                slice_info,
-                source_document=input_file,
-                verdict_override=verdict_override,
-                revision_number=revision_number,
-                reviewed_sha=resolve_reviewed_sha("."),
-            )
+        content = format_review_markdown(
+            result,
+            review_type,
+            slice_info,
+            source_document=input_file,
+            verdict_override=verdict_override,
+            revision_number=revision_number,
+            reviewed_sha=resolve_reviewed_sha("."),
         )
+
+    if not archive_existing_review(path):
+        raise OSError(
+            f"refusing to overwrite {path}: its prior content could not be archived to "
+            f"{path.parent / _ARCHIVE_SUBDIR / path.name}"
+        )
+    path.write_text(content)
 
     return path
