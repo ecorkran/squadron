@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
+import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
+import pytest
 import yaml
 
 from squadron.review.models import (
@@ -19,6 +23,7 @@ from squadron.review.persistence import (
     SliceInfo,
     format_review_markdown,
     save_review_file,
+    save_review_result,
     yaml_escape,
 )
 
@@ -257,3 +262,149 @@ class TestSaveReviewFile:
         result = save_review_file(content, "code", "my-slice", 146, cwd=str(tmp_path), as_json=True)
         assert result is not None
         assert result.suffix == ".json"
+
+
+# ---------------------------------------------------------------------------
+# reviewedSha stamp (slice 306 Part A)
+# ---------------------------------------------------------------------------
+
+
+def _frontmatter(md: str) -> dict[str, object]:
+    """Parse a rendered review's YAML frontmatter."""
+    data = yaml.safe_load(md.split("---")[1])
+    assert isinstance(data, dict)
+    return cast("dict[str, object]", data)
+
+
+@pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    """A temporary git repo with one commit, so HEAD resolves."""
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"], cwd=tmp_path, capture_output=True, check=True
+    )
+    (tmp_path / "README.md").write_text("init")
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, capture_output=True, check=True)
+    return tmp_path
+
+
+class TestReviewedShaStamp:
+    def test_stamped_when_supplied(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info(), reviewed_sha="abc123")
+        assert "reviewedSha: abc123" in md
+        assert _frontmatter(md)["reviewedSha"] == "abc123"
+
+    def test_key_absent_when_not_supplied(self) -> None:
+        """Absent, not ``null`` — a fabricated anchor is worse than none."""
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+        assert "reviewedSha" not in md
+        assert "reviewedSha" not in _frontmatter(md)
+
+    def test_save_review_result_stamps_head(
+        self, git_repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(git_repo)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=git_repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert _frontmatter(path.read_text())["reviewedSha"] == head
+
+    def test_git_unavailable_omits_key_and_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """``run_git`` returning None means git could not be invoked at all."""
+        monkeypatch.chdir(tmp_path)
+        with (
+            caplog.at_level(logging.WARNING, logger="squadron.review.persistence"),
+            patch("squadron.review.persistence.run_git", return_value=None),
+        ):
+            path = save_review_result(_make_result(), "code", _make_slice_info())
+
+        assert "reviewedSha" not in _frontmatter(path.read_text())
+        assert any("reviewedSha will not be stamped" in r.message for r in caplog.records)
+
+    def test_git_nonzero_omits_key_and_warns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """git ran and refused — a different failure from git being absent."""
+        monkeypatch.chdir(tmp_path)
+        refused = subprocess.CompletedProcess(
+            args=["git", "rev-parse", "HEAD"], returncode=128, stdout="", stderr="not a repository"
+        )
+        with (
+            caplog.at_level(logging.WARNING, logger="squadron.review.persistence"),
+            patch("squadron.review.persistence.run_git", return_value=refused),
+        ):
+            path = save_review_result(_make_result(), "code", _make_slice_info())
+
+        assert "reviewedSha" not in _frontmatter(path.read_text())
+        assert any("reviewedSha will not be stamped" in r.message for r in caplog.records)
+
+    def test_findings_block_shape_is_unchanged_by_the_stamp(self) -> None:
+        """Bind the frontmatter findings shape ``records_from_frontmatter`` reads.
+
+        Part B parses this block out of real review artifacts. Nothing else
+        pins its shape, so a change to ``format_review_markdown`` could alter
+        it silently and only surface as a broken resolve against production
+        files. Rendered through the real formatter, with the new parameter set.
+        """
+        result = ReviewResult(
+            verdict=Verdict.FAIL,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.FAIL,
+                    title="Unhandled write failure",
+                    description="write_text can raise.",
+                    category="error-handling",
+                    location="src/a.py:10",
+                ),
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Duplicated parse",
+                    description="Two parsers.",
+                    category="duplication",
+                    location="src/b.py:42",
+                ),
+                ReviewFinding(
+                    severity=Severity.NOTE,
+                    title="Vague name",
+                    description="x is vague.",
+                    category="naming",
+                ),
+            ],
+            raw_output="raw",
+            template_name="code",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 4, 1, 12, 0, 0),
+            model="claude-opus-4-5",
+        )
+        md = format_review_markdown(result, "code", _make_slice_info(), reviewed_sha="deadbeef")
+        findings = _frontmatter(md)["findings"]
+
+        assert isinstance(findings, list)
+        assert len(findings) == 3
+        assert [f["severity"] for f in findings] == ["fail", "concern", "note"]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
+        for entry in findings:  # pyright: ignore[reportUnknownVariableType]
+            assert set(entry) >= {"id", "severity", "category", "summary"}  # pyright: ignore[reportUnknownArgumentType]
+        # ``location`` is emitted only when the finding carries one.
+        assert findings[0]["location"] == "src/a.py:10"  # pyright: ignore[reportUnknownVariableType]
+        assert "location" not in findings[2]  # pyright: ignore[reportUnknownArgumentType]

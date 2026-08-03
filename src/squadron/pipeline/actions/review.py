@@ -15,6 +15,7 @@ from squadron.review.persistence import (
     CfClientProtocol,
     SliceInfo,
     format_review_markdown,
+    resolve_reviewed_sha,
     resolve_slice_info,
     save_review_file,
     save_review_result,
@@ -268,6 +269,7 @@ class ReviewAction:
                     source_document=inputs.get("input"),
                     verdict_override=verdict_override,
                     revision_number=revision_number,
+                    reviewed_sha=resolve_reviewed_sha(cwd),
                 )
                 path = save_review_file(
                     md_content,

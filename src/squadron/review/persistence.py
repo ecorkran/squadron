@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
+from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult
 
 _logger = logging.getLogger(__name__)
@@ -88,6 +89,42 @@ def yaml_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def resolve_reviewed_sha(cwd: str) -> str | None:
+    """HEAD at review-authoring time, or ``None`` when git cannot answer.
+
+    The stamp anchors ``sq review resolve``'s "what changed since the review"
+    diff (slice 306 Part A). Both persistence paths — CLI and pipeline action —
+    resolve it the same way, so a review carries the same anchor regardless of
+    which one authored it.
+
+    ``None`` is returned, and a WARNING logged, when git is absent, the
+    directory is not a repository, or HEAD does not resolve (an empty repo with
+    no commits). The caller omits the key entirely rather than writing a
+    placeholder: a fabricated SHA would send the resolve path diffing against
+    a commit that does not exist.
+    """
+    completed = run_git(["rev-parse", "HEAD"], cwd=cwd)
+    if completed is None:
+        _logger.warning("review: git could not be invoked in %s; reviewedSha will not be stamped", cwd)
+        return None
+    if completed.returncode != 0:
+        _logger.warning(
+            "review: `git rev-parse HEAD` failed in %s (%s); reviewedSha will not be stamped",
+            cwd,
+            completed.stderr.strip() or f"exit {completed.returncode}",
+        )
+        return None
+
+    sha = completed.stdout.strip()
+    if not sha:
+        _logger.warning(
+            "review: `git rev-parse HEAD` returned no SHA in %s; reviewedSha will not be stamped",
+            cwd,
+        )
+        return None
+    return sha
+
+
 def format_review_markdown(
     result: ReviewResult,
     review_type: str,
@@ -96,6 +133,7 @@ def format_review_markdown(
     model: str | None = None,
     verdict_override: str | None = None,
     revision_number: int | None = None,
+    reviewed_sha: str | None = None,
 ) -> str:
     """Format a ReviewResult as markdown with YAML frontmatter.
 
@@ -116,6 +154,11 @@ def format_review_markdown(
         revision_number: Squadron's loop-iteration revision count (slice 911
             Part B). Emitted only when supplied — a review authored outside
             a loop, or via the CLI, carries no such key.
+        reviewed_sha: HEAD at the moment the review was authored (slice 306
+            Part A) — the anchor ``sq review resolve`` diffs against to ask
+            what changed since. Emitted only when supplied: a review authored
+            where git was unavailable carries no key rather than a fabricated
+            placeholder, and the resolve path falls back to file history.
     """
     today = result.timestamp.strftime("%Y%m%d")
     resolved_model = model or result.model or "unknown"
@@ -145,6 +188,8 @@ def format_review_markdown(
         f"dateCreated: {today}",
         f"dateUpdated: {today}",
     ]
+    if reviewed_sha is not None:
+        lines.append(f"reviewedSha: {reviewed_sha}")
     if revision_number is not None:
         lines.append(f"revision_number: {revision_number}")
 
@@ -300,6 +345,8 @@ def save_review_result(
         path.write_text(json.dumps(result.to_dict(verdict_override=verdict_override), indent=2))
     else:
         path = target / f"{base}.md"
+        # The reviews directory is resolved relative to the process working
+        # directory, so HEAD is resolved against the same root.
         path.write_text(
             format_review_markdown(
                 result,
@@ -308,6 +355,7 @@ def save_review_result(
                 source_document=input_file,
                 verdict_override=verdict_override,
                 revision_number=revision_number,
+                reviewed_sha=resolve_reviewed_sha("."),
             )
         )
 
