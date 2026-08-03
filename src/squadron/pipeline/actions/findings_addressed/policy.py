@@ -18,16 +18,16 @@ from squadron.pipeline.actions.findings_addressed.screens import (
     run_deterministic_screens,
     screen_no_prior_round,
 )
-from squadron.pipeline.actions.findings_addressed.verification import (
-    derive_addressed_verdict,
-    verify_outcomes,
-)
 from squadron.pipeline.actions.judge import Provenance
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.review.addressed.models import (
     FindingRecord,
     concern_plus,
     read_findings,
+)
+from squadron.review.addressed.verification import (
+    derive_addressed_verdict,
+    verify_outcomes,
 )
 
 _logger = logging.getLogger(__name__)

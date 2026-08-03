@@ -28,12 +28,6 @@ from squadron.pipeline.actions.findings_addressed.judge import (
     JudgeLegResult,
     judge_residue,
 )
-from squadron.pipeline.actions.findings_addressed.parsing import (
-    JudgeStatus,
-    is_parse_failure,
-    parse_status_lines,
-    statuses_to_outcomes,
-)
 from squadron.pipeline.actions.findings_addressed.policy import FindingsAddressedPolicy
 from squadron.pipeline.actions.findings_addressed.screens import (
     RoundDiff,
@@ -45,10 +39,6 @@ from squadron.pipeline.actions.findings_addressed.screens import (
     screen_git_failure,
     screen_no_prior_round,
 )
-from squadron.pipeline.actions.findings_addressed.verification import (
-    derive_addressed_verdict,
-    verify_outcomes,
-)
 from squadron.review.addressed.models import (
     CONCERN_PLUS_SEVERITIES,
     FindingOutcome,
@@ -57,6 +47,16 @@ from squadron.review.addressed.models import (
     SettlingScreen,
     concern_plus,
     read_findings,
+)
+from squadron.review.addressed.parsing import (
+    JudgeStatus,
+    is_parse_failure,
+    parse_status_lines,
+    statuses_to_outcomes,
+)
+from squadron.review.addressed.verification import (
+    derive_addressed_verdict,
+    verify_outcomes,
 )
 
 __all__ = [
