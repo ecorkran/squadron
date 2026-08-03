@@ -230,8 +230,12 @@ def _injection_cap(cwd: str) -> int:
     return cap
 
 
-def exceeds_injection_cap(diff: RoundDiff, *, cwd: str) -> int | None:
-    """The cap, when the change set is too large to hand the judge; else None.
+def injection_cap_if_exceeded(diff: RoundDiff, *, cwd: str) -> int | None:
+    """The cap value when the change set is too large to hand the judge, else None.
+
+    Returns the cap rather than a bare ``True`` because the caller has to name
+    it in the warning — a reader who is told only "too large" cannot tell
+    whether to trim the change set or raise the limit.
 
     ``--since`` can name a ref arbitrarily far back, so the change set is not
     bounded by anything the caller has already agreed to. Measured on the

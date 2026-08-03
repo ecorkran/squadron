@@ -181,13 +181,16 @@ def _save_and_report(
     as_json: bool = False,
     input_file: str | None = None,
     name_suffix: str | None = None,
-) -> None:
+) -> bool:
     """Persist a review, reporting either where it landed or why it did not.
 
-    ``save_review_result`` refuses to overwrite an existing review whose prior
-    content it could not archive (slice 306 Part D). That refusal is reported
-    here rather than surfacing as a traceback — the review itself has already
-    been displayed, so the run is not lost.
+    Returns whether the file was written. ``save_review_result`` refuses to
+    overwrite an existing review whose prior content it could not archive
+    (slice 306 Part D). That refusal is reported here rather than surfacing as
+    a traceback — the review itself has already been displayed, so the run is
+    not lost — but the caller must still exit non-zero: an unwritten review is
+    a review Context Forge and every other downstream reader cannot see, and
+    reporting success for it would be a silent failure.
     """
     try:
         path = save_review_result(
@@ -200,8 +203,22 @@ def _save_and_report(
         )
     except OSError as exc:
         rprint(f"[red]Review not saved: {exc}[/red]")
-        return
+        return False
     rprint(f"[green]Saved review to {path}[/green]")
+    return True
+
+
+def _exit_on(verdict: Verdict, saved: bool) -> None:
+    """Exit with the code the run earned: 2 for a FAIL verdict, 1 for an unsaved review.
+
+    A FAIL verdict keeps precedence — it is the more specific signal, and both
+    codes are non-zero — but a review that could not be written must never exit
+    0. Downstream readers gate on the file, not on the terminal output.
+    """
+    if verdict == Verdict.FAIL:
+        raise typer.Exit(code=2)
+    if not saved:
+        raise typer.Exit(code=1)
 
 
 def _resolve_verbosity(verbose: int) -> int:
@@ -488,11 +505,11 @@ def review_slice(
         rules_dir=resolved_rules_dir,
     )
 
+    saved = True
     if slice_info and not no_save:
-        _save_and_report(result, "slice", slice_info, as_json=use_json, input_file=input_file)
+        saved = _save_and_report(result, "slice", slice_info, as_json=use_json, input_file=input_file)
 
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(result.verdict, saved)
 
 
 @review_app.command("arch")
@@ -539,6 +556,7 @@ def review_arch(
         rules_dir=resolved_rules_dir,
     )
 
+    saved = True
     if arch_index is not None and not no_save:
         # Build a minimal SliceInfo for save — arch reviews use initiative index
         arch_name = (
@@ -560,10 +578,11 @@ def review_arch(
             arch_file=input_file,
             project=project_name,
         )
-        _save_and_report(result, "arch", arch_slice_info, as_json=use_json, input_file=input_file)
+        saved = _save_and_report(
+            result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
+        )
 
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(result.verdict, saved)
 
 
 @review_app.command("tasks")
@@ -619,6 +638,7 @@ def review_tasks(
     resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
+    saved = True
     multi_part = len(task_file_paths) > 1
     for part_idx, task_path in enumerate(task_file_paths, start=1):
         if multi_part:
@@ -644,18 +664,21 @@ def review_tasks(
 
         if slice_info and not no_save:
             suffix = f"part-{part_idx}" if multi_part else None
-            _save_and_report(
-                result,
-                "tasks",
-                slice_info,
-                as_json=use_json,
-                input_file=task_path,
-                name_suffix=suffix,
+            # Every part is saved before exiting: the reviews have already been
+            # paid for, so one unwritable part must not cost the others.
+            saved = (
+                _save_and_report(
+                    result,
+                    "tasks",
+                    slice_info,
+                    as_json=use_json,
+                    input_file=task_path,
+                    name_suffix=suffix,
+                )
+                and saved
             )
 
-    worst = _aggregate_verdicts([r for _, r in results])
-    if worst == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(_aggregate_verdicts([r for _, r in results]), saved)
 
 
 @review_app.command("code")
@@ -778,11 +801,11 @@ def review_code(
         rules_dir=None,
     )
 
+    saved = True
     if slice_info and not no_save:
-        _save_and_report(result, "code", slice_info, as_json=use_json)
+        saved = _save_and_report(result, "code", slice_info, as_json=use_json)
 
-    if result.verdict == Verdict.FAIL:
-        raise typer.Exit(code=2)
+    _exit_on(result.verdict, saved)
 
 
 @review_app.command("list")

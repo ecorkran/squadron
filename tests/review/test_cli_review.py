@@ -540,3 +540,105 @@ class TestScopedDiff:
             result = cli_runner.invoke(app, ["review", "code", "--files", "src/**/*.py"])
         assert result.exit_code == 0
         mock_resolve.assert_not_called()
+
+
+class TestUnsavedReviewExitCode:
+    """A review that could not be written must never report success.
+
+    The archive guard (slice 306 Part D) refuses to overwrite a review whose
+    prior content it could not preserve. The refusal is printed rather than
+    raised, so the displayed review is not lost — but downstream readers gate
+    on the *file*, and exiting 0 with no file on disk is a silent failure.
+    """
+
+    @pytest.fixture
+    def slice_info(self) -> dict[str, object]:
+        return {
+            "index": 122,
+            "name": "test",
+            "slice_name": "test",
+            "design_file": "slice.md",
+            "task_files": [],
+            "arch_file": "arch.md",
+            "project": "squadron",
+        }
+
+    def test_save_failure_exits_one(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        slice_info: dict[str, object],
+    ) -> None:
+        patch_run_review.return_value = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="## Summary\nPASS\n",
+            template_name="code",
+            input_files={"cwd": "."},
+        )
+        with (
+            patch("squadron.cli.commands.review._resolve_slice_number", return_value=slice_info),
+            patch("squadron.cli.commands.review.resolve_slice_diff_range", return_value="main...HEAD"),
+            patch(
+                "squadron.cli.commands.review.save_review_result",
+                side_effect=OSError("could not archive the prior review"),
+            ),
+        ):
+            result = cli_runner.invoke(app, ["review", "code", "122"])
+
+        assert result.exit_code == 1, result.output
+        assert "Review not saved" in result.output
+        assert "could not archive the prior review" in result.output
+
+    def test_a_fail_verdict_keeps_its_own_exit_code(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        slice_info: dict[str, object],
+    ) -> None:
+        """FAIL stays 2 — the more specific signal wins, and both are non-zero."""
+        patch_run_review.return_value = ReviewResult(
+            verdict=Verdict.FAIL,
+            findings=[],
+            raw_output="## Summary\nFAIL\n",
+            template_name="code",
+            input_files={"cwd": "."},
+        )
+        with (
+            patch("squadron.cli.commands.review._resolve_slice_number", return_value=slice_info),
+            patch("squadron.cli.commands.review.resolve_slice_diff_range", return_value="main...HEAD"),
+            patch(
+                "squadron.cli.commands.review.save_review_result",
+                side_effect=OSError("could not archive the prior review"),
+            ),
+        ):
+            result = cli_runner.invoke(app, ["review", "code", "122"])
+
+        assert result.exit_code == 2, result.output
+
+    def test_a_successful_save_still_exits_zero(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        slice_info: dict[str, object],
+        tmp_path: Path,
+    ) -> None:
+        patch_run_review.return_value = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="## Summary\nPASS\n",
+            template_name="code",
+            input_files={"cwd": "."},
+        )
+        with (
+            patch("squadron.cli.commands.review._resolve_slice_number", return_value=slice_info),
+            patch("squadron.cli.commands.review.resolve_slice_diff_range", return_value="main...HEAD"),
+            patch(
+                "squadron.cli.commands.review.save_review_result",
+                return_value=tmp_path / "122-review.code.foo.md",
+            ),
+        ):
+            result = cli_runner.invoke(app, ["review", "code", "122"])
+
+        assert result.exit_code == 0, result.output
+        assert "Saved review to" in result.output

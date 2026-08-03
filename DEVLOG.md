@@ -12,6 +12,24 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (5)
+
+### Slice 306: Code Review — Resolved
+
+`306-review.code...md` returned **PASS** — four PASS findings, six notes, no CONCERN+. Four of the six notes were acted on; two were not, for stated reasons.
+
+**F009 was the one worth having.** `_save_and_report` catches the archive guard's `OSError`, prints the refusal, and returned — so a review that ran, displayed, and then could not be written exited 0. Downstream readers gate on the file, not on terminal output, so that is a silent failure of exactly the class Part D exists to prevent. Save failures now exit 1, with a `FAIL` verdict keeping its more specific exit 2; the tasks command still saves every part before exiting, since the reviews have already been paid for. Documented in the exit-code table.
+
+**F007 was more than cosmetic.** `_render_findings` promises the judge one finding per line, but finding text is model-authored and arrives through YAML, where a block scalar carries real newlines — and `records_from_frontmatter` does not strip them. A multi-line summary would not merely look untidy: it would present as an extra finding, and a line shaped like `F002: addressed` would read as a status. Every field is now collapsed to one line at render time, which is the seam that owns the format.
+
+**F006** renamed `exceeds_injection_cap` → `injection_cap_if_exceeded`; the old name promised a boolean and the function returns the cap value, which the caller needs in order to name it in the warning.
+
+**F005/F010** added CLI-layer tests for `--since` (including a bad ref, which must be a named git failure rather than a crash), `--model`/`--profile` passthrough asserted at the transport, and `-v`'s note column.
+
+**F008 left as-is.** `resolution.py` is 384 lines against a ~300 guideline the project states as "where practical"; the reviewer called it an observation rather than a violation, and the file is already the second half of a split made during implementation. Splitting again would trade one over-long orchestrator for three modules whose seams are less obvious than the first cut's.
+
+---
+
 ## 20260803 (4)
 
 ### Slice 306: Review Resolution — Implementation (Phase 6)

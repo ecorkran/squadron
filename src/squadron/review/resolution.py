@@ -40,7 +40,7 @@ from squadron.review.resolution_evidence import (
     DiffBaseSource,
     LoadedReview,
     compute_review_diff,
-    exceeds_injection_cap,
+    injection_cap_if_exceeded,
     load_review,
     locate_review,
     resolve_review_diff_base,
@@ -143,7 +143,7 @@ async def _run_judge_leg(
         )
         return JudgeLegResult(failed=True)
 
-    cap = exceeds_injection_cap(diff, cwd=cwd)
+    cap = injection_cap_if_exceeded(diff, cwd=cwd)
     if cap is not None:
         _logger.warning(
             "review-resolve: the change set since %s exceeds the %s cap of %d bytes; "

@@ -378,5 +378,7 @@ sq shutdown --all
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Error (invalid arguments, missing files, runtime error, unknown config key) |
+| 1 | Error (invalid arguments, missing files, runtime error, unknown config key), or a review that ran but could not be saved |
 | 2 | Review verdict is FAIL |
+
+A review whose file could not be written exits 1 even though the review itself ran and was displayed — the artifact is what Context Forge and every other downstream reader gate on, so reporting success with nothing on disk would be a silent failure. A `FAIL` verdict keeps exit 2 in that case: it is the more specific signal, and both codes are non-zero.

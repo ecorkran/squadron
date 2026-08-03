@@ -44,13 +44,26 @@ class JudgeLegResult:
     template: str | None = None
 
 
+def _one_line(value: str) -> str:
+    """Collapse *value* to a single line.
+
+    Finding text is model-authored and reaches here through YAML, where a block
+    scalar can carry newlines. One finding per line is a promise this function
+    makes to the judge, so a field that spans lines would not merely look
+    untidy — it would present as an extra finding, and a line shaped like a
+    status would read as one.
+    """
+    return " ".join(value.split())
+
+
 def _render_findings(records: list[FindingRecord]) -> str:
     """One finding per line, ids exactly as the judge must echo them back."""
     if not records:
         return "(none)"
     return "\n".join(
-        f"- {record.finding_id}: [{record.severity}] {record.category} at "
-        f"{record.location} — {record.summary}"
+        f"- {record.finding_id}: [{_one_line(record.severity)}] "
+        f"{_one_line(record.category)} at {_one_line(record.location)} "
+        f"— {_one_line(record.summary)}"
         for record in records
     )
 

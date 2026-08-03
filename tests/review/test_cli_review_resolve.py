@@ -10,8 +10,10 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.documents.frontmatter import read_frontmatter
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import REVIEWS_DIR
+from squadron.review.resolution_evidence import DiffBaseSource
 
 _JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
 
@@ -66,6 +68,19 @@ def _repo_with_review(repo: Path, *, review_types: tuple[str, ...] = ("code",)) 
         )
     _commit(repo, "add review")
     return base_sha
+
+
+def _commit_head(repo: Path) -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _artifact_frontmatter(repo: Path, revision: int) -> dict[str, object]:
+    path = repo / REVIEWS_DIR / f"305-resolution.code.findings-addressed-r{revision}.md"
+    frontmatter = read_frontmatter(path)
+    assert frontmatter is not None
+    return frontmatter
 
 
 def _flat(output: str) -> str:
@@ -163,3 +178,89 @@ class TestReviewResolveCommand:
 
         assert result.exit_code == 1, result.output
         assert "999-review" in _flat(result.output)
+
+
+class TestReviewResolveFlagPassthrough:
+    """Flags with non-trivial behavior, asserted at the CLI layer.
+
+    The unit tests prove each behavior in isolation; these prove the command
+    actually wires the flag through to it, which is the regression a refactor
+    of the option list would introduce.
+    """
+
+    def test_since_overrides_the_stamp(self, cli_runner: CliRunner, git_repo: Path) -> None:
+        base_sha = _repo_with_review(git_repo)
+        (git_repo / "src" / "foo.py").write_text("changed\n")
+        _commit(git_repo, "change")
+        head = _commit_head(git_repo)
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock()):
+            result = cli_runner.invoke(
+                app,
+                ["review", "resolve", "305", "--cwd", str(git_repo), "--since", "HEAD", "-v"],
+            )
+
+        # Measuring from HEAD means nothing changed since the base, so the
+        # empty-diff screen fires instead of the judge — which it would not
+        # have, had the flag been dropped and the stamp used.
+        assert "UNADDRESSED" in result.output
+        assert head != base_sha
+        frontmatter = _artifact_frontmatter(git_repo, 1)
+        assert frontmatter["shaSource"] == DiffBaseSource.SINCE.value
+        assert frontmatter["resolvedSha"] == "HEAD"
+
+    def test_a_bad_since_ref_is_a_named_git_failure_not_a_crash(
+        self, cli_runner: CliRunner, git_repo: Path
+    ) -> None:
+        _repo_with_review(git_repo)
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock()):
+            result = cli_runner.invoke(
+                app,
+                ["review", "resolve", "305", "--cwd", str(git_repo), "--since", "no-such-ref"],
+            )
+
+        assert result.exit_code == 1, result.output
+        assert "UNKNOWN" in result.output
+        assert _artifact_frontmatter(git_repo, 1)["resolution"] == "UNKNOWN"
+
+    def test_model_flag_reaches_the_judge_and_is_recorded(
+        self, cli_runner: CliRunner, git_repo: Path
+    ) -> None:
+        """``--model`` goes through the same alias cascade as every review command."""
+        _repo_with_review(git_repo)
+        (git_repo / "src" / "foo.py").write_text("changed\n")
+        _commit(git_repo, "change")
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "review",
+                    "resolve",
+                    "305",
+                    "--cwd",
+                    str(git_repo),
+                    "--model",
+                    "claude-sonnet-5",
+                    "--profile",
+                    "sdk",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert transport.call_args.kwargs["model"] == "claude-sonnet-5"
+        assert transport.call_args.kwargs["profile"] == "sdk"
+        assert _artifact_frontmatter(git_repo, 1)["judgeModel"] == "claude-sonnet-5"
+
+    def test_verbose_adds_the_note_column(self, cli_runner: CliRunner, git_repo: Path) -> None:
+        _repo_with_review(git_repo)
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock()):
+            quiet = cli_runner.invoke(app, ["review", "resolve", "305", "--cwd", str(git_repo)])
+            loud = cli_runner.invoke(app, ["review", "resolve", "305", "--cwd", str(git_repo), "-v"])
+
+        assert "Note" not in quiet.output
+        assert "Note" in loud.output
+        assert "nothing changed since the review" in _flat(loud.output)
