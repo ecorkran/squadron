@@ -12,9 +12,30 @@ from typing import cast
 
 import yaml
 
+from squadron.documents.schema import STATUS_ALIASES, DocumentStatus
+
 
 class FrontmatterError(Exception):
     """Raised when a document's YAML frontmatter block is malformed or absent."""
+
+
+def _validate_status_if_present(data: dict[str, object], *, context: str) -> None:
+    """Raise if a top-level ``status`` key is present and not a valid value.
+
+    Present-and-invalid only — never required. Machine artifacts legitimately
+    omit ``status`` entirely, and a nested ``findingStatuses`` entry carries a
+    ``FindingStatus``, not a document status, so only the top-level key is
+    checked.
+    """
+    if "status" not in data:
+        return
+    status_value = str(data["status"])
+    valid_values = {member.value for member in DocumentStatus} | set(STATUS_ALIASES)
+    if status_value not in valid_values:
+        accepted = ", ".join(member.value for member in DocumentStatus)
+        raise FrontmatterError(
+            f"Invalid status {status_value!r} in {context} — accepted values: {accepted}"
+        )
 
 
 def split_document(text: str) -> tuple[str, str, str] | None:
@@ -80,7 +101,13 @@ def render_frontmatter_block(data: dict[str, object]) -> str:
     artifacts embed arbitrary model-authored text — a colon-space, a leading
     ``#`` or ``-``, or an embedded newline would corrupt a hand-rendered block,
     and the whole point of the block is that a machine can read it back.
+
+    Raises:
+        FrontmatterError: a top-level ``status`` key is present and not a
+            valid ``DocumentStatus`` (or alias). Absent ``status`` is fine —
+            machine artifacts legitimately have none.
     """
+    _validate_status_if_present(data, context="frontmatter block")
     dumped = yaml.safe_dump(
         data,
         sort_keys=False,
@@ -99,7 +126,8 @@ def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
 
     Raises:
         FrontmatterError: the file has no frontmatter block, the block is not
-            closed, or it does not parse to a YAML mapping.
+            closed, it does not parse to a YAML mapping, or the merged result
+            carries a top-level ``status`` that is present and invalid.
     """
     text = path.read_text(encoding="utf-8")
     split = split_document(text)
@@ -118,6 +146,7 @@ def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
         str(key): value for key, value in cast("dict[object, object]", loaded).items()
     }
     merged.update(fields)
+    _validate_status_if_present(merged, context=str(path))
 
     dumped = yaml.safe_dump(merged, sort_keys=False, default_flow_style=False, allow_unicode=True)
     path.write_text(f"{leading}---\n{dumped}---{body}", encoding="utf-8")

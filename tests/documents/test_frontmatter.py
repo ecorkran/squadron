@@ -11,6 +11,7 @@ import yaml
 from squadron.documents.frontmatter import (
     FrontmatterError,
     read_frontmatter,
+    render_frontmatter_block,
     update_frontmatter,
 )
 
@@ -168,3 +169,47 @@ def test_update_frontmatter_output_is_valid_yaml(tmp_path: Path) -> None:
     text = doc.read_text(encoding="utf-8")
     fence_block = text.split("---", 2)[1]
     assert yaml.safe_load(fence_block) == {"a": 1, "b": 2}
+
+
+# ---------------------------------------------------------------------------
+# Status validation hardening (slice 172, D8/T13)
+# ---------------------------------------------------------------------------
+
+
+def test_update_frontmatter_invalid_status_raises(tmp_path: Path) -> None:
+    doc = tmp_path / "doc.md"
+    doc.write_text("---\ndocType: notes\nstatus: not_started\n---\nbody\n", encoding="utf-8")
+
+    with pytest.raises(FrontmatterError, match="not_started|in_progress|complete|deferred|deprecated"):
+        update_frontmatter(doc, {"status": "draft"})
+
+
+def test_update_frontmatter_valid_status_succeeds_and_preserves_body(tmp_path: Path) -> None:
+    doc = tmp_path / "doc.md"
+    doc.write_text("---\ndocType: notes\nstatus: not_started\n---\nbody text\n", encoding="utf-8")
+
+    update_frontmatter(doc, {"status": "complete"})
+
+    text = doc.read_text(encoding="utf-8")
+    fence_block = text.split("---", 2)[1]
+    assert yaml.safe_load(fence_block)["status"] == "complete"
+    assert text.endswith("body text\n")
+
+
+def test_render_frontmatter_block_nested_finding_status_does_not_raise() -> None:
+    data: dict[str, object] = {
+        "docType": "gate-evidence",
+        "findingStatuses": [{"id": "F001", "status": "addressed"}],
+    }
+
+    rendered = render_frontmatter_block(data)
+
+    assert "findingStatuses" in rendered
+
+
+def test_render_frontmatter_block_no_status_key_does_not_raise() -> None:
+    data: dict[str, object] = {"docType": "gate-evidence", "layer": "project"}
+
+    rendered = render_frontmatter_block(data)
+
+    assert "docType: gate-evidence" in rendered
