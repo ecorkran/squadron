@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260803
 dateUpdated: 20260804
-status: not_started
+status: complete
 ---
 
 # Slice 172 — `sq validate docs`: Mechanical Frontmatter Enforcement

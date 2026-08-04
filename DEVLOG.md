@@ -12,6 +12,73 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260804 (3)
+
+### Slice 172: Implementation — `sq validate docs` Mechanical Frontmatter Enforcement
+
+Implemented all 26 tasks across 10 parts on branch
+`172-slice.sq-validate-docs-mechanical-frontmatter-enforcement`, in 12 commits
+that follow the design's ordering constraints (writer fix before cleanup,
+cleanup before CI).
+
+**The validator.** `documents/schema.py` defines `DocumentStatus`, `DocType`,
+and the machine-artifact docType set in one place; a drift test fails (never
+skips) if they disagree with `file-naming-conventions.md`. `documents/validate.py`
+implements the eight `FM001`–`FM008` checks as a pure function —
+`validate_document`/`validate_paths` return `list[Violation]`, no printing, no
+`sys.exit` — wired into `sq validate docs` via a new `validate.docs_root`
+config key (default `project-documents/user`).
+
+**The writer fix and the hardening.** `review/persistence.py:222` now quotes
+`location` through `yaml_escape`, closing the exact defect that corrupted five
+review artifacts. `documents/frontmatter.py`'s `update_frontmatter` and
+`render_frontmatter_block` now raise on a present-and-invalid top-level
+`status`, and `update_frontmatter` gained a required `today=` keyword that
+stamps `dateUpdated` on every call — squadron's only in-place document edit
+(`executor.py`'s `revision_number` stamp) now keeps that date current, and the
+devlog stub and append path were brought in line with the same rule.
+
+**Cleanup, gate, and CI.** All 27 pre-existing violations were fixed in one
+commit, separate from the feature work: the five corrupted reviews (quote
+`location`), six non-canonical `status` values (three mechanical, three judged
+from document content — e.g. `superseded` on a design replaced by a later
+slice became `deprecated`, not left as-is), three missing `status` fields on
+fully-checked-off task files (`complete`), eleven `task-breakdown`/`slice-tasks`
+docTypes (`tasks`, confirmed unread by any source), and two documents with no
+frontmatter block. `.githooks/pre-commit` ships tracked and executable;
+`sq doctor` reports whether `core.hooksPath` is set to it. CI gained
+`submodules: true` and a `sq validate docs` step, landing only after the
+cleanup commit so the branch's own CI history is never red between two
+commits of the same slice.
+
+**T21's cross-check found a real bug, not a hypothetical one.** Running
+`cf check --fix` against this repo (not just re-reading its source) showed one
+of context-forge's thirteen `update-frontmatter` fix actions writing
+`status: in-progress` — hyphenated, disagreeing with `VALID_STATUSES` — into
+`900-arch.maintenance-and-refactoring.md`. Root cause: `introspection/types.ts`'s
+`STATUS.InProgress`/`STATUS.NotStarted` constants are hyphenated while
+`schema/frontmatterSchema.ts`'s `VALID_STATUSES` (and the spec) are
+underscored — two enums for the same values, and at least 6 of 13 fix actions
+reference the wrong one. `FM005` caught it correctly; the bad write was
+hand-corrected and filed as
+[context-forge#72](https://github.com/ecorkran/context-forge/issues/72),
+distinct from #71 (the `dateUpdated`-stamp gap, already tracked). Two of
+`cf check --fix`'s other proposed changes were declined outright — marking
+this slice's own parent architecture (140) complete mid-implementation, and
+marking a slice (344) complete when its own frontmatter says `deprecated` and
+its body says "DEPRECATED / DESCOPED, not merged."
+
+**Full verification:** `uv run ruff check`, `uv run ruff format --check`,
+`uv run pyright`, `uv run pytest` (2960 passed, 2 skipped), and
+`uv run sq validate docs` (413 documents, 0 violations) all clean. All nine
+Verification Walkthrough steps run in order and matched the design, with two
+corrections folded back into it: the `update_frontmatter` probe command needed
+`today=`, and D8a's `cf check --fix` claim was updated from "verified by
+reading source" to "verified by running it, with one exception found and
+filed."
+
+---
+
 ## 20260804 (2)
 
 ### Slice 172: Date-Field Audit — `dateCreated` Everywhere, `dateUpdated` on Every Write

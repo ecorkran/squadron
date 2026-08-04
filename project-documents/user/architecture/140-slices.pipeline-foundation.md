@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
-dateUpdated: 20260803
+dateUpdated: 20260804
 status: in_progress
 ---
 
@@ -90,7 +90,7 @@ Two facts make it smaller than it sounds. There is exactly **one** action-execut
 
 Dependencies: [149 executor, 142 action protocol, 909 (the hardcoded post-condition being generalized)]. Risk: Medium — the mechanism is small; deciding what a hook may do to a running pipeline is not. Effort: 3/5. **Design Complete: [171-slice.post-action-hooks-provider-independent-extension-point.md](../slices/171-slice.post-action-hooks-provider-independent-extension-point.md)**
 
-29. [ ] **(172) `sq validate docs` — Mechanical Frontmatter Enforcement** — Replaces slice 171 as the answer to the problem 171 was nominally built for: agents write `status: draft`, and the canonical set (`not_started | in_progress | complete | deferred | deprecated`) is defined in prose in `file-naming-conventions.md` and enforced by nothing. A convention that is only written down is a suggestion that does not get read.
+29. [x] **(172) `sq validate docs` — Mechanical Frontmatter Enforcement** (completed 20260804) — Replaces slice 171 as the answer to the problem 171 was nominally built for: agents write `status: draft`, and the canonical set (`not_started | in_progress | complete | deferred | deprecated`) is defined in prose in `file-naming-conventions.md` and enforced by nothing. A convention that is only written down is a suggestion that does not get read.
 
 The insight that shrinks this from 3/5 to 1/5: **enforcement does not have to happen inside squadron.** It has to happen somewhere a bad document cannot get past, and `git commit` is already that boundary — LLM-independent, crossed by every workflow including agent-driven ones, and blind to which tool wrote the file.
 

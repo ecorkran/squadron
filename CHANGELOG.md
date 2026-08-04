@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`sq validate docs` mechanically enforces frontmatter.** Checks that markdown under the project's document root has a valid `docType`, `status`, and dates, and catches frontmatter that looks fine but silently fails to parse (an unquoted colon in a review finding's location, for example). A tracked pre-commit hook (`git config core.hooksPath .githooks`) refuses a commit that would introduce a violation; `sq doctor` reports whether the hook is installed.
+
+### Fixed
+- **A review finding whose location contains a colon (e.g. `"Slice design: Implementation Details"`) no longer corrupts the review's frontmatter.** The value is now quoted like its neighboring `summary` field.
+
 ## [0.10.0] - 20260803
 
 ### Added
