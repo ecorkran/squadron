@@ -115,7 +115,9 @@ Each action implementation lives in `src/squadron/pipeline/actions/`. The execut
 
 Users (and future squadron slices) can register custom action types. The action registry is open. This is how 160's convergence loop strategy will plug in — as a specialized action type that wraps the review action with iteration logic.
 
-### Post-Action Hooks (171)
+### Post-Action Hooks (171 — designed, not built)
+
+> **Status: deferred 20260803.** Slice 171's design is complete and reviewed, but the slice was deferred for lack of a third consumer — the two checks it generalizes (909, 911) remain hardcoded in the executor, and nothing below is implemented. It is documented here because the design is settled and the extension point is one that 180-band work would otherwise re-invent. See `171-slice.post-action-hooks-provider-independent-extension-point.md`.
 
 A third registry, alongside step types and actions: hooks that run after each action completes, at the executor's single action-execution site. This is squadron's provider-independent answer to Claude Code's `PostToolUse`, which reaches exactly one of the seven provider profiles squadron runs.
 
@@ -248,11 +250,12 @@ steps:
 
   - devlog: auto                 # auto-generate from pipeline state
 
-# Post-action hooks (171): opt-out only. Built-in hooks run by default;
-# this block names hooks to skip for this pipeline. Unioned with the
+# Post-action hooks (171 — DEFERRED, not built; the loader does not accept
+# this block today). Opt-out only: built-in hooks would run by default and
+# this names hooks to skip for this pipeline, unioned with the
 # `hooks.disabled` config key.
-hooks:
-  disable: [frontmatter-status]
+# hooks:
+#   disable: [frontmatter-status]
 ```
 
 ### Step Types
@@ -536,7 +539,7 @@ Slice 125 (Conversation Persistence) remains deferred to initiative 160. That wo
 │  └────────────────────────┼──────────────────────────────┘   │
 │                           │ after each action                 │
 │  ┌────────────────────────┼──────────────────────────────┐   │
-│  │         Post-Action Hook Registry (171)                │   │
+│  │ Post-Action Hook Registry (171 — deferred, not built)  │   │
 │  │  observe │ warn │ fail the action — severity-clamped   │   │
 │  └────────────────────────┼──────────────────────────────┘   │
 │                           │                                   │
@@ -585,15 +588,15 @@ src/squadron/pipeline/
 │   ├── review.py            # standalone review step type
 │   ├── collection.py        # each/collection loop step type
 │   └── devlog.py            # devlog step type
-├── hooks/                   # post-action hooks (171)
+├── hooks/                   # post-action hooks (171 — DEFERRED, not built)
 │   ├── __init__.py          # PostActionHook protocol, registry, bootstrap
 │   ├── runner.py            # the single hook-invocation path
 │   └── builtin/             # dispatch-artifact, revision-stamp, frontmatter-status
 
 src/squadron/documents/      # document-level primitives shared across subsystems
 ├── frontmatter.py           # read/update/render frontmatter
-├── paths.py                 # USER_DOCS_ROOT (171)
-└── status.py                # DocumentStatus canonical enum (171)
+├── paths.py                 # USER_DOCS_ROOT (171 — DEFERRED)
+└── status.py                # DocumentStatus canonical enum (171 — DEFERRED)
 
 src/squadron/data/
 └── pipelines/               # built-in pipeline definitions (slice 141 establishes this)

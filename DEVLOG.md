@@ -12,6 +12,77 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (8)
+
+### Slice 171: Deferred — No Third Consumer
+
+Deferred immediately after a passing design review and before any
+implementation. **The design is not the reason.** It reviewed at CONCERNS with
+all findings resolved, and it stands as written.
+
+The slice rests on one load-bearing argument: the executor has accreted two
+hardcoded post-action checks (909's dispatch artifact post-condition, 911's
+`revision_number` stamp), so a third means editing the executor again — the
+open/closed violation the project's own review rules name. That argument is
+worth 3/5 effort only if a third consumer exists. Asked directly, there isn't
+one.
+
+And the nominal *first* consumer does not survive scrutiny. A frontmatter
+`status:` validator is better served by a `sq validate docs` command: it
+catches every document rather than only those touched during a pipeline run,
+it can go in CI where it actually blocks, and it is a fraction of the work.
+It also arguably is not squadron's job — `cf check` exists and Context Forge
+owns `file-naming-conventions.md`, which defines the canonical set. The
+design's own "accepted drift risk" note about mirroring another project's
+spec in a squadron enum was the tell, written down and then walked past.
+
+Building a mechanism to hold two checks that already work, for a consumer
+better served elsewhere, is speculative generality — which the project rules
+ban. The two checks stay hardcoded. A third is cheaper to add in place than
+this mechanism is to build.
+
+**Un-defers on:** naming a consumer that must run *inside* a pipeline and
+*block* it, i.e. one that cannot wait for CI or a manual command.
+
+Two reworks surfaced in discussion after the review and are recorded in the
+slice design's Deferral section rather than folded into the body:
+
+1. **Authoring flow.** As designed, adding a hook means editing squadron —
+   a module under `hooks/builtin/` plus a bootstrap line. No project-level
+   hook file exists. A feature that is a pain to use will not get used.
+   Likely shape if revived: a `.squadron/hooks/*.py` convention imported at
+   bootstrap, registering through the already-public
+   `register_post_action_hook`. The `conftest.py` pattern — in-repo, typed,
+   no shell door opened.
+2. **The watermark is wrong, and duplicate suppression is its symptom.**
+   `frontmatter-status` scopes to documents with mtime `>= run_started_at` —
+   a *run*-level watermark, so a document written in step 1 keeps matching
+   after every later action, which is the only reason the design needed a
+   dedup component at all. Correct shape: the runner computes the
+   changed-document set once per action (delta since the *previous* action)
+   and passes it in `HookContext`. A hook with nothing to do gets an empty
+   set and returns PASS; each document is validated once, when written; the
+   scan is shared across hooks; dedup disappears. Rejected alternative:
+   actions self-reporting what they wrote — `dispatch` cannot know, since an
+   agent writes files out of band, which is the whole premise of the 909 bug.
+
+Also unresolved and worth knowing before any revival: hook records would land
+in `ActionResult.metadata` (persisted free via `dataclasses.asdict` at
+`state.py:291`), but only at **step** completion, and prompt-only
+`record_step_done` builds an `action_results` list only when `--verdict` is
+passed — so there is nowhere to hang them. And the design recorded only
+non-`PASS` outcomes, making "ran and passed" indistinguishable from "never
+fired." The "no silent path" rule was applied to failures and not to the
+silence that actually bites.
+
+Documents updated: slice design `status: deferred` with a Deferral section at
+the top; slice-plan entry 28 marked DEFERRED with a Notes entry; the
+architecture's Post-Action Hooks section, component diagram, package
+structure, and YAML grammar all marked designed-not-built so the architecture
+does not read as describing shipped behavior.
+
+---
+
 ## 20260803 (7)
 
 ### Slice 171: Design Review — Resolved

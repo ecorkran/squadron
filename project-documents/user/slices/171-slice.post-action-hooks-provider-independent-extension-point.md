@@ -7,10 +7,86 @@ dependencies: [142, 149, 909, 911]
 interfaces: []
 dateCreated: 20260803
 dateUpdated: 20260803
-status: not_started
+status: deferred
 ---
 
 # Slice Design: Post-Action Hooks — Provider-Independent Extension Point
+
+## Deferral (20260803)
+
+**Deferred immediately after design review, before any implementation. The
+design below stands as written and is not the reason for the deferral.**
+
+The slice rests on one load-bearing argument: the executor has accreted two
+hardcoded post-action checks (909's dispatch artifact post-condition, 911's
+`revision_number` stamp), and a third means editing the executor again. That
+argument is worth 3/5 effort only if a credible third consumer exists. **There
+is not one.**
+
+The nominal first consumer — a frontmatter `status:` validator — turns out to
+be poorly served by a hook:
+
+- A `sq validate docs` command catches strictly more (every document, not only
+  those touched during a pipeline run), can go in CI where it actually blocks,
+  and is a fraction of the work.
+- It arguably is not squadron's job at all. `cf check` exists, and Context
+  Forge owns `file-naming-conventions.md`, which defines the canonical status
+  set. Squadron's `DocumentStatus` enum would mirror another project's spec —
+  the "accepted drift risk" noted under Technical Decisions is itself the tell.
+
+Refactoring two checks that work onto a mechanism whose only new consumer is
+better served elsewhere is speculative generality, which the project's own
+rules ban. The two hardcoded checks stay where they are; a third one is
+cheaper to add in place than this mechanism is to build.
+
+### What would un-defer this
+
+A consumer that must run **inside** a pipeline and **block** it — something
+that cannot wait for CI or a manual command. Name that consumer and the
+open/closed argument becomes real rather than theoretical.
+
+### Known rework if it is revived
+
+Two items surfaced in discussion after the design review and are **not**
+incorporated below:
+
+1. **Authoring flow.** As designed, adding a hook means editing squadron:
+   a module under `hooks/builtin/` plus a line in
+   `bootstrap_post_action_hooks()`. There is no project-level hook file. A
+   feature that is a pain to use will not get used. Likely shape: a
+   `.squadron/hooks/*.py` convention imported at bootstrap, registering
+   through the already-public `register_post_action_hook` — the `conftest.py`
+   pattern, in-repo, typed, and no shell door opened.
+
+2. **The watermark is wrong, and duplicate suppression is the symptom.**
+   `frontmatter-status` scopes to documents with mtime `>= run_started_at`,
+   which is a *run*-level watermark — a document written in step 1 keeps
+   matching after every later action, which is the only reason the design
+   needs a dedup component. The correct shape: the **runner** computes the
+   changed-document set once per action (delta since the *previous* action)
+   and passes it in `HookContext`. A hook with nothing to do then receives an
+   empty set and returns `PASS` immediately, each document is validated once
+   at the moment it is written, the scan is shared across hooks instead of
+   repeated per hook, and duplicate suppression disappears entirely. Gate the
+   scan on whether any registered hook consumes it.
+
+   Rejected alternative: having actions self-report what they wrote.
+   `dispatch` cannot know — an agent writes files out of band, which is the
+   entire premise of the 909 bug.
+
+Also unresolved: hook records land in `ActionResult.metadata`, which persists
+via `dataclasses.asdict` at [state.py:291](src/squadron/pipeline/state.py#L291)
+— but only at **step** completion, and in prompt-only mode
+`record_step_done` builds an `action_results` list only when `--verdict` is
+passed ([state.py:387-396](src/squadron/pipeline/state.py#L387-L396)), so
+there is nowhere to hang them. That signature needs to change. And as
+designed, only non-`PASS` outcomes are recorded, which makes "ran and passed"
+indistinguishable from "never fired" — the design's own "no silent path" rule
+applied to failures but not to the silence that actually bites.
+
+The architecture document carries the mechanism as **designed, not built**.
+
+---
 
 ## Overview
 
