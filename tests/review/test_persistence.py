@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from squadron.documents.frontmatter import read_frontmatter
 from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
@@ -121,6 +122,69 @@ class TestFormatReviewMarkdown:
         assert f1["category"] == "error-handling"
         assert f1["summary"] == "Missing error handling"
         assert f1["location"] == "src/foo.py:10"
+
+    def test_location_with_colon_space_round_trips(self, tmp_path: Path) -> None:
+        """The corruption class this slice exists to close.
+
+        A location like a document anchor (`Slice design: Implementation
+        Details`) contains a colon-space, which makes unquoted YAML read it
+        as a nested mapping and fail to parse. Quoting it must keep the
+        original string intact end to end.
+        """
+        colon_space_location = "Slice design: Implementation Details"
+        result = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Stale reference",
+                    description="Points at the wrong section.",
+                    category="accuracy",
+                    location=colon_space_location,
+                )
+            ],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 4, 1, 12, 0, 0),
+        )
+        md = format_review_markdown(result, "slice", _make_slice_info())
+        doc = tmp_path / "probe.md"
+        doc.write_text(md, encoding="utf-8")
+
+        data = read_frontmatter(doc)
+
+        assert data is not None
+        findings = cast("list[dict[str, object]]", data["findings"])
+        assert findings[0]["location"] == colon_space_location
+
+    def test_location_with_embedded_quote_round_trips(self, tmp_path: Path) -> None:
+        quoted_location = 'anchor "with quotes" inside'
+        result = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Stale reference",
+                    description="Points at the wrong section.",
+                    category="accuracy",
+                    location=quoted_location,
+                )
+            ],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 4, 1, 12, 0, 0),
+        )
+        md = format_review_markdown(result, "slice", _make_slice_info())
+        doc = tmp_path / "probe.md"
+        doc.write_text(md, encoding="utf-8")
+
+        data = read_frontmatter(doc)
+
+        assert data is not None
+        findings = cast("list[dict[str, object]]", data["findings"])
+        assert findings[0]["location"] == quoted_location
 
     def test_handles_missing_slice_info(self) -> None:
         result = _make_result()
