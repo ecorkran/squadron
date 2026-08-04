@@ -17,13 +17,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from squadron.documents.frontmatter import render_frontmatter_block, yaml_safe
+from squadron.documents.schema import GATE_EVIDENCE_DOC_TYPE
 from squadron.review.addressed.models import FindingOutcome, SettlingScreen
 from squadron.review.persistence import REVIEWS_DIR
 
 _logger = logging.getLogger(__name__)
-
-#: Frontmatter docType — provenance-distinct from a review.
-GATE_EVIDENCE_DOC_TYPE = "gate-evidence"
 
 #: Filename pattern. The ``-gate.`` segment is what keeps it out of the
 #: ``*-review.*`` glob; nothing else about the name may reintroduce it.

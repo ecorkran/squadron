@@ -6,6 +6,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from squadron.documents.schema import DEVLOG_DOC_TYPE
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 
@@ -101,7 +102,7 @@ def _read_or_create(path: Path) -> list[str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     minimal = [
         "---",
-        "docType: devlog",
+        f"docType: {DEVLOG_DOC_TYPE}",
         "---",
         "",
         "# Development Log",
