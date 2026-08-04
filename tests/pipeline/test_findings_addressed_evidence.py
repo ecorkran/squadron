@@ -209,6 +209,6 @@ def test_missing_slice_index_warns_rather_than_fabricating_one(
 
 
 def test_rendered_body_lists_every_finding_outcome() -> None:
-    body = render_gate_evidence(_evidence(), step_name="settled")
+    body = render_gate_evidence(_evidence(), step_name="settled", date_created="20260804")
     assert "`F001`: **unaddressed** [exact_match]" in body
     assert "`F002`: **moved** [judge] (successor: F077)" in body

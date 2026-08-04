@@ -17,7 +17,7 @@ class FrontmatterError(Exception):
     """Raised when a document's YAML frontmatter block is malformed or absent."""
 
 
-def _split_document(text: str) -> tuple[str, str, str] | None:
+def split_document(text: str) -> tuple[str, str, str] | None:
     """Split ``text`` into ``(leading, raw_frontmatter, body)``.
 
     ``leading`` is any BOM/blank-line prefix before the opening fence;
@@ -43,7 +43,7 @@ def read_frontmatter(path: Path) -> dict[str, object] | None:
     mapping — callers decide whether that absence is meaningful.
     """
     text = path.read_text(encoding="utf-8")
-    split = _split_document(text)
+    split = split_document(text)
     if split is None:
         return None
     _, raw_block, _ = split
@@ -102,7 +102,7 @@ def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
             closed, or it does not parse to a YAML mapping.
     """
     text = path.read_text(encoding="utf-8")
-    split = _split_document(text)
+    split = split_document(text)
     if split is None:
         raise FrontmatterError(f"No YAML frontmatter block found in {path}")
     leading, raw_block, body = split
