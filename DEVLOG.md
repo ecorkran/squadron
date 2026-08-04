@@ -12,6 +12,41 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (11)
+
+### Slice 172: Task Breakdown Complete
+
+[172-tasks.…md](project-documents/user/tasks/172-tasks.sq-validate-docs-mechanical-frontmatter-enforcement.md)
+— 22 tasks across 9 parts, 402 lines, test-with throughout.
+
+**Sequencing is the one thing this breakdown adds that the design left
+implicit.** Three orderings are load-bearing and each is called out in the
+task file rather than left to be discovered:
+
+1. The review-writer fix (Part 4) lands *before* the cleanup (Part 6).
+   Reversed, a single review written between the two commits reintroduces the
+   corruption the cleanup just removed.
+2. The cleanup lands *before* CI (Part 8). Reversed, `main` is red between two
+   commits of the same slice.
+3. `schema.py` and its drift test come first, because every later part imports
+   the values and the whole slice is an argument about defining them once.
+
+Two implementation details worth pinning down now rather than during Phase 6.
+`sq doctor`'s hook check must stay pure — `doctor_checks.py`'s docstring
+promises no subprocesses — so the resolved `core.hooksPath` is obtained in
+`doctor.py` via the existing `run_git` (`review/git_utils.py:19`) and passed
+in. And the cleanup task deliberately refuses to carry a transcribed list of
+the 24 violations: it says to run the validator and use its output, then
+compare. A work list copied into a document is stale the moment something else
+touches the tree.
+
+The `FM002` fixture is specified as the real defect string
+(`location: Slice design: Implementation Details`) rather than a synthetic
+colon, per the project rule that a parser's test fixture must include the
+format it will actually consume.
+
+---
+
 ## 20260803 (10)
 
 ### Slice 172: Design Review Resolved — PASS, One Pass Finding and Six Notes
