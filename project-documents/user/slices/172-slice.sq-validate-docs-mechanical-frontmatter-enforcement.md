@@ -6,7 +6,7 @@ parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
 dependencies: []
 interfaces: []
 dateCreated: 20260803
-dateUpdated: 20260803
+dateUpdated: 20260804
 status: not_started
 ---
 
@@ -79,14 +79,37 @@ Paths given on the command line are **filtered** against the root, not trusted. 
 
 ### D2 — Two document classes, because squadron writes documents too
 
-`review-resolution` and `gate-evidence` artifacts are written into `project-documents/user/reviews/` (`review/resolution_artifact.py:193`, `pipeline/actions/findings_addressed/evidence.py:184`) — inside the validated root. Their frontmatter carries `docType` and, for resolutions, `project` and `dateCreated`. Neither carries `status` or `dateUpdated`, and neither should: they are immutable machine records of a completed event, not documents with a lifecycle.
+`review-resolution` and `gate-evidence` artifacts are written into `project-documents/user/reviews/` (`review/resolution_artifact.py:193`, `pipeline/actions/findings_addressed/evidence.py:184`) — inside the validated root — and `devlog` is written to `DEVLOG.md`. They are machine records of a completed event, not documents with a lifecycle, and carry no `status`.
 
 So the validator recognizes two classes, both defined in one place:
 
 - **Process documents** — the fifteen `docType` values in the spec. Full universal-field validation.
-- **Machine artifacts** — squadron-emitted `docType` values (`review-resolution`, `gate-evidence`, `devlog`). Recognized as valid `docType`s; exempt from the universal-field and status checks. Date fields are still validated *when present*.
+- **Machine artifacts** — squadron-emitted `docType` values (`review-resolution`, `gate-evidence`, `devlog`). Recognized as valid `docType`s; exempt from the `status` check. `dateCreated` is required of them exactly as it is of process documents.
 
 Without this, the gate would fail on squadron's own correct output the first time a pipeline wrote a resolution artifact — which is precisely how a gate teaches people to use `--no-verify`.
+
+#### The date rule, and what a validator can actually enforce
+
+`dateCreated` belongs on every file that is created. `dateUpdated` belongs on every file that is edited after creation; when it is absent, the creation date is the answer — an inference that is sound only if every writer stamps it. Context Forge already depends on that inference (`frontmatterSchema.ts:224` backfills a missing `dateUpdated` from `dateCreated`).
+
+The two halves land in different places, and conflating them is the trap:
+
+- `dateCreated` is **mechanically checkable** from a single file. It is a universal required field for both classes.
+- `dateUpdated` **presence is not checkable** — no tool reading one file can know whether that file was ever edited. The validator therefore never requires it. It format-checks it when present (`FM007`), and nothing more.
+
+The second half is a *writer-side* obligation, enforced by the emitters and by tests over the mutation sites, not by the gate. Measured against the current corpus (413 documents), the authored side already complies in full: zero missing `dateCreated`, zero missing `dateUpdated`, zero with `dateUpdated` earlier than `dateCreated`. Every gap is on the machine side:
+
+| Emitter | Rewritten after creation? | Should carry | Carries today | Change |
+|---|---|---|---|---|
+| `review` (`review/persistence.py:196`) | no | `dateCreated` | both | none — `dateUpdated` is harmless and `metrology/identity.py:234` reads it |
+| `review-resolution` (`resolution_artifact.py:106`) | no — refuses overwrite, append-only | `dateCreated` | `dateCreated` | none, already correct |
+| `gate-evidence` (`evidence.py:99`) | no — the revision is in the filename | `dateCreated` | neither | add `dateCreated` |
+| `devlog` stub (`actions/devlog.py:102`) | **yes, on every append** | both | neither | add both; stamp `dateUpdated` on each append |
+| `update_frontmatter` caller (`executor.py:269`) | **yes — the only in-place document edit squadron performs** | both | leaves dates untouched | stamp `dateUpdated` (see D8) |
+
+Zero `review-resolution` and zero `gate-evidence` files exist in the corpus today, so these emitter changes carry no cleanup and no back-compatibility constraint. This is the cheapest moment they will ever be made.
+
+The `dateUpdated < dateCreated` ordering check is mechanical and cheap, but currently has zero violations and so enforces nothing. Recorded as Future Work rather than added as a ninth code.
 
 ### D3 — Eight check classes, each with exactly one mechanical fix
 
@@ -173,7 +196,39 @@ Ordering matters: CI must not gate on the validator until the cleanup commit has
 
 Verified safe against current callers: `render_frontmatter_block`'s two consumers (`resolution_frontmatter`, `gate_evidence_frontmatter`) carry `status` only inside nested `findingStatuses` entries, where it is a `FindingStatus`, not a document status. `update_frontmatter`'s only caller (`executor.py:269`) writes `revision_number`. No current call site changes behavior.
 
+`update_frontmatter` also stamps `dateUpdated`, taking the date as a required keyword parameter:
+
+```python
+def update_frontmatter(path: Path, updates: dict[str, object], *, today: str) -> None:
+```
+
+The date is passed in rather than read from a clock inside the function, so the behavior stays testable and the module stays free of ambient state. The stamp is skipped when the caller supplies `dateUpdated` in `updates` — the caller is then asserting a specific date and must win.
+
+This is not a hidden side effect: the function is named for the update path, and recording the update date is that path doing its job. Placing it here rather than at `executor.py:269` is what makes the rule hold for callers that do not exist yet — the alternative is a convention every future author has to remember, which is exactly the convention that left `DEVLOG.md` claiming `dateUpdated: 20260803` while carrying a `20260804` entry.
+
 This closes squadron's door, not the agents'. Agents write markdown with the Write tool and never touch this module — that is what piece 2 is for.
+
+### D8a — Division of labor with `cf check`
+
+Both tools validate frontmatter in the same tree, so the boundary has to be stated rather than assumed. Context Forge's `validateFrontmatter` (`packages/core/src/schema/frontmatterSchema.ts`) checks **per-`docType` schemas** for eight docTypes (`concept`, `initiative-plan`, `architecture`, `slice-plan`, `slice-design`, `tasks`, `review`, `analysis`), including docType-specific required fields such as `archIndex`, `component`, and `slice`. Unknown docTypes pass through unchecked (`frontmatterSchema.ts:210`).
+
+That is the complement of this slice, not an overlap:
+
+| | `sq validate docs` | `cf check` |
+|---|---|---|
+| Structural integrity (`FM001`–`FM003`, `FM008`) | yes | no |
+| Universal fields, all docTypes incl. squadron's own | yes | eight docTypes only |
+| Per-`docType` required fields | no | yes |
+| Cross-document consistency | no | yes |
+| Severity | blocks the commit | warning, with `--fix` |
+
+Three conflict surfaces were checked and are clear:
+
+- **`status` is the only field CF writes.** All thirteen `update-frontmatter` fix actions in `ConsistencyChecker.ts` write `status`, from the same five canonical values `FM005` accepts. `cf check --fix` cannot produce a document this gate rejects.
+- **`dateUpdated` must not be required here.** CF's schema requires it and backfills it from `dateCreated`. If `FM004` also required it, squadron's hook would *block* commits on documents CF considers valid-and-fixable — two gates disagreeing, with the blocking one wrong. Requiring only `dateCreated` keeps them consistent.
+- **CF cannot mis-infer squadron's artifacts.** Its `FILENAME_PARTS_RE` matches only the segments `arch|slices|slice|tasks|review|analysis|concept`; `{index}-resolution.…` and `{index}-gate.…` match none of them. Inference also fires only when `docType` is absent, and both emitters always write it.
+
+The `dateUpdated` stamp gap is symmetric — CF's `updateFrontmatterField` (`markdownWriter.ts:52`) writes one key and leaves the date alone, same as `executor.py:269` does today. Filed as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71); not a dependency of this slice, which fixes only squadron's half.
 
 ### D9 — Quote `location` in the review writer
 
@@ -197,7 +252,7 @@ src/squadron/documents/
                        REQUIRED_UNIVERSAL_FIELDS, STATUS_ALIASES
   validate.py    (new) Violation, ViolationCode, validate_document, validate_paths
   frontmatter.py (edit) status validation in update_frontmatter /
-                        render_frontmatter_block
+                        render_frontmatter_block; dateUpdated stamp
 
 src/squadron/cli/commands/
   validate.py    (new) validate_app typer sub-app; `docs` subcommand
@@ -207,6 +262,14 @@ src/squadron/config/keys.py   (edit) validate.docs_root
 src/squadron/review/persistence.py (edit) quote location
 .githooks/pre-commit          (new)
 .github/workflows/ci.yml      (edit) submodules: true; validate step
+
+src/squadron/pipeline/actions/findings_addressed/evidence.py
+                              (edit) emit dateCreated
+src/squadron/pipeline/actions/devlog.py
+                              (edit) stub emits dateCreated + dateUpdated;
+                                     stamp dateUpdated on each append
+src/squadron/pipeline/executor.py
+                              (edit) pass today= to update_frontmatter
 ```
 
 `schema.py` **defines** the machine-artifact docTypes; `review/` and `pipeline/` import them from it. The reverse — `documents/` sourcing the values from the modules that emit them — inverts the layering, and once `frontmatter.py` imports `schema.py` for the status check (D8) it is also a literal import cycle: `documents.frontmatter` → `documents.schema` → `review.resolution_artifact` → `documents.frontmatter`.
@@ -281,6 +344,10 @@ Exit: 0 clean | 1 violations | 2 usage error
 18. No existing test's assertions change as a result of criterion 17 — the current call sites are unaffected by construction.
 19. `persistence.py` quotes `location` via `yaml_escape`; a regression test writes a review whose finding location contains `: ` and asserts the resulting file's frontmatter round-trips through `read_frontmatter`.
 20. The five corrupted review artifacts parse after repair, verified by `read_frontmatter` returning a mapping for each.
+21. `dateCreated` is a required universal field for both document classes; `dateUpdated` is required by neither, and is format-checked only when present.
+22. `gate_evidence_frontmatter` emits `dateCreated`, and the devlog stub emits `dateCreated` and `dateUpdated`. A test renders each artifact and asserts `uv run sq validate docs` reports zero violations for it.
+23. `update_frontmatter` stamps `dateUpdated` from a required `today=` keyword, and skips the stamp when the caller supplies `dateUpdated` in `updates`. Tests cover both paths.
+24. The devlog action stamps `dateUpdated` on every append, verified by appending to a fixture whose frontmatter carries an older date and asserting the field advances.
 
 ## Verification Walkthrough
 
@@ -370,7 +437,7 @@ uv run sq validate docs && echo "clean" && uv run ruff check && uv run pyright &
 
 ## Risks
 
-- **Gate fatigue.** The one real risk. Mitigated by D3's narrowness (seven mechanical checks, no judgment calls), by D1's scoping (the gate is silent on non-documents), and by D2 (it never fires on squadron's own output). If it starts refusing commits for reasons a contributor cannot fix in fifteen seconds, the design has drifted.
+- **Gate fatigue.** The one real risk. Mitigated by D3's narrowness (eight mechanical checks, no judgment calls), by D1's scoping (the gate is silent on non-documents), by D2 (it never fires on squadron's own output), and by D8a (it never contradicts `cf check --fix`). If it starts refusing commits for reasons a contributor cannot fix in fifteen seconds, the design has drifted.
 - **Spec drift.** Handled by D4's drift test rather than by hoping.
 - **Cleanup ordering.** CI turns red if the validator step lands before the cleanup commit. Sequenced explicitly in D7 and criterion 16.
 
@@ -379,5 +446,7 @@ uv run sq validate docs && echo "clean" && uv run ruff check && uv run pyright &
 - **`sq validate install-hook`** — install the hook into an arbitrary project, or fold it into `sq setup`. This slice ships the hook for squadron's own repo; every other project using this process has the same problem.
 - **Render review frontmatter through `render_frontmatter_block`** — retire the hand-built f-string block in `_render_review` (`review/persistence.py:185-224`), the way gate evidence and resolution artifacts already do. Blocked only by test coupling to the exact rendered text; D9 patches the observed hole in the meantime.
 - **Offer the check class to Context Forge** as a second consumer, since it owns the naming spec.
+- **`dateUpdated` earlier than `dateCreated`** — a ninth check code. Mechanical and cheap, but zero violations exist in the corpus today, so it would enforce nothing on arrival. Worth adding once a writer can plausibly produce one.
+- **Context Forge's half of the stamp rule** — `updateFrontmatterField` (`markdownWriter.ts:52`) mutates documents without advancing `dateUpdated`, the same gap D8 closes on squadron's side. Filed as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71). Tracked, not depended on.
 
 **Effort:** 1/5

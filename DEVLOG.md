@@ -2,13 +2,88 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260803
+dateUpdated: 20260804
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260804 (2)
+
+### Slice 172: Date-Field Audit — `dateCreated` Everywhere, `dateUpdated` on Every Write
+
+Audited how `dateCreated` and `dateUpdated` are produced across squadron and
+Context Forge, and folded the result into the 172 design and tasks. The rule
+being enforced: `dateCreated` belongs on every created file; `dateUpdated`
+belongs on every file edited after creation, and its absence means "never
+edited."
+
+**Measurement first.** All 413 documents under `project-documents/user/` were
+scanned: zero missing `dateCreated`, zero missing `dateUpdated`, zero with
+`dateUpdated` earlier than `dateCreated`. The authored side complies in full.
+Also corrected an earlier miscount — a `grep` for `resolution`/`gate.` had
+matched *slice names*, not artifacts. There are **zero** `review-resolution`
+and **zero** `gate-evidence` files in the corpus, so the emitter fixes below
+carry no cleanup and no back-compatibility constraint.
+
+**The split that decides the validator's shape.** `dateCreated` is checkable
+from a single file. `dateUpdated` presence is not — no tool reading one file
+can know whether that file was ever edited. So the validator requires
+`dateCreated` of both document classes and never requires `dateUpdated`; the
+second half is a writer-side obligation. This also corrects D2, which had
+described the machine artifacts as a blanket exemption from date fields. The
+right classification is per-artifact, by whether the thing is ever rewritten:
+`review-resolution` is append-only and already correct, `gate-evidence` needs
+`dateCreated`, and `devlog` is the only artifact rewritten in place.
+
+**Three squadron write paths did not stamp.** `gate_evidence_frontmatter`
+emits no date at all; the devlog stub emits only `docType`; and
+`executor.py:269` — the only in-place document edit squadron performs —
+stamps `revision_number` into slice and task documents while leaving the dates
+untouched. D8 now puts the stamp inside `update_frontmatter` itself, taking
+`today` as a required keyword rather than calling a clock inline. Placing it
+there rather than at the call site is what makes the rule hold for callers
+that do not exist yet. The evidence that a hand-maintained convention does not
+survive: this file's own frontmatter read `dateUpdated: 20260803` while
+carrying a `20260804` entry.
+
+**Context Forge boundary, written down as D8a.** Both tools validate
+frontmatter in the same tree, so the division of labor is now stated rather
+than assumed. `cf check` owns per-`docType` schemas (eight docTypes; unknown
+ones pass through at `frontmatterSchema.ts:210`) and cross-document
+consistency; `sq validate docs` owns structural integrity and universal
+fields, for every docType including squadron's own. Three conflict surfaces
+were checked and are clear: all thirteen `update-frontmatter` fix actions in
+`ConsistencyChecker.ts` write only `status`, from the same five canonical
+values `FM005` accepts; CF's `FILENAME_PARTS_RE` cannot match
+`{index}-resolution.…` or `{index}-gate.…`, and its docType inference fires
+only when `docType` is absent, which squadron's emitters never leave it. The
+load-bearing consequence is negative: `FM004` must **not** require
+`dateUpdated`, because CF requires it and backfills it from `dateCreated`
+(`frontmatterSchema.ts:224`) — requiring it here too would make squadron's
+hook *block* commits on documents CF considers valid and fixable.
+
+CF has the mirror-image gap: `updateFrontmatterField`
+(`markdownWriter.ts:52`) writes one key and leaves `dateUpdated` alone. Filed
+as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71).
+Tracked, not a dependency — 172 fixes only squadron's half.
+
+**Changes.** Design: D2 rewritten per-artifact with the date rule and an
+emitter table; D8 extended with the stamp; D8a added for the CF boundary;
+components list extended by three files; criteria 21–24 added; the
+`dateUpdated < dateCreated` ordering check recorded as Future Work rather than
+added as a ninth code, since it has zero violations today and would enforce
+nothing on arrival. Tasks: T1 gains
+`MACHINE_ARTIFACT_REQUIRED_FIELDS` and an explicit prohibition on requiring
+`dateUpdated`; new Part 5A (T23–T26) covers the stamp, the emitters, and a
+test that squadron's own rendered output validates clean; T21 gains a
+`cf check --fix` then `sq validate docs` cross-check. Task numbers are
+append-only — renumbering T1–T22 would invalidate every reference in the
+design, the reviews, and this log.
 
 ---
 
