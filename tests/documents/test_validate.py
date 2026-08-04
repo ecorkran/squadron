@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from unittest.mock import MagicMock
 
+from squadron.documents.frontmatter import read_frontmatter
 from squadron.documents.validate import ViolationCode, validate_document
+from squadron.pipeline.actions.devlog import DevlogAction
+from squadron.pipeline.actions.devlog import (
+    _read_or_create as devlog_read_or_create,  # pyright: ignore[reportPrivateUsage]
+)
 from squadron.pipeline.actions.findings_addressed.evidence import (
     GateEvidence,
     render_gate_evidence,
 )
+from squadron.pipeline.models import ActionContext
 from squadron.review.addressed.models import FindingOutcome, FindingStatus, SettlingScreen
 from squadron.review.resolution_artifact import ResolutionRecord, render_resolution
 
@@ -257,3 +265,52 @@ def test_machine_artifact_resolution_validates_clean(tmp_path: Path) -> None:
     doc.write_text(rendered, encoding="utf-8")
 
     assert validate_document(doc) == []
+
+
+def test_machine_artifact_devlog_stub_validates_clean(tmp_path: Path) -> None:
+    """The devlog stub _read_or_create writes (T25) validates clean.
+
+    This is the regression guard against the gate firing on squadron's own
+    write path, mirroring the gate-evidence and resolution guards above.
+    """
+    doc = tmp_path / "DEVLOG.md"
+    devlog_read_or_create(doc, today="20260804", project="squadron")
+
+    assert validate_document(doc) == []
+
+
+def test_devlog_append_advances_dateupdated(tmp_path: Path) -> None:
+    """The real-world defect T25/T26 close: DEVLOG.md carried a stale
+    dateUpdated because the append path never re-stamped it by hand.
+    """
+    doc = tmp_path / "DEVLOG.md"
+    doc.write_text(
+        "---\n"
+        "docType: devlog\n"
+        "project: squadron\n"
+        "layer: project\n"
+        "dateCreated: 20260801\n"
+        "dateUpdated: 20260801\n"
+        "---\n\n# Development Log\n\n---\n\n## 20260801\n\nold entry\n",
+        encoding="utf-8",
+    )
+
+    action = DevlogAction()
+    context = ActionContext(
+        pipeline_name="test-pipeline",
+        run_id="r1",
+        params={"content": "new entry", "_project": "squadron", "path": str(doc)},
+        step_name="step1",
+        step_index=0,
+        prior_outputs={},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        cwd=str(tmp_path),
+    )
+
+    result = asyncio.run(action.execute(context))
+
+    assert result.success
+    updated = read_frontmatter(doc)
+    assert updated is not None
+    assert str(updated["dateUpdated"]) != "20260801"

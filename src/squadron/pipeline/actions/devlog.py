@@ -6,6 +6,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from squadron.documents.frontmatter import FrontmatterError, update_frontmatter
 from squadron.documents.schema import DEVLOG_DOC_TYPE
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -58,12 +59,18 @@ class DevlogAction:
 
         today = date.today().strftime("%Y%m%d")
         today_header = f"## {today}"
+        project_name = str(context.params.get("_project") or "unknown")
 
         try:
-            lines = _read_or_create(devlog_path)
+            lines = _read_or_create(devlog_path, today=today, project=project_name)
             updated = _insert_entry(lines, today_header, entry)
             devlog_path.write_text("\n".join(updated))
-        except OSError as exc:
+            # _insert_entry works on raw lines and must not grow frontmatter
+            # knowledge — the dateUpdated stamp goes through update_frontmatter
+            # instead, since DEVLOG.md is the one document squadron rewrites
+            # repeatedly.
+            update_frontmatter(devlog_path, {}, today=today)
+        except (OSError, FrontmatterError) as exc:
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
@@ -94,7 +101,7 @@ def _auto_generate(context: ActionContext) -> str:
     return "\n".join(parts)
 
 
-def _read_or_create(path: Path) -> list[str]:
+def _read_or_create(path: Path, *, today: str, project: str) -> list[str]:
     """Read existing DEVLOG.md or create a minimal one."""
     if path.exists():
         return path.read_text().splitlines()
@@ -103,6 +110,10 @@ def _read_or_create(path: Path) -> list[str]:
     minimal = [
         "---",
         f"docType: {DEVLOG_DOC_TYPE}",
+        f"project: {project}",
+        "layer: project",
+        f"dateCreated: {today}",
+        f"dateUpdated: {today}",
         "---",
         "",
         "# Development Log",
