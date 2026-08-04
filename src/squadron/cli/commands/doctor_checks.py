@@ -80,6 +80,48 @@ def check_squadron_install() -> CheckResult:
     )
 
 
+#: The hooksPath value that installs the frontmatter-validation pre-commit
+#: gate. Defined once so the check and its fix_hint cannot drift apart.
+GIT_HOOKS_PATH = ".githooks"
+
+
+def check_git_hooks(hooks_path: str | None) -> CheckResult:
+    """Report whether ``core.hooksPath`` is set to the tracked hooks directory.
+
+    Pure — the caller resolves ``hooks_path`` via ``run_git`` and passes it
+    in; this module's docstring promises no subprocesses. Not being in a git
+    repository (``hooks_path is None``) is not an error — outside a repo
+    there is nothing to gate. An empty string means the repo exists but the
+    key is unset, which is the ordinary "not installed yet" case.
+    """
+    if hooks_path is None:
+        return CheckResult(
+            name="git pre-commit hook",
+            status=CheckStatus.OK,
+            detail="not a git repository",
+            section=SECTION_INSTALL,
+            required=False,
+        )
+
+    if hooks_path == GIT_HOOKS_PATH:
+        return CheckResult(
+            name="git pre-commit hook",
+            status=CheckStatus.OK,
+            detail=f"core.hooksPath = {GIT_HOOKS_PATH}",
+            section=SECTION_INSTALL,
+            required=False,
+        )
+
+    return CheckResult(
+        name="git pre-commit hook",
+        status=CheckStatus.WARN,
+        detail=f"core.hooksPath is {hooks_path!r}, not {GIT_HOOKS_PATH!r}",
+        fix_hint=f"git config core.hooksPath {GIT_HOOKS_PATH}",
+        section=SECTION_INSTALL,
+        required=False,
+    )
+
+
 def check_slash_commands(target: Path | None = None) -> CheckResult:
     """Check if sq slash commands are installed."""
     if target is None:
@@ -400,8 +442,14 @@ def check_project_env() -> CheckResult:
     )
 
 
-def run_all_checks() -> list[CheckResult]:
-    """Run all doctor checks in section order; each wrapped in a process-boundary catch."""
+def run_all_checks(*, git_hooks_path: str | None = None) -> list[CheckResult]:
+    """Run all doctor checks in section order; each wrapped in a process-boundary catch.
+
+    ``git_hooks_path`` is the resolved ``core.hooksPath`` value (or ``None``
+    outside a git repo). Resolving it requires a subprocess, which this pure
+    module's docstring forbids, so the caller resolves it via ``run_git`` and
+    passes it in.
+    """
     results: list[CheckResult] = []
 
     def _run(name: str, fn: object, *args: object) -> None:
@@ -428,6 +476,7 @@ def run_all_checks() -> list[CheckResult]:
 
     _run("squadron", check_squadron_install)
     _run("slash commands", check_slash_commands)
+    _run("git pre-commit hook", check_git_hooks, git_hooks_path)
 
     profile_results: list[CheckResult] = []
     try:

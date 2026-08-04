@@ -20,6 +20,7 @@ from squadron.cli.commands.doctor_checks import (
     CheckStatus,
     run_all_checks,
 )
+from squadron.review.git_utils import run_git
 
 _SECTION_ORDER = [
     SECTION_INSTALL,
@@ -106,6 +107,24 @@ def _render_json(results: list[CheckResult], squadron_version: str) -> None:
     print(json.dumps(output, indent=2))
 
 
+def _resolve_git_hooks_path() -> str | None:
+    """``core.hooksPath`` for the current repo, or None outside a git repo / on error.
+
+    Uses ``run_git`` rather than a raw subprocess call, per the project's own
+    convention for shelling out to git. A repo with the key unset returns the
+    empty string (not None) so ``check_git_hooks`` can tell "no repo, nothing
+    to gate" apart from "repo present, hook not installed."
+    """
+    repo_check = run_git(["rev-parse", "--is-inside-work-tree"], cwd=".")
+    if repo_check is None or repo_check.returncode != 0:
+        return None
+
+    process = run_git(["config", "--get", "core.hooksPath"], cwd=".")
+    if process is None:
+        return None
+    return process.stdout.strip()
+
+
 def doctor(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show WARN-level rows."),
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
@@ -116,7 +135,7 @@ def doctor(
     except PackageNotFoundError:
         squadron_version = "(dev install)"
 
-    results = run_all_checks()
+    results = run_all_checks(git_hooks_path=_resolve_git_hooks_path())
     exit_code = 1 if any(r.status == CheckStatus.MISSING for r in results) else 0
 
     if json_output:

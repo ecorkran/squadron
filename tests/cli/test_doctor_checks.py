@@ -12,6 +12,7 @@ from squadron.cli.commands import doctor_checks
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
     CONTEXT_FORGE_PACKAGE,
+    GIT_HOOKS_PATH,
     SECTION_CONFIG,
     SECTION_INSTALL,
     SECTION_INTEGRATIONS,
@@ -23,6 +24,7 @@ from squadron.cli.commands.doctor_checks import (
     check_claude_code_cli,
     check_codex_cli,
     check_context_forge,
+    check_git_hooks,
     check_models_toml,
     check_project_env,
     check_provider_profiles,
@@ -336,6 +338,38 @@ def test_check_skill_packs_no_manifest(tmp_path: Path, monkeypatch: pytest.Monke
     assert results[0].status == CheckStatus.OK
     assert results[0].section == SECTION_SKILLS
     assert "no manifest" in results[0].detail
+
+
+# --- T19: check_git_hooks ---
+
+
+def test_check_git_hooks_installed() -> None:
+    result = check_git_hooks(GIT_HOOKS_PATH)
+
+    assert result.status == CheckStatus.OK
+    assert result.section == SECTION_INSTALL
+    assert GIT_HOOKS_PATH in result.detail
+
+
+def test_check_git_hooks_wrong_value() -> None:
+    result = check_git_hooks("some/other/path")
+
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint == f"git config core.hooksPath {GIT_HOOKS_PATH}"
+
+
+def test_check_git_hooks_unset_in_repo() -> None:
+    result = check_git_hooks("")
+
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint == f"git config core.hooksPath {GIT_HOOKS_PATH}"
+
+
+def test_check_git_hooks_not_a_repo() -> None:
+    result = check_git_hooks(None)
+
+    assert result.status == CheckStatus.OK
+    assert "not a git repository" in result.detail
 
 
 # --- T25: run_all_checks ---
