@@ -118,11 +118,20 @@ def render_frontmatter_block(data: dict[str, object]) -> str:
     return f"---\n{dumped.rstrip(chr(10))}\n---"
 
 
-def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
+def update_frontmatter(path: Path, fields: dict[str, object], *, today: str) -> None:
     """Merge ``fields`` into the frontmatter block of ``path``.
 
     Existing key order is preserved; new keys are appended to the end of the
     block. The document body is preserved byte-for-byte.
+
+    Also stamps ``dateUpdated`` to ``today``, unless ``fields`` already
+    supplies that key — the caller is then asserting a specific date and must
+    win. ``today`` is a required keyword rather than a clock call inside this
+    function so the behavior stays testable and this primitives module stays
+    free of ambient state. This is squadron's only in-place document edit, so
+    stamping it here is what makes the "dateUpdated tracks every edit" rule
+    hold for callers that do not exist yet, rather than a convention every
+    future author has to remember.
 
     Raises:
         FrontmatterError: the file has no frontmatter block, the block is not
@@ -146,6 +155,8 @@ def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
         str(key): value for key, value in cast("dict[object, object]", loaded).items()
     }
     merged.update(fields)
+    if "dateUpdated" not in fields:
+        merged["dateUpdated"] = today
     _validate_status_if_present(merged, context=str(path))
 
     dumped = yaml.safe_dump(merged, sort_keys=False, default_flow_style=False, allow_unicode=True)

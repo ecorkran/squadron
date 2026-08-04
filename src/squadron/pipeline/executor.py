@@ -266,7 +266,8 @@ def _stamp_revision_number(
             existing = read_frontmatter(full_path)
             prior = existing.get("revision_number") if existing is not None else None
             next_value = prior + 1 if isinstance(prior, int) else 1
-            update_frontmatter(full_path, {"revision_number": next_value})
+            today = datetime.now(UTC).strftime("%Y%m%d")
+            update_frontmatter(full_path, {"revision_number": next_value}, today=today)
         except (FrontmatterError, OSError) as exc:
             _logger.warning("revision_number stamp failed for %s: %s", full_path, exc)
 
