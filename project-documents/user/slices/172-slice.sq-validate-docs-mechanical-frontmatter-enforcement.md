@@ -222,13 +222,13 @@ That is the complement of this slice, not an overlap:
 | Cross-document consistency | no | yes |
 | Severity | blocks the commit | warning, with `--fix` |
 
-Three conflict surfaces were checked and are clear:
+Three conflict surfaces were checked; two are clear, one is a real, verified gap:
 
-- **`status` is the only field CF writes.** All thirteen `update-frontmatter` fix actions in `ConsistencyChecker.ts` write `status`, from the same five canonical values `FM005` accepts. `cf check --fix` cannot produce a document this gate rejects.
+- **`status` is the only field CF writes — but not always the canonical spelling.** All thirteen `update-frontmatter` fix actions in `ConsistencyChecker.ts` describe the fix as one of the five canonical `VALID_STATUSES` values in their `suggestedFix` text. Running `cf check --fix` against this repo's own tree (during T21's cross-check) showed at least one of them — the architecture-status-vs-plans fix at `ConsistencyChecker.ts:381` — actually *writing* `status: in-progress` (hyphenated), which `FM005` correctly rejects. The root cause: `introspection/types.ts`'s `STATUS.InProgress`/`STATUS.NotStarted` constants are hyphenated, while `schema/frontmatterSchema.ts`'s `VALID_STATUSES` (and the spec) use underscores — two enums for the same values, disagreeing. At least 6 of the 13 fix actions reference the hyphenated constant. Filed as [context-forge#72](https://github.com/ecorkran/context-forge/issues/72); the offending write in this repo (`900-arch.maintenance-and-refactoring.md`) was hand-corrected during the T21 cleanup pass rather than left for CF to fix again. Not a dependency of this slice — `FM005`'s job is exactly to catch this, and it did.
 - **`dateUpdated` must not be required here.** CF's schema requires it and backfills it from `dateCreated`. If `FM004` also required it, squadron's hook would *block* commits on documents CF considers valid-and-fixable — two gates disagreeing, with the blocking one wrong. Requiring only `dateCreated` keeps them consistent.
 - **CF cannot mis-infer squadron's artifacts.** Its `FILENAME_PARTS_RE` matches only the segments `arch|slices|slice|tasks|review|analysis|concept`; `{index}-resolution.…` and `{index}-gate.…` match none of them. Inference also fires only when `docType` is absent, and both emitters always write it.
 
-The `dateUpdated` stamp gap is symmetric — CF's `updateFrontmatterField` (`markdownWriter.ts:52`) writes one key and leaves the date alone, same as `executor.py:269` does today. Filed as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71); not a dependency of this slice, which fixes only squadron's half.
+The `dateUpdated` stamp gap is symmetric — CF's `updateFrontmatterField` (`markdownWriter.ts:52`) writes one key and leaves the date alone, same as `executor.py:269` did before T23. Filed as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71); not a dependency of this slice, which fixes only squadron's half.
 
 ### D9 — Quote `location` in the review writer
 
@@ -417,11 +417,12 @@ uv run python -c "
 from pathlib import Path
 from squadron.documents.frontmatter import update_frontmatter
 p = Path('/tmp/probe.md'); p.write_text('---\ndocType: notes\n---\n\nbody\n')
-update_frontmatter(p, {'status': 'draft'})
+update_frontmatter(p, {'status': 'draft'}, today='20260804')
 "
 ```
 
-Expect `FrontmatterError` naming the accepted values.
+Expect `FrontmatterError` naming the accepted values. (`today=` is required per T23 — it stamps
+`dateUpdated` on every call and is not optional.)
 
 **8. The review writer no longer produces unparseable frontmatter.**
 
@@ -437,7 +438,7 @@ uv run sq validate docs && echo "clean" && uv run ruff check && uv run pyright &
 
 ## Risks
 
-- **Gate fatigue.** The one real risk. Mitigated by D3's narrowness (eight mechanical checks, no judgment calls), by D1's scoping (the gate is silent on non-documents), by D2 (it never fires on squadron's own output), and by D8a (it never contradicts `cf check --fix`). If it starts refusing commits for reasons a contributor cannot fix in fifteen seconds, the design has drifted.
+- **Gate fatigue.** The one real risk, and no longer purely theoretical: T21's `cf check --fix` cross-check found CF's own architecture-status fix action writing a value (`in-progress`) this gate correctly rejects (context-forge#72). Mitigated by D3's narrowness (eight mechanical checks, no judgment calls), by D1's scoping (the gate is silent on non-documents), by D2 (it never fires on squadron's own output). D8a's "never contradicts `cf check --fix`" claim held for twelve of thirteen fix actions and was falsified for the thirteenth by direct measurement, not assumption — the gate did its job (refused the bad value) rather than silently accepting it, which is the correct failure mode even though the *source* of the bad value was the other tool. If it starts refusing commits for reasons a contributor cannot fix in fifteen seconds, the design has drifted; this instance was fixed in fifteen seconds (one line, one canonical value) and diagnosed to its root cause in the other tool.
 - **Spec drift.** Handled by D4's drift test rather than by hoping.
 - **Cleanup ordering.** CI turns red if the validator step lands before the cleanup commit. Sequenced explicitly in D7 and criterion 16.
 
@@ -448,5 +449,6 @@ uv run sq validate docs && echo "clean" && uv run ruff check && uv run pyright &
 - **Offer the check class to Context Forge** as a second consumer, since it owns the naming spec.
 - **`dateUpdated` earlier than `dateCreated`** — a ninth check code. Mechanical and cheap, but zero violations exist in the corpus today, so it would enforce nothing on arrival. Worth adding once a writer can plausibly produce one.
 - **Context Forge's half of the stamp rule** — `updateFrontmatterField` (`markdownWriter.ts:52`) mutates documents without advancing `dateUpdated`, the same gap D8 closes on squadron's side. Filed as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71). Tracked, not depended on.
+- **Context Forge's second status enum** — `introspection/types.ts`'s `STATUS.InProgress`/`STATUS.NotStarted` are hyphenated while `schema/frontmatterSchema.ts`'s `VALID_STATUSES` are underscored, and at least 6 of 13 fix actions write the hyphenated form. Filed as [context-forge#72](https://github.com/ecorkran/context-forge/issues/72), found during T21's cross-check. Tracked, not depended on — `FM005` already catches the output correctly.
 
 **Effort:** 1/5
