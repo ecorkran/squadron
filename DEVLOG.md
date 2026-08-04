@@ -12,6 +12,67 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (9)
+
+### Slice 172: `sq validate docs` — Slice Design Complete
+
+Phase 4 design for the replacement 171 made room for:
+[172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md](project-documents/user/slices/172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md).
+Five pieces — the validator, a tracked pre-commit hook, a CI backstop with a
+one-time cleanup, status validation on squadron's own frontmatter writers, and
+a fix to the review writer. Effort holds at 1/5.
+
+**The design was written against a scan, not against a hunch.** All 409
+markdown documents under `project-documents/user/` were checked: 24 violate the
+spec. Six carry a non-canonical `status` (`active`, `draft` ×2, `in-progress`,
+`not-started`, `superseded`), three are missing `status` entirely, eleven use a
+`docType` outside the canonical list (`task-breakdown` ×10, `slice-tasks`), and
+two have no frontmatter block.
+
+**The fifth class was invisible and is the most interesting.** Five review
+artifacts have frontmatter that *looks* correct and does not parse — a finding's
+`location:` value carries a colon-space (`location: Slice design:
+Implementation Details`), which YAML reads as a nested mapping. `read_frontmatter`
+returns `None` for a YAML error exactly as it does for a file with no block at
+all, so nothing distinguished "no metadata" from "corrupted metadata" until a
+scan asked directly. The consequence is a hard failure at a distance:
+`metrology/identity.py:180` raises `MetrologyTargetError` and
+`review/resolution_evidence.py:132` raises `ResolutionError`, so
+`sq metrology capture` and `sq review resolve` cannot process those five files.
+
+The producer is squadron. `review/persistence.py:222` renders that line as an
+unquoted f-string while its neighbor on line 220 quotes `summary` through
+`yaml_escape` — the two fields carrying model-authored free text, one guarded
+and one not. The slice quotes `location` and repairs the five artifacts. The
+larger fix (render the whole block through `render_frontmatter_block`, as gate
+evidence and resolution artifacts already do) is recorded as future work: it is
+correct, and several test modules assert on the exact rendered text, so it is
+its own unit.
+
+**Decisions worth their own line.** Scope is a configured document root
+(`validate.docs_root`, default `project-documents/user`), because a repo-wide
+sweep would flag `README.md`, `CLAUDE.md`, `docs/*`, `commands/sq/*.md`, and
+`.claude/agents/*.md` — all correctly frontmatter-free. Paths given on the
+command line are *filtered* against that root rather than trusted, which is what
+lets the hook hand over the entire staged file list without knowing anything
+about document conventions. Squadron's own machine artifacts (`review-resolution`,
+`gate-evidence`, `devlog`) land inside the root and legitimately carry no
+`status`, so they are a recognized second document class — a gate that fires on
+its own tool's correct output is how people learn to use `--no-verify`. Seven
+check classes, each with exactly one mechanical fix; no `--fix` mode, since
+`draft` and `superseded` have no unambiguous target and a hook that silently
+rewrites staged documents is worse than one that stops.
+
+Drift against the spec — the risk that ended 171's frontmatter consumer — is
+handled by a test that parses `file-naming-conventions.md` and compares it to
+the enums, failing (never skipping) when the submodule is absent. That needs
+`submodules: true` on the CI checkout; `ecorkran/ai-project-guide` is public, so
+no token.
+
+Slice plan entry 29 updated with the design link and the corruption finding.
+
+---
+
 ## 20260803 (8)
 
 ### Slice 171: Deferred — No Third Consumer

@@ -106,7 +106,9 @@ Plus one structural hardening, cheap and separable: `update_frontmatter` / `rend
 
 **Relationship to 171.** 171 is deferred, not superseded — it generalizes two hardcoded executor checks and revives when a consumer must run *inside* a pipeline and *block* it. This slice does not create such a consumer; a commit gate is deliberately outside the pipeline.
 
-Dependencies: [none — `read_frontmatter` already exists]. Risk: Low. Effort: 1/5
+**Found during design:** a scan of the 409 documents under `project-documents/user/` turned up 24 violations, of which five are *unparseable* frontmatter — review artifacts whose finding `location:` value carries a colon-space, produced by squadron's own hand-rendered frontmatter at `review/persistence.py:222`. `read_frontmatter` returns `None` for a YAML error exactly as for a file with no block, so the class was invisible; `sq metrology capture` and `sq review resolve` hard-fail on those files. The slice therefore also quotes that field and repairs the five artifacts.
+
+Dependencies: [none — `read_frontmatter` already exists]. Risk: Low. Effort: 1/5. **Design Complete: [172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md](../slices/172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md)**
 
 ---
 
