@@ -72,21 +72,32 @@ status: not_started
     read; nothing in squadron emits it.
   - [ ] Define `DocType(StrEnum)` with the fifteen values listed at
     `file-naming-conventions.md:30`.
-  - [ ] Define `MACHINE_ARTIFACT_DOC_TYPES: frozenset[str]` — the docTypes
-    squadron itself writes that are not in the spec. Source them from the
-    existing constants, do not retype the strings:
-    `RESOLUTION_DOC_TYPE` (`review/resolution_artifact.py:25`),
-    `GATE_EVIDENCE_DOC_TYPE` (`pipeline/actions/findings_addressed/evidence.py:26`),
-    and the devlog type written at `pipeline/actions/devlog.py:104`. If the
-    devlog value is only a literal inside a rendered line, promote it to a
-    module constant there and import it.
+  - [ ] Define the machine-artifact docTypes **here**, in `schema.py`, and
+    expose them as `MACHINE_ARTIFACT_DOC_TYPES: frozenset[str]`. These are the
+    docTypes squadron itself writes that are not in the spec:
+    `review-resolution`, `gate-evidence`, `devlog`.
+  - [ ] Flip the three existing definitions to import from `schema.py` rather
+    than declaring their own: `RESOLUTION_DOC_TYPE`
+    (`review/resolution_artifact.py:25`), `GATE_EVIDENCE_DOC_TYPE`
+    (`pipeline/actions/findings_addressed/evidence.py:26`), and the literal
+    `"docType: devlog"` rendered at `pipeline/actions/devlog.py:104`. Keep the
+    existing names as aliases if that reads better at the call sites; the rule
+    is one definition, not one spelling.
+  - [ ] **Direction matters.** `documents/` is the shared primitives package —
+    it must not import from `review/` or `pipeline/`. Sourcing the values the
+    other way would also be a real import cycle once T13 makes
+    `frontmatter.py` import `schema.py`: `documents.frontmatter` →
+    `documents.schema` → `review.resolution_artifact` →
+    `documents.frontmatter`.
   - [ ] Define `REQUIRED_UNIVERSAL_FIELDS: tuple[str, ...]` — the five fields
     at `file-naming-conventions.md:20-27`. Applies to process documents only.
   - [ ] Add a module docstring stating that this module is the single
     definition of these values for all of squadron, and that
     `file-naming-conventions.md` is the upstream source.
-  - [ ] Success: `pyright` strict clean; no other module in `src/` contains a
-    status or docType string literal after Part 3 lands.
+  - [ ] Success: `pyright` strict clean; the three modules above import their
+    docType from `schema.py`; the only remaining status/docType literals in
+    `src/` are the two in `review/persistence.py` (lines 187 and 195), which
+    T11 removes.
 
 - [ ] **T2. Drift test against the spec** (test-with)
   - [ ] Create `tests/documents/test_schema_drift.py`.
@@ -156,10 +167,14 @@ status: not_started
     `location: Slice design: Implementation Details` inside a `findings:`
     list. Assert the code is `FM002` (not `FM001`) and that `detail` carries
     a line number pointing inside the block.
-  - [ ] Machine-artifact test: render actual frontmatter via
-    `gate_evidence_frontmatter` and `resolution_frontmatter`, write it to a
-    file, and assert **zero** violations. This is the regression guard against
-    the gate firing on squadron's own output.
+  - [ ] Machine-artifact test: render whole documents via `render_gate_evidence`
+    (`pipeline/actions/findings_addressed/evidence.py:122`) and
+    `render_resolution` (`review/resolution_artifact.py:116`), write each to a
+    file, and assert **zero** violations. Use the full-document renderers, not
+    the `*_frontmatter` mapping builders — the validator reads files, so the
+    test must exercise exactly what lands on disk, including the fence.
+    This is the regression guard against the gate firing on squadron's own
+    output.
   - [ ] A valid process document of each of the three common docTypes
     (`slice-design`, `tasks`, `review`) yields zero violations.
   - [ ] A document with two problems yields two violations.
@@ -243,6 +258,11 @@ status: not_started
     already rendered on line 220.
   - [ ] Add a one-line comment naming why: `location` and `summary` are the
     only fields in this hand-built block carrying model-authored free text.
+  - [ ] While in this function, replace the two remaining canonical-value
+    literals with imports from `schema.py`: `"docType: review"` (line 187)
+    becomes `DocType.REVIEW` and `"status: complete"` (line 195) becomes
+    `DocumentStatus.COMPLETE`, each interpolated into the rendered line. These
+    are the last two sites; T1 handles the other three.
   - [ ] Do **not** migrate the rest of the block to `render_frontmatter_block`
     in this slice. It is the correct fix, several test modules assert on the
     exact rendered text, and it is recorded as Future Work in the design.
@@ -257,7 +277,15 @@ status: not_started
     and that the round-tripped location equals the original string.
   - [ ] Add the mirror-image test: a location containing an embedded double
     quote survives `yaml_escape` and still round-trips.
-  - [ ] Success: both pass; the first fails if T11 is reverted.
+  - [ ] Add a single-definition test: assert that no module in `src/` outside
+    `documents/schema.py` contains a canonical status or docType value as a
+    string literal. Implement it as a source grep over `src/**/*.py` driven by
+    the enum members, so a value added to `schema.py` later is covered without
+    editing the test. This is the mechanical form of the design's success
+    criterion 6 — a criterion only a grep in a close-out checklist can enforce
+    is one that silently rots.
+  - [ ] Success: all three pass; the first fails if T11 is reverted, and the
+    third fails if any of the five known literal sites is left behind.
 
 ---
 

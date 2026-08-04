@@ -12,6 +12,55 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260804 (1)
+
+### Slice 172: Task Review Resolved — CONCERNS, Both Findings Real
+
+Reviewed by `minimax/minimax-m3`:
+[172-review.tasks.…md](project-documents/user/reviews/172-review.tasks.sq-validate-docs-mechanical-frontmatter-enforcement.md).
+Verdict CONCERNS on two findings, six passes, two notes. Both concerns were
+right, and the first one turned out to be hiding a worse problem than the
+review described.
+
+**F001 — success criterion 6 had no implementing task.** Correct: SC6 says no
+status or docType literal survives outside the enum module, T21's close-out
+greps for it, and nothing in between actually removed any. There are five such
+sites — `review/persistence.py:187` (`"docType: review"`) and `:195`
+(`"status: complete"`), plus the three machine-artifact constants in
+`resolution_artifact.py:25`, `evidence.py:26`, and `devlog.py:104`.
+
+Writing the fix exposed the real defect. T1 said to *source* the
+machine-artifact docTypes from those three modules — `documents/schema.py`
+importing from `review/` and `pipeline/`. That inverts the layering
+(`documents/` is the shared primitives package) and, once T13 makes
+`frontmatter.py` import `schema.py` for the status check, it is a literal
+import cycle: `documents.frontmatter` → `documents.schema` →
+`review.resolution_artifact` → `documents.frontmatter`. Reversed: `schema.py`
+defines all three values and the emitting modules import them. That is also
+what makes SC6 true rather than aspirational.
+
+Rather than renumber 22 tasks to insert a sweep, each literal now lands in the
+task that already owns its file — the three constants in T1, the two
+`persistence.py` lines in T11, which is already editing that function. And SC6
+gets teeth: T12 adds a test that greps `src/**/*.py` for the enum members,
+driven by the enum so a value added later is covered without editing the test.
+A criterion enforced only by a grep in a close-out checklist is one that
+silently rots.
+
+**F002 — function-name mismatch between SC8 and T5.** Real mismatch, but the
+review's recommended direction was backwards. It proposed changing SC8 to
+match T5; both function pairs exist (`render_gate_evidence` /
+`gate_evidence_frontmatter`, `render_resolution` / `resolution_frontmatter`),
+and SC8 named the better ones. The validator reads *files*, so the test must
+render the whole document — fence included — not just the frontmatter mapping.
+T5 now uses the full-document renderers, with a line saying why.
+
+**F008/F009 (notes)** — no action. T4's size is cohesive (one function, one
+acceptance condition), and T19's manual walkthrough is deliberate: a git hook
+is not meaningfully testable without actually attempting a commit.
+
+---
+
 ## 20260803 (11)
 
 ### Slice 172: Task Breakdown Complete

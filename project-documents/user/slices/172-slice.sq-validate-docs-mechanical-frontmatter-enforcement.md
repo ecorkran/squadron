@@ -209,6 +209,8 @@ src/squadron/review/persistence.py (edit) quote location
 .github/workflows/ci.yml      (edit) submodules: true; validate step
 ```
 
+`schema.py` **defines** the machine-artifact docTypes; `review/` and `pipeline/` import them from it. The reverse — `documents/` sourcing the values from the modules that emit them — inverts the layering, and once `frontmatter.py` imports `schema.py` for the status check (D8) it is also a literal import cycle: `documents.frontmatter` → `documents.schema` → `review.resolution_artifact` → `documents.frontmatter`.
+
 `validate.py` is pure — it takes paths and returns `list[Violation]`, performs no printing and no `sys.exit`. The CLI command formats and sets the exit code. That keeps the validator testable without a runner and lets a future MCP tool or `sq doctor` check call it directly.
 
 ## Data Flow
@@ -264,7 +266,7 @@ Exit: 0 clean | 1 violations | 2 usage error
 3. Paths passed on the command line that fall outside the root are skipped, not flagged — verified by passing `README.md` and observing exit 0.
 4. All eight check classes (`FM001`–`FM008`) are implemented, each with a unit test using a real-format fixture.
 5. `FM001` (no block) and `FM002` (block present, YAML invalid) are reported as distinct codes; a fixture reproducing `location: Slice design: Implementation Details` yields `FM002` with the YAML error position.
-6. `DocumentStatus` and `DocType` are `StrEnum`s defined in exactly one module; no status or docType string literal appears elsewhere in `src/`.
+6. `DocumentStatus`, `DocType`, and the machine-artifact docTypes are defined in exactly one module (`documents/schema.py`); the five existing literal sites — `review/persistence.py:187,195`, `review/resolution_artifact.py:25`, `pipeline/actions/findings_addressed/evidence.py:26`, `pipeline/actions/devlog.py:104` — import from it instead. Enforced by a test that greps `src/**/*.py` for the enum members, not by a checklist item.
 7. A drift test parses `file-naming-conventions.md` and fails when its values disagree with the enums; it fails (not skips) when the submodule is absent, naming the fix.
 8. Machine-artifact docTypes (`review-resolution`, `gate-evidence`, `devlog`) validate clean — an actual `render_gate_evidence` and `render_resolution` output passes the validator in a test.
 9. Violation output carries `path:line`, code, offending key, actual value, and accepted values. Line numbers are real or the fence line; never invented.
