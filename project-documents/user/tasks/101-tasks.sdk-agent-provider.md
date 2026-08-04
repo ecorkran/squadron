@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: sdk-agent-provider
 project: squadron
 lld: user/slices/101-slice.sdk-agent-provider.md

@@ -47,7 +47,7 @@ findings:
     severity: note
     category: documentation
     summary: "README vs authoring guide scope"
-    location: Slice design: Implementation Details
+    location: "Slice design: Implementation Details"
   - id: F010
     severity: pass
     category: uncategorized

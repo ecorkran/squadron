@@ -27,12 +27,12 @@ findings:
     severity: pass
     category: design-anti-patterns
     summary: "Anti-pattern explicitly rejected"
-    location: "User-Provided Concept" section
+    location: '"User-Provided Concept" section'
   - id: F005
     severity: pass
     category: integration-points
     summary: "Data flow analysis is sound"
-    location: "How `review_model` Enters `context.params`" section
+    location: '"How `review_model` Enters `context.params`" section'
   - id: F006
     severity: note
     category: documentation
@@ -41,7 +41,7 @@ findings:
     severity: note
     category: documentation
     summary: "ReviewAction code change references YAML mapping verification"
-    location: "ReviewAction Change" section, paragraph 3
+    location: '"ReviewAction Change" section, paragraph 3'
 ---
 
 # Review: slice — slice 167

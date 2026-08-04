@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: profile-aware-dispatch-router-pure-cli
 project: squadron
 lldReference: 242-slice.profile-aware-dispatch-router-pure-cli.md

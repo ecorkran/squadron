@@ -1,3 +1,11 @@
+---
+docType: reference
+project: squadron
+dateCreated: 20260426
+dateUpdated: 20260426
+status: complete
+---
+
 # Codebase Analysis Prompt — v0.2.0
 # Three-phase pipeline for external codebase analysis
 #

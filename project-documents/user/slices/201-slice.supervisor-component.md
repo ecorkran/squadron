@@ -2,7 +2,7 @@
 docType: slice-design
 parent: 200-slices.multi-agent-communication.md
 project: squadron
-status: not-started
+status: not_started
 dateCreated: 20260218
 dateUpdated: 20260218
 slice: supervisor-component

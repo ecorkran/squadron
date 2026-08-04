@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: review-workflow-templates
 project: squadron
 lld: user/slices/105-slice.review-workflow-templates.md
@@ -9,6 +9,7 @@ projectState: >
   Slice 104 deferred. This slice (105) is the active work item.
 dateCreated: 20260222
 dateUpdated: 20260222
+status: complete
 ---
 
 ## Context Summary

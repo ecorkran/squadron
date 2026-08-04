@@ -15,22 +15,22 @@ findings:
     severity: concern
     category: sequencing
     summary: "T7 declares execute() delegation to helper defined in later task T8"
-    location: Task T7 description vs Task T8
+    location: "Task T7 description vs Task T8"
   - id: F002
     severity: concern
     category: gap
     summary: "Missing task for executor.py import-side-effect registration"
-    location: Files to change list: src/squadron/pipeline/executor.py
+    location: "Files to change list: src/squadron/pipeline/executor.py"
   - id: F003
     severity: concern
     category: gap
     summary: "Emit registry extensibility test not covered"
-    location: Success Criteria Technical #2 vs Test T4/T8
+    location: "Success Criteria Technical #2 vs Test T4/T8"
   - id: F004
     severity: note
     category: planning
     summary: "Inter-task dependencies not explicitly declared"
-    location: Tasks T1–T9 headers
+    location: "Tasks T1–T9 headers"
   - id: F005
     severity: pass
     category: git-hygiene

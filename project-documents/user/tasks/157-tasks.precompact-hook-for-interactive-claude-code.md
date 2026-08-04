@@ -1,5 +1,5 @@
 ---
-docType: slice-tasks
+docType: tasks
 slice: precompact-hook-for-interactive-claude-code
 project: squadron
 lld: 157-slice.precompact-hook-for-interactive-claude-code.md

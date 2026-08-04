@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: sq-slash-command
 project: squadron
 lld: user/slices/116-slice.sq-slash-command.md

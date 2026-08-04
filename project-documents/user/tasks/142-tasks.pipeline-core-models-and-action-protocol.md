@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 sliceIndex: 142
 sliceName: pipeline-core-models-and-action-protocol
 project: squadron

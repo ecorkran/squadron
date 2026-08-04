@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: foundation
 project: squadron
 lld: user/slices/100-slice.foundation.md

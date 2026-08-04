@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: resolution-pre-scan
 project: squadron
 lldReference: user/slices/243-slice.resolution-pre-scan.md
