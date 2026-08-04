@@ -251,6 +251,12 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "to one measured after that default shifts."
         ),
     ),
+    "validate.docs_root": ConfigKey(
+        name="validate.docs_root",
+        type_=str,
+        default="project-documents/user",
+        description=("Root under which markdown files are validated as process documents."),
+    ),
     "metrology.preemption_fragment_dir": ConfigKey(
         name="metrology.preemption_fragment_dir",
         type_=str,

@@ -271,14 +271,11 @@ def _resolve_under_root(path: Path, *, root: Path) -> Path | None:
     return resolved_path
 
 
-def validate_paths(paths: Sequence[Path] | None, *, root: Path) -> list[Violation]:
-    """Validate documents under *root*.
+def select_document_paths(paths: Sequence[Path] | None, *, root: Path) -> list[Path]:
+    """Resolve *paths* (or the whole root) to the documents that will be checked.
 
-    With ``paths=None``, walks *root* for every ``*.md`` file. With paths
-    given, validates only those that are ``.md`` **and** resolve under
-    *root* — others are silently skipped, so a caller (the pre-commit hook)
-    can pass the whole staged file list without knowing which files are
-    process documents.
+    Shared by ``validate_paths`` and the CLI's summary line, so "how many
+    documents did this run check" is answered identically in both places.
 
     Raises:
         DocumentRootError: *root* does not exist, or a named path does not
@@ -298,10 +295,26 @@ def validate_paths(paths: Sequence[Path] | None, *, root: Path) -> list[Violatio
             if resolved is not None:
                 candidates.append(resolved)
 
+    return [candidate for candidate in candidates if not _is_managed(candidate)]
+
+
+def validate_paths(paths: Sequence[Path] | None, *, root: Path) -> list[Violation]:
+    """Validate documents under *root*.
+
+    With ``paths=None``, walks *root* for every ``*.md`` file. With paths
+    given, validates only those that are ``.md`` **and** resolve under
+    *root* — others are silently skipped, so a caller (the pre-commit hook)
+    can pass the whole staged file list without knowing which files are
+    process documents.
+
+    Raises:
+        DocumentRootError: *root* does not exist, or a named path does not
+            exist.
+    """
+    candidates = select_document_paths(paths, root=root)
+
     violations: list[Violation] = []
     for candidate in candidates:
-        if _is_managed(candidate):
-            continue
         violations.extend(validate_document(candidate))
 
     return sorted(violations, key=lambda v: (v.path, v.line))
