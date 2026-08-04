@@ -7,7 +7,9 @@ drift test is a silent fallback, and drift is the exact risk that left slice
 
 from __future__ import annotations
 
+import io
 import re
+import tokenize
 from pathlib import Path
 
 from squadron.documents.schema import MACHINE_ARTIFACT_DOC_TYPES, DocType, DocumentStatus
@@ -92,12 +94,52 @@ def _frontmatter_key_literal_patterns(value: str) -> list[re.Pattern[str]]:
     ]
 
 
+def _strip_comments_and_docstrings(text: str) -> str:
+    """Blank out comments and docstrings, keeping every other token in place.
+
+    A docstring documenting the schema (``Example: docType: review``) is not a
+    hand-rendered canonical value, but a naive text scan cannot tell it from
+    ``f"docType: review"`` in real code. Tokenizing draws that line exactly.
+    String tokens are otherwise preserved, because the literals this test hunts
+    for live inside them.
+    """
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        # Unparseable source cannot be scoped, so scan it verbatim rather than
+        # letting a tokenizer failure silently exempt a file from the gate.
+        return text
+
+    kept: list[str] = []
+    previous_meaningful: int | None = None
+    for token in tokens:
+        if token.type == tokenize.COMMENT:
+            continue
+        # A string in statement position (start of a logical line, or opening a
+        # module/class/function body) is a docstring, not a value expression.
+        is_docstring = token.type == tokenize.STRING and previous_meaningful in (
+            None,
+            tokenize.INDENT,
+            tokenize.NEWLINE,
+            tokenize.DEDENT,
+        )
+        if is_docstring:
+            continue
+        kept.append(token.string)
+        if token.type not in (tokenize.NL, tokenize.COMMENT):
+            previous_meaningful = token.type
+    # Space-joined, not newline-joined: the patterns match a key and its value
+    # as adjacent text, and splitting tokens across lines would hide the very
+    # literals this test exists to catch.
+    return " ".join(kept)
+
+
 def test_no_canonical_literal_outside_schema_module() -> None:
     offenders: list[str] = []
     for path in sorted(_SRC_ROOT.rglob("*.py")):
         if path == _SCHEMA_MODULE:
             continue
-        text = path.read_text(encoding="utf-8")
+        text = _strip_comments_and_docstrings(path.read_text(encoding="utf-8"))
         for value in _CANONICAL_VALUES:
             for pattern in _frontmatter_key_literal_patterns(value):
                 if pattern.search(text):
@@ -106,3 +148,32 @@ def test_no_canonical_literal_outside_schema_module() -> None:
         "canonical status/docType key-value pairs must be built from "
         f"documents/schema.py, not restated as literals: {offenders}"
     )
+
+
+def _scan_finds_literal(source: str, value: str) -> bool:
+    scoped = _strip_comments_and_docstrings(source)
+    return any(pattern.search(scoped) for pattern in _frontmatter_key_literal_patterns(value))
+
+
+def test_drift_scan_ignores_docstrings_and_comments() -> None:
+    """Documentation describing the schema is not a hand-rendered literal.
+
+    Without this scoping the gate fires on prose, which is the false-positive
+    gate fatigue the scan is deliberately shaped to avoid.
+    """
+    documented = '''
+def render() -> str:
+    """Emits frontmatter, e.g. docType: review at the top."""
+    # status: complete is written by the caller
+    return build()
+'''
+    assert not _scan_finds_literal(documented, "review")
+    assert not _scan_finds_literal(documented, "complete")
+
+
+def test_drift_scan_still_catches_literals_in_code() -> None:
+    """Scoping must not blind the gate to the thing it exists to catch."""
+    fstring_form = 'def render() -> str:\n    return f"docType: review"\n'
+    dict_form = 'def render() -> dict[str, str]:\n    return {"status": "complete"}\n'
+    assert _scan_finds_literal(fstring_form, "review")
+    assert _scan_finds_literal(dict_form, "complete")

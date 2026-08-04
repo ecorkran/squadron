@@ -168,57 +168,98 @@ def validate_document(path: Path) -> list[Violation]:
     data: dict[str, object] = {
         str(key): value for key, value in cast("dict[object, object]", loaded).items()
     }
-    violations: list[Violation] = []
+    block = _FrontmatterBlock(path=path, raw_block=raw_block, start_line=block_start_line)
 
     doc_type = data.get("docType")
-    valid_doc_types = {member.value for member in DocType} | MACHINE_ARTIFACT_DOC_TYPES
-    if doc_type not in valid_doc_types:
-        violations.append(
-            Violation(
-                path=path,
-                line=_find_key_line(raw_block, "docType", block_start_line=block_start_line),
-                code=ViolationCode.FM006,
-                key="docType",
-                actual=str(doc_type) if doc_type is not None else None,
-                accepted=tuple(sorted(valid_doc_types)),
-                detail=None,
-            )
-        )
-
     is_machine_artifact = doc_type in MACHINE_ARTIFACT_DOC_TYPES
+    violations = [
+        *_check_doc_type(data, block=block),
+        *_check_required_fields(data, block=block, is_machine_artifact=is_machine_artifact),
+        *_check_status(data, block=block, is_machine_artifact=is_machine_artifact),
+        *_check_dates(data, block=block),
+    ]
+    return sorted(violations, key=lambda v: v.line)
+
+
+@dataclass(frozen=True)
+class _FrontmatterBlock:
+    """Where a document's frontmatter sits, for locating a violation in it.
+
+    Passed to each field check so a new FM-code helper needs one parameter
+    rather than re-threading path/raw text/offset individually.
+    """
+
+    path: Path
+    raw_block: str
+    start_line: int
+
+    def line_of(self, key: str) -> int:
+        return _find_key_line(self.raw_block, key, block_start_line=self.start_line)
+
+
+def _check_doc_type(data: dict[str, object], *, block: _FrontmatterBlock) -> list[Violation]:
+    doc_type = data.get("docType")
+    valid_doc_types = {member.value for member in DocType} | MACHINE_ARTIFACT_DOC_TYPES
+    if doc_type in valid_doc_types:
+        return []
+    return [
+        Violation(
+            path=block.path,
+            line=block.line_of("docType"),
+            code=ViolationCode.FM006,
+            key="docType",
+            actual=str(doc_type) if doc_type is not None else None,
+            accepted=tuple(sorted(valid_doc_types)),
+            detail=None,
+        )
+    ]
+
+
+def _check_required_fields(
+    data: dict[str, object], *, block: _FrontmatterBlock, is_machine_artifact: bool
+) -> list[Violation]:
     required_fields = (
         MACHINE_ARTIFACT_REQUIRED_FIELDS if is_machine_artifact else REQUIRED_UNIVERSAL_FIELDS
     )
-    for field_name in required_fields:
-        if field_name not in data:
-            violations.append(
-                Violation(
-                    path=path,
-                    line=block_start_line,
-                    code=ViolationCode.FM004,
-                    key=field_name,
-                    actual=None,
-                    accepted=(),
-                    detail=None,
-                )
-            )
+    return [
+        Violation(
+            path=block.path,
+            line=block.start_line,
+            code=ViolationCode.FM004,
+            key=field_name,
+            actual=None,
+            accepted=(),
+            detail=None,
+        )
+        for field_name in required_fields
+        if field_name not in data
+    ]
 
-    if not is_machine_artifact and "status" in data:
-        status_value = data["status"]
-        valid_statuses = {member.value for member in DocumentStatus} | set(STATUS_ALIASES)
-        if str(status_value) not in valid_statuses:
-            violations.append(
-                Violation(
-                    path=path,
-                    line=_find_key_line(raw_block, "status", block_start_line=block_start_line),
-                    code=ViolationCode.FM005,
-                    key="status",
-                    actual=str(status_value),
-                    accepted=tuple(member.value for member in DocumentStatus),
-                    detail=None,
-                )
-            )
 
+def _check_status(
+    data: dict[str, object], *, block: _FrontmatterBlock, is_machine_artifact: bool
+) -> list[Violation]:
+    if is_machine_artifact or "status" not in data:
+        return []
+    status_value = data["status"]
+    valid_statuses = {member.value for member in DocumentStatus} | set(STATUS_ALIASES)
+    if str(status_value) in valid_statuses:
+        return []
+    return [
+        Violation(
+            path=block.path,
+            line=block.line_of("status"),
+            code=ViolationCode.FM005,
+            key="status",
+            actual=str(status_value),
+            accepted=tuple(member.value for member in DocumentStatus),
+            detail=None,
+        )
+    ]
+
+
+def _check_dates(data: dict[str, object], *, block: _FrontmatterBlock) -> list[Violation]:
+    violations: list[Violation] = []
     for date_field in _DATE_FIELDS:
         if date_field not in data:
             continue
@@ -231,8 +272,8 @@ def validate_document(path: Path) -> list[Violation]:
         if as_text is None or not _is_real_date(as_text):
             violations.append(
                 Violation(
-                    path=path,
-                    line=_find_key_line(raw_block, date_field, block_start_line=block_start_line),
+                    path=block.path,
+                    line=block.line_of(date_field),
                     code=ViolationCode.FM007,
                     key=date_field,
                     actual=str(date_value),
@@ -240,8 +281,7 @@ def validate_document(path: Path) -> list[Violation]:
                     detail=None,
                 )
             )
-
-    return sorted(violations, key=lambda v: v.line)
+    return violations
 
 
 def _is_managed(path: Path) -> bool:
@@ -311,10 +351,27 @@ def validate_paths(paths: Sequence[Path] | None, *, root: Path) -> list[Violatio
         DocumentRootError: *root* does not exist, or a named path does not
             exist.
     """
+    _checked, violations = validate_paths_with_checked(paths, root=root)
+    return violations
+
+
+def validate_paths_with_checked(
+    paths: Sequence[Path] | None, *, root: Path
+) -> tuple[list[Path], list[Violation]]:
+    """Validate documents under *root*, returning what was checked alongside it.
+
+    Same contract as ``validate_paths``, but a caller that also needs to report
+    how many documents were checked gets that from the single walk performed
+    here rather than selecting the paths a second time.
+
+    Raises:
+        DocumentRootError: *root* does not exist, or a named path does not
+            exist.
+    """
     candidates = select_document_paths(paths, root=root)
 
     violations: list[Violation] = []
     for candidate in candidates:
         violations.extend(validate_document(candidate))
 
-    return sorted(violations, key=lambda v: (v.path, v.line))
+    return candidates, sorted(violations, key=lambda v: (v.path, v.line))

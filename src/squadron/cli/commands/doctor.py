@@ -30,6 +30,11 @@ _SECTION_ORDER = [
     SECTION_CONFIG,
 ]
 
+# `git config --get` exit codes we can interpret: 0 is a hit, 1 is a
+# well-formed "key not set". Anything else means the config was unreadable.
+_GIT_CONFIG_OK = 0
+_GIT_CONFIG_KEY_UNSET = 1
+
 _STATUS_ICON: dict[CheckStatus, tuple[str, str]] = {
     CheckStatus.OK: ("✓", "green"),
     CheckStatus.MISSING: ("✗", "red"),
@@ -121,6 +126,13 @@ def _resolve_git_hooks_path() -> str | None:
 
     process = run_git(["config", "--get", "core.hooksPath"], cwd=".")
     if process is None:
+        return None
+    # `git config --get` exits 1 for "key not set" — expected here, and the
+    # empty string it yields is what tells check_git_hooks the hook is not
+    # installed. Any other non-zero code means the config could not be read
+    # at all (corrupt .git/config, permission denied); reporting that as an
+    # unset key would diagnose the wrong problem, so treat it as unknown.
+    if process.returncode not in (_GIT_CONFIG_OK, _GIT_CONFIG_KEY_UNSET):
         return None
     return process.stdout.strip()
 

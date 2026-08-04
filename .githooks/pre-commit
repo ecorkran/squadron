@@ -11,7 +11,7 @@ set -u
 staged_files=()
 while IFS= read -r -d '' file; do
   staged_files+=("$file")
-done < <(git diff --cached --name-only --diff-filter=ACM -z -- '*.md')
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.md')
 
 if [ "${#staged_files[@]}" -eq 0 ]; then
   exit 0

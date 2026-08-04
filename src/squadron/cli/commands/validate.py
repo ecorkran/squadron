@@ -12,8 +12,7 @@ from squadron.config.manager import get_config
 from squadron.documents.validate import (
     DocumentRootError,
     Violation,
-    select_document_paths,
-    validate_paths,
+    validate_paths_with_checked,
 )
 
 validate_app = typer.Typer(
@@ -54,8 +53,7 @@ def validate_docs(
     resolved_root = root if root is not None else Path(str(get_config(docs_root_key)))
 
     try:
-        checked = select_document_paths(paths or None, root=resolved_root)
-        violations = validate_paths(paths or None, root=resolved_root)
+        checked, violations = validate_paths_with_checked(paths or None, root=resolved_root)
     except DocumentRootError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         raise typer.Exit(code=_EXIT_INVOCATION_ERROR) from exc
