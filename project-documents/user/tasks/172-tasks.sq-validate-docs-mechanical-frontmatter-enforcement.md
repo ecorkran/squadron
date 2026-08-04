@@ -19,7 +19,7 @@ projectState: >
   context-forge#71 — tracked, not a dependency.
 dateCreated: 20260803
 dateUpdated: 20260804
-status: complete
+status: in_progress
 ---
 
 ## Context Summary
@@ -84,6 +84,10 @@ status: complete
 ---
 
 ## Part 1 — Canonical Values and the Drift Guard
+
+> **Partly superseded by Part 10 (T29).** `schema.py` survives, reduced to the values
+> squadron *writes*; the spec transcription it carried for validation is retired.
+> The drift test is repointed at cf rather than the guide. See D10.
 
 - [x] **T1. Create `src/squadron/documents/schema.py`**
   - [x] Define `DocumentStatus(StrEnum)` with exactly the five spec values:
@@ -152,6 +156,9 @@ status: complete
 ---
 
 ## Part 2 — The Validator
+
+> **Superseded by Part 10 (T28).** Built and shipped, then retired — this duplicates
+> Context Forge's `validateFrontmatter`. Items stay checked: the work was done. See D10.
 
 - [x] **T3. Create `src/squadron/documents/validate.py` — types and codes**
   - [x] Define `ViolationCode(StrEnum)` with `FM001`–`FM008` per the design's
@@ -240,6 +247,9 @@ status: complete
 ---
 
 ## Part 3 — Config Key and CLI Surface
+
+> **Superseded by Part 10 (T28).** The `sq validate docs` surface and its config key
+> are retired along with the validator behind them. See D10.
 
 - [x] **T8. Add the `validate.docs_root` config key**
   - [x] In `src/squadron/config/keys.py`, add a `ConfigKey` named
@@ -524,12 +534,75 @@ function T13 just changed) and before Part 9.
     failure mode D8a exists to prevent.
   - [x] Success: all six commands exit 0.
 
-- [x] **T22. Documentation and slice close-out**
+- [ ] **T22. Documentation and slice close-out**
+
+  > Reopened 20260804. The CHANGELOG/DEVLOG entries were written and stay, but they
+  > describe `sq validate docs`, which Part 10 retires — they need rewriting once the
+  > gate calls `cf validate frontmatter`. The completion marks are withdrawn: the
+  > slice is not done.
+
   - [x] CHANGELOG: a short user-facing bullet for `sq validate docs` and the
     commit gate. Technical detail belongs in DEVLOG, not here.
   - [x] DEVLOG: implementation entry per the Session State Summary guidance.
-  - [x] Mark slice 172 complete in this task file's frontmatter, in the slice
+  - [ ] Rewrite the CHANGELOG bullet once the gate calls `cf validate frontmatter`,
+    since `sq validate docs` will no longer exist.
+  - [ ] Mark slice 172 complete in this task file's frontmatter, in the slice
     design's frontmatter, and in entry 29 of
     `user/architecture/140-slices.pipeline-foundation.md`.
-  - [x] Success: the slice plan entry is checked off and the design's status
+  - [ ] Success: the slice plan entry is checked off and the design's status
     reads `complete`.
+
+---
+
+## Part 10 — Retire the Parallel Validator, Install the Gate Everywhere
+
+Added 20260804 when the slice was reopened. See **D10** and **D11** in the design.
+Parts 1–3 built a Python validator and schema transcription that duplicate Context
+Forge's `validateFrontmatter`; this part retires them and makes the gate reach every
+squadron project rather than only this repo.
+
+**Blocked on [context-forge#73](https://github.com/ecorkran/context-forge/issues/73)**
+(exposes `cf validate frontmatter`), which is itself blocked on
+[#72](https://github.com/ecorkran/context-forge/issues/72) (status-spelling fix —
+until it lands, `validateFrontmatter` accepts the hyphenated values cf itself writes).
+
+- [ ] **T27.** Point the pre-commit hook at `cf validate frontmatter`.
+  - [ ] Replace the `uv run sq validate docs` invocation in `.githooks/pre-commit`.
+  - [ ] Keep the staged-file collection as-is, including `--diff-filter=ACMR`.
+  - [ ] `cf` missing on PATH is a hard non-zero exit with an actionable message —
+    never a silent skip (same rule as D6, which currently covers `uv`).
+  - [ ] Success: a staged document with a bad status is refused; a clean one commits.
+
+- [ ] **T28.** Retire the parallel validator.
+  - [ ] Delete `src/squadron/documents/validate.py` and
+    `src/squadron/cli/commands/validate.py`; unwire `validate_app` from `cli/app.py`.
+  - [ ] Delete `tests/documents/test_validate.py` and `test_validate_paths.py`.
+  - [ ] Remove the `validate.docs_root` config key.
+  - [ ] Success: `sq validate` is gone; the full suite passes.
+
+- [ ] **T29.** Reduce `schema.py` to write-side values only.
+  - [ ] Keep what squadron *emits*: the machine-artifact docTypes, and the values
+    the review/devlog/evidence writers reference.
+  - [ ] Drop what existed only to validate against.
+  - [ ] Repoint the drift test: assert squadron agrees with **cf**, not the guide,
+    since cf is now the schema squadron validates against. Still fails, never skips.
+  - [ ] Success: the five write-side importers still build valid frontmatter.
+
+- [ ] **T30.** Install the hook from `sq setup`.
+  - [ ] Add a step to `cli/commands/setup_steps.py` that writes the hook and sets
+    `core.hooksPath` — reuse the existing `StepKind` / installer registry.
+  - [ ] A normal `sq setup` run installs it without the user asking.
+  - [ ] Success: a fresh clone that runs `sq setup` has a working gate.
+
+- [ ] **T31.** Add a `cf`-availability check to `sq doctor`.
+  - [ ] Pure check function alongside `check_git_hooks`, per the existing shape.
+  - [ ] WARN with a fix hint when `cf` is absent, since the gate depends on it.
+  - [ ] Success: `sq doctor` reports the gate as unusable when `cf` is missing.
+
+- [ ] **T32.** Register squadron's machine-artifact docTypes with cf.
+  - [ ] `review-resolution`, `gate-evidence`, `devlog` — require `docType` and
+    `dateCreated`; no `status`; do **not** require `dateUpdated` (a validator
+    reading one file cannot know whether it was edited after creation).
+  - [ ] Lands in context-forge under #73, tracked here because this slice is the
+    consumer that needs them validated rather than silently passing through.
+  - [ ] Success: a malformed gate-evidence artifact is caught by the gate.

@@ -90,7 +90,7 @@ Two facts make it smaller than it sounds. There is exactly **one** action-execut
 
 Dependencies: [149 executor, 142 action protocol, 909 (the hardcoded post-condition being generalized)]. Risk: Medium — the mechanism is small; deciding what a hook may do to a running pipeline is not. Effort: 3/5. **Design Complete: [171-slice.post-action-hooks-provider-independent-extension-point.md](../slices/171-slice.post-action-hooks-provider-independent-extension-point.md)**
 
-29. [x] **(172) `sq validate docs` — Mechanical Frontmatter Enforcement** (completed 20260804) — Replaces slice 171 as the answer to the problem 171 was nominally built for: agents write `status: draft`, and the canonical set (`not_started | in_progress | complete | deferred | deprecated`) is defined in prose in `file-naming-conventions.md` and enforced by nothing. A convention that is only written down is a suggestion that does not get read.
+29. [ ] **(172) Mechanical Frontmatter Enforcement** (reopened 20260804 — Parts 1–9 shipped; retiring squadron's parallel validator in favor of Context Forge's, and installing the gate via `sq setup`; blocked on context-forge#73) — Replaces slice 171 as the answer to the problem 171 was nominally built for: agents write `status: draft`, and the canonical set (`not_started | in_progress | complete | deferred | deprecated`) is defined in prose in `file-naming-conventions.md` and enforced by nothing. A convention that is only written down is a suggestion that does not get read.
 
 The insight that shrinks this from 3/5 to 1/5: **enforcement does not have to happen inside squadron.** It has to happen somewhere a bad document cannot get past, and `git commit` is already that boundary — LLM-independent, crossed by every workflow including agent-driven ones, and blind to which tool wrote the file.
 
@@ -108,7 +108,7 @@ Plus one structural hardening, cheap and separable: `update_frontmatter` / `rend
 
 **Found during design:** a scan of the 409 documents under `project-documents/user/` turned up 24 violations, of which five are *unparseable* frontmatter — review artifacts whose finding `location:` value carries a colon-space, produced by squadron's own hand-rendered frontmatter at `review/persistence.py:222`. `read_frontmatter` returns `None` for a YAML error exactly as for a file with no block, so the class was invisible; `sq metrology capture` and `sq review resolve` hard-fail on those files. The slice therefore also quotes that field and repairs the five artifacts.
 
-Dependencies: [none — `read_frontmatter` already exists]. Risk: Low. Effort: 1/5. **Design Complete: [172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md](../slices/172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md)**
+Dependencies: [context-forge#72, context-forge#73]. Risk: Low. Effort: 1/5. **Design Complete: [172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md](../slices/172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md)**
 
 ---
 

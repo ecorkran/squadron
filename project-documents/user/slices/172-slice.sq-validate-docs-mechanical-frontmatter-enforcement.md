@@ -3,14 +3,30 @@ docType: slice-design
 slice: sq-validate-docs-mechanical-frontmatter-enforcement
 project: squadron
 parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
-dependencies: []
+dependencies:
+  - context-forge#72
+  - context-forge#73
 interfaces: []
 dateCreated: 20260803
 dateUpdated: 20260804
-status: complete
+status: in_progress
 ---
 
-# Slice 172 — `sq validate docs`: Mechanical Frontmatter Enforcement
+# Slice 172 — Mechanical Frontmatter Enforcement
+
+> **Reopened 20260804.** Parts 1–9 shipped and were code-reviewed, but the review
+> conversation surfaced that the slice solved the right problem the wrong way: it
+> built a parallel validator and schema in squadron when Context Forge already owns
+> both, and it shipped the enforcement to one repo while shipping the mechanism to
+> every repo. See **D10** (ownership) and **D11** (installation). The Problem and
+> Approach sections below still stand — the analysis, the 27 violations, and the
+> `location:` writer bug are unchanged and their fixes are kept.
+>
+> Retired: `documents/validate.py`, `cli/commands/validate.py`, the `sq validate docs`
+> command. Kept: the hook, the review-writer fix, the frontmatter hardening, the
+> date-emission fixes, the one-time cleanup. Now blocked on
+> [context-forge#73](https://github.com/ecorkran/context-forge/issues/73), which
+> exposes the command the hook will call.
 
 ## Problem
 
@@ -47,13 +63,14 @@ lines.append(f'    summary: "{yaml_escape(sf.summary)}"')  # quoted — the adja
 
 Enforcement does not have to happen inside squadron. It has to happen somewhere a bad document cannot get past, and `git commit` already is that boundary: LLM-independent, crossed by every workflow including agent-driven ones, and blind to which tool wrote the file. That observation is what makes this a 1/5 slice rather than the 3/5 pipeline-hook mechanism (slice 171) it replaces.
 
-Five pieces, in dependency order. Pieces 4 and 5 are separable — droppable without harming 1–3.
+Six pieces, in dependency order. Pieces 4 and 5 are separable — droppable without harming the rest.
 
-1. **`sq validate docs [paths...]`** — the primitive: a deterministic, path-scoped frontmatter validator.
+1. **`cf validate frontmatter [paths...]`** — the primitive: a deterministic, path-scoped frontmatter validator. Owned by Context Forge, not squadron ([#73](https://github.com/ecorkran/context-forge/issues/73)); see **D10** for why the first implementation of this slice wrongly built a second one in Python.
 2. **A tracked git pre-commit hook** over staged `.md` files. This is the enforcement; piece 1 alone is another suggestion.
-3. **CI backstop plus a one-time cleanup** of the 24 known violations, since `--no-verify` exists.
-4. **Structural hardening** — `update_frontmatter` / `render_frontmatter_block` reject an invalid `status`, closing squadron's own writing paths.
-5. **Fix the review writer** — quote `location`, and repair the five corrupted artifacts.
+3. **Installation via `sq setup`**, so the gate reaches every squadron project instead of only this repo. See **D11** — without this, piece 2 is a file in one repository.
+4. **CI backstop plus a one-time cleanup** of the 27 known violations, since `--no-verify` exists.
+5. **Structural hardening** — `update_frontmatter` / `render_frontmatter_block` reject an invalid `status`, closing squadron's own writing paths.
+6. **Fix the review writer** — quote `location`, and repair the five corrupted artifacts.
 
 ---
 
@@ -136,6 +153,12 @@ Explicitly **not** checked: per-`docType` schemas, cross-document reference inte
 
 ### D4 — Canonical values live in code, with a mechanical drift guard
 
+> **Superseded — see D10.** Squadron transcribing the spec was a third copy of the
+> canonical values (guide → cf → squadron). The drift test below is a tripwire for
+> that duplication, not a fix for it. Squadron now validates by calling Context
+> Forge and keeps only the values it *writes*. Retained for the reasoning about why
+> a skip would be a silent fallback, which still applies to the reduced drift test.
+
 Project rules forbid scattering comparison values; the spec states them in prose in a submodule. Squadron therefore defines them once as `StrEnum`s — and a test asserts the enums still match the spec:
 
 ```python
@@ -210,6 +233,14 @@ This closes squadron's door, not the agents'. Agents write markdown with the Wri
 
 ### D8a — Division of labor with `cf check`
 
+> **Superseded — see D10.** The table below splits the work by *mechanism*
+> (single-document vs project-model) and calls the halves complementary. They are
+> not: both answer "is this document's metadata valid against the schema," which is
+> one domain. The evidence for that is in this very section — the `status` and
+> `dateUpdated` rows are both squadron hand-reconciling its schema against cf's
+> behavior, which is what owning a duplicate schema costs. Retained because the
+> three conflict surfaces it verified are still accurate and still matter.
+
 Both tools validate frontmatter in the same tree, so the boundary has to be stated rather than assumed. Context Forge's `validateFrontmatter` (`packages/core/src/schema/frontmatterSchema.ts`) checks **per-`docType` schemas** for eight docTypes (`concept`, `initiative-plan`, `architecture`, `slice-plan`, `slice-design`, `tasks`, `review`, `analysis`), including docType-specific required fields such as `archIndex`, `component`, and `slice`. Unknown docTypes pass through unchecked (`frontmatterSchema.ts:210`).
 
 That is the complement of this slice, not an overlap:
@@ -229,6 +260,42 @@ Three conflict surfaces were checked; two are clear, one is a real, verified gap
 - **CF cannot mis-infer squadron's artifacts.** Its `FILENAME_PARTS_RE` matches only the segments `arch|slices|slice|tasks|review|analysis|concept`; `{index}-resolution.…` and `{index}-gate.…` match none of them. Inference also fires only when `docType` is absent, and both emitters always write it.
 
 The `dateUpdated` stamp gap is symmetric — CF's `updateFrontmatterField` (`markdownWriter.ts:52`) writes one key and leaves the date alone, same as `executor.py:269` did before T23. Filed as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71); not a dependency of this slice, which fixes only squadron's half.
+
+### D10 — Context Forge owns the schema; squadron owns the gate
+
+The first implementation of this slice shipped a Python validator (`documents/validate.py`) and a transcription of the canonical values (`documents/schema.py`). Both are being retired. The reasoning:
+
+**Validating frontmatter and checking frontmatter are the same thing.** D4 and D8a split them by mechanism — per-document vs needs-the-project-model — and treated that as a domain boundary. It is an implementation detail. Both answer one question: does this document's metadata satisfy the schema. Splitting one question across two tools yields two configurations, two definitions of five strings, and a drift test whose existence concedes the problem.
+
+**The duplication is third-hand and already broken.** `file-naming-conventions.md` defines the values; cf's `VALID_STATUSES` copies them; `schema.py` copied them again. [context-forge#72](https://github.com/ecorkran/context-forge/issues/72) is that exact failure between copies one and two — and `frontmatterSchema.ts:257-264` papers over it with a `.replace(/-/g, '_')` at the comparison site, so cf currently *accepts* `in-progress` while its own schema calls underscores canonical. Adding a third copy makes a known failure mode more likely, not less.
+
+**The validation already exists upstream.** `validateFrontmatter` (`packages/core/src/schema/frontmatterSchema.ts:183`) checks docType presence, required fields, and value constraints; it is exported from `packages/core/src/index.ts` and covered by ~30 tests. Squadron reimplemented a tested function. What was genuinely missing was a way to *invoke* it in isolation — [context-forge#73](https://github.com/ecorkran/context-forge/issues/73).
+
+**`cf check` is still the wrong thing for the hook to call.** It reasons across documents, so its findings are interdependent and its fixes can cycle — fix A because of B, fix B because of C, fix C invalidates A. Observed, not hypothetical. A gate needs the opposite: per-document, deterministic, enumerable result states, no fix cascades. That is `validateFrontmatter`, which is why #73 asks for a narrow command over it rather than reusing `cf check`.
+
+Revised ownership:
+
+| | owner |
+|---|---|
+| Canonical schema + validation logic | Context Forge (`validateFrontmatter`) |
+| Invocable per-document command | Context Forge (`cf validate frontmatter`, #73) |
+| Enforcement timing (pre-commit hook) | squadron |
+| Hook installation | squadron (`sq setup`) |
+| docTypes squadron *writes* | squadron (`schema.py`, reduced) |
+
+What squadron keeps is enforcement, not schema. `schema.py` shrinks to the values squadron emits when it writes review artifacts and devlogs — notably the three machine-artifact docTypes, which are squadron-owned and absent from the spec. Those get registered with cf under #73 so they are validated rather than passing through as unknown. The drift test's assertion changes accordingly: it should assert squadron agrees with **cf**, the thing it now validates against, rather than with the guide.
+
+`documents/validate.py`, `cli/commands/validate.py`, and their tests are retired. The `sq validate docs` name goes away; the hook calls `cf validate frontmatter`.
+
+### D11 — The gate has to install itself
+
+Shipping `sq validate docs` in the package while shipping the hook only in this repo meant 30+ projects got the mechanism and one project got the enforcement. A validator nobody remembers to run is the same as no validator — the convention-is-a-suggestion problem this slice opens by naming, reintroduced one level up.
+
+Copy-pasting the hook into each repo is not a distribution path. It drifts on the first change to the hook — which already happened once, in the review-fix commit that changed `--diff-filter=ACM` to `ACMR`.
+
+So installation belongs in `sq setup`, which already exists as a step-based orchestrator (`cli/commands/setup_steps.py`, `StepKind`, an installer registry). The hook is another step: no new architecture, and a normal user never thinks about it. `sq doctor` already checks `core.hooksPath` and keeps doing so.
+
+This also introduces a new runtime dependency for the gate: `cf` must be on PATH. The hook currently requires only `uv`. Same rule as D6 — a missing tool is a hard failure, never a silent skip — so `sq doctor` gains a `cf`-availability check alongside the hooks-path one.
 
 ### D9 — Quote `location` in the review writer
 
