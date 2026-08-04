@@ -90,6 +90,24 @@ Two facts make it smaller than it sounds. There is exactly **one** action-execut
 
 Dependencies: [149 executor, 142 action protocol, 909 (the hardcoded post-condition being generalized)]. Risk: Medium — the mechanism is small; deciding what a hook may do to a running pipeline is not. Effort: 3/5. **Design Complete: [171-slice.post-action-hooks-provider-independent-extension-point.md](../slices/171-slice.post-action-hooks-provider-independent-extension-point.md)**
 
+29. [ ] **(172) `sq validate docs` — Mechanical Frontmatter Enforcement** — Replaces slice 171 as the answer to the problem 171 was nominally built for: agents write `status: draft`, and the canonical set (`not_started | in_progress | complete | deferred | deprecated`) is defined in prose in `file-naming-conventions.md` and enforced by nothing. A convention that is only written down is a suggestion that does not get read.
+
+The insight that shrinks this from 3/5 to 1/5: **enforcement does not have to happen inside squadron.** It has to happen somewhere a bad document cannot get past, and `git commit` is already that boundary — LLM-independent, crossed by every workflow including agent-driven ones, and blind to which tool wrote the file.
+
+Three pieces:
+
+1. **`sq validate docs [paths...]`** — the primitive. Validates `status` against a `DocumentStatus` enum, `docType` against its canonical list, dates as `YYYYMMDD`, and required universal fields. Exits non-zero with `file:line`, the offending key, and the accepted values. Honors the IDE-generated exemptions in `file-naming-conventions.md` (`.github/instructions/`, `.claude/rules/`, `AGENTS.md`, etc. — files carrying the `context-forge:managed` marker). Reads via the existing `read_frontmatter`.
+2. **A tracked git pre-commit hook** running it over staged `.md` files. This is the enforcement; piece 1 alone is another suggestion. Hooks are per-clone by default, so this ships as `.githooks/` in the repo plus a documented one-time `git config core.hooksPath .githooks` — a hook nobody installs is the failure mode being escaped, so the install step is part of the deliverable, not a footnote.
+3. **CI backstop**, since `--no-verify` exists.
+
+Plus one structural hardening, cheap and separable: `update_frontmatter` / `render_frontmatter_block` in `documents/frontmatter.py` validate `status` and raise. That makes squadron **incapable** of writing a bad value on its own paths. It does not cover agents writing markdown with the Write tool directly — that is what piece 2 is for — but it closes squadron's own door for free.
+
+**Why not `cf check`.** `cf check` is a good tool but a wide one: it surfaces many finding classes, not all easily fixable, and it can send an agent in circles chasing them. A commit gate must be **narrow and deterministic** or people learn to bypass it, at which point it enforces nothing. One check class with one mechanical fix each is the property that makes a gate survive contact. Context Forge has the better ownership claim on the naming spec and may be offered this as a second consumer later; it is not a dependency.
+
+**Relationship to 171.** 171 is deferred, not superseded — it generalizes two hardcoded executor checks and revives when a consumer must run *inside* a pipeline and *block* it. This slice does not create such a consumer; a commit gate is deliberately outside the pipeline.
+
+Dependencies: [none — `read_frontmatter` already exists]. Risk: Low. Effort: 1/5
+
 ---
 
 ## Integration Work
