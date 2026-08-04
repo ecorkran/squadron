@@ -88,7 +88,7 @@ So the validator recognizes two classes, both defined in one place:
 
 Without this, the gate would fail on squadron's own correct output the first time a pipeline wrote a resolution artifact — which is precisely how a gate teaches people to use `--no-verify`.
 
-### D3 — Seven check classes, each with exactly one mechanical fix
+### D3 — Eight check classes, each with exactly one mechanical fix
 
 The property that makes a commit gate survive contact is that every failure has one obvious fix. Anything requiring judgment goes in `cf check`, not here.
 
@@ -101,6 +101,7 @@ The property that makes a commit gate survive contact is that every failure has 
 | `FM005` | `status` ∈ `DocumentStatus` | Replace with one of the listed values |
 | `FM006` | `docType` ∈ `DocType` ∪ machine artifact types | Replace with one of the listed values |
 | `FM007` | `dateCreated` / `dateUpdated` match `\d{8}` and are real dates | Rewrite as `YYYYMMDD` |
+| `FM008` | The file is readable as UTF-8 | Re-save as UTF-8, or move it out of the document root |
 
 `FM001` and `FM002` are distinct codes for what `read_frontmatter` currently collapses into one `None`. That distinction is the whole reason the five corrupted reviews went unnoticed, so the validator must not reuse `read_frontmatter`'s return-`None`-on-error path for diagnosis: it re-splits the document and calls `yaml.safe_load` itself so it can report the `yaml.YAMLError` position.
 
@@ -135,7 +136,7 @@ project-documents/user/slices/201-slice.supervisor-component.md:9: FM005 status:
 ```
 
 - **Line number** is the actual line of the offending key inside the block, found by scanning the raw block for the key (the block's start offset is known). Where there is no offending line — `FM001`, `FM004` — the reported line is the opening fence (or line 1 when there is no block). Never a fabricated number.
-- **Exit code** `0` clean, `1` violations found, `2` usage error (unreadable path, root does not exist).
+- **Exit code** `0` clean, `1` violations found, `2` invocation error. The split is by *who is wrong*: exit 2 means the command was called incorrectly and no useful validation happened — the configured root does not exist, or a named path does not exist. Everything about a document's content, including a `.md` file under the root that cannot be decoded as UTF-8 (`FM008`), is a violation on exit 1. A `.md` file that is unreadable for permission or I/O reasons is exit 2, since that is an environment fault, not a document defect. No condition is allowed to raise an uncaught traceback out of the command; if one does, the hook sees a nonzero exit and refuses the commit, which is the safe direction.
 - **Summary line** to stderr: `N documents checked, M violations in K files`. Emitted even when clean, so "the hook ran" is observable rather than inferred from silence.
 - No `--json`, no severity levels. One kind of finding, one exit code.
 
@@ -252,6 +253,7 @@ Exit: 0 clean | 1 violations | 2 usage error
 
 - **Depends on:** nothing new. `read_frontmatter` (slice 149-era `documents/frontmatter.py`) exists; the config manager exists.
 - **Relationship to 171 (deferred):** 171 generalizes two hardcoded executor post-action checks and revives only when a consumer must run *inside* a pipeline and *block* it. This slice does not create one — a commit gate is deliberately outside the pipeline, and it catches documents 171 could not: those written when no pipeline was running.
+- **Supersedes two placeholder modules in the parent architecture.** `140-arch.pipeline-foundation.md` reserved `documents/status.py` (DocumentStatus) and `documents/paths.py` (`USER_DOCS_ROOT`), both marked "171 — DEFERRED." This slice builds the canonical status enum in `documents/schema.py` alongside `DocType` and the machine-artifact set, and replaces `USER_DOCS_ROOT` with the `validate.docs_root` config key — a constant is the wrong shape for a value that must differ per project. The architecture is updated to name the real modules rather than leaving a revived 171 to discover a second `DocumentStatus`. If 171 is ever revived, it consumes `schema.py`; it does not define its own.
 - **Offered to, not depended on:** Context Forge owns `file-naming-conventions.md` and ships `cf check`. If it later wants this check class, `validate_paths` is the callable to lift. Not a dependency in either direction.
 - **`sq doctor`:** gains one check — is `core.hooksPath` set to `.githooks`? Additive, no interface change.
 
@@ -260,13 +262,13 @@ Exit: 0 clean | 1 violations | 2 usage error
 1. `sq validate docs` exists as a typer sub-app command wired into `app.py`.
 2. `validate.docs_root` is a defined config key with default `project-documents/user`; `--root` overrides it per invocation.
 3. Paths passed on the command line that fall outside the root are skipped, not flagged — verified by passing `README.md` and observing exit 0.
-4. All seven check classes (`FM001`–`FM007`) are implemented, each with a unit test using a real-format fixture.
+4. All eight check classes (`FM001`–`FM008`) are implemented, each with a unit test using a real-format fixture.
 5. `FM001` (no block) and `FM002` (block present, YAML invalid) are reported as distinct codes; a fixture reproducing `location: Slice design: Implementation Details` yields `FM002` with the YAML error position.
 6. `DocumentStatus` and `DocType` are `StrEnum`s defined in exactly one module; no status or docType string literal appears elsewhere in `src/`.
 7. A drift test parses `file-naming-conventions.md` and fails when its values disagree with the enums; it fails (not skips) when the submodule is absent, naming the fix.
 8. Machine-artifact docTypes (`review-resolution`, `gate-evidence`, `devlog`) validate clean — an actual `render_gate_evidence` and `render_resolution` output passes the validator in a test.
 9. Violation output carries `path:line`, code, offending key, actual value, and accepted values. Line numbers are real or the fence line; never invented.
-10. Exit codes are 0 / 1 / 2 as specified, asserted by CLI tests.
+10. Exit codes are 0 / 1 / 2 as specified, asserted by CLI tests covering at minimum: clean run, violation, nonexistent `--root`, nonexistent named path, and a non-UTF-8 `.md` under the root (which is exit 1 / `FM008`, not a traceback).
 11. A summary line is written to stderr on every run, including clean runs.
 12. `.githooks/pre-commit` is tracked, executable, validates only staged `.md` files, exits 0 when none are staged, propagates the validator's exit code, and exits non-zero (never 0) if `sq` cannot be launched.
 13. Hook installation (`git config core.hooksPath .githooks`) is documented in the README/contributing docs, and `sq doctor` reports whether it is set.

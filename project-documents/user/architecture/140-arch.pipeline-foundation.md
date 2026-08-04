@@ -409,12 +409,12 @@ findings:
     severity: concern           # concern | fail | note
     category: error-handling    # structural tag for matching
     summary: "Missing error handling in parse_config"
-    location: src/squadron/pipeline/executor.py:45
+    location: "src/squadron/pipeline/executor.py:45"   # quoted: model-authored free text
   - id: F002
     severity: note
     category: naming
     summary: "Variable name 'x' is unclear"
-    location: src/squadron/pipeline/actions/dispatch.py:12
+    location: "src/squadron/pipeline/actions/dispatch.py:12"
 ---
 
 ## Findings
@@ -595,8 +595,8 @@ src/squadron/pipeline/
 
 src/squadron/documents/      # document-level primitives shared across subsystems
 ├── frontmatter.py           # read/update/render frontmatter
-├── paths.py                 # USER_DOCS_ROOT (171 — DEFERRED)
-└── status.py                # DocumentStatus canonical enum (171 — DEFERRED)
+├── schema.py                # DocumentStatus, DocType, machine-artifact types (172)
+└── validate.py              # frontmatter validator behind `sq validate docs` (172)
 
 src/squadron/data/
 └── pipelines/               # built-in pipeline definitions (slice 141 establishes this)
@@ -708,7 +708,7 @@ The `ContextForgeClient` (slice 126, complete) wraps CF CLI subprocess calls beh
 - Cross-slice parallelism (run multiple slices simultaneously)
 - Cost tracking and optimization across providers
 - Pipeline sharing/marketplace
-- CI/CD integration
+- CI/CD integration *for pipeline execution* — running pipelines as CI jobs, reporting step results back to a CI system. Repo-level CI steps that invoke squadron's own commands (lint, tests, `sq validate docs`) are ordinary project hygiene and are not excluded here.
 - Automated complexity estimation for model selection
 
 ---

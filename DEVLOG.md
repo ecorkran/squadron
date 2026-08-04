@@ -12,6 +12,64 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260803 (10)
+
+### Slice 172: Design Review Resolved — PASS, One Pass Finding and Six Notes
+
+Reviewed by `minimax/minimax-m3`:
+[172-review.slice.…md](project-documents/user/reviews/172-review.slice.sq-validate-docs-mechanical-frontmatter-enforcement.md).
+Verdict PASS. Three of the six notes were worth acting on; all three turned out
+to be about the *architecture* being stale, not the slice being wrong.
+
+- **F001 (pass)** — the slice's positioning against deferred 171 reads correctly.
+  No action.
+- **F002 (note) — planned module names.** The architecture reserved
+  `documents/status.py` (DocumentStatus) and `documents/paths.py`
+  (`USER_DOCS_ROOT`), both marked "171 — DEFERRED." 172 builds `schema.py`
+  instead (status *and* docType *and* the machine-artifact set belong together)
+  and replaces `USER_DOCS_ROOT` with the `validate.docs_root` config key — a
+  module constant is the wrong shape for a value that differs per project.
+  Fixed at the source: the architecture's package structure now names
+  `schema.py` and `validate.py`. Leaving two placeholder filenames in place
+  would have set a revived 171 up to define a second `DocumentStatus`, which is
+  precisely the drift this slice exists to prevent.
+- **F003 (note) — "CI/CD integration" is listed out of scope.** The reviewer's
+  own reading is right: that bullet sits among GUI-for-pipeline-monitoring,
+  cross-slice parallelism, and pipeline marketplace — it means *running
+  pipelines as CI jobs*, not "squadron's repo may not have CI steps," which
+  would be a strange thing for a document to say about a repo that already runs
+  ruff, pyright, and pytest in CI. Narrowed the bullet's wording so nobody
+  re-litigates it.
+- **F004 (note) — cross-package edit to `review/persistence.py`.** Accepted, no
+  change. The `documents/` package owns the primitives; `review/` owns its own
+  rendering, and the fix is a one-line change to a `review/` file that produces
+  invalid documents today. The boundary-respecting version — render that block
+  through `render_frontmatter_block` — is already recorded as Future Work, held
+  up by test coupling to the exact rendered text, not by the boundary.
+- **F005 (note) — the architecture's own example teaches the bug.** Correct and
+  worth fixing. Its structured-findings sample quotes `summary` and leaves
+  `location` bare, the exact asymmetry D9 removes. The sample values happen not
+  to contain a colon-space so it is valid YAML, which is the problem: it looks
+  fine and reproduces the pattern. Both example locations are now quoted, with
+  a comment saying why.
+- **F006 (note)** — no NFRs apply. No action.
+- **F007 (note) — implicit edge cases in the exit-code contract.** The real
+  gap. Added `FM008` (file under the root not decodable as UTF-8) and rewrote
+  the exit-code paragraph around *who is wrong*: exit 2 means the command was
+  called incorrectly and no validation happened (missing root, missing named
+  path, permission/IO fault); anything about a document's content, including
+  undecodable bytes, is a violation on exit 1. Success criterion 10 now
+  enumerates the cases a CLI test must cover, and criterion 4 counts eight
+  check classes.
+
+One aside worth recording: this review artifact is itself another instance of
+the unquoted `location:` render — its seven finding locations are bare scalars
+carrying `.md#anchor` values. It parses (verified: 7 findings, verdict PASS)
+only because no anchor happens to contain a colon-space. The corruption class
+is not historical; it is one review away, in every review squadron writes.
+
+---
+
 ## 20260803 (9)
 
 ### Slice 172: `sq validate docs` — Slice Design Complete
