@@ -659,6 +659,45 @@ class TestLocationDiffMembershipAndPathExistence:
         assert any("not among the files in the diff" in m for m in messages)
         assert not any("does not exist on disk" in m for m in messages)
 
+    def test_bare_filename_in_subdirectory_does_not_warn(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Issue #55: models cite documents by bare filename because the review
+        # prompt supplies content, not repo paths. The file lives in a document
+        # subdirectory, so an exact cwd/path join misses it and every finding
+        # of a clean review warned.
+        (tmp_path / "tasks").mkdir()
+        (tmp_path / "tasks" / "913-tasks.least-privilege.md").write_text("# tasks\n")
+        text = (
+            "## Summary\nPASS\n\n"
+            "### [PASS] All criteria covered\n"
+            "location: 913-tasks.least-privilege.md\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(text, "tasks", {}, cwd=tmp_path)
+        messages = [r.getMessage() for r in caplog.records if r.name == "squadron.review.parsers"]
+        assert not any("does not exist on disk" in m for m in messages)
+
+    def test_bare_filename_that_exists_nowhere_still_warns(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # The hallucination defense must survive the fix above: a filename that
+        # is nowhere under the root still warns, or the check stops earning its
+        # keep.
+        (tmp_path / "tasks").mkdir()
+        (tmp_path / "tasks" / "913-tasks.least-privilege.md").write_text("# tasks\n")
+        text = (
+            "## Summary\nCONCERNS\n\n"
+            "### [CONCERN] Invented citation\n"
+            "location: 913-tasks.invented-by-the-model.md\n"
+            "Detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            parse_review_output(text, "tasks", {}, cwd=tmp_path)
+        messages = [r.getMessage() for r in caplog.records if r.name == "squadron.review.parsers"]
+        assert any("does not exist on disk" in m for m in messages)
+
     def test_arch_review_nonexistent_doc_warns_path_existence(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:

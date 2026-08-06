@@ -284,6 +284,29 @@ def _check_diff_membership(
             )
 
 
+def _path_exists_under(root: Path, path: str) -> bool:
+    """True if *path* resolves under *root*, directly or by basename search.
+
+    A review model is given document *content*, not repository paths, so it
+    cites documents the only way it can — by bare filename (e.g.
+    ``172-tasks.foo.md``). Those live in a subdirectory of the document root
+    (``tasks/``, ``slices/``, ``reviews/``, …), so an exact ``root / path``
+    join misses them and the check fires on findings that cite real files.
+
+    Multi-segment paths are treated as root-relative and joined exactly:
+    a model that supplies a directory is taken at its word. Only a bare
+    filename triggers the search, and only its basename is matched — an
+    invented filename still resolves nowhere, so the hallucination defense
+    this check exists for is preserved.
+    """
+    if (root / path).exists():
+        return True
+    # Only bare filenames get the search; a cited directory is honored as given.
+    if "/" in path or "\\" in path:
+        return False
+    return any(root.rglob(path))
+
+
 def _check_path_existence(
     findings: list[ReviewFinding],
     cwd: Path,
@@ -302,7 +325,7 @@ def _check_path_existence(
         path = location_path(finding.location)
         if path is None:
             continue
-        if not (cwd / path).exists():
+        if not _path_exists_under(cwd, path):
             logger.warning(
                 "Finding F%03d (%r) in %s review cites %r which does not "
                 "exist on disk (relative to %s).",
