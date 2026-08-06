@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,6 +18,7 @@ from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     _find_merge_commit,
     _find_slice_branch,
+    _resolve_fork_point,
     resolve_diff_base,
     resolve_slice_diff_range,
 )
@@ -123,6 +125,57 @@ class TestFindMergeCommit:
         assert matched == should_match
 
 
+class TestResolveForkPoint:
+    """Real-git tests: the reflog parsing is the part mocks cannot cover."""
+
+    @staticmethod
+    def _git(cwd: Path, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+    def _repo_with_ff_merged_slice(self, tmp_path: Path) -> Path:
+        self._git(tmp_path, "init", "-q", "-b", "main")
+        self._git(tmp_path, "config", "user.email", "t@t.co")
+        self._git(tmp_path, "config", "user.name", "T")
+        (tmp_path / "a.txt").write_text("base\n")
+        self._git(tmp_path, "add", "-A")
+        self._git(tmp_path, "commit", "-qm", "base")
+        self._git(tmp_path, "checkout", "-q", "-b", "211-slice.foo")
+        (tmp_path / "b.txt").write_text("one\n")
+        self._git(tmp_path, "add", "-A")
+        self._git(tmp_path, "commit", "-qm", "feat: slice work")
+        self._git(tmp_path, "checkout", "-q", "main")
+        self._git(tmp_path, "merge", "--ff-only", "-q", "211-slice.foo")
+        return tmp_path
+
+    def test_fork_point_from_branch_reflog(self, tmp_path: Path) -> None:
+        repo = self._repo_with_ff_merged_slice(tmp_path)
+        base_sha = subprocess.run(
+            ["git", "rev-parse", "main~1"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert _resolve_fork_point("211-slice.foo", str(repo)) == base_sha
+
+    def test_fork_point_returns_none_for_unknown_branch(self, tmp_path: Path) -> None:
+        repo = self._repo_with_ff_merged_slice(tmp_path)
+        assert _resolve_fork_point("no-such-branch", str(repo)) is None
+
+    def test_end_to_end_ff_merged_slice_yields_slice_files_only(self, tmp_path: Path) -> None:
+        """The real #54 repro: range must cover the slice's file, not the base."""
+        repo = self._repo_with_ff_merged_slice(tmp_path)
+        diff_range = resolve_slice_diff_range(211, str(repo), base="main")
+        changed = subprocess.run(
+            ["git", "diff", "--name-only", diff_range],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        assert changed == ["b.txt"]
+
+
 class TestResolveSliceDiffRange:
     """Tests for resolve_slice_diff_range()."""
 
@@ -175,6 +228,57 @@ class TestResolveSliceDiffRange:
         ):
             result = resolve_slice_diff_range(122, ".")
         assert result == "merge123^1..merge123^2"
+
+    def test_resolve_fast_forward_merged_uses_fork_point(self) -> None:
+        """Fast-forward merge: no merge commit exists, so use the branch reflog.
+
+        Issue #54. Fast-forward is git's default when the target has not
+        diverged, so this is the common case for a merged slice — both prior
+        paths miss it: tip == merge-base collapses the three-dot diff, and a
+        fast-forward leaves no merge commit to find.
+        """
+        mb_result = MagicMock()
+        mb_result.returncode = 0
+        mb_result.stdout = "deadbeef\n"
+
+        with (
+            patch(
+                "squadron.review.git_utils._find_slice_branch",
+                return_value="211-slice.foo",
+            ),
+            patch(_GIT_UTILS_SUBPROCESS, return_value=mb_result),
+            patch("squadron.review.git_utils._resolve_rev", return_value="deadbeef"),
+            patch(
+                "squadron.review.git_utils._resolve_fork_point",
+                return_value="f0rkp01nt",
+            ),
+            patch("squadron.review.git_utils._find_merge_commit", return_value=None),
+        ):
+            result = resolve_slice_diff_range(211, ".")
+        assert result == "f0rkp01nt..deadbeef"
+
+    def test_resolve_raises_when_fork_point_unavailable(self) -> None:
+        """Reflog expired or fresh clone → fail loudly, never guess a range.
+
+        The removed commit-message grep (issue #14) is exactly the guess this
+        must not make.
+        """
+        mb_result = MagicMock()
+        mb_result.returncode = 0
+        mb_result.stdout = "deadbeef\n"
+
+        with (
+            patch(
+                "squadron.review.git_utils._find_slice_branch",
+                return_value="211-slice.foo",
+            ),
+            patch(_GIT_UTILS_SUBPROCESS, return_value=mb_result),
+            patch("squadron.review.git_utils._resolve_rev", return_value="deadbeef"),
+            patch("squadron.review.git_utils._resolve_fork_point", return_value=None),
+            patch("squadron.review.git_utils._find_merge_commit", return_value=None),
+        ):
+            with pytest.raises(DiffRangeUnresolvedError, match="211"):
+                resolve_slice_diff_range(211, ".")
 
     def test_resolve_merged(self) -> None:
         with (

@@ -71,6 +71,43 @@ def _find_slice_branch(slice_number: int, cwd: str) -> str | None:
     return None
 
 
+def _resolve_fork_point(branch: str, cwd: str) -> str | None:
+    """Resolve where *branch* was created, from the branch's own reflog.
+
+    ``git reflog show <branch>`` ends with the entry that created the ref
+    ("branch: Created from ..."), whose commit is the fork point. That entry
+    survives a fast-forward merge, which is what makes it usable where plain
+    merge-base has collapsed to the branch tip (issue #54).
+
+    ``merge-base --fork-point base branch`` is *not* usable here: after a
+    fast-forward, base's reflog records the merge, so it resolves to the
+    merged tip rather than the fork.
+
+    Returns None when the reflog cannot answer — a fresh clone, or after
+    ``git gc`` has expired the entries — so the caller falls through and
+    fails loudly rather than guessing.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "reflog", "show", "--format=%H %gs", branch],
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            check=False,
+        )
+    except (FileNotFoundError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        sha, _, subject = line.partition(" ")
+        # The creating entry is "branch: Created from <rev>"; git also writes
+        # "branch: Reset to <rev>" and checkout entries, which are not forks.
+        if subject.startswith("branch: Created from") and sha.strip():
+            return sha.strip()
+    return None
+
+
 def _search_merge_commit(slice_number: int, cwd: str, ref: str) -> str | None:
     """Search ``ref`` for the newest merge commit naming this slice.
 
@@ -294,6 +331,22 @@ def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = Non
                         branch,
                     )
                     return f"{merge_base}...{branch}"
+                # branch_tip == merge_base: the branch is fully contained in
+                # base. A --no-ff merge leaves a merge commit for the path
+                # below, but a fast-forward merge leaves none (issue #54), and
+                # fast-forward is git's default when base has not diverged.
+                # The reflog still records where the branch forked, which is
+                # exact — unlike a commit-message search over base, which
+                # issue #14 removed for silently widening the range.
+                fork_point = _resolve_fork_point(branch, cwd)
+                if fork_point is not None and fork_point != branch_tip:
+                    _logger.debug(
+                        "slice %d: diff range from fork-point(%s, %s)",
+                        slice_number,
+                        base,
+                        branch,
+                    )
+                    return f"{fork_point}..{branch_tip}"
         except (FileNotFoundError, OSError):
             pass
         # merge-base failed or branch is merged — fall through
