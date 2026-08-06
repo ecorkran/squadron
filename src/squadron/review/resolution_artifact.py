@@ -18,11 +18,9 @@ from datetime import datetime
 from pathlib import Path
 
 from squadron.documents.frontmatter import render_frontmatter_block, yaml_safe
+from squadron.documents.schema import RESOLUTION_DOC_TYPE
 from squadron.review.addressed.models import FindingOutcome
 from squadron.review.persistence import REVIEWS_DIR
-
-#: Frontmatter docType — provenance-distinct from a review and from gate evidence.
-RESOLUTION_DOC_TYPE = "review-resolution"
 
 #: Filename pattern. ``{revision}`` increments; a resolution is never rewritten.
 RESOLUTION_FILENAME_FORMAT = "{index}-resolution.{review_type}.{slice_name}-r{revision}.md"

@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: agent-registry
 project: squadron
 lld: user/slices/102-slice.agent-registry.md

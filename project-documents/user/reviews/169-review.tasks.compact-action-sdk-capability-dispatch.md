@@ -15,27 +15,27 @@ findings:
     severity: concern
     category: capability-discovery
     summary: "Prompt-only capability probe omitted"
-    location: T3 — Capability probe in the SDK executor
+    location: "T3 — Capability probe in the SDK executor"
   - id: F002
     severity: concern
     category: testing
     summary: "True CLI compose-pattern integration test missing"
-    location: T10 — Integration test: compose pattern
+    location: "T10 — Integration test: compose pattern"
   - id: F003
     severity: note
     category: documentation
     summary: "Slice number inconsistency (193 vs 169)"
-    location: T11 commit message; slice design branch name
+    location: "T11 commit message; slice design branch name"
   - id: F004
     severity: note
     category: logging
     summary: "Compact boundary metadata logging to run state not explicit"
-    location: T6 — CompactAction: prompt-only branch
+    location: "T6 — CompactAction: prompt-only branch"
   - id: F005
     severity: note
     category: testing
     summary: "Timeout path for compact_boundary await untested"
-    location: T6 — Tests for prompt-only branch
+    location: "T6 — Tests for prompt-only branch"
 ---
 
 # Review: tasks — slice 169

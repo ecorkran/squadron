@@ -20,6 +20,7 @@ from squadron.cli.commands.doctor_checks import (
     CheckStatus,
     run_all_checks,
 )
+from squadron.review.git_utils import run_git
 
 _SECTION_ORDER = [
     SECTION_INSTALL,
@@ -28,6 +29,11 @@ _SECTION_ORDER = [
     SECTION_SKILLS,
     SECTION_CONFIG,
 ]
+
+# `git config --get` exit codes we can interpret: 0 is a hit, 1 is a
+# well-formed "key not set". Anything else means the config was unreadable.
+_GIT_CONFIG_OK = 0
+_GIT_CONFIG_KEY_UNSET = 1
 
 _STATUS_ICON: dict[CheckStatus, tuple[str, str]] = {
     CheckStatus.OK: ("✓", "green"),
@@ -106,6 +112,31 @@ def _render_json(results: list[CheckResult], squadron_version: str) -> None:
     print(json.dumps(output, indent=2))
 
 
+def _resolve_git_hooks_path() -> str | None:
+    """``core.hooksPath`` for the current repo, or None outside a git repo / on error.
+
+    Uses ``run_git`` rather than a raw subprocess call, per the project's own
+    convention for shelling out to git. A repo with the key unset returns the
+    empty string (not None) so ``check_git_hooks`` can tell "no repo, nothing
+    to gate" apart from "repo present, hook not installed."
+    """
+    repo_check = run_git(["rev-parse", "--is-inside-work-tree"], cwd=".")
+    if repo_check is None or repo_check.returncode != 0:
+        return None
+
+    process = run_git(["config", "--get", "core.hooksPath"], cwd=".")
+    if process is None:
+        return None
+    # `git config --get` exits 1 for "key not set" — expected here, and the
+    # empty string it yields is what tells check_git_hooks the hook is not
+    # installed. Any other non-zero code means the config could not be read
+    # at all (corrupt .git/config, permission denied); reporting that as an
+    # unset key would diagnose the wrong problem, so treat it as unknown.
+    if process.returncode not in (_GIT_CONFIG_OK, _GIT_CONFIG_KEY_UNSET):
+        return None
+    return process.stdout.strip()
+
+
 def doctor(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show WARN-level rows."),
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
@@ -116,7 +147,7 @@ def doctor(
     except PackageNotFoundError:
         squadron_version = "(dev install)"
 
-    results = run_all_checks()
+    results = run_all_checks(git_hooks_path=_resolve_git_hooks_path())
     exit_code = 1 if any(r.status == CheckStatus.MISSING for r in results) else 0
 
     if json_output:

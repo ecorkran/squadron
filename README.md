@@ -417,6 +417,15 @@ uv run ruff check      # Linting
 uv run ruff format     # Formatting
 ```
 
+Install the tracked pre-commit hook once per clone — it runs `sq validate docs`
+against staged markdown and refuses a commit with invalid frontmatter:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`sq doctor` reports whether this is set.
+
 ## License
 
 MIT

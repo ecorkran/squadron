@@ -15,37 +15,37 @@ findings:
     severity: pass
     category: architectural-alignment
     summary: "Install receipt design aligns with architecture's minimal mechanism goal"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Install Receipt
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Install Receipt"
   - id: F002
     severity: pass
     category: dependency-management
     summary: "Dependency direction is correct"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Dependencies
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Dependencies"
   - id: F003
     severity: pass
     category: error-handling
     summary: "`check_skill_packs()` uses CheckStatus.WARN appropriately for optional components"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Decision: Warn (not Missing) for uninstalled packs in `sq doctor`
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Decision: Warn (not Missing) for uninstalled packs in `sq doctor`"
   - id: F004
     severity: pass
     category: error-handling
     summary: "Failure modes are explicitly enumerated with handling strategies"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#New Command: `sq skills uninstall`
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#New Command: `sq skills uninstall`"
   - id: F005
     severity: pass
     category: architectural-alignment
     summary: "Doctor section ordering follows established pattern"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Modified: doctor.py
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Modified: doctor.py"
   - id: F006
     severity: pass
     category: integration-points
     summary: "Integration points with consuming slices are clear"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Integration Points
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Integration Points"
   - id: F007
     severity: pass
     category: testability
     summary: "Testability is properly addressed through dependency injection"
-    location: 343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Decision: `receipts_dir` injected, not hardcoded in business logic
+    location: "343-slice.sq-skills-uninstall-and-sq-doctor-integration.md#Decision: `receipts_dir` injected, not hardcoded in business logic"
 ---
 
 # Review: slice — slice 343

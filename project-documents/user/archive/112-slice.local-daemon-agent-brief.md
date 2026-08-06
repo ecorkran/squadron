@@ -1,3 +1,11 @@
+---
+docType: notes
+project: squadron
+dateCreated: 20260228
+dateUpdated: 20260301
+status: deprecated
+---
+
 # Slice Design Brief: 112 — Local Server & CLI Client
 
 ## Assignment

@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 slice: foundation
 project: squadron
 lld: user/slices/100-slice.foundation.md
@@ -7,6 +7,7 @@ dependencies: []
 projectState: New Python project, no code exists yet. This is the first slice to be implemented.
 dateCreated: 20260218
 dateUpdated: 20260219
+status: complete
 ---
 
 ## Context Summary

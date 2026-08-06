@@ -1,5 +1,5 @@
 ---
-docType: task-breakdown
+docType: tasks
 sliceIndex: 142
 sliceName: pipeline-core-models-and-action-protocol
 project: squadron
@@ -9,6 +9,7 @@ dependencies: [100-band complete, slice 141 complete]
 dateCreated: 20260330
 dateUpdated: 20260330
 status: complete
+slice: pipeline-core-models-and-action-protocol
 ---
 
 # Task Breakdown: Pipeline Core Models and Action Protocol (142)

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit gate: reject a commit whose staged markdown fails
+# `sq validate docs`. Install once with:
+#   git config core.hooksPath .githooks
+#
+# A hook that silently skips when its tool is missing enforces nothing while
+# appearing to work, so a failure to launch `sq` is a hard non-zero exit here
+# rather than a pass-through.
+set -u
+
+staged_files=()
+while IFS= read -r -d '' file; do
+  staged_files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.md')
+
+if [ "${#staged_files[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "pre-commit: 'uv' is not on PATH — cannot run sq validate docs" >&2
+  echo "pre-commit: install uv, or bypass this commit with --no-verify" >&2
+  exit 1
+fi
+
+uv run --quiet sq validate docs -- "${staged_files[@]}"
+status=$?
+
+if [ "$status" -ne 0 ]; then
+  echo "pre-commit: sq validate docs failed (exit $status)." >&2
+  echo "pre-commit: fix the violations above, or bypass with 'git commit --no-verify'." >&2
+fi
+
+exit "$status"

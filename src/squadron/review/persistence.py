@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
+from squadron.documents.schema import DocType, DocumentStatus
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult
 
@@ -184,7 +185,7 @@ def format_review_markdown(
 
     lines = [
         "---",
-        "docType: review",
+        f"docType: {DocType.REVIEW}",
         "layer: project",
         f"reviewType: {review_type}",
         f"slice: {slice_name}",
@@ -192,7 +193,7 @@ def format_review_markdown(
         f"verdict: {resolved_verdict}",
         f"sourceDocument: {source_doc}",
         f"aiModel: {resolved_model}",
-        "status: complete",
+        f"status: {DocumentStatus.COMPLETE}",
         f"dateCreated: {today}",
         f"dateUpdated: {today}",
     ]
@@ -219,7 +220,9 @@ def format_review_markdown(
             lines.append(f"    category: {sf.category}")
             lines.append(f'    summary: "{yaml_escape(sf.summary)}"')
             if sf.location:
-                lines.append(f"    location: {sf.location}")
+                # location and summary are the only fields in this hand-built
+                # block carrying model-authored free text; both must be quoted.
+                lines.append(f'    location: "{yaml_escape(sf.location)}"')
 
     lines.append("---")
     lines.append("")

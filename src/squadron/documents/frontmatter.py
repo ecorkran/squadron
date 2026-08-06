@@ -12,12 +12,33 @@ from typing import cast
 
 import yaml
 
+from squadron.documents.schema import STATUS_ALIASES, DocumentStatus
+
 
 class FrontmatterError(Exception):
     """Raised when a document's YAML frontmatter block is malformed or absent."""
 
 
-def _split_document(text: str) -> tuple[str, str, str] | None:
+def _validate_status_if_present(data: dict[str, object], *, context: str) -> None:
+    """Raise if a top-level ``status`` key is present and not a valid value.
+
+    Present-and-invalid only — never required. Machine artifacts legitimately
+    omit ``status`` entirely, and a nested ``findingStatuses`` entry carries a
+    ``FindingStatus``, not a document status, so only the top-level key is
+    checked.
+    """
+    if "status" not in data:
+        return
+    status_value = str(data["status"])
+    valid_values = {member.value for member in DocumentStatus} | set(STATUS_ALIASES)
+    if status_value not in valid_values:
+        accepted = ", ".join(member.value for member in DocumentStatus)
+        raise FrontmatterError(
+            f"Invalid status {status_value!r} in {context} — accepted values: {accepted}"
+        )
+
+
+def split_document(text: str) -> tuple[str, str, str] | None:
     """Split ``text`` into ``(leading, raw_frontmatter, body)``.
 
     ``leading`` is any BOM/blank-line prefix before the opening fence;
@@ -43,7 +64,7 @@ def read_frontmatter(path: Path) -> dict[str, object] | None:
     mapping — callers decide whether that absence is meaningful.
     """
     text = path.read_text(encoding="utf-8")
-    split = _split_document(text)
+    split = split_document(text)
     if split is None:
         return None
     _, raw_block, _ = split
@@ -80,7 +101,13 @@ def render_frontmatter_block(data: dict[str, object]) -> str:
     artifacts embed arbitrary model-authored text — a colon-space, a leading
     ``#`` or ``-``, or an embedded newline would corrupt a hand-rendered block,
     and the whole point of the block is that a machine can read it back.
+
+    Raises:
+        FrontmatterError: a top-level ``status`` key is present and not a
+            valid ``DocumentStatus`` (or alias). Absent ``status`` is fine —
+            machine artifacts legitimately have none.
     """
+    _validate_status_if_present(data, context="frontmatter block")
     dumped = yaml.safe_dump(
         data,
         sort_keys=False,
@@ -91,18 +118,28 @@ def render_frontmatter_block(data: dict[str, object]) -> str:
     return f"---\n{dumped.rstrip(chr(10))}\n---"
 
 
-def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
+def update_frontmatter(path: Path, fields: dict[str, object], *, today: str) -> None:
     """Merge ``fields`` into the frontmatter block of ``path``.
 
     Existing key order is preserved; new keys are appended to the end of the
     block. The document body is preserved byte-for-byte.
 
+    Also stamps ``dateUpdated`` to ``today``, unless ``fields`` already
+    supplies that key — the caller is then asserting a specific date and must
+    win. ``today`` is a required keyword rather than a clock call inside this
+    function so the behavior stays testable and this primitives module stays
+    free of ambient state. This is squadron's only in-place document edit, so
+    stamping it here is what makes the "dateUpdated tracks every edit" rule
+    hold for callers that do not exist yet, rather than a convention every
+    future author has to remember.
+
     Raises:
         FrontmatterError: the file has no frontmatter block, the block is not
-            closed, or it does not parse to a YAML mapping.
+            closed, it does not parse to a YAML mapping, or the merged result
+            carries a top-level ``status`` that is present and invalid.
     """
     text = path.read_text(encoding="utf-8")
-    split = _split_document(text)
+    split = split_document(text)
     if split is None:
         raise FrontmatterError(f"No YAML frontmatter block found in {path}")
     leading, raw_block, body = split
@@ -118,6 +155,9 @@ def update_frontmatter(path: Path, fields: dict[str, object]) -> None:
         str(key): value for key, value in cast("dict[object, object]", loaded).items()
     }
     merged.update(fields)
+    if "dateUpdated" not in fields:
+        merged["dateUpdated"] = today
+    _validate_status_if_present(merged, context=str(path))
 
     dumped = yaml.safe_dump(merged, sort_keys=False, default_flow_style=False, allow_unicode=True)
     path.write_text(f"{leading}---\n{dumped}---{body}", encoding="utf-8")

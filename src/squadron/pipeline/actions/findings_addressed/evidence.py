@@ -14,16 +14,15 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from squadron.documents.frontmatter import render_frontmatter_block, yaml_safe
+from squadron.documents.schema import GATE_EVIDENCE_DOC_TYPE
 from squadron.review.addressed.models import FindingOutcome, SettlingScreen
 from squadron.review.persistence import REVIEWS_DIR
 
 _logger = logging.getLogger(__name__)
-
-#: Frontmatter docType — provenance-distinct from a review.
-GATE_EVIDENCE_DOC_TYPE = "gate-evidence"
 
 #: Filename pattern. The ``-gate.`` segment is what keeps it out of the
 #: ``*-review.*`` glob; nothing else about the name may reintroduce it.
@@ -89,16 +88,24 @@ class GateEvidence:
         }
 
 
-def gate_evidence_frontmatter(evidence: GateEvidence, *, step_name: str) -> dict[str, object]:
+def gate_evidence_frontmatter(
+    evidence: GateEvidence, *, step_name: str, date_created: str
+) -> dict[str, object]:
     """The frontmatter mapping, as data — serialized by yaml, never by f-string.
 
     Notes and locations embed arbitrary model-authored text: a colon-space, a
     leading ``#`` or ``-``, or an embedded newline would corrupt hand-rendered
     frontmatter, and this artifact exists to be machine-readable.
+
+    ``date_created`` is a required keyword rather than a clock call inside
+    this function, on the same principle as ``update_frontmatter``'s
+    ``today`` keyword — it keeps the renderer testable and free of ambient
+    state.
     """
     data: dict[str, object] = {
         "docType": GATE_EVIDENCE_DOC_TYPE,
         "layer": "project",
+        "dateCreated": date_created,
         "gateStep": step_name,
         "policy": yaml_safe(evidence.policy),
         "verdict": yaml_safe(evidence.reduced_verdict),
@@ -119,10 +126,12 @@ def gate_evidence_frontmatter(evidence: GateEvidence, *, step_name: str) -> dict
     return data
 
 
-def render_gate_evidence(evidence: GateEvidence, *, step_name: str) -> str:
+def render_gate_evidence(evidence: GateEvidence, *, step_name: str, date_created: str) -> str:
     """Render the artifact: frontmatter carrying the whole record, then prose."""
     lines = [
-        render_frontmatter_block(gate_evidence_frontmatter(evidence, step_name=step_name)),
+        render_frontmatter_block(
+            gate_evidence_frontmatter(evidence, step_name=step_name, date_created=date_created)
+        ),
         "",
         f"# Gate Evidence — {step_name} ({evidence.policy})",
         "",
@@ -179,9 +188,10 @@ def save_gate_evidence(
         revision=evidence.revision_number if evidence.revision_number is not None else 0,
     )
     path = Path(cwd) / REVIEWS_SUBDIR / filename
+    today = date.today().strftime("%Y%m%d")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(render_gate_evidence(evidence, step_name=step_name))
+        path.write_text(render_gate_evidence(evidence, step_name=step_name, date_created=today))
     except OSError:
         _logger.warning("findings-addressed: failed to write gate evidence to %s", path)
         return None

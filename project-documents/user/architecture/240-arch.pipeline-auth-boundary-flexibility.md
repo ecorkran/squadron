@@ -7,7 +7,7 @@ component: pipeline-auth-boundary-flexibility
 dateCreated: 20260428
 dateUpdated: 20260501
 reviewIteration: 3
-status: draft
+status: in_progress
 ---
 
 # Architecture: Pipeline Auth-Boundary Flexibility

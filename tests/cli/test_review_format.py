@@ -87,7 +87,7 @@ class TestFrontmatterFindings:
     def test_finding_with_location(self) -> None:
         result = _make_result_with_structured_findings()
         md = format_review_markdown(result, "code", SLICE_INFO)
-        assert "    location: src/foo.py:10" in md
+        assert '    location: "src/foo.py:10"' in md
 
     def test_finding_without_location_omits_field(self) -> None:
         result = _make_result_with_structured_findings()

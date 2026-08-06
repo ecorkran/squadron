@@ -4,7 +4,7 @@ parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
 dateUpdated: 20260802
-status: in-progress
+status: in_progress
 ---
 
 # Slice Plan: Maintenance and Refactoring

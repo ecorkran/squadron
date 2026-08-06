@@ -6,7 +6,7 @@ archIndex: 180
 component: pipeline-intelligence
 dateCreated: 20260327
 dateUpdated: 20260406
-status: draft
+status: in_progress
 ---
 
 # Architecture: Pipeline Intelligence

@@ -5,7 +5,7 @@ project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [auth-strategy-credential-management, agent-registry-lifecycle]
 interfaces: []
-status: superseded
+status: deprecated
 dateCreated: 20260325
 dateUpdated: 20260327
 supersededBy: 128-slice.review-transport-unification-provider-decoupling.md
