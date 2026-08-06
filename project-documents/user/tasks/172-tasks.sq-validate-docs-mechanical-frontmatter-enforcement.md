@@ -3,22 +3,31 @@ docType: tasks
 slice: sq-validate-docs-mechanical-frontmatter-enforcement
 project: squadron
 lld: user/slices/172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md
-dependencies: []
+dependencies:
+  - context-forge#72
+  - context-forge#73
 projectState: >
-  Slice 172 designed and design-reviewed (PASS, six notes resolved) on main at
-  2ca8ecb. No implementation yet. Slice 171 (post-action hooks) is deferred —
-  designed, not built — and 172 replaces it as the answer to invalid document
-  frontmatter. The parent architecture 140-arch.pipeline-foundation.md was
-  updated during review resolution to name documents/schema.py and
-  documents/validate.py as the real modules. 24 known violations exist under
-  project-documents/user/, five of them unparseable review artifacts produced
-  by squadron itself. Task review resolved (CONCERNS, both findings fixed).
-  Part 5A added 20260804 after a date-field audit: dateCreated is required of
-  machine artifacts too, and squadron's three in-place write paths did not
-  stamp dateUpdated. Context Forge has the same gap on its side, filed as
-  context-forge#71 — tracked, not a dependency.
+  REOPENED 20260804. Parts 1-9 are implemented, code-reviewed, and committed on
+  branch 172-slice.sq-validate-docs-mechanical-frontmatter-enforcement (033b3fb,
+  4088a45); the branch is unmerged. Only Part 10 (T27-T32) remains, and it is
+  BLOCKED on context-forge#73 (exposes `cf validate frontmatter`), which is
+  itself blocked on context-forge#72 (status-spelling fix; cf slice 922 is
+  designed and task-broken, implementation not started as of 20260806).
+  Do not start Part 10 until `cf validate frontmatter` exists to call.
+  Parts 1-3 are SUPERSEDED: they built a Python validator (documents/validate.py,
+  cli/commands/validate.py) and a schema transcription that duplicate Context
+  Forge's validateFrontmatter. Their items remain [x] because the work genuinely
+  happened, but Part 10 deletes that code - do not extend, refactor, or rebuild
+  it. Parts 4, 5, 5A, 6, 8 stand as shipped: the review-writer `location:` quoting
+  fix, the frontmatter write-path hardening, the date-stamping fixes, the one-time
+  cleanup, and the CI backstop are all unaffected by the reopening. Part 9's T22
+  completion claims are withdrawn (the CHANGELOG bullet needs rewriting, since
+  `sq validate docs` will not exist). The governing decision is D10: Context Forge
+  maintains the schema, squadron uses it and owns only the gate. Slice 173
+  (user-definable actions on supported events) supersedes the deferred 171 and may
+  change T30's shape - see the design's Relationship note.
 dateCreated: 20260803
-dateUpdated: 20260804
+dateUpdated: 20260806
 status: in_progress
 ---
 
@@ -85,9 +94,15 @@ status: in_progress
 
 ## Part 1 — Canonical Values and the Drift Guard
 
-> **Partly superseded by Part 10 (T29).** `schema.py` survives, reduced to the values
-> squadron *writes*; the spec transcription it carried for validation is retired.
-> The drift test is repointed at cf rather than the guide. See D10.
+> ⚠️ **PARTLY SUPERSEDED — DO NOT IMPLEMENT AS WRITTEN. Shipped; read for history only.**
+>
+> Part 10 (T29) reduces `schema.py` to the values squadron *writes* and retires the
+> spec transcription it carried for validation; the drift test is repointed at cf
+> rather than the guide. The tasks below are checked because the work happened —
+> they are not a to-do list. **Anything below describing validation-side canonical
+> values is scheduled for deletion; do not extend or rebuild it.** The write-side
+> values (`MACHINE_ARTIFACT_DOC_TYPES` and the three definitions T1 unified) do
+> survive. See D10.
 
 - [x] **T1. Create `src/squadron/documents/schema.py`**
   - [x] Define `DocumentStatus(StrEnum)` with exactly the five spec values:
@@ -157,8 +172,14 @@ status: in_progress
 
 ## Part 2 — The Validator
 
-> **Superseded by Part 10 (T28).** Built and shipped, then retired — this duplicates
-> Context Forge's `validateFrontmatter`. Items stay checked: the work was done. See D10.
+> ⚠️ **SUPERSEDED — DO NOT IMPLEMENT. Shipped, then scheduled for deletion. History only.**
+>
+> This part built `documents/validate.py`, which duplicates Context Forge's
+> `validateFrontmatter`. Part 10 (T28) **deletes the entire module and its tests**.
+> Items stay checked because the work was done — this is not a to-do list, and the
+> code described below should not be extended, refactored, or reimplemented. If you
+> need frontmatter validation, call `cf validate frontmatter` (context-forge#73).
+> See D10.
 
 - [x] **T3. Create `src/squadron/documents/validate.py` — types and codes**
   - [x] Define `ViolationCode(StrEnum)` with `FM001`–`FM008` per the design's
@@ -248,8 +269,12 @@ status: in_progress
 
 ## Part 3 — Config Key and CLI Surface
 
-> **Superseded by Part 10 (T28).** The `sq validate docs` surface and its config key
-> are retired along with the validator behind them. See D10.
+> ⚠️ **SUPERSEDED — DO NOT IMPLEMENT. Shipped, then scheduled for deletion. History only.**
+>
+> Part 10 (T28) **removes the `sq validate docs` command, `cli/commands/validate.py`,
+> and the `validate.docs_root` config key** along with the validator behind them.
+> The command will not exist — do not document it, reference it in new work, or
+> restore it. Items stay checked because the work was done. See D10.
 
 - [x] **T8. Add the `validate.docs_root` config key**
   - [x] In `src/squadron/config/keys.py`, add a `ConfigKey` named
@@ -521,6 +546,13 @@ function T13 just changed) and before Part 9.
 ## Part 9 — Close Out
 
 - [x] **T21. Full verification pass**
+
+  > ⚠️ **Ran and passed 20260804, against the pre-reopening code. Do not re-run as
+  > written.** Three steps below invoke `sq validate docs`, which Part 10 (T28)
+  > deletes, and one cross-checks it against `cf check` per D8a, which D10
+  > supersedes. When Part 10 lands, the equivalent pass runs `cf validate
+  > frontmatter` and the `sq validate docs` steps drop out entirely.
+
   - [x] Run every step of the design's Verification Walkthrough in order and
     confirm each behaves as written. Update the walkthrough where reality
     differs — it becomes the slice's demo script.

@@ -6,11 +6,35 @@ parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
 dependencies: [142, 149, 909, 911]
 interfaces: []
 dateCreated: 20260803
-dateUpdated: 20260803
-status: deferred
+dateUpdated: 20260806
+status: deprecated
 ---
 
 # Slice Design: Post-Action Hooks — Provider-Independent Extension Point
+
+> **Superseded 20260806 by slice 173 (User-Definable Actions on Supported
+> Events).** Do not implement this slice. 173 reaches the same mechanism through
+> a more general trigger: 171 fires only *after a pipeline action*, while 173
+> binds actions to a closed `EventType` enum in which post-action is one event
+> and `COMMIT` — external, fired by git, with no pipeline running — is another.
+> The consumer that revives the mechanism turned out to be external to the
+> pipeline, which is precisely the case this design could not serve.
+>
+> **What carries forward into 173, intact:** the single action-execution choke
+> point (`executor.py:1124`); the hardcoded slice-909 dispatch post-condition
+> below it as the acceptance test for the generalized mechanism; contract (b)
+> on what a hook may do (observe / fail the action / mutate the result);
+> contract (e) failure-mode enumeration; contract (f) ordering and veto; and the
+> position that a hook is a typed in-process Python callable and **not**
+> arbitrary shell.
+>
+> **What 173 corrects.** This design assumed ownership of schema concerns that
+> belong to Context Forge — its motivating consumer was a frontmatter `status:`
+> validator holding squadron's own copy of the canonical values. Per D10 of
+> slice 172, cf maintains the schema and squadron uses it; a frontmatter rule
+> bound to `COMMIT` calls `cf validate frontmatter` rather than revalidating.
+> The two reworks recorded below (the authoring flow, and the run-level
+> watermark) are resolved in 173 by the binding manifest and by event scoping.
 
 ## Deferral (20260803)
 
