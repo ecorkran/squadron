@@ -12,7 +12,40 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
-## 20260809
+## 20260809 (2)
+
+### Slice 173: Design — User-Definable Actions on Supported Events
+
+Phase 4 complete. Design at
+`user/slices/173-slice.user-definable-actions-on-supported-events.md`;
+slice-plan entry 28 marked Design Complete. Supersedes deferred 171, whose
+authority/failure-mode/ordering contracts carry forward cited.
+
+The one open question from the overview — `ActionContext` vs. a narrower
+event context — resolved for the narrower context (D1): `ActionContext`
+demands `resolver`, `run_id`, `step_index`, `prior_outputs`, none of which a
+commit has, and lacks the staged paths it does have; reusing it would mean
+placeholder values, which the no-silent-fallback rule bans. Event actions get
+an event-typed context family (`CommitContext`, `PostActionContext` — the
+latter is 171's `HookContext` renamed) while sharing `ActionResult`,
+`ValidationError`, and the registry idiom. The pipeline `Action` protocol and
+registry are untouched; the events registry is the third instance of the
+established Protocol-plus-registry pattern, alongside actions and gate
+policies.
+
+Other decisions: closed `EventType` enum (D2); mandatory dotted namespacing
+with collision/reserved-prefix guards (D3); observe/fail/mutate authority with
+no severity axis — the revision stamp's never-fail contract is its own
+behavior, not a runner clamp (D4); coarse attributed failure handling, hard
+exit, never skip (D5); `events.yaml` manifest project → user first-found with
+in-code `DEFAULT_BINDINGS` and a `disable:` list (D6); declared-import
+discovery, no scanning (D7); `sq events fire commit` as the process entry
+point, with the 172 hook and installer repointed onto it (D8); prompt-only
+`--step-done` parity carried from 171 unchanged (D9). Migration of the
+hardcoded 909/911 executor checks onto the mechanism is the acceptance test —
+no assertion in their existing tests may change, only patch targets.
+
+---
 
 ### Slice 172 Part 10: Retire the Parallel Validator, Install the Gate Everywhere
 
