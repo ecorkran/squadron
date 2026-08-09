@@ -9,14 +9,20 @@ diagnostic is the whole point.
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
     CONTEXT_FORGE_PACKAGE,
+    GIT_HOOKS_PATH,
 )
 from squadron.cli.commands.setup_install import (
+    AUTO_INSTALL_CHECKS,
     CF_INIT_HINT,
+    PRE_COMMIT_HOOK,
     installer_for,
     run_install,
 )
@@ -186,3 +192,81 @@ def test_cf_init_is_never_run_automatically() -> None:
 
 def test_cf_init_hint_is_offered() -> None:
     assert "cf init" in CF_INIT_HINT
+
+
+# ---------------------------------------------------------------------------
+# Frontmatter pre-commit gate (D11: the gate installs itself)
+# ---------------------------------------------------------------------------
+
+
+def _init_repo(path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(path)], check=True)
+
+
+def test_gate_hook_matches_tracked_copy() -> None:
+    """The tracked .githooks/pre-commit and the installed hook must not drift."""
+    tracked = Path(".githooks/pre-commit").read_text(encoding="utf-8")
+    assert tracked == PRE_COMMIT_HOOK
+
+
+def test_gate_is_auto_installed() -> None:
+    assert "git pre-commit hook" in AUTO_INSTALL_CHECKS
+    assert installer_for("git pre-commit hook") is not None
+
+
+def test_gate_install_writes_hook_and_sets_hookspath(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    outcome = run_install("git pre-commit hook")
+
+    assert outcome.succeeded is True, outcome.message
+    hook = tmp_path / GIT_HOOKS_PATH / "pre-commit"
+    assert hook.read_text(encoding="utf-8") == PRE_COMMIT_HOOK
+    assert hook.stat().st_mode & 0o111, "hook must be executable"
+    configured = subprocess.run(
+        ["git", "config", "--get", "core.hooksPath"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert configured.stdout.strip() == GIT_HOOKS_PATH
+
+
+def test_gate_install_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _init_repo(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    first = run_install("git pre-commit hook")
+    second = run_install("git pre-commit hook")
+
+    assert first.succeeded and second.succeeded
+
+
+def test_gate_install_refuses_foreign_hookspath(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A user's own hooks directory is never overwritten to install ours."""
+    _init_repo(tmp_path)
+    subprocess.run(["git", "config", "core.hooksPath", "my/own/hooks"], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+
+    outcome = run_install("git pre-commit hook")
+
+    assert outcome.succeeded is False
+    assert "my/own/hooks" in outcome.message
+    assert not (tmp_path / GIT_HOOKS_PATH).exists()
+
+
+def test_gate_install_outside_repo_fails_with_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    outcome = run_install("git pre-commit hook")
+
+    assert outcome.succeeded is False
+    assert "not inside a git repository" in outcome.message

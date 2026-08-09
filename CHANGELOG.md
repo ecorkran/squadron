@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **`sq validate docs` mechanically enforces frontmatter.** Checks that markdown under the project's document root has a valid `docType`, `status`, and dates, and catches frontmatter that looks fine but silently fails to parse (an unquoted colon in a review finding's location, for example). A tracked pre-commit hook (`git config core.hooksPath .githooks`) refuses a commit that would introduce a violation; `sq doctor` reports whether the hook is installed.
+- **Commits with invalid frontmatter are refused automatically.** `sq setup` installs a tracked pre-commit hook that runs `cf validate frontmatter` (Context Forge ≥0.12.0) against staged markdown — bad `docType`, `status`, or dates block the commit. `sq doctor` reports whether the hook is installed and whether `cf` is available.
+
+### Removed
+- **`sq validate docs` is gone.** Context Forge owns the frontmatter schema; validate with `cf validate frontmatter` instead. The `validate.docs_root` config key is removed with it.
 
 ### Fixed
 - **A review finding whose location contains a colon (e.g. `"Slice design: Implementation Details"`) no longer corrupts the review's frontmatter.** The value is now quoted like its neighboring `summary` field.

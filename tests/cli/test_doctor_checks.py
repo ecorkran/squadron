@@ -344,29 +344,38 @@ def test_check_skill_packs_no_manifest(tmp_path: Path, monkeypatch: pytest.Monke
 
 
 def test_check_git_hooks_installed() -> None:
-    result = check_git_hooks(GIT_HOOKS_PATH)
+    result = check_git_hooks(GIT_HOOKS_PATH, cf_available=True)
 
     assert result.status == CheckStatus.OK
     assert result.section == SECTION_INSTALL
     assert GIT_HOOKS_PATH in result.detail
 
 
+def test_check_git_hooks_installed_but_cf_missing_is_unusable() -> None:
+    """An installed hook without cf is a gate that cannot run — never an OK row."""
+    result = check_git_hooks(GIT_HOOKS_PATH, cf_available=False)
+
+    assert result.status == CheckStatus.WARN
+    assert "cf" in result.detail
+    assert result.fix_hint is not None
+
+
 def test_check_git_hooks_wrong_value() -> None:
-    result = check_git_hooks("some/other/path")
+    result = check_git_hooks("some/other/path", cf_available=True)
 
     assert result.status == CheckStatus.WARN
     assert result.fix_hint == f"git config core.hooksPath {GIT_HOOKS_PATH}"
 
 
 def test_check_git_hooks_unset_in_repo() -> None:
-    result = check_git_hooks("")
+    result = check_git_hooks("", cf_available=True)
 
     assert result.status == CheckStatus.WARN
     assert result.fix_hint == f"git config core.hooksPath {GIT_HOOKS_PATH}"
 
 
 def test_check_git_hooks_not_a_repo() -> None:
-    result = check_git_hooks(None)
+    result = check_git_hooks(None, cf_available=True)
 
     assert result.status == CheckStatus.OK
     assert "not a git repository" in result.detail

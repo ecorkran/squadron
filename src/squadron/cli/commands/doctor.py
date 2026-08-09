@@ -112,7 +112,7 @@ def _render_json(results: list[CheckResult], squadron_version: str) -> None:
     print(json.dumps(output, indent=2))
 
 
-def _resolve_git_hooks_path() -> str | None:
+def resolve_git_hooks_path() -> str | None:
     """``core.hooksPath`` for the current repo, or None outside a git repo / on error.
 
     Uses ``run_git`` rather than a raw subprocess call, per the project's own
@@ -147,7 +147,7 @@ def doctor(
     except PackageNotFoundError:
         squadron_version = "(dev install)"
 
-    results = run_all_checks(git_hooks_path=_resolve_git_hooks_path())
+    results = run_all_checks(git_hooks_path=resolve_git_hooks_path())
     exit_code = 1 if any(r.status == CheckStatus.MISSING for r in results) else 0
 
     if json_output:

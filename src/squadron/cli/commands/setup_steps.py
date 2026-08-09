@@ -16,6 +16,7 @@ from squadron.cli.commands.doctor_checks import (
     check_at_least_one_provider,
     check_codex_cli,
     check_context_forge,
+    check_git_hooks,
     check_models_toml,
     check_project_env,
     check_provider_profiles,
@@ -72,6 +73,24 @@ def _recheck_aggregate() -> CheckResult:
 _RECHECK_MAP["at least one provider OK"] = _recheck_aggregate
 
 
+def _recheck_git_hooks() -> CheckResult:
+    """Re-resolve core.hooksPath and cf availability for the gate step."""
+    import shutil
+
+    # Imported here rather than at module scope: doctor.py is a command module
+    # and this file is the pure conversion layer — the I/O happens only when
+    # the recheck actually runs.
+    from squadron.cli.commands.doctor import resolve_git_hooks_path
+
+    return check_git_hooks(
+        resolve_git_hooks_path(),
+        cf_available=shutil.which("cf") is not None,
+    )
+
+
+_RECHECK_MAP["git pre-commit hook"] = _recheck_git_hooks
+
+
 # Anchor map: check name → QUICKSTART section anchor.
 #
 # Every value must resolve to a real heading in docs/QUICKSTART.md;
@@ -107,6 +126,11 @@ _EXPLANATION: dict[str, str] = {
     "codex CLI": (
         "The Codex CLI enables the codex provider for AI-assisted shell tasks. "
         "Only required if you plan to use the openai/codex provider."
+    ),
+    "git pre-commit hook": (
+        "A tracked pre-commit hook that runs cf validate frontmatter against "
+        "staged markdown, refusing commits with invalid frontmatter. Installed "
+        "into the repo you run setup from."
     ),
     "Claude Code CLI": (
         "The sdk provider authenticates through the Claude Code CLI's stored credentials, "
@@ -164,6 +188,7 @@ def _human_title(result: CheckResult) -> str:
     _TITLE_MAP: dict[str, str] = {
         "squadron": "Squadron installed",
         "slash commands": "Install slash commands",
+        "git pre-commit hook": "Install frontmatter pre-commit gate",
         "context-forge": "Install Context Forge",
         "codex CLI": "Install Codex CLI",
         "Claude Code CLI": "Claude Code CLI",

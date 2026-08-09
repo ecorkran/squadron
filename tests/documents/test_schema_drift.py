@@ -1,69 +1,118 @@
-"""Fails when file-naming-conventions.md and the schema enums disagree.
+"""Fails when Context Forge and the schema enums disagree.
 
-Deliberately fails rather than skips when the submodule is absent — a skipped
-drift test is a silent fallback, and drift is the exact risk that left slice
-171's frontmatter consumer designing against a schema nobody re-checked.
+Context Forge owns the frontmatter schema (D10); squadron's ``schema.py`` keeps
+only the values squadron *writes*. These tests assert cf accepts every value
+squadron emits, by running ``cf validate frontmatter`` against generated
+fixtures. Deliberately fails rather than skips when ``cf`` is absent — a
+skipped drift test is a silent fallback, and drift is the exact risk that left
+slice 171's frontmatter consumer designing against a schema nobody re-checked.
+
+``cf validate frontmatter`` silently skips out-of-root paths and reports
+``filesChecked: 0`` with exit 0, so every assertion here checks
+``filesChecked`` — a fixture cf never looked at must fail the test, not pass it.
 """
 
 from __future__ import annotations
 
 import io
+import json
 import re
+import subprocess
 import tokenize
+import uuid
 from pathlib import Path
 
 from squadron.documents.schema import MACHINE_ARTIFACT_DOC_TYPES, DocType, DocumentStatus
 
-_SPEC_PATH = Path("project-documents/ai-project-guide/file-naming-conventions.md")
-
-_STATUS_SECTION_RE = re.compile(r"###\s*Valid Status Values\s*\n(.*?)(?=\n##|\Z)", re.DOTALL)
-_STATUS_BULLET_RE = re.compile(r"^-\s*`([a-z_]+)`", re.MULTILINE)
-_DOCTYPE_LINE_RE = re.compile(r"Valid `docType` values:\s*(.+)$")
-_BACKTICK_TOKEN_RE = re.compile(r"`([a-z-]+)`")
+_DOC_ROOT = Path("project-documents/user")
 
 
-def _read_spec() -> str:
-    if not _SPEC_PATH.is_file():
-        raise AssertionError(
-            f"{_SPEC_PATH} not found — run 'git submodule update --init' "
-            "to fetch the ai-project-guide submodule before running this test"
+def _cf_validate(paths: list[Path]) -> dict:
+    """Run ``cf validate frontmatter --json`` on paths; fail (never skip) if cf is absent."""
+    try:
+        result = subprocess.run(
+            ["cf", "validate", "frontmatter", "--json", *[str(p) for p in paths]],
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
-    return _SPEC_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise AssertionError(
+            "'cf' is not on PATH — the frontmatter schema lives in Context Forge, "
+            "so this drift test cannot run without it. Install context-forge >= 0.12.0."
+        ) from None
+    return json.loads(result.stdout)
 
 
-def _parse_status_values(spec_text: str) -> set[str]:
-    section_match = _STATUS_SECTION_RE.search(spec_text)
-    if not section_match:
-        raise AssertionError("Could not find a '### Valid Status Values' section in the spec")
-    return set(_STATUS_BULLET_RE.findall(section_match.group(1)))
+def _write_fixtures(frontmatters: list[dict[str, str]]) -> list[Path]:
+    paths: list[Path] = []
+    for frontmatter in frontmatters:
+        lines = "\n".join(f"{key}: {value}" for key, value in frontmatter.items())
+        path = _DOC_ROOT / f"zz-drift-{uuid.uuid4().hex}.md"
+        path.write_text(f"---\n{lines}\n---\nDrift-test fixture.\n", encoding="utf-8")
+        paths.append(path)
+    return paths
 
 
-def _parse_doctype_values(spec_text: str) -> set[str]:
-    for line in spec_text.splitlines():
-        match = _DOCTYPE_LINE_RE.search(line)
-        if match:
-            return set(_BACKTICK_TOKEN_RE.findall(match.group(1)))
-    raise AssertionError("Could not find a 'Valid `docType` values:' line in the spec")
+def _assert_cf_accepts(frontmatters: list[dict[str, str]]) -> None:
+    paths = _write_fixtures(frontmatters)
+    try:
+        report = _cf_validate(paths)
+    finally:
+        for path in paths:
+            path.unlink()
+    assert report["filesChecked"] == len(paths), (
+        f"cf checked {report['filesChecked']} of {len(paths)} fixtures — "
+        "a skipped fixture proves nothing"
+    )
+    assert report["totalFindings"] == 0, report["findings"]
 
 
-def test_status_enum_matches_spec() -> None:
-    spec_text = _read_spec()
-    spec_values = _parse_status_values(spec_text)
-    enum_values = {member.value for member in DocumentStatus}
-    assert spec_values == enum_values
+# The one spec docType squadron writes (review/persistence.py). It must be a
+# docType cf has a schema for: cf validates per-docType, and several docTypes
+# (guide, notes, slice, template, ...) fall through unvalidated — a status
+# test built on one of those would prove nothing.
+_WRITTEN_DOC_TYPE = DocType.REVIEW
 
 
-def test_doctype_enum_matches_spec() -> None:
-    spec_text = _read_spec()
-    spec_values = _parse_doctype_values(spec_text)
-    enum_values = {member.value for member in DocType}
-    assert spec_values == enum_values
+def _universal_fields(doc_type: str, status: str) -> dict[str, str]:
+    return {
+        "docType": doc_type,
+        "project": "squadron",
+        "dateCreated": "20260809",
+        "dateUpdated": "20260809",
+        "status": status,
+    }
 
 
-def test_machine_artifact_types_are_not_in_spec() -> None:
-    spec_text = _read_spec()
-    spec_doctypes = _parse_doctype_values(spec_text)
-    assert not (MACHINE_ARTIFACT_DOC_TYPES & spec_doctypes)
+def test_cf_accepts_every_status_squadron_writes() -> None:
+    _assert_cf_accepts(
+        [_universal_fields(_WRITTEN_DOC_TYPE, member.value) for member in DocumentStatus]
+    )
+
+
+def test_cf_accepts_machine_artifacts_squadron_writes() -> None:
+    """Machine artifacts carry only docType and dateCreated — no status, and no
+    dateUpdated, which a validator reading one file cannot justify requiring."""
+    _assert_cf_accepts(
+        [
+            {"docType": doc_type, "dateCreated": "20260809"}
+            for doc_type in sorted(MACHINE_ARTIFACT_DOC_TYPES)
+        ]
+    )
+
+
+def test_cf_rejects_a_bad_status() -> None:
+    """Harness sanity: a value cf should refuse produces a finding on a checked
+    file. Without this, a cf that checked nothing would pass every test above."""
+    paths = _write_fixtures([_universal_fields(_WRITTEN_DOC_TYPE, "definitely-not-a-status")])
+    try:
+        report = _cf_validate(paths)
+    finally:
+        for path in paths:
+            path.unlink()
+    assert report["filesChecked"] == 1
+    assert report["totalFindings"] > 0
 
 
 _SRC_ROOT = Path("src/squadron")

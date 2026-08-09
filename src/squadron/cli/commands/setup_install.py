@@ -5,11 +5,13 @@ below that is needless friction: they are all user-global, idempotent, and
 have no project side effects, so making the user copy a command back into
 the same terminal buys nothing.
 
-Scope is deliberately narrow. Only these three are automated:
+Scope is deliberately narrow. Only these four are automated:
 
 - ``sq install-commands`` — the ``/sq:*`` slash commands (in-process)
 - ``npm i -g @context-forge/cli`` — the ``cf`` binary
 - ``cf install-commands`` — the ``/cf:*`` slash commands
+- the frontmatter pre-commit gate — writes ``.githooks/pre-commit`` into the
+  current repo and sets ``core.hooksPath`` (D11: the gate installs itself)
 
 Everything else (provider credentials, ``.env`` files) stays advisory: those
 need a human decision or a secret, and running them unattended would be
@@ -26,20 +28,68 @@ from __future__ import annotations
 import logging
 import shutil
 import subprocess
+from pathlib import Path
 
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
     CONTEXT_FORGE_PACKAGE,
+    GIT_HOOKS_PATH,
 )
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "AUTO_INSTALL_CHECKS",
     "CF_INIT_HINT",
     "InstallOutcome",
+    "PRE_COMMIT_HOOK",
     "installer_for",
     "run_install",
 ]
+
+#: The frontmatter gate, verbatim. ``.githooks/pre-commit`` in squadron's own
+#: repo must stay byte-identical to this — tests/cli/test_setup_install.py
+#: pins that, so the tracked copy and the one setup installs cannot drift.
+PRE_COMMIT_HOOK = """\
+#!/usr/bin/env bash
+# Pre-commit gate: reject a commit whose staged markdown fails
+# `cf validate frontmatter`. Install once with:
+#   git config core.hooksPath .githooks
+#
+# A hook that silently skips when its tool is missing enforces nothing while
+# appearing to work, so a failure to launch `cf` is a hard non-zero exit here
+# rather than a pass-through.
+set -u
+
+staged_files=()
+while IFS= read -r -d '' file; do
+  staged_files+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.md')
+
+if [ "${#staged_files[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+if ! command -v cf >/dev/null 2>&1; then
+  echo "pre-commit: 'cf' is not on PATH — cannot run cf validate frontmatter" >&2
+  echo "pre-commit: install context-forge, or bypass this commit with --no-verify" >&2
+  exit 1
+fi
+
+cf validate frontmatter "${staged_files[@]}"
+status=$?
+
+if [ "$status" -eq 2 ]; then
+  echo "pre-commit: cf could not run the validation (see above)." >&2
+  echo "pre-commit: if this repo is not a registered cf project, run 'cf init' once," >&2
+  echo "pre-commit: or bypass this commit with 'git commit --no-verify'." >&2
+elif [ "$status" -ne 0 ]; then
+  echo "pre-commit: cf validate frontmatter failed (exit $status)." >&2
+  echo "pre-commit: fix the violations above, or bypass with 'git commit --no-verify'." >&2
+fi
+
+exit "$status"
+"""
 
 #: Closing suggestion printed once at the end of setup. Global setup cannot
 #: do this step for the user: it is per-project by nature.
@@ -153,13 +203,86 @@ def _install_cf_commands() -> InstallOutcome:
     return _run_command(["cf", "install-commands"], label="cf install-commands")
 
 
+def _git_stdout(argv: list[str]) -> str | None:
+    """Run a git query, returning stripped stdout or None on any failure."""
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell, no user input
+            ["git", *argv],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.exception("git %s failed to run", " ".join(argv))
+        return None
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip()
+
+
+def _install_git_hook() -> InstallOutcome:
+    """Write the frontmatter pre-commit gate into the current repo and enable it.
+
+    Per-project by nature (like ``cf init``), which is why it inspects the
+    current directory: the gate belongs to the repo the user ran setup from.
+    Refuses to touch a repo whose ``core.hooksPath`` already points somewhere
+    else — overwriting a user's own hooks directory would break their setup
+    to install ours.
+    """
+    repo_root = _git_stdout(["rev-parse", "--show-toplevel"])
+    if repo_root is None:
+        return InstallOutcome(
+            succeeded=False,
+            message="not inside a git repository — nothing to install the gate into.",
+        )
+
+    existing = _git_stdout(["config", "--get", "core.hooksPath"])
+    if existing not in (None, "", GIT_HOOKS_PATH):
+        return InstallOutcome(
+            succeeded=False,
+            message=(
+                f"core.hooksPath is already {existing!r} — not overwriting your "
+                f"hooks. Add the gate to that directory manually, or unset the "
+                f"key and re-run."
+            ),
+        )
+
+    hook_path = Path(repo_root) / GIT_HOOKS_PATH / "pre-commit"
+    try:
+        hook_path.parent.mkdir(parents=True, exist_ok=True)
+        hook_path.write_text(PRE_COMMIT_HOOK, encoding="utf-8")
+        hook_path.chmod(0o755)
+    except OSError as exc:
+        logger.exception("writing %s failed", hook_path)
+        return InstallOutcome(succeeded=False, message=f"could not write {hook_path}: {exc}")
+
+    config = _git_stdout(["config", "core.hooksPath", GIT_HOOKS_PATH])
+    if config is None:
+        return InstallOutcome(
+            succeeded=False,
+            message=f"wrote {hook_path} but could not set core.hooksPath — set it manually.",
+        )
+
+    return InstallOutcome(
+        succeeded=True,
+        message=f"frontmatter gate installed ({hook_path}, core.hooksPath = {GIT_HOOKS_PATH}).",
+    )
+
+
 #: Check name → installer. A check absent from this map is advisory-only and
 #: setup falls back to printing its fix command, which is the correct
 #: behavior for anything needing a human decision or a secret.
 _INSTALLERS = {
     "slash commands": _install_sq_commands,
     "context-forge": _install_context_forge,
+    "git pre-commit hook": _install_git_hook,
 }
+
+#: Checks setup installs without prompting (D11: a normal ``sq setup`` run
+#: must leave a working gate without the user asking for it). Everything else
+#: in ``_INSTALLERS`` still waits for the user to press Enter.
+AUTO_INSTALL_CHECKS: frozenset[str] = frozenset({"git pre-commit hook"})
 
 
 def installer_for(check_name: str):  # type: ignore[no-untyped-def]

@@ -8,11 +8,13 @@ import typer
 from rich.console import Console
 from rich.text import Text
 
+from squadron.cli.commands.doctor import resolve_git_hooks_path
 from squadron.cli.commands.doctor_checks import (
     CheckStatus,
     run_all_checks,
 )
 from squadron.cli.commands.setup_install import (
+    AUTO_INSTALL_CHECKS,
     CF_INIT_HINT,
     installer_for,
     run_install,
@@ -104,6 +106,13 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
             continue
 
         if step.kind == StepKind.OPTIONAL and not verbose:
+            # D11: the gate installs itself. Auto-install steps run without a
+            # prompt instead of hiding behind --verbose like other optional
+            # steps — a normal setup run must leave a working gate.
+            if step.check_name in AUTO_INSTALL_CHECKS and installer_for(step.check_name):
+                outcome = run_install(step.check_name)
+                style = "green" if outcome.succeeded else "yellow"
+                console.print(f"  [{style}]{outcome.message}[/{style}]")
             continue
 
         _render_step_block(console, step, n, total, verbose)
@@ -180,7 +189,7 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
     console.print()
     console.print("[bold]─── Final check ──────────────────────────────────────────────[/bold]")
     try:
-        final_results = run_all_checks()
+        final_results = run_all_checks(git_hooks_path=resolve_git_hooks_path())
     except Exception:
         logger.exception("final run_all_checks failed")
         console.print("[red]Could not run final check — try `sq doctor` directly.[/red]")
@@ -218,7 +227,7 @@ def setup(
 ) -> None:
     """Walk through the full Squadron install sequence interactively."""
     try:
-        results = run_all_checks()
+        results = run_all_checks(git_hooks_path=resolve_git_hooks_path())
     except Exception:
         logger.exception("sq setup: run_all_checks raised unexpectedly")
         typer.echo("sq setup: internal error during checks; try `sq doctor` directly", err=True)

@@ -7,28 +7,20 @@ dependencies:
   - context-forge#72
   - context-forge#73
 projectState: >
-  REOPENED 20260804. Parts 1-9 are implemented, code-reviewed, and committed on
-  branch 172-slice.sq-validate-docs-mechanical-frontmatter-enforcement (033b3fb,
-  4088a45); the branch is unmerged. Only Part 10 (T27-T32) remains, and it is
-  BLOCKED on context-forge#73 (exposes `cf validate frontmatter`), which is
-  itself blocked on context-forge#72 (status-spelling fix; cf slice 922 is
-  designed and task-broken, implementation not started as of 20260806).
-  Do not start Part 10 until `cf validate frontmatter` exists to call.
-  Parts 1-3 are SUPERSEDED: they built a Python validator (documents/validate.py,
-  cli/commands/validate.py) and a schema transcription that duplicate Context
-  Forge's validateFrontmatter. Their items remain [x] because the work genuinely
-  happened, but Part 10 deletes that code - do not extend, refactor, or rebuild
-  it. Parts 4, 5, 5A, 6, 8 stand as shipped: the review-writer `location:` quoting
-  fix, the frontmatter write-path hardening, the date-stamping fixes, the one-time
-  cleanup, and the CI backstop are all unaffected by the reopening. Part 9's T22
-  completion claims are withdrawn (the CHANGELOG bullet needs rewriting, since
-  `sq validate docs` will not exist). The governing decision is D10: Context Forge
-  maintains the schema, squadron uses it and owns only the gate. Slice 173
-  (user-definable actions on supported events) supersedes the deferred 171 and may
-  change T30's shape - see the design's Relationship note.
+  COMPLETE 20260809. Parts 1-9 shipped 20260804 (merged via 8a0a27f); Part 10
+  landed 20260809 after context-forge 0.12.0 shipped #72/#73, unblocking
+  `cf validate frontmatter`. The gate now calls cf's validator; the parallel
+  Python validator (documents/validate.py, cli/commands/validate.py) and its
+  schema transcription are retired in Part 10 (T28). Parts 1-3 are superseded
+  (deleted in Part 10): they built a Python validator that duplicated Context
+  Forge's validateFrontmatter. Their items remain [x] because the work happened.
+  The governing decision is D10: Context Forge maintains the schema, squadron
+  uses it and owns only the gate. Slice 173 (user-definable actions on supported
+  events) supersedes the deferred 171 and may change T30's shape - see the
+  design's Relationship note.
 dateCreated: 20260803
-dateUpdated: 20260806
-status: in_progress
+dateUpdated: 20260809
+status: complete
 ---
 
 ## Context Summary
@@ -100,7 +92,7 @@ status: in_progress
 > spec transcription it carried for validation; the drift test is repointed at cf
 > rather than the guide. The tasks below are checked because the work happened —
 > they are not a to-do list. **Anything below describing validation-side canonical
-> values is scheduled for deletion; do not extend or rebuild it.** The write-side
+> values is deleted in Part 10; do not extend or rebuild it.** The write-side
 > values (`MACHINE_ARTIFACT_DOC_TYPES` and the three definitions T1 unified) do
 > survive. See D10.
 
@@ -172,7 +164,7 @@ status: in_progress
 
 ## Part 2 — The Validator
 
-> ⚠️ **SUPERSEDED — DO NOT IMPLEMENT. Shipped, then scheduled for deletion. History only.**
+> ⚠️ **SUPERSEDED — DO NOT IMPLEMENT. Shipped, then deleted in Part 10. History only.**
 >
 > This part built `documents/validate.py`, which duplicates Context Forge's
 > `validateFrontmatter`. Part 10 (T28) **deletes the entire module and its tests**.
@@ -269,7 +261,7 @@ status: in_progress
 
 ## Part 3 — Config Key and CLI Surface
 
-> ⚠️ **SUPERSEDED — DO NOT IMPLEMENT. Shipped, then scheduled for deletion. History only.**
+> ⚠️ **SUPERSEDED — DO NOT IMPLEMENT. Shipped, then deleted in Part 10. History only.**
 >
 > Part 10 (T28) **removes the `sq validate docs` command, `cli/commands/validate.py`,
 > and the `validate.docs_root` config key** along with the validator behind them.
@@ -566,7 +558,7 @@ function T13 just changed) and before Part 9.
     failure mode D8a exists to prevent.
   - [x] Success: all six commands exit 0.
 
-- [ ] **T22. Documentation and slice close-out**
+- [x] **T22. Documentation and slice close-out**
 
   > Reopened 20260804. The CHANGELOG/DEVLOG entries were written and stay, but they
   > describe `sq validate docs`, which Part 10 retires — they need rewriting once the
@@ -576,65 +568,60 @@ function T13 just changed) and before Part 9.
   - [x] CHANGELOG: a short user-facing bullet for `sq validate docs` and the
     commit gate. Technical detail belongs in DEVLOG, not here.
   - [x] DEVLOG: implementation entry per the Session State Summary guidance.
-  - [ ] Rewrite the CHANGELOG bullet once the gate calls `cf validate frontmatter`,
+  - [x] Rewrite the CHANGELOG bullet once the gate calls `cf validate frontmatter`,
     since `sq validate docs` will no longer exist.
-  - [ ] Mark slice 172 complete in this task file's frontmatter, in the slice
+  - [x] Mark slice 172 complete in this task file's frontmatter, in the slice
     design's frontmatter, and in entry 29 of
     `user/architecture/140-slices.pipeline-foundation.md`.
-  - [ ] Success: the slice plan entry is checked off and the design's status
+  - [x] Success: the slice plan entry is checked off and the design's status
     reads `complete`.
 
 ---
 
 ## Part 10 — Retire the Parallel Validator, Install the Gate Everywhere
 
-Added 20260804 when the slice was reopened. See **D10** and **D11** in the design.
-Parts 1–3 built a Python validator and schema transcription that duplicate Context
-Forge's `validateFrontmatter`; this part retires them and makes the gate reach every
+Implemented 20260809 after context-forge 0.12.0 shipped #72/#73. Parts 1–3 built
+a Python validator and schema transcription that duplicate Context Forge's
+`validateFrontmatter`; this part retires them and makes the gate reach every
 squadron project rather than only this repo.
 
-**Blocked on [context-forge#73](https://github.com/ecorkran/context-forge/issues/73)**
-(exposes `cf validate frontmatter`), which is itself blocked on
-[#72](https://github.com/ecorkran/context-forge/issues/72) (status-spelling fix —
-until it lands, `validateFrontmatter` accepts the hyphenated values cf itself writes).
-
-- [ ] **T27.** Point the pre-commit hook at `cf validate frontmatter`.
-  - [ ] Replace the `uv run sq validate docs` invocation in `.githooks/pre-commit`.
-  - [ ] Keep the staged-file collection as-is, including `--diff-filter=ACMR`.
-  - [ ] `cf` missing on PATH is a hard non-zero exit with an actionable message —
+- [x] **T27.** Point the pre-commit hook at `cf validate frontmatter`.
+  - [x] Replace the `uv run sq validate docs` invocation in `.githooks/pre-commit`.
+  - [x] Keep the staged-file collection as-is, including `--diff-filter=ACMR`.
+  - [x] `cf` missing on PATH is a hard non-zero exit with an actionable message —
     never a silent skip (same rule as D6, which currently covers `uv`).
-  - [ ] Success: a staged document with a bad status is refused; a clean one commits.
+  - [x] Success: a staged document with a bad status is refused; a clean one commits.
 
-- [ ] **T28.** Retire the parallel validator.
-  - [ ] Delete `src/squadron/documents/validate.py` and
+- [x] **T28.** Retire the parallel validator.
+  - [x] Delete `src/squadron/documents/validate.py` and
     `src/squadron/cli/commands/validate.py`; unwire `validate_app` from `cli/app.py`.
-  - [ ] Delete `tests/documents/test_validate.py` and `test_validate_paths.py`.
-  - [ ] Remove the `validate.docs_root` config key.
-  - [ ] Success: `sq validate` is gone; the full suite passes.
+  - [x] Delete `tests/documents/test_validate.py` and `test_validate_paths.py`.
+  - [x] Remove the `validate.docs_root` config key.
+  - [x] Success: `sq validate` is gone; the full suite passes.
 
-- [ ] **T29.** Reduce `schema.py` to write-side values only.
-  - [ ] Keep what squadron *emits*: the machine-artifact docTypes, and the values
+- [x] **T29.** Reduce `schema.py` to write-side values only.
+  - [x] Keep what squadron *emits*: the machine-artifact docTypes, and the values
     the review/devlog/evidence writers reference.
-  - [ ] Drop what existed only to validate against.
-  - [ ] Repoint the drift test: assert squadron agrees with **cf**, not the guide,
+  - [x] Drop what existed only to validate against.
+  - [x] Repoint the drift test: assert squadron agrees with **cf**, not the guide,
     since cf is now the schema squadron validates against. Still fails, never skips.
-  - [ ] Success: the five write-side importers still build valid frontmatter.
+  - [x] Success: the five write-side importers still build valid frontmatter.
 
-- [ ] **T30.** Install the hook from `sq setup`.
-  - [ ] Add a step to `cli/commands/setup_steps.py` that writes the hook and sets
+- [x] **T30.** Install the hook from `sq setup`.
+  - [x] Add a step to `cli/commands/setup_steps.py` that writes the hook and sets
     `core.hooksPath` — reuse the existing `StepKind` / installer registry.
-  - [ ] A normal `sq setup` run installs it without the user asking.
-  - [ ] Success: a fresh clone that runs `sq setup` has a working gate.
+  - [x] A normal `sq setup` run installs it without the user asking.
+  - [x] Success: a fresh clone that runs `sq setup` has a working gate.
 
-- [ ] **T31.** Add a `cf`-availability check to `sq doctor`.
-  - [ ] Pure check function alongside `check_git_hooks`, per the existing shape.
-  - [ ] WARN with a fix hint when `cf` is absent, since the gate depends on it.
-  - [ ] Success: `sq doctor` reports the gate as unusable when `cf` is missing.
+- [x] **T31.** Add a `cf`-availability check to `sq doctor`.
+  - [x] Pure check function alongside `check_git_hooks`, per the existing shape.
+  - [x] WARN with a fix hint when `cf` is absent, since the gate depends on it.
+  - [x] Success: `sq doctor` reports the gate as unusable when `cf` is missing.
 
-- [ ] **T32.** Register squadron's machine-artifact docTypes with cf.
-  - [ ] `review-resolution`, `gate-evidence`, `devlog` — require `docType` and
+- [x] **T32.** Register squadron's machine-artifact docTypes with cf.
+  - [x] `review-resolution`, `gate-evidence`, `devlog` — require `docType` and
     `dateCreated`; no `status`; do **not** require `dateUpdated` (a validator
     reading one file cannot know whether it was edited after creation).
-  - [ ] Lands in context-forge under #73, tracked here because this slice is the
+  - [x] Lands in context-forge under #73, tracked here because this slice is the
     consumer that needs them validated rather than silently passing through.
-  - [ ] Success: a malformed gate-evidence artifact is caught by the gate.
+  - [x] Success: a malformed gate-evidence artifact is caught by the gate.

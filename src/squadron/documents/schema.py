@@ -1,15 +1,13 @@
-"""Canonical frontmatter values for all of squadron.
+"""Canonical frontmatter values squadron writes.
 
-This module is the single definition of document status, docType, and
-universal-field values used anywhere in squadron. Everything else — CLI
-commands, review/pipeline writers, the validator — imports from here rather
-than restating a value.
+This module is the single definition of the document status and docType
+values squadron *emits*. The review/devlog/evidence writers import from here
+rather than restating a value.
 
-The upstream source of truth for process-document values is
-``project-documents/ai-project-guide/file-naming-conventions.md`` (a git
-submodule). ``tests/documents/test_schema_drift.py`` asserts this module still
-agrees with it. The machine-artifact docTypes below are squadron-owned and
-intentionally absent from that spec.
+Context Forge owns the frontmatter schema and validates it (D10 — validation
+is ``cf validate frontmatter``, wired into the pre-commit hook, not squadron
+code). ``tests/documents/test_schema_drift.py`` asserts cf still accepts every
+value defined here.
 """
 
 from __future__ import annotations
@@ -63,30 +61,3 @@ DEVLOG_DOC_TYPE = "devlog"
 MACHINE_ARTIFACT_DOC_TYPES: frozenset[str] = frozenset(
     {RESOLUTION_DOC_TYPE, GATE_EVIDENCE_DOC_TYPE, DEVLOG_DOC_TYPE}
 )
-
-#: The five universal fields every process document's frontmatter must carry
-#: (file-naming-conventions.md:20-27).
-REQUIRED_UNIVERSAL_FIELDS: tuple[str, ...] = (
-    "docType",
-    "project",
-    "dateCreated",
-    "dateUpdated",
-    "status",
-)
-
-#: Machine artifacts have no lifecycle, so no ``status``. Neither this tuple
-#: nor the one above may require ``dateUpdated``: a validator reading one file
-#: cannot know whether that file was ever edited after creation, so requiring
-#: the field would be a check the tool cannot justify from the evidence in
-#: front of it. Context Forge's schema requires it and backfills it from
-#: ``dateCreated`` (frontmatterSchema.ts:224) — requiring it here too would
-#: make this gate block commits on documents ``cf check --fix`` considers
-#: valid. Do not "complete" this tuple by adding it.
-MACHINE_ARTIFACT_REQUIRED_FIELDS: tuple[str, ...] = (
-    "docType",
-    "dateCreated",
-)
-
-#: Marker identifying IDE-generated frontmatter exempt from the universal
-#: schema (file-naming-conventions.md:43).
-CONTEXT_FORGE_MANAGED_MARKER = "context-forge:managed"

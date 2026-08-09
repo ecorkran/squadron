@@ -417,14 +417,15 @@ uv run ruff check      # Linting
 uv run ruff format     # Formatting
 ```
 
-Install the tracked pre-commit hook once per clone — it runs `sq validate docs`
-against staged markdown and refuses a commit with invalid frontmatter:
+`sq setup` installs the tracked pre-commit hook — it runs `cf validate frontmatter`
+(Context Forge) against staged markdown and refuses a commit with invalid
+frontmatter. To install it manually instead:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-`sq doctor` reports whether this is set.
+`sq doctor` reports whether the hook is set and whether `cf` is available.
 
 ## License
 
