@@ -85,7 +85,7 @@ def check_squadron_install() -> CheckResult:
 GIT_HOOKS_PATH = ".githooks"
 
 
-def check_git_hooks(hooks_path: str | None) -> CheckResult:
+def check_git_hooks(hooks_path: str | None, *, cf_available: bool) -> CheckResult:
     """Report whether ``core.hooksPath`` is set to the tracked hooks directory.
 
     Pure — the caller resolves ``hooks_path`` via ``run_git`` and passes it
@@ -93,6 +93,11 @@ def check_git_hooks(hooks_path: str | None) -> CheckResult:
     repository (``hooks_path is None``) is not an error — outside a repo
     there is nothing to gate. An empty string means the repo exists but the
     key is unset, which is the ordinary "not installed yet" case.
+
+    ``cf_available`` is whether the ``cf`` binary is on PATH. The hook runs
+    ``cf validate frontmatter``, so an installed hook without ``cf`` is a
+    gate that cannot run — reported as WARN rather than letting an OK row
+    claim a working gate.
     """
     if hooks_path is None:
         return CheckResult(
@@ -104,6 +109,18 @@ def check_git_hooks(hooks_path: str | None) -> CheckResult:
         )
 
     if hooks_path == GIT_HOOKS_PATH:
+        if not cf_available:
+            return CheckResult(
+                name="git pre-commit hook",
+                status=CheckStatus.WARN,
+                detail=(
+                    f"core.hooksPath = {GIT_HOOKS_PATH}, but 'cf' is not on PATH — "
+                    "the frontmatter gate cannot run"
+                ),
+                fix_hint=CONTEXT_FORGE_INSTALL_CMD,
+                section=SECTION_INSTALL,
+                required=False,
+            )
         return CheckResult(
             name="git pre-commit hook",
             status=CheckStatus.OK,
@@ -476,7 +493,11 @@ def run_all_checks(*, git_hooks_path: str | None = None) -> list[CheckResult]:
 
     _run("squadron", check_squadron_install)
     _run("slash commands", check_slash_commands)
-    _run("git pre-commit hook", check_git_hooks, git_hooks_path)
+
+    def _check_git_hooks_with_cf(path: str | None) -> CheckResult:
+        return check_git_hooks(path, cf_available=shutil.which("cf") is not None)
+
+    _run("git pre-commit hook", _check_git_hooks_with_cf, git_hooks_path)
 
     profile_results: list[CheckResult] = []
     try:
