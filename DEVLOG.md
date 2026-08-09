@@ -2,13 +2,53 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260804
+dateUpdated: 20260809
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260809
+
+### Slice 172 Part 10: Retire the Parallel Validator, Install the Gate Everywhere
+
+Context Forge 0.12.0 shipped `cf validate frontmatter` (cf#72/#73), unblocking
+Part 10 (T27–T32). Slice 172 is now complete.
+
+**Retired.** `documents/validate.py`, `cli/commands/validate.py`, their tests,
+and the `validate.docs_root` config key are deleted; `sq validate` is gone.
+`schema.py` is reduced to the values squadron writes (dropped the
+required-field tuples and the managed-marker constant; kept the enums, aliases,
+and machine-artifact docTypes — all still imported by writers or the
+literal-scan test).
+
+**The gate.** `.githooks/pre-commit` runs `cf validate frontmatter` on staged
+`.md` files; `cf` missing on PATH is a hard exit 1, and cf exit 2 (invocation
+error, e.g. an unregistered cf project) gets its own message pointing at
+`cf init`. `sq setup` now installs the gate without prompting: `setup_install.py`
+carries the hook as `PRE_COMMIT_HOOK` (byte-identity with the tracked copy is
+test-pinned), `_install_git_hook` writes it and sets `core.hooksPath` —
+refusing to overwrite a foreign hooksPath — and `AUTO_INSTALL_CHECKS` marks it
+as run-without-asking (D11). `check_git_hooks` now takes `cf_available`; an
+installed hook without `cf` reports WARN "gate cannot run" in `sq doctor`, and
+`sq setup` now resolves and passes the hooksPath (it previously never saw the
+hook check at all).
+
+**Drift test repointed at cf.** `test_schema_drift.py` no longer parses
+`file-naming-conventions.md`; it writes fixtures into the document root and
+runs `cf validate frontmatter --json`, asserting `filesChecked` on every call
+because cf silently skips out-of-root paths (exit 0, 0 checked — a naive test
+would false-pass). Probing cf's schema showed it validates only 8 of the 15
+spec docTypes (`guide`, `reference`, `slice`, `notes`, `template`,
+`intro-guide`, `migration` fall through unvalidated), so the status assertions
+run against `review` — the one docType squadron writes, which cf does
+validate. The machine-artifact test pins that cf requires neither `status` nor
+`dateUpdated` for `review-resolution`/`gate-evidence`/`devlog` (T32, landed in
+cf under #73).
 
 ---
 
