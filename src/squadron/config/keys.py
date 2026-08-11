@@ -262,6 +262,15 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "affects where generation writes — never what dispatch reads."
         ),
     ),
+    "events.timeout_seconds": ConfigKey(
+        name="events.timeout_seconds",
+        type_=int,
+        default=30,
+        description=(
+            "Per-action timeout (seconds) for event action execution. "
+            "Exceeding it is treated as a Fail, attributed to the action."
+        ),
+    ),
 }
 
 
