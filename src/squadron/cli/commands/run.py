@@ -40,6 +40,7 @@ from squadron.pipeline.executor import (
     LazySessionConnectError,
     PipelineResult,
     execute_pipeline,
+    resolve_placeholders,
 )
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.loader import (
@@ -741,11 +742,12 @@ async def _run_post_action_bindings_for_step_done(
     actions = step_type_impl.expand(step)
 
     for action_type, action_config in actions:
+        resolved_action_config = resolve_placeholders(action_config, state.params)
         result = ActionResult(success=True, action_type=action_type, outputs={})
         context = PostActionContext(
             event=EventType.POST_ACTION,
             cwd=cwd,
-            params=action_config,
+            params=resolved_action_config,
             action_type=action_type,
             result=result,
             run_id=run_id,
