@@ -2,13 +2,29 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260809
+dateUpdated: 20260811
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260811
+
+### Slice 173: Task Breakdown — User-Definable Actions on Supported Events
+
+Phase 5 complete. Task file at
+`user/tasks/173-tasks.user-definable-actions-on-supported-events.md` (284
+lines, 24 tasks in five parts, test-with ordering, commit checkpoint per
+part). Part order preserves the design's reasoning: A events package →
+B migrate 909/911 (the acceptance test — T12 instructs STOP if any existing
+assertion needs changing) → C frontmatter gate + `sq events` CLI + hook
+repoint → D prompt-only `--step-done` parity → E docs/closeout. Slice is
+ready for Phase 6 implementation on branch
+`173-slice.user-definable-actions-on-supported-events` pending PM approval.
 
 ---
 
