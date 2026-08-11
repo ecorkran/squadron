@@ -17,6 +17,11 @@ from rich.table import Table
 if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
 
+from squadron.events import EventType, bootstrap_event_actions
+from squadron.events.contexts import PostActionContext
+from squadron.events.discovery import PluginLoadError
+from squadron.events.dispatcher import OutcomeErrorKind, run_event
+from squadron.events.manifest import ManifestError
 from squadron.integrations.context_forge import (
     ContextForgeClient,
     ContextForgeError,
@@ -42,14 +47,15 @@ from squadron.pipeline.loader import (
     load_pipeline,
     validate_pipeline,
 )
-from squadron.pipeline.models import PipelineDefinition
+from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.prompt_renderer import (
     CompletionResult,
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.sdk_session import SDKExecutionSession
-from squadron.pipeline.state import ExecutionMode, SchemaVersionError, StateManager
+from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError, StateManager
+from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _logger = logging.getLogger(__name__)
@@ -706,6 +712,61 @@ def _handle_prompt_only_next(
     print(instructions.to_json())
 
 
+async def _run_post_action_bindings_for_step_done(
+    *,
+    run_id: str,
+    state: RunState,
+    step: StepConfig,
+) -> str | None:
+    """Run POST_ACTION bindings for every action a prompt-only step expands to.
+
+    Design D9: this is the prompt-only parity for the in-process executor's
+    per-action POST_ACTION dispatch (issue #15/909). ``outputs`` is always
+    ``{}`` (an honest reading of what --step-done asserts — no in-process
+    result to inspect). Stops at the first failing action and returns its
+    attributed message; ``None`` means every binding passed.
+    """
+    from squadron.pipeline.steps import bootstrap_step_types, get_step_type
+
+    bootstrap_step_types()
+    bootstrap_event_actions()
+
+    cf_client = ContextForgeClient()
+    cwd = os.getcwd()
+
+    step_type_impl = get_step_type(step.step_type)
+    expected_kind = (
+        step_type_impl.expected_artifact_kind if isinstance(step_type_impl, PhaseStepType) else None
+    )
+    actions = step_type_impl.expand(step)
+
+    for action_type, action_config in actions:
+        result = ActionResult(success=True, action_type=action_type, outputs={})
+        context = PostActionContext(
+            event=EventType.POST_ACTION,
+            cwd=cwd,
+            params=action_config,
+            action_type=action_type,
+            result=result,
+            run_id=run_id,
+            run_started_at=state.started_at,
+            run_state_error=None,
+            step_name=step.name,
+            step_type=step.step_type,
+            expected_artifact_kind=expected_kind,
+            iteration=0,
+            cf_client=cf_client,
+        )
+        outcomes = await run_event(context)
+        for outcome in outcomes:
+            if outcome.result is not None and not outcome.result.success:
+                return f"{outcome.action_name}: {outcome.result.error}"
+            if outcome.error_kind is not OutcomeErrorKind.NONE:
+                return f"{outcome.action_name}: {outcome.error_kind.value}"
+
+    return None
+
+
 def _handle_step_done(
     run_id: str,
     verdict: str | None,
@@ -738,12 +799,27 @@ def _handle_step_done(
         rprint("[yellow]All steps already completed.[/yellow]")
         return
 
-    # Find step type from definition
-    step_type = "unknown"
+    # Find step config from definition
+    step_config: StepConfig | None = None
     for step in definition.steps:
         if step.name == next_name:
-            step_type = step.step_type
+            step_config = step
             break
+
+    step_type = step_config.step_type if step_config is not None else "unknown"
+
+    if step_config is not None:
+        try:
+            failure = asyncio.run(
+                _run_post_action_bindings_for_step_done(run_id=run_id, state=state, step=step_config)
+            )
+        except (PluginLoadError, ManifestError) as exc:
+            rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+            raise typer.Exit(1) from exc
+
+        if failure is not None:
+            rprint(f"[red]Error: {failure}[/red]", file=sys.stderr)
+            raise typer.Exit(1)
 
     state_mgr.record_step_done(run_id, next_name, step_type, verdict=verdict)
     rprint(f"Step '{next_name}' marked complete.", file=sys.stderr)
