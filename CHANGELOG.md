@@ -16,7 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **A project can now bind its own Python callable to a commit, or to every pipeline action, without forking squadron.** `sq events fire commit` / `sq events list` and a project-level `events.yaml` manifest let you register a checked-in module against the `commit` or `post-action` event; squadron imports it, runs it, and fails closed with an attributed message if it breaks. See `docs/EVENTS.md`.
 - **Commits with invalid frontmatter are refused automatically.** `sq setup` installs a tracked pre-commit hook that runs `cf validate frontmatter` (Context Forge ≥0.12.0) against staged markdown — bad `docType`, `status`, or dates block the commit. `sq doctor` reports whether the hook is installed and whether `cf` is available.
+
+### Changed
+- **`sq run --step-done` can now exit non-zero.** It runs the same post-action checks the in-process executor does before marking a step complete, so a prompt-only phase whose dispatch wrote no artifact no longer silently advances. A failing check prints an attributed message to stderr and the step is not recorded; `disable:` in `events.yaml` is the escape hatch.
+- **The pre-commit hook now requires `uv`/squadron on PATH, not only `cf`.** It calls `sq events fire commit` instead of `cf validate frontmatter` directly, so the frontmatter gate is one of potentially several bound `commit` checks. A repo that wants the old `cf`-only gate can `disable: [squadron.frontmatter-gate]` in `events.yaml` and hand-edit `.githooks/pre-commit`.
 
 ### Removed
 - **`sq validate docs` is gone.** Context Forge owns the frontmatter schema; validate with `cf validate frontmatter` instead. The `validate.docs_root` config key is removed with it.

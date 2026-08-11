@@ -5,7 +5,7 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20260803
+dateUpdated: 20260811
 status: in_progress
 ---
 
@@ -115,22 +115,17 @@ Each action implementation lives in `src/squadron/pipeline/actions/`. The execut
 
 Users (and future squadron slices) can register custom action types. The action registry is open. This is how 160's convergence loop strategy will plug in — as a specialized action type that wraps the review action with iteration logic.
 
-### Post-Action Hooks (171 — designed, not built)
+### Events: User-Definable Actions on Supported Events (173)
 
-> **Status: deferred 20260803.** Slice 171's design is complete and reviewed, but the slice was deferred for lack of a third consumer — the two checks it generalizes (909, 911) remain hardcoded in the executor, and nothing below is implemented. It is documented here because the design is settled and the extension point is one that 180-band work would otherwise re-invent. See `171-slice.post-action-hooks-provider-independent-extension-point.md`.
+A third registry, alongside step types and actions: `squadron/events/` — user-definable callables bound to a **closed** set of events (`commit`, `post-action`) via an `events.yaml` manifest. `post-action` fires at the executor's single action-execution site; `commit` is external, fired by git through `sq events fire commit`. This supersedes 171's deferred post-action-hooks design — the frontmatter gate (172) and the 909/911 post-condition checks are its first three built-in consumers, migrated onto the mechanism rather than left hardcoded.
 
-A third registry, alongside step types and actions: hooks that run after each action completes, at the executor's single action-execution site. This is squadron's provider-independent answer to Claude Code's `PostToolUse`, which reaches exactly one of the seven provider profiles squadron runs.
+Event actions are **not** pipeline actions: they take an event-typed context (`CommitContext` / `PostActionContext`), not the pipeline's `ActionContext` — a commit has no `run_id` or `resolver`, so reusing the pipeline shape would mean synthesizing placeholder fields. The pipeline `Action` protocol, `ActionContext`, and action registry are unchanged by this; events registration, namespacing, and dispatch are entirely separate machinery reusing only `ActionResult` and `ValidationError`.
 
-A hook declares a trigger (which action types, success-only or not) and a **severity** — the maximum authority it holds. That severity is one axis, and it governs both what the hook may return and what happens when the hook itself breaks:
+Authority is one axis, not severity-tiered: an action may **observe** (return success, nothing altered), **fail** (return failure — fails the commit on `commit`, fails the action and stops the chain on `post-action`), or **mutate** (write files, as `squadron.revision-stamp` does) — it may not otherwise touch the `ActionResult` it observes, and may not read `result.outputs` (empty in prompt-only mode, so a dependency would silently no-op there). `commit` runs every binding and reports every failure; `post-action` stops at the first failure, in registration-then-manifest order — the built-in dispatch-artifact-then-revision-stamp ordering expressed directly rather than via a severity clamp.
 
-- `WARN` — may observe and warn, and may never fail an action. A `WARN` hook that returns a failure is clamped and the overreach logged; a `WARN` hook that raises or times out does not fail the action.
-- `FAIL` — may turn a reported success into a failure. A `FAIL` hook that raises or times out fails the action, closed.
+Discovery is declared imports only (`plugins:` in `events.yaml`, one `importlib.import_module` per module at dispatch entry) — no directory scanning, no shell hooks. A plugin that fails to import hard-fails the run with an attributed error; nothing is ever silently skipped. `sq run --step-done` (prompt-only mode) runs the same `post-action` bindings itself, since there is no in-process executor moment to fire from.
 
-Hooks run in registration order and a failure stops the chain. They may write files; they may not otherwise mutate an `ActionResult`, and may not read `result.outputs` — prompt-only mode has none, and a hook that depended on them would work in one execution mode and silently no-op in the other.
-
-The registry is open in-process but has no file-based discovery and no shell hooks. Shell is the security surface that makes Claude's hooks risky and is the least portable across CI, MCP, IDE, and bare CLI; it can be added later and cannot be removed later.
-
-Slice 171 establishes the mechanism by generalizing two checks the executor had already accreted in-place (the 909 dispatch artifact post-condition, which fails an action, and the 911 `revision_number` stamp, which must never fail one) and migrating both onto it.
+See `docs/EVENTS.md` and `173-slice.user-definable-actions-on-supported-events.md`.
 
 ---
 
@@ -249,14 +244,9 @@ steps:
       checkpoint: on-fail
 
   - devlog: auto                 # auto-generate from pipeline state
-
-# Post-action hooks (171 — DEFERRED, not built; the loader does not accept
-# this block today). Opt-out only: built-in hooks would run by default and
-# this names hooks to skip for this pipeline, unioned with the
-# `hooks.disabled` config key.
-# hooks:
-#   disable: [frontmatter-status]
 ```
+
+Post-action event bindings (173) are not configured per-pipeline in YAML — they are opt-out via `disable:` in `events.yaml` (project or user), unioned across every pipeline run. See `docs/EVENTS.md`.
 
 ### Step Types
 
@@ -539,8 +529,8 @@ Slice 125 (Conversation Persistence) remains deferred to initiative 160. That wo
 │  └────────────────────────┼──────────────────────────────┘   │
 │                           │ after each action                 │
 │  ┌────────────────────────┼──────────────────────────────┐   │
-│  │ Post-Action Hook Registry (171 — deferred, not built)  │   │
-│  │  observe │ warn │ fail the action — severity-clamped   │   │
+│  │ Events Dispatcher (173) — fires POST_ACTION bindings   │   │
+│  │  observe │ fail (stops chain) │ mutate                 │   │
 │  └────────────────────────┼──────────────────────────────┘   │
 │                           │                                   │
 │  ┌────────────────────────┼──────────────────────────────┐   │
@@ -588,10 +578,18 @@ src/squadron/pipeline/
 │   ├── review.py            # standalone review step type
 │   ├── collection.py        # each/collection loop step type
 │   └── devlog.py            # devlog step type
-├── hooks/                   # post-action hooks (171 — DEFERRED, not built)
-│   ├── __init__.py          # PostActionHook protocol, registry, bootstrap
-│   ├── runner.py            # the single hook-invocation path
-│   └── builtin/             # dispatch-artifact, revision-stamp, frontmatter-status
+
+src/squadron/events/         # user-definable actions on supported events (173)
+├── __init__.py               # EventType, registry (register/get/list), bootstrap
+├── contexts.py                # EventContext base + CommitContext, PostActionContext
+├── protocol.py                # EventAction protocol
+├── manifest.py                # events.yaml load/resolve (project → user)
+├── discovery.py                # plugin import with per-plugin attribution
+├── dispatcher.py               # fire() / run_event() — the one execution path
+└── builtin/
+    ├── frontmatter_gate.py    # COMMIT — wraps `cf validate frontmatter`
+    ├── dispatch_artifact.py   # POST_ACTION — migrated 909 post-condition
+    └── revision_stamp.py      # POST_ACTION — migrated 911 stamp
 
 src/squadron/documents/      # document-level primitives shared across subsystems
 ├── frontmatter.py           # read/update/render frontmatter
