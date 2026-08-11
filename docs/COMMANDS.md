@@ -373,6 +373,59 @@ sq shutdown --all
 | `AGENT_NAME` | string | no | Agent to shut down |
 | `--all` | flag | no | Shutdown all agents |
 
+## events
+
+Run and inspect user-definable actions on supported events (`commit`,
+`post-action`). See the [Events Guide](EVENTS.md) for the full contract.
+
+### events fire
+
+Fire all bound actions for an event. This is what `.githooks/pre-commit`
+invokes; it is the process-boundary entry point.
+
+```
+sq events fire <EVENT> [PATHS...] [OPTIONS]
+```
+
+| Argument/Option | Type | Required | Default | Description |
+|----------------|------|----------|---------|-------------|
+| `EVENT` | string | yes | — | `commit` (the only event fireable from the CLI) |
+| `PATHS` | string(s) | no | — | Staged paths (commit event only) |
+| `--cwd` | string | no | `.` | Working directory |
+
+```bash
+sq events fire commit -- staged-file.md another.md
+sq events fire post-action     # usage error — has no meaning outside a run
+```
+
+Exit codes: `0` every bound action succeeded, `1` at least one action
+failed, `2` the run could not happen at all (unknown event, plugin import
+failure, or manifest error).
+
+### events list
+
+Show every binding grouped by event, with its source (`built-in` or the
+manifest file path), and any disabled built-ins.
+
+```
+sq events list [OPTIONS]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--cwd` | string | no | `.` | Working directory |
+
+### `--step-done` and `events.timeout_seconds`
+
+`sq run --step-done <run-id>` now runs every bound `post-action` action
+before marking the step done (see [Events Guide § Prompt-only parity](EVENTS.md#prompt-only-parity)).
+A failing action prints its attributed error to stderr and exits non-zero
+without recording the step — a behavior change for scripted callers; see
+the CHANGELOG.
+
+Every event action's `execute` is bounded by the `events.timeout_seconds`
+config key (default `30`) — `sq config set events.timeout_seconds 60`.
+
 ## Exit codes
 
 | Code | Meaning |

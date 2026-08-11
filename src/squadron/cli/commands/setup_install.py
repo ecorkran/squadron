@@ -47,17 +47,18 @@ __all__ = [
     "run_install",
 ]
 
-#: The frontmatter gate, verbatim. ``.githooks/pre-commit`` in squadron's own
-#: repo must stay byte-identical to this — tests/cli/test_setup_install.py
+#: The commit event gate, verbatim. ``.githooks/pre-commit`` in squadron's
+#: own repo must stay byte-identical to this — tests/cli/test_setup_install.py
 #: pins that, so the tracked copy and the one setup installs cannot drift.
 PRE_COMMIT_HOOK = """\
 #!/usr/bin/env bash
-# Pre-commit gate: reject a commit whose staged markdown fails
-# `cf validate frontmatter`. Install once with:
+# Pre-commit gate: reject a commit whose staged markdown fails any bound
+# COMMIT event action (squadron.frontmatter-gate by default; a project's
+# events.yaml may add more). Install once with:
 #   git config core.hooksPath .githooks
 #
 # A hook that silently skips when its tool is missing enforces nothing while
-# appearing to work, so a failure to launch `cf` is a hard non-zero exit here
+# appearing to work, so a failure to launch `uv` is a hard non-zero exit here
 # rather than a pass-through.
 set -u
 
@@ -70,21 +71,21 @@ if [ "${#staged_files[@]}" -eq 0 ]; then
   exit 0
 fi
 
-if ! command -v cf >/dev/null 2>&1; then
-  echo "pre-commit: 'cf' is not on PATH — cannot run cf validate frontmatter" >&2
-  echo "pre-commit: install context-forge, or bypass this commit with --no-verify" >&2
+if ! command -v uv >/dev/null 2>&1; then
+  echo "pre-commit: 'uv' is not on PATH — cannot run sq events fire commit" >&2
+  echo "pre-commit: install uv and squadron, or bypass this commit with --no-verify" >&2
   exit 1
 fi
 
-cf validate frontmatter "${staged_files[@]}"
+uv run --quiet sq events fire commit -- "${staged_files[@]}"
 status=$?
 
 if [ "$status" -eq 2 ]; then
-  echo "pre-commit: cf could not run the validation (see above)." >&2
+  echo "pre-commit: sq events fire commit could not run (see above)." >&2
   echo "pre-commit: if this repo is not a registered cf project, run 'cf init' once," >&2
   echo "pre-commit: or bypass this commit with 'git commit --no-verify'." >&2
 elif [ "$status" -ne 0 ]; then
-  echo "pre-commit: cf validate frontmatter failed (exit $status)." >&2
+  echo "pre-commit: sq events fire commit failed (exit $status)." >&2
   echo "pre-commit: fix the violations above, or bypass with 'git commit --no-verify'." >&2
 fi
 

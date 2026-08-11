@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
 dependencies: [142, 149, 172, 909, 911]
 interfaces: []
 dateCreated: 20260809
-dateUpdated: 20260809
-status: not_started
+dateUpdated: 20260811
+status: complete
 ---
 
 # Slice Design: User-Definable Actions on Supported Events
@@ -507,7 +507,8 @@ Two files total for the consumer: this module, and an `events.yaml` declaring
 
 ## Verification Walkthrough
 
-Draft; refined at end of Phase 6.
+Executed against the real implementation at end of Phase 6 (20260811).
+Commands and output below are as observed, not illustrative.
 
 ### 1. The migration changed nothing
 
@@ -517,44 +518,103 @@ git diff main -- tests/pipeline/test_executor.py | grep "^[+-]" | grep -v "patch
 grep -n 'action_type == "dispatch"' src/squadron/pipeline/executor.py
 ```
 
-Expect: all pass; the filtered diff shows no assertion lines; the grep is
-empty.
+Observed: 18 passed; the filtered diff is empty (this file has zero diff
+from `main` — the existing 909/911 tests already exercised the public
+`execute_pipeline` entry point, never the private helpers by dotted path,
+so no patch-target strings needed to move at all); the grep exits 1 (no
+match).
 
 ### 2. A third-party rules check runs on commit
 
-In a scratch repo with squadron installed:
+In a scratch repo (`git init`, no cf project yet):
 
 ```bash
-mkdir -p tools && cat > tools/demo_rules.py    # the plugin from the contract illustration
-cat > project-documents/user/events.yaml       # plugins + one commit binding
-sq events list                                 # expect demo.rule-check under COMMIT
-git add <file the rule rejects> && git commit -m test
+mkdir -p tools project-documents/user
+cat > tools/demo_rules.py    # RuleCheck class from the contract illustration,
+                              # named "demo.rule-check", rejecting paths containing "forbidden"
+cat > project-documents/user/events.yaml <<'EOF'
+plugins:
+  - tools.demo_rules
+bindings:
+  commit:
+    - action: demo.rule-check
+disable:
+  - squadron.frontmatter-gate   # no cf project registered in this scratch repo
+EOF
+sq events list
 ```
 
-Expect: commit refused, the rule's message attributed to `demo.rule-check`,
-exit 1. Fix the file, commit again: passes. Break the plugin (syntax error):
-commit refused with exit 2 and an ERROR naming `tools/demo_rules.py` — not a
+Observed:
+```
+commit
+  demo.rule-check  (project-documents/user/events.yaml)
+post-action
+  squadron.dispatch-artifact  (built-in)
+  squadron.revision-stamp  (built-in)
+disabled
+  squadron.frontmatter-gate  (disabled)
+```
+
+```bash
+echo content > forbidden-file.md
+sq events fire commit -- forbidden-file.md; echo $?
+```
+Observed: `demo.rule-check: failed (0.00s): rule violations: ['forbidden-file.md']`,
+exit 1. Renamed to a clean path: `demo.rule-check: ok`, exit 0. With a
+syntax error appended to `tools/demo_rules.py`:
+`Error: failed to import plugin 'tools.demo_rules' declared in project-documents/user/events.yaml`,
+exit 2 — a full traceback is also logged naming the file and line — never a
 silent pass.
 
 ### 3. The frontmatter gate still gates, one layer down
 
+In this repo (a registered cf project), with a doc carrying
+`status: not-a-real-status`:
+
 ```bash
-git add <md with bad status> && git commit -m test   # refused, cf findings shown
-sq events fire commit <that file>; echo $?           # 1, same findings
-echo 'disable: [squadron.frontmatter-gate]' >> project-documents/user/events.yaml
-git commit -m test                                   # passes; DEBUG log names the disable
+git add project-documents/user/reviews/zz-smoke.md
+git commit -m test
 ```
+Observed: commit refused; `frontmatter-gate: Frontmatter Validation ... ⚠
+Invalid value 'not-a-real-status' for field 'status' ...`; hook prints
+`pre-commit: sq events fire commit failed (exit 1).`; exit 1.
+
+```bash
+echo 'disable: [squadron.frontmatter-gate]' >> project-documents/user/events.yaml
+sq events fire commit -- <that file>; echo $?
+```
+Observed: exit 0 — no bindings ran, so no findings printed (the disable
+is silently effective at manifest resolution; `manifest.py` logs the
+suppression at DEBUG, verified via `caplog` in `tests/events/test_manifest.py::test_disable_removes_a_default_binding`).
 
 ### 4. Prompt-only parity
 
 ```bash
-sq run p4 <n> --prompt-only        # note run_id
+sq run P4 200 --prompt-only        # -> run_id=run-...
 sq run --step-done <run_id>        # without writing the design artifact
-echo $?                            # non-zero; step NOT recorded
+echo $?
 ```
 
-Write the artifact, re-run `--step-done`: exit 0, step recorded. Before this
-slice the first call succeeded silently.
+Observed (scratch repo, slice 200 not in any registered slice plan):
+`squadron.dispatch-artifact: raised during execute` with a full traceback
+(`cf list slices --json` fails closed because no slice plan is configured),
+`Error: squadron.dispatch-artifact: raised`, exit 1 — the attributed-raise
+path (D5), not the artifact-post-condition path, since slice resolution
+itself failed here. `record_step_done` is never called in either failure
+mode (unit-tested directly in
+`tests/cli/commands/test_run.py::TestStepDonePostActionParity`, which
+mocks `run_event` to also exercise the artifact-missing/-present and
+implement-phase-unaffected paths without requiring a live cf slice plan).
+
+**Bug found and fixed during this walkthrough**: the first implementation
+passed `PhaseStepType.expand(step)`'s action config straight through as
+`PostActionContext.params`, so the `slice` param stayed the literal
+unresolved string `"{slice}"` instead of the run's actual slice number —
+`_run_post_action_bindings_for_step_done` now calls
+`resolve_placeholders(action_config, state.params)` first, mirroring the
+in-process executor's own resolution step. Covered by
+`test_slice_placeholder_resolves_against_run_params`, which asserts against
+`{slice}` leaking through if the fix regresses.
 
 ## Risk Assessment
 

@@ -870,9 +870,12 @@ class TestPromptOnly:
         parsed = _extract_json(result.output)
         assert parsed["status"] == "completed"
 
+    @patch("squadron.cli.commands.run._run_post_action_bindings_for_step_done")
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_step_done_marks_complete(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
+    def test_step_done_marks_complete(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_post_action: MagicMock
+    ) -> None:
         defn = PipelineDefinition(
             name="slice",
             description="Test",
@@ -881,7 +884,7 @@ class TestPromptOnly:
                 StepConfig(
                     step_type="design",
                     name="design-0",
-                    config={},
+                    config={"phase": 4},
                 ),
             ],
         )
@@ -898,14 +901,18 @@ class TestPromptOnly:
         )
         mock_mgr.load.return_value = mock_state
         mock_cls.return_value = mock_mgr
+        mock_post_action.return_value = None
 
         result = runner.invoke(app, ["run", "--step-done", "run-123"])
         assert result.exit_code == 0
         mock_mgr.record_step_done.assert_called_once_with("run-123", "design-0", "design", verdict=None)
 
+    @patch("squadron.cli.commands.run._run_post_action_bindings_for_step_done")
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
-    def test_step_done_with_verdict(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
+    def test_step_done_with_verdict(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_post_action: MagicMock
+    ) -> None:
         defn = PipelineDefinition(
             name="slice",
             description="Test",
@@ -914,7 +921,7 @@ class TestPromptOnly:
                 StepConfig(
                     step_type="design",
                     name="design-0",
-                    config={},
+                    config={"phase": 4},
                 ),
             ],
         )
@@ -931,6 +938,7 @@ class TestPromptOnly:
         )
         mock_mgr.load.return_value = mock_state
         mock_cls.return_value = mock_mgr
+        mock_post_action.return_value = None
 
         result = runner.invoke(
             app,
@@ -977,6 +985,171 @@ class TestPromptOnly:
         result = runner.invoke(app, ["run", "--step-done", "run-123"])
         assert result.exit_code == 0
         assert "already completed" in result.output
+
+
+class TestStepDonePostActionParity:
+    """Design D9: --step-done runs POST_ACTION bindings before recording."""
+
+    def _run_state(self, params: dict[str, object] | None = None) -> RunState:
+        return RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params=params or {},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+
+    def _design_pipeline(self) -> PipelineDefinition:
+        return PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[StepConfig(step_type="design", name="design-0", config={"phase": 4})],
+        )
+
+    def _implement_pipeline(self) -> PipelineDefinition:
+        return PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[StepConfig(step_type="implement", name="implement-0", config={"phase": 6})],
+        )
+
+    @patch("squadron.cli.commands.run.run_event")
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_failing_post_condition_blocks_step_done(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_run_event: MagicMock
+    ) -> None:
+        from squadron.events.dispatcher import EventOutcome, OutcomeErrorKind
+        from squadron.pipeline.models import ActionResult
+
+        mock_load.return_value = self._design_pipeline()
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "design-0"
+        mock_mgr.load.return_value = self._run_state()
+        mock_cls.return_value = mock_mgr
+
+        mock_run_event.return_value = [
+            EventOutcome(
+                action_name="squadron.dispatch-artifact",
+                result=ActionResult(
+                    success=False,
+                    action_type="squadron.dispatch-artifact",
+                    outputs={},
+                    error="no design artifact was written",
+                ),
+                error_kind=OutcomeErrorKind.NONE,
+            )
+        ]
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+
+        assert result.exit_code != 0
+        assert "squadron.dispatch-artifact" in result.output
+        mock_mgr.record_step_done.assert_not_called()
+
+    @patch("squadron.cli.commands.run.run_event")
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_artifact_present_records_step_and_exits_zero(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_run_event: MagicMock
+    ) -> None:
+        from squadron.events.dispatcher import EventOutcome, OutcomeErrorKind
+        from squadron.pipeline.models import ActionResult
+
+        mock_load.return_value = self._design_pipeline()
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "design-0"
+        mock_mgr.load.return_value = self._run_state()
+        mock_cls.return_value = mock_mgr
+
+        mock_run_event.return_value = [
+            EventOutcome(
+                action_name="squadron.dispatch-artifact",
+                result=ActionResult(success=True, action_type="squadron.dispatch-artifact", outputs={}),
+                error_kind=OutcomeErrorKind.NONE,
+            )
+        ]
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+
+        assert result.exit_code == 0
+        mock_mgr.record_step_done.assert_called_once_with("run-123", "design-0", "design", verdict=None)
+
+    @patch("squadron.cli.commands.run.run_event")
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_implement_phase_unaffected_by_post_action_bindings(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_run_event: MagicMock
+    ) -> None:
+        from squadron.events.dispatcher import EventOutcome, OutcomeErrorKind
+        from squadron.pipeline.models import ActionResult
+
+        mock_load.return_value = self._implement_pipeline()
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "implement-0"
+        mock_mgr.load.return_value = self._run_state()
+        mock_cls.return_value = mock_mgr
+
+        # dispatch-artifact no-ops (expected_artifact_kind is None for
+        # implement); revision-stamp no-ops (iteration=0). Both report success.
+        mock_run_event.return_value = [
+            EventOutcome(
+                action_name="squadron.dispatch-artifact",
+                result=ActionResult(success=True, action_type="squadron.dispatch-artifact", outputs={}),
+                error_kind=OutcomeErrorKind.NONE,
+            ),
+            EventOutcome(
+                action_name="squadron.revision-stamp",
+                result=ActionResult(success=True, action_type="squadron.revision-stamp", outputs={}),
+                error_kind=OutcomeErrorKind.NONE,
+            ),
+        ]
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+
+        assert result.exit_code == 0
+        mock_mgr.record_step_done.assert_called_once_with(
+            "run-123", "implement-0", "implement", verdict=None
+        )
+
+    @patch("squadron.cli.commands.run.run_event")
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_slice_placeholder_resolves_against_run_params(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_run_event: MagicMock
+    ) -> None:
+        """The step's expanded action config carries the unresolved
+        '{slice}' placeholder (PhaseStepType.expand's default) — it must be
+        resolved against the run's own params before reaching the context,
+        the same way the in-process executor resolves it."""
+        from squadron.events.dispatcher import EventOutcome, OutcomeErrorKind
+        from squadron.pipeline.models import ActionResult
+
+        mock_load.return_value = self._design_pipeline()
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "design-0"
+        mock_mgr.load.return_value = self._run_state(params={"slice": "200"})
+        mock_cls.return_value = mock_mgr
+
+        mock_run_event.return_value = [
+            EventOutcome(
+                action_name="squadron.dispatch-artifact",
+                result=ActionResult(success=True, action_type="squadron.dispatch-artifact", outputs={}),
+                error_kind=OutcomeErrorKind.NONE,
+            )
+        ]
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+
+        assert result.exit_code == 0
+        # design's expand() order: cf-op(set_phase), cf-op(set_slice),
+        # cf-op(build_context), dispatch(slice=...), commit(slice=...).
+        # "slice" first appears in the second call (set_slice).
+        set_slice_context = mock_run_event.call_args_list[1].args[0]
+        assert set_slice_context.params.get("slice") == "200"
 
 
 # ---------------------------------------------------------------------------

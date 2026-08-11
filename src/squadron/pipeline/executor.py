@@ -17,22 +17,23 @@ import sys
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from squadron.documents.frontmatter import FrontmatterError, read_frontmatter, update_frontmatter
+from squadron.events import EventType
+from squadron.events.contexts import PostActionContext
+from squadron.events.dispatcher import OutcomeErrorKind, run_event
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.steps import StepTypeName
-from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
+from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
-from squadron.review.persistence import TASKS_DIR, CfClientProtocol, resolve_slice_info
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -105,171 +106,6 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
         _logger.info("    -> FAILED: %s", result.error or "no details")
 
     _logger.debug("    outputs=%s metadata=%s", result.outputs, result.metadata)
-
-
-def _expected_artifact_paths(
-    kind: ArtifactKind, slice_index: int, cf_client: CfClientProtocol
-) -> list[str]:
-    """Resolve the expected artifact path(s) for a phase's artifact kind.
-
-    Raises:
-        ValueError, TypeError: If the slice cannot be resolved via CF —
-            propagated to the caller, which treats it as "path unresolvable".
-    """
-    info = resolve_slice_info(cf_client, slice_index)
-    if kind is ArtifactKind.DESIGN:
-        return [info["design_file"]] if info["design_file"] else []
-    return [str(TASKS_DIR / f) for f in info["task_files"]]
-
-
-def _check_dispatch_artifact_written(
-    *,
-    kind: ArtifactKind,
-    slice_index: int,
-    cf_client: CfClientProtocol,
-    cwd: str,
-    run_started_at: datetime,
-) -> str | None:
-    """Verify a phase-step dispatch wrote its expected artifact this run.
-
-    Returns None if the post-condition is satisfied, else an error message
-    naming the failure mode. Every failure mode fails closed (returns a
-    message) and is logged at WARNING — never a silent pass.
-    """
-    try:
-        paths = _expected_artifact_paths(kind, slice_index, cf_client)
-    except (ValueError, TypeError) as exc:
-        msg = f"could not resolve expected {kind.value} artifact path for slice {slice_index}: {exc}"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-
-    if not paths:
-        msg = f"no {kind.value} artifact path registered for slice {slice_index}"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-
-    base_dir = Path(cwd) if cwd else Path(".")
-    for rel_path in paths:
-        full_path = base_dir / rel_path
-        try:
-            if not full_path.exists():
-                continue
-            mtime = datetime.fromtimestamp(full_path.stat().st_mtime, tz=UTC)
-            if mtime >= run_started_at:
-                return None
-        except OSError as exc:
-            msg = f"could not verify {kind.value} artifact at {rel_path}: {exc}"
-            _logger.warning("dispatch post-condition: %s", msg)
-            return msg
-
-    msg = (
-        f"phase dispatch completed but no {kind.value} artifact was written "
-        f"for slice {slice_index} (expected one of: {', '.join(paths)})"
-    )
-    _logger.warning("dispatch post-condition: %s", msg)
-    return msg
-
-
-def _dispatch_artifact_post_condition_error(
-    *,
-    kind: ArtifactKind,
-    slice_param: object,
-    cf_client: CfClientProtocol,
-    cwd: str,
-    run_started_at: datetime | None,
-    run_state_error: str | None,
-) -> str | None:
-    """Resolve the dispatch artifact post-condition for one dispatch action.
-
-    Returns None if satisfied, else the failure message. Every branch fails
-    closed and is logged at WARNING (see docstrings on the helpers it calls).
-    """
-    if run_state_error is not None:
-        return run_state_error
-    if run_started_at is None:
-        # Only reachable if a future caller sets expected_kind without also
-        # resolving run_started_at/run_state_error — guards the invariant.
-        msg = "run start time unavailable"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-    if slice_param is None:
-        msg = f"could not resolve expected {kind.value} artifact path: no 'slice' param in scope"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-    try:
-        slice_index = int(str(slice_param))
-    except ValueError:
-        msg = (
-            f"could not resolve expected {kind.value} artifact path: "
-            f"'slice' param {slice_param!r} is not a numeric index"
-        )
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-    return _check_dispatch_artifact_written(
-        kind=kind,
-        slice_index=slice_index,
-        cf_client=cf_client,
-        cwd=cwd,
-        run_started_at=run_started_at,
-    )
-
-
-def _stamp_revision_number(
-    *,
-    kind: ArtifactKind,
-    slice_param: object,
-    cf_client: CfClientProtocol,
-    cwd: str,
-) -> None:
-    """Stamp a monotonic ``revision_number`` onto each artifact this dispatch
-    just wrote, called only after the artifact post-condition has passed.
-
-    Value rule: absent or non-int prior value -> 1; present int n -> n + 1.
-    It counts squadron stamps, not the loop iteration. A failed evidence
-    stamp must not fail a converging loop, so any parse/write failure is
-    logged at WARNING (naming the path and reason) and swallowed.
-    """
-    if slice_param is None:
-        return
-    try:
-        slice_index = int(str(slice_param))
-    except ValueError:
-        return
-    try:
-        paths = _expected_artifact_paths(kind, slice_index, cf_client)
-    except Exception as exc:
-        # cf_client is duck-typed (CfClientProtocol); any implementation can
-        # raise its own error type here, not just ValueError/TypeError. The
-        # contract above is unconditional — every resolution failure must be
-        # swallowed and logged, not just the two types the built-in CF client
-        # happens to raise.
-        _logger.warning(
-            "revision_number stamp: could not resolve %s artifact path for slice %s: %s",
-            kind.value,
-            slice_index,
-            exc,
-        )
-        return
-
-    if not paths:
-        _logger.warning(
-            "revision_number stamp: no %s artifact path registered for slice %s",
-            kind.value,
-            slice_index,
-        )
-        return
-
-    base_dir = Path(cwd) if cwd else Path(".")
-    for rel_path in paths:
-        full_path = base_dir / rel_path
-        try:
-            existing = read_frontmatter(full_path)
-            prior = existing.get("revision_number") if existing is not None else None
-            next_value = prior + 1 if isinstance(prior, int) else 1
-            today = datetime.now(UTC).strftime("%Y%m%d")
-            update_frontmatter(full_path, {"revision_number": next_value}, today=today)
-        except (FrontmatterError, OSError) as exc:
-            _logger.warning("revision_number stamp failed for %s: %s", full_path, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -733,10 +569,12 @@ async def execute_pipeline(
         _fan_in_reducers,
     )
 
+    from squadron.events import bootstrap_event_actions
     from squadron.pipeline.actions import get_action
     from squadron.pipeline.steps import bootstrap_step_types, get_step_type
 
     bootstrap_step_types()
+    bootstrap_event_actions()
 
     effective_cwd = cwd or os.getcwd()
     effective_run_id = run_id or uuid.uuid4().hex[:12]
@@ -1127,31 +965,34 @@ async def _execute_step_once(
 
         _log_action_result(action_type, result)
 
-        # Dispatch artifact post-condition (Part A, issue #15): a phase-step
-        # dispatch that completes without writing its expected artifact is
-        # not a success, regardless of what DispatchAction reported. Scoped
-        # to PhaseStepType steps with a non-None expected_artifact_kind;
-        # generic dispatch and no-artifact phases (e.g. implement) pass
-        # through unchecked.
-        if action_type == "dispatch" and result.success and expected_kind is not None:
-            artifact_error = _dispatch_artifact_post_condition_error(
-                kind=expected_kind,
-                slice_param=ctx.params.get("slice"),
-                cf_client=cf_client,
-                cwd=cwd,
-                run_started_at=run_started_at,
-                run_state_error=run_state_error,
-            )
-            if artifact_error is not None:
+        # POST_ACTION event bindings (slice 173): squadron.dispatch-artifact
+        # (909's post-condition) and squadron.revision-stamp (911's stamp)
+        # run here by default; a project's events.yaml may add more.
+        post_action_ctx = PostActionContext(
+            event=EventType.POST_ACTION,
+            cwd=cwd,
+            params=ctx.params,
+            action_type=action_type,
+            result=result,
+            run_id=run_id,
+            run_started_at=run_started_at,
+            run_state_error=run_state_error,
+            step_name=step.name,
+            step_type=step.step_type,
+            expected_artifact_kind=expected_kind,
+            iteration=ctx.iteration,
+            cf_client=cf_client,
+        )
+        outcomes = await run_event(post_action_ctx)
+        for outcome in outcomes:
+            if outcome.result is not None and not outcome.result.success:
                 result.success = False
-                result.error = artifact_error
-            elif ctx.iteration >= 1:
-                _stamp_revision_number(
-                    kind=expected_kind,
-                    slice_param=ctx.params.get("slice"),
-                    cf_client=cf_client,
-                    cwd=cwd,
-                )
+                result.error = outcome.result.error
+                break
+            if outcome.error_kind is not OutcomeErrorKind.NONE:
+                result.success = False
+                result.error = f"{outcome.action_name}: {outcome.error_kind.value}"
+                break
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"

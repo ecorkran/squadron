@@ -709,3 +709,16 @@ sq run --step-done <run-id>                            # mark current step compl
 ```
 
 The `/sq:run` slash command (installed via `sq install-commands`) wraps this loop automatically — you don't need to manage run IDs manually.
+
+`--step-done` also runs every bound `post-action` event action (the same
+ones the in-process executor fires after each action) before marking the
+step complete — see [Events Guide](EVENTS.md#prompt-only-parity).
+
+---
+
+## User-Definable Actions on Events
+
+A project can bind its own Python callable to a commit or run a check after
+every pipeline action, without forking squadron. See the
+[Events Guide](EVENTS.md) for the `EventAction` contract, the
+`events.yaml` manifest format, and the authority/failure model.

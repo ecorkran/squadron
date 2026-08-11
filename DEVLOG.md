@@ -12,6 +12,41 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260811 (2)
+
+### Slice 173: Complete — User-Definable Actions on Supported Events
+
+Phase 6 complete. Built `squadron/events/` (types, contexts, protocol,
+namespaced registry, `events.yaml` manifest loader, declared-import plugin
+discovery, dispatcher) and migrated the hardcoded 909 dispatch-artifact
+post-condition and 911 revision-number stamp off `executor.py` onto it as
+`squadron.dispatch-artifact` and `squadron.revision-stamp` — the acceptance
+test — with zero assertion changes in the existing tests (they exercised
+`execute_pipeline` end-to-end, never the private helpers by dotted path, so
+no patch-target strings needed to move). `squadron.frontmatter-gate`
+refactors 172's bespoke installer-driven gate onto the mechanism as a
+`COMMIT`-bound built-in. `sq events fire` / `sq events list` ship as a Typer
+sub-app; `.githooks/pre-commit` and `setup_install.py`'s `PRE_COMMIT_HOOK`
+repoint from `cf validate frontmatter` to `sq events fire commit`, byte-
+identity test intact. `sq run --step-done` now runs `POST_ACTION` bindings
+before recording a step done, closing the prompt-only parity gap from
+issue #15 — a bug in that wiring (the `{slice}` placeholder wasn't resolved
+against the run's own params before reaching the event context) was found
+during the manual verification walkthrough and fixed, with a regression
+test asserting the resolved value reaches the dispatcher.
+
+Four commits (Parts A+B combined since `bootstrap_event_actions()` imports
+all three built-ins together, forcing `frontmatter-gate` in ahead of its
+originally-planned Part C slot; then Part C; then Part D; then docs).
+`docs/EVENTS.md` is new; `docs/PIPELINES.md`, `docs/COMMANDS.md`,
+`CHANGELOG.md` (two flagged breaking changes), and
+`140-arch.pipeline-foundation.md` (deferred-171 section replaced with what
+173 actually built) are updated. Full suite: 2991 passed, 2 skipped;
+pyright strict and ruff clean throughout. Slice marked complete; slice-plan
+entry 28 checked.
+
+---
+
 ## 20260811
 
 ### Slice 173: Task Breakdown — User-Definable Actions on Supported Events
