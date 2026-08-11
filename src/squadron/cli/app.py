@@ -12,6 +12,7 @@ from squadron.cli.commands.auth import auth_app
 from squadron.cli.commands.config import config_app
 from squadron.cli.commands.dispatch_run import dispatch_run
 from squadron.cli.commands.doctor import doctor
+from squadron.cli.commands.events import events_app
 from squadron.cli.commands.history import history
 from squadron.cli.commands.install import install_commands, uninstall_commands
 from squadron.cli.commands.list import list_agents
@@ -52,6 +53,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(metrology_app, name="metrology")
 app.add_typer(auth_app, name="auth")
 app.add_typer(skills_app, name="skills")
+app.add_typer(events_app, name="events")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
 app.command("setup")(setup)
