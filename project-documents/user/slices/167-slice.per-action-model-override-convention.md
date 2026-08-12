@@ -6,9 +6,31 @@ parent: 140-slices.pipeline-foundation.md
 dependencies: [142-pipeline-core-models-and-action-protocol, 146-review-and-checkpoint-actions]
 interfaces: [ReviewAction, ModelResolver, docs/PIPELINES.md]
 dateCreated: 20260414
-dateUpdated: 20260424
-status: not_started
+dateUpdated: 20260812
+status: deprecated
 ---
+
+## Deprecation Note (20260812)
+
+Superseded by a better-scoped alternative: per-action model overrides
+should be authored explicitly per pipeline, the way `P5.yaml` already
+does it — declare a param (e.g. `review-model`) and wire it into the
+action's config via `{review-model}` placeholder substitution. That
+mechanism already works today for any param name, requires no code
+changes, and is explicit rather than a hardcoded per-action fallback
+key that only `ReviewAction` would recognize.
+
+The convention this slice proposed (`{purpose}_model` checked in code,
+ahead of `params["model"]`) would only apply to actions individually
+updated to support it, creates a second, implicit path to the same
+value on pipelines that already self-wire the explicit pattern (e.g.
+`P5.yaml`), and invites convention drift across action authors — the
+exact risk the slice's own Risks section flagged.
+
+The one genuinely useful idea adjacent to this slice — a CLI shorthand
+like `--{param}=value` instead of `--param {param}=value` — is real
+but distinct, and tracked separately as a GitHub enhancement issue
+rather than folded into this slice.
 
 # Slice Design: Per-Action Model Override Convention
 

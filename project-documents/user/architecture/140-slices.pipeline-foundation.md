@@ -4,7 +4,7 @@ parent: 140-arch.pipeline-foundation.md
 project: squadron
 dateCreated: 20260327
 dateUpdated: 20260806
-status: in_progress
+status: complete
 ---
 
 # Slice Plan: Pipeline Foundation
@@ -68,7 +68,7 @@ status: in_progress
 
 22. [x] **(164) Profile-Aware Summary Model Routing** — Summary action currently routes all model requests through the SDK session's `set_model()`, which only works for Claude models. When the resolved model alias has a non-SDK profile (e.g. `minimax` → OpenRouter), the summary action should dispatch via the provider registry using a one-shot API call — the same pattern review already uses via `run_review_with_profile()`. Resolve the alias to `(model_id, profile)`, branch on profile: SDK profiles use existing `capture_summary()` path; all other profiles dispatch through the provider registry. Applies to both SDK and prompt-only execution modes. Prompt-only `_render_summary` updates `model_switch` only for SDK-profile models; non-SDK models emit a CLI command instead. Unblocks using cheap external models (minimax, gemini-flash) for pipeline summaries. Dependencies: [161]. Risk: Low. Effort: 2/5. **Design Complete: [164-slice.profile-aware-summary-model-routing.md](../slices/164-slice.profile-aware-summary-model-routing.md)**
 
-24. [ ] **(167) Per-Action Model Override Convention** — Establish a standard convention for action-specific model overrides in pipeline params. Each action checks `params["{purpose}_model"]` before falling back to `params["model"]`, so authors can write `sq run p4 123 --model opus --param review_model=sonnet` without a new CLI flag per action type. First adopter: `ReviewAction` checks `params["review_model"]`. Override values resolve through `ModelResolver` — aliases, concrete IDs, and `pool:` refs all work uniformly. Document the convention in the pipeline authoring guide. Dependencies: [142 model resolver, 146 review action]. Risk: Low. Effort: 2/5
+24. [~] **(167) Per-Action Model Override Convention** — Establish a standard convention for action-specific model overrides in pipeline params. Each action checks `params["{purpose}_model"]` before falling back to `params["model"]`, so authors can write `sq run p4 123 --model opus --param review_model=sonnet` without a new CLI flag per action type. First adopter: `ReviewAction` checks `params["review_model"]`. Override values resolve through `ModelResolver` — aliases, concrete IDs, and `pool:` refs all work uniformly. Document the convention in the pipeline authoring guide. Dependencies: [142 model resolver, 146 review action]. Risk: Low. Effort: 2/5. **Deprecated:** superseded by explicit per-pipeline param wiring (already works today via `--param key=value` + a declared param + placeholder substitution, as `P5.yaml` does with `review-model`); see [167-slice.per-action-model-override-convention.md](../slices/167-slice.per-action-model-override-convention.md) for the deprecation note.
 
 25. [x] **(168) `sq review code` — Slice Implementation Review**
 
