@@ -2,13 +2,61 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260811
+dateUpdated: 20260812
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260812
+
+### Loop Backlog Triage; Slice 915 Designed
+
+Went to address the four open "loop bugs" and found three of them were
+already fixed. Slices 910 and 911 shipped in v0.9.0 and closed only #44 at
+merge time — #42 (findings feedback between iterations), #43 (ambiguous
+`until:` with multiple verdict-bearing actions), and #45 (`--dry-run` loop
+expansion) stayed open despite their fixes being live. Verified each against
+`main` before closing: `running_prior` threading in `_execute_loop_body`,
+`_validate_verdict_count` in `LoopStepType`, and the loop-expansion branch in
+`--dry-run` rendering are all present. Closed all three with pointers to the
+implementing commits. Housekeeping gap, not a code gap — worth noting that
+merge-time issue closure is manual and was missed for a whole slice.
+
+That left **#48** as the only real remaining loop defect, and it is not small:
+a checkpoint firing inside a loop body pauses the run, the loop step is
+recorded as *completed* anyway, and resume skips it — silently dropping every
+remaining round. `on-concerns` fires on CONCERNS/FAIL/UNKNOWN, so a retry loop
+that pauses for human review hits this on its first non-passing round, which
+is precisely the case the checkpoint exists to serve.
+
+Traced the mechanism end-to-end against `main` (the issue's line citations had
+drifted since 305 and 173 landed). Four points confirmed: the loop
+short-circuits on inner `PAUSED` (preserving `iteration`), `on_step_complete`
+runs two lines *before* the `PAUSED` early-return, `_append_step` appends
+unconditionally, and `first_unfinished_step` builds its completed-set from
+step *names* without ever inspecting status. Two findings shaped the design:
+`StepState.iteration` is written and never read anywhere in the repo — the
+re-entry coordinate is already persisted, just unused — and `start_from` is
+step-name granular, with no notion of resuming *into* a step at a round.
+
+Designed slice **915** (`900` plan, sequenced after 910/911) with three parts:
+status-aware `first_unfinished_step` (also fixes the identical `FAILED`-step
+skip), a `start_from_iteration` coordinate threaded to the loop's range, and a
+WARNING when a loop abandons rounds. Answered the issue's open question rather
+than deferring it again (910/911 precedent): **a checkpoint-paused loop is
+re-enterable** — `until:` is the loop's contract and a pause is not a verdict,
+`checkpoint: continue` already means "keep going," and "a human takes over"
+already has a spelling in `Exit`. Rejected making it configurable; the knob
+would double the resume test surface for a mode nobody asked for.
+
+Recorded one known limitation rather than conflating it: `each:`/`fan_out:`
+return no `iteration`, so Part A stops them being skipped but they resume by
+restart, not re-entry.
 
 ---
 

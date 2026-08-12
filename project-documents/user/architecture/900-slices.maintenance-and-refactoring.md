@@ -191,7 +191,8 @@ Direct successor to slice 910 (loop convergence) and 911 (loop iteration version
 
 The issue leaves one question open: whether a checkpoint-paused loop should be **re-enterable at all** on resume, versus a checkpoint legitimately meaning "a human is taking over from here." Per 910/911 precedent (resolving deferred design questions inline in the slice design rather than punting them again), this slice's design doc must state and justify one answer before implementation — not leave it open a second time. At minimum, per the issue, the abandoned iterations must become observable rather than silent regardless of which answer is chosen.
 
-**Status:** not started · **Risk:** Medium (execution-state/resume semantics) · **Effort:** 2/5 · **Dependencies:** [910, 911]
+**Slice design:** `user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md` — resolves the re-enterability question: a checkpoint-paused loop **is** re-enterable, resuming from the paused round (D1).
+**Status:** designed (20260812) · **Risk:** Medium (execution-state/resume semantics) · **Effort:** 2/5 · **Dependencies:** [910, 911]
 
 ---
 
