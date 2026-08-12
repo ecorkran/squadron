@@ -13,27 +13,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.events import EventType, register_event_action
+from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
-from squadron.review.persistence import TASKS_DIR, CfClientProtocol, resolve_slice_info
+from squadron.review.persistence import CfClientProtocol
 
 _logger = logging.getLogger(__name__)
-
-
-def _expected_artifact_paths(
-    kind: ArtifactKind, slice_index: int, cf_client: CfClientProtocol
-) -> list[str]:
-    """Resolve the expected artifact path(s) for a phase's artifact kind.
-
-    Raises:
-        ValueError, TypeError: If the slice cannot be resolved via CF —
-            propagated to the caller, which treats it as "path unresolvable".
-    """
-    info = resolve_slice_info(cf_client, slice_index)
-    if kind is ArtifactKind.DESIGN:
-        return [info["design_file"]] if info["design_file"] else []
-    return [str(TASKS_DIR / f) for f in info["task_files"]]
 
 
 def _check_dispatch_artifact_written(
@@ -51,7 +37,7 @@ def _check_dispatch_artifact_written(
     message) and is logged at WARNING — never a silent pass.
     """
     try:
-        paths = _expected_artifact_paths(kind, slice_index, cf_client)
+        paths = expected_artifact_paths(kind, slice_index, cf_client)
     except (ValueError, TypeError) as exc:
         msg = f"could not resolve expected {kind.value} artifact path for slice {slice_index}: {exc}"
         _logger.warning("dispatch post-condition: %s", msg)

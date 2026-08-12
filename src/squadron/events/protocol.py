@@ -13,21 +13,21 @@ from squadron.pipeline.models import ActionResult, ValidationError
 class EventAction(Protocol):
     """Interface for all event action implementations.
 
+    ``name`` and ``events`` are plain attributes (matching every built-in
+    implementation) rather than properties — there is no computed logic
+    behind either, so a property would only add ceremony.
+
     ``execute`` is async so ``asyncio.wait_for`` is the timeout mechanism
     (design D2). An action narrows *context* to the concrete subtype it
     expects and returns a failed ``ActionResult`` naming the mismatch if
     bound to an event it does not support.
     """
 
-    @property
-    def name(self) -> str:
-        """Namespaced action identifier, e.g. 'squadron.frontmatter-gate'."""
-        ...
+    #: Namespaced action identifier, e.g. 'squadron.frontmatter-gate'.
+    name: str
 
-    @property
-    def events(self) -> frozenset[EventType]:
-        """The events this action may be bound to."""
-        ...
+    #: The events this action may be bound to.
+    events: frozenset[EventType]
 
     def validate(self, config: dict[str, object]) -> list[ValidationError]:
         """Validate this action's binding params. Empty list if valid."""

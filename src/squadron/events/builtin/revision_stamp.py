@@ -15,9 +15,7 @@ from pathlib import Path
 
 from squadron.documents.frontmatter import FrontmatterError, read_frontmatter, update_frontmatter
 from squadron.events import EventType, register_event_action
-from squadron.events.builtin.dispatch_artifact import (
-    _expected_artifact_paths,  # pyright: ignore[reportPrivateUsage]
-)
+from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
@@ -48,7 +46,7 @@ def _stamp_revision_number(
     except ValueError:
         return
     try:
-        paths = _expected_artifact_paths(kind, slice_index, cf_client)
+        paths = expected_artifact_paths(kind, slice_index, cf_client)
     except Exception as exc:
         # cf_client is duck-typed (CfClientProtocol); any implementation can
         # raise its own error type here, not just ValueError/TypeError. The

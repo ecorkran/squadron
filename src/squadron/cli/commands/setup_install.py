@@ -82,7 +82,8 @@ status=$?
 
 if [ "$status" -eq 2 ]; then
   echo "pre-commit: sq events fire commit could not run (see above)." >&2
-  echo "pre-commit: if this repo is not a registered cf project, run 'cf init' once," >&2
+  echo "pre-commit: common causes: this repo is not a registered cf project (run 'cf init' once)," >&2
+  echo "pre-commit: a broken plugin declared in events.yaml, or a malformed events.yaml." >&2
   echo "pre-commit: or bypass this commit with 'git commit --no-verify'." >&2
 elif [ "$status" -ne 0 ]; then
   echo "pre-commit: sq events fire commit failed (exit $status)." >&2

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,6 +17,12 @@ from squadron.events.contexts import CommitContext
 
 def _commit_context(cwd: str, staged_paths: tuple[str, ...] = ()) -> CommitContext:
     return CommitContext(event=EventType.COMMIT, cwd=cwd, params={}, staged_paths=staged_paths)
+
+
+async def _run_cf(args: list[str], *, cwd: str) -> None:
+    """Off-thread ``cf`` invocation — a blocking subprocess call must not
+    run directly inside an ``async def`` test method (project async rule)."""
+    await asyncio.to_thread(subprocess.run, ["cf", *args], cwd=cwd, capture_output=True)
 
 
 def _fake_process(returncode: int, stdout: bytes = b"", stderr: bytes = b"") -> MagicMock:
@@ -97,17 +104,13 @@ class TestRealCfIntegration:
             "---\ndocType: review\nproject: test-project\nstatus: not-a-real-status\n"
             "dateCreated: 20260101\ndateUpdated: 20260101\n---\nbody\n"
         )
-        subprocess.run(["cf", "init", "--lite", "--no-ide"], cwd=str(tmp_path), capture_output=True)
+        await _run_cf(["init", "--lite", "--no-ide"], cwd=str(tmp_path))
         try:
             result = await FrontmatterGateAction().execute(
                 _commit_context(str(tmp_path), staged_paths=(str(bad_doc),))
             )
         finally:
-            subprocess.run(
-                ["cf", "project", "rm", tmp_path.name, "--yes"],
-                cwd=str(tmp_path),
-                capture_output=True,
-            )
+            await _run_cf(["project", "rm", tmp_path.name, "--yes"], cwd=str(tmp_path))
 
         assert result.success is False
         assert result.error is not None and "status" in result.error.lower()
@@ -122,16 +125,12 @@ class TestRealCfIntegration:
             "---\ndocType: review\nproject: test-project\nstatus: complete\n"
             "dateCreated: 20260101\ndateUpdated: 20260101\n---\nbody\n"
         )
-        subprocess.run(["cf", "init", "--lite", "--no-ide"], cwd=str(tmp_path), capture_output=True)
+        await _run_cf(["init", "--lite", "--no-ide"], cwd=str(tmp_path))
         try:
             result = await FrontmatterGateAction().execute(
                 _commit_context(str(tmp_path), staged_paths=(str(clean_doc),))
             )
         finally:
-            subprocess.run(
-                ["cf", "project", "rm", tmp_path.name, "--yes"],
-                cwd=str(tmp_path),
-                capture_output=True,
-            )
+            await _run_cf(["project", "rm", tmp_path.name, "--yes"], cwd=str(tmp_path))
 
         assert result.success is True

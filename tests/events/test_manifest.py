@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -91,19 +92,68 @@ def test_unknown_event_key_errors_naming_file(tmp_path: Path) -> None:
         load_manifest(project_path=project_path, user_path=tmp_path / "missing-user.yaml")
 
 
+def _fake_get_action(events_by_name: dict[str, frozenset[EventType]]):
+    def get_action(name: str):
+        return SimpleNamespace(events=events_by_name[name])
+
+    return get_action
+
+
 def test_unknown_action_name_errors_naming_both(tmp_path: Path) -> None:
     project_path = tmp_path / "project-events.yaml"
     project_path.write_text(_PROJECT_MANIFEST_YAML)
 
     manifest = load_manifest(project_path=project_path, user_path=tmp_path / "missing-user.yaml")
     registered = [b.action for b in DEFAULT_BINDINGS]
+    get_action = _fake_get_action(
+        {
+            "squadron.frontmatter-gate": frozenset({EventType.COMMIT}),
+            "squadron.dispatch-artifact": frozenset({EventType.POST_ACTION}),
+            "squadron.revision-stamp": frozenset({EventType.POST_ACTION}),
+        }
+    )
 
     with pytest.raises(ManifestError) as exc_info:
-        resolve_bindings(manifest, registered_names=registered)
+        resolve_bindings(manifest, registered, get_action)
 
     message = str(exc_info.value)
     assert "demo.rule-check" in message
     assert all(name in message for name in registered)
+
+
+def test_incompatible_event_binding_errors(tmp_path: Path) -> None:
+    project_path = tmp_path / "project-events.yaml"
+    project_path.write_text("bindings:\n  post-action:\n    - action: squadron.frontmatter-gate\n")
+
+    manifest = load_manifest(project_path=project_path, user_path=tmp_path / "missing-user.yaml")
+    registered = [b.action for b in DEFAULT_BINDINGS]
+    get_action = _fake_get_action(
+        {
+            "squadron.frontmatter-gate": frozenset({EventType.COMMIT}),
+            "squadron.dispatch-artifact": frozenset({EventType.POST_ACTION}),
+            "squadron.revision-stamp": frozenset({EventType.POST_ACTION}),
+        }
+    )
+
+    with pytest.raises(ManifestError, match="does not support event 'post-action'"):
+        resolve_bindings(manifest, registered, get_action)
+
+
+def test_compatible_event_binding_passes(tmp_path: Path) -> None:
+    project_path = tmp_path / "project-events.yaml"
+    project_path.write_text("bindings:\n  commit:\n    - action: demo.rule-check\n")
+    manifest = load_manifest(project_path=project_path, user_path=tmp_path / "missing-user.yaml")
+    registered = [*[b.action for b in DEFAULT_BINDINGS], "demo.rule-check"]
+    get_action = _fake_get_action(
+        {
+            "squadron.frontmatter-gate": frozenset({EventType.COMMIT}),
+            "squadron.dispatch-artifact": frozenset({EventType.POST_ACTION}),
+            "squadron.revision-stamp": frozenset({EventType.POST_ACTION}),
+            "demo.rule-check": frozenset({EventType.COMMIT}),
+        }
+    )
+
+    resolve_bindings(manifest, registered, get_action)  # must not raise
 
 
 def test_bindings_preserve_file_order_after_defaults(tmp_path: Path) -> None:

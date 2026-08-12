@@ -17,7 +17,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from squadron.config.manager import get_typed_config
-from squadron.events import EventType, bootstrap_event_actions, get_event_action, list_event_actions
+from squadron.events import (
+    EventType,
+    bootstrap_event_actions,
+    get_event_action,
+    list_event_actions,
+)
 from squadron.events.contexts import EventContext
 from squadron.events.discovery import discover_plugins
 from squadron.events.manifest import Binding, load_manifest, resolve_bindings
@@ -55,6 +60,12 @@ async def _run_binding(binding: Binding, context: EventContext, timeout_seconds:
             action_name=binding.action, result=None, error_kind=OutcomeErrorKind.TIMEOUT
         )
     except Exception:
+        # Deliberately broad (project exception-handling rule, clause c): this
+        # is the dispatch boundary between squadron and third-party plugin
+        # code. Per design D5, any exception an action raises — a plugin bug,
+        # not an expected failure mode squadron itself defines — is attributed
+        # Fail, logged with the traceback, and the run continues per the
+        # event's semantics (COMMIT keeps going, POST_ACTION stops).
         _logger.exception("%s: raised during execute", binding.action)
         return EventOutcome(action_name=binding.action, result=None, error_kind=OutcomeErrorKind.RAISED)
 
@@ -109,7 +120,7 @@ async def run_event(context: EventContext) -> list[EventOutcome]:
     manifest = load_manifest(cwd=context.cwd)
     manifest_source = str(manifest.manifest_path) if manifest.manifest_path is not None else "defaults"
     discover_plugins(manifest.plugins, manifest_source=manifest_source, cwd=context.cwd)
-    resolve_bindings(manifest, list_event_actions())
+    resolve_bindings(manifest, list_event_actions(), get_event_action)
 
     scoped = [b for b in manifest.bindings if b.event is context.event]
     return await fire(context, scoped, cwd=context.cwd)

@@ -10,13 +10,18 @@ disabled) followed by manifest bindings in file order.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from squadron.events import EventType
+from squadron.events.schema import parse_manifest_yaml
+
+if TYPE_CHECKING:
+    from squadron.events.protocol import EventAction
 
 _logger = logging.getLogger(__name__)
 
@@ -79,32 +84,6 @@ def _resolve_manifest_path(
     return None
 
 
-def _parse_event_key(raw_key: object, manifest_path: Path) -> EventType:
-    if not isinstance(raw_key, str):
-        raise ManifestError(f"{manifest_path}: binding key {raw_key!r} must be a string event name")
-    try:
-        return EventType(raw_key)
-    except ValueError as exc:
-        valid = [member.value for member in EventType]
-        raise ManifestError(
-            f"{manifest_path}: unknown event '{raw_key}' in bindings — valid events: {valid}"
-        ) from exc
-
-
-def _parse_binding_entry(raw_entry: object, event: EventType, manifest_path: Path) -> Binding:
-    if not isinstance(raw_entry, dict):
-        raise ManifestError(
-            f"{manifest_path}: binding entry for '{event.value}' must be a mapping with 'action'"
-        )
-    entry = cast(dict[str, Any], raw_entry)
-    action = entry.get("action")
-    if not isinstance(action, str) or not action:
-        raise ManifestError(f"{manifest_path}: binding entry for '{event.value}' is missing 'action'")
-    params_raw = entry.get("params", {})
-    params = cast(dict[str, object], params_raw) if isinstance(params_raw, dict) else {}
-    return Binding(event=event, action=action, params=params, source=str(manifest_path))
-
-
 def load_manifest(
     *,
     cwd: str | None = None,
@@ -128,30 +107,24 @@ def load_manifest(
     with open(manifest_path) as f:
         loaded: Any = yaml.safe_load(f) or {}
 
-    if not isinstance(loaded, dict):
-        raise ManifestError(f"{manifest_path}: top level must be a mapping")
-    raw_dict = cast(dict[str, Any], loaded)
+    try:
+        schema = parse_manifest_yaml(loaded, manifest_path=str(manifest_path))
+    except ValueError as exc:
+        raise ManifestError(str(exc)) from exc
 
-    plugins_raw: Any = raw_dict.get("plugins", []) or []
-    if not isinstance(plugins_raw, list):
-        raise ManifestError(f"{manifest_path}: 'plugins' must be a list of module paths")
-    plugins = tuple(str(p) for p in cast(list[Any], plugins_raw))
+    plugins = tuple(schema.plugins)
+    disabled = frozenset(schema.disable)
 
-    disable_raw: Any = raw_dict.get("disable", []) or []
-    if not isinstance(disable_raw, list):
-        raise ManifestError(f"{manifest_path}: 'disable' must be a list of action names")
-    disabled = frozenset(str(d) for d in cast(list[Any], disable_raw))
-
-    manifest_bindings: list[Binding] = []
-    bindings_raw: Any = raw_dict.get("bindings", {}) or {}
-    if not isinstance(bindings_raw, dict):
-        raise ManifestError(f"{manifest_path}: 'bindings' must be a mapping of event -> entries")
-    for raw_key, raw_entries in cast(dict[Any, Any], bindings_raw).items():
-        event = _parse_event_key(raw_key, manifest_path)
-        if not isinstance(raw_entries, list):
-            raise ManifestError(f"{manifest_path}: bindings['{raw_key}'] must be a list")
-        for raw_entry in cast(list[Any], raw_entries):
-            manifest_bindings.append(_parse_binding_entry(raw_entry, event, manifest_path))
+    manifest_bindings: list[Binding] = [
+        Binding(
+            event=EventType(event_key),
+            action=entry.action,
+            params=entry.params,
+            source=str(manifest_path),
+        )
+        for event_key, entries in schema.bindings.items()
+        for entry in entries
+    ]
 
     for binding in DEFAULT_BINDINGS:
         if binding.action in disabled:
@@ -169,17 +142,28 @@ def load_manifest(
     )
 
 
-def resolve_bindings(manifest: EventManifest, registered_names: list[str]) -> None:
-    """Validate every binding's action name is registered.
+def resolve_bindings(
+    manifest: EventManifest,
+    registered_names: list[str],
+    get_action: Callable[[str], EventAction],
+) -> None:
+    """Validate every binding names a registered action that supports its event.
 
     Raises:
-        ManifestError: Naming the manifest source, the unknown action name,
-            and the full list of registered actions — resolved once at
-            load time, never at fire time.
+        ManifestError: Naming the manifest source, the offending action or
+            event name, and (for an unknown action) the full list of
+            registered actions — resolved once at load time, never at
+            fire time.
     """
     for binding in manifest.bindings:
         if binding.action not in registered_names:
             raise ManifestError(
                 f"{binding.source}: unknown action '{binding.action}' in binding for "
                 f"'{binding.event.value}'. Registered actions: {registered_names}"
+            )
+        action = get_action(binding.action)
+        if binding.event not in action.events:
+            raise ManifestError(
+                f"{binding.source}: action '{binding.action}' does not support event "
+                f"'{binding.event.value}' (supports: {sorted(e.value for e in action.events)})"
             )

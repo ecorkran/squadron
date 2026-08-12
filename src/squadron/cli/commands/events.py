@@ -23,7 +23,7 @@ events_app = typer.Typer(
 @events_app.command("fire")
 def events_fire(
     event: str = typer.Argument(help="Event to fire: 'commit'"),
-    paths: list[str] = typer.Argument(default=None, help="Staged paths (commit event only)"),
+    paths: list[str] | None = typer.Argument(default=None, help="Staged paths (commit event only)"),
     cwd: str = typer.Option(".", "--cwd", help="Working directory"),
 ) -> None:
     """Fire all bound actions for *event* and exit 0/1/2 per D8."""
