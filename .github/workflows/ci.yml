@@ -21,6 +21,7 @@ jobs:
         with:
           node-version: "22"
       - run: npm i -g @context-forge/cli
+      - run: cf init --lite --no-ide
       - uses: astral-sh/setup-uv@v9.0.0
       - run: uv python install ${{ matrix.python-version }}
       - run: uv sync --dev
