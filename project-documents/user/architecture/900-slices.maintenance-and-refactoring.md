@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260802
+dateUpdated: 20260812
 status: in_progress
 ---
 
@@ -183,6 +183,15 @@ Worth doing on evidence, not principle: slice 305's F001 was a severity-case mis
 Open questions for design: whether to land it in one sweep or per-directory with a temporary `exclude` list that shrinks; whether some `reportUnknownMemberType` noise on `MagicMock` warrants a narrower rule set for `tests/` rather than full strict; and whether the mock-heavy pipeline tests want typed fixture factories (which would pay for themselves) or just annotations (which would not). Resolve those before estimating tasks — the 868 number is a starting point, not a task count.
 
 **Status:** not started · **Risk:** Low (test-only; no production code changes) · **Effort:** 3/5 · **Dependencies:** [913 — sequencing only, so two large mechanical diffs do not interleave]
+
+13. [ ] **(915) Loop Checkpoint-Pause Resume Correctness**
+Fixes [issue #48](https://github.com/ecorkran/squadron/issues/48): a checkpoint that fires inside a `loop:` body pauses the run mid-iteration, but the loop step is recorded as **completed** anyway — `on_step_complete`/`_append_step` run before the `PAUSED` status is checked (`executor.py:930-933`, `state.py:304`). On resume, `first_unfinished_step` sees the loop in `completed_steps` and skips it entirely (`state.py:438-446`), silently abandoning whatever iterations never ran. Affects any loop whose body contains a checkpoint: phase-bodied loops (`checkpoint` emitted unconditionally by `PhaseStepType.expand`), gate-bearing bodies with `checkpoint:` set, and `review:` steps with their own `checkpoint:`.
+
+Direct successor to slice 910 (loop convergence) and 911 (loop iteration versioning) on the same `_execute_loop_body`/execution-state code path — sequenced after both since it depends on iteration bookkeeping they introduced (`_append_step` already stores `iteration=step_result.iteration`, per the issue; state to re-enter the loop exists, it is simply never read for that purpose).
+
+The issue leaves one question open: whether a checkpoint-paused loop should be **re-enterable at all** on resume, versus a checkpoint legitimately meaning "a human is taking over from here." Per 910/911 precedent (resolving deferred design questions inline in the slice design rather than punting them again), this slice's design doc must state and justify one answer before implementation — not leave it open a second time. At minimum, per the issue, the abandoned iterations must become observable rather than silent regardless of which answer is chosen.
+
+**Status:** not started · **Risk:** Medium (execution-state/resume semantics) · **Effort:** 2/5 · **Dependencies:** [910, 911]
 
 ---
 
