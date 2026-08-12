@@ -17,13 +17,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm i -g @context-forge/cli
       - uses: astral-sh/setup-uv@v9.0.0
       - run: uv python install ${{ matrix.python-version }}
       - run: uv sync --dev
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pyright
-      - run: uv run sq validate docs
+      - run: cf validate frontmatter
       - run: uv run pytest
 
   publish:
