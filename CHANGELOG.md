@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Resuming a run no longer silently abandons a loop paused mid-round.** If a checkpoint inside a `loop:` body pauses the run, `sq run --resume` now re-enters that loop at the paused round instead of skipping past it — and a paused loop now logs a warning naming what round it stopped at and how many rounds it didn't run.
+
 ## [0.10.1] - 20260811
 
 ### Added

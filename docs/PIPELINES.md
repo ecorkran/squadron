@@ -315,6 +315,15 @@ steps:
 
 Give each model role its own named `params` entry (as above) rather than leaving a step's `model:` unset — every built-in pipeline follows this convention so a caller can retarget any model by overriding one param, without editing step bodies. See [Judge-Gated Cycles](#judge-gated-cycles) for why the review step needs an explicit model even though its judge template declares its own default.
 
+**Resume semantics — a checkpoint pausing inside the body resumes *into* the loop.** A `checkpoint:` on a step inside a `loop` body (e.g. `on-fail`/`on-concerns` on the `review` step above) pauses the run mid-iteration. `sq run --resume` (explicit or implicit) re-enters that same loop at the paused round rather than skipping past it to the next top-level step — the round is not silently abandoned.
+
+- **Rounds are counted per loop, not per invocation.** A loop paused at round 2 of `max: 3` resumes at round 2 and runs at most rounds 2–3. Resume never restarts the count at round 1, and never grants rounds beyond `max`.
+- **A resumed round has no memory of the round before it.** `prior_iteration_step_outputs` — the prior round's inner-step results, used by e.g. a `dispatch` step's findings feedback — is empty on the first round after a resume. Only the persisted round number survives a pause; the in-memory results of round *N-1* do not. A pipeline author relying on round-to-round feedback should treat a resumed round the same as round 1: no prior-round context.
+- **Every pause is logged.** When a loop's body pauses on an inner checkpoint, this is logged at WARNING — naming the pipeline, the step, the paused round, and how many rounds were not run — so an abandoned loop is never silent. Re-entering a loop above round 1 on resume is logged at INFO.
+- **A `FAILED` step resumes the same way a `PAUSED` one does** — no checkpoint required. Resume returns to a failed step rather than treating it as done.
+
+**Known limitation — `each`/`fan_out` bodies resume by restart, not re-entry.** Neither `each:` nor `fan_out:` records a per-branch round the way `loop` does, so a checkpoint pausing inside either causes resume to re-run that step's branches from the start rather than continuing from where it paused.
+
 ---
 
 ### `devlog`

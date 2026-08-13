@@ -7,7 +7,7 @@ dependencies: [910, 911]
 interfaces: []
 dateCreated: 20260812
 dateUpdated: 20260813
-status: not_started
+status: complete
 ---
 
 # Slice Design: Loop Checkpoint-Pause Resume Correctness
@@ -140,7 +140,7 @@ Any loop whose body contains a checkpoint:
 - **`on_exhaust: skip` fall-through.** Deferred by 910, still deferred, untouched.
 - **Re-entering a paused `each:` / `fan_out:` step at a specific branch.** Those
   paths return a `StepResult` **without** `iteration`
-  ([executor.py:1424-1430](src/squadron/pipeline/executor.py#L1424-L1430)), so
+  ([executor.py:1542-1547](src/squadron/pipeline/executor.py#L1542-L1547)), so
   they carry no re-entry coordinate. Part A still fixes their *skipping* (they
   stop being treated as complete); resuming them restarts the step. Recorded as
   a known limitation below rather than silently conflated with the loop case.
@@ -323,7 +323,7 @@ change to D1 makes abandonment intentional.
   completed. Nothing to resume." — the Part A predicate must not make finished
   runs look resumable.
 - A run containing a paused or failed step is **not** finalized as `COMPLETED` by
-  the [run.py:653](src/squadron/cli/commands/run.py#L653) path.
+  the [run.py:666](src/squadron/cli/commands/run.py#L666) path.
 - A resume request for an iteration above the loop's `max:` (only reachable from
   malformed state) **fails loudly** with a WARNING naming step, requested
   iteration, and `max:` — it does not report `COMPLETED` for a loop that ran zero
@@ -342,72 +342,106 @@ change to D1 makes abandonment intentional.
 
 ## Verification Walkthrough
 
-*Draft — to be executed and corrected during Phase 6, per 910/911 practice.*
+**Executed 20260813** during Phase 6 implementation. Per 910's practice, live
+`sq run` execution against a real pipeline was intentionally **not** used —
+pausing an in-loop checkpoint for real requires a live dispatch/review round
+(real Claude API calls) and writes to the operator's real
+`~/.config/squadron/runs/`, and the Project Manager elected the same evidence
+path 910's Part A used: the automated test suite, proven to fail pre-fix and
+pass post-fix. `--validate`/`--dry-run` (no live model calls, no state writes)
+were run against a real user-configured pipeline as a live sanity check
+alongside the test evidence.
 
-**1. Reproduce the bug before fixing it.** A throwaway pipeline whose loop body
-is `[dispatch, review]` with `checkpoint: on-concerns` and `max: 3`, against a
-review that returns CONCERNS on round 1:
+**1. Reproduce the bug before fixing it.** All Part A/B/C tests (22 new/updated
+across `tests/pipeline/test_state.py`, `tests/pipeline/test_executor_loop_body.py`,
+`tests/pipeline/test_state_integration.py`, `tests/pipeline/test_cli_integration.py`)
+were copied into a `git worktree` checked out at pre-fix commit `0b4087a` and run
+there. All 22 failed, matching the pre-fix expectation exactly — most concretely
+`test_cli_integration.py::TestCliIntegration::test_resume_from_paused_completes`,
+which asserted 10 `completed_steps` records pre-fix (one incomplete round,
+silently accepted) against 11 post-fix (the paused step legitimately re-executes
+on resume). Confirms the tests would have caught the original bug, following the
+`git stash`/worktree discipline 910 used.
 
-```bash
-sq run <fixture> 999
-# pauses at the loop step
-sq run --resume <run-id>
-```
+**2. Part A — resume returns to the paused step.** Verified by
+`tests/pipeline/test_state.py::TestFirstUnfinishedStep` (`PAUSED` and `FAILED`
+cases) and `tests/pipeline/test_cli_integration.py::test_resume_from_paused_completes`,
+which asserts the persisted `StepState.status == "paused"` and that resume names
+the loop step itself, not its successor.
 
-Pre-fix expectation: resume reports the step *after* the loop and the run
-completes, having executed one incomplete round. Confirm this fails as described
-before changing code — the same `git stash` discipline 910 used to prove its
-tests would have caught the original bug.
+**3. Part B — re-entry at the recorded round.** Verified by
+`tests/pipeline/test_executor_loop_body.py::test_e2e_paused_at_round_2_of_3_resumes_at_round_2_not_round_1`,
+which pauses a `[dispatch, review]` loop body at round 2 of `max: 3`, asserts
+the persisted `StepState.iteration == 2`, resumes via the same
+`first_unfinished_step` + `resume_iteration_for` sequence `run.py` uses, and
+asserts the loop converges at round 2 on resume (not round 1 — proves the count
+did not restart — and not round 4+, which is structurally impossible since
+`max: 3`). `test_start_from_loop_step_emits_reentry_info` asserts the INFO line
+naming the step and round.
 
-**2. Part A — resume returns to the paused step.**
+**4. Part C — the abandonment is loud.** Verified by
+`test_multi_step_body_pause_emits_warning_with_rounds_not_run` and
+`test_single_step_body_pause_emits_same_warning`, both asserting the WARNING
+message contains the step name, the paused round, and the rounds-not-run count;
+`test_converging_loop_emits_no_pause_warning` asserts silence on a normal
+convergence.
 
-```bash
-sq run --status <run-id>
-```
-
-The loop step shows status `paused`; resume now names the loop step itself as its
-starting point rather than the following step.
-
-**3. Part B — re-entry at the recorded round.** With the checkpoint configured to
-fire on round 2, resume and confirm from the run log that the loop re-enters at
-iteration 2 (INFO line) and that rounds 2–3 execute — not rounds 1–3, and not
-zero rounds.
-
-**4. Part C — the abandonment is loud.** Inspect the run log at the moment of the
-original pause: a WARNING naming the pipeline, the loop step, the paused round,
-and the count of rounds not run.
-
-**5. Regression — a clean run is unaffected.** A pipeline with no in-loop
-checkpoint, run to completion, then `sq run --resume <run-id>`, must still report
-"All steps already completed. Nothing to resume."
+**5. Regression — a clean run is unaffected.** Verified by
+`tests/pipeline/test_state.py::TestFirstUnfinishedStep::test_all_completed_returns_none`
+and the clean-run assertion inside
+`test_e2e_pause_and_resume_reenters_loop_at_recorded_round`
+(`first_unfinished_step` returns `None` after full completion — the CLI layer
+turns that into "All steps already completed. Nothing to resume.", unchanged
+by this slice).
 
 **6. The finalizer does not mark a paused run complete.** *(Added 20260813 —
-covers the [run.py:653](src/squadron/cli/commands/run.py#L653) caller the original
-draft did not account for.)* With the run from step 1 still paused, exercise the
-status/finalize path and confirm the run is **not** written to state as
-`COMPLETED`. Pre-fix, the predicate returned `None` for that run and the finalize
-branch was reachable; post-fix it returns the paused loop step and the branch is
-not taken. Confirm against the persisted state file, not only the console output —
-this is the one hazard in this slice that changes a stored outcome.
+covers the [run.py:666](src/squadron/cli/commands/run.py#L666) caller the
+original draft did not account for.)* Verified by
+`tests/cli/commands/test_run.py::TestPromptOnly::test_prompt_only_next_paused_step_not_finalized_completed`,
+which asserts `mock_mgr.finalize.assert_not_called()` for a run containing a
+paused step — the persisted-outcome check the task called for, done at the
+mock-call-assertion level since `finalize` is the single write path to
+`RunState.status`.
 
-**7. The single-step loop shape behaves identically.** Steps 1–4 use a multi-step
-loop body (`[dispatch, review]`, exercising `_execute_loop_body`). Repeat the
-pause, the WARNING check, and the re-entry check against a **single-step** loop
-body, which routes through `_execute_loop_step` instead. Both paths carry their
-own round range and their own inner-pause short-circuit, so a fix verified on only
-one shape is verified on half the surface.
+**7. The single-step loop shape behaves identically.** Steps 2–4 above each
+have a single-step-loop sibling test
+(`test_single_step_body_pause_emits_same_warning`,
+`test_single_step_loop_start_iteration_2_runs_rounds_2_and_3`,
+`test_single_step_loop_start_iteration_above_max_fails_loudly`), driving
+`_execute_loop_step` (an inline `loop:` key, not `step_type: loop`) rather than
+`_execute_loop_body`, confirming both loop shapes carry the fix.
 
-**8. A failed step resumes too.** Part A treats `FAILED` and `PAUSED` alike
-(design D2). Run a pipeline to a step failure, then `sq run --resume <run-id>`,
-and confirm resume returns to the failed step rather than past it. This path has
-no checkpoint involved and is easy to leave untested precisely because #48 was
-reported as a pause bug.
+**8. A failed step resumes too.** Verified by
+`tests/pipeline/test_state.py::TestFirstUnfinishedStep::test_failed_step_resume_returns_to_it`,
+asserting `first_unfinished_step` returns a `FAILED` step's name rather than its
+successor — the same predicate change Part A made for `PAUSED`, per design D2.
+
+**Live CLI sanity checks (no live model calls):**
+
+```bash
+sq run --validate p45b 999
+# Pipeline 'P45B' is valid.
+
+sq run --dry-run p45b 999
+# Steps:
+#   loop-0 (loop)
+#     max: 3, until: review.pass, on_exhaust: checkpoint
+#     design-0 (design)
+#   loop-1 (loop)
+#     max: 3, until: review.pass, on_exhaust: checkpoint
+#     tasks-0 (tasks)
+#   summary-2 (summary)
+```
+
+Run against the operator's real `p45b.yaml` (two loop bodies with
+`checkpoint: on-fail`) — confirms the fix introduces no validation or dry-run
+regression on a real in-loop-checkpoint pipeline shape.
 
 ## Known Limitation
 
 **`each:` / `fan_out:` steps resume by restart, not re-entry.** Those paths return
 their `StepResult` without an `iteration`
-([executor.py:1424-1430](src/squadron/pipeline/executor.py#L1424-L1430)), so no
+([executor.py:1542-1547](src/squadron/pipeline/executor.py#L1542-L1547)), so no
 per-branch resume coordinate is recorded. Part A stops them from being *skipped*
 (a strict improvement over today's silent skip); Part B cannot re-enter them
 mid-fan-out, so a resumed `each:` step re-runs its branches from the start.
@@ -421,10 +455,13 @@ checkpoint inside an `each:` body; no shipped pipeline does today.
 
 **Changing `first_unfinished_step` changes resume for every pipeline, not just
 looping ones.** It is the single predicate behind both resume paths — and behind
-two further callers (see Verified Current Behavior): the next-step display at
-[run.py:799](src/squadron/cli/commands/run.py#L799) and the run finalizer at
-[run.py:653](src/squadron/cli/commands/run.py#L653). The blast radius is four
-call sites, not two.
+two further callers (see Verified Current Behavior, and Task 1.5's audit
+finding in the task breakdown): the next-step display at
+[run.py:812](src/squadron/cli/commands/run.py#L812) and the run finalizer at
+[run.py:666](src/squadron/cli/commands/run.py#L666). *(Cited lines as
+implemented, 20260813 — the pre-fix draft cited 799/653; both shifted when a
+small shared resume-iteration helper was added earlier in the file.)* The
+blast radius is four call sites, not two.
 
 Two distinct hazards:
 
@@ -432,10 +469,11 @@ Two distinct hazards:
    failed step. That is the intended fix, but it is a behavior change visible to
    anyone with paused runs on disk, bounded by the regression test in
    Verification step 5.
-2. The 653 finalizer stops marking runs `COMPLETED` when a paused or failed step
-   is present. This is also the intended fix — such runs were never complete —
-   but it changes a *persisted* outcome, not just a displayed one, so it is
-   audited and tested explicitly rather than assumed benign.
+2. The finalizer at run.py:666 stops marking runs `COMPLETED` when a paused or
+   failed step is present. This is also the intended fix — such runs were
+   never complete — but it changes a *persisted* outcome, not just a
+   displayed one, so it is audited and tested explicitly rather than assumed
+   benign (Verification step 6).
 
 **Mitigation:** land Part A with its own tests and commit before Parts B/C, so a
 bisect can separate "resume returns to paused steps" from "loops re-enter at a
