@@ -53,7 +53,7 @@ The design states `first_unfinished_step` has **two** callers. It has **four**:
 - [run.py:1159](src/squadron/cli/commands/run.py#L1159) — implicit paused-run detection
 
 The two display/finalize callers were not in the design's Component Structure.
-Task 1.4 audits them explicitly — the predicate change alters what they report,
+Task 1.5 audits them explicitly — the predicate change alters what they report,
 and the 653 caller *finalizes a run as COMPLETED* when the predicate returns
 `None`, which is a correctness-relevant path, not cosmetic.
 
@@ -118,7 +118,22 @@ reverted.
 **Success criteria:** returns the persisted round for a paused loop step; returns
 `0` for an unknown step name and for a non-loop step.
 
-### Task 1.4 — Audit the two non-resume `first_unfinished_step` callers
+### Task 1.4 — Test `resume_iteration_for`
+
+- [ ] Effort: 1/5
+- [ ] Add tests to [tests/pipeline/test_state.py](tests/pipeline/test_state.py),
+      following the Task 1.2 pattern in that file.
+- [ ] Case: a paused loop step recorded at iteration 2 → returns `2`.
+- [ ] Case: unknown step name → returns `0`.
+- [ ] Case: a non-loop step (recorded iteration `0`) → returns `0`.
+- [ ] Case: the same step name appearing twice in `completed_steps` → returns the
+      **last** occurrence's iteration, not the first.
+
+**Success criteria:** each branch of Task 1.3's contract is asserted directly.
+The end-to-end test in Task 3.6 exercises only the happy path, so this unit test
+is what catches a first-vs-last or absent-vs-zero regression.
+
+### Task 1.5 — Audit the two non-resume `first_unfinished_step` callers
 
 - [ ] Effort: 1/5
 - [ ] Read [run.py:653](src/squadron/cli/commands/run.py#L653) (finalize-on-`None`)
@@ -136,7 +151,7 @@ reverted.
 **Success criteria:** both callers are read and their post-change behavior is
 stated explicitly — no caller of the changed predicate is left unexamined.
 
-### Task 1.5 — Test the non-resume callers at CLI level
+### Task 1.6 — Test the non-resume callers at CLI level
 
 - [ ] Effort: 2/5
 - [ ] Add a test covering the 653 finalize path: a run state containing a paused
@@ -148,7 +163,7 @@ stated explicitly — no caller of the changed predicate is left unexamined.
 
 **Success criteria:** both tests fail against pre-Task-1.1 behavior and pass after.
 
-### Task 1.6 — Verify, format, and commit Part A alone
+### Task 1.7 — Verify, format, and commit Part A alone
 
 - [ ] Effort: 1/5
 - [ ] Run `ruff format .`, then `ruff check .`, then strict `pyright` — all clean.
@@ -241,9 +256,14 @@ the default `1` reproduces today's behavior exactly for both loop shapes.
       `start_iteration=2`, `max: 3` → exactly two rounds execute, numbered 2 and 3.
 - [ ] `start_iteration=1` (default) → unchanged from current behavior.
 - [ ] `start_iteration == max` → exactly one round runs.
-- [ ] `start_iteration > max` → zero rounds run; assert the resulting status and
-      that this does not raise. Decide and record the intended status for this
-      degenerate case rather than leaving it to fall out of the range.
+- [ ] `start_iteration > max` → zero rounds run. This is only reachable from
+      malformed resume state (a recorded iteration above the loop's `max:`).
+      Do **not** let the status fall out of an empty range: treat it as a
+      **failure**, not a silent success — returning `COMPLETED` for a loop that
+      ran no rounds would re-create the exact class of bug this slice fixes
+      (a loop reporting doneness it never reached). Log at WARNING naming the
+      step, the requested iteration, and `max:`.
+- [ ] Assert both the returned status and the WARNING for that case.
 - [ ] Cover the single-step (`_execute_loop_step`) path as well as the multi-step
       one.
 
@@ -271,8 +291,11 @@ range on both paths.
 ### Task 3.4 — Test `execute_pipeline` iteration threading
 
 - [ ] Effort: 2/5
-- [ ] Add tests in [tests/pipeline/test_executor.py](tests/pipeline/test_executor.py)
-      (or the loop test file if that matches existing organization better).
+- [ ] Add tests to
+      [tests/pipeline/test_executor_loop_body.py](tests/pipeline/test_executor_loop_body.py).
+      That file already imports and drives `execute_pipeline` directly and is the
+      loop-focused suite, so `start_from_iteration` coverage belongs there rather
+      than in the general `test_executor.py`.
 - [ ] Case: `start_from` a loop step with `start_from_iteration=2` → the loop runs
       rounds 2+ and an INFO naming step and round is emitted.
 - [ ] Case: `start_from` a non-loop step with a non-zero iteration → behavior
