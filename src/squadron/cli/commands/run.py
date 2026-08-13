@@ -174,12 +174,22 @@ def _check_cf(cf_client: ContextForgeClient) -> None:
         raise typer.Exit(1)
 
 
+def _resolve_resume_iteration(state_mgr: StateManager, run_id: str, step_name: str) -> int:
+    """Look up the round to resume *step_name* at (slice 915 Part B).
+
+    Single source for both resume entry points (--resume and implicit
+    paused-run detection) so neither carries its own copy of the lookup.
+    """
+    return state_mgr.resume_iteration_for(run_id, step_name)
+
+
 async def _run_pipeline(
     pipeline_name: str,
     params: dict[str, object],
     model_override: str | None = None,
     runs_dir: Path | None = None,
     from_step: str | None = None,
+    from_iteration: int = 0,
     sdk_session: object | None = None,
     run_id: str | None = None,
     execution_mode: ExecutionMode = ExecutionMode.SDK,
@@ -231,6 +241,7 @@ async def _run_pipeline(
             cf_client=cf_client,
             run_id=run_id,
             start_from=from_step,
+            start_from_iteration=from_iteration,
             sdk_session=sdk_session,  # type: ignore[arg-type]
             pool_policy=pool_policy,
             on_step_complete=state_mgr.make_step_callback(run_id),
@@ -258,6 +269,7 @@ async def _run_pipeline_sdk(
     model_override: str | None = None,
     runs_dir: Path | None = None,
     from_step: str | None = None,
+    from_iteration: int = 0,
     run_id: str | None = None,
     strict: bool = False,
 ) -> PipelineResult:
@@ -359,6 +371,7 @@ async def _run_pipeline_sdk(
             model_override=model_override,
             runs_dir=runs_dir,
             from_step=from_step,
+            from_iteration=from_iteration,
             sdk_session=session,
             run_id=run_id,
             execution_mode=ExecutionMode.SDK,
@@ -1103,6 +1116,7 @@ def run(
         if resume_from is None:
             rprint("[yellow]All steps already completed. Nothing to resume.[/yellow]")
             raise typer.Exit(0)
+        resume_iteration = _resolve_resume_iteration(state_mgr, resume, resume_from)
 
         resume_model = model or str(state.params.get("model")) if state.params.get("model") else model
 
@@ -1117,6 +1131,7 @@ def run(
                             model_override=resume_model,
                             run_id=run_id,
                             from_step=resume_from,
+                            from_iteration=resume_iteration,
                             strict=strict,
                         )
                     )
@@ -1128,6 +1143,7 @@ def run(
                             model_override=resume_model,
                             run_id=run_id,
                             from_step=resume_from,
+                            from_iteration=resume_iteration,
                         )
                     )
         except KeyboardInterrupt:
@@ -1158,6 +1174,9 @@ def run(
             if typer.confirm(f"Found a paused run ({match.run_id}). Resume?", default=True):
                 implicit_from = state_mgr.first_unfinished_step(match.run_id, definition)
                 if implicit_from is not None:
+                    implicit_iteration = _resolve_resume_iteration(
+                        state_mgr, match.run_id, implicit_from
+                    )
                     try:
                         match match.execution_mode:
                             case ExecutionMode.SDK:
@@ -1168,6 +1187,7 @@ def run(
                                         model_override=model,
                                         run_id=match.run_id,
                                         from_step=implicit_from,
+                                        from_iteration=implicit_iteration,
                                         strict=strict,
                                     )
                                 )
@@ -1179,6 +1199,7 @@ def run(
                                         model_override=model,
                                         run_id=match.run_id,
                                         from_step=implicit_from,
+                                        from_iteration=implicit_iteration,
                                     )
                                 )
                     except KeyboardInterrupt:
