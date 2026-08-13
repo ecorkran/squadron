@@ -217,7 +217,11 @@ class TestCliIntegration:
 
         final = mgr.load(run_id)
         assert final.status == "completed"
-        assert len(final.completed_steps) == 10
+        # 10 top-level steps, but the paused step ("tasks") is recorded twice:
+        # once as PAUSED, once as COMPLETED on resume (slice 915 Part A —
+        # first_unfinished_step now returns to the paused step and it
+        # re-executes, rather than being skipped as already-done).
+        assert len(final.completed_steps) == 11
 
     # -------------------------------------------------------------------
     # T18: --from mid-process adoption

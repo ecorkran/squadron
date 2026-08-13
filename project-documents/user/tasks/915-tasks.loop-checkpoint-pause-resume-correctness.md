@@ -151,6 +151,26 @@ is what catches a first-vs-last or absent-vs-zero regression.
 **Success criteria:** both callers are read and their post-change behavior is
 stated explicitly — no caller of the changed predicate is left unexamined.
 
+**Finding (recorded during Phase 6 implementation, 20260813):** Both callers
+are the **prompt-only** mode entry points (`--prompt-only --next` and
+`--step-done`), distinct from the SDK-mode resume paths at 1102/1159.
+
+- **653** (`_handle_prompt_only_next`): post-fix, `next_name is None` is only
+  reached when every step is truly `COMPLETED`. A run containing a
+  paused/failed step now has that step re-emitted as "next" instead of
+  falling through to the finalize-as-`COMPLETED` branch — confirmed by
+  reading the branch, not assumed.
+- **799** (`_handle_step_done`): post-fix, `--step-done` on a run with a
+  paused/failed current step now re-targets *that* step instead of its
+  successor, so it (re-)marks the paused/failed step complete rather than
+  skipping past it into wrongly marking the next step complete.
+
+No adjustment made — `completed_steps` is already append-only with no
+uniqueness assumption elsewhere in the codebase (verified: only three read
+sites, none deduplicate by name), so a duplicate entry for a retried step is
+already normal, and `resume_iteration_for` (Task 1.3) already resolves
+duplicates by taking the last occurrence.
+
 ### Task 1.6 — Test the non-resume callers at CLI level
 
 - [ ] Effort: 2/5

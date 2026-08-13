@@ -546,20 +546,18 @@ class TestFirstUnfinishedStep:
         result = state_manager.first_unfinished_step(run_id, defn)
         assert result == "implement"
 
-    def test_paused_loop_step_is_recorded_completed_and_resume_skips_it(
+    def test_paused_loop_step_is_recorded_but_resume_returns_to_it(
         self, state_manager: StateManager
     ) -> None:
-        """Squadron has no mid-loop resume: a loop step that pauses mid-iteration
-        is appended to completed_steps like any other, so resume continues past
-        it rather than re-entering the loop.
+        """A loop step that pauses mid-iteration is appended to
+        completed_steps like any other, but its recorded status is
+        "paused" — so resume returns to that step, not past it.
 
-        Pinned by slice 305 (T28): the findings-addressed policy deliberately
-        contains no resume special case, because there is no execution path
-        where it runs against a resumed round with the prior round missing. If
-        resume granularity ever changes, this test must fail loudly rather than
-        that assumption silently becoming wrong. Whether a checkpoint-paused
-        loop *should* be re-enterable is a real question — issue #48 — and not
-        this slice's.
+        Fixes issue #48 (slice 915 Part A): resume was previously
+        skipping loops that paused on an inner checkpoint, silently
+        abandoning every remaining round. Whether a checkpoint-paused
+        loop *should* be re-enterable was the open question issue #48
+        raised; slice 915 answers it (D1: yes, resume re-enters).
         """
         run_id = state_manager.init_run("pipe", {})
         cb = state_manager.make_step_callback(run_id)
@@ -577,6 +575,19 @@ class TestFirstUnfinishedStep:
         assert state.status == ExecutionStatus.PAUSED.value
 
         defn = _make_definition(["design", "fix-loop", "implement"])
+        assert state_manager.first_unfinished_step(run_id, defn) == "fix-loop"
+
+    def test_failed_step_resume_returns_to_it(self, state_manager: StateManager) -> None:
+        """A FAILED step is treated the same as PAUSED (design D2): the
+        top-level walk records it complete via the same unconditional
+        append, so resume must return to it rather than past it.
+        """
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        cb(_make_step_result(step_name="implement", status=ExecutionStatus.FAILED))
+
+        defn = _make_definition(["design", "implement", "review"])
         assert state_manager.first_unfinished_step(run_id, defn) == "implement"
 
     def test_all_completed_returns_none(self, state_manager: StateManager) -> None:
@@ -587,6 +598,78 @@ class TestFirstUnfinishedStep:
         defn = _make_definition(["design", "tasks", "implement"])
         result = state_manager.first_unfinished_step(run_id, defn)
         assert result is None
+
+    def test_paused_step_followed_by_completed_returns_paused_not_last_gap(
+        self, state_manager: StateManager
+    ) -> None:
+        """A paused step followed by later completed steps must still return
+        the paused step — proving the predicate isn't merely finding the
+        last gap in the sequence.
+        """
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        cb(_make_step_result(step_name="review-loop", status=ExecutionStatus.PAUSED))
+        cb(_make_step_result(step_name="implement"))
+
+        defn = _make_definition(["design", "review-loop", "implement", "deploy"])
+        assert state_manager.first_unfinished_step(run_id, defn) == "review-loop"
+
+
+# ---------------------------------------------------------------------------
+# T17: resume_iteration_for tests
+# ---------------------------------------------------------------------------
+
+
+class TestResumeIterationFor:
+    def test_paused_loop_step_returns_recorded_iteration(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(
+            StepResult(
+                step_name="review-loop",
+                step_type="loop",
+                status=ExecutionStatus.PAUSED,
+                action_results=[],
+                iteration=2,
+            )
+        )
+        assert state_manager.resume_iteration_for(run_id, "review-loop") == 2
+
+    def test_unknown_step_name_returns_zero(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        assert state_manager.resume_iteration_for(run_id, "does-not-exist") == 0
+
+    def test_non_loop_step_with_no_iteration_returns_zero(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        assert state_manager.resume_iteration_for(run_id, "design") == 0
+
+    def test_repeated_step_name_returns_last_occurrence(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(
+            StepResult(
+                step_name="review-loop",
+                step_type="loop",
+                status=ExecutionStatus.PAUSED,
+                action_results=[],
+                iteration=1,
+            )
+        )
+        cb(
+            StepResult(
+                step_name="review-loop",
+                step_type="loop",
+                status=ExecutionStatus.PAUSED,
+                action_results=[],
+                iteration=3,
+            )
+        )
+        assert state_manager.resume_iteration_for(run_id, "review-loop") == 3
 
 
 # ---------------------------------------------------------------------------

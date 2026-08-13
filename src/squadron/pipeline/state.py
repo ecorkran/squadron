@@ -43,6 +43,13 @@ __all__ = [
 _SCHEMA_VERSION = 4
 _SUPPORTED_SCHEMA_VERSIONS = {3, 4}
 
+# Statuses that mean "not actually done" despite being recorded in
+# completed_steps. FAILED is included because the top-level walk appends the
+# step via the same unconditional _append_step before returning on failure
+# (see executor.py), so a failed step is recorded complete by the identical
+# mechanism a paused step is.
+_RESUMABLE_STATUSES = {ExecutionStatus.PAUSED.value, ExecutionStatus.FAILED.value}
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -436,13 +443,34 @@ class StateManager:
         return prior
 
     def first_unfinished_step(self, run_id: str, definition: PipelineDefinition) -> str | None:
-        """Return name of the first step in definition not in completed_steps."""
+        """Return name of the first step in definition not completed.
+
+        A step recorded with a status in _RESUMABLE_STATUSES (PAUSED, FAILED)
+        is not treated as done, so resume returns to that step rather than
+        past it.
+        """
         state = self.load(run_id)
-        completed = {s.step_name for s in state.completed_steps}
+        completed = {s.step_name for s in state.completed_steps if s.status not in _RESUMABLE_STATUSES}
         for step in definition.steps:
             if step.name not in completed:
                 return step.name
         return None
+
+    def resume_iteration_for(self, run_id: str, step_name: str) -> int:
+        """Return the recorded loop iteration to resume *step_name* at.
+
+        First reader of StepState.iteration. Returns 0 (the established
+        "not in a loop" sentinel; see ActionContext.iteration and
+        _execute_step_once) when the step is absent from completed_steps or
+        its recorded iteration is 0. If the step name appears more than
+        once, returns the last occurrence's iteration.
+        """
+        state = self.load(run_id)
+        iteration = 0
+        for step_state in state.completed_steps:
+            if step_state.step_name == step_name:
+                iteration = step_state.iteration
+        return iteration
 
     def list_runs(
         self,
