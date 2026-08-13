@@ -986,6 +986,84 @@ class TestPromptOnly:
         assert result.exit_code == 0
         assert "already completed" in result.output
 
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_next_paused_step_not_finalized_completed(
+        self, mock_cls: MagicMock, mock_load: MagicMock
+    ) -> None:
+        """Slice 915 Part A: first_unfinished_step now returns a paused step's
+        name rather than None, so a run containing a paused step must not
+        take the finalize-as-COMPLETED branch at run.py:653."""
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={"slice": "required"},
+            steps=[
+                StepConfig(step_type="devlog", name="devlog-0", config={"mode": "auto"}),
+                StepConfig(step_type="devlog", name="devlog-1", config={"mode": "auto"}),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        # Post-fix predicate output: the paused step, not None.
+        mock_mgr.first_unfinished_step.return_value = "devlog-1"
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={"slice": "152"},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="paused",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+
+        result = runner.invoke(
+            app,
+            ["run", "--prompt-only", "--next", "--resume", "run-123"],
+        )
+        assert result.exit_code == 0
+        parsed = _extract_json(result.output)
+        assert parsed["step_name"] == "devlog-1"
+        mock_mgr.finalize.assert_not_called()
+
+    @patch("squadron.cli.commands.run._run_post_action_bindings_for_step_done")
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_step_done_reports_paused_step_as_next(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_post_action: MagicMock
+    ) -> None:
+        """Slice 915 Part A: --step-done's next-step lookup (run.py:799) now
+        names the paused step itself rather than its successor."""
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={},
+            steps=[
+                StepConfig(step_type="design", name="design-0", config={"phase": 4}),
+                StepConfig(step_type="design", name="design-1", config={"phase": 5}),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        # Post-fix predicate output: the paused step, not its successor.
+        mock_mgr.first_unfinished_step.return_value = "design-0"
+        mock_state = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="paused",
+        )
+        mock_mgr.load.return_value = mock_state
+        mock_cls.return_value = mock_mgr
+        mock_post_action.return_value = None
+
+        result = runner.invoke(app, ["run", "--step-done", "run-123"])
+        assert result.exit_code == 0
+        mock_mgr.record_step_done.assert_called_once_with("run-123", "design-0", "design", verdict=None)
+
 
 class TestStepDonePostActionParity:
     """Design D9: --step-done runs POST_ACTION bindings before recording."""

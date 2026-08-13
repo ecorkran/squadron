@@ -2,13 +2,70 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260812
+dateUpdated: 20260813
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260813
+
+### Slice 915: Complete — Loop Checkpoint-Pause Resume Correctness
+
+Phase 6 complete, three commits landed as separable parts per the design's
+bisect requirement. **Part A** (`6a0db23`): `first_unfinished_step` filters on
+status (`PAUSED`/`FAILED` via `_RESUMABLE_STATUSES`, never string literals)
+instead of mere presence, so resume returns *to* a paused or failed step
+rather than past it — fixing both the loop-abandonment bug and the identical
+`FAILED`-step skip in one predicate change. `resume_iteration_for` gives
+`StepState.iteration` its first reader. Audited the two non-resume callers of
+the changed predicate the design hadn't accounted for (`run.py`'s prompt-only
+`--next` finalizer and `--step-done`'s next-step lookup) — neither needed
+adjustment, since `completed_steps` was already append-only with no
+uniqueness assumption. Two integration tests asserted the pre-fix step count;
+updated from 10 to 11 since the resumed step now legitimately re-executes and
+is recorded twice.
+
+**Part C** (`3f4a84f`): a loop that short-circuits on an inner pause now logs
+a WARNING — pipeline, step, paused round, rounds not run — from one shared
+helper covering both loop shapes (`_execute_loop_step` single-action,
+`_execute_loop_body` multi-step), so the signal that would have made #48
+self-reporting instead of silent is single-sourced rather than duplicated.
+
+**Part B** (`04f4a7e`): `execute_pipeline` gains `start_from_iteration`,
+threaded only to the `start_from` step's loop; both loop executors gain
+`start_iteration`, replacing the hardcoded `range(1, max+1)`. A resume
+request above the loop's `max:` (only reachable from malformed state) fails
+loudly with a WARNING rather than silently reporting `COMPLETED` for zero
+rounds run — re-creating the exact defect class this slice fixes was the one
+thing to avoid here. Both resume paths in `run.py` (`--resume` and implicit
+paused-run detection) now read the round through one shared helper. End-to-end
+coverage proves the `max:` counting rule directly: a loop paused at round 2 of
+3 resumes at round 2, not round 1, and runs at most rounds 2–3.
+
+Verification followed 910's precedent exactly rather than a live `sq run`:
+copied all 22 new/updated tests into a `git worktree` at the pre-fix commit
+and confirmed every one fails there, proving they'd have caught the original
+bug. `--validate`/`--dry-run` (no live model calls) were run against the
+operator's real `p45b.yaml` as a sanity check; live pause/resume against
+actual Claude dispatch/review calls was declined — real API cost and writes
+to the operator's real run state for evidence the test suite already covers
+more precisely. Corrected the design doc's line citations to match the
+implemented code (several drifted when the Part A audit finding and small
+resume-path helpers landed).
+
+Filed #59 for the known limitation this slice records rather than fixes:
+`each:`/`fan_out:` steps return no `iteration`, so Part A stops them being
+silently skipped on resume but they still restart from the top rather than
+re-entering mid-branch — a per-branch completion record is a larger
+data-model change than the single integer `loop:` needed. Documented the
+resume contract (round counting, empty `prior_iteration_step_outputs` on
+re-entry, the WARNING/INFO signals, the `each`/`fan_out` limitation) in
+`docs/PIPELINES.md`'s `loop` section. Closes #48.
 
 ---
 

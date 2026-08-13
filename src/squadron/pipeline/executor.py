@@ -503,6 +503,7 @@ async def execute_pipeline(
     cwd: str | None = None,
     run_id: str | None = None,
     start_from: str | None = None,
+    start_from_iteration: int = 0,
     sdk_session: SDKExecutionSession | None = None,
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     on_step_complete: Callable[[StepResult], None] | None = None,
@@ -527,6 +528,12 @@ async def execute_pipeline(
         Unique run identifier; auto-generated if not provided.
     start_from:
         Step name to resume from; earlier steps are skipped.
+    start_from_iteration:
+        Loop round to resume at, applied only to the ``start_from`` step
+        (slice 915 Part B / design D3). Clamped to ``>= 1`` when that step
+        is a loop; ignored (logged at DEBUG) when it is not, since a
+        non-loop step has no rounds to re-enter. ``0`` (default) means "no
+        resume round" and behaves exactly as before this parameter existed.
     sdk_session:
         Pre-connected SDK session; ``None`` for non-SDK or lazy pipelines.
     pool_policy:
@@ -718,6 +725,9 @@ async def execute_pipeline(
                 get_step_type_fn=get_step_type,
                 get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
                 runs_dir=runs_dir,
+                start_iteration=_resume_start_iteration(
+                    step=step, start_from=start_from, start_from_iteration=start_from_iteration
+                ),
             )
         else:
             # Check for loop config
@@ -744,8 +754,19 @@ async def execute_pipeline(
                     get_step_type_fn=get_step_type,
                     get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
                     runs_dir=runs_dir,
+                    start_iteration=_resume_start_iteration(
+                        step=step,
+                        start_from=start_from,
+                        start_from_iteration=start_from_iteration,
+                    ),
                 )
             else:
+                if step.name == start_from and start_from_iteration != 0:
+                    _logger.debug(
+                        "executor: start_from_iteration=%d ignored for non-loop step '%s'",
+                        start_from_iteration,
+                        step.name,
+                    )
                 step_result = await _execute_step_once(
                     step=step,
                     resolved_config=resolved_config,
@@ -1074,6 +1095,72 @@ def _loop_exhaust_result(
     )
 
 
+def _warn_loop_abandoned_on_pause(
+    *, pipeline_name: str, step_name: str, iteration: int, loop_max: int
+) -> None:
+    """Log the observable signal for slice 915 Part A/#48: a checkpoint pause
+    inside a loop body silently abandoned every remaining round. Shared by
+    both loop shapes (_execute_loop_step, _execute_loop_body) so the message
+    is single-sourced rather than duplicated at each short-circuit.
+    """
+    rounds_not_run = loop_max - iteration
+    _logger.warning(
+        "pipeline %s: loop step %s paused at round %d of %d; %d round(s) not run",
+        pipeline_name,
+        step_name,
+        iteration,
+        loop_max,
+        rounds_not_run,
+    )
+
+
+def _resume_start_iteration(*, step: Any, start_from: str | None, start_from_iteration: int) -> int:
+    """Resolve the loop round to resume *step* at (slice 915 Part B, D3).
+
+    Applies only to the ``start_from`` step; every other loop step starts at
+    round 1. Clamps to ``>= 1`` — ``start_from_iteration=0`` is the "no
+    resume round" sentinel and must not become an invalid round 0. Emits the
+    resume-time INFO (design D4 signal 2) when re-entering above round 1.
+    """
+    if step.name != start_from or start_from_iteration <= 0:
+        return 1
+    iteration = max(1, start_from_iteration)
+    if iteration > 1:
+        _logger.info(
+            "pipeline resume: loop step %s re-entering at round %d",
+            step.name,
+            iteration,
+        )
+    return iteration
+
+
+def _degenerate_start_iteration_result(
+    *, step: Any, pipeline_name: str, start_iteration: int, loop_max: int
+) -> StepResult:
+    """Build the StepResult for a resume request above the loop's max: (slice
+    915 Part B). Only reachable from malformed resume state — a recorded
+    iteration greater than the loop's configured max. Returning COMPLETED
+    for a loop that ran zero rounds would re-create the exact defect class
+    this slice fixes (a loop reporting doneness it never reached), so this
+    fails loudly instead of falling out of an empty range() silently.
+    """
+    _logger.warning(
+        "pipeline %s: loop step %s resume requested at round %d, above max %d; no rounds run",
+        pipeline_name,
+        step.name,
+        start_iteration,
+        loop_max,
+    )
+    return StepResult(
+        step_name=step.name,
+        step_type=step.step_type,
+        status=ExecutionStatus.FAILED,
+        action_results=[],
+        iteration=start_iteration,
+        error=(f"resume requested at round {start_iteration}, above loop max {loop_max}"),
+    )
+
+
 async def _execute_loop_step(
     *,
     step: Any,
@@ -1092,6 +1179,7 @@ async def _execute_loop_step(
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
+    start_iteration: int = 1,
 ) -> StepResult:
     """Execute a step with loop configuration."""
     if loop_config.strategy is not None:
@@ -1109,9 +1197,17 @@ async def _execute_loop_step(
         config=action_config,
     )
 
+    if start_iteration > loop_config.max:
+        return _degenerate_start_iteration_result(
+            step=step,
+            pipeline_name=pipeline_name,
+            start_iteration=start_iteration,
+            loop_max=loop_config.max,
+        )
+
     last_result: StepResult | None = None
 
-    for iteration in range(1, loop_config.max + 1):
+    for iteration in range(start_iteration, loop_config.max + 1):
         result = await _execute_step_once(
             step=stripped_step,
             resolved_config=action_config,
@@ -1134,6 +1230,12 @@ async def _execute_loop_step(
 
         # Checkpoint pause always stops the loop
         if result.status == ExecutionStatus.PAUSED:
+            _warn_loop_abandoned_on_pause(
+                pipeline_name=pipeline_name,
+                step_name=step.name,
+                iteration=iteration,
+                loop_max=loop_config.max,
+            )
             return result
 
         # Check until condition if set
@@ -1179,6 +1281,7 @@ async def _execute_loop_body(
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
+    start_iteration: int = 1,
 ) -> StepResult:
     """Execute a ``loop:`` step type with a multi-step body.
 
@@ -1226,7 +1329,15 @@ async def _execute_loop_body(
     # never outlives its iteration.
     pre_loop_step_outputs = dict(step_outputs) if step_outputs is not None else {}
 
-    for iteration in range(1, loop_config.max + 1):
+    if start_iteration > loop_config.max:
+        return _degenerate_start_iteration_result(
+            step=step,
+            pipeline_name=pipeline_name,
+            start_iteration=start_iteration,
+            loop_max=loop_config.max,
+        )
+
+    for iteration in range(start_iteration, loop_config.max + 1):
         iteration_action_results = []
         iteration_step_outputs: dict[str, ActionResult] = {}
         # What the body's actions resolve step names against this round:
@@ -1282,6 +1393,12 @@ async def _execute_loop_body(
 
             # Checkpoint pause short-circuits the loop immediately
             if inner_result.status == ExecutionStatus.PAUSED:
+                _warn_loop_abandoned_on_pause(
+                    pipeline_name=pipeline_name,
+                    step_name=step.name,
+                    iteration=iteration,
+                    loop_max=loop_config.max,
+                )
                 return StepResult(
                     step_name=step.name,
                     step_type=step.step_type,
