@@ -1074,6 +1074,25 @@ def _loop_exhaust_result(
     )
 
 
+def _warn_loop_abandoned_on_pause(
+    *, pipeline_name: str, step_name: str, iteration: int, loop_max: int
+) -> None:
+    """Log the observable signal for slice 915 Part A/#48: a checkpoint pause
+    inside a loop body silently abandoned every remaining round. Shared by
+    both loop shapes (_execute_loop_step, _execute_loop_body) so the message
+    is single-sourced rather than duplicated at each short-circuit.
+    """
+    rounds_not_run = loop_max - iteration
+    _logger.warning(
+        "pipeline %s: loop step %s paused at round %d of %d; %d round(s) not run",
+        pipeline_name,
+        step_name,
+        iteration,
+        loop_max,
+        rounds_not_run,
+    )
+
+
 async def _execute_loop_step(
     *,
     step: Any,
@@ -1134,6 +1153,12 @@ async def _execute_loop_step(
 
         # Checkpoint pause always stops the loop
         if result.status == ExecutionStatus.PAUSED:
+            _warn_loop_abandoned_on_pause(
+                pipeline_name=pipeline_name,
+                step_name=step.name,
+                iteration=iteration,
+                loop_max=loop_config.max,
+            )
             return result
 
         # Check until condition if set
@@ -1282,6 +1307,12 @@ async def _execute_loop_body(
 
             # Checkpoint pause short-circuits the loop immediately
             if inner_result.status == ExecutionStatus.PAUSED:
+                _warn_loop_abandoned_on_pause(
+                    pipeline_name=pipeline_name,
+                    step_name=step.name,
+                    iteration=iteration,
+                    loop_max=loop_config.max,
+                )
                 return StepResult(
                     step_name=step.name,
                     step_type=step.step_type,

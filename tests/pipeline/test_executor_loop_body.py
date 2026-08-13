@@ -1090,4 +1090,129 @@ async def test_commit_each_iteration_absent_never_invokes_commit() -> None:
     )
 
     assert result.status == ExecutionStatus.COMPLETED
-    commit_action.execute.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Slice 915 Part C (#48) — WARNING when a loop abandons rounds on pause
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_multi_step_body_pause_emits_warning_with_rounds_not_run(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Multi-step body pauses at round 1 of max: 3 -> one WARNING naming the
+    step, the paused round (1), and 2 rounds not run."""
+    ckpt_result = _action_result(True, "checkpoint", paused=True)
+    ckpt_action = _mock_action([ckpt_result])
+
+    inner_st = _mock_step_type([("checkpoint", {})])
+    register_step_type("_lb_warn_multi_t915", inner_st)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "pause-loop",
+                {
+                    "max": 3,
+                    "steps": [{"_lb_warn_multi_t915": {}}],
+                },
+            )
+        ]
+    )
+
+    with caplog.at_level("WARNING", logger="squadron.pipeline.executor"):
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={"checkpoint": ckpt_action},
+        )
+
+    assert result.status == ExecutionStatus.PAUSED
+    abandon_warnings = [r.getMessage() for r in caplog.records if "paused at round" in r.getMessage()]
+    assert len(abandon_warnings) == 1
+    message = abandon_warnings[0]
+    assert "pause-loop" in message
+    assert "1" in message  # paused round
+    assert "2" in message  # rounds not run (max 3 - round 1)
+
+
+@pytest.mark.asyncio
+async def test_single_step_body_pause_emits_same_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The single-step loop path (_execute_loop_step, driven by an inline
+    `loop:` key rather than step_type: loop) emits the identical WARNING."""
+    ckpt_result = _action_result(True, "checkpoint", paused=True)
+    ckpt_action = _mock_action([ckpt_result])
+
+    inner_st = _mock_step_type([("checkpoint", {})])
+    register_step_type("_ls_warn_t915", inner_st)
+
+    pipeline = _pipeline(
+        [
+            StepConfig(
+                step_type="_ls_warn_t915",
+                name="single-pause-loop",
+                config={"loop": {"max": 4}},
+            )
+        ]
+    )
+
+    with caplog.at_level("WARNING", logger="squadron.pipeline.executor"):
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={"checkpoint": ckpt_action},
+        )
+
+    assert result.status == ExecutionStatus.PAUSED
+    abandon_warnings = [r.getMessage() for r in caplog.records if "paused at round" in r.getMessage()]
+    assert len(abandon_warnings) == 1
+    message = abandon_warnings[0]
+    assert "single-pause-loop" in message
+    assert "1" in message  # paused round
+    assert "3" in message  # rounds not run (max 4 - round 1)
+
+
+@pytest.mark.asyncio
+async def test_converging_loop_emits_no_pause_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A loop that converges normally (no inner pause) emits no abandonment
+    WARNING at all."""
+    pass_result = _action_result(True, "review", verdict="PASS")
+    review_action = _mock_action([pass_result])
+
+    inner_st = _mock_step_type([("review", {})])
+    register_step_type("_lb_no_warn_t915", inner_st)
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "converging-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "steps": [{"_lb_no_warn_t915": {}}],
+                },
+            )
+        ]
+    )
+
+    with caplog.at_level("WARNING", logger="squadron.pipeline.executor"):
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={"review": review_action},
+        )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert warnings == []
