@@ -354,19 +354,29 @@ is asserted at CLI level, not just at unit level.
 
 ### Task 4.1 — Execute the design's Verification Walkthrough
 
-- [ ] Effort: 2/5
-- [ ] Run all five steps of the Verification Walkthrough in the slice design
+- [ ] Effort: 3/5
+- [ ] Run all **eight** steps of the Verification Walkthrough in the slice design
       (§ Verification Walkthrough), which is marked *draft — to be executed and
-      corrected during Phase 6*.
+      corrected during Phase 6*. Steps 6–8 were added 20260813 to cover the
+      finalize caller, the single-step loop shape, and the `FAILED` resume path.
 - [ ] Step 1 requires reproducing the bug **before** the fix. If Part A is already
       committed, reproduce against the pre-fix commit rather than skipping the
       step — 910's practice was to prove the tests would have caught the original
       bug.
+- [ ] Step 6 must be confirmed against the **persisted state file**, not console
+      output alone — it is the only check in this slice covering a changed stored
+      outcome.
 - [ ] Correct the walkthrough text in the design document wherever reality differs
       from the draft. Do not leave a walkthrough that was never run.
+- [ ] Verify the design's corrected claims still hold against the code as
+      implemented: the four `first_unfinished_step` callers, and both loop paths
+      carrying the round range and the inner-pause short-circuit. If Phase 6 moves
+      any of these, update the design's Verified Current Behavior, Component
+      Structure, and Risk Assessment rather than leaving cited lines stale.
 
-**Success criteria:** all five steps executed; the design's walkthrough section
-reflects what actually happened.
+**Success criteria:** all eight steps executed; the design's walkthrough section
+reflects what actually happened; no cited line number in the design points
+somewhere else by the end of the slice.
 
 ### Task 4.2 — Document resume semantics in `docs/PIPELINES.md`
 

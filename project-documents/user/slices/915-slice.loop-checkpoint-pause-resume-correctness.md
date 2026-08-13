@@ -6,7 +6,7 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: [910, 911]
 interfaces: []
 dateCreated: 20260812
-dateUpdated: 20260812
+dateUpdated: 20260813
 status: not_started
 ---
 
@@ -94,6 +94,16 @@ which skips whole steps by name
 ([executor.py:644-650](src/squadron/pipeline/executor.py#L644-L650)). There is no
 existing notion of "resume *into* step X at iteration N." That absence is why
 re-entry is a design decision rather than a one-line predicate change.
+
+**`first_unfinished_step` has two further callers beyond the resume paths.**
+*(Corrected 20260813 during Phase 5 task breakdown; the original draft accounted
+for the two resume callers only.)* It is also called at
+[run.py:653](src/squadron/cli/commands/run.py#L653) — which **finalizes the run as
+`COMPLETED`** when the predicate returns `None` — and at
+[run.py:799](src/squadron/cli/commands/run.py#L799), the next-step display path.
+The 653 caller is correctness-relevant, not cosmetic: pre-fix, a run containing a
+paused step could be finalized as complete by that path. Part A therefore changes
+what all four callers observe, and each is audited and tested (tasks 1.5, 1.6).
 
 **`CheckpointState` is write-only.** It is set at
 [state.py:310](src/squadron/pipeline/state.py#L310) and read only for display
@@ -268,9 +278,11 @@ what a resumed round can honestly claim. This is stated in the round contract
 Two observable signals, both required, per `.claude/rules/review-code.md`
 (failure-mode enumeration):
 
-1. **At pause time** — when `_execute_loop_body` short-circuits on an inner
-   `PAUSED`, log at WARNING: pipeline, step name, paused iteration, and how many
-   rounds were not run (`max - iteration`). Today this returns silently.
+1. **At pause time** — when a loop short-circuits on an inner `PAUSED`, log at
+   WARNING: pipeline, step name, paused iteration, and how many rounds were not
+   run (`max - iteration`). Today this returns silently. This applies to **both**
+   loop shapes — `_execute_loop_body` (multi-step) and `_execute_loop_step`
+   (single-step) — from one shared message source, not two copies.
 2. **At resume time** — when resume re-enters a loop at iteration > 1, log at
    INFO naming the step and round, so the run log shows the loop was re-entered
    rather than re-run from scratch.
@@ -287,8 +299,9 @@ change to D1 makes abandonment intentional.
 | `pipeline/state.py` — `resume_iteration_for` **(new)** | Return the recorded `iteration` for a named step; first reader of `StepState.iteration` (Part B) |
 | `pipeline/executor.py` — `execute_pipeline` | New `start_from_iteration: int = 0`; thread to the `start_from` step (Part B) |
 | `pipeline/executor.py` — `_execute_loop_step` / `_execute_loop_body` | New `start_iteration: int = 1`; iterate `range(start_iteration, max + 1)` (Part B) |
-| `pipeline/executor.py` — `_execute_loop_body` | WARNING on inner-pause short-circuit (Part C) |
-| `cli/commands/run.py` | Both resume paths read the iteration and pass it through (Parts A/B) |
+| `pipeline/executor.py` — `_execute_loop_step` / `_execute_loop_body` | WARNING on inner-pause short-circuit, single-sourced across both paths (Part C) |
+| `pipeline/state.py` — `resume_iteration_for` unit tests | Direct coverage of the new reader (Part A) |
+| `cli/commands/run.py` | Both resume paths read the iteration and pass it through (Parts A/B); the two display/finalize callers of `first_unfinished_step` are audited (Part A) |
 | `docs/PIPELINES.md` | Document checkpoint-in-loop resume semantics and the `max:` counting rule |
 
 ## Success Criteria
@@ -309,6 +322,12 @@ change to D1 makes abandonment intentional.
 - A run whose steps all completed normally still reports "All steps already
   completed. Nothing to resume." — the Part A predicate must not make finished
   runs look resumable.
+- A run containing a paused or failed step is **not** finalized as `COMPLETED` by
+  the [run.py:653](src/squadron/cli/commands/run.py#L653) path.
+- A resume request for an iteration above the loop's `max:` (only reachable from
+  malformed state) **fails loudly** with a WARNING naming step, requested
+  iteration, and `max:` — it does not report `COMPLETED` for a loop that ran zero
+  rounds, which would re-create the defect class this slice fixes.
 
 ### Technical Requirements
 
@@ -362,6 +381,28 @@ and the count of rounds not run.
 checkpoint, run to completion, then `sq run --resume <run-id>`, must still report
 "All steps already completed. Nothing to resume."
 
+**6. The finalizer does not mark a paused run complete.** *(Added 20260813 —
+covers the [run.py:653](src/squadron/cli/commands/run.py#L653) caller the original
+draft did not account for.)* With the run from step 1 still paused, exercise the
+status/finalize path and confirm the run is **not** written to state as
+`COMPLETED`. Pre-fix, the predicate returned `None` for that run and the finalize
+branch was reachable; post-fix it returns the paused loop step and the branch is
+not taken. Confirm against the persisted state file, not only the console output —
+this is the one hazard in this slice that changes a stored outcome.
+
+**7. The single-step loop shape behaves identically.** Steps 1–4 use a multi-step
+loop body (`[dispatch, review]`, exercising `_execute_loop_body`). Repeat the
+pause, the WARNING check, and the re-entry check against a **single-step** loop
+body, which routes through `_execute_loop_step` instead. Both paths carry their
+own round range and their own inner-pause short-circuit, so a fix verified on only
+one shape is verified on half the surface.
+
+**8. A failed step resumes too.** Part A treats `FAILED` and `PAUSED` alike
+(design D2). Run a pipeline to a step failure, then `sq run --resume <run-id>`,
+and confirm resume returns to the failed step rather than past it. This path has
+no checkpoint involved and is easy to leave untested precisely because #48 was
+reported as a pause bug.
+
 ## Known Limitation
 
 **`each:` / `fan_out:` steps resume by restart, not re-entry.** Those paths return
@@ -379,11 +420,22 @@ checkpoint inside an `each:` body; no shipped pipeline does today.
 ## Risk Assessment
 
 **Changing `first_unfinished_step` changes resume for every pipeline, not just
-looping ones.** It is the single predicate behind both resume paths. The specific
-hazard is a run that previously reported "nothing to resume" now offering to
-re-run a failed step. That is the intended fix, but it is a behavior change
-visible to anyone with paused runs on disk, and the regression test in
-Verification step 5 exists to bound it.
+looping ones.** It is the single predicate behind both resume paths — and behind
+two further callers (see Verified Current Behavior): the next-step display at
+[run.py:799](src/squadron/cli/commands/run.py#L799) and the run finalizer at
+[run.py:653](src/squadron/cli/commands/run.py#L653). The blast radius is four
+call sites, not two.
+
+Two distinct hazards:
+
+1. A run that previously reported "nothing to resume" now offers to re-run a
+   failed step. That is the intended fix, but it is a behavior change visible to
+   anyone with paused runs on disk, bounded by the regression test in
+   Verification step 5.
+2. The 653 finalizer stops marking runs `COMPLETED` when a paused or failed step
+   is present. This is also the intended fix — such runs were never complete —
+   but it changes a *persisted* outcome, not just a displayed one, so it is
+   audited and tested explicitly rather than assumed benign.
 
 **Mitigation:** land Part A with its own tests and commit before Parts B/C, so a
 bisect can separate "resume returns to paused steps" from "loops re-enter at a
