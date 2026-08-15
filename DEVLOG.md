@@ -97,6 +97,51 @@ success criteria, but the "reintroduce #49's shape" step it praises is in the
 verification walkthrough. Body text names the right section; only the field is
 off.
 
+### Slice 913: Phase 5 Task Breakdown Complete
+
+Tasks at `user/tasks/913-tasks.ruff-rule-set-adoption-b-async-ble.md` — 386
+lines, no split needed. Fifteen tasks across the three parts plus a final
+verification group, sequenced A → B → C with each part's `select` change landing
+in the same task that zeroes its rule (D7), so no commit in history has a rule
+enabled and failing.
+
+Sized the mechanical work against per-file counts rather than totals, which
+changes how Part A is executed: Task 1.3 works largest-file-first —
+`run.py` (25 of the 54 `B904`), then `skills.py` and `dispatch_run.py` (4 each),
+down to six single-site files. A 54-site diff is unreviewable; a 25-site diff in
+one CLI module is not.
+
+Two tasks exist purely to prove a suppression didn't overreach, both derived
+from decisions the design made rather than from the rule counts. Task 1.2 plants
+a genuine `B006` in a CLI module and requires it to fire, proving the D1 `B008`
+ignore didn't disable `B` wholesale for that directory. Task 4.2 inventories the
+final suppression set and asserts `extend-exclude` appears nowhere — the F009
+narrowing is easy to silently undo at implementation time by reaching for the
+simpler form when the glob looks fiddly.
+
+Part C's task split follows blast radius, not file count. Task 3.2 isolates the
+two sites already identified as issue-#49-shaped
+(`prompt_renderer.py:158`'s silent degradation to a wrong-but-plausible
+dispatch, `executor.py:1603`'s tracebackless failure conversion), and Task 3.3
+is the only new-test task in the slice — those two are the sites where behavior
+actually changes. The remaining 21 are narrowings covered by the existing suite,
+split by subsystem (3.4 pipeline, 3.5 CLI/provider/client/core/events). Task 3.6
+gates on reading every retained `noqa` before `BLE` is enabled, since a
+`noqa` without justification is a failed criterion rather than a passing one
+with a note.
+
+Task 3.4 carries a specific instruction to read issue #49 before touching
+`actions/cf_op.py` — it is the module that defect lived in, and its remaining
+broad catch should be confirmed not to be a second instance of the same bug.
+
+Task 4.1 is the slice's acceptance test: reintroduce `except Exception: pass` in
+`pipeline/`, confirm `ruff check` fails, revert. If that step doesn't fail, the
+slice didn't deliver what it claims regardless of the violation count.
+
+Also carried into the tasks: the frontmatter gate rejects hyphenated status
+values (`not-started` failed the pre-commit hook when the design was first
+written), so Task 4.3 names the accepted set explicitly.
+
 ---
 
 ## 20260813
