@@ -2,13 +2,67 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260813
+dateUpdated: 20260815
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260815
+
+### Slice 913: Phase 4 Design Complete — Ruff Rule-Set Adoption (`B`, `ASYNC`, `BLE`)
+
+Design written to
+`user/slices/913-slice.ruff-rule-set-adoption-b-async-ble.md`. Re-measured every
+count against the current tree rather than trusting issue #50's figures, and two
+of the drifts changed the design rather than just the arithmetic.
+
+**`B904` is a CLI-shaped problem.** 53 of 54 sites are in
+`src/squadron/cli/commands/` — 25 in `run.py` alone — with one straggler in
+`pipeline/emit.py`. The plan describes Part A as a codebase-wide mechanical
+pass; it is a single-directory pass that happens to touch the same directory as
+the `B008` ignore. Far more reviewable than the raw count implies.
+
+**`BLE` is 28, not 23.** The 23-in-`src` figure is correct as far as it goes,
+but CI runs `ruff check` with no path argument, so it also lints the tracked
+`project-documents/user/reference/codebase-probe.py` — five more sites in a
+one-off analysis script that is not packaged, not imported, and appropriately
+best-effort. D3 excludes the documents tree from ruff rather than applying the
+production exception policy to a document-tree scratch script. Called out
+explicitly in both the design and the plan entry: it is the only part of this
+slice that removes something from CI's view instead of adding to it.
+
+Decisions worth recording: `B008` gets a directory-scoped `per-file-ignores`
+rather than 14 rewrites of the standard Typer idiom (D1), and the verification
+walkthrough proves the ignore didn't disable `B` wholesale for the CLI by
+planting a real `B006` and confirming it still fails. `B904` picks `from exc`
+vs. `from None` per site rather than uniformly (D2) — `ruff --fix` doesn't fix
+`B904`, so all 54 are hand-touched regardless and choosing correctly is free.
+`ASYNC240` in `client/http.py:42` is fixed with stdlib `asyncio.to_thread`, not
+the `anyio.Path`/`trio.Path` the rule message suggests — the project is
+asyncio-native and adding a dependency to satisfy a lint message is the wrong
+trade (D4). Test-side `ASYNC221` gets the same treatment rather than a `tests/`
+exemption, since those tests are what future tests get copied from (D5).
+
+Part C's `BLE` sites get a forced three-way choice — narrow, or keep-broad with
+`logger.exception` + justified `# noqa`, or fix a real bug — with "leave it
+broad without comment" explicitly excluded (D6). Two sites already look like
+#49's shape: `prompt_renderer.py:158` swallows a `resolver.resolve` failure into
+`model_id = action_model, profile = None`, silently degrading an unresolvable
+model into a wrong-but-plausible dispatch; and `executor.py:1603` converts any
+exception — including a programming error inside the `try` — into a `FAILED`
+StepResult with a bare message and no traceback. D6 caps the blast radius: a
+genuine bug of more than trivial size gets filed and fixed in its own slice, not
+absorbed under a lint banner.
+
+Rule sets are enabled one part at a time (D7), each in the commit that zeroes
+it, so no part leaves the build red and `git bisect` stays meaningful. The
+acceptance test for the slice is reintroducing #49's shape and watching CI catch
+it.
 
 ---
 
