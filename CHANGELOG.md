@@ -15,8 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 20260815
+
 ### Fixed
 - **Resuming a run no longer silently abandons a loop paused mid-round.** If a checkpoint inside a `loop:` body pauses the run, `sq run --resume` now re-enters that loop at the paused round instead of skipping past it — and a paused loop now logs a warning naming what round it stopped at and how many rounds it didn't run.
+- **Resuming a run no longer skips past a step that failed.** `sq run --resume` returned to the step *after* a `FAILED` one, so the failure was stepped over rather than retried. Resume now returns to any paused or failed step. Note that a resumed step is recorded again on completion, so a run's `completed_steps` may now list the same step twice — once paused or failed, once completed.
 
 ## [0.10.1] - 20260811
 
