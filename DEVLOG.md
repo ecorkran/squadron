@@ -31,10 +31,10 @@ the `B008` ignore. Far more reviewable than the raw count implies.
 but CI runs `ruff check` with no path argument, so it also lints the tracked
 `project-documents/user/reference/codebase-probe.py` — five more sites in a
 one-off analysis script that is not packaged, not imported, and appropriately
-best-effort. D3 excludes the documents tree from ruff rather than applying the
-production exception policy to a document-tree scratch script. Called out
+best-effort. D3 exempts the documents tree from `BLE001` rather than applying
+the production exception policy to a document-tree scratch script. Called out
 explicitly in both the design and the plan entry: it is the only part of this
-slice that removes something from CI's view instead of adding to it.
+slice that narrows what CI enforces instead of widening it.
 
 Decisions worth recording: `B008` gets a directory-scoped `per-file-ignores`
 rather than 14 rewrites of the standard Typer idiom (D1), and the verification
@@ -63,6 +63,39 @@ Rule sets are enabled one part at a time (D7), each in the commit that zeroes
 it, so no part leaves the build red and `git bisect` stays meaningful. The
 acceptance test for the slice is reintroducing #49's shape and watching CI catch
 it.
+
+### Slice 913: Design Review — PASS, D3 narrowed in response
+
+Review at `user/reviews/913-review.slice.ruff-rule-set-adoption-b-async-ble.md`
+(minimax/minimax-m3, reviewed `df47148`): **PASS**, eight pass findings and two
+notes, no blockers.
+
+**F009 acted on.** D3 originally read `extend-exclude = ["project-documents/"]`,
+dropping the whole tree from ruff. The reviewer's objection is correct and
+sharper than the tradeoff I recorded in the design: excluding the directory
+discards `E`/`F`/`W`/`I`/`UP` on a file that passes them today, not merely on
+hypothetical future scripts — a coverage reduction well past the problem, which
+was five `BLE001` sites in a best-effort probe. Narrowed to a rule-scoped
+`per-file-ignores` entry (`"project-documents/**/*.py" = ["BLE001"]`), which
+gives up only the rule that does not fit and keeps everything else live.
+Verified against the tree before committing rather than assuming the glob
+resolves: with the entry applied, `BLE` drops from 28 to exactly the 23 `src`
+sites and `ruff check --select E,F,W,I,UP project-documents/` still passes. The
+rejected alternative is recorded in D3 so it is not re-litigated at
+implementation. Success criteria gained an explicit "no `extend-exclude` is
+added" check and the walkthrough a step proving the tree kept its other
+coverage.
+
+**F010 accepted without change.** Document weight is high against the
+architecture's "lighter-weight given the maintenance nature" guidance, and the
+reviewer allows the complexity is defensible — the density sits in D6 and the
+re-measured baseline, which are the two things that caught real problems. Noted
+as a calibration point, not an alignment failure.
+
+One review defect, not verdict-affecting: F008's `location` points at the
+success criteria, but the "reintroduce #49's shape" step it praises is in the
+verification walkthrough. Body text names the right section; only the field is
+off.
 
 ---
 

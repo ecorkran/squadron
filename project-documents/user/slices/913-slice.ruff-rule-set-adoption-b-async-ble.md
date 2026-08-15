@@ -109,7 +109,7 @@ fix `B904` (confirmed: `--fix` reports no fixes available for it), so each of
 the 54 is touched by hand anyway. The cost of choosing correctly is therefore
 zero over choosing uniformly.
 
-### D3 — `codebase-probe.py` is excluded from lint, not fixed
+### D3 — the documents tree is exempted from `BLE` only, not from lint
 
 `project-documents/user/reference/codebase-probe.py` is a tracked
 one-off analysis script under the *documents* tree, not shipped code —
@@ -119,21 +119,29 @@ imported by anything. Its 5 `BLE001` sites are the appropriate shape for a
 best-effort probe that must not die on one unreadable file.
 
 Applying the production exception policy to it would be enforcing a rule
-against code the rule is not for. Exclude the documents tree from ruff:
+against code the rule is not for. Exempt the documents tree from that rule
+alone:
 
 ```toml
-[tool.ruff]
-extend-exclude = ["project-documents/"]
+[tool.ruff.lint.per-file-ignores]
+"project-documents/**/*.py" = ["BLE001"]
 ```
 
 Directory-scoped rather than naming the one file, because the reason is
 "documents are not source", which applies to any future script that lands
 there. **This is a scope decision the plan did not record** — flagged here
-because it is the only part of this slice that removes something from CI's
-view rather than adding to it. `E`/`F` currently pass on that file, so nothing
-regresses today; the tradeoff is that a future probe script gets no lint at
-all. Accepted: the alternative is holding document-tree scratch scripts to the
-production exception-handling contract.
+because it is the only part of this slice that narrows what CI enforces rather
+than widening it.
+
+**Alternative considered and rejected:** `extend-exclude =
+["project-documents/"]` under `[tool.ruff]`, which drops the tree from ruff
+entirely. Simpler to write, but it also discards `E`/`F`/`W`/`I`/`UP` on a file
+that passes them today, and on anything that lands there later — a real
+coverage reduction well beyond the problem being solved. The `per-file-ignores`
+form gives up only the rule that does not fit a best-effort probe and keeps
+every other rule live. Raised as F009 in the slice design review
+(`913-review.slice.ruff-rule-set-adoption-b-async-ble.md`) and narrowed here in
+response.
 
 ### D4 — `ASYNC240` in `http.py` is fixed, not annotated
 
@@ -245,9 +253,12 @@ lint-conformance change. Behavior verification is the concern:
 - [ ] `uv run ruff format --check`, `uv run pyright` (0 errors), and
       `uv run pytest` all pass — no regressions from a 3016-passing baseline.
 - [ ] The only ruff suppressions added are: the D1 `B008` `per-file-ignores`
-      entry, the D3 `extend-exclude`, and per-site `# noqa: BLE001` comments
-      each carrying a justification.
-- [ ] No blanket `per-file-ignores` for `BLE` or `ASYNC` anywhere.
+      entry, the D3 `BLE001` `per-file-ignores` entry for the documents tree,
+      and per-site `# noqa: BLE001` comments each carrying a justification.
+- [ ] No `extend-exclude` is added — the documents tree keeps
+      `E`/`F`/`W`/`I`/`UP` coverage (D3).
+- [ ] No blanket `per-file-ignores` for `BLE` or `ASYNC` anywhere in `src/` or
+      `tests/`.
 - [ ] Every retained broad catch has both a justifying comment and a
       `logger.exception` (or a documented reason it must be silent).
 - [ ] Any `BLE` site deferred under D6 has a filed issue, referenced in its
@@ -306,6 +317,15 @@ Read that last output site by site. A `noqa` without a justifying comment
 naming the boundary, or without a `logger.exception` nearby, is a failed
 criterion — not a passing one with a note.
 
+Confirm the D3 exemption is rule-scoped and did not cost the documents tree its
+other coverage:
+
+```bash
+grep -n 'extend-exclude' pyproject.toml                    # no match
+uv run ruff check --select E,F,W,I,UP project-documents/   # still enforced
+uv run ruff check --select BLE project-documents/          # clean via ignore
+```
+
 **Whole-slice confirmation** — the guide's baseline is met verbatim:
 
 ```bash
@@ -330,7 +350,7 @@ that produced #49 is now caught by CI rather than by review.
 |---|---|---|
 | A — `B` | `per-file-ignores` + 54 `B904` (53 in one dir) + 3 stragglers | 1/5 |
 | B — `ASYNC` | 6 sites, one production | 1/5 |
-| C — `BLE` | 23 `src` sites, one decision each + D3 exclude | 2/5 |
+| C — `BLE` | 23 `src` sites, one decision each + D3 ignore entry | 2/5 |
 
 Total 2/5, consistent with the plan. Part C carries essentially all of the risk
 and all of the value.
