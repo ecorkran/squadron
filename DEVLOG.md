@@ -142,6 +142,53 @@ Also carried into the tasks: the frontmatter gate rejects hyphenated status
 values (`not-started` failed the pre-commit hook when the design was first
 written), so Task 4.3 names the accepted set explicitly.
 
+### Slice 913: Task Breakdown Review — CONCERNS, three acted on
+
+Review at `user/reviews/913-review.tasks.ruff-rule-set-adoption-b-async-ble.md`
+(minimax/minimax-m3, reviewed `7174524`): **CONCERNS** — six pass, five concerns,
+two notes. Three concerns acted on, two declined with reasons.
+
+**F011 acted on** — the sharpest of the five. Task 1.3 spans 13 files, and
+nothing told the implementer not to commit partway through; doing so would leave
+a commit with the `B904` fixes but without `B` in `select`, the exact inverse of
+D7's contract. Added an explicit "do not commit here, Part A lands as one commit
+at Task 1.5" bullet naming 1.1/1.2/1.4 as well.
+
+**F008 acted on.** Task 3.2's scope guard was judgmental ("if it turns out to be
+a larger fix"), which is not a usable stopping rule for someone who has not read
+the resolver. Replaced with three observable triggers — the fix needs a file
+outside the two named modules, it changes a signature or return type, or the
+raisable set is not determinable from the resolver and its direct callees. Also
+stated that taking the guard is a *passing* outcome, not a failure, since an
+implementer who reads a stopping rule as an admission of defeat will push
+through it.
+
+**F007 acted on, but not as suggested.** The concern is real: Tasks 3.4/3.5
+narrow ~18 sites and lean on "the existing suite", and a narrowing that changes
+an untested path passes the suite by construction. The reviewer's proposed fix —
+review `--tb=long` output during the gate — does not address it, since that shows
+tracebacks for failing tests and these paths are silent when they change. Fixed
+instead by extending Task 3.6 into a per-site audit: for every narrowed site,
+record what now escapes and where it lands, and name the existing test covering
+that failure path or add one. Retitled and re-rated 1/5 → 2/5.
+
+**F009 declined.** The reviewer notes `extend-exclude` is mentioned repeatedly
+but never installed, and self-resolves it in the same paragraph ("no action
+needed... flagging only because a reviewer scanning for scope items might
+miscount"). The repetition is deliberate: it is the F009 narrowing from the
+*design* review, and the negative assertions in Tasks 3.1 and 4.2 exist so the
+simpler rejected form is not reached for at implementation time.
+
+**F010 declined.** Suggests the acceptance probe also exercise `B904` and an
+`async` variant. Task 4.1 tests one specific claim — that #49's shape is now
+caught mechanically — and `except Exception: pass` is exactly that shape. `B`
+and `ASYNC` are already gated by their own zero-violation checks at Tasks 1.5
+and 2.5; re-probing them in 4.1 tests ruff rather than the slice. Declining keeps
+the acceptance test pointed at the thing the slice claims.
+
+F012 (Part C is the largest commit) and F013 (no load test needed) were
+informational and need no change.
+
 ---
 
 ## 20260813

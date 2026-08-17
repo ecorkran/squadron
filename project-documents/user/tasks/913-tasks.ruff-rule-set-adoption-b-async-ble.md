@@ -116,6 +116,10 @@ with it applied, `BLE` drops from 28 to exactly the 23 `src` sites and
       available for `B904`.
 - [ ] Do not change control flow, exception types, or messages — this task is
       chaining only.
+- [ ] **Do not commit here.** Part A lands as one commit at Task 1.5.
+      Intermediate `git add` is fine; a commit before `select` gains `B` would
+      leave a commit in history with the fixes but not the rule, which is the
+      inverse of what D7 requires. The same applies to Tasks 1.1, 1.2, and 1.4.
 - [ ] Success: `uv run ruff check --select B904 --output-format=concise .` →
       `All checks passed!`
 
@@ -265,7 +269,15 @@ user" is not done — it needs a handler or outcome 2.
       the `try` reaches the user as a step failure with a bare message and no
       traceback. At minimum add the logging; narrow the type if the raisable set
       is knowable.
-- [ ] Apply the scope guard above if either turns out to be a larger fix.
+- [ ] **Concrete scope-guard trigger.** Start by reading `resolver.resolve` and
+      listing what it raises for an unknown alias. Stop, file an issue, and take
+      outcome 2 (`noqa` referencing the issue) if any of these hold:
+      the fix requires editing a file outside `prompt_renderer.py` /
+      `executor.py`; it requires changing a function signature or return type; or
+      the raisable set is not determinable by reading the resolver and its direct
+      callees. Otherwise proceed with outcome 1 or 3.
+- [ ] The guard is a stopping rule, not a failure — a filed issue with a
+      justified `noqa` is a complete, passing outcome for this task.
 - [ ] Success: both sites resolved to outcome 1, 2, or 3 with the reasoning
       recorded in the code comment or the filed issue.
 
@@ -314,9 +326,18 @@ user" is not done — it needs a handler or outcome 2.
       detail — a narrow candidate (JSON decode errors), not a boundary.
 - [ ] Success: `uv run ruff check --select BLE src/` → `All checks passed!`
 
-### Task 3.6 — Audit every retained `noqa` before enabling
+### Task 3.6 — Audit every narrowing and every retained `noqa` before enabling
 
-- [ ] Effort: 1/5
+- [ ] Effort: 2/5
+- [ ] **Per-site narrowing audit.** For every site resolved as outcome 1
+      (narrowed) in Tasks 3.4 and 3.5, record a one-line answer to the migration
+      plan's question: *what now escapes that did not before, and where does it
+      land?* A site whose answer is "an unhandled traceback to the user" is not
+      done — it needs a handler or outcome 2.
+- [ ] For each narrowed site, name the existing test that exercises its failure
+      path. If none exists, either add one or state why the escaping exception is
+      unreachable in practice. Do not rely on "the suite passes" alone — a
+      narrowing that changes an untested path passes the suite by construction.
 - [ ] Run `grep -rn -B3 'noqa: BLE001' src/` and read every hit.
 - [ ] Each must have: a comment naming why the boundary must not let anything
       escape, and a `logger.exception` nearby — or an explicit documented reason
