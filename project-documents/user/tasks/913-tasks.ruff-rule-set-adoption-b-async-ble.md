@@ -5,9 +5,9 @@ project: squadron
 lldReference: project-documents/user/slices/913-slice.ruff-rule-set-adoption-b-async-ble.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
-status: not_started
+status: complete
 dateCreated: 20260815
-dateUpdated: 20260815
+dateUpdated: 20260817
 ---
 
 # Tasks: Ruff Rule-Set Adoption — `B`, `ASYNC`, `BLE`
@@ -350,15 +350,15 @@ user" is not done — it needs a handler or outcome 2.
 
 ### Task 3.7 — Enable `BLE`, remove the stale comment, and gate Part C
 
-- [ ] Effort: 1/5
-- [ ] Add `"BLE"` to `select`. The final list must read exactly
+- [x] Effort: 1/5
+- [x] Add `"BLE"` to `select`. The final list must read exactly
       `["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]`, matching the guide's
       baseline.
-- [ ] Delete the deferral comment at
+- [x] Delete the deferral comment at
       [pyproject.toml:74-79](pyproject.toml#L74-L79) — it stops being true here.
-- [ ] Run the full per-part gate (same four commands as Task 1.5).
-- [ ] Commit Part C.
-- [ ] Success: all gate commands pass; `BLE` is live.
+- [x] Run the full per-part gate (same four commands as Task 1.5).
+- [x] Commit Part C.
+- [x] Success: all gate commands pass; `BLE` is live.
 
 ---
 
@@ -366,42 +366,42 @@ user" is not done — it needs a handler or outcome 2.
 
 ### Task 4.1 — Confirm the rules are load-bearing
 
-- [ ] Effort: 1/5
-- [ ] This is the acceptance test for the slice: reintroduce issue #49's shape and
+- [x] Effort: 1/5
+- [x] This is the acceptance test for the slice: reintroduce issue #49's shape and
       confirm CI would now catch it.
-- [ ] Temporarily add `try: pass` / `except Exception: pass` to any
+- [x] Temporarily add `try: pass` / `except Exception: pass` to any
       `src/squadron/pipeline/*.py` file.
-- [ ] Run `uv run ruff check` and confirm it **fails** with `BLE001`.
-- [ ] Revert. Confirm `git status` is clean.
-- [ ] Success: the failure mode that produced #49 is now caught mechanically
+- [x] Run `uv run ruff check` and confirm it **fails** with `BLE001`.
+- [x] Revert. Confirm `git status` is clean.
+- [x] Success: the failure mode that produced #49 is now caught mechanically
       rather than by review.
 
 ### Task 4.2 — Confirm the suppression inventory
 
-- [ ] Effort: 1/5
-- [ ] `grep -n 'select = ' pyproject.toml` → the guide's baseline, verbatim.
-- [ ] `grep -A4 'per-file-ignores' pyproject.toml` → exactly two entries: `B008`
+- [x] Effort: 1/5
+- [x] `grep -n 'select = ' pyproject.toml` → the guide's baseline, verbatim.
+- [x] `grep -A4 'per-file-ignores' pyproject.toml` → exactly two entries: `B008`
       for `src/squadron/cli/commands/*.py`, and `BLE001` for
       `project-documents/**/*.py`. No others.
-- [ ] `grep -n 'extend-exclude' pyproject.toml` → no match.
-- [ ] No blanket `per-file-ignores` for `BLE` or `ASYNC` anywhere in `src/` or
+- [x] `grep -n 'extend-exclude' pyproject.toml` → no match.
+- [x] No blanket `per-file-ignores` for `BLE` or `ASYNC` anywhere in `src/` or
       `tests/`.
-- [ ] Success: the only suppressions present are the two config entries and the
+- [x] Success: the only suppressions present are the two config entries and the
       justified per-site `noqa` comments.
 
 ### Task 4.3 — Update slice and plan status
 
-- [ ] Effort: 1/5
-- [ ] Set `status: complete` in the slice design frontmatter
+- [x] Effort: 1/5
+- [x] Set `status: complete` in the slice design frontmatter
       (`913-slice.ruff-rule-set-adoption-b-async-ble.md`) and in this task file.
       The gate accepts `complete`, `in_progress`, `not_started`, `deprecated`,
       `deferred` — hyphenated forms fail.
-- [ ] Check off entry 11 in
+- [x] Check off entry 11 in
       [900-slices.maintenance-and-refactoring.md](project-documents/user/architecture/900-slices.maintenance-and-refactoring.md)
       and set its `**Status:**` line to complete with the date.
-- [ ] Update [issue #50](https://github.com/ecorkran/squadron/issues/50) — steps
+- [x] Update [issue #50](https://github.com/ecorkran/squadron/issues/50) — steps
       1–3 done, step 4 (pyright over tests) remains as slice 914.
-- [ ] Write the DEVLOG entry per `prompt.ai-project.system.md`, Session State
+- [x] Write the DEVLOG entry per `prompt.ai-project.system.md`, Session State
       Summary. Record any `BLE` site that turned out to be a real bug, and any
       issue filed under the scope guard.
-- [ ] Success: slice, plan, issue, and DEVLOG all reflect the landed state.
+- [x] Success: slice, plan, issue, and DEVLOG all reflect the landed state.

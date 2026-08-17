@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: []
 interfaces: []
 dateCreated: 20260815
-dateUpdated: 20260815
-status: not_started
+dateUpdated: 20260817
+status: complete
 ---
 
 # Slice Design: Ruff Rule-Set Adoption — `B`, `ASYNC`, `BLE`
@@ -268,7 +268,9 @@ lint-conformance change. Behavior verification is the concern:
 
 ## Verification Walkthrough
 
-Each part is independently verifiable; run at the end of each.
+Each part is independently verifiable; run at the end of each. Commands and
+output below are as actually run during implementation (20260817), on top of
+each part's own commit — not merely predicted.
 
 **Per-part gate (all three):**
 
@@ -276,7 +278,9 @@ Each part is independently verifiable; run at the end of each.
 uv run ruff check              # exits 0, no path arg — same as CI
 uv run ruff format --check
 uv run pyright                 # 0 errors
-uv run pytest -q               # 3016 passed, 2 skipped baseline
+uv run pytest -q               # 3016 passed, 2 skipped baseline (Part A/B);
+                                # 3018 after Part B's 2 new client tests;
+                                # 3021 after Part C's 3 new tests (Tasks 3.3, 3.4)
 ```
 
 **After Part A** — confirm `B` is live and the ignore is scoped, not blanket:
@@ -292,7 +296,10 @@ default) in a command module must still fail:
 ```bash
 # temporarily add `def _probe(x: list[str] = []) -> None: ...`
 # to any src/squadron/cli/commands/*.py, then:
-uv run ruff check --select B src/squadron/cli/commands/   # must report B006
+uv run ruff check --select B006,B008 src/squadron/cli/commands/
+# B006 fires on the probe; B008 stays silent. Caveat: `--select B` alone also
+# surfaces pre-existing B904 noise before Task 1.3 lands — select the two
+# rules directly to isolate the signal.
 # revert the probe
 ```
 
@@ -301,21 +308,24 @@ works:
 
 ```bash
 uv run ruff check --select ASYNC --output-format=concise   # "All checks passed!"
-uv run pytest tests/client -q
-sq doctor                       # exercises the http client path end-to-end
+uv run pytest tests/client -q                               # 9 passed
+sq doctor                       # exercises the http client path end-to-end;
+                                 # "0 missing" confirms the socket-detection
+                                 # branch selection is unchanged
 ```
 
 **After Part C** — the substantive gate:
 
 ```bash
 uv run ruff check --select BLE --output-format=concise     # "All checks passed!"
-grep -rn 'noqa: BLE001' src/ | wc -l                       # expect a small number
-grep -rn -B2 'noqa: BLE001' src/                           # every one has a comment
+grep -rn 'noqa: BLE001' src/ | wc -l                       # 13, across 12 files
+grep -rn -B3 'noqa: BLE001' src/                           # every one has a comment
 ```
 
 Read that last output site by site. A `noqa` without a justifying comment
-naming the boundary, or without a `logger.exception` nearby, is a failed
-criterion — not a passing one with a note.
+naming the boundary, or without a `logger.exception`/`logger.warning(...,
+exc_info=True)` nearby, is a failed criterion — not a passing one with a note.
+All 13 retained sites were read individually and confirmed to carry both.
 
 Confirm the D3 exemption is rule-scoped and did not cost the documents tree its
 other coverage:
@@ -337,12 +347,15 @@ Then confirm the rules are actually load-bearing by reintroducing #49's shape:
 
 ```bash
 # add `try: pass\nexcept Exception: pass` to any src/squadron/pipeline/*.py
-uv run ruff check    # must fail with BLE001
-# revert
+uv run ruff check    # must fail with BLE001 — confirmed
+# revert; `git status` clean
 ```
 
 That last step is the real acceptance test for this slice: the failure mode
-that produced #49 is now caught by CI rather than by review.
+that produced #49 is now caught by CI rather than by review. Two sites turned
+out to match #49's shape exactly during implementation and were fixed as real
+bugs rather than narrowed or logged — see D6's outcome-3 note and the DEVLOG
+entry for this slice.
 
 ## Effort
 
