@@ -47,7 +47,7 @@ def _stamp_revision_number(
         return
     try:
         paths = expected_artifact_paths(kind, slice_index, cf_client)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         # cf_client is duck-typed (CfClientProtocol); any implementation can
         # raise its own error type here, not just ValueError/TypeError. The
         # contract above is unconditional — every resolution failure must be
@@ -58,6 +58,7 @@ def _stamp_revision_number(
             kind.value,
             slice_index,
             exc,
+            exc_info=True,
         )
         return
 

@@ -236,24 +236,24 @@ user" is not done — it needs a handler or outcome 2.
 
 ### Task 3.1 — Exempt the documents tree from `BLE001` only
 
-- [ ] Effort: 1/5
-- [ ] The 5 sites in `project-documents/user/reference/codebase-probe.py` are a
+- [x] Effort: 1/5
+- [x] The 5 sites in `project-documents/user/reference/codebase-probe.py` are a
       tracked one-off analysis script — not in `src/`, not packaged, not imported.
       CI lints it because `ruff check` runs with no path argument.
-- [ ] Add to the existing `[tool.ruff.lint.per-file-ignores]` block (created in
+- [x] Add to the existing `[tool.ruff.lint.per-file-ignores]` block (created in
       Task 1.1): `"project-documents/**/*.py" = ["BLE001"]`
-- [ ] Do **not** use `extend-exclude` for the tree. That was the design's original
+- [x] Do **not** use `extend-exclude` for the tree. That was the design's original
       form and was narrowed after review finding F009: excluding the directory
       also discards `E`/`F`/`W`/`I`/`UP` on a file that passes them today
       (design D3).
-- [ ] Success: `uv run ruff check --select E,F,W,I,UP project-documents/` →
+- [x] Success: `uv run ruff check --select E,F,W,I,UP project-documents/` →
       `All checks passed!`, and `grep -n 'extend-exclude' pyproject.toml` finds
       nothing.
 
 ### Task 3.2 — Resolve the two flagged high-value sites
 
-- [ ] Effort: 2/5
-- [ ] **[prompt_renderer.py:158](src/squadron/pipeline/prompt_renderer.py#L158)** —
+- [x] Effort: 2/5
+- [x] **[prompt_renderer.py:158](src/squadron/pipeline/prompt_renderer.py#L158)** —
       `except Exception` around `resolver.resolve(action_model)`, falling back to
       `model_id = action_model, profile = None`, which then feeds
       `is_sdk_profile(profile)`. A resolver failure is silently reinterpreted as
@@ -262,91 +262,91 @@ user" is not done — it needs a handler or outcome 2.
       shape structurally. It needs a real answer, not a `noqa` — determine what
       `resolve` actually raises for an unknown alias and decide whether that
       should propagate.
-- [ ] **[executor.py:1603](src/squadron/pipeline/executor.py#L1603)** — broad catch
+- [x] **[executor.py:1603](src/squadron/pipeline/executor.py#L1603)** — broad catch
       around branch-model resolution converting *any* exception into a `FAILED`
       StepResult carrying `str(exc)`. Likely outcome 2 (it is a step boundary),
       but it currently has no `logger.exception`, so a programming error inside
       the `try` reaches the user as a step failure with a bare message and no
       traceback. At minimum add the logging; narrow the type if the raisable set
       is knowable.
-- [ ] **Concrete scope-guard trigger.** Start by reading `resolver.resolve` and
+- [x] **Concrete scope-guard trigger.** Start by reading `resolver.resolve` and
       listing what it raises for an unknown alias. Stop, file an issue, and take
       outcome 2 (`noqa` referencing the issue) if any of these hold:
       the fix requires editing a file outside `prompt_renderer.py` /
       `executor.py`; it requires changing a function signature or return type; or
       the raisable set is not determinable by reading the resolver and its direct
       callees. Otherwise proceed with outcome 1 or 3.
-- [ ] The guard is a stopping rule, not a failure — a filed issue with a
+- [x] The guard is a stopping rule, not a failure — a filed issue with a
       justified `noqa` is a complete, passing outcome for this task.
-- [ ] Success: both sites resolved to outcome 1, 2, or 3 with the reasoning
+- [x] Success: both sites resolved to outcome 1, 2, or 3 with the reasoning
       recorded in the code comment or the filed issue.
 
 ### Task 3.3 — Test the behavior change at the two flagged sites
 
-- [ ] Effort: 2/5
-- [ ] For `prompt_renderer.py`: add a test covering an unresolvable model alias,
+- [x] Effort: 2/5
+- [x] For `prompt_renderer.py`: add a test covering an unresolvable model alias,
       asserting the new behavior (error propagates, or the fallback is taken
       deliberately with the reason visible) rather than the old silent
       reinterpretation.
-- [ ] For `executor.py`: add or extend a test asserting that a resolution failure
+- [x] For `executor.py`: add or extend a test asserting that a resolution failure
       still produces a `FAILED` StepResult **and** that the failure is logged —
       the observable-failure requirement from the project's review rules.
-- [ ] These are the only two `BLE` sites expected to need new tests; the rest are
+- [x] These are the only two `BLE` sites expected to need new tests; the rest are
       narrowings covered by the existing suite.
-- [ ] Success: new tests pass and fail against the pre-fix behavior.
+- [x] Success: new tests pass and fail against the pre-fix behavior.
 
 ### Task 3.4 — Resolve the remaining `pipeline/` sites
 
-- [ ] Effort: 2/5
-- [ ] Sites: `prompt_renderer.py` (2 remaining — `:211`, `:309`), `state.py`
+- [x] Effort: 2/5
+- [x] Sites: `prompt_renderer.py` (2 remaining — `:211`, `:309`), `state.py`
       (`:435`, `:485`), `sdk_session.py` (`:108`), `loader.py` (`:141`),
       `emit.py` (`:157`), `actions/cf_op.py` (`:107`), `actions/review.py`
       (`:283`), `actions/summary.py` (`:254`).
-- [ ] `cf_op.py` is the module named in issue #49 — read that issue before
+- [x] `cf_op.py` is the module named in issue #49 — read that issue before
       touching it, and confirm the remaining catch there is not a second instance
       of the same defect.
-- [ ] Apply the three-outcome rule per site.
-- [ ] Success: `uv run ruff check --select BLE src/squadron/pipeline/` →
+- [x] Apply the three-outcome rule per site.
+- [x] Success: `uv run ruff check --select BLE src/squadron/pipeline/` →
       `All checks passed!`
 
 ### Task 3.5 — Resolve the CLI, provider, client, core, and events sites
 
-- [ ] Effort: 2/5
-- [ ] Sites: `cli/commands/dispatch_run.py` (`:63`, `:79`),
+- [x] Effort: 2/5
+- [x] Sites: `cli/commands/dispatch_run.py` (`:63`, `:79`),
       `cli/commands/doctor_checks.py` (`:70`), `cli/commands/spawn.py` (`:101`),
       `cli/commands/summary_run.py` (`:67`), `client/http.py` (`:74`),
       `core/agent_registry.py` (`:147`), `events/builtin/revision_stamp.py`
       (`:50`), `providers/codex/agent.py` (`:82`), `providers/sdk/agent.py`
       (`:247`).
-- [ ] CLI top-level command bodies and provider subprocess seams are the most
+- [x] CLI top-level command bodies and provider subprocess seams are the most
       likely legitimate outcome-2 sites — a CLI command that must render an error
       rather than traceback is a documented process boundary. They still need the
       comment and the `logger.exception`.
-- [ ] `client/http.py:74` catches around `resp.json()` when building an error
+- [x] `client/http.py:74` catches around `resp.json()` when building an error
       detail — a narrow candidate (JSON decode errors), not a boundary.
-- [ ] Success: `uv run ruff check --select BLE src/` → `All checks passed!`
+- [x] Success: `uv run ruff check --select BLE src/` → `All checks passed!`
 
 ### Task 3.6 — Audit every narrowing and every retained `noqa` before enabling
 
-- [ ] Effort: 2/5
-- [ ] **Per-site narrowing audit.** For every site resolved as outcome 1
+- [x] Effort: 2/5
+- [x] **Per-site narrowing audit.** For every site resolved as outcome 1
       (narrowed) in Tasks 3.4 and 3.5, record a one-line answer to the migration
       plan's question: *what now escapes that did not before, and where does it
       land?* A site whose answer is "an unhandled traceback to the user" is not
       done — it needs a handler or outcome 2.
-- [ ] For each narrowed site, name the existing test that exercises its failure
+- [x] For each narrowed site, name the existing test that exercises its failure
       path. If none exists, either add one or state why the escaping exception is
       unreachable in practice. Do not rely on "the suite passes" alone — a
       narrowing that changes an untested path passes the suite by construction.
-- [ ] Run `grep -rn -B3 'noqa: BLE001' src/` and read every hit.
-- [ ] Each must have: a comment naming why the boundary must not let anything
+- [x] Run `grep -rn -B3 'noqa: BLE001' src/` and read every hit.
+- [x] Each must have: a comment naming why the boundary must not let anything
       escape, and a `logger.exception` nearby — or an explicit documented reason
       it must be silent.
-- [ ] A `noqa` without justification is a failed success criterion, not a passing
+- [x] A `noqa` without justification is a failed success criterion, not a passing
       one with a note. Fix or narrow it.
-- [ ] Any site deferred under the scope guard must reference its filed issue in
+- [x] Any site deferred under the scope guard must reference its filed issue in
       the comment.
-- [ ] Success: the retained count is small and every one is justified.
+- [x] Success: the retained count is small and every one is justified.
 
 ### Task 3.7 — Enable `BLE`, remove the stale comment, and gate Part C
 

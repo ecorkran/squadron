@@ -144,7 +144,19 @@ class AgentRegistry:
             try:
                 await agent.shutdown()
                 report.succeeded.append(name)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
+                # Best-effort teardown by design (see docstring): each
+                # agent's shutdown() is provider-specific (SDK session
+                # close, subprocess kill, etc.) with an open-ended raisable
+                # set. One agent's failure must not block shutting down the
+                # rest. Logged individually so a failure isn't visible only
+                # as an aggregate count.
+                logger.warning(
+                    "agent.shutdown_all_failed: name=%s error=%s",
+                    name,
+                    exc,
+                    exc_info=True,
+                )
                 report.failed[name] = str(exc)
 
         self._agents.clear()

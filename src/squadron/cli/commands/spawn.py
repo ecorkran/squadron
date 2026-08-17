@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import typer
@@ -11,6 +12,8 @@ from rich import print as rprint
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 from squadron.config.manager import get_config
 from squadron.providers.profiles import get_profile
+
+_logger = logging.getLogger(__name__)
 
 
 def _resolve_spawn_model(flag: str | None) -> str | None:
@@ -98,7 +101,12 @@ async def _spawn(request_data: dict[str, Any]) -> None:
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
         raise typer.Exit(code=1) from None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        # CLI process boundary: client.spawn() is an HTTP call to the daemon
+        # over httpx; its failure modes (connection reset, malformed
+        # response, daemon-side error) are not enumerable here. Rendered as
+        # a clean CLI exit.
+        _logger.exception("spawn: daemon request failed")
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from None
     finally:

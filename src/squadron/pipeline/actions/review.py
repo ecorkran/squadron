@@ -280,8 +280,13 @@ class ReviewAction:
                 )
                 if path is not None:
                     review_file_path = str(path)
-        except Exception:
-            _logger.warning(
+        except Exception:  # noqa: BLE001
+            # Boundary by design: this block only persists the review markdown
+            # artifact (file write + templating + a git-sha subprocess call);
+            # the review itself already succeeded and its result is returned
+            # below regardless. A failure to save the secondary artifact must
+            # not fail the action's primary output, the review response.
+            _logger.exception(
                 "review: failed to persist review file for step %s",
                 context.step_name,
             )

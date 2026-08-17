@@ -8,12 +8,15 @@ the actual dispatch call and print the result to stdout.
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from pathlib import Path
 
 import typer
 
 from squadron.pipeline.actions.dispatch import one_shot_dispatch
+
+_logger = logging.getLogger(__name__)
 
 
 def dispatch_run(
@@ -60,7 +63,13 @@ def dispatch_run(
         try:
             model_id, resolved_profile_or_none = resolver.resolve(model)
             resolved_profile = resolved_profile_or_none or "sdk"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
+            # CLI process boundary: model is a required, non-empty --model
+            # value, so resolve() can only raise on a pool: prefix
+            # (ModelPoolNotImplemented / PoolNotFoundError) — both indicate a
+            # misconfigured pool reference, rendered here as a clean CLI exit
+            # rather than a traceback.
+            _logger.exception("dispatch_run: model resolution failed")
             print(f"Error: model resolution failed — {exc}", file=sys.stderr)
             raise typer.Exit(code=1) from None
 
@@ -76,7 +85,11 @@ def dispatch_run(
     except KeyError as exc:
         print(f"Error: unknown profile — {exc}", file=sys.stderr)
         raise typer.Exit(code=1) from None
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        # CLI process boundary: one_shot_dispatch calls out to an external
+        # provider API, whose failure modes (network, auth, provider-side
+        # errors) are not enumerable here. Rendered as a clean CLI exit.
+        _logger.exception("dispatch_run: provider dispatch failed")
         print(f"Error: provider failure — {exc}", file=sys.stderr)
         raise typer.Exit(code=1) from None
 

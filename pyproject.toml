@@ -71,16 +71,11 @@ packages = ["src/squadron"]
 line-length = 104
 
 [tool.ruff.lint]
-# The Python guide's baseline is ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"].
-# W is clean and enabled. B (70), BLE (23) and ASYNC (6) have pre-existing
-# violations across modules unrelated to any current slice; adopting them is
-# tracked in issue #50, since BLE and ASYNC in particular require
-# narrowing exception types and moving blocking calls off the loop, which are
-# behavior changes rather than mechanical fixes.
-select = ["E", "F", "W", "I", "UP", "B", "ASYNC"]
+select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/squadron/cli/commands/*.py" = ["B008"]
+"project-documents/**/*.py" = ["BLE001"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

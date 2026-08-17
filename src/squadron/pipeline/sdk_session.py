@@ -105,8 +105,13 @@ class SDKExecutionSession:
         """Disconnect the SDK client. Best-effort — ignores errors."""
         try:
             await self.client.disconnect()
-        except Exception:
-            _logger.debug("SDKExecutionSession.disconnect: ignoring error during cleanup")
+        except Exception:  # noqa: BLE001
+            # Teardown boundary: client.disconnect() closes the SDK's
+            # subprocess/transport, whose failure modes are internal to the
+            # SDK and not enumerable here. A cleanup failure at process exit
+            # must not mask the pipeline's actual result — logged for
+            # diagnosability, never re-raised.
+            _logger.exception("SDKExecutionSession.disconnect: ignoring error during cleanup")
 
     async def set_model(self, model_id: str) -> None:
         """Switch model if different from current.

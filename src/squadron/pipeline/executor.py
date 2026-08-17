@@ -1601,6 +1601,13 @@ async def _execute_fan_out_step(
         else:
             branch_models = [resolver.resolve(str(m)) for m in models_raw]  # type: ignore[union-attr]
     except Exception as exc:
+        # Broad by design: an invalid branch-model spec (bad alias, unknown
+        # pool) must become a reported FAILED step rather than crash the
+        # run, and the raisable set from resolver.resolve() is open-ended
+        # across ModelResolutionError / ModelPoolNotImplemented /
+        # PoolNotFoundError. logger.exception preserves the traceback so a
+        # genuine programming error inside this block is still diagnosable.
+        _logger.exception("fan_out step '%s': branch model resolution failed", step.name)
         return StepResult(
             step_name=step.name,
             step_type=step.step_type,
@@ -1652,7 +1659,13 @@ async def _execute_fan_out_step(
         branch_results: list[StepResult] = list(
             await asyncio.gather(*(_run_branch(i, m, p) for i, (m, p) in enumerate(branch_models)))
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Broad by design: each branch runs a full step execution (dispatch,
+        # actions, etc.), so the raisable set here is whatever any branch's
+        # step execution can raise — open-ended. A branch failure must
+        # become a reported FAILED step, not crash the whole run. Logged so
+        # a genuine programming error surfaced this way is still diagnosable.
+        _logger.exception("fan_out step '%s': a branch raised during gather", step.name)
         return StepResult(
             step_name=step.name,
             step_type=step.step_type,

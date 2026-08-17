@@ -67,7 +67,10 @@ def check_squadron_install() -> CheckResult:
     except PackageNotFoundError:
         try:
             source_path = str(importlib.resources.files("squadron"))
-        except Exception:
+        except ModuleNotFoundError:
+            # We are executing inside the "squadron" package right now, so
+            # this import can only fail if the package layout is broken —
+            # ModuleNotFoundError is the only realistic outcome.
             source_path = "(unknown path)"
         detail = f"(dev install) at {source_path}"
 

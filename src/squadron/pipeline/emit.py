@@ -154,7 +154,14 @@ async def _emit_rotate(text: str, dest: EmitDestination, ctx: ActionContext) -> 
             restore_model=ctx.sdk_session.current_model,
         )
         return EmitResult(destination=dest.display(), ok=True, detail="session rotated")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Boundary by design: SDKExecutionSession.compact() documents that it
+        # lets exceptions propagate for this call site to wrap. Compaction
+        # spans dispatch/disconnect/reconnect against the SDK subprocess, so
+        # the raisable set is open-ended. A rotate failure must become a
+        # reported EmitResult, not crash the pipeline — logged so it's
+        # diagnosable rather than only visible as a failed emit detail.
+        _logger.exception("emit rotate: session compaction failed")
         return EmitResult(destination=dest.display(), ok=False, detail=str(exc))
 
 
