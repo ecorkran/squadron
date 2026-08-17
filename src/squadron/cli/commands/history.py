@@ -26,7 +26,7 @@ async def _history(agent_name: str, limit: int | None) -> None:
         _display_history(messages)
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     finally:
         await client.close()
 

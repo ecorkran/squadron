@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +41,7 @@ class DaemonClient:
         if self._client is not None:
             return self._client
 
-        if Path(self._socket_path).exists():
+        if await asyncio.to_thread(Path(self._socket_path).exists):
             transport = httpx.AsyncHTTPTransport(uds=self._socket_path)
             self._client = httpx.AsyncClient(
                 transport=transport,
@@ -71,7 +73,10 @@ class DaemonClient:
             try:
                 body = resp.json()
                 detail = body.get("detail", str(body))
-            except Exception:
+            except (json.JSONDecodeError, AttributeError):
+                # Error body is either not JSON, or JSON that isn't a dict
+                # (body.get raises AttributeError on e.g. a list/scalar).
+                # Fall back to the raw text for the error message.
                 detail = resp.text or f"HTTP {resp.status_code}"
             if resp.status_code == 404:
                 from squadron.core.agent_registry import (

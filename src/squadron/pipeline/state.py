@@ -20,7 +20,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
 from squadron.pipeline.models import ActionResult
@@ -432,10 +432,16 @@ class StateManager:
                 filtered = {k: v for k, v in ar_dict.items() if k in valid_fields}
                 try:
                     action_result = ActionResult(**filtered)  # type: ignore[arg-type]
-                except Exception:
+                except TypeError:
+                    # ActionResult is a plain dataclass; the only realistic
+                    # failure from an arbitrary stored dict is a missing
+                    # required field (e.g. success/action_type/outputs absent
+                    # from an older or hand-edited state file). One bad
+                    # record must not block reconstructing the rest.
                     _logger.warning(
                         "Could not reconstruct ActionResult from stored dict: %r",
                         ar_dict,
+                        exc_info=True,
                     )
                     continue
                 key = f"{action_type}-{idx}"
@@ -482,8 +488,18 @@ class StateManager:
         for path in self._runs_dir.glob("*.json"):
             try:
                 run = self._load_raw(path)
-            except Exception:
-                _logger.warning("Skipping unreadable state file: %s", path)
+            except (
+                OSError,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                SchemaVersionError,
+                ValidationError,
+            ):
+                # Narrowed to _load_raw's actual raisable set: unreadable file,
+                # corrupt JSON, unsupported schema version, or a state shape
+                # that fails RunState validation. One bad run-state file must
+                # not stop the rest of the listing from loading.
+                _logger.warning("Skipping unreadable state file: %s", path, exc_info=True)
                 continue
             if pipeline is not None and run.pipeline != pipeline:
                 continue

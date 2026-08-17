@@ -244,7 +244,12 @@ class ClaudeSDKAgent:
         if self._client is not None:
             try:
                 await self._client.disconnect()
-            except Exception:
-                pass  # Best-effort cleanup
+            except Exception:  # noqa: BLE001
+                # Teardown boundary: disconnect() closes the Claude Agent
+                # SDK's subprocess/transport, whose failure modes are
+                # internal to the SDK and not enumerable here. A cleanup
+                # failure at shutdown must not block finishing teardown —
+                # logged for diagnosability, never re-raised.
+                self._log.exception("SDKAgent.shutdown: ignoring error during client disconnect")
             self._client = None
         self._state = AgentState.terminated

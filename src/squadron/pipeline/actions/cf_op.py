@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import cast
 
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.profiles import is_sdk_profile
+
+_logger = logging.getLogger(__name__)
 
 
 class CfOperation(StrEnum):
@@ -104,8 +109,16 @@ class CfOpAction:
                         _, alias_profile = context.resolver.resolve(action_model, step_model)
                         if not is_sdk_profile(alias_profile):
                             build_args.append("--embed")
-                    except Exception:
-                        pass  # resolution failure handled downstream in dispatch; use plain build
+                    except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError):
+                        # Narrowed to the resolver's actual raisable set (issue #49).
+                        # A resolution failure here means we can't tell whether the
+                        # step model can read files, so --embed is skipped and the
+                        # prompt may reference files a non-SDK model can't open.
+                        # Logged so that degradation is auditable rather than silent.
+                        _logger.exception(
+                            "cf_op build_context: model resolution failed; --embed skipped "
+                            "(prompt may reference files unreadable by the eventual model)"
+                        )
                     raw = cf_client._run_json(build_args)  # pyright: ignore[reportPrivateUsage]
                     data_dict = cast(dict[str, object], raw) if isinstance(raw, dict) else {}
                     stdout = str(data_dict.get("context", ""))

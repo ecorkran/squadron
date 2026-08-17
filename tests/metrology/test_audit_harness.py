@@ -454,6 +454,7 @@ async def test_a_modified_tracked_analysis_file_still_refuses(
     audited_repo: Path, audit_store: MetrologyStore, stub_provider: _StubProvider
 ) -> None:
     """Only *untracked* audit output is exempt, not a tracked-file edit."""
+    import asyncio
     import subprocess
 
     from squadron.metrology.audit import AuditPreflightError
@@ -462,9 +463,15 @@ async def test_a_modified_tracked_analysis_file_still_refuses(
     analysis_dir.mkdir()
     tracked = analysis_dir / "940-analysis.example-repo.md"
     tracked.write_text("# committed\n", encoding="utf-8")
-    subprocess.run(["git", "add", "."], cwd=audited_repo, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "commit", "-m", "add analysis"], cwd=audited_repo, check=True, capture_output=True
+    await asyncio.to_thread(
+        subprocess.run, ["git", "add", "."], cwd=audited_repo, check=True, capture_output=True
+    )
+    await asyncio.to_thread(
+        subprocess.run,
+        ["git", "commit", "-m", "add analysis"],
+        cwd=audited_repo,
+        check=True,
+        capture_output=True,
     )
     tracked.write_text("# edited after commit\n", encoding="utf-8")
 

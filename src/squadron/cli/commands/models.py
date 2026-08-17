@@ -217,7 +217,7 @@ async def _fetch_models(base_url: str) -> None:
             data = response.json()
     except httpx.ConnectError:
         rprint(f"[red]Error: could not connect to {base_url}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except Exception as exc:
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc

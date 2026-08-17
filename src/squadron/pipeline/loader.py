@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
+from pydantic import ValidationError as PydanticValidationError
 
 from squadron.data import data_dir
 from squadron.pipeline.actions.gate import policy_contract
@@ -138,8 +139,11 @@ def discover_pipelines(
                     source=source,
                     path=yaml_path,
                 )
-            except Exception:
-                _logger.warning("Skipping invalid pipeline file: %s", yaml_path)
+            except (OSError, yaml.YAMLError, PydanticValidationError):
+                # Narrowed to: unreadable file, malformed YAML, or a document
+                # shape that fails PipelineSchema validation. One bad
+                # pipeline file must not stop the rest of the directory scan.
+                _logger.warning("Skipping invalid pipeline file: %s", yaml_path, exc_info=True)
                 continue
 
     return sorted(found.values(), key=lambda p: p.name)

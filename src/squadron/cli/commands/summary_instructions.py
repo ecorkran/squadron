@@ -59,7 +59,7 @@ def summary_instructions(
             rendered = resolve_template_instructions(template, cwd=cwd)
     except FileNotFoundError:
         print(f"Error: template '{template}' not found.", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     print(rendered)
 

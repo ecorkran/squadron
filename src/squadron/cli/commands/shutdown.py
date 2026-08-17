@@ -36,10 +36,10 @@ async def _shutdown_one(name: str) -> None:
         rprint(f"[green]Agent '{name}' shut down.[/green]")
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except AgentNotFoundError:
         rprint(f"[red]Error: No agent named '{name}'. Use 'sq list' to see active agents.[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     finally:
         await client.close()
 
@@ -56,6 +56,6 @@ async def _shutdown_all() -> None:
             rprint(f"  [red]✗ {name}: {error}[/red]")
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     finally:
         await client.close()

@@ -24,6 +24,8 @@ from squadron.pipeline.executor import (
     CHECKPOINT_KEY_OVERRIDE,
     resolve_placeholders,
 )
+from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.steps import get_step_type
 from squadron.providers.profiles import is_sdk_profile
 
@@ -153,11 +155,7 @@ def _render_dispatch(
             instruction="Execute the work using the assembled context",
         )
 
-    try:
-        model_id, profile = resolver.resolve(action_model)
-    except Exception:
-        model_id = action_model
-        profile = None
+    model_id, profile = resolver.resolve(action_model)
 
     if is_sdk_profile(profile):
         return ActionInstruction(
@@ -208,7 +206,16 @@ def _render_review(
         alias_str = str(review_model_alias)
         try:
             review_model_id, _ = resolver.resolve(alias_str)
-        except Exception:
+        except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError):
+            # Unlike dispatch, the actual reviewer command below uses alias_str
+            # directly via --model — sq review resolves it independently. This
+            # field is display-only, so falling back to the raw alias doesn't
+            # change what model actually runs; it just makes the reported
+            # instruction.model less resolved. Logged so the failure is visible.
+            _logger.exception(
+                "review action: model resolution failed for %r; using raw alias for display",
+                alias_str,
+            )
             review_model_id = alias_str
 
     # Build the CLI command — template is the subcommand, not a flag
@@ -304,11 +311,7 @@ def _render_summary(
 
     if model_raw is not None:
         alias = str(model_raw)
-        try:
-            model_id, profile = resolver.resolve(alias)
-        except Exception:
-            model_id = alias
-            profile = None
+        model_id, profile = resolver.resolve(alias)
 
         if is_sdk_profile(profile):
             model_switch = f"/model {alias}"

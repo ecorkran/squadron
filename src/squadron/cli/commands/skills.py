@@ -53,7 +53,7 @@ def install(
         manifest = load_effective(cwd=Path.cwd())
     except ValueError as exc:
         rprint(f"[red]Error loading skills.toml: {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     if manifest is None:
         _require_manifest()
 
@@ -67,7 +67,7 @@ def install(
         result = install_pack(pack_name, entry, commands_dir, receipts_dir=receipts_dir)
     except SkillSourceError as exc:
         rprint(f"[red]Error: {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     count = len(result.files_written)
     rprint(f"[green]Installed pack '{pack_name}': {count} file(s) → {result.destination}[/green]")
@@ -92,7 +92,7 @@ def uninstall(
         receipt = read_receipt(pack_name, receipts_dir)
     except ValueError as exc:
         rprint(f"[red]Error reading receipt for '{pack_name}': {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     if receipt is None:
         rprint(
@@ -135,7 +135,7 @@ def list_packs(
         manifest = load_effective(cwd=Path.cwd())
     except ValueError as exc:
         rprint(f"[red]Error loading skills.toml: {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     if manifest is None:
         _require_manifest()
 

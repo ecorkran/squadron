@@ -353,8 +353,12 @@ async def test_pool_reference_calls_resolver_n_times() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pool_reference_resolver_raises_model_pool_not_implemented() -> None:
-    """Pool resolver raising ModelPoolNotImplemented → step returns FAILED."""
+async def test_pool_reference_resolver_raises_model_pool_not_implemented(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Pool resolver raising ModelPoolNotImplemented → step returns FAILED
+    and the failure is logged (observable-failure requirement — a step that
+    fails silently in the logs is a bug even when it returns FAILED)."""
     from squadron.pipeline.resolver import ModelPoolNotImplemented
 
     resolver = MagicMock()
@@ -362,21 +366,26 @@ async def test_pool_reference_resolver_raises_model_pool_not_implemented() -> No
 
     step = _make_fan_out_step({"models": "pool:review", "n": 2, "inner": {"dispatch": {}}})
 
-    result = await _execute_fan_out_step(
-        step=step,
-        resolved_config=step.config,
-        step_index=0,
-        merged_params={},
-        prior_outputs={},
-        pipeline_name="test",
-        run_id="run1",
-        cwd="/tmp",
-        resolver=resolver,
-        cf_client=MagicMock(),
-        sdk_session=None,
-        get_step_type_fn=lambda _: _dispatch_step_type(),
-        get_action_fn=lambda _: MagicMock(),
-    )
+    with caplog.at_level("ERROR", logger="squadron.pipeline.executor"):
+        result = await _execute_fan_out_step(
+            step=step,
+            resolved_config=step.config,
+            step_index=0,
+            merged_params={},
+            prior_outputs={},
+            pipeline_name="test",
+            run_id="run1",
+            cwd="/tmp",
+            resolver=resolver,
+            cf_client=MagicMock(),
+            sdk_session=None,
+            get_step_type_fn=lambda _: _dispatch_step_type(),
+            get_action_fn=lambda _: MagicMock(),
+        )
 
     assert result.status == ExecutionStatus.FAILED
     assert "no pool backend" in (result.error or "")
+    assert any(
+        "branch model resolution failed" in record.message and record.levelname == "ERROR"
+        for record in caplog.records
+    )

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from squadron.pipeline.prompt_renderer import _render_dispatch
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolver
 
 
 def _mock_resolver(model_id: str, profile: str | None):
@@ -166,3 +167,27 @@ def test_render_dispatch_never_emits_both_command_and_model_switch(
     result = _render_dispatch(config, params, resolver)
 
     assert not (result.command is not None and result.model_switch is not None)
+
+
+# ---------------------------------------------------------------------------
+# Unresolvable model — resolver failure must propagate, not be swallowed
+# ---------------------------------------------------------------------------
+
+
+def test_render_dispatch_unresolvable_pool_propagates() -> None:
+    """A misconfigured pool: reference must raise, not silently dispatch to
+    the literal ``pool:...`` string as if it were a model id.
+
+    Regression guard for the BLE001 fix at prompt_renderer.py:158 — the
+    resolver failure used to be caught by a bare ``except Exception`` and
+    replaced with ``model_id = action_model, profile = None``, which fed
+    the raw ``pool:review`` string into is_sdk_profile() as though it were
+    a real model. ModelResolver has no pool backend configured here, so
+    resolving a ``pool:`` reference must raise ModelPoolNotImplemented.
+    """
+    config: dict[str, object] = {"model": "pool:review"}
+    params: dict[str, object] = {}
+    resolver = ModelResolver()  # no pool_backend configured
+
+    with pytest.raises(ModelPoolNotImplemented):
+        _render_dispatch(config, params, resolver)

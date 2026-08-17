@@ -251,7 +251,13 @@ async def _execute_summary(
                 model_id=model_id,
                 profile=profile,
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        # Boundary by design: this wraps SDK session dispatch (capture_summary)
+        # or a separate provider dispatch (capture_summary_via_profile) —
+        # both have open-ended raisable sets (transport, subprocess, provider
+        # API errors). A capture failure must become a reported FAILED
+        # ActionResult, not crash the pipeline. Logged for diagnosability.
+        _logger.exception("summary action: failed to capture summary")
         return ActionResult(
             success=False,
             action_type=action_type,
@@ -270,7 +276,7 @@ async def _execute_summary(
             _logger.warning("emit to %s failed (non-fatal): %s", dest.display(), result.detail)
 
     # Check for rotate failures — these fail the action.
-    for dest, res in zip(emit_destinations, emit_results):
+    for dest, res in zip(emit_destinations, emit_results, strict=True):
         if dest.kind is EmitKind.ROTATE and not res.ok:
             return ActionResult(
                 success=False,

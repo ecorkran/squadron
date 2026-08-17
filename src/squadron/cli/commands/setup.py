@@ -231,7 +231,7 @@ def setup(
     except Exception:
         logger.exception("sq setup: run_all_checks raised unexpectedly")
         typer.echo("sq setup: internal error during checks; try `sq doctor` directly", err=True)
-        raise typer.Exit(3)
+        raise typer.Exit(3) from None
 
     try:
         steps = build_steps(results, profile)
@@ -241,7 +241,7 @@ def setup(
         available = ", ".join(sorted(get_all_profiles().keys())) or "(none)"
         typer.echo(f"sq setup: {exc}", err=True)
         typer.echo(f"Available profiles: {available}", err=True)
-        raise typer.Exit(64)
+        raise typer.Exit(64) from None
 
     if check_only:
         missing_count = _render_check_only(steps)

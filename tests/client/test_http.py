@@ -121,3 +121,20 @@ async def test_health(client: DaemonClient):
         assert call_args[0][0] == "GET"
         assert call_args[0][1] == "/health"
         assert result["status"] == "ok"
+
+
+async def test_get_client_uses_base_url_when_socket_absent(client: DaemonClient):
+    """Socket path does not exist → falls back to the HTTP base_url transport."""
+    http_client = await client._get_client()
+    assert str(http_client.base_url) == "http://127.0.0.1:7862"
+
+
+async def test_get_client_uses_unix_socket_when_present(tmp_path):
+    """Socket path exists → uses the Unix transport with localhost base_url."""
+    socket_path = tmp_path / "daemon.sock"
+    socket_path.touch()
+    daemon_client = DaemonClient(socket_path=str(socket_path), base_url="http://127.0.0.1:7862")
+
+    http_client = await daemon_client._get_client()
+
+    assert str(http_client.base_url) == "http://localhost"

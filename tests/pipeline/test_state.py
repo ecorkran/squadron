@@ -515,6 +515,37 @@ class TestLoadPriorOutputs:
         prior = state_manager.load_prior_outputs(run_id)
         assert "cf-op-0" in prior
 
+    def test_missing_required_field_skipped_not_raised(self, state_manager: StateManager) -> None:
+        """A stored dict missing a required ActionResult field (e.g. from an
+        older or hand-edited state file) raises TypeError on reconstruction —
+        the malformed record must be skipped, not crash the whole load."""
+        run_id = state_manager.init_run("pipe", {})
+        state = state_manager.load(run_id)
+        now = datetime.now(UTC)
+        state.completed_steps.append(
+            StepState(
+                step_name="design",
+                step_type="phase",
+                status="completed",
+                completed_at=now,
+                action_results=[
+                    {"action_type": "cf-op"},  # missing required `success`, `outputs`
+                    {
+                        "action_type": "review",
+                        "success": True,
+                        "outputs": {},
+                    },
+                ],
+            )
+        )
+        state_manager._write_atomic(
+            state_manager._state_path(run_id),
+            json.dumps(state.model_dump(mode="json"), indent=2),
+        )
+        prior = state_manager.load_prior_outputs(run_id)
+        assert "cf-op-0" not in prior
+        assert "review-1" in prior
+
 
 # ---------------------------------------------------------------------------
 # T16: first_unfinished_step tests
@@ -807,7 +838,7 @@ class TestPrune:
         # Create 12 completed runs without triggering auto-prune on init_run.
         # Use a custom pipeline name per run to avoid auto-prune interference.
         mgr = StateManager(runs_dir=tmp_path)
-        for i in range(12):
+        for _ in range(12):
             # Override prune so auto-prune in init_run is a no-op
             original_prune = mgr.prune
             mgr.prune = lambda *a, **kw: 0  # type: ignore[method-assign]

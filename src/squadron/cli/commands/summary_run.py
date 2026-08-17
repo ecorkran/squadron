@@ -8,6 +8,7 @@ the actual summary call and print the result to stdout.
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 
 import typer
@@ -17,6 +18,8 @@ from squadron.pipeline.compaction_templates import (
     render_instructions,
 )
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile
+
+_logger = logging.getLogger(__name__)
 
 
 def summary_run(
@@ -48,7 +51,7 @@ def summary_run(
         tmpl = load_compaction_template(template)
     except FileNotFoundError:
         print(f"Error: template {template!r} not found.", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     instructions = render_instructions(tmpl, pipeline_params=params)
 
@@ -63,9 +66,14 @@ def summary_run(
         )
     except KeyError as exc:
         print(f"Error: unknown profile — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
-    except Exception as exc:
+        raise typer.Exit(code=1) from None
+    except Exception as exc:  # noqa: BLE001
+        # CLI process boundary: capture_summary_via_profile calls out to an
+        # external provider API, whose failure modes (network, auth,
+        # provider-side errors) are not enumerable here. Rendered as a
+        # clean CLI exit.
+        _logger.exception("summary_run: provider dispatch failed")
         print(f"Error: provider failure — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     print(result)

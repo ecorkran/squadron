@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260815
+dateUpdated: 20260817
 
 ---
 
@@ -11,6 +11,94 @@ dateUpdated: 20260815
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260817
+
+### Slice 913: Complete — Ruff Rule-Set Adoption (`B`, `ASYNC`, `BLE`)
+
+Implemented across three commits, one per rule set, each enabling its rule in
+`select` in the same commit that zeroes its violations (design D7) — no commit
+in history has a rule live and failing. Branch
+`913-slice.ruff-rule-set-adoption-b-async-ble`, merged into `main`.
+`pyproject.toml`'s `select` now reads the Python guide's baseline verbatim:
+`["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]`.
+
+**Part A — `B`.** Added the `B008` `per-file-ignores` entry, then proved it
+didn't disable `B` wholesale for the CLI by planting a real `B006` (mutable
+default) and confirming it still fired while `B008` stayed silent. Fixed all 54
+`B904` sites — 53 with `raise ... from None` (the CLI print-then-`typer.Exit`
+pattern, where a chained traceback would be noise on an already-explained exit)
+and 1 with `raise ... from exc` (`pipeline/emit.py`, a data-parsing function
+that re-raises a different `ValueError` with no user-facing message first).
+Fixed the three stragglers (`B905` `zip(strict=True)`, `B007` renamed unused
+loop var, `B017` narrowed a blind `pytest.raises(Exception)`).
+
+**Part B — `ASYNC`.** Moved four blocking calls off the event loop via stdlib
+`asyncio.to_thread` — the daemon client's `Path.exists()` socket probe
+(production I/O path), two test files' `subprocess.run` calls, and a test
+mock's `write_text`. Added direct test coverage for both of `_get_client`'s
+socket-detection branches, since the existing suite only exercised the
+socket-absent path implicitly through a fixture. `sq doctor` confirmed the
+daemon client still behaves correctly end-to-end after the change.
+
+**Part C — `BLE`.** The substantive part. Exempted
+`project-documents/**/*.py` from `BLE001` only (not `extend-exclude`, per the
+design review's D3 narrowing) — verified the glob drops `BLE` from 28 to
+exactly the 23 `src` sites while `E,F,W,I,UP` stay enforced on the tree.
+
+Every other site got one of three outcomes. Two matched **issue #49's own
+shape exactly** and were fixed as real bugs rather than narrowed or logged:
+
+- `prompt_renderer.py`'s dispatch and summary model-resolution fallbacks
+  (`except Exception: model_id = alias; profile = None`) silently reinterpreted
+  an unresolvable model alias as a literal model id with no profile — since
+  `profile` controls SDK-vs-non-SDK dispatch routing in both call sites, a
+  resolver failure could misroute the dispatch. Removed the catch entirely for
+  both; a `pool:` misconfiguration (the only way `resolve()` can actually raise
+  here, since both callers guarantee a non-`None` alias) now propagates instead
+  of silently degrading. `_render_review`'s equivalent site stayed
+  caught-and-logged rather than propagated, since there the resolved value is
+  display-only — the real dispatch command uses the raw alias independently.
+- `cf_op.py`'s `--embed` detection — the exact site issue #49 was filed
+  against — was still unfixed. Narrowed to the resolver's actual raisable set
+  (`ModelResolutionError`, `ModelPoolNotImplemented`, `PoolNotFoundError`),
+  added `logger.exception`, kept the plain-build fallback but made it
+  auditable. Fixing this surfaced a second, independent bug: the test
+  fixture's mock resolver had no `.resolve.return_value` configured, so it
+  silently unpacked to a `ValueError` the old bare `except` had been
+  swallowing — the tests had never actually exercised the embed-detection
+  branch. Fixed the fixture and added a dedicated resolution-failure test.
+
+`executor.py`'s two fan_out broad catches (branch-model resolution, branch
+gather) stayed broad by design — the raisable set is genuinely open-ended
+(any exception any branch's step execution can raise) and an invalid
+branch-model spec must become a reported `FAILED` step, not a crash — but both
+were previously silent on failure; added `logger.exception` to each so a
+programming error surfaced this way is still diagnosable. The remaining sites
+split roughly evenly between narrowing (7: `client/http.py`, `loader.py`,
+`state.py` ×2, `doctor_checks.py`, plus the two above) and justified
+keep-broad (13 `# noqa: BLE001`, down from 28 pre-slice violations) — mostly
+SDK/subprocess teardown boundaries (`sdk_session.py`, both provider agents'
+`shutdown()`) and CLI process boundaries wrapping provider/daemon calls. Every
+retained `noqa` was individually read and confirmed to carry both a comment
+naming why the boundary must not let anything escape and a nearby
+`logger.exception`/`logger.warning(exc_info=True)` call (Task 3.6 audit).
+
+Acceptance test: reintroduced `except Exception: pass` in `pipeline/`,
+confirmed `ruff check` failed with `BLE001`, reverted. The failure mode that
+produced #49 is now caught mechanically by CI rather than by review — the
+actual point of this slice.
+
+Test count grew from the 3016/2-skipped baseline to 3021/2-skipped across the
+three parts (new coverage: both `_get_client` branches, the two `BLE`-flagged
+sites' resolution-failure paths, and a `state.py` narrowing's previously
+untested missing-field path). `ruff check`, `ruff format --check`, `pyright`
+(0 errors), and `pytest -q` all pass at each part's gate and at the final
+whole-tree check.
+
+Closes steps 1–3 of issue #50 (comment posted). Step 4 (pyright strict over
+`tests`, 868 errors / 234 files) remains open as slice 914, sequenced after
+this one for review-cost reasons only — the two sweeps are independent.
 
 ## 20260815
 

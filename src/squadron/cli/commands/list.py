@@ -38,7 +38,7 @@ async def _list_agents(state_filter: str | None, provider_filter: str | None) ->
         )
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     finally:
         await client.close()
 

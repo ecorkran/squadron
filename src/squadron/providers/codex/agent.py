@@ -79,8 +79,13 @@ class CodexAgent:
         if self._codex is not None:
             try:
                 await self._codex.__aexit__(None, None, None)  # type: ignore[union-attr]
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                # Teardown boundary: __aexit__ closes the Codex SDK's
+                # subprocess/transport, whose failure modes are internal to
+                # the SDK and not enumerable here. A cleanup failure at
+                # shutdown must not block finishing teardown — logged for
+                # diagnosability, never re-raised.
+                _log.exception("CodexAgent.shutdown: ignoring error during SDK teardown")
         self._codex = None
         self._thread = None
         self._state = AgentState.terminated
