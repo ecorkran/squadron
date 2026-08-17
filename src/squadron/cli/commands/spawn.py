@@ -80,7 +80,7 @@ def spawn(
             profile_data = _resolve_profile(profile, provider, base_url)
         except KeyError as exc:
             rprint(f"[red]Error: {exc}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
         request_data.update(profile_data)
 
     asyncio.run(_spawn(request_data))
@@ -97,9 +97,9 @@ async def _spawn(request_data: dict[str, Any]) -> None:
         )
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except Exception as exc:
         rprint(f"[red]Error: {exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     finally:
         await client.close()

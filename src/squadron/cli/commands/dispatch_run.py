@@ -37,7 +37,7 @@ def dispatch_run(
         prompt_text = prompt_file.read_text(encoding="utf-8")
     except OSError as exc:
         print(f"Error: could not read prompt file — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     params: dict[str, object] = {}
     for entry in param:
@@ -62,7 +62,7 @@ def dispatch_run(
             resolved_profile = resolved_profile_or_none or "sdk"
         except Exception as exc:
             print(f"Error: model resolution failed — {exc}", file=sys.stderr)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
     try:
         result = asyncio.run(
@@ -75,9 +75,9 @@ def dispatch_run(
         )
     except KeyError as exc:
         print(f"Error: unknown profile — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except Exception as exc:
         print(f"Error: provider failure — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     print(result)

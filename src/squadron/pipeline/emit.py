@@ -183,8 +183,8 @@ def parse_emit_entry(entry: object) -> EmitDestination:
     if isinstance(entry, str):
         try:
             kind = EmitKind(entry)
-        except ValueError:
-            raise ValueError(f"unknown emit destination: {entry!r}")
+        except ValueError as exc:
+            raise ValueError(f"unknown emit destination: {entry!r}") from exc
         # Bare "file" string → default path (no explicit arg).
         return EmitDestination(kind=kind)
 

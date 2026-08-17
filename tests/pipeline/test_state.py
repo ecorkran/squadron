@@ -807,7 +807,7 @@ class TestPrune:
         # Create 12 completed runs without triggering auto-prune on init_run.
         # Use a custom pipeline name per run to avoid auto-prune interference.
         mgr = StateManager(runs_dir=tmp_path)
-        for i in range(12):
+        for _ in range(12):
             # Override prune so auto-prune in init_run is a no-op
             original_prune = mgr.prune
             mgr.prune = lambda *a, **kw: 0  # type: ignore[method-assign]

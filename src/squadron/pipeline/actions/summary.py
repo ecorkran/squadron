@@ -270,7 +270,7 @@ async def _execute_summary(
             _logger.warning("emit to %s failed (non-fatal): %s", dest.display(), result.detail)
 
     # Check for rotate failures — these fail the action.
-    for dest, res in zip(emit_destinations, emit_results):
+    for dest, res in zip(emit_destinations, emit_results, strict=True):
         if dest.kind is EmitKind.ROTATE and not res.ok:
             return ActionResult(
                 success=False,

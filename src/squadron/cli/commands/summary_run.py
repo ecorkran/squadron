@@ -48,7 +48,7 @@ def summary_run(
         tmpl = load_compaction_template(template)
     except FileNotFoundError:
         print(f"Error: template {template!r} not found.", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     instructions = render_instructions(tmpl, pipeline_params=params)
 
@@ -63,9 +63,9 @@ def summary_run(
         )
     except KeyError as exc:
         print(f"Error: unknown profile — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except Exception as exc:
         print(f"Error: provider failure — {exc}", file=sys.stderr)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     print(result)

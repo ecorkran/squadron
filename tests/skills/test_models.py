@@ -99,5 +99,5 @@ class TestSkillSourceError:
         assert isinstance(err, Exception)
 
     def test_catchable_as_exception(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(SkillSourceError):
             raise SkillSourceError("test")

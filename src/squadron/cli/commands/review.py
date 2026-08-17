@@ -290,7 +290,7 @@ def _resolve_slice_number(num: str) -> SliceInfo:
             "Install it with: [bold]npm install -g @context-forge/cli[/bold]\n"
             "Then run: [bold]sq install-commands[/bold]"
         )
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except (ContextForgeError, ValueError) as exc:
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc

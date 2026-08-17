@@ -168,10 +168,10 @@ def _check_cf(cf_client: ContextForgeClient) -> None:
             "Install it with: [bold]npm install -g @context-forge/cli[/bold]\n"
             "Then run: [bold]sq install-commands[/bold]"
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ContextForgeError as exc:
         rprint(f"[red]Error: Context Forge pre-flight check failed — {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _resolve_resume_iteration(state_mgr: StateManager, run_id: str, step_name: str) -> int:
@@ -324,7 +324,7 @@ async def _run_pipeline_sdk(
         classification = classify_pipeline(definition, _classify_resolver, pool_backend, policy=policy)
     except ClassificationError as exc:
         rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     _logger.info(
         "pipeline '%s' shape: %s (%d classified steps)",
@@ -492,7 +492,7 @@ def _handle_explain(
         definition = load_pipeline(pipeline_name)
     except FileNotFoundError:
         rprint(f"[red]Error: Pipeline '{pipeline_name}' not found.[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     errors = validate_pipeline(definition)
     if errors:
@@ -519,7 +519,7 @@ def _handle_explain(
         classification = classify_pipeline(definition, resolver, pool_backend, policy=policy)
     except ClassificationError as exc:
         rprint(f"[red]Error: Classification failed — {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     _render_explain(classification)
 
@@ -596,7 +596,7 @@ def _handle_prompt_only_init(
             f"[red]Error: Pipeline '{pipeline_name}' not found.[/red]",
             file=sys.stderr,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     errors = validate_pipeline(definition)
     if errors:
@@ -649,10 +649,10 @@ def _handle_prompt_only_next(
             f"[red]Error: Run '{run_id}' not found.[/red]",
             file=sys.stderr,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except SchemaVersionError as exc:
         rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     try:
         definition = load_pipeline(state.pipeline)
@@ -661,7 +661,7 @@ def _handle_prompt_only_next(
             f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]",
             file=sys.stderr,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     next_name = state_mgr.first_unfinished_step(run_id, definition)
     if next_name is None:
@@ -795,10 +795,10 @@ def _handle_step_done(
             f"[red]Error: Run '{run_id}' not found.[/red]",
             file=sys.stderr,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except SchemaVersionError as exc:
         rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     try:
         definition = load_pipeline(state.pipeline)
@@ -807,7 +807,7 @@ def _handle_step_done(
             f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]",
             file=sys.stderr,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     next_name = state_mgr.first_unfinished_step(run_id, definition)
     if next_name is None:
@@ -1019,10 +1019,10 @@ def run(
                 state = state_mgr.load(status)
             except FileNotFoundError:
                 rprint(f"[red]Error: Run '{status}' not found.[/red]")
-                raise typer.Exit(1)
+                raise typer.Exit(1) from None
             except SchemaVersionError as exc:
                 rprint(f"[red]Error: {exc}[/red]")
-                raise typer.Exit(1)
+                raise typer.Exit(1) from None
             _display_run_status(state)
         raise typer.Exit(0)
 
@@ -1034,7 +1034,7 @@ def run(
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
             rprint(f"[red]Error: Pipeline '{pipeline}' not found.[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         errors = validate_pipeline(definition)
         if not errors:
             rprint(f"[bright_green]Pipeline '{definition.name}' is valid.[/bright_green]")
@@ -1060,7 +1060,7 @@ def run(
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
             rprint(f"[red]Error: Pipeline '{pipeline}' not found.[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
         errors = validate_pipeline(definition)
         if errors:
@@ -1101,16 +1101,16 @@ def run(
             state = state_mgr.load(resume)
         except FileNotFoundError:
             rprint(f"[red]Error: Run '{resume}' not found.[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except SchemaVersionError as exc:
             rprint(f"[red]Error: {exc}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
         try:
             definition = load_pipeline(state.pipeline)
         except FileNotFoundError:
             rprint(f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
         resume_from = state_mgr.first_unfinished_step(resume, definition)
         if resume_from is None:
@@ -1149,7 +1149,7 @@ def run(
         except KeyboardInterrupt:
             rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
             rprint(f"Resume with: [bold]sq run --resume {run_id}[/bold]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
         _display_result(result)
         raise typer.Exit(0)
@@ -1162,7 +1162,7 @@ def run(
         definition = load_pipeline(pipeline)
     except FileNotFoundError:
         rprint(f"[red]Error: Pipeline '{pipeline}' not found.[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     params = _assemble_params(definition, target, model, param)
 
@@ -1205,7 +1205,7 @@ def run(
                     except KeyboardInterrupt:
                         rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
                         rprint(f"Resume with: [bold]sq run --resume {match.run_id}[/bold]")
-                        raise typer.Exit(1)
+                        raise typer.Exit(1) from None
 
                     _display_result(result)
                     raise typer.Exit(0)
@@ -1223,13 +1223,13 @@ def run(
         )
     except FileNotFoundError:
         # Already printed by _run_pipeline
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ValueError as exc:
         rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except KeyboardInterrupt:
         rprint("\n[yellow]Interrupted. Run state saved as failed.[/yellow]")
         rprint("Resume with: [bold]sq run --resume <run-id>[/bold]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     _display_result(result)
