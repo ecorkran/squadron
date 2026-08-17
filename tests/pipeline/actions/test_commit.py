@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -129,7 +130,8 @@ async def test_paths_param_scopes_staging(action: CommitAction, git_repo: Path) 
     assert result.success is True
     assert result.outputs["committed"] is True
     # Verify exclude.txt is still untracked
-    status = subprocess.run(
+    status = await asyncio.to_thread(
+        subprocess.run,
         ["git", "status", "--porcelain"],
         cwd=git_repo,
         capture_output=True,
@@ -147,7 +149,8 @@ async def test_returns_sha_in_outputs(action: CommitAction, git_repo: Path) -> N
 
     sha = str(result.outputs["sha"])
     # Verify SHA matches actual HEAD
-    head = subprocess.run(
+    head = await asyncio.to_thread(
+        subprocess.run,
         ["git", "rev-parse", "HEAD"],
         cwd=git_repo,
         capture_output=True,

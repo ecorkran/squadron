@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +40,7 @@ class DaemonClient:
         if self._client is not None:
             return self._client
 
-        if Path(self._socket_path).exists():
+        if await asyncio.to_thread(Path(self._socket_path).exists):
             transport = httpx.AsyncHTTPTransport(uds=self._socket_path)
             self._client = httpx.AsyncClient(
                 transport=transport,

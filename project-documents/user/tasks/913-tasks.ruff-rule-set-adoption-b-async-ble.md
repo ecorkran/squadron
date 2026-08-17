@@ -76,81 +76,81 @@ with it applied, `BLE` drops from 28 to exactly the 23 `src` sites and
 
 ### Task 1.1 — Add the `B008` `per-file-ignores` entry
 
-- [ ] Effort: 1/5
-- [ ] In [pyproject.toml](pyproject.toml), add a `[tool.ruff.lint.per-file-ignores]`
+- [x] Effort: 1/5
+- [x] In [pyproject.toml](pyproject.toml), add a `[tool.ruff.lint.per-file-ignores]`
       section (none exists yet) with one entry:
       `"src/squadron/cli/commands/*.py" = ["B008"]`.
-- [ ] Do **not** add `B008` to a global `ignore` list, and do **not** rewrite the
+- [x] Do **not** add `B008` to a global `ignore` list, and do **not** rewrite the
       14 `typer.Option`/`typer.Argument` defaults — they are the framework idiom,
       not debt (design D1).
-- [ ] Do not enable `B` in `select` yet; that happens in Task 1.5.
-- [ ] Success: `uv run ruff check --select B008 --output-format=concise .`
+- [x] Do not enable `B` in `select` yet; that happens in Task 1.5.
+- [x] Success: `uv run ruff check --select B008 --output-format=concise .`
       reports no `B008` under `src/squadron/cli/commands/`.
 
 ### Task 1.2 — Verify the ignore did not disable `B` for the CLI
 
-- [ ] Effort: 1/5
-- [ ] Temporarily add a function with a genuine mutable default to any
+- [x] Effort: 1/5
+- [x] Temporarily add a function with a genuine mutable default to any
       `src/squadron/cli/commands/*.py` — e.g.
       `def _probe(x: list[str] = []) -> None: ...`
-- [ ] Run `uv run ruff check --select B src/squadron/cli/commands/` and confirm it
+- [x] Run `uv run ruff check --select B src/squadron/cli/commands/` and confirm it
       reports `B006`. If it reports nothing, the ignore is too broad — fix it
       before continuing.
-- [ ] Remove the probe function. Confirm `git status` shows no change to the file.
-- [ ] Success: `B006` fired while `B008` stayed silent, and the probe is reverted.
+- [x] Remove the probe function. Confirm `git status` shows no change to the file.
+- [x] Success: `B006` fired while `B008` stayed silent, and the probe is reverted.
 
 ### Task 1.3 — Fix the 54 `B904` sites
 
-- [ ] Effort: 2/5
-- [ ] Work file by file, largest first, so the diff is reviewable:
+- [x] Effort: 2/5
+- [x] Work file by file, largest first, so the diff is reviewable:
       `run.py` (25), `skills.py` (4), `dispatch_run.py` (4), `summary_run.py` (3),
       `spawn.py` (3), `shutdown.py` (3), `task.py` (2), `setup.py` (2),
       `message.py` (2), then the six single-site files
       (`summary_instructions.py`, `review.py`, `models.py`, `list.py`,
       `history.py`, and `pipeline/emit.py`).
-- [ ] Per site, choose deliberately (design D2):
+- [x] Per site, choose deliberately (design D2):
       **`from exc`** by default — preserves the cause chain;
       **`from None`** only where the CLI has already rendered the error for the
       user and a chained traceback would be noise on a deliberate exit.
-- [ ] Do not run `ruff --fix` expecting it to handle these; it reports no fixes
+- [x] Do not run `ruff --fix` expecting it to handle these; it reports no fixes
       available for `B904`.
-- [ ] Do not change control flow, exception types, or messages — this task is
+- [x] Do not change control flow, exception types, or messages — this task is
       chaining only.
-- [ ] **Do not commit here.** Part A lands as one commit at Task 1.5.
+- [x] **Do not commit here.** Part A lands as one commit at Task 1.5.
       Intermediate `git add` is fine; a commit before `select` gains `B` would
       leave a commit in history with the fixes but not the rule, which is the
       inverse of what D7 requires. The same applies to Tasks 1.1, 1.2, and 1.4.
-- [ ] Success: `uv run ruff check --select B904 --output-format=concise .` →
+- [x] Success: `uv run ruff check --select B904 --output-format=concise .` →
       `All checks passed!`
 
 ### Task 1.4 — Fix the three stragglers
 
-- [ ] Effort: 1/5
-- [ ] `B905` at [actions/summary.py:273](src/squadron/pipeline/actions/summary.py#L273)
+- [x] Effort: 1/5
+- [x] `B905` at [actions/summary.py:273](src/squadron/pipeline/actions/summary.py#L273)
       — add an explicit `strict=` to the `zip()` call. Choose the value that
       matches the existing behavior; if the two sequences are guaranteed
       equal-length, `strict=True` documents that.
-- [ ] `B007` at `tests/pipeline/test_state.py:810` — unused loop control variable
+- [x] `B007` at `tests/pipeline/test_state.py:810` — unused loop control variable
       `i`; rename to `_` (or `_i`).
-- [ ] `B017` at `tests/skills/test_models.py:102` — `pytest.raises(Exception)` is
+- [x] `B017` at `tests/skills/test_models.py:102` — `pytest.raises(Exception)` is
       too broad. Narrow it to the exception the code under test actually raises.
       If that assertion was masking a mismatch, fix the test to assert the real
       type rather than widening it back.
-- [ ] Success: `uv run ruff check --select B007,B017,B905 --output-format=concise .`
+- [x] Success: `uv run ruff check --select B007,B017,B905 --output-format=concise .`
       → `All checks passed!`
 
 ### Task 1.5 — Enable `B` and gate Part A
 
-- [ ] Effort: 1/5
-- [ ] Add `"B"` to `select` in [pyproject.toml:80](pyproject.toml#L80).
-- [ ] Run the full per-part gate:
+- [x] Effort: 1/5
+- [x] Add `"B"` to `select` in [pyproject.toml:80](pyproject.toml#L80).
+- [x] Run the full per-part gate:
       `uv run ruff check` (no path arg — matches CI),
       `uv run ruff format --check`,
       `uv run pyright` (0 errors),
       `uv run pytest -q` (baseline: 3016 passed, 2 skipped).
-- [ ] Commit Part A alone. The commit must contain the `select` change and the
+- [x] Commit Part A alone. The commit must contain the `select` change and the
       fixes together, so no commit in history has `B` enabled and failing (D7).
-- [ ] Success: all four commands pass; `B` is live.
+- [x] Success: all four commands pass; `B` is live.
 
 ---
 
@@ -158,61 +158,61 @@ with it applied, `BLE` drops from 28 to exactly the 23 `src` sites and
 
 ### Task 2.1 — Move the blocking `Path.exists()` off the event loop
 
-- [ ] Effort: 1/5
-- [ ] In [client/http.py:42](src/squadron/client/http.py#L42), `Path(self._socket_path).exists()`
+- [x] Effort: 1/5
+- [x] In [client/http.py:42](src/squadron/client/http.py#L42), `Path(self._socket_path).exists()`
       runs inside `async def _get_client` — a blocking `stat(2)` on the daemon
       client's I/O path.
-- [ ] Wrap it with stdlib `asyncio.to_thread`, e.g.
+- [x] Wrap it with stdlib `asyncio.to_thread`, e.g.
       `if await asyncio.to_thread(Path(self._socket_path).exists):`
-- [ ] Do **not** introduce `anyio.Path` or `trio.Path` as the rule message
+- [x] Do **not** introduce `anyio.Path` or `trio.Path` as the rule message
       suggests — the project is asyncio-native and adding a dependency to satisfy
       a lint message is the wrong trade (design D4).
-- [ ] Add the `asyncio` import if not already present.
-- [ ] Preserve behavior exactly: the Unix-socket branch is still taken when the
+- [x] Add the `asyncio` import if not already present.
+- [x] Preserve behavior exactly: the Unix-socket branch is still taken when the
       socket exists, the base-URL branch otherwise.
-- [ ] Success: `uv run ruff check --select ASYNC240 src/` → `All checks passed!`
+- [x] Success: `uv run ruff check --select ASYNC240 src/` → `All checks passed!`
 
 ### Task 2.2 — Test the socket-detection branches still select correctly
 
-- [ ] Effort: 1/5
-- [ ] Confirm `tests/client` covers both `_get_client` branches — socket present
+- [x] Effort: 1/5
+- [x] Confirm `tests/client` covers both `_get_client` branches — socket present
       (Unix transport) and socket absent (base URL). If either is uncovered, add
       the missing case.
-- [ ] The assertion is on which transport/base URL the returned client carries,
+- [x] The assertion is on which transport/base URL the returned client carries,
       not on the `to_thread` call itself — the change must be invisible to callers.
-- [ ] Success: `uv run pytest tests/client -q` passes.
+- [x] Success: `uv run pytest tests/client -q` passes.
 
 ### Task 2.3 — Fix the four `ASYNC221` sites in tests
 
-- [ ] Effort: 1/5
-- [ ] Sites: `tests/metrology/test_audit_harness.py:465` and `:466`,
+- [x] Effort: 1/5
+- [x] Sites: `tests/metrology/test_audit_harness.py:465` and `:466`,
       `tests/pipeline/actions/test_commit.py:132` and `:150` — blocking
       `subprocess.run` (git commands) inside `async def` tests.
-- [ ] Wrap each in `asyncio.to_thread`, consistent with Task 2.1.
-- [ ] Do **not** add a `per-file-ignores` exemption for `tests/`. These tests are
+- [x] Wrap each in `asyncio.to_thread`, consistent with Task 2.1.
+- [x] Do **not** add a `per-file-ignores` exemption for `tests/`. These tests are
       what future tests get copied from, and a blanket `ASYNC` exemption would
       license the next `ASYNC240` in a test that *is* exercising loop behavior
       (design D5).
-- [ ] Success: `uv run ruff check --select ASYNC221 --output-format=concise .` →
+- [x] Success: `uv run ruff check --select ASYNC221 --output-format=concise .` →
       `All checks passed!`
 
 ### Task 2.4 — Fix the `ASYNC240` site in tests
 
-- [ ] Effort: 1/5
-- [ ] `tests/pipeline/test_executor.py:966` — blocking pathlib call in an
+- [x] Effort: 1/5
+- [x] `tests/pipeline/test_executor.py:966` — blocking pathlib call in an
       `async def`. Same treatment as Task 2.1.
-- [ ] Success: `uv run ruff check --select ASYNC --output-format=concise .` →
+- [x] Success: `uv run ruff check --select ASYNC --output-format=concise .` →
       `All checks passed!`
 
 ### Task 2.5 — Enable `ASYNC` and gate Part B
 
-- [ ] Effort: 1/5
-- [ ] Add `"ASYNC"` to `select` in `pyproject.toml`.
-- [ ] Run the full per-part gate (same four commands as Task 1.5).
-- [ ] Additionally run `sq doctor`, which exercises the http client path
+- [x] Effort: 1/5
+- [x] Add `"ASYNC"` to `select` in `pyproject.toml`.
+- [x] Run the full per-part gate (same four commands as Task 1.5).
+- [x] Additionally run `sq doctor`, which exercises the http client path
       end-to-end, and confirm it behaves as before the change.
-- [ ] Commit Part B alone.
-- [ ] Success: all gate commands pass; `ASYNC` is live.
+- [x] Commit Part B alone.
+- [x] Success: all gate commands pass; `ASYNC` is live.
 
 ---
 

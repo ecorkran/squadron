@@ -77,7 +77,7 @@ line-length = 104
 # tracked in issue #50, since BLE and ASYNC in particular require
 # narrowing exception types and moving blocking calls off the loop, which are
 # behavior changes rather than mechanical fixes.
-select = ["E", "F", "W", "I", "UP", "B"]
+select = ["E", "F", "W", "I", "UP", "B", "ASYNC"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/squadron/cli/commands/*.py" = ["B008"]

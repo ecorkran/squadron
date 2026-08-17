@@ -4,6 +4,7 @@ evaluate_condition, retry loops, and core executor logic.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -963,7 +964,7 @@ def _dispatch_writer(path: Path, content: str) -> MagicMock:
     """A dispatch mock that writes fixed ``content`` to ``path`` and succeeds."""
 
     async def dispatch_execute(ctx: object) -> ActionResult:
-        path.write_text(content)
+        await asyncio.to_thread(path.write_text, content)
         return make_action_result(True, "dispatch")
 
     mock = MagicMock()
