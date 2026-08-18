@@ -12,6 +12,31 @@ Internal work log for squadron project development.
 
 ## 20260818
 
+### Slice 362: Comprehension Analysis and Graph Extraction — Slice Design Complete
+
+**Phase 4 complete.** Design at `user/slices/362-slice.comprehension-analysis-and-graph-extraction.md`; the slice plan entry already carried the (362) index. Committed to `main` (planning work, no branch).
+
+**Two corrections to the shipped 361 contract, both found by probing the real v2.8.1 graph while writing this design.** These make the slice a defect fix rather than a purely additive one:
+
+- **`layers[].nodeIds` does not mix function and class nodes.** The 361 skill says it does and instructs intersecting with `type == "file"` to get a file count. Measured: all 238 `nodeIds` entries across all 10 layers resolve to `file` (201), `config` (17), or `pipeline` (20) — zero function or class. The intersect instruction therefore **undercounts** two layers: Packaged Declarative Content reports 1 file instead of **34**, Project Configuration 2 instead of **6**. The generated `943` sample carries both wrong numbers. Fix is `nodeIds | length` plus a cross-check that every entry resolves to a node carrying `filePath` — a `function`/`class` entry is reported as upstream drift, not silently filtered, which keeps the simplification safe on graphs nobody has measured.
+- **"File-level" means "carries a `filePath`", not `type == "file"`.** The architecture names nine file-level types; 361 collapsed that to one, silently dropping 37 real analyzed files — every review template, every pipeline definition, `pyproject.toml`. Selector becomes `select(.type != "function" and .type != "class")`, stated as an exclusion so a future tenth upstream type is included automatically rather than dropped. This also repairs the coverage arithmetic: 238 file-level nodes reconciles exactly with `meta.json`'s `analyzedFiles` (238), which is what makes the new coverage section verifiable instead of decorative.
+
+Neither is an upstream contract change — the graph matches what the architecture documented, and the 361 skill text is what diverged. No escalation.
+
+**Extraction mapping is the core deliverable:** seven sections, each binding a source-field list, an ordering rule, and a fallback. Order is identity → structure → detail → caveats. The fallback column has no third option — every section resolves to sourced content or a gap marker, never a silent omission.
+
+**Three new sections** the corrected reading makes sourceable: project identity (`project.name/.description/.languages/.frameworks`, none read by 361), entry points (the `entry-point` tag, 27 nodes — the architecture required these and 361 did not deliver them), and coverage/scope limits, which closes all three 361 deferrals (`analyzedFiles`, `config.json`, `.understandignore`) in one place.
+
+**Both open questions settled:**
+- **`[INFERRED]`** — defined but not used by this flow; its appearance in a comprehension document is a defect. Every claim traces to a named field, so a gap marker is the correct output where inference would go. The marker stays documented for 363's interview path, which genuinely needs it.
+- **`analyze-codebase-prompt.md` reuse** — adopt its fact/inference discipline and its say-so-explicitly rule; adopt none of its ten-part template, which is built for a probe+Repomix backend supplying CI configs, dependency versions, and source text the graph does not have. Adopting it would yield a document that is mostly gap markers. The document is retained unchanged in `user/reference/` and gains only a cross-reference line.
+
+**Also recorded:** the architecture documents `config.json` as carrying `autoUpdate` and `outputLanguage`; the real file carries only `outputLanguage`. Section 7 therefore reports what is present rather than checking for expected keys.
+
+The walkthrough opens with a re-measurement step — if layer sum, `analyzedFiles`, and the file-level node count do not all agree at 238, implementation stops rather than proceeding on a stale premise. The 943 sample is deliberately left unedited; 944 will be the corrected sample and the divergence is evidence the fix landed.
+
+**Next:** Phase 5 task breakdown for 362.
+
 ### Slice 361: Graph Contract and Provenance — Task Breakdown Complete
 
 **Phase 5 complete.** Tasks at `user/tasks/361-tasks.graph-contract-and-provenance.md` (349 lines, within guideline). Design review came back **PASS** (`361-review.slice.graph-contract-and-provenance.md`, minimax/minimax-m3, 15 findings: 12 pass / 3 note, zero concerns).
