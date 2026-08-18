@@ -14,6 +14,79 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260817
 
+### Slice 914: Phase 4 Design Complete — Strict Type Checking Over the Test Suite
+
+Design written to
+`project-documents/user/slices/914-slice.strict-type-checking-over-the-test-suite.md`.
+Closes the fourth and final step of issue #50 by widening
+`[tool.pyright] include` from `["src"]` to `["src", "tests"]` under the existing
+`typeCheckingMode = "strict"`.
+
+**Re-measured the baseline rather than trusting the plan's numbers.** Set the
+include, ran `pyright --outputjson`, reverted. Result: **905 errors across 104
+files**, against the plan's "868 across 234 test files." Both figures were off —
+the count drifted up by 37 as slices 909–915 added tests, and 234 was the number
+of files *analyzed*, not the number containing errors. The real shape is
+concentrated, not broad: the top 10 files carry 45% of all errors and the top 50
+carry 90%. That concentration is what made per-directory landing the right call.
+
+**All three open design questions resolved on evidence, two of them against the
+assumption in the question:**
+
+- **`MagicMock` noise (D1) — premise is false.** The plan asked whether
+  `reportUnknownMemberType` noise on mocks warranted a narrower rule set for
+  `tests/`. Of 362 `reportUnknown*` errors, exactly **2** mention `Mock`. The
+  unknown-type errors are ordinary missing annotations — untyped lambda params
+  (68), unannotated locals (57), unannotated helper signatures (55). A
+  per-directory relaxation would have suppressed real annotation debt to solve a
+  problem that does not exist. `tests/` runs full strict, no rule overrides.
+- **One sweep vs. per-directory (D2) — per-directory.** `include` widens in the
+  first commit with `exclude` seeded with every still-erroring test directory;
+  each subsequent commit fixes one directory and deletes its line. Pyright
+  passes at *every* commit, not just the last — the same principle as 913's D7
+  applied to a config key. Ordered cheapest-signal-first: providers/server →
+  cli → pipeline → remainder, with `tests/pipeline` (382 errors, 46 files) last
+  because it is where the judgment calls live.
+- **Fixture factories vs. annotations (D5) — neither, as posed.** A general
+  fixture-factory rewrite is a refactor disguised as a type-checking slice, and
+  is out of scope. Instead, two helpers identified from the error data erase 110
+  errors mechanically. The larger one is a self-inflicted bug: 12 test modules
+  wrap `CliRunner.invoke`, and `test_dispatch_run.py:17` annotates the wrapper
+  `-> object`, discarding the properly typed `Result` — that single annotation
+  causes **all 42** `reportAttributeAccessIssue` errors
+  (`Cannot access attribute "exit_code" for class "object"`).
+
+**Two findings that changed the slice's risk profile.** `reportPrivateUsage` is
+the second-largest rule at 172 errors — tests importing underscore-prefixed
+production symbols (`_execute_summary` ×16, `_write_atomic` ×11,
+`_run_pipeline_sdk` ×10, `_REGISTRY` ×9). Pyright has no honest inline
+suppression for this; the rule is asking a design question (is this symbol part
+of the module's contract?), so D3 resolves each site by re-export/rename with
+justified single-line suppression as the fallback. **That means the slice edits
+`src`**, and the plan's recorded basis of "test-only; no production code
+changes" is stale — risk corrected from Low to **Low-Medium** and effort from
+3/5 to **4/5** in the plan entry alongside this design.
+
+Separately, 11 of the 23 `reportUnusedFunction` errors sit on
+`@pytest.fixture(autouse=True)` functions — a genuine pyright/pytest idiom
+conflict that gets a justified suppression (D4). The other 12 are inspected
+individually and deleted if genuinely dead, not suppressed by association.
+
+`reportArgumentType` (175, the largest rule) gets no shortcut: only 9 have the
+`monkeypatch.setattr` overload shape, and the other 166 are real mismatches
+between what a test passes and what production declares — the errors most likely
+to be actual findings. D6 requires any wrong *production* signature discovered
+there to be recorded in the completion notes, and records zero if zero: the
+slice's value claim is falsifiable rather than assumed.
+
+Verification walkthrough guards the failure mode that matters — a config typo
+matching nothing also reports 0 errors, so the walkthrough checks pyright's
+`filesAnalyzed` (~444, not ~210) and plants a deliberate type error to prove the
+test tree is really being checked.
+
+**Next:** Phase 5 task breakdown for 914. No implementation started; working tree
+carries only the design doc and the plan-entry update.
+
 ### Slice 913: Complete — Ruff Rule-Set Adoption (`B`, `ASYNC`, `BLE`)
 
 Implemented across three commits, one per rule set, each enabling its rule in
