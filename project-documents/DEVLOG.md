@@ -12,6 +12,20 @@ Internal work log for squadron project development.
 
 ## 20260818
 
+### Slice 361: Graph Contract and Provenance — Task Breakdown Complete
+
+**Phase 5 complete.** Tasks at `user/tasks/361-tasks.graph-contract-and-provenance.md` (349 lines, within guideline). Design review came back **PASS** (`361-review.slice.graph-contract-and-provenance.md`, minimax/minimax-m3, 15 findings: 12 pass / 3 note, zero concerns).
+
+**Review notes dispositioned in Task 1.1, no design change:**
+- **F013** (`model:` frontmatter field novel, may need schema validation) — **resolved empirically**. The gate delegates to `cf validate frontmatter` ([frontmatter_gate.py:44](src/squadron/events/builtin/frontmatter_gate.py#L44)); squadron owns no schema. Ran `cf validate frontmatter` against `942-analysis.tech-debt-audit.md`, which already carries `model:` — passes. Recorded as a verified fact in the task file rather than left as an assumption.
+- **F011** (`config.json`, `.understandignore` unaddressed) and **F012** (`meta.json` `analyzedFiles` unused) — correctly out of scope at 361's proving depth; forwarded to 362 as an in-skill note so that author sees the deferral instead of rediscovering it.
+
+**One deviation from the design, promoted to a blocking task.** The design's walkthrough opens with "Prerequisite: a real graph." Verified at task-authoring time: `.understand-anything/` **does not exist** in this repo. Every verification task depends on it, and generating it runs a marketplace plugin over the whole repo (token cost, writes to the working tree), so it became **Task 0.1** — PM-gated, not unattended. Task 0.1 also carries the stop-and-escalate rule: if the real graph's shape differs from the architecture's documented contract, stop rather than adapt, since upstream drift is this initiative's standing risk.
+
+**Structure:** 8 task groups, 17 tasks, test-with ordering throughout (2.1 author → 2.3 verify, 3.1 → 3.2, 4.1 → 4.2, 6.1 → 6.2/6.3). Five commit checkpoints rather than a single terminal commit. Also verified `.gitignore` currently has no `understand`/`trash` entry, so Task 4.2's first case exercises the create-and-append path rather than the already-present path.
+
+**Next:** Phase 6 implementation on branch `361-slice.graph-contract-and-provenance`, starting with the PM-gated Task 0.1.
+
 ### Slice 361: Graph Contract and Provenance — Slice Design Complete
 
 **Phase 4 complete.** Design at `user/slices/361-slice.graph-contract-and-provenance.md`; slice plan entry already carried the (361) index. Committed to `main` (planning work, no branch).
