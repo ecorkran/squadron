@@ -24,6 +24,11 @@ Internal work log for squadron project development.
 
 **Structure:** 8 task groups, 17 tasks, test-with ordering throughout (2.1 author → 2.3 verify, 3.1 → 3.2, 4.1 → 4.2, 6.1 → 6.2/6.3). Five commit checkpoints rather than a single terminal commit. Also verified `.gitignore` currently has no `understand`/`trash` entry, so Task 4.2's first case exercises the create-and-append path rather than the already-present path.
 
+**Task review — PASS**, 10 findings (8 pass / 2 note), zero concerns. Both notes addressed in place (357 lines, still within guideline):
+
+- **F009 (`model:` population not explicit)** — genuine gap, not cosmetic. Task 5.3 listed `model` among the fields but never said it must hold the *generating* model's id, and `cf validate frontmatter` is permissive enough to pass on a placeholder. Tightened 5.3 to require a real id and added a matching check to Task 6.2's success criteria, since the gate cannot catch it. Also wrote the instruction to avoid a hallucination trap: no example model id appears near the requirement, and a model that cannot determine its own id must say so rather than reach for the nearest plausible token.
+- **F010 (deferral note owned by 1.1, authored in 2.1)** — reworded 1.1 so it plainly produces a decision rather than skill text, and named Task 2.1 as the authoring owner. A linear reader can no longer mistake 1.1 for incomplete.
+
 **Next:** Phase 6 implementation on branch `361-slice.graph-contract-and-provenance`, starting with the PM-gated Task 0.1.
 
 ### Slice 361: Graph Contract and Provenance — Slice Design Complete

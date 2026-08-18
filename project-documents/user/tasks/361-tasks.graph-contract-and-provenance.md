@@ -70,12 +70,12 @@ repo, which costs tokens and writes to the working tree).
         frontmatter` passes on `942-analysis.tech-debt-audit.md`, which carries `model:`. Record
         this in the skill's frontmatter section as a verified fact, not an assumption.
   - [ ] **F011 (`config.json`, `.understandignore` unaddressed) — out of scope for 361, forward to
-        362.** Add a one-line "not consumed at this depth" note in the skill's read-discipline
-        section so 362's author sees the deferral rather than rediscovering it.
+        362.** Disposition only; the "not consumed at this depth" note is **authored in Task 2.1**,
+        which owns the read-discipline section. Nothing is written to the skill file here.
   - [ ] **F012 (`meta.json` `analyzedFiles` unused) — out of scope for 361, forward to 362.** Same
-        treatment as F011.
-  - [ ] Success: no design change is made; the two forwarded notes are visible to 362's author, and
-        the resolved note is recorded as verified.
+        treatment and same handoff as F011.
+  - [ ] Success: this task produces a decision, not skill text. It is complete when all three notes
+        are dispositioned — F013 verified resolved, F011 and F012 handed to Task 2.1 for authoring.
 
 ---
 
@@ -273,6 +273,12 @@ repo, which costs tokens and writes to the working tree).
         sanctioned by the architecture.
   - [ ] Specify the frontmatter fields: `docType: analysis`, `project`, `topic:
         codebase-comprehension`, `dateCreated`, `dateUpdated`, `status: not_started`, `model`.
+  - [ ] **`model:` must be populated with the id of the model actually generating the document** —
+        never left empty, never a placeholder, never a hardcoded example. `cf validate frontmatter`
+        is permissive here and will pass on a placeholder, so the skill text must state the
+        requirement rather than relying on the gate to enforce it. Do not put an example model id
+        in the skill's instruction text: if the generating model cannot determine its own id, it
+        must say so rather than reach for the nearest plausible token.
   - [ ] Record the verified fact from Task 1.1: `cf validate frontmatter` accepts `model:` on an
         `analysis` document (confirmed against `942-analysis.tech-debt-audit.md`).
   - [ ] State why `status: not_started` is correct rather than a review-pending value: the enum has
@@ -312,6 +318,8 @@ repo, which costs tokens and writes to the working tree).
         and confirm they are true of the actual codebase. A claim that does not hold is a defect,
         not a cosmetic issue.
   - [ ] Success: `cf validate frontmatter` passes on the generated file.
+  - [ ] Success: `model:` holds a real model id, not a placeholder or empty value. Check this by
+        reading the field — the gate is permissive and will not catch it.
   - [ ] Success: a second run produces a **new** index rather than overwriting the first.
 
 - [ ] **6.3 Verify at least one gap marker is exercised** — Effort: 1/5
