@@ -201,9 +201,13 @@ problem the upstream design avoids.
 
 ### Output
 
-`project-documents/user/analysis/{index}-analysis.{name}.md` — markdown, chosen because it converts
-cleanly to PDF, slides, or a document without a toolchain commitment. See Output Conventions for
-index allocation and the working name of this artifact.
+`project-documents/user/analysis/{index}-analysis.overview.md` — markdown, chosen because it converts
+cleanly to PDF, slides, or a document without a toolchain commitment.
+
+The artifact is called an **overview**: plain enough that any reader understands it without
+explanation, and it claims no particular format (unlike "presentation", which would promise slides
+squadron does not produce). Where a project needs more than one, the topic is appended —
+`{index}-analysis.overview.{topic}.md`.
 
 ### Document field schema
 
@@ -247,20 +251,22 @@ investigation" in `user/analysis/`. Generated documents draw from that range, in
 like the existing `940`/`941`/`942` tech-debt-audit series, where each run is an independent sample
 rather than a revision of the last.
 
-**Known constraint — the range is small.** Ten slots, three already consumed. Comprehension runs and
-client documents share the range with tech-debt audits, and a client engagement would spend several
-on arrival. The convention does not define an overflow rule (950+ is maintenance/tasks). The first
-slice design must therefore establish an allocation rule: which sub-range each artifact type draws
-from, and what happens at 949. This is a real ceiling, not a theoretical one.
+**Overflow into 950+ is sanctioned.** Ten slots with three already consumed is not enough for
+comprehension runs and client documents alongside tech-debt audits, so generated documents take
+remaining slots in the 900 band as needed rather than stopping at 949. The 900 band is heavily used
+and its subdivision may need to be widened or re-cut later; that is a known future concern for the
+naming convention as a whole, not a blocker for this initiative.
 
 **Status values.** Generated frontmatter uses only enum members — `complete`, `in_progress`,
 `not_started`, `deprecated`, `deferred`. Invented values such as `draft` are rejected by the gate.
 
-**Prior art.** `user/reference/analyze-codebase-prompt.md` is an existing hand-authored three-phase
-codebase-analysis prompt built on a different extraction backend (`codebase-probe.py` + Repomix). It
-shares this initiative's discipline of separating known facts from inference and flagging gaps
-explicitly. It is an input to slice design — its analysis template is a tested structure for the
-comprehension output, and its `[INFERRED]` convention is directly applicable to graph-derived claims.
+**Prior art (retained, not superseded).** `user/reference/analyze-codebase-prompt.md` is an
+experimental hand-authored three-phase codebase-analysis prompt on a different extraction backend
+(`codebase-probe.py` + Repomix). It is a more cursory answer to the same question than
+understand-anything gives, but materially lighter on token use. It is not part of any main process
+and this initiative does not supersede or absorb it — it stays available as a low-cost alternative
+path. Its analysis template and `[INFERRED]` convention are useful references when designing the
+comprehension output, since both address separating known facts from inference.
 
 ## Delivery
 
@@ -277,10 +283,10 @@ squadron's own document layout and writes for stakeholders; nothing about it aud
 routing it through the analysis dispatcher would make that dispatcher's name inaccurate. It belongs
 alongside `sq:review` and `sq:task`.
 
-**Naming is unresolved for (b).** `brief` is the working placeholder, not a decision — it is
-serviceable but not liked, and `presentation` was rejected as too long and overstating what the
-artifact is. The command name, the document name, and the `{name}` slot in the output path all
-depend on settling this. It must be resolved before the capability-(b) slice is designed.
+**Capability (b) — `overview`** ships as `/sq:overview`, writing
+`{index}-analysis.overview.md`. `brief` was rejected as vague about contents, `presentation` as
+naming a format squadron does not produce, and `summary` because `commands/sq/summary.md` already
+exists for conversation summaries.
 
 ## Non-Goals
 
@@ -316,6 +322,9 @@ Settled during architecture review (20260818):
 - **Skill name for (a)** — `understand`, matching the upstream plugin rather than inventing a
   synonym. Dispatcher namespacing prevents collision, and a second vocabulary word for one concept
   is a cost with no benefit.
+- **Name for capability (b)** — `overview`, shipping as `/sq:overview`. Chosen over `brief`
+  (vague), `presentation` (names a format squadron does not produce), and `summary` (taken by the
+  existing conversation-summary command).
 - **Client document audience handling** — one neutral document, not per-audience variants. The three
   readerships (client, management, colleagues) differ in emphasis, not in fact; three variants would
   mean three artifacts to keep true. An emphasis parameter is added only if real use demonstrates
@@ -327,12 +336,7 @@ Settled during architecture review (20260818):
 
 ## Open Questions for Slice Design
 
-- **Name for capability (b).** `brief` is a working placeholder that has not been accepted.
-  Blocks the (b) slice: the command name, document name, and output filename all derive from it.
-- **Index allocation within 940-949.** Seven slots remain and three artifact types now compete for
-  them. Needs an explicit sub-range rule and an overflow answer for 949.
 - **Interview question set for (a).** The concept sections needing PM input are identified; the
   actual wording, ordering, and how much the graph can pre-fill to shorten the interview are not.
 - **Reuse of `analyze-codebase-prompt.md`.** How much of its analysis template and `[INFERRED]`
-  convention transfers to the graph-backed path, and whether that reference document is superseded,
-  retained as the non-graph fallback, or merged.
+  convention transfers to the graph-backed path. The document itself is retained regardless.
