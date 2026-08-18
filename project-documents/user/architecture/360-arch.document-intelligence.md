@@ -127,14 +127,25 @@ Squadron does not replace or wrap either skill.
 1. **Preconditions.** Verify the plugin is installed and `knowledge-graph.json` exists. If the graph
    is missing, report the exact command to run (`/understand`) and stop.
 
+   **Validate shape, not just presence.** The plugin is upstream-maintained and actively developed,
+   so the output contract can change under us. Before reading, confirm the required top-level keys
+   exist — `project`, `nodes`, `edges`, `layers`, `tour` — and that `nodes`/`edges`/`layers` are
+   non-empty arrays. On a missing or mistyped key, stop with an error naming the absent key and the
+   graph's version, rather than proceeding with partial data. A renamed field in a future release
+   must surface as a loud failure, never as a silently thinner document. Absence and malformation
+   are different failures and get different messages.
+
    **Staleness warns, it does not block.** If `meta.json`'s `gitCommitHash` differs from `HEAD`,
    report the drift — including the commit distance — and let the PM choose to proceed or refresh.
    Blocking would force a full re-analysis after a typo commit, which is disproportionate; a graph a
-   few commits behind is usually adequate for concept-level work. The warning must be prominent and
-   must appear in the generated document's provenance, because the genuine failure mode is a
-   confidently wrong concept doc built on a stale graph without the reader knowing.
-2. **Hygiene.** Ensure `.gitignore` contains an entry for the plugin's scratch directories,
-   idempotently (see below).
+   few commits behind is usually adequate for concept-level work.
+
+   **The check requires git.** If `git` is unavailable or the directory is not a repository, the
+   comparison cannot run. Skip it and say so explicitly, in both the console output and the
+   provenance block — never skip silently. A silent skip defeats the check's entire purpose, which
+   is to prevent a confidently wrong document built on a stale graph.
+2. **Hygiene.** Ensure `.gitignore` ignores the plugin's scratch directories, idempotently — a
+   named, announced side effect of the skill, not a silent one (see Working-tree hygiene).
 3. **Read structure.** Extract `project`, `layers[]`, `tour[]`, and file-level nodes with their
    `summary`, `filePath`, and `complexity`.
 4. **Interview.** Ask a short focused set of questions covering only what the graph cannot supply:
@@ -146,30 +157,83 @@ Squadron does not replace or wrap either skill.
 ### Outputs
 
 - `project-documents/user/project-guides/000-concept.{project}.md` — `docType: concept`, with the
-  interview responses preserved verbatim in the **User-Provided Concept** section (which is sacred
-  per project convention and never rewritten), and graph-derived structure in Refined Concept's
-  Solution Approach and Initial Technical Direction.
+  interview responses preserved verbatim in the **User-Provided Concept** section, and graph-derived
+  structure in Refined Concept's Solution Approach and Initial Technical Direction.
 - `project-documents/user/analysis/{index}-analysis.codebase-comprehension.md` — `docType: analysis`,
   the structural findings: layers, complexity hotspots, entry points, dependency observations.
-- **Initiative-plan candidates** — proposed initiatives derived from layer boundaries and complexity
-  clustering, offered for PM review. Written only on explicit confirmation, because an initiative
-  plan is a commitment document; an unreviewed generated one is worse than none.
+- `project-documents/user/analysis/{index}-analysis.initiative-candidates.md` — `docType: analysis`,
+  proposed initiatives for PM review. See below.
+
+**Dependency on the concept document layout.** The skill relies on one structural guarantee from
+`guide.ai-project.000-concept.md` (owned by the ai-project-guide, not by squadron): a section titled
+**User-Provided Concept**, whose contents are authored by the PM and never rewritten by an AI. The
+skill writes interview responses there verbatim and preserves anything already present. This is a
+cross-repo dependency: if that guide renames the section or drops it, the skill must fail loudly
+rather than write to a section that no longer means what it did. Slice design verifies the section
+exists before writing and errors with a pointer to the guide if it does not.
+
+**Initiative candidates are a proposal, not a plan.** They are written to their own `analysis`
+document, never into `001-initiative-plan.{project}.md`, because an initiative plan is a commitment
+document and a generated one that nobody reviewed is worse than none. Adopting a candidate is a
+deliberate PM act of moving it into the real plan.
+
+Each candidate is derived from one signal and states which: a layer boundary from `layers[]`, or a
+complexity cluster from file-level `complexity` values within a layer. Each carries a title, the
+signal and the node IDs supporting it, a one-paragraph scope statement, and observed dependencies
+from `edges[]` between the implicated layers. A candidate the graph does not support is not
+proposed — the skill emits fewer candidates rather than padding to a target count. What the PM
+confirms is that the document is worth writing at all; they are not approving the candidates
+themselves, which remain proposals until moved by hand.
+
+### Provenance block
+
+Every document generated by either capability carries a **Provenance** section, placed immediately
+after the title so it cannot be missed, recording how the document was produced:
+
+- Which capability generated it, and when.
+- Source artifacts read, with their identity — for (a) the graph's `gitCommitHash` and
+  `lastAnalyzedAt`; for (b) the concept and initiative-plan paths.
+- **Staleness state**: whether the graph matched `HEAD`, the commit distance if not, or that the
+  check was skipped because git was unavailable.
+- Which sections came from source data and which from the interview.
+- Any gap the skill flagged rather than filled.
+
+The block is body prose, not frontmatter — frontmatter is validated against a fixed schema and a
+reader never sees it, whereas the failure this guards against is a *human* trusting a stale or
+partly-invented document. Placement above the content is deliberate for the same reason: a warning
+at the bottom of a long document is a warning nobody reads.
+
+The block is also what makes `status: not_started` legible on a generated draft — it states plainly
+that a machine produced this and no human has reviewed it.
 
 ### Interview scope
 
 The graph supplies structure; the interview supplies intent. Question set is bounded and derived
-from the concept guide's own section list:
+from the concept guide's own section list. The table below names, per section, the graph fields to
+attempt first and what the human is asked for:
 
-| Concept section | Source |
-|---|---|
-| Problem & Motivation | Interview — graph cannot infer why |
-| Target Users | Interview — graph cannot infer who |
-| Solution Approach | Graph (layers, tour) + interview confirmation |
-| Initial Technical Direction | Graph (languages, frameworks, dependencies) |
-| Development Approach | Interview — methodology and constraints |
+| Concept section | Graph fields attempted | Interview role |
+|---|---|---|
+| Problem & Motivation | — | Primary; graph holds no statement of why |
+| Target Users | — | Primary; graph holds no statement of who |
+| Solution Approach | `layers[]`, `tour[]` node ordering | Confirm and correct the derived summary |
+| Initial Technical Direction | `project.languages`, `project.frameworks`, `config` nodes | Confirm; supply direction the code does not show |
+| Development Approach | test/CI `config` nodes as weak evidence | Primary; methodology is rarely inferable |
+
+**The extract-then-ask rule.** For each section, attempt extraction from its named graph fields
+first. Ask the human only when the fields are absent, or when what they yield is structure standing
+in for intent. This is the operative definition of "structural": *a claim is structural when it is
+supported by a named graph field, and intent when it is not.* A question is never asked for content
+already extracted — the extracted value is shown for confirmation instead, which is cheaper for the
+PM than answering from scratch.
+
+The two failure modes are asymmetric, and the rule is tuned accordingly: asking too much wastes the
+PM's time, while asking too little produces a fabricated concept. When a field is present but thin,
+ask.
 
 Anything the PM declines to answer is written as an explicit unknown, per the concept guide's "flag
-unknowns explicitly" rule. It is never filled with a plausible guess.
+unknowns explicitly" rule, and recorded in the provenance block. It is never filled with a plausible
+guess.
 
 ### Working-tree hygiene
 
@@ -182,6 +246,18 @@ Squadron adds a single idempotent `.gitignore` entry scoped to the scratch only:
 ```
 .understand-anything/.trash-*/
 ```
+
+**Who writes it, when, and what if it fails.** The skill itself performs the write, at the start of
+every run, and reports what it did. The check is cheap and the entry may have been removed since
+last time, so it is verified per-run rather than once. Writing is skipped when the entry is already
+present — matched semantically, so an existing broader ignore of `.understand-anything/` satisfies
+it and is not duplicated.
+
+Failure is non-fatal and never silent. If `.gitignore` is absent it is created; if it cannot be
+written (read-only, permission denied) or the directory is not a git repository, the skill reports
+that the entry could not be added, names the reason, and continues to the analysis — hygiene is a
+convenience, and failing the whole run over an untracked scratch directory would be
+disproportionate. What is never acceptable is proceeding as though the write succeeded.
 
 **Not ignored:** `knowledge-graph.json`, `meta.json`, `config.json`, and `.understandignore` remain
 tracked. They are durable project knowledge, and tracking `meta.json` makes graph staleness visible
@@ -225,14 +301,25 @@ The document communicates purpose and benefit to a non-engineering reader. Field
 | Roadmap | Sequenced themes with dependency-driven ordering, no indices | Initiative plan + dependencies |
 | Risks / Open Questions | Known unknowns stated honestly | Initiative plan notes |
 
+Every field resolves to exactly one of: content derived from its named source, or a gap marker
+naming the missing input. There is no third outcome in which the skill supplies the content itself.
+The overview also carries the provenance block described under Capability 1, recording which inputs
+were read and which fields were marked as gaps.
+
 ### Translation rules
 
 - **Strip internal vocabulary.** Slice indices, phase numbers, initiative indices, and docType
   frontmatter never appear. "Initiative 140 status draft" becomes "foundational work, in progress."
 - **Features become outcomes.** "Weighted review convergence with decay-based finding dismissal"
   becomes "automated review that converges without human babysitting."
-- **Derive, never invent.** Every claim traces to an input artifact. If a benefit is not supported by
-  the concept or initiative plan, it is not asserted — the skill flags the gap for the PM instead.
+- **Derive, never invent.** Every claim traces to an input artifact. This is enforced structurally
+  rather than by good intentions: the overview is assembled **field by field from named sources**
+  (see the schema table), and a field whose source yields nothing is emitted as an explicit gap
+  marker naming what is missing and which input would supply it — never as inferred prose. The rule
+  applies to every field, not only Benefits: Approach, Scope, Risks, and Roadmap are each either
+  sourced or marked. Gap markers appear in the document body, so the PM sees them where the content
+  would have been, and are listed in the provenance block so they can be found without reading
+  through. A document with gap markers is the expected output for a thin input, not a failure.
 - **Status is honest.** Not-started work is described as planned, not implied complete. A client
   document that overstates progress is a liability, not a deliverable.
 - **Audience variants share one document.** Client, management, and colleague readings differ in
@@ -240,11 +327,22 @@ The document communicates purpose and benefit to a non-engineering reader. Field
 
 ## Output Conventions
 
-Both capabilities write to the existing `project-documents/user/analysis/` directory with the
-existing `docType: analysis`. No new directory, no new docType, and no change to
-`file-naming-conventions.md` — which matters because the frontmatter gate validates `docType` and
-`status` against a fixed enum, so a new type would require a gate change before anything could be
-committed.
+Both capabilities use existing directories and existing docTypes, and require no change to
+`file-naming-conventions.md` and no gate change — which matters because the frontmatter gate
+validates `docType` and `status` against fixed enums, so a new type could not be committed until the
+gate was changed first.
+
+Per-artifact placement:
+
+| Artifact | Path | docType |
+|---|---|---|
+| Concept draft (a) | `user/project-guides/000-concept.{project}.md` | `concept` |
+| Comprehension analysis (a) | `user/analysis/{index}-analysis.codebase-comprehension.md` | `analysis` |
+| Initiative candidates (a) | see Capability 1 → Outputs | `analysis` |
+| Overview (b) | `user/analysis/{index}-analysis.overview.md` | `analysis` |
+
+Capability (a) therefore writes to **two** directories: the concept lands in `project-guides/`
+because that is where the naming convention puts it, and everything else in `analysis/`.
 
 **Index range.** The naming convention reserves **940-949** for "codebase analysis, research,
 investigation" in `user/analysis/`. Generated documents draw from that range, incrementing per run
@@ -257,8 +355,16 @@ remaining slots in the 900 band as needed rather than stopping at 949. The 900 b
 and its subdivision may need to be widened or re-cut later; that is a known future concern for the
 naming convention as a whole, not a blocker for this initiative.
 
-**Status values.** Generated frontmatter uses only enum members — `complete`, `in_progress`,
-`not_started`, `deprecated`, `deferred`. Invented values such as `draft` are rejected by the gate.
+**Status values.** Generated frontmatter uses only `DocumentStatus` members — `complete`,
+`in_progress`, `not_started`, `deprecated`, `deferred` (`src/squadron/documents/schema.py`).
+Invented values such as `draft` are rejected by the gate.
+
+**A generated document is written `not_started`.** The enum has no `needs_review` member, and none
+is added here: `complete` would assert a PM review that has not happened, and `in_progress` would
+claim an active author. `not_started` reads correctly for a machine-produced draft awaiting human
+work — the *work* has not started, notwithstanding that a draft exists. The distinction matters
+because a generated concept marked `complete` would be indistinguishable from a human-authored,
+reviewed one. Review state is carried by the document's own provenance block, not by `status`.
 
 **Prior art (retained, not superseded).** `user/reference/analyze-codebase-prompt.md` is an
 experimental hand-authored three-phase codebase-analysis prompt on a different extraction backend
@@ -284,7 +390,10 @@ routing it through the analysis dispatcher would make that dispatcher's name ina
 alongside `sq:review` and `sq:task`.
 
 **Capability (b) — `overview`** ships as `/sq:overview`, writing
-`{index}-analysis.overview.md`. `brief` was rejected as vague about contents, `presentation` as
+`{index}-analysis.overview.md`. Registration matches capability (a)'s cost: `sq install-commands`
+copies `commands/sq/*.md` wholesale (`src/squadron/cli/commands/install.py`), so adding
+`commands/sq/overview.md` is sufficient — no installer, manifest, or CLI change, exactly as for the
+pack skill. The two capabilities differ in delivery surface, not in registration burden. `brief` was rejected as vague about contents, `presentation` as
 naming a format squadron does not produce, and `summary` because `commands/sq/summary.md` already
 exists for conversation summaries.
 
@@ -336,7 +445,10 @@ Settled during architecture review (20260818):
 
 ## Open Questions for Slice Design
 
-- **Interview question set for (a).** The concept sections needing PM input are identified; the
-  actual wording, ordering, and how much the graph can pre-fill to shorten the interview are not.
+- **Interview wording for (a).** The extract-then-ask rule and the per-section graph-field mapping
+  are settled; the literal question wording and ordering are not.
 - **Reuse of `analyze-codebase-prompt.md`.** How much of its analysis template and `[INFERRED]`
   convention transfers to the graph-backed path. The document itself is retained regardless.
+- **Gap-marker syntax.** A single convention is needed for both capabilities. The retained
+  `analyze-codebase-prompt.md` uses `[INFERRED]` for a related purpose and is the obvious candidate
+  to extend rather than compete with.
