@@ -344,10 +344,13 @@ covered by the existing suite and gated per part.
 7. `uv run ruff check` and `uv run ruff format --check` pass.
 8. Every retained `# pyright: ignore` carries a justifying comment, and the
    audit task has read each one individually.
-9. Every `reportPrivateUsage` site is resolved by re-export/rename or by a
-   justified single-line suppression — none by bulk suppression (D3).
+9. Every `reportPrivateUsage` site is resolved by renaming the symbol public,
+   or — where a public name reads wrong — by a justified single-line
+   suppression recorded in the completion summary. None by bulk suppression.
 10. Any production signature found to be wrong during D6 is recorded in the
-    slice completion notes.
+    completion summary.
+11. The Completion Summary section is filled in: errors remaining (must be 0),
+    one-sentence actions, renames, kept-private exceptions.
 
 ## Verification Walkthrough
 
@@ -449,23 +452,27 @@ reason each:
 
 ## Effort
 
-**4/5.** Raised from the plan's 3/5. The volume is as advertised and the
-individual edits are easy, but D3 (172 sites, each needing a public/private
-judgment and some touching `src`) and D6 (166 genuine mismatches with no
-mechanical shortcut) are not the mechanical annotation work the 3/5 assumed.
-D1 and D5 pull in the other direction — 110 of the 905 errors collapse under two
-mechanical fixes — but not far enough to hold 3/5.
+**4/5.** Raised from the plan's 3/5. The volume is as advertised and most
+individual edits are easy, but the private-symbol renames (67 symbols, 922 lines,
+261 of them in `src`) and the 166 genuine argument-type mismatches are not the
+mechanical annotation work 3/5 assumed. Two mechanical fixes collapse 110 of the
+905 errors, but not far enough to hold 3/5.
 
 ## Risks
 
-**The plan's "test-only; no production code changes" basis is stale.** D3
-requires production symbol renames or re-exports. These are signature-only and
-covered by the suite, but the slice is no longer strictly test-only, and the
-plan entry's risk line needs correcting to Low-Medium alongside this design.
+**The plan's "test-only; no production code changes" basis is stale.** The
+private-symbol renames touch 261 `src` lines. These are signature-only and
+covered by the suite, but the slice is not test-only; risk is corrected to
+Low-Medium.
 
-**Annotation churn hiding a behavior change.** D4 deletes functions and D3
-renames symbols. Mitigated by the per-part gate (D7) and the pytest floor of
-3021 — but the floor only catches what the suite covers.
+**Renaming creates public API the project must live with.** Promoting a symbol
+is not free — `run`, `client`, `REGISTRY` are permanent surface once exposed.
+Mitigated by the kept-private exception path and by recording every rename in
+the completion summary for review.
+
+**Churn hiding a behavior change.** Dead-helper deletions and symbol renames can
+alter behavior. Mitigated by the per-part gate and the pytest floor of 3021 —
+but the floor only catches what the suite covers.
 
 **Baseline drift.** The 905/104 figures are measured at `03cdd73`. Any slice
 merged before 914 starts will move them. Part A re-measures before seeding
