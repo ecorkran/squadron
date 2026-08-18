@@ -50,82 +50,83 @@ repo, which costs tokens and writes to the working tree).
 
 ## Task 0: Prerequisite
 
-- [ ] **0.1 Generate the knowledge graph** — Effort: 1/5
-  - [ ] Confirm the `understand-anything` marketplace plugin is installed and available in this
+- [x] **0.1 Generate the knowledge graph** — Effort: 1/5
+  - [x] Confirm the `understand-anything` marketplace plugin is installed and available in this
         Claude Code session.
-  - [ ] Run the plugin's `/understand` against this repo to produce
+  - [x] Run the plugin's `/understand` against this repo to produce
         `.understand-anything/knowledge-graph.json`.
-  - [ ] **This task writes to the working tree and consumes significant tokens.** Confirm with the
+  - [x] **This task writes to the working tree and consumes significant tokens.** Confirm with the
         Project Manager before running; do not run it unattended.
-  - [ ] Success: `.understand-anything/knowledge-graph.json` and `meta.json` exist.
-  - [ ] Success: record the graph's actual top-level keys and the `meta.json` fields present. If
+  - [x] Success: `.understand-anything/knowledge-graph.json` and `meta.json` exist.
+  - [x] Success: record the graph's actual top-level keys and the `meta.json` fields present. If
         the observed shape differs from the architecture's documented contract (`project`,
         `nodes`, `edges`, `layers`, `tour`), **stop and raise to the Project Manager** — that is a
         contract change, not an implementation detail (design Risk Assessment).
-  - [ ] Do **not** commit `.understand-anything/` contents in this task; Task 4.1 settles what is
+  - [x] Do **not** commit `.understand-anything/` contents in this task; Task 4.1 settles what is
         ignored and what is tracked.
 
-- [ ] **1.1 Disposition the review notes** — Effort: 1/5
-  - [ ] **F013 (`model:` frontmatter field) — already resolved, no action.** Verified: `cf validate
+- [x] **1.1 Disposition the review notes** — Effort: 1/5
+  - [x] **F013 (`model:` frontmatter field) — already resolved, no action.** Verified: `cf validate
         frontmatter` passes on `942-analysis.tech-debt-audit.md`, which carries `model:`. Record
         this in the skill's frontmatter section as a verified fact, not an assumption.
-  - [ ] **F011 (`config.json`, `.understandignore` unaddressed) — out of scope for 361, forward to
+  - [x] **F011 (`config.json`, `.understandignore` unaddressed) — out of scope for 361, forward to
         362.** Disposition only; the "not consumed at this depth" note is **authored in Task 2.1**,
         which owns the read-discipline section. Nothing is written to the skill file here.
-  - [ ] **F012 (`meta.json` `analyzedFiles` unused) — out of scope for 361, forward to 362.** Same
+  - [x] **F012 (`meta.json` `analyzedFiles` unused) — out of scope for 361, forward to 362.** Same
         treatment and same handoff as F011.
-  - [ ] Success: this task produces a decision, not skill text. It is complete when all three notes
+  - [x] Success: this task produces a decision, not skill text. It is complete when all three notes
         are dispositioned — F013 verified resolved, F011 and F012 handed to Task 2.1 for authoring.
 
 ---
 
 ## Task 1: Skill file skeleton
 
-- [ ] **1.2 Create `commands/analysis/understand.md` with its skill header** — Effort: 2/5
-  - [ ] Create the file with YAML skill frontmatter matching the shape of
+- [x] **1.2 Create `commands/analysis/understand.md` with its skill header** — Effort: 2/5
+  - [x] Create the file with YAML skill frontmatter matching the shape of
         `commands/analysis/tech-debt-audit.md`: `name`, `description`, and
         `disable-model-invocation: true` (this skill writes documents and runs on explicit
         invocation only).
-  - [ ] `name: understand`. Write a `description` that states it consumes an existing
+  - [x] `name: understand`. Write a `description` that states it consumes an existing
         `understand-anything` knowledge graph and writes squadron planning documents — it must not
         claim to analyze a codebase itself, which is the plugin's job.
-  - [ ] Lay out the section skeleton in the order the design's Component Structure specifies:
+  - [x] Lay out the section skeleton in the order the design's Component Structure specifies:
         **Preflight: Graph Contract** → **Document Conventions** → **Flow: Comprehension
         Analysis**, plus a human-facing maintainer section after a `---` divider (matching
         `tech-debt-audit.md`'s protocol/documentation split).
-  - [ ] Add a note in the maintainer section stating why the contract lives in **this file** rather
+  - [x] Add a note in the maintainer section stating why the contract lives in **this file** rather
         than a separate fragment: `_install_prefix()` installs every pack `*.md` as its own skill,
         so a fragment file would surface as a bogus installable command.
-  - [ ] Success: file exists, sections are present and empty-but-titled, and the file's purpose is
+  - [x] Success: file exists, sections are present and empty-but-titled, and the file's purpose is
         unambiguous to a reader who has not read the design.
 
-- [ ] **1.3 Verify the skeleton installs** — Effort: 1/5
-  - [ ] Run `sq skills install analysis` and read the receipt.
-  - [ ] Success: the receipt lists both `tech-debt-audit.md` and `understand.md`.
-  - [ ] Success: no change to `src/squadron/`, manifests, or installer code was required.
-  - [ ] Run the existing skills test suite (`uv run pytest tests/skills/`) and confirm it is green.
-  - [ ] **Commit checkpoint:** commit the skeleton before authoring protocol content.
+- [x] **1.3 Verify the skeleton installs** — Effort: 1/5
+  - [x] Run `sq skills install analysis` and read the receipt.
+  - [x] Success: the receipt lists both `tech-debt-audit.md` and `understand.md`.
+  - [x] Success: no change to `src/squadron/`, manifests, or installer code was required.
+  - [x] Run the existing skills test suite (`uv run pytest tests/skills/`) and confirm it is green.
+  - [x] **Commit checkpoint:** commit the skeleton before authoring protocol content.
+  - [x] Environment note: the `sq` on PATH (`/Users/manta/.local/bin/sq`) is a separate global uv-tool install and reports only 1 file. Use `uv run sq skills install analysis` to exercise the working-tree installer, which correctly reports 2 files.
 
 ---
 
 ## Task 2: Preflight — graph location and validation
 
-- [ ] **2.1 Author graph location and read discipline** — Effort: 2/5
-  - [ ] Specify graph root resolution: `git rev-parse --show-toplevel`, falling back to the current
+- [x] **2.1 Author graph location and read discipline** — authored in commands/analysis/understand.md. Read-discipline table names each jq selection; function/class nodes excluded via `select(.type == "file")`; missing jq stops the run; F011/F012 deferral note included.
+  - [x] Specify graph root resolution: `git rev-parse --show-toplevel`, falling back to the current
         working directory outside a repository; graph root is `<root>/.understand-anything/`.
-  - [ ] Specify that all reads are field-scoped `jq` selections and the graph is never loaded whole
+  - [x] Specify that all reads are field-scoped `jq` selections and the graph is never loaded whole
         into context. Name the specific selections needed: key presence, array lengths, `layers[]`,
         file-level nodes (`id`, `filePath`, `summary`, `complexity` only), `tour[]`
         order/title/nodeIds, edge aggregates.
-  - [ ] State explicitly that function- and class-level nodes are never read.
-  - [ ] Specify that a missing `jq` stops the run with a clear message — it must **not** fall back
+  - [x] State explicitly that function- and class-level nodes are never read.
+  - [x] Specify that a missing `jq` stops the run with a clear message — it must **not** fall back
         to reading the raw file into context.
-  - [ ] Include the F011/F012 deferral note from Task 1.1.
-  - [ ] Success: a junior AI following this section reads only named fields and could not
+  - [x] Include the F011/F012 deferral note from Task 1.1.
+  - [x] Success: a junior AI following this section reads only named fields and could not
         accidentally load the whole graph.
 
-- [ ] **2.2 Author the three-way validation failure** — Effort: 3/5
-  - [ ] Author the checks in order, each with its own distinct message:
+- [x] **2.2 Author the three-way validation failure** — three distinct messages authored (absent / unparseable / malformed), tour asymmetry specified, governing rule stated.
+  - [x] Author the checks in order, each with its own distinct message:
     1. **Absent** — graph file does not exist → stop; message points at running the plugin's
        `/understand` first. This message must **not** speculate about whether the plugin is
        installed (that detection is slice 366 scope).
@@ -133,102 +134,102 @@ repo, which costs tokens and writes to the working tree).
     3. **Malformed** — any required top-level key missing/mistyped, or `nodes`/`edges`/`layers`
        empty → stop; message names **each** offending key and reports graph identity
        (`lastAnalyzedAt`, `gitCommitHash` when readable).
-  - [ ] Specify the `tour` asymmetry: an empty `tour` **warns and proceeds** (it degrades one
+  - [x] Specify the `tour` asymmetry: an empty `tour` **warns and proceeds** (it degrades one
         signal); empty `nodes`/`edges`/`layers` **reject** (nothing useful can be written).
-  - [ ] State the governing rule in the section: a renamed upstream field must surface as failure 3,
+  - [x] State the governing rule in the section: a renamed upstream field must surface as failure 3,
         never as a silently thinner document.
-  - [ ] Success: the three messages are textually distinct and each names what a reader must do
+  - [x] Success: the three messages are textually distinct and each names what a reader must do
         next.
 
-- [ ] **2.3 Verify validation against real and tampered graphs** — Effort: 3/5
-  - [ ] Work in a scratch copy outside this repo; never tamper with this repo's real graph.
-  - [ ] **Happy path:** run preflight against the real graph (Task 0.1) — expect it to pass and
+- [x] **2.3 Verify validation against real and tampered graphs** — all six cases run in a scratch copy outside the repo. Real graph passed (nodes 925, edges 2184, layers 10, tour 15). `del(.layers)` produced "MALFORMED: missing key(s): layers" plus identity (version 1.0.0, gitCommitHash 1bfbca1, lastAnalyzedAt). `.layers = []` produced "MALFORMED: empty required array(s): layers". `.tour = []` warned and proceeded. Truncated file produced "UNPARSEABLE" with jq's parse error. Absent directory produced the run-/understand-first message. Three failure messages confirmed textually distinct in actual output.
+  - [x] Work in a scratch copy outside this repo; never tamper with this repo's real graph.
+  - [x] **Happy path:** run preflight against the real graph (Task 0.1) — expect it to pass and
         report node/edge/layer counts.
-  - [ ] **Missing key:** `jq 'del(.layers)'` on the scratch copy — expect a loud error naming
+  - [x] **Missing key:** `jq 'del(.layers)'` on the scratch copy — expect a loud error naming
         `layers` plus graph identity, and no document written.
-  - [ ] **Empty array:** `jq '.layers = []'` — expect the same rejection.
-  - [ ] **Empty tour:** `jq '.tour = []'` — expect a **warning** and a completed run.
-  - [ ] **Unparseable:** truncate the JSON mid-object — expect the invalid-JSON message, distinct
+  - [x] **Empty array:** `jq '.layers = []'` — expect the same rejection.
+  - [x] **Empty tour:** `jq '.tour = []'` — expect a **warning** and a completed run.
+  - [x] **Unparseable:** truncate the JSON mid-object — expect the invalid-JSON message, distinct
         from the missing-key message.
-  - [ ] **Absent:** run in a scratch directory with no `.understand-anything/` — expect the
+  - [x] **Absent:** run in a scratch directory with no `.understand-anything/` — expect the
         run-`/understand`-first message, distinct from all of the above.
-  - [ ] Success: all six runs produce the specified outcome; the three failure messages are
+  - [x] Success: all six runs produce the specified outcome; the three failure messages are
         confirmed distinct in actual output, not just in the source text.
 
 ---
 
 ## Task 3: Preflight — staleness
 
-- [ ] **3.1 Author the staleness check** — Effort: 2/5
-  - [ ] Specify reading `gitCommitHash` from `meta.json`; if `meta.json` is missing or the field is
+- [x] **3.1 Author the staleness check** — authored; three comparison outcomes, explicit skip reasons, never fabricates a distance, PM decision recorded in provenance.
+  - [x] Specify reading `gitCommitHash` from `meta.json`; if `meta.json` is missing or the field is
         absent, report that the check cannot run **for that reason** and record the skip in
         provenance.
-  - [ ] Specify the git-unavailable path: if `git` is absent or the directory is not a repository,
+  - [x] Specify the git-unavailable path: if `git` is absent or the directory is not a repository,
         announce the skip explicitly in console output **and** record it in the provenance block.
         Never skip silently.
-  - [ ] Specify the three comparison outcomes against `git rev-parse HEAD`:
+  - [x] Specify the three comparison outcomes against `git rev-parse HEAD`:
     1. equal → "matched HEAD";
     2. differing, hash is a known ancestor → distance via `git rev-list --count {hash}..HEAD`,
        reported as "N commits behind HEAD";
     3. differing, hash unknown to the repo (rebase, amend, shallow clone) → drift reported with
        **unknown** distance and the reason. Never fabricate a distance number.
-  - [ ] Specify that on any drift the skill states the finding and asks the PM to proceed or stop
+  - [x] Specify that on any drift the skill states the finding and asks the PM to proceed or stop
         and refresh; proceeding is recorded in provenance as a PM choice. The check never blocks on
         its own.
-  - [ ] Success: every path either produces a distance, an explicit unknown-distance reason, or an
+  - [x] Success: every path either produces a distance, an explicit unknown-distance reason, or an
         explicit skip reason — there is no silent outcome.
 
-- [ ] **3.2 Verify staleness paths** — Effort: 2/5
-  - [ ] **Matched:** run against the fresh graph from Task 0.1 with a clean tree — expect "matched
+- [x] **3.2 Verify staleness paths** — all five verified. Matched-HEAD confirmed via scratch meta at current HEAD. "Behind" exercised naturally against real data: graph hash 1bfbca1 vs HEAD abd6a4d gave "1 commits behind HEAD" via git rev-list --count (no throwaway commit needed — the skeleton commit moved HEAD). Unknown hash produced drift with unknown distance and no fabricated number. Non-repo scratch dir produced explicit skip. Missing meta.json and present-but-no-gitCommitHash produced two distinct "cannot run" reasons.
+  - [x] **Matched:** run against the fresh graph from Task 0.1 with a clean tree — expect "matched
         HEAD".
-  - [ ] **Behind:** make one throwaway commit, re-run — expect "1 commit behind HEAD" and a PM
+  - [x] **Behind:** make one throwaway commit, re-run — expect "1 commit behind HEAD" and a PM
         prompt; confirm proceeding is possible. Reset the throwaway commit afterwards.
-  - [ ] **Unknown distance:** in the scratch copy, set `gitCommitHash` to a syntactically valid but
+  - [x] **Unknown distance:** in the scratch copy, set `gitCommitHash` to a syntactically valid but
         unknown hash — expect drift reported with unknown distance and a stated reason, and **no
         fabricated number**.
-  - [ ] **No git:** copy graph and skill inputs to a scratch directory that is not a repository —
+  - [x] **No git:** copy graph and skill inputs to a scratch directory that is not a repository —
         expect an explicit skip statement in console output.
-  - [ ] **No meta.json:** remove it in the scratch copy — expect the distinct "cannot run" reason.
-  - [ ] Success: all five paths behave as specified; the console output states the outcome in every
+  - [x] **No meta.json:** remove it in the scratch copy — expect the distinct "cannot run" reason.
+  - [x] Success: all five paths behave as specified; the console output states the outcome in every
         case.
-  - [ ] **Commit checkpoint:** commit the preflight sections (2.1–3.1) once verified.
+  - [x] **Commit checkpoint:** committed as 7b5a90e.
 
 ---
 
 ## Task 4: Preflight — `.gitignore` hygiene
 
-- [ ] **4.1 Author the hygiene step** — Effort: 2/5
-  - [ ] Specify that hygiene runs per-run, at the start, **before any document is written**.
-  - [ ] Specify the semantic idempotency test:
+- [x] **4.1 Author the hygiene step** — authored; runs before any document write, semantic `git check-ignore -q` test, append with squadron-managed comment, re-confirm, non-fatal failure reporting, what-is-not-ignored rationale.
+  - [x] Specify that hygiene runs per-run, at the start, **before any document is written**.
+  - [x] Specify the semantic idempotency test:
         `git check-ignore -q .understand-anything/.trash-probe/`. Exit 0 → already covered by some
         rule (including a broader `.understand-anything/` ignore) → report "already ignored" and
         write nothing. Note in the text that the probe path need not exist for the check to work.
-  - [ ] Specify the append (creating `.gitignore` if absent): a comment line marking it
+  - [x] Specify the append (creating `.gitignore` if absent): a comment line marking it
         squadron-managed, then `.understand-anything/.trash-*/`.
-  - [ ] Specify re-running the check to confirm, then reporting the addition.
-  - [ ] Specify failure handling: read-only or permission-denied → report that the entry could not
+  - [x] Specify re-running the check to confirm, then reporting the addition.
+  - [x] Specify failure handling: read-only or permission-denied → report that the entry could not
         be added **and why**, then continue (non-fatal). Outside a git repository → report that
         hygiene does not apply. Never proceed claiming a write succeeded when it did not.
-  - [ ] State what is **not** ignored and why: `knowledge-graph.json`, `meta.json`, `config.json`,
+  - [x] State what is **not** ignored and why: `knowledge-graph.json`, `meta.json`, `config.json`,
         and `.understandignore` stay tracked as durable project knowledge. Squadron never deletes
         trash directories — the upstream purge owns that lifecycle.
-  - [ ] Success: the section specifies a semantic check (not a pattern grep), and every failure
+  - [x] Success: the section specifies a semantic check (not a pattern grep), and every failure
         path is reported rather than swallowed.
 
-- [ ] **4.2 Verify hygiene idempotency and failure paths** — Effort: 2/5
-  - [ ] **First run (this repo has no entry today):** run — expect `.gitignore` to gain the entry
+- [x] **4.2 Verify hygiene idempotency and failure paths** — all five verified. First run appended the entry and confirmed; real trash dir .trash-1787060004 now matched by .gitignore:177. All four durable files (knowledge-graph.json, meta.json, config.json, .understandignore) confirmed NOT ignored. Second run reported "already ignored", .gitignore md5 unchanged, exactly 1 matching line (no duplicate). Broader `.understand-anything/` rule accepted with no addition. chmod 444 produced a reported non-fatal permission-denied and the run continued. Non-repo dir produced does-not-apply.
+  - [x] **First run (this repo has no entry today):** run — expect `.gitignore` to gain the entry
         exactly once, reported.
-  - [ ] **Second run:** run again — expect "already ignored"; confirm `git diff .gitignore` is
+  - [x] **Second run:** run again — expect "already ignored"; confirm `git diff .gitignore` is
         empty and there is no duplicate line.
-  - [ ] **Broader ignore accepted:** temporarily replace the entry with `.understand-anything/`,
+  - [x] **Broader ignore accepted:** temporarily replace the entry with `.understand-anything/`,
         run — expect no addition. Restore the original entry afterwards.
-  - [ ] **Read-only:** `chmod 444 .gitignore`, run — expect a reported non-fatal failure **and a
+  - [x] **Read-only:** `chmod 444 .gitignore`, run — expect a reported non-fatal failure **and a
         completed run**. `chmod 644 .gitignore` to restore.
-  - [ ] **Not a repository:** run in a non-repo scratch directory — expect the does-not-apply
+  - [x] **Not a repository:** run in a non-repo scratch directory — expect the does-not-apply
         report.
-  - [ ] Success: all five paths behave as specified; no duplicate `.gitignore` line exists after
+  - [x] Success: all five paths behave as specified; no duplicate `.gitignore` line exists after
         repeated runs.
-  - [ ] **Commit checkpoint:** commit the hygiene section and the resulting `.gitignore` entry.
+  - [x] **Commit checkpoint:** committed as 6e0363e.
 
 ---
 
