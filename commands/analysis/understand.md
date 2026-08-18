@@ -159,6 +159,53 @@ explicit skip reason. There is no silent outcome.
 
 ### `.gitignore` hygiene
 
+The upstream plugin writes timestamped trash directories (`.understand-anything/.trash-<epoch>/`)
+when it re-analyzes. These are churn, not project knowledge, and must not reach a commit.
+
+Run this **at the start of every run, before any document is written**. A run that writes a document
+and then fails hygiene has already left the repository in the state hygiene exists to prevent.
+
+**1. Test whether it is already covered.** Run:
+
+```
+git check-ignore -q .understand-anything/.trash-probe/
+```
+
+Exit 0 means some existing rule already covers the path — this skill's own entry, a broader
+`.understand-anything/`, or anything else equivalent. Report "already ignored" and write nothing.
+
+This is a **semantic** test, not a pattern grep. Grepping `.gitignore` for a literal string would
+miss a broader rule that already does the job and would append a redundant entry. **The probe path
+does not need to exist** — `git check-ignore` answers about the path, not about the file.
+
+**2. Append if not covered.** Create `.gitignore` if it is absent. Append:
+
+```
+# squadron: understand-anything trash directories
+.understand-anything/.trash-*/
+```
+
+**3. Confirm.** Re-run the check from step 1. Report the addition only after it passes. Never report
+a write you did not confirm.
+
+**Failure handling.** Every failure is reported and non-fatal — hygiene never stops a run:
+
+- `.gitignore` is read-only or the write is permission-denied → report that the entry could not be
+  added **and why**, then continue.
+- The graph root is not inside a git repository → report that hygiene does not apply here, then
+  continue.
+
+**Never claim a write succeeded when it did not.** "Could not update .gitignore: permission denied"
+is a good outcome. Silence is not.
+
+**What is not ignored, and why.** `knowledge-graph.json`, `meta.json`, `config.json`, and
+`.understandignore` stay **tracked**. They are durable project knowledge: the graph is the input every
+document in this initiative derives from, and a tracked graph is what makes a generated document
+auditable after the fact.
+
+Squadron never deletes trash directories. The upstream plugin owns that lifecycle; this skill only
+keeps them out of git.
+
 ## Document Conventions
 
 ### Gap markers
