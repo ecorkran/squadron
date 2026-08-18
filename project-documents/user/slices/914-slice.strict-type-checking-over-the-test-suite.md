@@ -144,61 +144,80 @@ has errors. Each subsequent commit fixes one directory and deletes its line from
 `exclude`. The final commit deletes the last entry, leaving `exclude` holding
 only its pre-existing production entry.
 
-**Ordering** runs cheapest-signal-first, so the mechanical directories land
-before the two that need judgment:
+**Ordering runs highest-value-first.** `exclude` accepts file paths, not only
+directories, so the heaviest files can be their own part regardless of where
+they live:
 
-| Part | Directories | Errors | Files |
-|------|------------|-------:|------:|
+| Part | Target | Errors | Files |
+|------|--------|-------:|------:|
 | A | infra: `include` widened, `exclude` seeded, shared helpers added (see D5) | — | — |
-| B | `tests/providers/*`, `tests/server` | 255 | 13 |
-| C | `tests/cli`, `tests/cli/commands` | 168 | 24 |
-| D | `tests/pipeline` and all subdirectories | 382 | 46 |
-| E | `tests/review`, `tests/events`, `tests/client`, `tests/metrology`, `tests/integrations`, `tests/core`, `tests/documents` | 100 | 21 |
+| B | the 10 heaviest files (spans 6 directories) | 407 | 10 |
+| C | `tests/pipeline` remainder + subdirectories | 292 | 42 |
+| D | `tests/cli`, `tests/cli/commands` remainder | 104 | 22 |
+| E | `tests/providers` remainder, `tests/server`, `tests/review`, `tests/events`, `tests/client`, `tests/metrology`, `tests/integrations`, `tests/core`, `tests/documents` | 102 | 30 |
 
-Part D is deliberately last: it is the largest, and it is the one where the
-fixture-factory question (D5) is live.
+Part B clears 45% of all errors in the first working commit. Its cost is
+cohesion — a 10-file commit spanning six directories reviews less cleanly than a
+directory-scoped one — and it places four `tests/pipeline` files, where the
+judgment calls concentrate, before the rest of that directory. Part A mitigates
+this by landing the shared helpers before any fixing begins.
 
-**Rejected alternative:** ordering by directory size descending, to "get the
-hard part over with." That front-loads the judgment calls before the mechanical
-work has established the shared helper vocabulary the judgment calls depend on.
+**Rejected alternative:** cheapest-signal-first (small self-contained
+directories, then the heavy ones). It reviews more cleanly per commit but
+defers the bulk of the work behind commits that move 5–10% each, and gives no
+early read on whether the hard files hold surprises.
 
-### D3 — `reportPrivateUsage` is fixed by re-export, not by `noqa`-equivalent
+### D3 — `reportPrivateUsage` is fixed by renaming the symbol public
 
-172 errors — the second-largest rule — are tests importing underscore-prefixed
-symbols from production modules: `_execute_summary` (16), `_write_atomic` (11),
-`_run_pipeline_sdk` (10), `_REGISTRY` (9), `_codex` (7), and ~50 more.
+172 errors across **67 distinct symbols** — the second-largest rule — are tests
+using underscore-prefixed symbols from production modules: `_execute_summary`
+(16 sites), `_write_atomic` (11), `_run_pipeline_sdk` (10), `_REGISTRY` (9),
+`_codex` (7), and 62 more.
 
-Pyright has no inline suppression that is honest here. `# pyright: ignore` on
-172 import sites would be pure noise. The question the rule is actually asking
-is a design question: *is this symbol part of the module's contract or not?*
+Three resolutions exist, and two are rejected:
 
-**Decision:** each flagged symbol gets one of two resolutions, chosen per
-symbol, with the choice recorded in the task breakdown:
+**Rejected — 172 inline suppressions.** `# pyright: ignore[reportPrivateUsage]`
+on 172 lines is a blanket disable wearing a costume. It leaves the rule nominally
+enabled while removing all of its signal.
 
-1. **The test is testing a genuine internal** — the common case for helpers
-   like `_write_atomic`. Keep the symbol private; the *test module* accesses it
-   through an explicit alias assigned once at import (`write_atomic =
-   _module._write_atomic`) — no, this does not silence the rule. The correct
-   resolution is (2) or a `pyright: ignore` on a single line with a comment
-   naming why the symbol must stay private. Prefer (2).
+**Rejected — rewriting the tests to reach the symbol through a public path.**
+This is correct in principle but is test-behavior work, not type work, across
+172 sites. It would balloon well past this slice and risks changing what the
+tests actually assert.
 
-2. **The symbol is de-facto public** — it has external callers (the test suite
-   *is* an external caller), a stable signature, and no reason for the
-   underscore beyond habit. Rename to drop the underscore and update call
-   sites, or add it to the module's `__all__` and re-export it under a public
-   name.
+**Decision: rename the symbol to drop the underscore and update all call
+sites.** The test then calls public API, with no suppression and no test-logic
+change.
 
-Resolution (2) is the default. Resolution (1) requires a one-line justification
-comment at the suppression site, and the audit task at the end of this slice
-reads every one of them individually — the same discipline 913 applied to
-retained `# noqa: BLE001`.
+An explicitly rejected justification, recorded because it is tempting and
+wrong: *"the test suite calls it, therefore it is de-facto public."* That
+reasoning is circular — it derives the contract from the violation, and would
+launder any encapsulation breach into API. Call-site counting cannot answer
+whether a symbol belongs in a module's contract. The judgment is made on the
+symbol itself: a stable signature that means something to a caller who is not
+the test.
 
-**This is the one part of the slice that touches `src`.** The slice plan
-records "test-only; no production code changes" as the risk basis. That
-assessment is now stale: renaming a private symbol to public is a production
-edit. It is a *signature-only* edit with no behavior change, and it is covered
-by the existing suite, but the slice's risk line should be corrected from Low to
-Low-Medium when this design is accepted, and the plan entry updated to say so.
+**Measured blast radius:** 922 lines touched — **261 in `src`**, 661 in tests.
+The heaviest by production footprint are `_REGISTRY` (28 `src` occurrences),
+`_client` (23), `_run` (18), `_write_atomic` (11), `_run_review_command` (8),
+`_state_path` (8).
+
+**Known exceptions, to be resolved during implementation, not assumed away.**
+Some flagged symbols are module-level internals whose names only read correctly
+as private — `_run`, `_client`, `_codex`, `_REGISTRY`, `_thread`, `_HEADER`,
+`_FOOTER` are the clear candidates. Promoting `_run` to `run` creates public API
+the project then has to live with, which is a real cost and not obviously better
+than the alternative. Implementation renames every symbol where a public name
+reads correctly, and for each symbol where it does not, records the symbol and
+the reason in the slice's completion notes and resolves it with a justified
+single-line suppression. The count of such exceptions is reported, not
+predicted — this design does not claim to know it in advance.
+
+**This is the part of the slice that touches `src`.** The slice plan records
+"test-only; no production code changes" as its risk basis; that is stale. These
+are signature-only edits with no behavior change, covered by the existing suite,
+but they are production edits. Risk is corrected from Low to **Low-Medium** and
+the plan entry updated to say so.
 
 ### D4 — `reportUnusedFunction` on fixtures is a real conflict, suppressed at source
 
@@ -398,6 +417,35 @@ grep -rn "basic\|reportUnknown.*false\|executionEnvironments" pyproject.toml
 ```
 
 Must return nothing.
+
+## Completion Summary (required output)
+
+The slice is not done until this table is filled in and committed with it. One
+line per action; if an action needs a paragraph to describe, it was the wrong
+unit of work and should be split.
+
+**Errors remaining:** must be 0. If not 0, the slice is not complete — record
+the count and the reason rather than closing.
+
+**Actions taken** — one sentence each:
+
+| # | Action | Files | Errors cleared |
+|---|--------|------:|---------------:|
+| 1 | _e.g. "Annotated the `CliRunner.invoke` wrapper `-> Result` in 12 modules."_ | | |
+
+**Renames that promoted a private symbol to public** — one line each, since
+these are the slice's only production edits:
+
+| Symbol | New name | `src` sites | Why it belongs in the contract |
+|--------|----------|------------:|--------------------------------|
+
+**Symbols kept private** (suppression instead of rename), with the one-line
+reason each:
+
+| Symbol | Why a public name reads wrong |
+|--------|-------------------------------|
+
+**Production signatures found to be wrong** (from D6) — record zero if zero.
 
 ## Effort
 
