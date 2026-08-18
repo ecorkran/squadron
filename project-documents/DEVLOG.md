@@ -10,6 +10,22 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260818
+
+### Slice 361: Graph Contract and Provenance — Slice Design Complete
+
+**Phase 4 complete.** Design at `user/slices/361-slice.graph-contract-and-provenance.md`; slice plan entry already carried the (361) index. Committed to `main` (planning work, no branch).
+
+Key decisions settled in the design:
+- The graph contract lives as named sections **inside** `commands/analysis/understand.md`, not a separate fragment file — `_install_prefix()` installs every pack `*.md` as its own skill, so a fragment would surface as a bogus installable command. Slices 362-364 extend the same file; 365 copies the conventions (no runtime dependency on the pack).
+- Three distinct preflight failures with distinct messages: absent graph (points at `/understand`), unparseable JSON, malformed shape (names each bad key + graph version identity). Empty `tour` warns and proceeds; empty `nodes`/`edges`/`layers` reject.
+- `.gitignore` idempotency is tested semantically via `git check-ignore -q .understand-anything/.trash-probe/` rather than pattern-grepping, so any equivalent broader ignore satisfies it.
+- Gap-marker syntax settled: `[GAP: {what is missing} — {which input would supply it}]`, sibling to the retained `[INFERRED]` convention; markers appear in the body at the point of absence and are listed in provenance.
+- Provenance block format specified line-by-line (`## Provenance` directly under the title); generated doc frontmatter matches the 940-series shape (`topic:`, `model:` fields), index = lowest unused ≥ 940.
+- All graph reads are field-scoped `jq` selections; missing `jq` stops the run rather than falling back to whole-file reads. No Python added.
+
+**Next:** Phase 5 task breakdown for 361.
+
 ## 20260801
 
 ### Slice 911: Loop Iteration Versioning and Review Evidence — Implementation Complete
