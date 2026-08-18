@@ -306,8 +306,9 @@ drop means an annotation changed behavior, which is a bug in the change.
 
 **In scope:** `[tool.pyright] include`/`exclude` in `pyproject.toml`; type
 annotations and typed helpers across all 104 erroring test files; deletion of
-genuinely dead test helpers (D4); production symbol re-exports/renames required
-by D3; deletion of the stale deferral comment in `pyproject.toml`.
+genuinely dead test helpers; renaming private production symbols public and
+updating their call sites; deletion of the stale deferral comment in
+`pyproject.toml`.
 
 **Out of scope:** any production behavior change; a general typed-fixture-factory
 framework for pipeline tests (D5); adding new tests for uncovered code;
