@@ -14,6 +14,61 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260818
 
+### Slice 361: Phase 6 Implementation Complete — Graph Contract and Provenance
+
+Foundation slice of initiative 360 delivered. Everything is markdown authoring: the only new
+non-document file is `commands/analysis/understand.md`. No Python was added, `src/squadron/` is
+untouched, and the full suite is green at 3021 passed / 2 skipped (both skips pre-existing).
+
+**The contract lives inside the skill file, not a fragment.** `_install_prefix()` globs every pack
+`*.md` and installs each as its own skill, so a `graph-contract.md` fragment would have surfaced to
+users as a bogus installable command. Slices 362-364 extend this same file; 365 copies the
+conventions instead, since a first-party `commands/sq/` command cannot assume the analysis pack is
+installed.
+
+**Two divergences from the design, both found by running against a real graph rather than reading
+about one.**
+
+The first is the one worth carrying forward: `complexity` is an **ordinal string** — `simple` (83),
+`moderate` (76), `complex` (42) across 201 file-level nodes — not the numeric sort key the design
+assumed. `sort_by(-.complexity)` fails outright with `string ("simple") cannot be negated`, which is
+at least a loud failure rather than a silent miscount. The Complexity hotspots section now selects
+the top tier. Per Task 0.1's stop-and-escalate rule this was assessed as a contract question, and it
+is a **narrowing, not a break**: the field's name and presence match the architecture's documented
+shape, so no escalation was required. Recorded for 362.
+
+The second: `layers[].nodeIds` mixes file, function, and class nodes, so a file count requires
+intersecting with `type == "file"`. Taking `nodeIds | length` would have reported node counts as
+file counts — wrong by roughly 4x, and wrong in a way that reads as plausible.
+
+**Upstream contract drift remains the initiative's standing risk, and this slice is the mitigation
+working as intended.** Both divergences were caught in minutes because validation runs before every
+read and because verification used real data. Neither would have been caught by authoring alone.
+
+**Staleness during implementation is expected, not a defect.** Each commit moves HEAD past the
+graph's `gitCommitHash`, so runs late in the slice legitimately report "N commits behind HEAD". The
+943 sample records the drift, notes that the intervening commits touched only the skill file and
+`.gitignore`, and logs proceeding as a deliberate choice — which is precisely the behavior the
+provenance block exists to produce.
+
+**Environment caveat worth knowing.** A globally installed `sq` (uv tool at `~/.local/bin/sq`)
+resolves its bundled pack from its own snapshot and reports `1 file(s)`, silently ignoring the
+working tree. `uv run sq skills install analysis` reports `2 file(s)` and is what exercises the
+working-tree installer. This cost a diagnostic detour; the walkthrough now names it.
+
+Verification produced `project-documents/user/analysis/943-analysis.codebase-comprehension.md`, whose
+two spot-checked claims both held against the real repo: the CLI Surface layer's "27 sq sub-commands"
+matches exactly 27 modules in `src/squadron/cli/commands/`, and `pipeline/sdk_session.py`'s `complex`
+rating matches a real 288-line SDK-session wrapper. The design's Verification Walkthrough has been
+rewritten with actual commands and observed output so an external agent can re-run it.
+
+**Next:** slice 362 (Comprehension Analysis and Graph Extraction), which deepens this flow and
+inherits three deferrals — `config.json` / `.understandignore` coverage limits, `meta.json`'s
+`analyzedFiles`, and governance of `[INFERRED]` in deeper analysis.
+
+---
+
+
 ### Initiative 360: Phase 3 Slice Planning Complete — Document Intelligence
 
 Slice plan written to `project-documents/user/architecture/360-slices.document-intelligence.md`.

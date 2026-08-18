@@ -41,7 +41,7 @@ where its analysis template is the direct comparable.
 
 ## Foundation Work
 
-1. [ ] **(361) Graph Contract and Provenance** — Establish the shared machinery every capability-(a)
+1. [x] **(361) Graph Contract and Provenance** — Establish the shared machinery every capability-(a)
    skill depends on, delivered as a reusable skill fragment plus the smallest real consumer that
    proves it works. Covers: locating `.understand-anything/knowledge-graph.json`; validating the
    required top-level keys (`project`, `nodes`, `edges`, `layers`, `tour`) and erroring loudly on a

@@ -198,10 +198,22 @@ a write you did not confirm.
 **Never claim a write succeeded when it did not.** "Could not update .gitignore: permission denied"
 is a good outcome. Silence is not.
 
-**What is not ignored, and why.** `knowledge-graph.json`, `meta.json`, `config.json`, and
-`.understandignore` stay **tracked**. They are durable project knowledge: the graph is the input every
-document in this initiative derives from, and a tracked graph is what makes a generated document
-auditable after the fact.
+**What is not ignored, and why.** Everything in the graph root except the trash directories stays
+**tracked**:
+
+- `knowledge-graph.json`, `meta.json`, `config.json`, `.understandignore` — durable project
+  knowledge. The graph is the input every document in this initiative derives from, and a tracked
+  graph is what makes a generated document auditable after the fact.
+- `fingerprints.json` — the plugin's incremental-analysis cache: a `contentHash` plus structural
+  summary per analyzed file. Tracking it means a fresh clone's first re-analysis is incremental
+  rather than a full rescan. It is regenerable, so it is tracked for the speed, not because it is
+  authoritative. **Expect it to churn** — it rewrites on every graph refresh and is diff-noisy.
+- `intermediate/` — the raw pre-analysis scan (file inventory, language and framework detection,
+  import map) that feeds graph construction.
+
+`fingerprints.json` and `intermediate/` were not contemplated by the slice 361 design; they were
+observed in a real v2.8.1 graph and are recorded here so a later author does not have to rediscover
+what they are.
 
 Squadron never deletes trash directories. The upstream plugin owns that lifecycle; this skill only
 keeps them out of git.

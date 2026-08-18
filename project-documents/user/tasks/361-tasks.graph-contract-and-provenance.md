@@ -8,7 +8,7 @@ dependencies: [340]
 projectState: Phase 4 design complete and reviewed PASS (2904beb). No graph exists in this repo yet.
 dateCreated: 20260818
 dateUpdated: 20260818
-status: not_started
+status: complete
 ---
 
 # Tasks: Graph Contract and Provenance
@@ -235,66 +235,66 @@ repo, which costs tokens and writes to the working tree).
 
 ## Task 5: Document conventions
 
-- [ ] **5.1 Author the gap-marker syntax** — Effort: 2/5
-  - [ ] Specify the marker: `[GAP: {what is missing} — {which input would supply it}]`, placed in
+- [x] **5.1 Author the gap-marker syntax** — authored in commands/analysis/understand.md. Marker `[GAP: {what is missing} — {which input would supply it}]`, [INFERRED] retained as sibling convention from analyze-codebase-prompt.md, three rules stated (body + provenance placement, valid output, never filled with prose).
+  - [x] Specify the marker: `[GAP: {what is missing} — {which input would supply it}]`, placed in
         the body exactly where the content would have appeared.
-  - [ ] Specify `[INFERRED]` as the retained sibling convention from
+  - [x] Specify `[INFERRED]` as the retained sibling convention from
         `user/reference/analyze-codebase-prompt.md` — a prefix for claims from indirect evidence.
         State that 361's structural output should not need it (all claims trace to named fields)
         and that its use in the deepened analysis is 362's to govern.
-  - [ ] Specify the three rules: markers appear in the body at the point of absence **and** are
+  - [x] Specify the three rules: markers appear in the body at the point of absence **and** are
         listed in the provenance block; a document with gap markers is a valid output, not a
         failure; a gap is never filled with plausible prose.
-  - [ ] Success: a junior AI can tell from this section alone which marker to use and where both
+  - [x] Success: a junior AI can tell from this section alone which marker to use and where both
         copies of it go.
 
-- [ ] **5.2 Author the provenance block format** — Effort: 3/5
-  - [ ] Specify placement: a `## Provenance` section immediately after the H1 title, before all
+- [x] **5.2 Author the provenance block format** — authored. `## Provenance` immediately after H1 as body prose (not frontmatter) with the reason stated. All nine lines specified. Block obeys its own gap-marker rule. Review-state line always states machine-generated draft with no human review. Slice 365 reuse noted.
+  - [x] Specify placement: a `## Provenance` section immediately after the H1 title, before all
         content, as body prose — **not** frontmatter. Include the reason: frontmatter is
         schema-validated and invisible to a reader, and the failure this guards against is a human
         trusting a stale or partly-invented document.
-  - [ ] Author the line set per the design: generated-by, generated-date, source (with node/edge/
+  - [x] Author the line set per the design: generated-by, generated-date, source (with node/edge/
         layer/tour counts), graph identity (`gitCommitHash`, `lastAnalyzedAt`), staleness state,
         section sourcing, flagged gaps, review state.
-  - [ ] Specify that the block obeys its own gap-marker rule — a missing `meta.json` yields a
+  - [x] Specify that the block obeys its own gap-marker rule — a missing `meta.json` yields a
         `[GAP: ...]` in the graph-identity line, consistent with the staleness skip line.
-  - [ ] Specify that the review-state line always states the document is a machine-generated draft
+  - [x] Specify that the review-state line always states the document is a machine-generated draft
         with no human review. This is what makes `status: not_started` legible on a generated draft.
-  - [ ] Note that capability (b) (slice 365) reuses this shape with **Source** naming the concept
+  - [x] Note that capability (b) (slice 365) reuses this shape with **Source** naming the concept
         and initiative-plan paths instead.
-  - [ ] Success: every line resolves from real data or carries a gap marker; no line can be silently
+  - [x] Success: every line resolves from real data or carries a gap marker; no line can be silently
         omitted.
 
-- [ ] **5.3 Author the generated-document conventions** — Effort: 2/5
-  - [ ] Specify the output path
+- [x] **5.3 Author the generated-document conventions** — authored. Output path, index selection (lowest unused >= 940, new index per run, 949 overflow sanctioned), frontmatter field set, `model:` must hold the real generating model id with an explicit stop-and-say-so instruction if the model cannot determine its own id (no example id in the text, per the hallucination-trap rule), F013 verified fact recorded, `status: not_started` rationale stated.
+  - [x] Specify the output path
         `project-documents/user/analysis/{index}-analysis.codebase-comprehension.md`.
-  - [ ] Specify index selection: lowest unused index ≥ 940, found by scanning existing `9nn-`
+  - [x] Specify index selection: lowest unused index ≥ 940, found by scanning existing `9nn-`
         filenames in `user/analysis/`. Each run takes a **new** index — runs are independent
         samples, matching the existing `940`/`941`/`942` series. State that overflow past 949 is
         sanctioned by the architecture.
-  - [ ] Specify the frontmatter fields: `docType: analysis`, `project`, `topic:
+  - [x] Specify the frontmatter fields: `docType: analysis`, `project`, `topic:
         codebase-comprehension`, `dateCreated`, `dateUpdated`, `status: not_started`, `model`.
-  - [ ] **`model:` must be populated with the id of the model actually generating the document** —
+  - [x] **`model:` must be populated with the id of the model actually generating the document** —
         never left empty, never a placeholder, never a hardcoded example. `cf validate frontmatter`
         is permissive here and will pass on a placeholder, so the skill text must state the
         requirement rather than relying on the gate to enforce it. Do not put an example model id
         in the skill's instruction text: if the generating model cannot determine its own id, it
         must say so rather than reach for the nearest plausible token.
-  - [ ] Record the verified fact from Task 1.1: `cf validate frontmatter` accepts `model:` on an
+  - [x] Record the verified fact from Task 1.1: `cf validate frontmatter` accepts `model:` on an
         `analysis` document (confirmed against `942-analysis.tech-debt-audit.md`).
-  - [ ] State why `status: not_started` is correct rather than a review-pending value: the enum has
+  - [x] State why `status: not_started` is correct rather than a review-pending value: the enum has
         no `needs_review` member, `complete` would assert a review that has not happened, and review
         state is carried by the provenance block.
-  - [ ] Success: the conventions produce a document that passes `cf validate frontmatter` and does
+  - [x] Success: the conventions produce a document that passes `cf validate frontmatter` and does
         not collide with an existing index.
 
 ---
 
 ## Task 6: Comprehension analysis flow
 
-- [ ] **6.1 Author the comprehension flow at proving depth** — Effort: 3/5
-  - [ ] Specify that the flow runs preflight (Tasks 2–4) first, then extracts and writes.
-  - [ ] Author exactly four sections, each naming its source graph field inline:
+- [x] **6.1 Author the comprehension flow at proving depth** — authored. Preflight-first, exactly four sections each naming its source field, explicit statement that depth/ordering/additional sections are 362's scope, unrecognized-argument handling.
+  - [x] Specify that the flow runs preflight (Tasks 2–4) first, then extracts and writes.
+  - [x] Author exactly four sections, each naming its source graph field inline:
     1. **Layer architecture** — each layer's name, description, and file count, from `layers[]`.
     2. **Complexity hotspots** — top file-level nodes by `complexity`, with `filePath` and
        `summary`.
@@ -302,57 +302,57 @@ repo, which costs tokens and writes to the working tree).
        empty.
     4. **Dependency observations** — edge-type counts and the strongest inter-layer
        `imports`/`depends_on` connections, from `edges[]`.
-  - [ ] State explicitly that section depth, ordering, fallbacks, and any **additional** sections
+  - [x] State explicitly that section depth, ordering, fallbacks, and any **additional** sections
         are slice 362's scope, and that 361 must not grow this list.
-  - [ ] Specify that any argument other than the comprehension default is treated as unrecognized
+  - [x] Specify that any argument other than the comprehension default is treated as unrecognized
         (the concept and candidates flows are 363/364).
-  - [ ] Success: the flow exercises every contract element — validation, staleness, hygiene,
+  - [x] Success: the flow exercises every contract element — validation, staleness, hygiene,
         provenance, gap markers, index selection — end to end.
+  - [x] Divergence from design: `complexity` is an ordinal STRING (observed values `simple` 83 / `moderate` 76 / `complex` 42 across 201 file nodes), not a numeric sort key. `sort_by(-.complexity)` fails outright on a string. Flow section 2 corrected to select the top tier rather than sort numerically. Field name and presence match the documented contract, so this is a narrowing, not a contract break — no escalation required, recorded for slice 362.
 
-- [ ] **6.2 Verify the happy path against this repo** — Effort: 3/5
-  - [ ] Run the full flow against this repo using the real graph.
-  - [ ] Success: a new `user/analysis/{index}-analysis.codebase-comprehension.md` exists at the
+- [x] **6.2 Verify the happy path against this repo** — all sub-bullets. Generated `project-documents/user/analysis/943-analysis.codebase-comprehension.md` at the expected next index (940/941/942 existed). Provenance block confirmed at line 13, directly under the H1 at line 11, above all content. Every structural claim names its graph field. `cf validate frontmatter` = "No inconsistencies found (1 file checked)". `model:` read back as `claude-opus-5[1m]` — a real id, not a placeholder. A second run would select 944, not overwrite. SPOT-CHECKS BOTH HOLD: (1) CLI Surface layer description claims "27 sq sub-commands" — `src/squadron/cli/commands/*.py` contains exactly 27 modules; (2) `src/squadron/pipeline/sdk_session.py` rated `complex` — confirmed a real 288-line module wrapping a long-lived ClaudeSDKClient across dispatch steps, its own docstring matching the graph summary.
+  - [x] Run the full flow against this repo using the real graph.
+  - [x] Success: a new `user/analysis/{index}-analysis.codebase-comprehension.md` exists at the
         expected next index.
-  - [ ] Success: the provenance block sits directly under the H1 title, above all content.
-  - [ ] Success: every structural claim names the graph field it derives from.
-  - [ ] **Spot-check two claims against the real repo** — pick one layer and one complexity hotspot
+  - [x] Success: the provenance block sits directly under the H1 title, above all content.
+  - [x] Success: every structural claim names the graph field it derives from.
+  - [x] **Spot-check two claims against the real repo** — pick one layer and one complexity hotspot
         and confirm they are true of the actual codebase. A claim that does not hold is a defect,
         not a cosmetic issue.
-  - [ ] Success: `cf validate frontmatter` passes on the generated file.
-  - [ ] Success: `model:` holds a real model id, not a placeholder or empty value. Check this by
+  - [x] Success: `cf validate frontmatter` passes on the generated file.
+  - [x] Success: `model:` holds a real model id, not a placeholder or empty value. Check this by
         reading the field — the gate is permissive and will not catch it.
-  - [ ] Success: a second run produces a **new** index rather than overwriting the first.
+  - [x] Success: a second run produces a **new** index rather than overwriting the first.
 
-- [ ] **6.3 Verify at least one gap marker is exercised** — Effort: 1/5
-  - [ ] If the real graph produced a gap marker naturally (e.g. a node lacking `complexity`),
+- [x] **6.3 Verify at least one gap marker is exercised** — all sub-bullets. Real graph supplied everything (no natural gap), so the tampered `.tour = []` scratch copy was used per the task. Preflight warned and proceeded (required arrays OK). Marker demonstrated in BOTH required locations: the body's reading-order section and the provenance block's flagged-gaps line, 2 occurrences confirmed.
+  - [x] If the real graph produced a gap marker naturally (e.g. a node lacking `complexity`),
         confirm it appears both in the body and in the provenance block's flagged-gaps line.
-  - [ ] If the real graph supplied everything, use the tampered `.tour = []` scratch copy from Task
+  - [x] If the real graph supplied everything, use the tampered `.tour = []` scratch copy from Task
         2.3 to produce the marker, and confirm both placements there.
-  - [ ] Success: at least one genuine `[GAP: ...]` marker is demonstrated in both required
+  - [x] Success: at least one genuine `[GAP: ...]` marker is demonstrated in both required
         locations.
-  - [ ] **Commit checkpoint:** commit the conventions and flow sections plus the generated sample
-        document once verified.
+  - [x] **Commit checkpoint:** committed as be2ed5f.
 
 ---
 
 ## Task 7: Close-out
 
-- [ ] **7.1 Full-slice verification pass** — Effort: 2/5
-  - [ ] Walk the design's Verification Walkthrough steps 1–8 in order and confirm each produces its
+- [x] **7.1 Full-slice verification pass** — Effort: 2/5
+  - [x] Walk the design's Verification Walkthrough steps 1–8 in order and confirm each produces its
         stated outcome. Steps map to tasks: 1→6.2, 2–4→4.2, 5→2.3, 6→2.3, 7→3.2, 8→1.3.
-  - [ ] Confirm the slice's ten Success Criteria are each satisfied, checking them against actual
+  - [x] Confirm the slice's ten Success Criteria are each satisfied, checking them against actual
         run output rather than the authored text.
-  - [ ] Confirm no file under `src/squadron/` changed: `git diff --stat main -- src/` is empty.
-  - [ ] Confirm the only new non-document file is `commands/analysis/understand.md`.
-  - [ ] Run `uv run ruff format` and `uv run ruff check` (note: bare `ruff` is not on PATH; use
+  - [x] Confirm no file under `src/squadron/` changed: `git diff --stat main -- src/` is empty.
+  - [x] Confirm the only new non-document file is `commands/analysis/understand.md`.
+  - [x] Run `uv run ruff format` and `uv run ruff check` (note: bare `ruff` is not on PATH; use
         `uv run`). No Python changed, so these should be no-ops — run them to confirm that.
-  - [ ] Run the full test suite once and confirm it is green with no new skips.
+  - [x] Run the full test suite once and confirm it is green with no new skips.
 
-- [ ] **7.2 Mark the slice complete and record the session** — Effort: 1/5
-  - [ ] Check off entry 1 (361) in `360-slices.document-intelligence.md`.
-  - [ ] Set `status: complete` in the slice design's frontmatter.
-  - [ ] Write the DEVLOG entry per `prompt.ai-project.system.md` → Session State Summary. Record any
+- [x] **7.2 Mark the slice complete and record the session** — Effort: 1/5
+  - [x] Check off entry 1 (361) in `360-slices.document-intelligence.md`.
+  - [x] Set `status: complete` in the slice design's frontmatter.
+  - [x] Write the DEVLOG entry per `prompt.ai-project.system.md` → Session State Summary. Record any
         observed divergence between the real graph's shape and the architecture's documented
         contract, since that is the initiative's standing risk.
-  - [ ] **Commit checkpoint:** final commit; merge the slice branch into `main` (no integration
+  - [x] **Commit checkpoint:** final commit; merge the slice branch into `main` (no integration
         branch is configured).

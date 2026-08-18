@@ -1,0 +1,128 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+# Lines below are suggestions — uncomment to activate.
+# Use ! prefix to force-include something excluded by defaults.
+#
+# Built-in defaults (always excluded unless negated):
+#   node_modules/, .git/, dist/, build/, obj/, *.lock, *.min.js, etc.
+#
+
+# --- From .gitignore (uncomment to exclude) ---
+
+# *.py[cod]
+# *$py.class
+# sq_stderr.txt
+# *.so
+# .DS_Store
+# .Python
+# develop-eggs/
+# downloads/
+# eggs/
+# .eggs/
+# lib/
+# lib64/
+# parts/
+# sdist/
+# var/
+# wheels/
+# share/python-wheels/
+# *.egg-info/
+# .installed.cfg
+# *.egg
+# MANIFEST
+# *.manifest
+# *.spec
+# pip-log.txt
+# pip-delete-this-directory.txt
+# htmlcov/
+# .tox/
+# .nox/
+# .coverage
+# .coverage.*
+# nosetests.xml
+# coverage.xml
+# *.cover
+# *.py,cover
+# .hypothesis/
+# .pytest_cache/
+# cover/
+# test/unit/temp_dir/
+# *.mo
+# *.pot
+# local_settings.py
+# db.sqlite3
+# db.sqlite3-journal
+# instance/
+# .webassets-cache
+# .scrapy
+# docs/_build/
+# .pybuilder/
+# .ipynb_checkpoints
+# profile_default/
+# ipython_config.py
+# .pdm.toml
+# __pypackages__/
+# celerybeat-schedule
+# celerybeat.pid
+# *.sage.py
+# .env
+# env/
+# ENV/
+# env.bak/
+# venv.bak/
+# .spyderproject
+# .spyproject
+# .ropeproject
+# /site
+# .mypy_cache/
+# .dmypy.json
+# dmypy.json
+# .pyre/
+# .pytype/
+# cython_debug/
+# .claude/scheduled_tasks.lock
+# .squadron.toml
+
+# --- Detected directories (uncomment to exclude) ---
+
+# docs/
+# scripts/
+# tests/
+
+# --- Test file patterns (uncomment to exclude) ---
+
+# JS / TS
+# *.test.*
+# *.spec.*
+# *.snap
+# C# / .NET
+# **/*Tests.cs
+# **/*Test.cs
+# **/*Fixture.cs
+# **/*.Tests.csproj
+# Java / Kotlin
+# **/src/test/**
+# **/*Test.java
+# **/*IT.java
+# **/*Spec.kt
+# Go
+# **/*_test.go
+
+# --- Recommended for squadron (active) ---
+.venv/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+*.bak
+uv.lock
+project-documents/
+/tests/
+/docs/
+/commands/
+.claude/
+.github/
+.githooks/
+/scripts/
+/assets/
+*.md
+.understand-anything/
