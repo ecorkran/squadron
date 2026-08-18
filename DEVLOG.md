@@ -2,13 +2,58 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260817
+dateUpdated: 20260818
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260818
+
+### Initiative 360: Phase 3 Slice Planning Complete — Document Intelligence
+
+Slice plan written to `project-documents/user/architecture/360-slices.document-intelligence.md`.
+Six slices across foundation, feature, and integration work, breaking down the two capabilities the
+parent architecture describes.
+
+**Slice boundaries follow the dependency structure, not the capability split.** The obvious cut —
+one slice per capability — would have produced a 4/5-effort monolith for (a) and hidden the fact
+that its three outputs share exactly one thing: the graph-reading contract. That contract is the
+only foundation work here, so it became slice 361 with the comprehension analysis as its proving
+consumer. The remaining (a) outputs (362 extraction, 363 concept+interview, 364 candidates) are
+ordered by how much human input they need, cheapest first, so extraction quality is verifiable
+before interview complexity lands on top.
+
+**Capability (b) is genuinely independent and the plan says so.** Slice 365 reads no graph and has
+no external dependency. It is numbered last for coherence but explicitly insertable anywhere —
+including first, if a client-facing artifact is wanted sooner, or when the marketplace plugin is
+unavailable. Stating that in the implementation order matters more than the number.
+
+**Risk ordering put the upstream contract first.** 361 leads because it is the only place this
+initiative can be broken by someone else's release — the `understand-anything` plugin is actively
+developed and its output shape is observed, not guaranteed. Proving the contract against a real
+graph early surfaces that risk before three skills depend on it. It is also the only Medium-risk
+slice besides 363, whose risk is interview quality rather than external change.
+
+**Both of the parent's open questions were assigned rather than left floating** — interview wording
+to 363, `analyze-codebase-prompt.md` reuse to 362. Gap-marker syntax, which surfaced during the
+architecture review, is settled in 361 because the first generated artifact needs it. No open
+question remains unowned.
+
+**No slice adds Python.** Every one is markdown skill content plus, in 366, three edits to an
+existing dispatcher. `sq install-commands` copies `commands/sq/*.md` wholesale and
+`_install_prefix()` copies all `*.md` from `commands/analysis/`, so registration is free for both
+capabilities. The plan records this as a tripwire: a slice design concluding otherwise means scope
+has drifted from the architecture.
+
+Four items went to Future Work, notably the 900-band index re-cut — the band now carries reviews,
+analyses, maintenance tasks, and generated documents in 100 slots, with 940-949 overflowing by
+design. That touches `file-naming-conventions.md` and therefore every project on the guide, so it
+belongs in 900-band maintenance, not here.
 
 ---
 
