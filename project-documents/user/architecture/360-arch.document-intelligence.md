@@ -3,7 +3,7 @@ docType: architecture
 project: squadron
 initiative: 360
 dateCreated: 20260817
-dateUpdated: 20260817
+dateUpdated: 20260818
 status: not_started
 archIndex: 360
 component: document-intelligence
@@ -62,7 +62,8 @@ no artifact to hand a stakeholder.
 - **Ignore the scratch, track the artifacts.** Squadron manages `.gitignore` for the plugin's
   transient output only. The durable graph files remain tracked — they are project knowledge.
 - **Separation of audience is a document boundary, not a tone setting.** The client document is a
-  distinct artifact with its own docType, not a rendering mode of an engineering document.
+  distinct artifact, not a rendering mode of an engineering document. It reuses the existing
+  `analysis` docType rather than introducing a new one (see Output Conventions).
 
 ## Current State
 
@@ -124,9 +125,14 @@ Squadron does not replace or wrap either skill.
 ### Flow
 
 1. **Preconditions.** Verify the plugin is installed and `knowledge-graph.json` exists. If the graph
-   is missing, report the exact command to run (`/understand`) and stop. If `meta.json`'s
-   `gitCommitHash` differs from `HEAD`, report the graph as stale and offer to proceed or refresh —
-   never silently analyze a stale graph.
+   is missing, report the exact command to run (`/understand`) and stop.
+
+   **Staleness warns, it does not block.** If `meta.json`'s `gitCommitHash` differs from `HEAD`,
+   report the drift — including the commit distance — and let the PM choose to proceed or refresh.
+   Blocking would force a full re-analysis after a typo commit, which is disproportionate; a graph a
+   few commits behind is usually adequate for concept-level work. The warning must be prominent and
+   must appear in the generated document's provenance, because the genuine failure mode is a
+   confidently wrong concept doc built on a stale graph without the reader knowing.
 2. **Hygiene.** Ensure `.gitignore` contains an entry for the plugin's scratch directories,
    idempotently (see below).
 3. **Read structure.** Extract `project`, `layers[]`, `tour[]`, and file-level nodes with their
@@ -195,8 +201,9 @@ problem the upstream design avoids.
 
 ### Output
 
-`project-documents/user/client/{index}-brief.{topic}.md` — markdown, chosen because it converts
-cleanly to PDF, slides, or a document without a toolchain commitment.
+`project-documents/user/analysis/{index}-analysis.{name}.md` — markdown, chosen because it converts
+cleanly to PDF, slides, or a document without a toolchain commitment. See Output Conventions for
+index allocation and the working name of this artifact.
 
 ### Document field schema
 
@@ -227,12 +234,53 @@ The document communicates purpose and benefit to a non-engineering reader. Field
 - **Audience variants share one document.** Client, management, and colleague readings differ in
   emphasis, not in facts. Emphasis is a generation parameter; the factual content is identical.
 
+## Output Conventions
+
+Both capabilities write to the existing `project-documents/user/analysis/` directory with the
+existing `docType: analysis`. No new directory, no new docType, and no change to
+`file-naming-conventions.md` — which matters because the frontmatter gate validates `docType` and
+`status` against a fixed enum, so a new type would require a gate change before anything could be
+committed.
+
+**Index range.** The naming convention reserves **940-949** for "codebase analysis, research,
+investigation" in `user/analysis/`. Generated documents draw from that range, incrementing per run
+like the existing `940`/`941`/`942` tech-debt-audit series, where each run is an independent sample
+rather than a revision of the last.
+
+**Known constraint — the range is small.** Ten slots, three already consumed. Comprehension runs and
+client documents share the range with tech-debt audits, and a client engagement would spend several
+on arrival. The convention does not define an overflow rule (950+ is maintenance/tasks). The first
+slice design must therefore establish an allocation rule: which sub-range each artifact type draws
+from, and what happens at 949. This is a real ceiling, not a theoretical one.
+
+**Status values.** Generated frontmatter uses only enum members — `complete`, `in_progress`,
+`not_started`, `deprecated`, `deferred`. Invented values such as `draft` are rejected by the gate.
+
+**Prior art.** `user/reference/analyze-codebase-prompt.md` is an existing hand-authored three-phase
+codebase-analysis prompt built on a different extraction backend (`codebase-probe.py` + Repomix). It
+shares this initiative's discipline of separating known facts from inference and flagging gaps
+explicitly. It is an input to slice design — its analysis template is a tested structure for the
+comprehension output, and its `[INFERRED]` convention is directly applicable to graph-derived claims.
+
 ## Delivery
 
-Both capabilities ship as skill markdown through the existing 340 mechanism — bundled pack files
-installed to `~/.claude/commands/`, routed by a dispatcher. No installer, manifest, or CLI changes
-are required by this initiative's design; whether these join the existing `analysis` pack or a new
-pack is a slice-design decision, made when the first slice is designed.
+**Capability (a) — `understand`** ships as a skill in the existing bundled `analysis` pack, routed
+by the existing dispatcher as `/sq:analysis understand`. The name deliberately matches the upstream
+plugin's `/understand`, because the two are the same concept at different stages: the plugin builds
+comprehension, squadron consumes it. Dispatcher namespacing keeps the names distinct in use, so
+there is no collision. Adding it requires a new pack file plus three edits to
+`commands/sq/analysis.md` (valid-skills line, usage block, skill section) — the same shape as the
+deprecated slice 344, and no installer, manifest, or CLI change.
+
+**Capability (b)** ships as a first-party command in `commands/sq/`, not as a pack skill. It reads
+squadron's own document layout and writes for stakeholders; nothing about it audits a codebase, so
+routing it through the analysis dispatcher would make that dispatcher's name inaccurate. It belongs
+alongside `sq:review` and `sq:task`.
+
+**Naming is unresolved for (b).** `brief` is the working placeholder, not a decision — it is
+serviceable but not liked, and `presentation` was rejected as too long and overstating what the
+artifact is. The command name, the document name, and the `{name}` slot in the output path all
+depend on settling this. It must be resolved before the capability-(b) slice is designed.
 
 ## Non-Goals
 
@@ -258,11 +306,33 @@ pack is a slice-design decision, made when the first slice is designed.
 Independent of 140, 180, 240, 260, 280, 300, and 320 — no pipeline, judging, or agent-provider
 machinery is involved.
 
+## Resolved Design Decisions
+
+Settled during architecture review (20260818):
+
+- **Pack placement** — capability (a) joins the existing bundled `analysis` pack as
+  `/sq:analysis understand`; capability (b) ships as a first-party `commands/sq/` command. No new
+  pack is introduced.
+- **Skill name for (a)** — `understand`, matching the upstream plugin rather than inventing a
+  synonym. Dispatcher namespacing prevents collision, and a second vocabulary word for one concept
+  is a cost with no benefit.
+- **Client document audience handling** — one neutral document, not per-audience variants. The three
+  readerships (client, management, colleagues) differ in emphasis, not in fact; three variants would
+  mean three artifacts to keep true. An emphasis parameter is added only if real use demonstrates
+  the need.
+- **Output location and docType** — existing `user/analysis/` directory and `docType: analysis`, in
+  the 940-949 reserved range. No new convention, no gate change.
+- **Graph staleness** — warn and offer, never block; the warning is recorded in the generated
+  document's provenance.
+
 ## Open Questions for Slice Design
 
-- Pack placement: extend the `analysis` pack or introduce a separate pack for document transforms.
-- Whether the client document supports an explicit emphasis parameter (client / management /
-  colleague) or produces one neutral document the PM adapts.
-- Index assignment within `project-documents/user/client/` and whether that directory needs a
-  convention entry in `file-naming-conventions.md`.
-- Whether graph staleness (`meta.json` vs `HEAD`) should block generation or only warn.
+- **Name for capability (b).** `brief` is a working placeholder that has not been accepted.
+  Blocks the (b) slice: the command name, document name, and output filename all derive from it.
+- **Index allocation within 940-949.** Seven slots remain and three artifact types now compete for
+  them. Needs an explicit sub-range rule and an overflow answer for 949.
+- **Interview question set for (a).** The concept sections needing PM input are identified; the
+  actual wording, ordering, and how much the graph can pre-fill to shorten the interview are not.
+- **Reuse of `analyze-codebase-prompt.md`.** How much of its analysis template and `[INFERRED]`
+  convention transfers to the graph-backed path, and whether that reference document is superseded,
+  retained as the non-graph fallback, or merged.
