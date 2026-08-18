@@ -175,3 +175,6 @@ cython_debug/
 
 # squadron: understand-anything trash directories
 .understand-anything/.trash-*/
+
+# context-forge installs these project-local by default; user-level install covers them
+.claude/commands/
