@@ -47,27 +47,54 @@ below.
 | Key presence | `jq -r 'keys[]'` |
 | Array lengths | `jq -r '"\(.nodes\|length) \(.edges\|length) \(.layers\|length) \(.tour\|length)"'` |
 | Graph version | `jq -r '.version'` |
+| Project identity | `jq -r '.project \| {name, description, languages, frameworks}'` |
 | Layers | `jq -r '.layers[] \| {id, name, description, count: (.nodeIds\|length)}'` |
-| File-level nodes | `jq -r '.nodes[] \| select(.type == "file") \| {id, filePath, summary, complexity}'` |
-| Tour steps | `jq -r '.tour[] \| {order, title, nodeIds}'` |
+| Layer membership | `jq -r '.layers[] \| {name, nodeIds}'` |
+| File-level nodes | `jq -r '.nodes[] \| select(.type != "function" and .type != "class") \| {id, filePath, summary, complexity, tags, languageNotes}'` |
+| Tour steps | `jq -r '.tour[] \| {order, title, description}'` |
 | Edge aggregates | `jq -r '[.edges[].type] \| group_by(.) \| map({type: .[0], n: length})'` |
+| Edge endpoints | `jq -r '.edges[] \| {type, source, target, weight}'` |
 
-Select **only** the fields named in that table. A node carries `name`, `tags`, `lineRange`, and
-`languageNotes` as well; none of them are read at this depth.
+Select **only** the fields named in that table. A node also carries `name` and `lineRange`; neither is
+read by this flow.
 
-**Function- and class-level nodes are never read.** Filter with `select(.type == "file")` — never
-read a node whose `type` is `function` or `class`. They are the bulk of the graph and none of the
+**Edge endpoints are read as strings, never dereferenced into nodes** — see section 6 of the flow for
+the id-prefix parse that makes this possible.
+
+**Function- and class-level nodes are never read.** They are the bulk of the graph and none of the
 sections this skill writes derive from them.
 
-**Not consumed at this depth** (deferred to slice 362, recorded here so the next author sees the
-deferral rather than rediscovering it):
+**"File-level" means "carries a `filePath`"** — a node that stands for a whole file. It is *not* a
+synonym for `type == "file"`. The architecture defines nine file-level types; this graph carries
+`file`, `config`, and `pipeline` among them, and a future upstream release may add a tenth.
 
-- `config.json` and `.understandignore` in the graph root — they describe how the upstream plugin was
-  configured and what it excluded. Reading them would let a generated document state its own
-  coverage limits, which is a real improvement and out of scope here.
-- `meta.json`'s `analyzedFiles` count — a coverage signal, same reasoning.
-- Node `type` values beyond `file`, `function`, and `class` (this graph also carries `pipeline` and
-  `config` nodes).
+So the file-level filter is stated as an **exclusion by name**:
+
+```
+select(.type != "function" and .type != "class")
+```
+
+Not `select(.type == "file")`. The allow-list form silently drops every file-level type it was not
+written to know about — on this graph it yields 201 nodes instead of 238, losing all 17 `config` and
+20 `pipeline` nodes and quietly disagreeing with `meta.json`'s `analyzedFiles`. The exclusion form
+admits a new upstream file-level type automatically, which is the correct default: a file-level node
+this skill has never heard of still stands for a real file.
+
+**Drift rule.** A node that survives the exclusion but carries **no `filePath`** is reported as
+upstream drift, naming the offending id. It is never silently counted or silently dropped — either
+`function`/`class` are no longer the only non-file-level types, or the node is malformed, and both
+are findings.
+
+**Also consumed by the comprehension flow**, beyond the selections above — these were deferred by the
+361 contract and are read by section 7 (coverage and scope limits):
+
+- `config.json` and `.understandignore` in the graph root — how the upstream plugin was configured
+  and what it excluded, which is what lets a generated document state its own coverage limits.
+- `meta.json`'s `analyzedFiles` count, reconciled against the file-level node count.
+
+Node `type` values beyond `file`, `function`, and `class` (this graph also carries `pipeline` and
+`config`) are **in scope** — see the file-level definition above; they are the reason the filter is an
+exclusion rather than an allow-list.
 
 ### Validation: absent, unparseable, malformed
 
@@ -207,7 +234,19 @@ is a good outcome. Silence is not.
 - `fingerprints.json` — the plugin's incremental-analysis cache: a `contentHash` plus structural
   summary per analyzed file. Tracking it means a fresh clone's first re-analysis is incremental
   rather than a full rescan. It is regenerable, so it is tracked for the speed, not because it is
-  authoritative. **Expect it to churn** — it rewrites on every graph refresh and is diff-noisy.
+  authoritative.
+
+  **Exactly two things rewrite it**, and neither is a side effect of using this skill:
+
+  1. A deliberate re-run of the upstream plugin's own `/understand` command.
+  2. The plugin's post-commit auto-update hook — but **only when `autoUpdate` is `true` in
+     `.understand-anything/config.json`**. The hook is gated on that key and the plugin's default
+     is `autoUpdate: false`, so on a project that has never enabled it the hook never fires.
+
+  **Reading a graph never writes fingerprints.** Every squadron flow that touches the graph — this
+  skill included — only reads, via the field-scoped `jq` selections above. No number of runs of this
+  skill will produce a `fingerprints.json` diff. Expect churn when you refresh the graph on purpose,
+  not when you consume it.
 - `intermediate/` — the raw pre-analysis scan (file inventory, language and framework detection,
   import map) that feeds graph construction.
 
@@ -249,9 +288,25 @@ the tour field and says that re-running the plugin's `/understand` would populat
 indirect evidence. The two differ: `[GAP: ...]` marks something absent, `[INFERRED]` marks something
 present but derived.
 
-At this slice's depth `[INFERRED]` should not be needed — every claim traces to a named graph field.
-If a section cannot be written without inference, that is a signal the section is out of scope here.
-Governing its use in deeper analysis belongs to slice 362.
+**This flow does not use `[INFERRED]`, and its appearance in a comprehension document is a defect.**
+
+Every claim in the comprehension document traces to a named field via the extraction mapping table
+below, so nothing is left for `[INFERRED]` to mark. Where inference would go, the correct output is a
+**gap marker** — the field is absent, and saying so is more useful than reasoning around it.
+
+The one apparent exception is the closing observation a section may carry — a sentence that reads a
+pattern out of the data it just presented. Those are **summaries of presented data, not new claims**,
+and the test is mechanical:
+
+> If the closing sentence is not derivable from the data presented directly above it, it does not
+> belong in the document.
+
+`[INFERRED]` is not a license to add one. **A conforming comprehension document contains zero
+`[INFERRED]` markers** — `grep -c 'INFERRED'` returns 0.
+
+The marker stays documented in these shared conventions because slice 363's interview path genuinely
+needs it: a concept's Solution Approach derived from tour ordering *is* an inference from indirect
+evidence. Governance for that use belongs to 363.
 
 ### Provenance block
 
@@ -337,37 +392,241 @@ full first — location, validation, staleness, hygiene — then extract and wri
 Any argument other than the comprehension default is **unrecognized**. Say so and stop; do not guess
 at intent. The concept flow and the initiative-candidates flow are slices 363 and 364.
 
-Write exactly these four sections. Each names its source graph field inline, in the body, so a reader
-can trace any claim without consulting this skill.
+### Extraction mapping
 
-**1. Layer architecture** — from `layers[]`.
+This table governs the flow. Seven sections, in document order. **Each row is binding**: the section
+is written from those fields, ordered by that rule, and on absence emits that fallback and nothing
+else.
 
-For each layer: `name`, `description`, and the count of **file-level** nodes it contains. Note that
-`layers[].nodeIds` mixes file, function, and class nodes — intersect it with nodes whose
-`type == "file"` to get a file count. Reporting `nodeIds | length` as a file count would be wrong.
+| # | Section | Source fields | Ordering rule | Fallback when absent/empty |
+|---|---|---|---|---|
+| 1 | Project identity | `project.name`, `.description`, `.languages`, `.frameworks` | n/a (single block) | `[GAP: ...]` per missing subfield; `project` itself missing is a preflight rejection |
+| 2 | Layer architecture | `layers[]` (`name`, `description`, `nodeIds`) | descending file count | preflight rejects empty `layers` |
+| 3 | Entry points | file-level `nodes[]` where `tags` contains `entry-point` | layer, then `filePath` | `[GAP: no node carries the entry-point tag — re-run /understand]` |
+| 4 | Complexity hotspots | file-level `nodes[]` (`complexity`, `filePath`, `summary`, `languageNotes`) | top ordinal tier, then layer | `[GAP: ...]` naming `complexity` |
+| 5 | Suggested reading order | `tour[]` (`order`, `title`, `description`) | `order` ascending | `[GAP: ...]` naming `tour`; preflight has already warned |
+| 6 | Dependency observations | `edges[]` (`type`, `source`, `target`, `weight`) | descending count, ties by `weight` | preflight rejects empty `edges`; an edge whose endpoint will not resolve to a layer is excluded from the tally and reported as drift, with the excluded count carried as a `[GAP: ...]` when non-zero |
+| 7 | Coverage and scope limits | `meta.json` `analyzedFiles`; `config.json`; `.understandignore` | n/a | `[GAP: ...]` naming the unreadable file |
 
-**2. Complexity hotspots** — from file-level `nodes[]`.
+**Section ordering is identity → structure → detail → caveats.** A reader who stops after section 1
+knows what the project is; a reader who stops after section 2 knows how it is shaped. Coverage limits
+go last because they qualify everything above them and are meaningless read first.
 
-Nodes in the highest `complexity` tier, each with its `filePath` and `summary`. File-level only
-(`select(.type == "file")`).
+**The fallback column has no third option.** Every section resolves to sourced content or a gap
+marker. A section is never omitted, never shortened silently, and never filled with prose that is not
+traceable to its named fields. This is the governing rule of the graph contract applied per section
+rather than globally.
+
+Write exactly these seven sections, in this order. Each names its source graph field **inline, in the
+body**, so a reader can trace any claim without consulting this skill — the section-sourcing lines in
+the provenance block are in addition to that, not a substitute for it.
+
+**Inline attribution is required in every section.** Each section body **opens with a lead sentence
+naming the fields it was written from** — the established pattern is a short `From \`<field>\`.`
+sentence, optionally carrying the one caveat a reader needs to read the numbers correctly:
+
+```
+From `layers[]`. Counts are `nodeIds | length`; layers holding non-`file` types carry a breakdown.
+From `tour[]`, in `order`.
+```
+
+This is what makes a claim traceable at the point of reading. The provenance block's section-sourcing
+lines serve a reader scanning the top of the document; they do not discharge this requirement.
+
+**1. Project identity** — from `project`.
+
+`project.name`, `project.description`, `project.languages`, `project.frameworks` — a single block, no
+internal ordering.
+
+**`project.description` is upstream-generated prose.** Quote it and attribute it to the plugin. Never
+restate it as squadron's own claim about the project: it is the graph's description of the codebase,
+and a reader must be able to tell that apart from anything squadron asserts. `languages` and
+`frameworks` are listed verbatim, not summarized or reordered.
+
+Fallback: a `[GAP: ...]` marker **per missing subfield**, naming that subfield. A missing `project`
+object as a whole is a preflight rejection (**Validation** step 3 above) and never reaches this
+section — do not re-implement that check here.
+
+This section supplies the concept document's Initial Technical Direction in slice 363, which is why
+identity is captured here rather than left to that slice.
+
+**2. Layer architecture** — from `layers[]`.
+
+For each layer: `name`, `description`, and its node count.
+
+**Ordering: descending file count** — the largest layer first, so the shape of the system is legible
+from the top of the section.
+
+**Fallback: none beyond preflight.** An empty `layers` array is a preflight rejection (**Validation**
+step 3), so this section is never reached without data and invents no marker of its own.
+
+**The count is `nodeIds | length`, directly.** `layers[].nodeIds` holds only file-level nodes — no
+function or class node appears in any layer. Intersecting with `type == "file"` undercounts every
+layer that carries a non-`file` file-level type, and does so silently: on this repo's graph it
+reports Packaged Declarative Content as 1 instead of 34, and Project Configuration as 2 instead of 6.
+
+**Report the type breakdown when a layer holds anything other than `file` nodes**, so the count is
+auditable rather than a bare number:
+
+```
+Packaged Declarative Content — 34 (config:13 file:1 pipeline:20)
+Project Configuration — 6 (config:4 file:2)
+```
+
+A layer that is entirely `file` nodes reports its count alone; the breakdown would add nothing.
+
+**Cross-check, and its drift rule.** Every `nodeIds` entry must resolve to a node carrying a
+`filePath`. An entry that resolves to a `function` or `class` node — or to no node at all — is
+**reported as upstream drift**, naming the offending id. It is never silently filtered out of the
+count: filtering is what produced the wrong numbers this rule replaces.
+
+```
+jq -r '([.nodes[]|{name:.id,value:.type}]|from_entries) as $T
+  | .layers[] | "\(.name)  total=\(.nodeIds|length)  " +
+    (.nodeIds|map($T[.]//"UNRESOLVED")|group_by(.)|map("\(.[0]):\(length)")|join(" "))' \
+  .understand-anything/knowledge-graph.json
+```
+
+Any `function`, `class`, or `UNRESOLVED` entry in that breakdown is drift; report it.
+
+**3. Entry points** — from file-level `nodes[]` whose `tags` contains `entry-point`.
+
+**The tag is the only signal.** No filename heuristics — do not infer an entry point from `main.py`,
+`__main__`, `app.py`, or any other naming pattern, and do not suppress one because its name looks
+unlikely. A package `__init__.py` carrying the tag is reported **as tagged**. The tag is upstream's
+judgment; this skill reports it and does not overrule it in either direction.
+
+Selection — note the file-level exclusion, not `type == "file"`:
+
+```
+jq -r '.nodes[] | select(.type != "function" and .type != "class")
+       | select(.tags and (.tags | index("entry-point"))) | "\(.type)  \(.filePath)"' \
+  .understand-anything/knowledge-graph.json
+```
+
+Ordering: **group by layer**, report the count per layer with the paths beneath it. A flat list is
+the wrong shape here — this graph tags 28 file-level nodes, and grouping is what makes the
+distribution legible.
+
+Function-level nodes also carry this tag (24 of them here) and are **not** read: they are not
+file-level, and the section reports files.
+
+Fallback, verbatim: `[GAP: no node carries the entry-point tag — re-run /understand]`.
+
+**4. Complexity hotspots** — from file-level `nodes[]`.
+
+Fields: `complexity`, `filePath`, `summary`, `languageNotes`. File-level only
+(`select(.type != "function" and .type != "class")` — see the file-level definition in the read
+discipline above).
 
 `complexity` is an **ordinal string**, not a number — observed values are `simple`, `moderate`, and
 `complex`. Do not sort it numerically; `sort_by(-.complexity)` fails outright on a string, which is
-the correct loud failure. Select the top tier by value. If the upstream plugin ever emits a value
-outside the observed set, report it rather than bucketing it into a known tier.
+the correct loud failure.
 
-**3. Suggested reading order** — from `tour[]`.
+**Report the full tier distribution first, then the top tier grouped by layer.** The distribution
+gives the reader a denominator; the grouping is what makes concentration visible. Ordering within the
+section is top ordinal tier first, then by layer.
 
-Step titles in `order`. If `tour` is empty, this section is a `[GAP: ...]` marker naming the tour
-field and the input that would supply it — preflight has already warned in this case.
+```
+# distribution across all file-level nodes
+jq -r '[.nodes[]|select(.type!="function" and .type!="class")|.complexity]
+       | group_by(.) | map("\(.[0]):\(length)") | join(" ")' \
+  .understand-anything/knowledge-graph.json
+```
 
-**4. Dependency observations** — from `edges[]`.
+**`languageNotes` is attached where present and omitted silently where absent.** This is the one
+sanctioned omission in the whole flow, and the reason is specific: `languageNotes` is a **per-node
+optional annotation**, not a source field of the section. It is present on 97 of 238 file-level nodes
+in this graph, and emitting a gap marker for each of the other 141 would bury the section in noise
+that tells a reader nothing. Every other absence in this document still gets a marker.
 
-Edge-type counts, and the strongest inter-layer `imports` / `depends_on` connections.
+**A `complexity` value outside the observed ordinal set is reported as an unrecognized tier**, named
+explicitly, and never bucketed into a known one. Bucketing would silently move a file into a tier
+upstream did not assign it.
 
-**Do not add sections.** Section depth, ordering, fallback behavior, and any additional sections are
-slice 362's scope. This slice proves the contract works end to end at the shallowest depth that
-exercises every element of it; growing the list here would move that boundary.
+Fallback: `[GAP: ...]` naming `complexity`.
+
+**5. Suggested reading order** — from `tour[]`.
+
+Fields: `order`, `title`, `description`. **Ordering: `order` ascending** — the tour is a sequence and
+reporting it out of sequence destroys the only thing it carries.
+
+`description` annotates each step; it is not optional decoration, it is what tells a reader why the
+step comes where it does.
+
+Fallback: `[GAP: ...]` naming `tour` and the input that would supply it. Preflight has already warned
+on an empty `tour` (the tour asymmetry above), but **this section still emits its own marker** — the
+warning went to the console, and the document has to stand on its own.
+
+**6. Dependency observations** — from `edges[]`.
+
+Fields: `type`, `source`, `target`, `weight`. Two parts, in this order:
+
+1. **Edge-type counts across the whole graph** — a `group_by` over `.edges[].type`.
+2. **Inter-layer `imports` / `depends_on` connections**, self-references excluded (a layer importing
+   itself is not an observation), **ordered by descending count with ties broken by `weight`**.
+
+**Endpoint resolution is a string parse of the edge's own `source` / `target` id — not a node read.**
+Node ids are type-prefixed as `<type>:<filePath>[:<name>]`, so the **second colon-delimited field is
+the owning file's path**, and that path's file-level node gives the layer. Verified across all 925
+nodes of this graph: the second field equals `filePath` exactly for every node of every type, and no
+`filePath` contains a colon.
+
+**No node — and specifically no `function` or `class` node — is read to resolve an endpoint.** This
+is what keeps the dependency section consistent with the read discipline above while still counting
+the edges whose endpoints are function-level.
+
+**Failure path — an endpoint that does not resolve.** Both variants are excluded from the tally and
+**reported as drift naming the endpoint id**:
+
+- The endpoint string **does not parse** as `<type>:<filePath>[:<name>]` → excluded, reported as
+  drift naming the malformed endpoint id.
+- The endpoint parses but its `filePath` **matches no file-level node** → excluded, reported as drift
+  naming the unresolved id.
+
+**Excluded edges are counted, and when that count is non-zero the section carries a `[GAP: ...]`
+marker** stating how many edges were excluded, so a reader knows the tally is partial and by how
+much. An unresolvable edge is **never silently skipped** — that would make the counts wrong in a way
+no reader could detect. In this graph, zero of 2184 edges have an endpoint absent from `nodes`, but
+the code path exists regardless, because that is one graph.
+
+**Scope note — the fallback if the id-prefix contract ever fails.** Only 16 of 610
+`imports`/`depends_on` edges here touch a function or class endpoint (2.6%), so endpoint resolution
+is a correctness guarantee for a small tail, not a load-bearing feature. If a future graph breaks the
+id-prefix contract, restrict the tally to file-level endpoints and **report the excluded count** —
+that loses little and stays honest.
+
+**7. Coverage and scope limits** — from `meta.json`, `config.json`, and `.understandignore`.
+
+Last section, because it qualifies everything above it. Three inputs, each with its own rule:
+
+**`analyzedFiles` from `meta.json`, reconciled against the file-level node count.** Equality is the
+expected case and is stated as such ("238 analyzed files, matching 238 file-level nodes"). **A
+mismatch is reported as a discrepancy carrying both numbers** — never silently prefer either, and
+never reconcile them by hand. A mismatch means the graph is internally inconsistent, which is exactly
+what a reader deciding how far to trust the document needs to be told.
+
+```
+jq -r '.analyzedFiles' .understand-anything/meta.json
+jq -r '[.nodes[]|select(.type!="function" and .type!="class")]|length' \
+  .understand-anything/knowledge-graph.json
+```
+
+**`config.json` — report the settings that are present.** Nothing more. **An absent optional key is
+not a gap**: this is upstream's own file with upstream's own defaults, and squadron does not know
+which keys are mandatory. This graph's file holds only `outputLanguage`; `autoUpdate` is absent, and
+that absence is reported as nothing at all, not as a missing setting.
+
+**`.understandignore` — report the count of active patterns and list them.** Active means uncommented
+and non-blank (`grep -vE '^\s*(#|$)'`). This is what lets the document state its own coverage limits:
+a reader can see what was never analyzed. A file whose lines are **all** comments or blank is
+reported as **"defaults only"** — a real state, not a gap, because the upstream plugin ships this
+file pre-populated with commented suggestions.
+
+Fallback: `[GAP: ...]` naming the specific file that could not be read.
+
+**Do not add sections beyond these seven.** The mapping table is the full scope of this flow. Concept
+generation is slice 363 and initiative candidates are slice 364; neither is written here.
 
 ---
 
@@ -386,3 +645,25 @@ therefore surface to users as a bogus installable command that does nothing on i
 
 Slice 365 (`commands/sq/`) copies these conventions rather than referencing them: a first-party
 squadron command cannot assume the analysis pack is installed.
+
+## Relationship to `analyze-codebase-prompt.md`
+
+`project-documents/user/reference/analyze-codebase-prompt.md` is squadron's pre-existing codebase
+analysis prompt. It is **retained unchanged** as a reference document, and this skill adopted
+**two of its conventions and none of its structure**:
+
+**Adopted:**
+
+- **Fact/inference discipline** — the explicit separation between what a source states and what a
+  reader concludes from it. This skill's `[GAP: ...]` rule and its `[INFERRED]` governance above are
+  that discipline applied to a graph-backed flow.
+- **A data-lacking section says so and names what would supply it** — which is precisely the
+  two-halves requirement on the gap marker.
+
+**Not adopted:** its ten-part document template. That template was written for a probe-plus-Repomix
+backend that reads source files directly; a knowledge graph cannot feed most of its parts, and
+adopting the shape would have produced sections this flow can only fill with gap markers. The
+extraction mapping table's seven sections are derived from what the graph actually carries.
+
+Both paths exist on purpose: the reference prompt for a source-reading analysis, this skill for a
+graph-backed one.

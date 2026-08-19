@@ -12,6 +12,35 @@ Internal work log for squadron project development.
 
 ## 20260819
 
+### Slice 362: Comprehension Analysis and Graph Extraction — Implementation Complete
+
+**Phase 6 complete** on branch `362-slice.comprehension-analysis-and-graph-extraction` (7 commits, unmerged — merge is PM-gated). All ten task groups done; walkthrough executed in full with every step passing.
+
+**Both STOP gates cleared before any edit.** Premise re-measurement returned 238/238/238 with layer compositions matching the design exactly (Packaged Declarative Content 34 `config:13 file:1 pipeline:20`, Project Configuration 6 `config:4 file:2`). The id-prefix contract held at `ok:true, n:925`, zero filePaths containing a colon, zero edges with an absent endpoint — so endpoint resolution is a pure string parse and no function/class node is ever read.
+
+**Three 361-contract corrections landed, each verified against the real graph before its commit:**
+
+- **Correction 1 (`4e1ec80`)** — layer count is `nodeIds | length` with a type breakdown where mixed, plus a drift cross-check that reports rather than filters. Verified: 34, 6, sum 238, zero drift on both the type check and the filePath check.
+- **Correction 2 (`2aafe86`)** — file-level selector widened to `select(.type != "function" and .type != "class")`. Verified 238, reconciling exactly with `meta.json` `analyzedFiles`; zero survivors lack `filePath`. The old allow-list form yields 201, losing 17 `config` and 20 `pipeline` nodes.
+- **Correction 3 (`1204380`)** — the `fingerprints.json` churn note now names the two actual writers. Confirmed against the installed plugin's own `hooks/hooks.json`: the post-commit hook is gated on `"autoUpdate".*true` in `config.json` and the plugin's default is `autoUpdate: false`, so on this repo (which sets only `outputLanguage`) it never fires. Reading a graph never writes fingerprints — later confirmed empirically, see below.
+
+**Skill now carries the full seven-section contract**: the extraction mapping table (verified byte-identical to design lines 241–249), three new sections (project identity, entry points, coverage/scope limits — closing all three 361 deferrals), four deepened sections with explicit ordering rules and fallbacks, the `[INFERRED]`-is-a-defect governance with its mechanical closing-observation test, and the `analyze-codebase-prompt.md` decision (two conventions adopted, no structure, document retained unchanged).
+
+**Generated sample 944** (`user/analysis/944-analysis.codebase-comprehension.md`): seven sections in mapping order, Provenance under the H1, seven inline `From ...` lead sentences satisfying SC1, `grep -c INFERRED` = 0, frontmatter gate clean with a real model id. 943 not overwritten.
+
+**Two numbers changed from the design's measurements — both consequences of correction 2, not premise failures:**
+
+- **Entry points are 28, not 27.** The design counted `type == "file"` only; the corrected selector adds `pyproject.toml`, a `config`-type node genuinely carrying the `entry-point` tag and declaring the `sq` console script. The narrow selector was silently dropping a real entry point — the correction proving itself on its first use.
+- **Complexity distribution is 43/89/106 across 238**, where 943 reported 42/76/83 across 201. Same cause; both are internally consistent with their own selector. 943 deliberately retains the pre-correction numbers as the historical record.
+
+**Walkthrough outcomes.** Gap-marker paths (empty `tour`, no `entry-point` tag, absent `meta.json`) each degrade exactly one section and complete. Induced unresolvable endpoints both detected and named — dangling target reported `UNRESOLVED`, malformed source reported `MALFORMED` — with the control run on the unmodified graph returning 0, which is what makes the positives meaningful rather than a check that always fires. Coverage discrepancy reports both numbers (999 vs 238) preferring neither. Full-slice: no `src/` diff, 446 files formatted, 62 skills tests pass.
+
+**One spot-check reported rather than reconciled.** The CLI Surface layer `description` says "27 `sq` sub-commands"; `app.py` registers 23 top-level entries (15 commands + 8 sub-groups) and `cli/commands/` holds 26 non-`__init__` modules. Layer descriptions are upstream-generated prose quoted verbatim, so this is recorded as a caveat in the generated document; the layer's computed node count (29) is unaffected. Numbers embedded in upstream prose carry upstream's authority, not the document's.
+
+**Read discipline held throughout and is now empirically demonstrated.** Every graph access was a field-scoped `jq` selection; no `cat`, `head`, or Read tool call targeted `knowledge-graph.json`, and `git status` on `.understand-anything/` reports no modification — `fingerprints.json` included, which is direct evidence for correction 3's claim.
+
+The design's Verification Walkthrough was updated in place with actual commands, results, and a per-step outcome table, so an external agent can re-run it. Awaiting PM review and merge authorization.
+
 ### Slice 362: Comprehension Analysis and Graph Extraction — Task Breakdown Complete
 
 **Phase 5 complete.** Task file at `user/tasks/362-tasks.comprehension-analysis-and-graph-extraction.md` (378 lines, status not_started). Committed to `main` (planning work, no branch). Ten task groups: branch + premise re-verification (with the design's two STOP conditions promoted to explicit gate tasks 0.2/0.3), the three 361-contract corrections each paired with its own verification and commit, the extraction mapping table, the three new sections and four deepened sections as separate per-component subtasks with test-with verification, recorded decisions + cross-reference line, the full eight-step walkthrough (including induced unresolvable-endpoint and coverage-discrepancy paths), and slice close.

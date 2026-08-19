@@ -6,8 +6,8 @@ parent: 360-slices.document-intelligence.md
 dependencies: [361]
 interfaces: [363, 364]
 dateCreated: 20260818
-dateUpdated: 20260818
-status: not_started
+dateUpdated: 20260819
+status: complete
 ---
 
 # Slice Design: Comprehension Analysis and Graph Extraction
@@ -508,16 +508,28 @@ Confirm in the written document:
 **3. Frontmatter gate.** `cf validate frontmatter` on the new document returns no inconsistencies;
 `model:` reads back as a real model id, not a placeholder.
 
-**4. Spot-checks against the real repo** (at least three, recorded in the walkthrough when
-implementation closes). Candidates:
+**4. Spot-checks against the real repo** (at least three). **Executed 20260819 — four run, all
+resolved:**
 
 ```
-ls src/squadron/data/pipelines/*.yaml | wc -l      # vs the pipeline node count reported
-ls src/squadron/data/templates/*.yaml | wc -l      # vs config nodes under templates/
-grep -vE '^\s*(#|$)' .understand-anything/.understandignore | wc -l   # vs reported active patterns
+find src/squadron -name '*.yaml' -path '*pipeline*' | wc -l          # 20 == 20 pipeline nodes  PASS
+find src/squadron -name '*.yaml' | grep -i templ | wc -l             # 7 templates             PASS
+grep -vE '^\s*(#|$)' .understand-anything/.understandignore | wc -l  # 17 == 17 reported       PASS
+grep -cE '^\s*app\.(command|add_typer)' src/squadron/cli/app.py      # 23 vs prose "27"        REPORTED
 ```
 
-Each reported number must match, or the mismatch is reported rather than reconciled by hand.
+**Caveat found and recorded in the generated document, not reconciled.** The CLI Surface layer's
+`description` says "27 `sq` sub-commands"; `app.py` registers 23 top-level entries (15 commands + 8
+sub-groups) and `cli/commands/` holds 26 non-`__init__` modules. Layer descriptions are
+upstream-generated prose and are quoted verbatim, so the mismatch is reported as a caveat in section
+7 of the generated document. The layer's **node count (29) is computed from `nodeIds` and is
+unaffected** — numbers embedded in upstream prose carry upstream's authority, not the document's.
+
+Both paths in this step's original draft are correct: all 20 pipeline YAML files live in
+`src/squadron/data/pipelines/` and all 7 templates in `src/squadron/data/templates/`, so the `ls`
+form yields the same counts as the `find` form above. The 13 `config`-type nodes in the Packaged
+Declarative Content layer decompose exactly as 7 templates + 3 compaction policies + 3 `.toml`
+registries.
 
 **5. Gap-marker path.** Against a scratch copy (never tamper with the repo's real graph), following
 the 361 scratch pattern:
@@ -552,6 +564,19 @@ endpoint id**, and carry the excluded count as a `[GAP: ...]` in the dependency 
 completes with an unchanged-looking tally and no mention of the excluded edge is a **failure of this
 step**, not a pass — silent exclusion is the specific behavior this path exists to prevent.
 
+**Executed 20260819 — both variants PASS.** Detection is a single selection resolving each endpoint
+by id-prefix parse and classifying it `MALFORMED` (no colon) or `UNRESOLVED` (parses, but the
+`filePath` matches no file-level node):
+
+```
+excluded_edges=1  DRIFT: target=file:does/not/exist.py [UNRESOLVED]      # dangling
+excluded_edges=1  DRIFT: source=malformed-endpoint-id [MALFORMED]        # malformed
+excluded_edges=0                                                          # control: real graph
+```
+
+The control run on the unmodified graph returns 0, which is what makes the two positives meaningful —
+the check distinguishes induced breakage from the healthy case rather than always firing.
+
 **6. Coverage discrepancy path.** Make `analyzedFiles` disagree with the node count:
 
 ```
@@ -564,6 +589,44 @@ either.
 **7. Read discipline.** Confirm no whole-graph read occurred: the session used only `jq` selections,
 and no `cat`, `head`, or Read tool call targeted `knowledge-graph.json`. Confirm no
 function/class-level node data appears in any section.
+
+**Executed 20260819 — PASS.** Every graph access in the implementing session was a field-scoped `jq`
+selection; no `cat`, `head`, or Read tool call targeted `knowledge-graph.json`, and no function- or
+class-level node data reached any section of the generated document. `git status` on
+`.understand-anything/` reports no modification — including `fingerprints.json`, which empirically
+confirms correction 3's claim that **reading a graph never writes fingerprints**.
+
+## Walkthrough outcome (20260819)
+
+All steps executed on branch `362-slice.comprehension-analysis-and-graph-extraction`. Generated
+document: `project-documents/user/analysis/944-analysis.codebase-comprehension.md` (943 not
+overwritten).
+
+| Step | Result |
+|---|---|
+| 1. Corrections are real | PASS — 238/238/238 reconcile; layer compositions match (PDC 34 `config:13 file:1 pipeline:20`, Project Configuration 6 `config:4 file:2`) |
+| 1b. Id-prefix contract | PASS — `ok:true, n:925`; 0 filePaths contain a colon; 0 edges have an absent endpoint |
+| 2. Happy path | PASS — 944 written; 7 sections in mapping order; Provenance under H1; 7 inline `From ...` lead sentences; `grep -c INFERRED` = 0 |
+| 3. Frontmatter gate | PASS — no inconsistencies; `model: claude-fable-5` (real id) |
+| 4. Spot-checks | 3 PASS, 1 REPORTED (upstream prose "27 sub-commands" vs 23 registrations — recorded as a caveat, not reconciled) |
+| 5. Gap-marker paths | PASS — all three degrade exactly one section and complete |
+| 5b. Unresolvable endpoints | PASS — both variants excluded and named; control returns 0 |
+| 6. Coverage discrepancy | PASS — both numbers reported (999 vs 238), neither preferred |
+| 7. Read discipline | PASS — `jq`-only; graph and `fingerprints.json` unmodified |
+| 8. Full-slice checks | PASS — no `src/` diff; 446 files formatted; 62 skills tests pass |
+
+**Numbers that changed from the design's measurements, both as a direct result of correction 2** (the
+widened file-level selector), not as premise failures:
+
+- **Entry points: 28, not 27.** The design counted `type == "file"` only. The corrected selector adds
+  `pyproject.toml`, a `config`-type node that genuinely carries the `entry-point` tag and declares the
+  `sq` console script. The narrow selector was silently dropping a real entry point.
+- **Complexity distribution: `complex` 43 / `moderate` 89 / `simple` 106** across 238 file-level
+  nodes, where sample 943 reported 42/76/83 across 201. Same reason — 943 was generated under the
+  pre-correction selector. Both totals are internally consistent with their own selector.
+
+Sample 943 deliberately retains the pre-correction numbers as the historical record; 944 is the first
+sample generated under the corrected contract.
 
 **8. Full-slice checks.**
 
