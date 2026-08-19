@@ -10,6 +10,18 @@ Internal work log for squadron project development.
 
 ---
 
+## 20260819
+
+### Slice 362: Comprehension Analysis and Graph Extraction — Task Breakdown Complete
+
+**Phase 5 complete.** Task file at `user/tasks/362-tasks.comprehension-analysis-and-graph-extraction.md` (378 lines, status not_started). Committed to `main` (planning work, no branch). Ten task groups: branch + premise re-verification (with the design's two STOP conditions promoted to explicit gate tasks 0.2/0.3), the three 361-contract corrections each paired with its own verification and commit, the extraction mapping table, the three new sections and four deepened sections as separate per-component subtasks with test-with verification, recorded decisions + cross-reference line, the full eight-step walkthrough (including induced unresolvable-endpoint and coverage-discrepancy paths), and slice close.
+
+**One recorded deviation from the design:** Implementation Notes step 1 says re-run the flow immediately after corrections 1–2. The breakdown instead verifies corrections by executing the corrected skill's own `jq` selections (deterministic, zero tokens, same 34/6/238 evidence) and runs the full flow once at the walkthrough — an interim LLM run would write a throwaway numbered sample at 944 and displace the walkthrough's expected index. Flagged in the task file with the literal-fidelity alternative (walkthrough doc at 945) if the PM prefers.
+
+**Anchors re-verified at breakdown time on `837ff73`:** skill file present (388 lines), graph unchanged since design (`gitCommitHash` `1bfbca1`), next analysis index 944, `.gitignore` trash-only scope already in place (so correction 3 touches only the skill's note text).
+
+Awaiting PM approval of the task breakdown before Phase 6.
+
 ## 20260818
 
 ### Slice 362: Comprehension Analysis and Graph Extraction — Slice Design Complete
