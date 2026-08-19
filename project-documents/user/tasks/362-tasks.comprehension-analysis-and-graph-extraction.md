@@ -166,7 +166,11 @@ design's Section detail. One subtask per section, verification paired with each.
         restated as squadron's own claim. `languages`/`frameworks` listed verbatim.
   - [ ] Fallback: `[GAP: ...]` per missing subfield; `project` itself missing is a preflight
         rejection (already handled by 361 — do not duplicate).
-  - [ ] Success: instructions cover all four fields, attribution rule, per-subfield gaps.
+  - [ ] Inline attribution per SC1: the generated section body opens with a lead sentence naming
+        its source fields (the 943 `From \`...\`.` pattern) — in addition to the Provenance
+        sourcing line.
+  - [ ] Success: instructions cover all four fields, attribution rule, inline lead-in, and
+        per-subfield gaps.
 
 - [ ] **5.2 Verify section 1 sources** — Effort: 1/5
   - [ ] `jq` the four `project.*` fields from the real graph; confirm each is present and the
@@ -179,7 +183,9 @@ design's Section detail. One subtask per section, verification paired with each.
         `__init__.py` is reported as tagged).
   - [ ] Ordering: group by layer, report per-layer count with paths (27 nodes is too many flat).
   - [ ] Fallback: `[GAP: no node carries the entry-point tag — re-run /understand]`.
-  - [ ] Success: tag-only selection, layer grouping, exact fallback present.
+  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+        fields (the 943 `From \`...\`.` pattern).
+  - [ ] Success: tag-only selection, layer grouping, inline lead-in, exact fallback present.
 
 - [ ] **5.4 Verify section 3 sources** — Effort: 1/5
   - [ ] `jq` count of file-level nodes tagged `entry-point`; confirm 27 on this graph and that
@@ -195,8 +201,10 @@ design's Section detail. One subtask per section, verification paired with each.
   - [ ] `.understandignore`: report count of active (uncommented, non-blank) patterns and list
         them; all-comments/blank file is reported as "defaults only", a real state, not a gap.
   - [ ] Fallback: `[GAP: ...]` naming the unreadable file.
-  - [ ] Success: all three 361 deferrals closed by this section's instructions; discrepancy and
-        defaults-only paths explicit.
+  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+        fields (the 943 `From \`...\`.` pattern).
+  - [ ] Success: all three 361 deferrals closed by this section's instructions; inline lead-in
+        required; discrepancy and defaults-only paths explicit.
 
 - [ ] **5.6 Verify section 7 sources** — Effort: 1/5
   - [ ] Confirm against the real inputs: `analyzedFiles` = 238 = file-level count;
@@ -214,7 +222,9 @@ One subtask per section; each gains its explicit ordering rule and fallback per 
   - [ ] Counts per correction 1 (Task 1) — `nodeIds | length` with type breakdown where mixed.
   - [ ] Fallback: none needed beyond preflight (empty `layers` is a 361 preflight rejection);
         state that.
-  - [ ] Success: ordering rule and count rule explicit; no new fallback invented.
+  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+        fields (the 943 `From \`...\`.` pattern).
+  - [ ] Success: ordering rule, count rule, and inline lead-in explicit; no new fallback invented.
 
 - [ ] **6.2 Deepen section 4 — complexity hotspots** — Effort: 2/5
   - [ ] `complexity` is an ordinal string (`simple`/`moderate`/`complex`) — never sort numerically.
@@ -226,15 +236,19 @@ One subtask per section; each gains its explicit ordering rule and fallback per 
   - [ ] A value outside the observed ordinal set is reported as an unrecognized tier, never
         bucketed.
   - [ ] Fallback: `[GAP: ...]` naming `complexity`.
+  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+        fields (the 943 `From \`...\`.` pattern).
   - [ ] Success: distribution + top-tier-by-layer rules, languageNotes exception, unrecognized-tier
-        rule, and fallback all present.
+        rule, inline lead-in, and fallback all present.
 
 - [ ] **6.3 Deepen section 5 — suggested reading order** — Effort: 1/5
   - [ ] Source: `tour[]` (`order`, `title`, `description`), ordered by `order` ascending;
         `description` annotates each step.
   - [ ] Fallback: `[GAP: ...]` naming `tour` (preflight has already warned; the section still
         emits its own marker).
-  - [ ] Success: ordering rule and fallback explicit.
+  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+        fields (the 943 `From \`...\`.` pattern).
+  - [ ] Success: ordering rule, inline lead-in, and fallback explicit.
 
 - [ ] **6.4 Deepen section 6 — dependency observations** — Effort: 3/5
   - [ ] Edge-type counts across the whole graph; then inter-layer `imports`/`depends_on`
@@ -250,8 +264,10 @@ One subtask per section; each gains its explicit ordering rule and fallback per 
         non-zero. Never silently skipped.
   - [ ] Include the design's scope note: if the id-prefix contract fails on a future graph,
         restrict the tally to file-level endpoints and report the excluded count.
-  - [ ] Success: string-parse rule, both drift variants, non-zero-count gap marker, and the
-        fallback scope note all present.
+  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+        fields (the 943 `From \`...\`.` pattern).
+  - [ ] Success: string-parse rule, both drift variants, non-zero-count gap marker, inline
+        lead-in, and the fallback scope note all present.
 
 - [ ] **6.5 Verify deepened sections** — Effort: 1/5
   - [ ] Review each of 6.1–6.4 against the mapping table and the design's Section detail —
@@ -298,9 +314,11 @@ comprehension analysis flow against this repo" (dispatcher routing is slice 366)
   - [ ] Run the flow. Preflight reports as in 361, unchanged. Document written to the next unused
         index — expect **944** (943 is not overwritten).
   - [ ] Confirm in the document: seven sections in mapping-table order; `## Provenance`
-        immediately under the H1 with a section-sourcing line per section; Packaged Declarative
-        Content reports 34 with type breakdown; coverage states 238 analyzed files,
-        `outputLanguage: en`, and the active pattern count; `grep -c 'INFERRED'` returns 0.
+        immediately under the H1 with a section-sourcing line per section; every section body
+        opens with an inline lead sentence naming its source fields (SC1, the 943 `From \`...\`.`
+        pattern); Packaged Declarative Content reports 34 with type breakdown; coverage states
+        238 analyzed files, `outputLanguage: en`, and the active pattern count;
+        `grep -c 'INFERRED'` returns 0.
   - [ ] Success: all listed checks pass on the written document.
 
 - [ ] **8.2 Frontmatter gate** — Effort: 1/5
