@@ -1,0 +1,2444 @@
+{
+  "name": "squadron-ai",
+  "description": "Squadron is a template-driven code review framework that runs repeatable, structured LLM reviews from the terminal through the `sq` CLI. Each review executes a YAML-defined template against a diff, design document, or task plan and returns a verdict (PASS, CONCERNS, or FAIL) with severity-tagged findings. Beyond reviews it orchestrates multi-step agent pipelines across multiple LLM providers, with event streaming, metrology, and an MCP/FastAPI server surface.",
+  "languages": [
+    "json",
+    "python",
+    "toml",
+    "yaml"
+  ],
+  "frameworks": [
+    "Anthropic SDK",
+    "Claude Agent SDK",
+    "FastAPI",
+    "Google ADK",
+    "MCP",
+    "OpenAI SDK",
+    "Pydantic",
+    "Pytest",
+    "Typer",
+    "Uvicorn"
+  ],
+  "files": [
+    {
+      "path": ".context-forge.toml",
+      "language": "toml",
+      "sizeLines": 2,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".env.example",
+      "language": "config",
+      "sizeLines": 48,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".gitleaks.toml",
+      "language": "toml",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".gitmodules",
+      "language": "unknown",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".python-version",
+      "language": "unknown",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "pyproject.toml",
+      "language": "toml",
+      "sizeLines": 105,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/__init__.py",
+      "language": "python",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/adk/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/__init__.py",
+      "language": "python",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/app.py",
+      "language": "python",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/auth.py",
+      "language": "python",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/config.py",
+      "language": "python",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/dispatch_run.py",
+      "language": "python",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/doctor.py",
+      "language": "python",
+      "sizeLines": 158,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/doctor_checks.py",
+      "language": "python",
+      "sizeLines": 530,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/events.py",
+      "language": "python",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/history.py",
+      "language": "python",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/install.py",
+      "language": "python",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/list.py",
+      "language": "python",
+      "sizeLines": 65,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/message.py",
+      "language": "python",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/metrology.py",
+      "language": "python",
+      "sizeLines": 1019,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/metrology_preemption.py",
+      "language": "python",
+      "sizeLines": 277,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/models.py",
+      "language": "python",
+      "sizeLines": 232,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/pools.py",
+      "language": "python",
+      "sizeLines": 173,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/review.py",
+      "language": "python",
+      "sizeLines": 932,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/run.py",
+      "language": "python",
+      "sizeLines": 1235,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/serve.py",
+      "language": "python",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/setup.py",
+      "language": "python",
+      "sizeLines": 256,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/setup_install.py",
+      "language": "python",
+      "sizeLines": 324,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/setup_steps.py",
+      "language": "python",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/shutdown.py",
+      "language": "python",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/skills.py",
+      "language": "python",
+      "sizeLines": 195,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/spawn.py",
+      "language": "python",
+      "sizeLines": 113,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/summary_instructions.py",
+      "language": "python",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/summary_run.py",
+      "language": "python",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/cli/commands/task.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/client/__init__.py",
+      "language": "python",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/client/http.py",
+      "language": "python",
+      "sizeLines": 152,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/config/__init__.py",
+      "language": "python",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/config/keys.py",
+      "language": "python",
+      "sizeLines": 284,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/config/manager.py",
+      "language": "python",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/core/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/core/agent_registry.py",
+      "language": "python",
+      "sizeLines": 192,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/core/message_bus.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/core/models.py",
+      "language": "python",
+      "sizeLines": 100,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/core/supervisor.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/core/topology.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/data/__init__.py",
+      "language": "python",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/data/compaction/default.yaml",
+      "language": "yaml",
+      "sizeLines": 18,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/compaction/minimal-sdk.yaml",
+      "language": "yaml",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/compaction/minimal.yaml",
+      "language": "yaml",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/models.toml",
+      "language": "toml",
+      "sizeLines": 351,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/P1.yaml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/P2.yaml",
+      "language": "yaml",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/P4.yaml",
+      "language": "yaml",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/P5.yaml",
+      "language": "yaml",
+      "sizeLines": 20,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/P6.yaml",
+      "language": "yaml",
+      "sizeLines": 22,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/app.yaml",
+      "language": "yaml",
+      "sizeLines": 63,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/compose-gate-example.yaml",
+      "language": "yaml",
+      "sizeLines": 27,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/design-batch.yaml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/example.yaml",
+      "language": "yaml",
+      "sizeLines": 222,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/findings-addressed-cycle.yaml",
+      "language": "yaml",
+      "sizeLines": 38,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/implement.yaml",
+      "language": "yaml",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/judge-cycle.yaml",
+      "language": "yaml",
+      "sizeLines": 19,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/review.yaml",
+      "language": "yaml",
+      "sizeLines": 12,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/slice.yaml",
+      "language": "yaml",
+      "sizeLines": 53,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/tasks.yaml",
+      "language": "yaml",
+      "sizeLines": 46,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/test-compact-compose.yaml",
+      "language": "yaml",
+      "sizeLines": 23,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/test-fanout.yaml",
+      "language": "yaml",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/test-loop.yaml",
+      "language": "yaml",
+      "sizeLines": 13,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/test-p4.yaml",
+      "language": "yaml",
+      "sizeLines": 21,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pipelines/test-pipeline.yaml",
+      "language": "yaml",
+      "sizeLines": 32,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/pools.toml",
+      "language": "toml",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/skills.toml",
+      "language": "toml",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/arch.yaml",
+      "language": "yaml",
+      "sizeLines": 136,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/code.yaml",
+      "language": "yaml",
+      "sizeLines": 87,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/judge-findings-addressed.yaml",
+      "language": "yaml",
+      "sizeLines": 86,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/judge-slice-vs-arch.yaml",
+      "language": "yaml",
+      "sizeLines": 94,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/judge-tasks-vs-slice.yaml",
+      "language": "yaml",
+      "sizeLines": 95,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/slice.yaml",
+      "language": "yaml",
+      "sizeLines": 80,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/data/templates/tasks.yaml",
+      "language": "yaml",
+      "sizeLines": 81,
+      "fileCategory": "config"
+    },
+    {
+      "path": "src/squadron/documents/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/documents/frontmatter.py",
+      "language": "python",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/documents/schema.py",
+      "language": "python",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/__init__.py",
+      "language": "python",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/builtin/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/builtin/artifact_paths.py",
+      "language": "python",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/builtin/dispatch_artifact.py",
+      "language": "python",
+      "sizeLines": 149,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/builtin/frontmatter_gate.py",
+      "language": "python",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/builtin/revision_stamp.py",
+      "language": "python",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/contexts.py",
+      "language": "python",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/discovery.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/dispatcher.py",
+      "language": "python",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/manifest.py",
+      "language": "python",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/protocol.py",
+      "language": "python",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/events/schema.py",
+      "language": "python",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/integrations/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/integrations/context_forge.py",
+      "language": "python",
+      "sizeLines": 188,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/logging.py",
+      "language": "python",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/mcp/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/__init__.py",
+      "language": "python",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/audit.py",
+      "language": "python",
+      "sizeLines": 796,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/audit_delta.py",
+      "language": "python",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/audit_models.py",
+      "language": "python",
+      "sizeLines": 222,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/audit_parse.py",
+      "language": "python",
+      "sizeLines": 287,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/audit_report.py",
+      "language": "python",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/audit_variance.py",
+      "language": "python",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/calibration.py",
+      "language": "python",
+      "sizeLines": 189,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/calibration_models.py",
+      "language": "python",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/capture.py",
+      "language": "python",
+      "sizeLines": 258,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/discovery.py",
+      "language": "python",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/errors.py",
+      "language": "python",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/graduation.py",
+      "language": "python",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/identity.py",
+      "language": "python",
+      "sizeLines": 332,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/levels.py",
+      "language": "python",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/models.py",
+      "language": "python",
+      "sizeLines": 294,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/preemption.py",
+      "language": "python",
+      "sizeLines": 325,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/report.py",
+      "language": "python",
+      "sizeLines": 378,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/report_models.py",
+      "language": "python",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/metrology/store.py",
+      "language": "python",
+      "sizeLines": 353,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/models/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/models/aliases.py",
+      "language": "python",
+      "sizeLines": 216,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/__init__.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/__init__.py",
+      "language": "python",
+      "sizeLines": 58,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/cf_op.py",
+      "language": "python",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/checkpoint.py",
+      "language": "python",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/commit.py",
+      "language": "python",
+      "sizeLines": 130,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/compact.py",
+      "language": "python",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/devlog.py",
+      "language": "python",
+      "sizeLines": 190,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/dispatch.py",
+      "language": "python",
+      "sizeLines": 407,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/findings_addressed/__init__.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/findings_addressed/evidence.py",
+      "language": "python",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/findings_addressed/judge.py",
+      "language": "python",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/findings_addressed/policy.py",
+      "language": "python",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/findings_addressed/screens.py",
+      "language": "python",
+      "sizeLines": 161,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/gate.py",
+      "language": "python",
+      "sizeLines": 284,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/judge.py",
+      "language": "python",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/protocol.py",
+      "language": "python",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/review.py",
+      "language": "python",
+      "sizeLines": 338,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/actions/summary.py",
+      "language": "python",
+      "sizeLines": 310,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/classification.py",
+      "language": "python",
+      "sizeLines": 543,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/compact_render.py",
+      "language": "python",
+      "sizeLines": 27,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/compaction_templates.py",
+      "language": "python",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/emit.py",
+      "language": "python",
+      "sizeLines": 231,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/executor.py",
+      "language": "python",
+      "sizeLines": 1698,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/fan_in/__init__.py",
+      "language": "python",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/fan_in/protocol.py",
+      "language": "python",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/fan_in/reducers.py",
+      "language": "python",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/pools/__init__.py",
+      "language": "python",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/pools/backend.py",
+      "language": "python",
+      "sizeLines": 74,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/pools/loader.py",
+      "language": "python",
+      "sizeLines": 318,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/pools/models.py",
+      "language": "python",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/pools/protocol.py",
+      "language": "python",
+      "sizeLines": 21,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/intelligence/pools/strategies.py",
+      "language": "python",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/loader.py",
+      "language": "python",
+      "sizeLines": 354,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/models.py",
+      "language": "python",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/prompt_renderer.py",
+      "language": "python",
+      "sizeLines": 467,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/resolver.py",
+      "language": "python",
+      "sizeLines": 171,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/schema.py",
+      "language": "python",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/sdk_session.py",
+      "language": "python",
+      "sizeLines": 288,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/state.py",
+      "language": "python",
+      "sizeLines": 548,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/__init__.py",
+      "language": "python",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/collection.py",
+      "language": "python",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/compact.py",
+      "language": "python",
+      "sizeLines": 54,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/devlog.py",
+      "language": "python",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/dispatch.py",
+      "language": "python",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/fan_out.py",
+      "language": "python",
+      "sizeLines": 114,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/gate.py",
+      "language": "python",
+      "sizeLines": 198,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/loop.py",
+      "language": "python",
+      "sizeLines": 434,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/phase.py",
+      "language": "python",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/protocol.py",
+      "language": "python",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/review.py",
+      "language": "python",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/summary.py",
+      "language": "python",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/steps/utils.py",
+      "language": "python",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/summary_context.py",
+      "language": "python",
+      "sizeLines": 115,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/summary_oneshot.py",
+      "language": "python",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/pipeline/summary_render.py",
+      "language": "python",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/__init__.py",
+      "language": "python",
+      "sizeLines": 20,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/anthropic/__init__.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/anthropic/agent.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/anthropic/provider.py",
+      "language": "python",
+      "sizeLines": 3,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/auth.py",
+      "language": "python",
+      "sizeLines": 239,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/base.py",
+      "language": "python",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/codex/__init__.py",
+      "language": "python",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/codex/agent.py",
+      "language": "python",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/codex/auth.py",
+      "language": "python",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/codex/provider.py",
+      "language": "python",
+      "sizeLines": 55,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/errors.py",
+      "language": "python",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/loader.py",
+      "language": "python",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/openai/__init__.py",
+      "language": "python",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/openai/agent.py",
+      "language": "python",
+      "sizeLines": 141,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/openai/provider.py",
+      "language": "python",
+      "sizeLines": 70,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/openai/translation.py",
+      "language": "python",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/profiles.py",
+      "language": "python",
+      "sizeLines": 155,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/registry.py",
+      "language": "python",
+      "sizeLines": 30,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/sdk/__init__.py",
+      "language": "python",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/sdk/agent.py",
+      "language": "python",
+      "sizeLines": 255,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/sdk/provider.py",
+      "language": "python",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/sdk/rate_limit.py",
+      "language": "python",
+      "sizeLines": 153,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/providers/sdk/translation.py",
+      "language": "python",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/py.typed",
+      "language": "typed",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/__init__.py",
+      "language": "python",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/addressed/__init__.py",
+      "language": "python",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/addressed/judge.py",
+      "language": "python",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/addressed/models.py",
+      "language": "python",
+      "sizeLines": 219,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/addressed/parsing.py",
+      "language": "python",
+      "sizeLines": 124,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/addressed/screens.py",
+      "language": "python",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/addressed/verification.py",
+      "language": "python",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/builders/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/builders/code.py",
+      "language": "python",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/git_utils.py",
+      "language": "python",
+      "sizeLines": 363,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/models.py",
+      "language": "python",
+      "sizeLines": 143,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/parsers.py",
+      "language": "python",
+      "sizeLines": 563,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/persistence.py",
+      "language": "python",
+      "sizeLines": 436,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/resolution.py",
+      "language": "python",
+      "sizeLines": 384,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/resolution_artifact.py",
+      "language": "python",
+      "sizeLines": 192,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/resolution_evidence.py",
+      "language": "python",
+      "sizeLines": 302,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/review_client.py",
+      "language": "python",
+      "sizeLines": 458,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/rules.py",
+      "language": "python",
+      "sizeLines": 263,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/template_inputs.py",
+      "language": "python",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/review/templates/__init__.py",
+      "language": "python",
+      "sizeLines": 208,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/__init__.py",
+      "language": "python",
+      "sizeLines": 7,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/app.py",
+      "language": "python",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/daemon.py",
+      "language": "python",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/engine.py",
+      "language": "python",
+      "sizeLines": 133,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/models.py",
+      "language": "python",
+      "sizeLines": 88,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/pid.py",
+      "language": "python",
+      "sizeLines": 67,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/routes/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/routes/agents.py",
+      "language": "python",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/server/routes/health.py",
+      "language": "python",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/skills/__init__.py",
+      "language": "python",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/skills/installer.py",
+      "language": "python",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/skills/manifest.py",
+      "language": "python",
+      "sizeLines": 89,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/skills/models.py",
+      "language": "python",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/skills/receipts.py",
+      "language": "python",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/squadron/skills/resolver.py",
+      "language": "python",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    }
+  ],
+  "totalFiles": 238,
+  "filteredByIgnore": 825,
+  "estimatedComplexity": "large",
+  "importMap": {
+    ".context-forge.toml": [],
+    ".env.example": [],
+    ".gitleaks.toml": [],
+    ".gitmodules": [],
+    ".python-version": [],
+    "pyproject.toml": [],
+    "src/squadron/__init__.py": [],
+    "src/squadron/adk/__init__.py": [],
+    "src/squadron/cli/__init__.py": [
+      "src/squadron/cli/app.py"
+    ],
+    "src/squadron/cli/app.py": [
+      "src/squadron/cli/commands/auth.py",
+      "src/squadron/cli/commands/config.py",
+      "src/squadron/cli/commands/dispatch_run.py",
+      "src/squadron/cli/commands/doctor.py",
+      "src/squadron/cli/commands/events.py",
+      "src/squadron/cli/commands/history.py",
+      "src/squadron/cli/commands/install.py",
+      "src/squadron/cli/commands/list.py",
+      "src/squadron/cli/commands/message.py",
+      "src/squadron/cli/commands/metrology.py",
+      "src/squadron/cli/commands/models.py",
+      "src/squadron/cli/commands/pools.py",
+      "src/squadron/cli/commands/review.py",
+      "src/squadron/cli/commands/run.py",
+      "src/squadron/cli/commands/serve.py",
+      "src/squadron/cli/commands/setup.py",
+      "src/squadron/cli/commands/shutdown.py",
+      "src/squadron/cli/commands/skills.py",
+      "src/squadron/cli/commands/spawn.py",
+      "src/squadron/cli/commands/summary_instructions.py",
+      "src/squadron/cli/commands/summary_run.py",
+      "src/squadron/cli/commands/task.py"
+    ],
+    "src/squadron/cli/commands/__init__.py": [],
+    "src/squadron/cli/commands/auth.py": [
+      "src/squadron/providers/auth.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/cli/commands/config.py": [
+      "src/squadron/config/keys.py",
+      "src/squadron/config/manager.py"
+    ],
+    "src/squadron/cli/commands/dispatch_run.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/dispatch.py"
+    ],
+    "src/squadron/cli/commands/doctor.py": [
+      "src/squadron/cli/commands/doctor_checks.py",
+      "src/squadron/review/git_utils.py"
+    ],
+    "src/squadron/cli/commands/doctor_checks.py": [
+      "src/squadron/logging.py",
+      "src/squadron/models/aliases.py",
+      "src/squadron/providers/auth.py",
+      "src/squadron/providers/profiles.py",
+      "src/squadron/skills/manifest.py"
+    ],
+    "src/squadron/cli/commands/events.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/events/discovery.py",
+      "src/squadron/events/dispatcher.py",
+      "src/squadron/events/manifest.py"
+    ],
+    "src/squadron/cli/commands/history.py": [
+      "src/squadron/client/http.py"
+    ],
+    "src/squadron/cli/commands/install.py": [],
+    "src/squadron/cli/commands/list.py": [
+      "src/squadron/client/http.py",
+      "src/squadron/core/models.py"
+    ],
+    "src/squadron/cli/commands/message.py": [
+      "src/squadron/client/http.py",
+      "src/squadron/core/agent_registry.py"
+    ],
+    "src/squadron/cli/commands/metrology.py": [
+      "src/squadron/cli/commands/metrology_preemption.py",
+      "src/squadron/config/manager.py",
+      "src/squadron/logging.py",
+      "src/squadron/metrology/audit_models.py",
+      "src/squadron/metrology/audit_report.py",
+      "src/squadron/metrology/audit_variance.py",
+      "src/squadron/metrology/audit.py",
+      "src/squadron/metrology/calibration_models.py",
+      "src/squadron/metrology/calibration.py",
+      "src/squadron/metrology/capture.py",
+      "src/squadron/metrology/discovery.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/graduation.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/levels.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/report_models.py",
+      "src/squadron/metrology/report.py",
+      "src/squadron/metrology/store.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/templates/__init__.py"
+    ],
+    "src/squadron/cli/commands/metrology_preemption.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/metrology/audit_delta.py",
+      "src/squadron/metrology/audit_models.py",
+      "src/squadron/metrology/audit_report.py",
+      "src/squadron/metrology/audit.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/preemption.py",
+      "src/squadron/metrology/store.py"
+    ],
+    "src/squadron/cli/commands/models.py": [
+      "src/squadron/models/aliases.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/cli/commands/pools.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/intelligence/pools/__init__.py",
+      "src/squadron/pipeline/intelligence/pools/models.py",
+      "src/squadron/pipeline/state.py"
+    ],
+    "src/squadron/cli/commands/review.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/integrations/context_forge.py",
+      "src/squadron/logging.py",
+      "src/squadron/models/aliases.py",
+      "src/squadron/review/addressed/judge.py",
+      "src/squadron/review/git_utils.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/persistence.py",
+      "src/squadron/review/resolution_evidence.py",
+      "src/squadron/review/resolution.py",
+      "src/squadron/review/review_client.py",
+      "src/squadron/review/rules.py",
+      "src/squadron/review/template_inputs.py",
+      "src/squadron/review/templates/__init__.py"
+    ],
+    "src/squadron/cli/commands/run.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/events/discovery.py",
+      "src/squadron/events/dispatcher.py",
+      "src/squadron/events/manifest.py",
+      "src/squadron/integrations/context_forge.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/classification.py",
+      "src/squadron/pipeline/executor.py",
+      "src/squadron/pipeline/intelligence/pools/backend.py",
+      "src/squadron/pipeline/loader.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/prompt_renderer.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/pipeline/sdk_session.py",
+      "src/squadron/pipeline/state.py",
+      "src/squadron/pipeline/steps/phase.py",
+      "src/squadron/pipeline/steps/utils.py"
+    ],
+    "src/squadron/cli/commands/serve.py": [
+      "src/squadron/server/daemon.py",
+      "src/squadron/server/engine.py",
+      "src/squadron/server/pid.py"
+    ],
+    "src/squadron/cli/commands/setup.py": [
+      "src/squadron/cli/commands/doctor_checks.py",
+      "src/squadron/cli/commands/doctor.py",
+      "src/squadron/cli/commands/setup_install.py",
+      "src/squadron/cli/commands/setup_steps.py",
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/cli/commands/setup_install.py": [
+      "src/squadron/cli/commands/doctor_checks.py",
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/cli/commands/setup_steps.py": [
+      "src/squadron/cli/commands/doctor_checks.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/cli/commands/shutdown.py": [
+      "src/squadron/client/http.py",
+      "src/squadron/core/agent_registry.py"
+    ],
+    "src/squadron/cli/commands/skills.py": [
+      "src/squadron/skills/installer.py",
+      "src/squadron/skills/manifest.py",
+      "src/squadron/skills/models.py",
+      "src/squadron/skills/receipts.py"
+    ],
+    "src/squadron/cli/commands/spawn.py": [
+      "src/squadron/client/http.py",
+      "src/squadron/config/manager.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/cli/commands/summary_instructions.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/pipeline/summary_render.py"
+    ],
+    "src/squadron/cli/commands/summary_run.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/compaction_templates.py",
+      "src/squadron/pipeline/summary_oneshot.py"
+    ],
+    "src/squadron/cli/commands/task.py": [
+      "src/squadron/client/http.py",
+      "src/squadron/core/agent_registry.py"
+    ],
+    "src/squadron/client/__init__.py": [
+      "src/squadron/client/http.py"
+    ],
+    "src/squadron/client/http.py": [],
+    "src/squadron/config/__init__.py": [],
+    "src/squadron/config/keys.py": [],
+    "src/squadron/config/manager.py": [
+      "src/squadron/config/keys.py",
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/core/__init__.py": [],
+    "src/squadron/core/agent_registry.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/registry.py"
+    ],
+    "src/squadron/core/message_bus.py": [],
+    "src/squadron/core/models.py": [],
+    "src/squadron/core/supervisor.py": [],
+    "src/squadron/core/topology.py": [],
+    "src/squadron/data/__init__.py": [],
+    "src/squadron/data/compaction/default.yaml": [],
+    "src/squadron/data/compaction/minimal-sdk.yaml": [],
+    "src/squadron/data/compaction/minimal.yaml": [],
+    "src/squadron/data/models.toml": [],
+    "src/squadron/data/pipelines/P1.yaml": [],
+    "src/squadron/data/pipelines/P2.yaml": [],
+    "src/squadron/data/pipelines/P4.yaml": [],
+    "src/squadron/data/pipelines/P5.yaml": [],
+    "src/squadron/data/pipelines/P6.yaml": [],
+    "src/squadron/data/pipelines/app.yaml": [],
+    "src/squadron/data/pipelines/compose-gate-example.yaml": [],
+    "src/squadron/data/pipelines/design-batch.yaml": [],
+    "src/squadron/data/pipelines/example.yaml": [],
+    "src/squadron/data/pipelines/findings-addressed-cycle.yaml": [],
+    "src/squadron/data/pipelines/implement.yaml": [],
+    "src/squadron/data/pipelines/judge-cycle.yaml": [],
+    "src/squadron/data/pipelines/review.yaml": [],
+    "src/squadron/data/pipelines/slice.yaml": [],
+    "src/squadron/data/pipelines/tasks.yaml": [],
+    "src/squadron/data/pipelines/test-compact-compose.yaml": [],
+    "src/squadron/data/pipelines/test-fanout.yaml": [],
+    "src/squadron/data/pipelines/test-loop.yaml": [],
+    "src/squadron/data/pipelines/test-p4.yaml": [],
+    "src/squadron/data/pipelines/test-pipeline.yaml": [],
+    "src/squadron/data/pools.toml": [],
+    "src/squadron/data/skills.toml": [],
+    "src/squadron/data/templates/arch.yaml": [],
+    "src/squadron/data/templates/code.yaml": [],
+    "src/squadron/data/templates/judge-findings-addressed.yaml": [],
+    "src/squadron/data/templates/judge-slice-vs-arch.yaml": [],
+    "src/squadron/data/templates/judge-tasks-vs-slice.yaml": [],
+    "src/squadron/data/templates/slice.yaml": [],
+    "src/squadron/data/templates/tasks.yaml": [],
+    "src/squadron/documents/__init__.py": [],
+    "src/squadron/documents/frontmatter.py": [
+      "src/squadron/documents/schema.py"
+    ],
+    "src/squadron/documents/schema.py": [],
+    "src/squadron/events/__init__.py": [],
+    "src/squadron/events/builtin/__init__.py": [],
+    "src/squadron/events/builtin/artifact_paths.py": [
+      "src/squadron/pipeline/steps/phase.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/events/builtin/dispatch_artifact.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/builtin/artifact_paths.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/phase.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/events/builtin/frontmatter_gate.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/events/builtin/revision_stamp.py": [
+      "src/squadron/documents/frontmatter.py",
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/builtin/artifact_paths.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/phase.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/events/contexts.py": [
+      "src/squadron/events/__init__.py"
+    ],
+    "src/squadron/events/discovery.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/events/dispatcher.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/events/discovery.py",
+      "src/squadron/events/manifest.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/events/manifest.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/schema.py",
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/events/protocol.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/events/schema.py": [
+      "src/squadron/events/__init__.py"
+    ],
+    "src/squadron/integrations/__init__.py": [],
+    "src/squadron/integrations/context_forge.py": [],
+    "src/squadron/logging.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/mcp/__init__.py": [],
+    "src/squadron/metrology/__init__.py": [
+      "src/squadron/metrology/capture.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/store.py"
+    ],
+    "src/squadron/metrology/audit.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/logging.py",
+      "src/squadron/metrology/audit_parse.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/store.py",
+      "src/squadron/providers/errors.py",
+      "src/squadron/skills/models.py",
+      "src/squadron/skills/resolver.py"
+    ],
+    "src/squadron/metrology/audit_delta.py": [
+      "src/squadron/metrology/audit_models.py"
+    ],
+    "src/squadron/metrology/audit_models.py": [
+      "src/squadron/metrology/models.py"
+    ],
+    "src/squadron/metrology/audit_parse.py": [
+      "src/squadron/logging.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/review/parsers.py"
+    ],
+    "src/squadron/metrology/audit_report.py": [
+      "src/squadron/logging.py",
+      "src/squadron/metrology/audit_models.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/store.py"
+    ],
+    "src/squadron/metrology/audit_variance.py": [
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/models.py"
+    ],
+    "src/squadron/metrology/calibration.py": [
+      "src/squadron/logging.py",
+      "src/squadron/metrology/calibration_models.py",
+      "src/squadron/metrology/report_models.py",
+      "src/squadron/pipeline/actions/judge.py"
+    ],
+    "src/squadron/metrology/calibration_models.py": [
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/report_models.py",
+      "src/squadron/pipeline/actions/judge.py"
+    ],
+    "src/squadron/metrology/capture.py": [
+      "src/squadron/logging.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/store.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/metrology/discovery.py": [
+      "src/squadron/logging.py",
+      "src/squadron/metrology/capture.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py"
+    ],
+    "src/squadron/metrology/errors.py": [],
+    "src/squadron/metrology/graduation.py": [
+      "src/squadron/logging.py",
+      "src/squadron/metrology/calibration_models.py",
+      "src/squadron/metrology/discovery.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/levels.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/store.py"
+    ],
+    "src/squadron/metrology/identity.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/documents/frontmatter.py",
+      "src/squadron/logging.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/models.py"
+    ],
+    "src/squadron/metrology/levels.py": [],
+    "src/squadron/metrology/models.py": [
+      "src/squadron/metrology/levels.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/metrology/preemption.py": [
+      "src/squadron/metrology/audit_models.py"
+    ],
+    "src/squadron/metrology/report.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/logging.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/identity.py",
+      "src/squadron/metrology/levels.py",
+      "src/squadron/metrology/models.py",
+      "src/squadron/metrology/report_models.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/metrology/report_models.py": [
+      "src/squadron/metrology/levels.py",
+      "src/squadron/metrology/models.py"
+    ],
+    "src/squadron/metrology/store.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/logging.py",
+      "src/squadron/metrology/errors.py",
+      "src/squadron/metrology/models.py"
+    ],
+    "src/squadron/models/__init__.py": [],
+    "src/squadron/models/aliases.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/pipeline/__init__.py": [
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/prompt_renderer.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/pipeline/sdk_session.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/actions/__init__.py": [
+      "src/squadron/pipeline/actions/protocol.py"
+    ],
+    "src/squadron/pipeline/actions/cf_op.py": [
+      "src/squadron/integrations/context_forge.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/intelligence/pools/models.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/pipeline/actions/checkpoint.py": [
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/actions/commit.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/review/git_utils.py"
+    ],
+    "src/squadron/pipeline/actions/compact.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/actions/devlog.py": [
+      "src/squadron/documents/frontmatter.py",
+      "src/squadron/documents/schema.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/actions/dispatch.py": [
+      "src/squadron/core/agent_registry.py",
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/metrology/preemption.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/loader.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/pipeline/actions/findings_addressed/__init__.py": [
+      "src/squadron/pipeline/actions/findings_addressed/evidence.py",
+      "src/squadron/pipeline/actions/findings_addressed/judge.py",
+      "src/squadron/pipeline/actions/findings_addressed/policy.py",
+      "src/squadron/pipeline/actions/findings_addressed/screens.py"
+    ],
+    "src/squadron/pipeline/actions/findings_addressed/evidence.py": [
+      "src/squadron/documents/frontmatter.py",
+      "src/squadron/documents/schema.py",
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/pipeline/actions/findings_addressed/judge.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/findings_addressed/screens.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/review/addressed/judge.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/templates/__init__.py"
+    ],
+    "src/squadron/pipeline/actions/findings_addressed/policy.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/actions/findings_addressed/evidence.py",
+      "src/squadron/pipeline/actions/findings_addressed/judge.py",
+      "src/squadron/pipeline/actions/findings_addressed/screens.py",
+      "src/squadron/pipeline/actions/judge.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/verification.py"
+    ],
+    "src/squadron/pipeline/actions/findings_addressed/screens.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/screens.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/parsers.py"
+    ],
+    "src/squadron/pipeline/actions/gate.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/actions/findings_addressed/policy.py",
+      "src/squadron/pipeline/actions/judge.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/actions/judge.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/pipeline/actions/protocol.py": [
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/actions/review.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/actions/judge.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/review/git_utils.py",
+      "src/squadron/review/persistence.py",
+      "src/squadron/review/review_client.py",
+      "src/squadron/review/rules.py",
+      "src/squadron/review/template_inputs.py",
+      "src/squadron/review/templates/__init__.py"
+    ],
+    "src/squadron/pipeline/actions/summary.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/emit.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/summary_oneshot.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/pipeline/classification.py": [
+      "src/squadron/models/aliases.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/pipeline/compact_render.py": [],
+    "src/squadron/pipeline/compaction_templates.py": [
+      "src/squadron/data/__init__.py",
+      "src/squadron/pipeline/compact_render.py"
+    ],
+    "src/squadron/pipeline/emit.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/pipeline/executor.py": [
+      "src/squadron/events/__init__.py",
+      "src/squadron/events/contexts.py",
+      "src/squadron/events/dispatcher.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/classification.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py",
+      "src/squadron/pipeline/steps/phase.py",
+      "src/squadron/pipeline/steps/utils.py",
+      "src/squadron/pipeline/summary_render.py"
+    ],
+    "src/squadron/pipeline/intelligence/__init__.py": [],
+    "src/squadron/pipeline/intelligence/fan_in/__init__.py": [
+      "src/squadron/pipeline/intelligence/fan_in/protocol.py",
+      "src/squadron/pipeline/intelligence/fan_in/reducers.py"
+    ],
+    "src/squadron/pipeline/intelligence/fan_in/protocol.py": [],
+    "src/squadron/pipeline/intelligence/fan_in/reducers.py": [
+      "src/squadron/pipeline/intelligence/fan_in/protocol.py"
+    ],
+    "src/squadron/pipeline/intelligence/pools/__init__.py": [
+      "src/squadron/pipeline/intelligence/pools/backend.py",
+      "src/squadron/pipeline/intelligence/pools/loader.py",
+      "src/squadron/pipeline/intelligence/pools/models.py",
+      "src/squadron/pipeline/intelligence/pools/protocol.py",
+      "src/squadron/pipeline/intelligence/pools/strategies.py"
+    ],
+    "src/squadron/pipeline/intelligence/pools/backend.py": [
+      "src/squadron/pipeline/intelligence/pools/loader.py",
+      "src/squadron/pipeline/intelligence/pools/models.py"
+    ],
+    "src/squadron/pipeline/intelligence/pools/loader.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/intelligence/pools/models.py",
+      "src/squadron/pipeline/intelligence/pools/strategies.py"
+    ],
+    "src/squadron/pipeline/intelligence/pools/models.py": [],
+    "src/squadron/pipeline/intelligence/pools/protocol.py": [
+      "src/squadron/pipeline/intelligence/pools/models.py"
+    ],
+    "src/squadron/pipeline/intelligence/pools/strategies.py": [
+      "src/squadron/pipeline/intelligence/pools/models.py"
+    ],
+    "src/squadron/pipeline/loader.py": [
+      "src/squadron/data/__init__.py",
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/gate.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/schema.py"
+    ],
+    "src/squadron/pipeline/models.py": [],
+    "src/squadron/pipeline/prompt_renderer.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/compaction_templates.py",
+      "src/squadron/pipeline/executor.py",
+      "src/squadron/pipeline/intelligence/pools/models.py",
+      "src/squadron/pipeline/resolver.py",
+      "src/squadron/pipeline/steps/__init__.py",
+      "src/squadron/providers/profiles.py"
+    ],
+    "src/squadron/pipeline/resolver.py": [
+      "src/squadron/models/aliases.py"
+    ],
+    "src/squadron/pipeline/schema.py": [
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/sdk_session.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/errors.py",
+      "src/squadron/providers/sdk/rate_limit.py",
+      "src/squadron/providers/sdk/translation.py"
+    ],
+    "src/squadron/pipeline/state.py": [
+      "src/squadron/logging.py",
+      "src/squadron/pipeline/executor.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/steps/__init__.py": [
+      "src/squadron/pipeline/steps/protocol.py",
+      "src/squadron/pipeline/steps/utils.py"
+    ],
+    "src/squadron/pipeline/steps/collection.py": [
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py",
+      "src/squadron/pipeline/steps/utils.py"
+    ],
+    "src/squadron/pipeline/steps/compact.py": [
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/devlog.py": [
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/dispatch.py": [
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/fan_out.py": [
+      "src/squadron/pipeline/intelligence/fan_in/reducers.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/gate.py": [
+      "src/squadron/pipeline/actions/checkpoint.py",
+      "src/squadron/pipeline/actions/gate.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/loop.py": [
+      "src/squadron/pipeline/actions/gate.py",
+      "src/squadron/pipeline/executor.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py",
+      "src/squadron/pipeline/steps/utils.py"
+    ],
+    "src/squadron/pipeline/steps/phase.py": [
+      "src/squadron/pipeline/actions/checkpoint.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/protocol.py": [
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/steps/review.py": [
+      "src/squadron/pipeline/actions/checkpoint.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/summary.py": [
+      "src/squadron/pipeline/actions/checkpoint.py",
+      "src/squadron/pipeline/emit.py",
+      "src/squadron/pipeline/models.py",
+      "src/squadron/pipeline/steps/__init__.py"
+    ],
+    "src/squadron/pipeline/steps/utils.py": [
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/summary_context.py": [
+      "src/squadron/pipeline/actions/__init__.py",
+      "src/squadron/pipeline/models.py"
+    ],
+    "src/squadron/pipeline/summary_oneshot.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/pipeline/summary_render.py": [
+      "src/squadron/integrations/context_forge.py",
+      "src/squadron/pipeline/compact_render.py",
+      "src/squadron/pipeline/compaction_templates.py"
+    ],
+    "src/squadron/providers/__init__.py": [
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/errors.py"
+    ],
+    "src/squadron/providers/anthropic/__init__.py": [],
+    "src/squadron/providers/anthropic/agent.py": [],
+    "src/squadron/providers/anthropic/provider.py": [],
+    "src/squadron/providers/auth.py": [
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/errors.py"
+    ],
+    "src/squadron/providers/base.py": [
+      "src/squadron/core/models.py"
+    ],
+    "src/squadron/providers/codex/__init__.py": [
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/codex/agent.py",
+      "src/squadron/providers/codex/provider.py",
+      "src/squadron/providers/registry.py"
+    ],
+    "src/squadron/providers/codex/agent.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/errors.py"
+    ],
+    "src/squadron/providers/codex/auth.py": [
+      "src/squadron/providers/errors.py"
+    ],
+    "src/squadron/providers/codex/provider.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/codex/agent.py",
+      "src/squadron/providers/codex/auth.py",
+      "src/squadron/providers/errors.py"
+    ],
+    "src/squadron/providers/errors.py": [],
+    "src/squadron/providers/loader.py": [],
+    "src/squadron/providers/openai/__init__.py": [
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/openai/agent.py",
+      "src/squadron/providers/openai/provider.py",
+      "src/squadron/providers/registry.py"
+    ],
+    "src/squadron/providers/openai/agent.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/errors.py",
+      "src/squadron/providers/openai/__init__.py",
+      "src/squadron/providers/openai/translation.py"
+    ],
+    "src/squadron/providers/openai/provider.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/auth.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/errors.py",
+      "src/squadron/providers/openai/__init__.py"
+    ],
+    "src/squadron/providers/openai/translation.py": [
+      "src/squadron/core/models.py"
+    ],
+    "src/squadron/providers/profiles.py": [
+      "src/squadron/providers/base.py"
+    ],
+    "src/squadron/providers/registry.py": [
+      "src/squadron/providers/base.py"
+    ],
+    "src/squadron/providers/sdk/__init__.py": [
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/registry.py",
+      "src/squadron/providers/sdk/agent.py",
+      "src/squadron/providers/sdk/provider.py"
+    ],
+    "src/squadron/providers/sdk/agent.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/errors.py",
+      "src/squadron/providers/sdk/rate_limit.py",
+      "src/squadron/providers/sdk/translation.py"
+    ],
+    "src/squadron/providers/sdk/provider.py": [
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/base.py",
+      "src/squadron/providers/sdk/rate_limit.py"
+    ],
+    "src/squadron/providers/sdk/rate_limit.py": [],
+    "src/squadron/providers/sdk/translation.py": [
+      "src/squadron/core/models.py"
+    ],
+    "src/squadron/py.typed": [],
+    "src/squadron/review/__init__.py": [],
+    "src/squadron/review/addressed/__init__.py": [
+      "src/squadron/review/addressed/judge.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/parsing.py",
+      "src/squadron/review/addressed/screens.py",
+      "src/squadron/review/addressed/verification.py"
+    ],
+    "src/squadron/review/addressed/judge.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/parsing.py",
+      "src/squadron/review/addressed/screens.py",
+      "src/squadron/review/review_client.py",
+      "src/squadron/review/templates/__init__.py"
+    ],
+    "src/squadron/review/addressed/models.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/review/addressed/parsing.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py"
+    ],
+    "src/squadron/review/addressed/screens.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/git_utils.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/review/addressed/verification.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/screens.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/parsers.py"
+    ],
+    "src/squadron/review/builders/__init__.py": [],
+    "src/squadron/review/builders/code.py": [],
+    "src/squadron/review/git_utils.py": [
+      "src/squadron/logging.py"
+    ],
+    "src/squadron/review/models.py": [],
+    "src/squadron/review/parsers.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/review/persistence.py": [
+      "src/squadron/documents/schema.py",
+      "src/squadron/logging.py",
+      "src/squadron/review/git_utils.py",
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/review/resolution.py": [
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/judge.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/screens.py",
+      "src/squadron/review/addressed/verification.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/resolution_artifact.py",
+      "src/squadron/review/resolution_evidence.py"
+    ],
+    "src/squadron/review/resolution_artifact.py": [
+      "src/squadron/documents/frontmatter.py",
+      "src/squadron/documents/schema.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/review/resolution_evidence.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/documents/frontmatter.py",
+      "src/squadron/logging.py",
+      "src/squadron/review/addressed/models.py",
+      "src/squadron/review/addressed/screens.py",
+      "src/squadron/review/git_utils.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/review/review_client.py": [
+      "src/squadron/config/manager.py",
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/loader.py",
+      "src/squadron/providers/profiles.py",
+      "src/squadron/providers/registry.py",
+      "src/squadron/review/models.py",
+      "src/squadron/review/parsers.py",
+      "src/squadron/review/template_inputs.py",
+      "src/squadron/review/templates/__init__.py"
+    ],
+    "src/squadron/review/rules.py": [
+      "src/squadron/config/manager.py"
+    ],
+    "src/squadron/review/template_inputs.py": [
+      "src/squadron/review/git_utils.py",
+      "src/squadron/review/persistence.py"
+    ],
+    "src/squadron/review/templates/__init__.py": [
+      "src/squadron/review/models.py"
+    ],
+    "src/squadron/server/__init__.py": [
+      "src/squadron/server/engine.py"
+    ],
+    "src/squadron/server/app.py": [
+      "src/squadron/server/engine.py",
+      "src/squadron/server/routes/agents.py",
+      "src/squadron/server/routes/health.py"
+    ],
+    "src/squadron/server/daemon.py": [
+      "src/squadron/logging.py",
+      "src/squadron/server/app.py",
+      "src/squadron/server/engine.py",
+      "src/squadron/server/pid.py"
+    ],
+    "src/squadron/server/engine.py": [
+      "src/squadron/core/agent_registry.py",
+      "src/squadron/core/models.py",
+      "src/squadron/logging.py",
+      "src/squadron/providers/base.py"
+    ],
+    "src/squadron/server/models.py": [],
+    "src/squadron/server/pid.py": [],
+    "src/squadron/server/routes/__init__.py": [],
+    "src/squadron/server/routes/agents.py": [
+      "src/squadron/core/agent_registry.py",
+      "src/squadron/core/models.py",
+      "src/squadron/providers/errors.py",
+      "src/squadron/server/engine.py",
+      "src/squadron/server/models.py"
+    ],
+    "src/squadron/server/routes/health.py": [
+      "src/squadron/server/models.py"
+    ],
+    "src/squadron/skills/__init__.py": [],
+    "src/squadron/skills/installer.py": [
+      "src/squadron/logging.py",
+      "src/squadron/skills/models.py",
+      "src/squadron/skills/receipts.py",
+      "src/squadron/skills/resolver.py"
+    ],
+    "src/squadron/skills/manifest.py": [
+      "src/squadron/skills/models.py"
+    ],
+    "src/squadron/skills/models.py": [],
+    "src/squadron/skills/receipts.py": [
+      "src/squadron/skills/models.py"
+    ],
+    "src/squadron/skills/resolver.py": [
+      "src/squadron/skills/models.py"
+    ]
+  }
+}

@@ -178,5 +178,7 @@ cython_debug/
 # Scoped to commands/ only — .claude/agents, rules, and skills stay tracked.
 .claude/commands/
 
-# understand-anything transient scratch (squadron-managed)
+# understand-anything transient scratch (squadron-managed).
+# Trash only — knowledge-graph.json, meta.json, config.json, .understandignore,
+# fingerprints.json, and intermediate/ stay tracked as durable project knowledge.
 .understand-anything/.trash-*/

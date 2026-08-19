@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New `/understand` analysis skill that turns an existing understand-anything knowledge graph into a
+  codebase comprehension document, with a provenance block recording where every claim came from and
+  how stale the graph was. Requires `jq`, and requires running the understand-anything plugin's own
+  `/understand` first — this skill reads the graph, it does not analyze the codebase itself.
+- Generated documents flag anything the graph could not supply with a `[GAP: ...]` marker instead of
+  filling it with plausible-sounding prose.
+- `.understand-anything/.trash-*/` is now git-ignored automatically, so the plugin's timestamped
+  trash directories stay out of commits.
+
 ## [0.10.2] - 20260815
 
 ### Fixed
