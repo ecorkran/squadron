@@ -82,7 +82,7 @@ where its analysis template is the direct comparable.
 
 ## Feature Slices
 
-2. [ ] **(362) Comprehension Analysis and Graph Extraction** — Deepen the structural output from a
+2. [x] **(362) Comprehension Analysis and Graph Extraction** — Deepen the structural output from a
    contract-proving stub into the real comprehension document, and settle the extraction strategy the
    architecture leaves open. Defines which graph fields map to which sections of the analysis, in what
    order, with what fallback when a field is absent: `layers[]` for architecture, file-level

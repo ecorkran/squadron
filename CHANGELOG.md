@@ -24,6 +24,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filling it with plausible-sounding prose.
 - `.understand-anything/.trash-*/` is now git-ignored automatically, so the plugin's timestamped
   trash directories stay out of commits.
+- Comprehension documents now cover seven sections instead of four, adding what the project is
+  (name, description, languages, frameworks), its entry points, and its coverage limits — the last
+  tells you what the analysis never looked at, so you can judge how much it leaves out.
+- Every section now states the graph fields it was written from, in the section itself, so any claim
+  can be traced without opening the skill.
+
+### Fixed
+- Layer file counts were wrong for layers holding YAML or TOML files. Packaged Declarative Content
+  reported 1 file instead of 34, and Project Configuration 2 instead of 6.
+- Analysis silently skipped 37 real files — every review template, every pipeline definition, and
+  `pyproject.toml` — because it only recognized one kind of file node. Counts now reconcile with the
+  graph's own analyzed-file total.
+- Dependency counts no longer drop unresolvable edges quietly; an edge that cannot be traced to a
+  layer is reported by name and counted in a gap marker.
+- Corrected a misleading note claiming `fingerprints.json` rewrites on every graph refresh. Reading a
+  graph never writes it; only a deliberate re-analysis or the plugin's auto-update hook does.
 
 ## [0.10.2] - 20260815
 

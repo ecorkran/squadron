@@ -8,7 +8,7 @@ dependencies: [361]
 projectState: Slice 361 merged to main. Phase 4 design complete, reviewed CONCERNS with all three findings addressed in the design. Real v2.8.1 graph present at .understand-anything/, gitCommitHash 1bfbca1, unchanged since design.
 dateCreated: 20260819
 dateUpdated: 20260819
-status: not_started
+status: in_progress
 ---
 
 # Tasks: Comprehension Analysis and Graph Extraction
@@ -57,103 +57,103 @@ Task 2 and expect the walkthrough document at 945 instead.
 
 ## Task 0: Branch and premise verification
 
-- [ ] **0.1 Create the slice branch** — Effort: 1/5
-  - [ ] Confirm working tree is clean and current branch is `main` (integration branch is unset;
+- [x] **0.1 Create the slice branch** — Effort: 1/5
+  - [x] Confirm working tree is clean and current branch is `main` (integration branch is unset;
         target is `main`).
-  - [ ] `git checkout -b 362-slice.comprehension-analysis-and-graph-extraction main`
-  - [ ] Success: on the new branch, clean tree.
+  - [x] `git checkout -b 362-slice.comprehension-analysis-and-graph-extraction main`
+  - [x] Success: on the new branch, clean tree.
 
-- [ ] **0.2 Re-measure the design's premises** — Effort: 1/5
-  - [ ] Run the three reconciliation checks from Verification Walkthrough step 1 (design lines
+- [x] **0.2 Re-measure the design's premises** — Effort: 1/5
+  - [x] Run the three reconciliation checks from Verification Walkthrough step 1 (design lines
         456–469): layer `nodeIds` sum, `meta.json` `analyzedFiles`, and the not-function-not-class
         node count.
-  - [ ] Confirm all three return **238**, and layer compositions show Packaged Declarative Content
+  - [x] Confirm all three return **238**, and layer compositions show Packaged Declarative Content
         total=34 (config:13 file:1 pipeline:20) and Project Configuration total=6 (config:4 file:2),
         with every other layer file-only.
-  - [ ] **STOP condition:** if the three numbers do not agree, stop and report to the Project
+  - [x] **STOP condition:** if the three numbers do not agree, stop and report to the Project
         Manager — the coverage section's reconciliation claim is false and the design needs
         revisiting before implementation.
-  - [ ] Success: all checks match the design's Verified graph facts table, or work is stopped.
+  - [x] Success: all checks match the design's Verified graph facts table, or work is stopped.
 
-- [ ] **0.3 Verify the id-prefix contract** — Effort: 1/5
-  - [ ] Run the three checks from Verification Walkthrough step 1b (design lines 477–489):
+- [x] **0.3 Verify the id-prefix contract** — Effort: 1/5
+  - [x] Run the three checks from Verification Walkthrough step 1b (design lines 477–489):
         second colon field equals `filePath` for all 925 nodes; zero `filePath` contains a colon;
         zero edges have an endpoint absent from `nodes`.
-  - [ ] **STOP condition:** if the first check returns any `ok:false`, stop — endpoint resolution
+  - [x] **STOP condition:** if the first check returns any `ok:false`, stop — endpoint resolution
         must fall back to file-level endpoints only per the design's scope note (Section detail
         item 6), and the PM decides before Task 6.4 is authored against the wrong contract.
-  - [ ] Success: `ok:true, n:925`; colon count 0; absent-endpoint count 0 (or documented fallback
+  - [x] Success: `ok:true, n:925`; colon count 0; absent-endpoint count 0 (or documented fallback
         decision).
 
 ## Task 1: Correction 1 — layer counting
 
-- [ ] **1.1 Replace the intersect-with-`type=="file"` layer counting** — Effort: 2/5
-  - [ ] In `commands/analysis/understand.md`, remove the claim that `layers[].nodeIds` mixes file,
+- [x] **1.1 Replace the intersect-with-`type=="file"` layer counting** — Effort: 2/5
+  - [x] In `commands/analysis/understand.md`, remove the claim that `layers[].nodeIds` mixes file,
         function, and class nodes, and the instruction to intersect with `type == "file"`.
-  - [ ] Replace with: layer count is `nodeIds | length` directly; when a layer contains anything
+  - [x] Replace with: layer count is `nodeIds | length` directly; when a layer contains anything
         other than `file` nodes, report its type breakdown (e.g. `34 (config:13 file:1 pipeline:20)`).
-  - [ ] Retain a cross-check: every `nodeIds` entry must resolve to a node carrying `filePath`; an
+  - [x] Retain a cross-check: every `nodeIds` entry must resolve to a node carrying `filePath`; an
         entry resolving to a `function` or `class` node is **reported as upstream drift**, never
         silently filtered.
-  - [ ] Success: skill text contains no intersect instruction; count rule, breakdown rule, and
+  - [x] Success: skill text contains no intersect instruction; count rule, breakdown rule, and
         drift cross-check all present.
 
-- [ ] **1.2 Verify correction 1 against the real graph** — Effort: 1/5
-  - [ ] Execute the skill's new layer-count selection exactly as the skill now states it.
-  - [ ] Success: Packaged Declarative Content reports **34** with type breakdown, Project
+- [x] **1.2 Verify correction 1 against the real graph** — Effort: 1/5
+  - [x] Execute the skill's new layer-count selection exactly as the skill now states it.
+  - [x] Success: Packaged Declarative Content reports **34** with type breakdown, Project
         Configuration reports **6**, totals sum to **238**, and the cross-check reports zero drift.
-  - [ ] Commit: `fix: count layers by nodeIds length with type breakdown (correction 1)`
+  - [x] Commit: `fix: count layers by nodeIds length with type breakdown (correction 1)`
 
 ## Task 2: Correction 2 — file-level selector
 
-- [ ] **2.1 Widen the file-level selector to an exclusion** — Effort: 2/5
-  - [ ] Replace `select(.type == "file")` (wherever the skill uses it as the file-level filter)
+- [x] **2.1 Widen the file-level selector to an exclusion** — Effort: 2/5
+  - [x] Replace `select(.type == "file")` (wherever the skill uses it as the file-level filter)
         with `select(.type != "function" and .type != "class")`, stated as an exclusion by name so
         a future tenth upstream file-level type is included automatically.
-  - [ ] State the definition in the skill: "file-level" means "carries a `filePath`", and the
+  - [x] State the definition in the skill: "file-level" means "carries a `filePath`", and the
         architecture's nine file-level types are all included.
-  - [ ] Add the drift rule: a node surviving the filter but carrying no `filePath` is reported as
+  - [x] Add the drift rule: a node surviving the filter but carrying no `filePath` is reported as
         drift.
-  - [ ] Success: no remaining `type == "file"` file-level filter in the skill; exclusion selector,
+  - [x] Success: no remaining `type == "file"` file-level filter in the skill; exclusion selector,
         definition, and drift rule present.
 
-- [ ] **2.2 Verify correction 2 against the real graph** — Effort: 1/5
-  - [ ] Execute the skill's new file-level selection as written.
-  - [ ] Success: yields **238** nodes, reconciling exactly with `meta.json`'s `analyzedFiles`;
+- [x] **2.2 Verify correction 2 against the real graph** — Effort: 1/5
+  - [x] Execute the skill's new file-level selection as written.
+  - [x] Success: yields **238** nodes, reconciling exactly with `meta.json`'s `analyzedFiles`;
         zero nodes lack `filePath`.
-  - [ ] Commit: `fix: widen file-level selector to exclude function/class by name (correction 2)`
+  - [x] Commit: `fix: widen file-level selector to exclude function/class by name (correction 2)`
 
 ## Task 3: Correction 3 — `fingerprints.json` note
 
-- [ ] **3.1 Reword the churn note** — Effort: 1/5
-  - [ ] In the skill's `.gitignore` section, replace the "expect it to churn — it rewrites on
+- [x] **3.1 Reword the churn note** — Effort: 1/5
+  - [x] In the skill's `.gitignore` section, replace the "expect it to churn — it rewrites on
         every graph refresh" wording with text naming what actually rewrites `fingerprints.json`:
         a deliberate `/understand` re-run, or the post-commit auto-update hook **only when
         `autoUpdate` is enabled** in `config.json`.
-  - [ ] State explicitly: **reading a graph never writes fingerprints**, and squadron's flows only
+  - [x] State explicitly: **reading a graph never writes fingerprints**, and squadron's flows only
         read (`jq` selections).
-  - [ ] Do not change the tracking decision or `.gitignore` itself — ignore scope stays trash-only.
-  - [ ] Success: note names both writers and their triggers; states reads never write; `git diff`
+  - [x] Do not change the tracking decision or `.gitignore` itself — ignore scope stays trash-only.
+  - [x] Success: note names both writers and their triggers; states reads never write; `git diff`
         touches only `commands/analysis/understand.md`.
-  - [ ] Commit: `docs: correct fingerprints.json churn note to name actual writers (correction 3)`
+  - [x] Commit: `docs: correct fingerprints.json churn note to name actual writers (correction 3)`
 
 ## Task 4: Extraction mapping table
 
-- [ ] **4.1 Add the mapping table as the flow's governing reference** — Effort: 2/5
-  - [ ] Add the seven-row extraction mapping table from the design (Technical Decisions →
+- [x] **4.1 Add the mapping table as the flow's governing reference** — Effort: 2/5
+  - [x] Add the seven-row extraction mapping table from the design (Technical Decisions →
         Extraction mapping) to `commands/analysis/understand.md`: section, source fields, ordering
         rule, fallback. Reproduce the design's rows; do not paraphrase field names.
-  - [ ] State the two governing rules with it: section order is identity → structure → detail →
+  - [x] State the two governing rules with it: section order is identity → structure → detail →
         caveats, and the fallback column has **no third option** — sourced content or a gap
         marker, never omission, never untraceable prose.
-  - [ ] Success: table matches the design row-for-row (7 sections, same fields, same ordering
+  - [x] Success: table matches the design row-for-row (7 sections, same fields, same ordering
         rules, same fallbacks); both governing rules stated adjacent to it.
 
-- [ ] **4.2 Verify table fidelity** — Effort: 1/5
-  - [ ] Diff-check each row against design lines 241–249; confirm no field renamed, dropped, or
+- [x] **4.2 Verify table fidelity** — Effort: 1/5
+  - [x] Diff-check each row against design lines 241–249; confirm no field renamed, dropped, or
         added.
-  - [ ] Success: row-for-row match confirmed.
-  - [ ] Commit: `feat: add field-to-section extraction mapping table to understand skill`
+  - [x] Success: row-for-row match confirmed.
+  - [x] Commit: `feat: add field-to-section extraction mapping table to understand skill`
 
 ## Task 5: New sections
 
