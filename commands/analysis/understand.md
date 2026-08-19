@@ -227,7 +227,19 @@ is a good outcome. Silence is not.
 - `fingerprints.json` — the plugin's incremental-analysis cache: a `contentHash` plus structural
   summary per analyzed file. Tracking it means a fresh clone's first re-analysis is incremental
   rather than a full rescan. It is regenerable, so it is tracked for the speed, not because it is
-  authoritative. **Expect it to churn** — it rewrites on every graph refresh and is diff-noisy.
+  authoritative.
+
+  **Exactly two things rewrite it**, and neither is a side effect of using this skill:
+
+  1. A deliberate re-run of the upstream plugin's own `/understand` command.
+  2. The plugin's post-commit auto-update hook — but **only when `autoUpdate` is `true` in
+     `.understand-anything/config.json`**. The hook is gated on that key and the plugin's default
+     is `autoUpdate: false`, so on a project that has never enabled it the hook never fires.
+
+  **Reading a graph never writes fingerprints.** Every squadron flow that touches the graph — this
+  skill included — only reads, via the field-scoped `jq` selections above. No number of runs of this
+  skill will produce a `fingerprints.json` diff. Expect churn when you refresh the graph on purpose,
+  not when you consume it.
 - `intermediate/` — the raw pre-analysis scan (file inventory, language and framework detection,
   import map) that feeds graph construction.
 
