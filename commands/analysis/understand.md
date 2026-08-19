@@ -48,16 +48,36 @@ below.
 | Array lengths | `jq -r '"\(.nodes\|length) \(.edges\|length) \(.layers\|length) \(.tour\|length)"'` |
 | Graph version | `jq -r '.version'` |
 | Layers | `jq -r '.layers[] \| {id, name, description, count: (.nodeIds\|length)}'` |
-| File-level nodes | `jq -r '.nodes[] \| select(.type == "file") \| {id, filePath, summary, complexity}'` |
+| File-level nodes | `jq -r '.nodes[] \| select(.type != "function" and .type != "class") \| {id, filePath, summary, complexity}'` |
 | Tour steps | `jq -r '.tour[] \| {order, title, nodeIds}'` |
 | Edge aggregates | `jq -r '[.edges[].type] \| group_by(.) \| map({type: .[0], n: length})'` |
 
 Select **only** the fields named in that table. A node carries `name`, `tags`, `lineRange`, and
 `languageNotes` as well; none of them are read at this depth.
 
-**Function- and class-level nodes are never read.** Filter with `select(.type == "file")` — never
-read a node whose `type` is `function` or `class`. They are the bulk of the graph and none of the
+**Function- and class-level nodes are never read.** They are the bulk of the graph and none of the
 sections this skill writes derive from them.
+
+**"File-level" means "carries a `filePath`"** — a node that stands for a whole file. It is *not* a
+synonym for `type == "file"`. The architecture defines nine file-level types; this graph carries
+`file`, `config`, and `pipeline` among them, and a future upstream release may add a tenth.
+
+So the file-level filter is stated as an **exclusion by name**:
+
+```
+select(.type != "function" and .type != "class")
+```
+
+Not `select(.type == "file")`. The allow-list form silently drops every file-level type it was not
+written to know about — on this graph it yields 201 nodes instead of 238, losing all 17 `config` and
+20 `pipeline` nodes and quietly disagreeing with `meta.json`'s `analyzedFiles`. The exclusion form
+admits a new upstream file-level type automatically, which is the correct default: a file-level node
+this skill has never heard of still stands for a real file.
+
+**Drift rule.** A node that survives the exclusion but carries **no `filePath`** is reported as
+upstream drift, naming the offending id. It is never silently counted or silently dropped — either
+`function`/`class` are no longer the only non-file-level types, or the node is malformed, and both
+are findings.
 
 **Not consumed at this depth** (deferred to slice 362, recorded here so the next author sees the
 deferral rather than rediscovering it):
@@ -376,7 +396,8 @@ Any `function`, `class`, or `UNRESOLVED` entry in that breakdown is drift; repor
 **2. Complexity hotspots** — from file-level `nodes[]`.
 
 Nodes in the highest `complexity` tier, each with its `filePath` and `summary`. File-level only
-(`select(.type == "file")`).
+(`select(.type != "function" and .type != "class")` — see the file-level definition in the read
+discipline above).
 
 `complexity` is an **ordinal string**, not a number — observed values are `simple`, `moderate`, and
 `complex`. Do not sort it numerically; `sort_by(-.complexity)` fails outright on a string, which is
