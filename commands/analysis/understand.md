@@ -431,6 +431,12 @@ identity is captured here rather than left to that slice.
 
 For each layer: `name`, `description`, and its node count.
 
+**Ordering: descending file count** — the largest layer first, so the shape of the system is legible
+from the top of the section.
+
+**Fallback: none beyond preflight.** An empty `layers` array is a preflight rejection (**Validation**
+step 3), so this section is never reached without data and invents no marker of its own.
+
 **The count is `nodeIds | length`, directly.** `layers[].nodeIds` holds only file-level nodes — no
 function or class node appears in any layer. Intersecting with `type == "file"` undercounts every
 layer that carries a non-`file` file-level type, and does so silently: on this repo's graph it
@@ -486,23 +492,86 @@ Fallback, verbatim: `[GAP: no node carries the entry-point tag — re-run /under
 
 **4. Complexity hotspots** — from file-level `nodes[]`.
 
-Nodes in the highest `complexity` tier, each with its `filePath` and `summary`. File-level only
+Fields: `complexity`, `filePath`, `summary`, `languageNotes`. File-level only
 (`select(.type != "function" and .type != "class")` — see the file-level definition in the read
 discipline above).
 
 `complexity` is an **ordinal string**, not a number — observed values are `simple`, `moderate`, and
 `complex`. Do not sort it numerically; `sort_by(-.complexity)` fails outright on a string, which is
-the correct loud failure. Select the top tier by value. If the upstream plugin ever emits a value
-outside the observed set, report it rather than bucketing it into a known tier.
+the correct loud failure.
 
-**3. Suggested reading order** — from `tour[]`.
+**Report the full tier distribution first, then the top tier grouped by layer.** The distribution
+gives the reader a denominator; the grouping is what makes concentration visible. Ordering within the
+section is top ordinal tier first, then by layer.
 
-Step titles in `order`. If `tour` is empty, this section is a `[GAP: ...]` marker naming the tour
-field and the input that would supply it — preflight has already warned in this case.
+```
+# distribution across all file-level nodes
+jq -r '[.nodes[]|select(.type!="function" and .type!="class")|.complexity]
+       | group_by(.) | map("\(.[0]):\(length)") | join(" ")' \
+  .understand-anything/knowledge-graph.json
+```
+
+**`languageNotes` is attached where present and omitted silently where absent.** This is the one
+sanctioned omission in the whole flow, and the reason is specific: `languageNotes` is a **per-node
+optional annotation**, not a source field of the section. It is present on 97 of 238 file-level nodes
+in this graph, and emitting a gap marker for each of the other 141 would bury the section in noise
+that tells a reader nothing. Every other absence in this document still gets a marker.
+
+**A `complexity` value outside the observed ordinal set is reported as an unrecognized tier**, named
+explicitly, and never bucketed into a known one. Bucketing would silently move a file into a tier
+upstream did not assign it.
+
+Fallback: `[GAP: ...]` naming `complexity`.
+
+**5. Suggested reading order** — from `tour[]`.
+
+Fields: `order`, `title`, `description`. **Ordering: `order` ascending** — the tour is a sequence and
+reporting it out of sequence destroys the only thing it carries.
+
+`description` annotates each step; it is not optional decoration, it is what tells a reader why the
+step comes where it does.
+
+Fallback: `[GAP: ...]` naming `tour` and the input that would supply it. Preflight has already warned
+on an empty `tour` (the tour asymmetry above), but **this section still emits its own marker** — the
+warning went to the console, and the document has to stand on its own.
 
 **6. Dependency observations** — from `edges[]`.
 
-Edge-type counts, and the strongest inter-layer `imports` / `depends_on` connections.
+Fields: `type`, `source`, `target`, `weight`. Two parts, in this order:
+
+1. **Edge-type counts across the whole graph** — a `group_by` over `.edges[].type`.
+2. **Inter-layer `imports` / `depends_on` connections**, self-references excluded (a layer importing
+   itself is not an observation), **ordered by descending count with ties broken by `weight`**.
+
+**Endpoint resolution is a string parse of the edge's own `source` / `target` id — not a node read.**
+Node ids are type-prefixed as `<type>:<filePath>[:<name>]`, so the **second colon-delimited field is
+the owning file's path**, and that path's file-level node gives the layer. Verified across all 925
+nodes of this graph: the second field equals `filePath` exactly for every node of every type, and no
+`filePath` contains a colon.
+
+**No node — and specifically no `function` or `class` node — is read to resolve an endpoint.** This
+is what keeps the dependency section consistent with the read discipline above while still counting
+the edges whose endpoints are function-level.
+
+**Failure path — an endpoint that does not resolve.** Both variants are excluded from the tally and
+**reported as drift naming the endpoint id**:
+
+- The endpoint string **does not parse** as `<type>:<filePath>[:<name>]` → excluded, reported as
+  drift naming the malformed endpoint id.
+- The endpoint parses but its `filePath` **matches no file-level node** → excluded, reported as drift
+  naming the unresolved id.
+
+**Excluded edges are counted, and when that count is non-zero the section carries a `[GAP: ...]`
+marker** stating how many edges were excluded, so a reader knows the tally is partial and by how
+much. An unresolvable edge is **never silently skipped** — that would make the counts wrong in a way
+no reader could detect. In this graph, zero of 2184 edges have an endpoint absent from `nodes`, but
+the code path exists regardless, because that is one graph.
+
+**Scope note — the fallback if the id-prefix contract ever fails.** Only 16 of 610
+`imports`/`depends_on` edges here touch a function or class endpoint (2.6%), so endpoint resolution
+is a correctness guarantee for a small tail, not a load-bearing feature. If a future graph breaks the
+id-prefix contract, restrict the tally to file-level endpoints and **report the excluded count** —
+that loses little and stays honest.
 
 **7. Coverage and scope limits** — from `meta.json`, `config.json`, and `.understandignore`.
 
