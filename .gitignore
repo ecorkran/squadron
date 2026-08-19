@@ -172,3 +172,11 @@ cython_debug/
 
 # Per-developer squadron project config
 .squadron.toml
+
+# context-forge installs its slash commands project-local by default; the
+# user-level install at ~/.claude/commands/ is the source of truth.
+# Scoped to commands/ only — .claude/agents, rules, and skills stay tracked.
+.claude/commands/
+
+# understand-anything transient scratch (squadron-managed)
+.understand-anything/.trash-*/
