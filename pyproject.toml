@@ -1,7 +1,7 @@
 [project]
 name = "squadron-ai"
 version = "0.10.2"
-description = "Multi-agent squadron framework"
+description = "Repeatable AI workflows from the terminal — structured reviews, YAML pipelines, and project artifacts, with any model"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.12"

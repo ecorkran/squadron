@@ -1,24 +1,29 @@
 # Squadron
 
-Repeatable, template-driven code reviews powered by Claude — from the terminal.
+Repeatable AI workflows from the terminal — structured reviews, YAML pipelines, and project artifacts, using whatever model you want.
 
-Point `sq` at a diff, an architecture doc, or a task plan and get back a structured verdict with specific findings. No more freeform "hey Claude, review this" — each review runs against a purpose-built prompt template that tells the agent exactly what to evaluate and how to report what it finds.
+Point `sq` at an architecture doc, a slice design, a task plan, or a diff and get back a structured verdict with specific findings. Define a pipeline in YAML and it chains reviews, artifact generation, judges, and loops into one repeatable command. Every step can run on the model of your choice.
 
 ```bash
 sq review slice 120 -v
 ```
 ![Review output from current squadron branch](assets/review-image.png)
 
-## Why this exists
+## What Squadron does
 
-Code review with LLMs is powerful but inconsistent. The same prompt gets different levels of scrutiny depending on how you phrase it, what context you include, and whether you remembered to mention your project's conventions.
+- **Repeatable reviews with structured findings** — for architecture documents, slice designs, task breakdowns, and code. Each review runs against a purpose-built template that tells the agent exactly what to evaluate and how to report it: a verdict (PASS, CONCERNS, or FAIL) plus findings with severity levels. Same template, structurally consistent output, every run.
+- **Any model** — Anthropic, OpenAI, anything supported by OpenRouter, or local models. Any step of any workflow can use any model.
+- **YAML-definable pipelines** — automate reviews, summaries, and context lifetimes, and generate project artifacts: architectural concepts, slice designs, task breakdowns.
+- **Pipeline control flow** — `loop-each` and `loop-until` iteration, judge nodes for resolution, configurable escalation checkpoints, and composition of steps and loops into extended pipelines.
+- **Context summaries and handoffs** — carry working context from a plain terminal to an agent CLI to VS Code. Squadron doesn't care where you run it.
 
-Squadron makes reviews **repeatable**. A review template defines the system prompt, the tools the agent can use, and the inputs it expects. Run the same template on Monday and Friday and you get structurally consistent output — a verdict (PASS, CONCERNS, or FAIL) and a list of findings with severity levels.
+## Review templates
 
-Three built-in templates cover the most common review patterns:
+Four built-in templates cover the common review patterns:
 
 | Template | What it reviews |
 |----------|----------------|
+| `arch` | An architecture document on its own merits — completeness, consistency, feasibility |
 | `slice` | A design document against an architecture reference |
 | `tasks` | A task breakdown against its parent slice design |
 | `code` | Source code, optionally scoped to a diff or glob |
@@ -27,9 +32,44 @@ The template system is extensible — each template is a YAML file, and adding n
 
 ## Install
 
-### Fresh install (one liner)
+### Global install (recommended)
 
-New user? Run this to install Squadron and Context Forge, then get guided setup:
+Squadron ships on PyPI as `squadron-ai`:
+
+```bash
+# Using uv (recommended)
+uv tool install squadron-ai
+
+# Or using pipx
+pipx install squadron-ai
+```
+
+This installs Squadron **only**. Squadron drives its pipelines through Context Forge (the `cf` CLI), which ships on npm rather than PyPI, so `uv`/`pipx` cannot pull it in. Run `sq setup` next and it installs the rest for you:
+
+```bash
+sq --version
+sq setup          # installs cf, /sq: and /cf: slash commands, then checks providers
+```
+
+`sq setup` is interactive and idempotent — safe to re-run. Use `--non-interactive` to print the commands instead of running them.
+
+The `/sq:` and `/cf:` slash commands land in `~/.claude/commands` — user-level, so they're available in every project. To reinstall or update them later without a full setup pass:
+
+```bash
+sq install-commands   # refresh /sq:* commands (sq uninstall-commands removes them)
+```
+
+Then, inside a project you want to work on:
+
+```bash
+cf init           # per-project: installs AI project guides and IDE config
+```
+
+New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
+
+### Install script (alternative)
+
+The one-line installer does the same steps — installs Squadron and Context Forge, then guides setup:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh | sh
@@ -42,34 +82,7 @@ curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/insta
     -o install.sh && less install.sh && bash install.sh
 ```
 
-### Global install (recommended)
-
-```bash
-# Using pipx (recommended)
-pipx install squadron-ai
-
-# Or using uv
-uv tool install squadron-ai
-```
-
-This installs Squadron **only**. Squadron drives its pipelines through Context Forge (the `cf` CLI), which ships on npm rather than PyPI, so `pipx`/`uv` cannot pull it in. Run `sq setup` next and it installs the rest for you:
-
-```bash
-sq --version
-sq setup          # installs cf, /sq: and /cf: slash commands, then checks providers
-```
-
-`sq setup` is interactive and idempotent — safe to re-run. Use `--non-interactive` to print the commands instead of running them.
-
-Then, inside a project you want to work on:
-
-```bash
-cf init           # per-project: installs AI project guides and IDE config
-```
-
-The one-line `install.sh` above does the same install steps for you; either path ends in the same place.
-
-New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
+Either path ends in the same place.
 
 ### Development install
 
@@ -99,7 +112,7 @@ chmod +x .git/hooks/pre-commit
 
 ### 1. Configure credentials
 
-Squadron uses the Claude Agent SDK, which supports two authentication methods:
+The default provider is Claude via the Claude Agent SDK, which supports two authentication methods:
 
 **Claude Max subscription** (recommended): If you're already signed into Claude Code, you're set — the SDK uses your existing session. No API key needed.
 ```bash
@@ -111,6 +124,8 @@ claude --version
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
+
+Other providers (OpenAI, Gemini, OpenRouter, local) are configured with their own keys — see [Using different models](#using-different-models) and [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ### 2. Review a design before writing code
 
@@ -151,7 +166,7 @@ It measures what changed since the review was written, settles what it can for f
 
 ## Using different models
 
-Use `--model` with a built-in alias to run reviews through any supported provider:
+Use `--model` with a built-in alias to run any review or pipeline step through any supported provider:
 
 ```bash
 # Claude (default — uses SDK)
@@ -164,39 +179,51 @@ sq review code --diff main --model gpt54-nano -v
 sq review slice 120 --model flash3 -v
 
 # OpenRouter
-sq review tasks 118 --model kimi25 -v
+sq review tasks 118 --model kimi27 -v
 ```
 
 Non-SDK models automatically get file contents and diffs injected into the prompt, so they can review actual code without tool access.
 
-Run `sq models` to see all available aliases:
+Run `sq models` to see all available aliases (trimmed here — around 30 ship built-in):
 
 ```
 $ sq models
-┌────────────┬────────────┬────────────────────────────────────────┬────────┐
-│ Alias      │ Profile    │ Model ID                               │ Source │
-├────────────┼────────────┼────────────────────────────────────────┼────────┤
-│ codex      │ openai     │ gpt-5.3-codex                          │        │
-│ codex-agent│ openai-oauth│ gpt-5.3-codex                         │        │
-│ flash3     │ gemini     │ gemini-3-flash-preview                 │        │
-│ gemini     │ gemini     │ gemini-3.1-pro-preview-customtools     │        │
-│ glm5       │ openrouter │ z-ai/glm-5                             │        │
-│ gpt54      │ openai     │ gpt-5.4                                │        │
-│ gpt54-mini │ openai     │ gpt-5.4-mini                           │        │
-│ gpt54-nano │ openai     │ gpt-5.4-nano                           │        │
-│ haiku      │ sdk        │ claude-haiku-4-5-20251001              │        │
-│ kimi25     │ openrouter │ moonshotai/kimi-k2.5                   │        │
-│ minimax    │ openrouter │ minimax/minimax-m2.7                   │        │
-│ opus       │ sdk        │ claude-opus-4-6                        │        │
-│ sonnet     │ sdk        │ claude-sonnet-4-6                      │        │
-└────────────┴────────────┴────────────────────────────────────────┴────────┘
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
+┃ Alias           ┃ Profile      ┃ Model ID                           ┃ Source ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
+│ fable           │ sdk          │ claude-fable-5                     │        │
+│ haiku           │ sdk          │ claude-haiku-4-5-20251001          │        │
+│ opus            │ sdk          │ claude-opus-5                      │        │
+│ sonnet          │ sdk          │ claude-sonnet-5                    │        │
+│ codex           │ openai       │ gpt-5.3-codex                      │        │
+│ gpt54           │ openai       │ gpt-5.4                            │        │
+│ gpt54-nano      │ openai       │ gpt-5.4-nano                       │        │
+│ codex-agent     │ openai-oauth │ gpt-5.3-codex                      │        │
+│ flash3          │ gemini       │ gemini-3-flash-preview             │        │
+│ gemini          │ gemini       │ gemini-3.1-pro-preview-customtools │        │
+│ deepseek4-flash │ openrouter   │ deepseek/deepseek-v4-flash-0731    │        │
+│ glm53           │ openrouter   │ z-ai/glm-5.3                       │        │
+│ kimi27          │ openrouter   │ moonshotai/kimi-k2.7-code          │        │
+│ minimax         │ openrouter   │ minimax/minimax-m3                 │        │
+│ qwen38          │ openrouter   │ qwen/qwen3.8-2.4t-a95b             │        │
+│ …               │              │                                    │        │
+└─────────────────┴──────────────┴────────────────────────────────────┴────────┘
 ```
 
-Add your own aliases in `~/.config/squadron/models.toml`:
+`sq models list -v` adds privacy, cost tier, per-million-token pricing, and notes columns.
+
+Add your own aliases in `~/.config/squadron/models.toml`. Only `profile` and `model` are required — the rest feeds the `-v` display (shown: the built-in `deepseek4-flash` definition):
 
 ```toml
-[aliases]
-deepseek = { profile = "openrouter", model = "deepseek/deepseek-r2" }
+[aliases.deepseek4-flash]
+profile = "openrouter"
+model = "deepseek/deepseek-v4-flash-0731"
+private = true
+cost_tier = "cheap"
+
+[aliases.deepseek4-flash.pricing]
+input = 0.0765
+output = 0.153
 ```
 
 ### Using Codex (experimental)
@@ -229,6 +256,21 @@ sq review slice 120 --model codex-agent -v
    ```
 
 Codex is experimental and requires active OpenAI subscriptions. The standard `codex` alias (without `-agent` suffix) uses OpenAI's Chat Completions API and doesn't require this setup.
+
+## Pipelines (`sq run`)
+
+Pipelines compose multi-step AI workflows into a single repeatable command, defined in YAML:
+
+```bash
+sq run slice 152          # design → tasks → implement → devlog for slice 152
+sq run --list             # show all available pipelines
+```
+
+Pipelines can review, summarize, manage context lifetimes, and generate project artifacts — architectural concepts, slice designs, task breakdowns. Steps compose with `loop-each` and `loop-until` iteration, judge nodes that resolve disagreement, and configurable escalation checkpoints that pause for a human when a gate fails. Each step names its own model, so a cheap model can draft while a stronger one judges.
+
+When running inside Claude Code (VS Code or terminal), use `--prompt-only` to get step-by-step instructions instead of direct LLM dispatch — or use the `/sq:run` slash command (installed by `sq setup`), which wraps this automatically.
+
+See **[docs/PIPELINES.md](docs/PIPELINES.md)** for the full authoring guide: YAML grammar, step types, model resolution, and how to write custom pipelines.
 
 ## Reviews in depth
 
@@ -327,17 +369,11 @@ sq config list
 
 Available keys: `cwd`, `verbosity`, `default_rules`, `compact.template`, `compact.instructions`. See [docs/COMMANDS.md](docs/COMMANDS.md) for full details.
 
-## Interactive `/compact` for Claude Code
+## Context summaries and handoffs (`/sq:summary`)
 
-Squadron ships a `PreCompact` hook that runs whenever you type `/compact` (or auto-compaction fires) inside an interactive Claude Code session — VS Code extension or CLI Claude Code. The hook feeds project-aware instructions into Claude Code's compaction summarizer so slice context isn't lost.
+Inside an interactive Claude Code session (VS Code extension or CLI), `/sq:summary` generates a project-aware summary of the conversation, copies it to the clipboard, and saves it under `~/.config/squadron/runs/summaries/`. `/sq:summary --restore` seeds a fresh session from a saved summary — so you can end a session in a plain terminal and pick the same context up in an agent CLI or VS Code, or just reset a long session without losing the thread.
 
-`sq install-commands` writes the hook entry into your project's `.claude/settings.json` alongside the slash command files:
-
-```bash
-sq install-commands   # installs slash commands AND the PreCompact hook
-```
-
-Pick the instructions the hook emits with either of two config keys:
+Pick the summary template with either of two config keys:
 
 ```bash
 # Named template (resolved from ~/.config/squadron/compaction/ then built-ins)
@@ -348,11 +384,11 @@ sq config set compact.template minimal --project
 sq config set compact.instructions "Keep slice {slice} design and tasks only." --project
 ```
 
-Both keys honour the usual `--project` / user layering. `sq uninstall-commands` removes the squadron-managed hook entry while preserving any third-party hooks.
+Both keys honour the usual `--project` / user layering.
 
-## Agent management
+## Agent management (experimental)
 
-Agent lifecycle commands require the Squadron daemon. Start it first:
+Squadron retains agent lifecycle commands, but they're no longer a primary feature — this functionality is slated to move to the Amoeba project, where it can be addressed more completely. The commands require the Squadron daemon:
 
 ```bash
 sq serve            # start daemon (included in uv tool install squadron-ai)
@@ -383,29 +419,13 @@ A review that ran but whose file could not be written exits 1 even though you sa
 
 `sq review resolve` uses its own two codes — 0 for `ADDRESSED`, 1 for `UNADDRESSED` or `UNKNOWN`.
 
-## Pipelines (`sq run`)
-
-Pipelines compose multi-step AI workflows into a single repeatable command:
-
-```bash
-sq run slice 152          # design → tasks → implement → devlog for slice 152
-sq run --list             # show all available pipelines
-```
-
-When running inside Claude Code (VS Code or terminal), use `--prompt-only` to get step-by-step instructions instead of direct LLM dispatch — or install the `/sq:run` slash command which wraps this automatically:
-
-```bash
-sq install-commands       # installs /sq:run and other slash commands
-```
-
-See **[docs/PIPELINES.md](docs/PIPELINES.md)** for the full authoring guide: YAML grammar, step types, model resolution, and how to write custom pipelines.
-
 ## Documentation
 
 - **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — Verify your install, configure any provider, troubleshoot `sq doctor`/`sq setup` output
 - **[docs/COMMANDS.md](docs/COMMANDS.md)** — Full command reference with all options and arguments
 - **[docs/TEMPLATES.md](docs/TEMPLATES.md)** — How review templates work and how to create new ones
 - **[docs/PIPELINES.md](docs/PIPELINES.md)** — Pipeline authoring guide
+- **[docs/EVENTS.md](docs/EVENTS.md)** — Bind project-specific Python callables to squadron's execution lifecycle
 
 ## Development
 
