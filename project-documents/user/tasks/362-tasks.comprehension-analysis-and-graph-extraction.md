@@ -160,122 +160,122 @@ Task 2 and expect the walkthrough document at 945 instead.
 Each new section is authored in the skill's comprehension flow per its mapping row and the
 design's Section detail. One subtask per section, verification paired with each.
 
-- [ ] **5.1 Author section 1 — project identity** — Effort: 2/5
-  - [ ] Source: `project.name`, `.description`, `.languages`, `.frameworks`.
-  - [ ] `project.description` is quoted and attributed as the plugin's generated prose — never
+- [x] **5.1 Author section 1 — project identity** — Effort: 2/5
+  - [x] Source: `project.name`, `.description`, `.languages`, `.frameworks`.
+  - [x] `project.description` is quoted and attributed as the plugin's generated prose — never
         restated as squadron's own claim. `languages`/`frameworks` listed verbatim.
-  - [ ] Fallback: `[GAP: ...]` per missing subfield; `project` itself missing is a preflight
+  - [x] Fallback: `[GAP: ...]` per missing subfield; `project` itself missing is a preflight
         rejection (already handled by 361 — do not duplicate).
-  - [ ] Inline attribution per SC1: the generated section body opens with a lead sentence naming
+  - [x] Inline attribution per SC1: the generated section body opens with a lead sentence naming
         its source fields (the 943 `From \`...\`.` pattern) — in addition to the Provenance
         sourcing line.
-  - [ ] Success: instructions cover all four fields, attribution rule, inline lead-in, and
+  - [x] Success: instructions cover all four fields, attribution rule, inline lead-in, and
         per-subfield gaps.
 
-- [ ] **5.2 Verify section 1 sources** — Effort: 1/5
-  - [ ] `jq` the four `project.*` fields from the real graph; confirm each is present and the
+- [x] **5.2 Verify section 1 sources** — Effort: 1/5
+  - [x] `jq` the four `project.*` fields from the real graph; confirm each is present and the
         skill's selection retrieves them.
-  - [ ] Success: all four fields returned non-empty on this graph.
+  - [x] Success: all four fields returned non-empty on this graph.
 
-- [ ] **5.3 Author section 3 — entry points** — Effort: 2/5
-  - [ ] Source: file-level nodes whose `tags` contains `entry-point`. The tag is the signal — no
+- [x] **5.3 Author section 3 — entry points** — Effort: 2/5
+  - [x] Source: file-level nodes whose `tags` contains `entry-point`. The tag is the signal — no
         filename heuristics, and upstream's judgment is reported, never overruled (a tagged
         `__init__.py` is reported as tagged).
-  - [ ] Ordering: group by layer, report per-layer count with paths (27 nodes is too many flat).
-  - [ ] Fallback: `[GAP: no node carries the entry-point tag — re-run /understand]`.
-  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+  - [x] Ordering: group by layer, report per-layer count with paths (27 nodes is too many flat).
+  - [x] Fallback: `[GAP: no node carries the entry-point tag — re-run /understand]`.
+  - [x] Inline attribution per SC1: section body opens with a lead sentence naming its source
         fields (the 943 `From \`...\`.` pattern).
-  - [ ] Success: tag-only selection, layer grouping, inline lead-in, exact fallback present.
+  - [x] Success: tag-only selection, layer grouping, inline lead-in, exact fallback present.
 
-- [ ] **5.4 Verify section 3 sources** — Effort: 1/5
-  - [ ] `jq` count of file-level nodes tagged `entry-point`; confirm 27 on this graph and that
+- [x] **5.4 Verify section 3 sources** — Effort: 1/5
+  - [x] `jq` count of file-level nodes tagged `entry-point`; confirm 27 on this graph and that
         each maps to exactly one layer.
-  - [ ] Success: count matches; layer grouping is total (no orphan).
+  - [x] Success: count matches; layer grouping is total (no orphan).
 
-- [ ] **5.5 Author section 7 — coverage and scope limits** — Effort: 2/5
-  - [ ] `analyzedFiles` from `meta.json`, reconciled against the file-level node count. Equal is
+- [x] **5.5 Author section 7 — coverage and scope limits** — Effort: 2/5
+  - [x] `analyzedFiles` from `meta.json`, reconciled against the file-level node count. Equal is
         stated as expected; **a mismatch reports both numbers as a discrepancy** — never silently
         prefer either.
-  - [ ] `config.json`: report settings present; do not report absent optional keys as gaps
+  - [x] `config.json`: report settings present; do not report absent optional keys as gaps
         (upstream owns its defaults — `autoUpdate` absent here is not a gap).
-  - [ ] `.understandignore`: report count of active (uncommented, non-blank) patterns and list
+  - [x] `.understandignore`: report count of active (uncommented, non-blank) patterns and list
         them; all-comments/blank file is reported as "defaults only", a real state, not a gap.
-  - [ ] Fallback: `[GAP: ...]` naming the unreadable file.
-  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+  - [x] Fallback: `[GAP: ...]` naming the unreadable file.
+  - [x] Inline attribution per SC1: section body opens with a lead sentence naming its source
         fields (the 943 `From \`...\`.` pattern).
-  - [ ] Success: all three 361 deferrals closed by this section's instructions; inline lead-in
+  - [x] Success: all three 361 deferrals closed by this section's instructions; inline lead-in
         required; discrepancy and defaults-only paths explicit.
 
-- [ ] **5.6 Verify section 7 sources** — Effort: 1/5
-  - [ ] Confirm against the real inputs: `analyzedFiles` = 238 = file-level count;
+- [x] **5.6 Verify section 7 sources** — Effort: 1/5
+  - [x] Confirm against the real inputs: `analyzedFiles` = 238 = file-level count;
         `config.json` holds only `outputLanguage: en`; active `.understandignore` pattern count
         matches `grep -vE '^\s*(#|$)' | wc -l` (17 at design time — re-measure, report actual).
-  - [ ] Success: skill instructions produce these values as written.
-  - [ ] Commit: `feat: add project identity, entry points, and coverage sections to flow`
+  - [x] Success: skill instructions produce these values as written.
+  - [x] Commit: `feat: add project identity, entry points, and coverage sections to flow`
 
 ## Task 6: Deepen existing sections
 
 One subtask per section; each gains its explicit ordering rule and fallback per the mapping table.
 
-- [ ] **6.1 Deepen section 2 — layer architecture** — Effort: 1/5
-  - [ ] Ordering: descending file count. Source: `layers[]` `name`, `description`, `nodeIds`.
-  - [ ] Counts per correction 1 (Task 1) — `nodeIds | length` with type breakdown where mixed.
-  - [ ] Fallback: none needed beyond preflight (empty `layers` is a 361 preflight rejection);
+- [x] **6.1 Deepen section 2 — layer architecture** — Effort: 1/5
+  - [x] Ordering: descending file count. Source: `layers[]` `name`, `description`, `nodeIds`.
+  - [x] Counts per correction 1 (Task 1) — `nodeIds | length` with type breakdown where mixed.
+  - [x] Fallback: none needed beyond preflight (empty `layers` is a 361 preflight rejection);
         state that.
-  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+  - [x] Inline attribution per SC1: section body opens with a lead sentence naming its source
         fields (the 943 `From \`...\`.` pattern).
-  - [ ] Success: ordering rule, count rule, and inline lead-in explicit; no new fallback invented.
+  - [x] Success: ordering rule, count rule, and inline lead-in explicit; no new fallback invented.
 
-- [ ] **6.2 Deepen section 4 — complexity hotspots** — Effort: 2/5
-  - [ ] `complexity` is an ordinal string (`simple`/`moderate`/`complex`) — never sort numerically.
-  - [ ] Report full tier distribution across all file-level nodes, then list the top tier grouped
+- [x] **6.2 Deepen section 4 — complexity hotspots** — Effort: 2/5
+  - [x] `complexity` is an ordinal string (`simple`/`moderate`/`complex`) — never sort numerically.
+  - [x] Report full tier distribution across all file-level nodes, then list the top tier grouped
         by layer.
-  - [ ] Attach `languageNotes` where present; **omit silently where absent** — the one sanctioned
+  - [x] Attach `languageNotes` where present; **omit silently where absent** — the one sanctioned
         omission, because it is a per-node optional annotation, not a section source field. State
         this exception in the skill.
-  - [ ] A value outside the observed ordinal set is reported as an unrecognized tier, never
+  - [x] A value outside the observed ordinal set is reported as an unrecognized tier, never
         bucketed.
-  - [ ] Fallback: `[GAP: ...]` naming `complexity`.
-  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+  - [x] Fallback: `[GAP: ...]` naming `complexity`.
+  - [x] Inline attribution per SC1: section body opens with a lead sentence naming its source
         fields (the 943 `From \`...\`.` pattern).
-  - [ ] Success: distribution + top-tier-by-layer rules, languageNotes exception, unrecognized-tier
+  - [x] Success: distribution + top-tier-by-layer rules, languageNotes exception, unrecognized-tier
         rule, inline lead-in, and fallback all present.
 
-- [ ] **6.3 Deepen section 5 — suggested reading order** — Effort: 1/5
-  - [ ] Source: `tour[]` (`order`, `title`, `description`), ordered by `order` ascending;
+- [x] **6.3 Deepen section 5 — suggested reading order** — Effort: 1/5
+  - [x] Source: `tour[]` (`order`, `title`, `description`), ordered by `order` ascending;
         `description` annotates each step.
-  - [ ] Fallback: `[GAP: ...]` naming `tour` (preflight has already warned; the section still
+  - [x] Fallback: `[GAP: ...]` naming `tour` (preflight has already warned; the section still
         emits its own marker).
-  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+  - [x] Inline attribution per SC1: section body opens with a lead sentence naming its source
         fields (the 943 `From \`...\`.` pattern).
-  - [ ] Success: ordering rule, inline lead-in, and fallback explicit.
+  - [x] Success: ordering rule, inline lead-in, and fallback explicit.
 
-- [ ] **6.4 Deepen section 6 — dependency observations** — Effort: 3/5
-  - [ ] Edge-type counts across the whole graph; then inter-layer `imports`/`depends_on`
+- [x] **6.4 Deepen section 6 — dependency observations** — Effort: 3/5
+  - [x] Edge-type counts across the whole graph; then inter-layer `imports`/`depends_on`
         connections, self-references excluded, ordered by descending count with ties broken by
         `weight`.
-  - [ ] **Endpoint resolution is a string parse of the edge's own `source`/`target` id**
+  - [x] **Endpoint resolution is a string parse of the edge's own `source`/`target` id**
         (`<type>:<filePath>[:<name>]` → second colon field is the owning file's path → that
         file's layer). No node — and specifically no function/class node — is read to resolve an
         endpoint.
-  - [ ] Failure path, verbatim from the design: an endpoint that does not parse, or whose
+  - [x] Failure path, verbatim from the design: an endpoint that does not parse, or whose
         `filePath` matches no file-level node, is excluded from the tally and **reported as drift
         naming the endpoint id**; the excluded count appears as a `[GAP: ...]` in the section when
         non-zero. Never silently skipped.
-  - [ ] Include the design's scope note: if the id-prefix contract fails on a future graph,
+  - [x] Include the design's scope note: if the id-prefix contract fails on a future graph,
         restrict the tally to file-level endpoints and report the excluded count.
-  - [ ] Inline attribution per SC1: section body opens with a lead sentence naming its source
+  - [x] Inline attribution per SC1: section body opens with a lead sentence naming its source
         fields (the 943 `From \`...\`.` pattern).
-  - [ ] Success: string-parse rule, both drift variants, non-zero-count gap marker, inline
+  - [x] Success: string-parse rule, both drift variants, non-zero-count gap marker, inline
         lead-in, and the fallback scope note all present.
 
-- [ ] **6.5 Verify deepened sections** — Effort: 1/5
-  - [ ] Review each of 6.1–6.4 against the mapping table and the design's Section detail —
+- [x] **6.5 Verify deepened sections** — Effort: 1/5
+  - [x] Review each of 6.1–6.4 against the mapping table and the design's Section detail —
         every ordering rule and fallback matches its row exactly.
-  - [ ] Execute the section 6 edge selections against the real graph: expect 0 unresolvable
+  - [x] Execute the section 6 edge selections against the real graph: expect 0 unresolvable
         endpoints of 2184, and inter-layer tallies computable without reading any node.
-  - [ ] Success: no divergence from mapping table; edge checks pass.
-  - [ ] Commit: `feat: add ordering rules and fallbacks to layer, complexity, tour, dependency sections`
+  - [x] Success: no divergence from mapping table; edge checks pass.
+  - [x] Commit: `feat: add ordering rules and fallbacks to layer, complexity, tour, dependency sections`
 
 ## Task 7: Recorded decisions and cross-reference
 

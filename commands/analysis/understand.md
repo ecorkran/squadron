@@ -47,13 +47,19 @@ below.
 | Key presence | `jq -r 'keys[]'` |
 | Array lengths | `jq -r '"\(.nodes\|length) \(.edges\|length) \(.layers\|length) \(.tour\|length)"'` |
 | Graph version | `jq -r '.version'` |
+| Project identity | `jq -r '.project \| {name, description, languages, frameworks}'` |
 | Layers | `jq -r '.layers[] \| {id, name, description, count: (.nodeIds\|length)}'` |
-| File-level nodes | `jq -r '.nodes[] \| select(.type != "function" and .type != "class") \| {id, filePath, summary, complexity}'` |
-| Tour steps | `jq -r '.tour[] \| {order, title, nodeIds}'` |
+| Layer membership | `jq -r '.layers[] \| {name, nodeIds}'` |
+| File-level nodes | `jq -r '.nodes[] \| select(.type != "function" and .type != "class") \| {id, filePath, summary, complexity, tags, languageNotes}'` |
+| Tour steps | `jq -r '.tour[] \| {order, title, description}'` |
 | Edge aggregates | `jq -r '[.edges[].type] \| group_by(.) \| map({type: .[0], n: length})'` |
+| Edge endpoints | `jq -r '.edges[] \| {type, source, target, weight}'` |
 
-Select **only** the fields named in that table. A node carries `name`, `tags`, `lineRange`, and
-`languageNotes` as well; none of them are read at this depth.
+Select **only** the fields named in that table. A node also carries `name` and `lineRange`; neither is
+read by this flow.
+
+**Edge endpoints are read as strings, never dereferenced into nodes** — see section 6 of the flow for
+the id-prefix parse that makes this possible.
 
 **Function- and class-level nodes are never read.** They are the bulk of the graph and none of the
 sections this skill writes derive from them.
@@ -79,15 +85,16 @@ upstream drift, naming the offending id. It is never silently counted or silentl
 `function`/`class` are no longer the only non-file-level types, or the node is malformed, and both
 are findings.
 
-**Not consumed at this depth** (deferred to slice 362, recorded here so the next author sees the
-deferral rather than rediscovering it):
+**Also consumed by the comprehension flow**, beyond the selections above — these were deferred by the
+361 contract and are read by section 7 (coverage and scope limits):
 
-- `config.json` and `.understandignore` in the graph root — they describe how the upstream plugin was
-  configured and what it excluded. Reading them would let a generated document state its own
-  coverage limits, which is a real improvement and out of scope here.
-- `meta.json`'s `analyzedFiles` count — a coverage signal, same reasoning.
-- Node `type` values beyond `file`, `function`, and `class` (this graph also carries `pipeline` and
-  `config` nodes).
+- `config.json` and `.understandignore` in the graph root — how the upstream plugin was configured
+  and what it excluded, which is what lets a generated document state its own coverage limits.
+- `meta.json`'s `analyzedFiles` count, reconciled against the file-level node count.
+
+Node `type` values beyond `file`, `function`, and `class` (this graph also carries `pipeline` and
+`config`) are **in scope** — see the file-level definition above; they are the reason the filter is an
+exclusion rather than an allow-list.
 
 ### Validation: absent, unparseable, malformed
 
