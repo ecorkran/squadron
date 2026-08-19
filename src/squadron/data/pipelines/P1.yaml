@@ -10,7 +10,7 @@ steps:
       model: opus
       review:
         template: arch
-        model: glm5
+        model: glm52
       checkpoint: always
 
   - summary:

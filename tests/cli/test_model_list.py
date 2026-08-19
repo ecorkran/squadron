@@ -260,12 +260,12 @@ def test_existing_toml_backward_compat(tmp_path: Path) -> None:
 
 def test_estimate_cost_full_pricing() -> None:
     """Known alias with pricing returns correct USD result."""
-    pricing = load_builtin_aliases()["kimi25"]["pricing"]
+    pricing = load_builtin_aliases()["kimi27"]["pricing"]
     with patch(
         "squadron.models.aliases.models_toml_path",
         return_value=Path("/nonexistent/models.toml"),
     ):
-        result = estimate_cost("kimi25", input_tokens=1000, output_tokens=500)
+        result = estimate_cost("kimi27", input_tokens=1000, output_tokens=500)
     assert result is not None
     expected = 1000 / 1_000_000 * pricing["input"] + 500 / 1_000_000 * pricing["output"]
     assert result == pytest.approx(expected)
@@ -273,13 +273,13 @@ def test_estimate_cost_full_pricing() -> None:
 
 def test_estimate_cost_with_cache() -> None:
     """Cache cost is included when cached_tokens > 0 and cache_read present."""
-    pricing = load_builtin_aliases()["kimi25"]["pricing"]
+    pricing = load_builtin_aliases()["kimi27"]["pricing"]
     with patch(
         "squadron.models.aliases.models_toml_path",
         return_value=Path("/nonexistent/models.toml"),
     ):
         result = estimate_cost(
-            "kimi25",
+            "kimi27",
             input_tokens=1000,
             output_tokens=500,
             cached_tokens=2000,
@@ -319,7 +319,7 @@ def test_estimate_cost_zero_tokens() -> None:
         "squadron.models.aliases.models_toml_path",
         return_value=Path("/nonexistent/models.toml"),
     ):
-        result = estimate_cost("kimi25", input_tokens=0, output_tokens=0)
+        result = estimate_cost("kimi27", input_tokens=0, output_tokens=0)
     assert result == 0.0
 
 

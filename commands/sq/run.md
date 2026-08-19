@@ -74,7 +74,7 @@ Else:
   If `model_switch` is present (e.g., `/model opus`), note the recommended model for the user. Model switching cannot be automated — only the user can issue `/model` commands. State which model is recommended so the user can switch if desired.
 
 ### review
-Run the `command` field via Bash. Example: `sq review slice 152 --model glm5 -v`.
+Run the `command` field via Bash. Example: `sq review slice 152 --model glm52 -v`.
 Capture the output. The review will produce a verdict (PASS, CONCERNS, FAIL) and persist the review file automatically.
 
 ### checkpoint

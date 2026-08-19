@@ -185,34 +185,8 @@ cache_read = 0.14
 cache_write = 0.40
 
 # ---------------------------------------------------------------------------
-# OpenRouter — cost-effective, no retention/training
+# OpenRouter — cost-effective, no retention/training (provider-dependent)
 # ---------------------------------------------------------------------------
-
-[aliases.kimi25]
-profile = "openrouter"
-model = "moonshotai/kimi-k2.5"
-private = true
-cost_tier = "cheap"
-notes = "1M context"
-
-[aliases.kimi25.pricing]
-input = 0.45
-output = 2.83
-cache_read = 0.189
-cache_write = 2.83
-
-[aliases.kimi26]
-profile = "openrouter"
-model = "moonshotai/kimi-k2.6"
-private = true
-cost_tier = "moderate"
-notes = "1M context"
-
-[aliases.kimi26.pricing]
-input = 0.95
-output = 4.00
-cache_read = 0.20
-cache_write = 4.00
 
 [aliases.kimi27]
 profile = "openrouter"
@@ -227,54 +201,31 @@ output = 3.50
 cache_read = 0.279
 cache_write = 3.83
 
-[aliases.minimax]
+[aliases.kimi3]
 profile = "openrouter"
-model = "minimax/minimax-m2.7"
+model = "moonshotai/kimi-k3"
 private = true
-cost_tier = "cheap"
+cost_tier = "high"
+notes = "1M context"
 
-[aliases.minimax.pricing]
-input = 0.30
-output = 1.20
-cache_read = 0.06
-cache_write = 1.20
+[aliases.kimi3.pricing]
+input = 2.60
+output = 13.00
+cache_read = 0.30
+cache_write = 13.00
 
-[aliases.minimax3]
+[aliases.minimax]
 profile = "openrouter"
 model = "minimax/minimax-m3"
 private = true
 cost_tier = "cheap"
 
-[aliases.minimax3.pricing]
+[aliases.minimax.pricing]
 input = 0.60
 output = 2.40
 cache_read = 0.12
 cache_write = 2.40
 notes = "sale 50% off 1.20"
-
-[aliases.glm5]
-profile = "openrouter"
-model = "z-ai/glm-5"
-private = true
-cost_tier = "cheap"
-
-[aliases.glm5.pricing]
-input = 0.72
-output = 2.30
-cache_read = 0.72
-cache_write = 2.30
-
-[aliases.glm51]
-profile = "openrouter"
-model = "z-ai/glm-5.1"
-private = true
-cost_tier = "moderate"
-
-[aliases.glm51.pricing]
-input = 0.95
-output = 3.15
-cache_read = 0.475
-cache_write = 3.15
 
 [aliases.glm52]
 profile = "openrouter"
@@ -283,23 +234,46 @@ private = true
 cost_tier = "moderate"
 
 [aliases.glm52.pricing]
-input = 0.93
-output = 3.85
-cache_read = 0.38
-cache_write = 3.00
+input = 0.50
+output = 3.15
+cache_read = 0.115
+cache_write = 3.15
+
+[aliases.glm53]
+profile = "openrouter"
+model = "z-ai/glm-5.3"
+private = true
+cost_tier = "moderate"
+
+[aliases.glm53.pricing]
+input = 1.40
+output = 4.40
+cache_read = 0.26
+cache_write = 4.40
 
 [aliases.deepseek4]
 profile = "openrouter"
 model = "deepseek/deepseek-v4-pro"
 private = true
-cost_tier = "cheap"
+cost_tier = "moderate"
 
 [aliases.deepseek4.pricing]
-input = 1.30
-output = 2.78
-cache_read = 0.116
-cache_write = 2.78
+input = 1.32
+output = 3.96
+cache_read = 0.132
+cache_write = 3.06
 
+[aliases.deepseek4-flash]
+profile = "openrouter"
+model = "deepseek/deepseek-v4-flash-0731"
+private = true
+cost_tier = "cheap"
+
+[aliases.deepseek4-flash.pricing]
+input = 0.0765
+output = 0.153
+cache_read = 0.0153
+cache_write = 0.153
 
 [aliases.mimo-omni]
 profile = "openrouter"
@@ -338,6 +312,32 @@ input = 0.00
 output = 0.00
 cache_read = 0.00
 cache_write = 0.00
+
+[aliases.qwen38]
+profile = "openrouter"
+model = "qwen/qwen3.8-2.4t-a95b"
+private = true
+cost_tier = "moderate"
+notes = "2.4T model"
+
+[aliases.qwen38.pricing]
+input = 2.00
+output = 6.00
+cache_read = 0.20
+cache_write = 6.00
+
+[aliases.qwen38-27b]
+profile = "openrouter"
+model = "qwen/qwen3.8-27b"
+private = true
+cost_tier = "cheap"
+notes = "27b model"
+
+[aliases.qwen38-27b.pricing]
+input = 0.45
+output = 3.20
+cache_read = 0.05
+cache_write = 3.20
 
 [aliases.trinity]
 profile = "openrouter"

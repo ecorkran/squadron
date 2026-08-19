@@ -3,7 +3,7 @@ description: Design a slice (phase 4) with review and human checkpoint
 
 params:
   slice: required
-  model: kimi25
+  model: kimi27
   review-model: minimax
 
 steps:

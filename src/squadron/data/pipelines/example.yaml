@@ -54,7 +54,7 @@ steps:
   #   review: slice                          # uses pipeline/step model
   #   review:
   #     template: slice                      # review template name
-  #     model: glm5                          # model for the review call
+  #     model: glm52                         # model for the review call
   #
   # Available review templates: arch, slice, tasks, code
   # -------------------------------------------------------------------------

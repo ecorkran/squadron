@@ -11,6 +11,7 @@ from squadron.cli.app import app
 from squadron.cli.commands.review import (
     _resolve_model,  # pyright: ignore[reportPrivateUsage]
 )
+from squadron.models.aliases import resolve_model_alias
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.templates import ReviewTemplate
 
@@ -165,7 +166,11 @@ class TestModelCLIFlag:
             )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
-        # "minimax" alias should resolve to full model ID, not bare "minimax"
-        assert call_kwargs["model"] == "minimax/minimax-m2.7"
+        # "minimax" alias should resolve to full model ID, not bare "minimax".
+        # Read the expected target from the registry so retargeting the alias
+        # to a newer model does not break this test.
+        expected_model, _ = resolve_model_alias("minimax")
+        assert call_kwargs["model"] == expected_model
+        assert call_kwargs["model"] != "minimax"
         # Profile should be inferred from alias
         assert call_kwargs["profile"] == "openrouter"

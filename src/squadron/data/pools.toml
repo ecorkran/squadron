@@ -13,7 +13,7 @@
 [pools.review]
 description = "Varied mid-tier models for review diversity"
 strategy = "round-robin"
-models = ["minimax", "glm5", "kimi25", "grok-fast"]
+models = ["minimax", "glm52", "kimi27", "grok-fast"]
 
 [pools.high]
 description = "Strongest available models"
@@ -23,4 +23,4 @@ models = ["opus", "gpt54", "gemini"]
 [pools.cheap]
 description = "Lowest-cost models for bulk or low-stakes work"
 strategy = "cheapest"
-models = ["minimax", "glm5", "grok-fast", "flash3", "gemma4", "qwen36-free"]
+models = ["minimax", "deepseek4-flash", "grok-fast", "flash3", "gemma4", "qwen36-free"]

@@ -19,21 +19,27 @@ def sample_aliases() -> dict[str, ModelAlias]:
     return {
         "minimax": ModelAlias(
             profile="openrouter",
-            model="minimax/minimax-m2.7",
+            model="minimax/minimax-m3",
             cost_tier="cheap",
-            pricing={"input": 0.30, "output": 1.25},
+            pricing={"input": 0.60, "output": 2.40},
         ),
-        "glm5": ModelAlias(
+        "glm52": ModelAlias(
             profile="openrouter",
-            model="z-ai/glm-5",
-            cost_tier="cheap",
-            pricing={"input": 0.72, "output": 2.30},
+            model="z-ai/glm-5.2",
+            cost_tier="moderate",
+            pricing={"input": 0.50, "output": 3.15},
         ),
-        "kimi25": ModelAlias(
+        "kimi27": ModelAlias(
             profile="openrouter",
-            model="moonshotai/kimi-k2.5",
+            model="moonshotai/kimi-k2.7-code",
+            cost_tier="moderate",
+            pricing={"input": 0.56, "output": 3.50},
+        ),
+        "deepseek4-flash": ModelAlias(
+            profile="openrouter",
+            model="deepseek/deepseek-v4-flash-0731",
             cost_tier="cheap",
-            pricing={"input": 0.45, "output": 2.83},
+            pricing={"input": 0.0765, "output": 0.153},
         ),
         "grok-fast": ModelAlias(
             profile="openrouter",

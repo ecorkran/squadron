@@ -388,7 +388,7 @@ _SDK_POOL = ModelPool(
 _NON_SDK_POOL = ModelPool(
     name="non-sdk-pool",
     description="all non-SDK",
-    models=["minimax", "glm5"],
+    models=["minimax", "glm52"],
     strategy="round-robin",
 )
 

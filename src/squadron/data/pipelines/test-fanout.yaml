@@ -4,7 +4,7 @@ description: Pipeline for testing pipelines.
 steps:
   - fan_out:
       name: multi-dispatch
-      models: [minimax, glm5]
+      models: [minimax, glm52]
       inner:
         dispatch:
           prompt: "Respond with: branch {_fan_out_branch_index}"

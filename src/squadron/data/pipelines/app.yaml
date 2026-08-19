@@ -11,7 +11,7 @@ steps:
       model: opus
       review:
         template: arch
-        model: glm5
+        model: glm52
       checkpoint: always
 
   - design:
@@ -19,7 +19,7 @@ steps:
       model: opus
       review:
         template: arch
-        model: glm5
+        model: glm52
       checkpoint: always
 
   - summary:
@@ -37,7 +37,7 @@ steps:
       model: opus
       review:
         template: arch
-        model: glm5
+        model: glm52
       checkpoint: always
 
 # todo: fill in later this is work in progress.

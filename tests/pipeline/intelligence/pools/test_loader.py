@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from squadron.models.aliases import load_builtin_aliases
 from squadron.pipeline.intelligence.pools.loader import (
     _parse_pools_from_toml,
     get_all_pools,
@@ -109,18 +110,10 @@ class TestGetAllPools:
         (cfg_dir / "pools.toml").write_text(
             '[pools.review]\ndescription = "custom"\nstrategy = "random"\nmodels = ["opus"]\n'
         )
-        known = {
-            "opus": {},
-            "gpt54": {},
-            "gemini": {},
-            "minimax": {},
-            "glm5": {},
-            "kimi25": {},
-            "grok-fast": {},
-            "flash3": {},
-            "gemma4": {},
-            "qwen36-free": {},
-        }
+        # This test loads the *real* shipped pools.toml, so the alias table it
+        # validates against must be the real one. A hand-mirrored dict here
+        # silently rots every time models.toml is updated.
+        known = load_builtin_aliases()
         with patch(
             "squadron.models.aliases.get_all_aliases",
             return_value=known,

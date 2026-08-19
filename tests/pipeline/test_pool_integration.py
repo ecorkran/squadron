@@ -19,6 +19,7 @@ from squadron.pipeline.intelligence.pools import (
     PoolNotFoundError,
     PoolSelection,
 )
+from squadron.pipeline.intelligence.pools.loader import load_builtin_pools
 from squadron.pipeline.intelligence.pools.models import SelectionContext
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolver
@@ -44,7 +45,9 @@ def tmp_state_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # Helpers
 # ---------------------------------------------------------------------------
 
-_POOL_MEMBERS = ["minimax", "glm5", "kimi25", "grok-fast"]  # from review pool
+# Read from the shipped pool rather than duplicating it — a hand-copied list
+# silently rots whenever models.toml/pools.toml are updated.
+_POOL_MEMBERS = load_builtin_pools()["review"].models
 
 
 def _stub_action_fn() -> MagicMock:
