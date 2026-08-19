@@ -8,7 +8,7 @@ dependencies: [361]
 projectState: Slice 361 merged to main. Phase 4 design complete, reviewed CONCERNS with all three findings addressed in the design. Real v2.8.1 graph present at .understand-anything/, gitCommitHash 1bfbca1, unchanged since design.
 dateCreated: 20260819
 dateUpdated: 20260819
-status: in_progress
+status: complete
 ---
 
 # Tasks: Comprehension Analysis and Graph Extraction
@@ -279,30 +279,30 @@ One subtask per section; each gains its explicit ordering rule and fallback per 
 
 ## Task 7: Recorded decisions and cross-reference
 
-- [ ] **7.1 Record `[INFERRED]` governance in the skill** — Effort: 1/5
-  - [ ] State: this flow does not use `[INFERRED]`; every claim traces to a named field, so its
+- [x] **7.1 Record `[INFERRED]` governance in the skill** — Effort: 1/5
+  - [x] State: this flow does not use `[INFERRED]`; every claim traces to a named field, so its
         appearance in a comprehension document is a defect — the correct output where inference
         would go is a gap marker.
-  - [ ] Include the closing-observation test: a section's closing sentence must be derivable from
+  - [x] Include the closing-observation test: a section's closing sentence must be derivable from
         the data presented directly above it, or it does not belong. Zero `[INFERRED]` markers in
         a conforming document.
-  - [ ] Note the marker remains documented in shared conventions for 363's interview path.
-  - [ ] Success: rule, mechanical test, and 363 note present in the skill.
+  - [x] Note the marker remains documented in shared conventions for 363's interview path.
+  - [x] Success: rule, mechanical test, and 363 note present in the skill.
 
-- [ ] **7.2 Record the `analyze-codebase-prompt.md` decision in the skill** — Effort: 1/5
-  - [ ] State the decision: two conventions adopted (fact/inference discipline; a data-lacking
+- [x] **7.2 Record the `analyze-codebase-prompt.md` decision in the skill** — Effort: 1/5
+  - [x] State the decision: two conventions adopted (fact/inference discipline; a data-lacking
         section says so and names what would supply it), no structure adopted (its ten-part
         template serves a probe+Repomix backend the graph cannot feed), document retained
         unchanged in `user/reference/`.
-  - [ ] Success: decision recorded; matches the design's wording in substance.
+  - [x] Success: decision recorded; matches the design's wording in substance.
 
-- [ ] **7.3 Add the cross-reference line to the reference document** — Effort: 1/5
-  - [ ] Add exactly one line to `user/reference/analyze-codebase-prompt.md` pointing at the
+- [x] **7.3 Add the cross-reference line to the reference document** — Effort: 1/5
+  - [x] Add exactly one line to `user/reference/analyze-codebase-prompt.md` pointing at the
         graph-backed path (`commands/analysis/understand.md`), noting both alternatives exist.
         Nothing else in the file changes; frontmatter `dateUpdated` may be refreshed.
-  - [ ] Success: `git diff` for this file shows the one content line (plus frontmatter date at
+  - [x] Success: `git diff` for this file shows the one content line (plus frontmatter date at
         most).
-  - [ ] Commit: `docs: record INFERRED and analyze-codebase-prompt decisions; add cross-reference`
+  - [x] Commit: `docs: record INFERRED and analyze-codebase-prompt decisions; add cross-reference`
 
 ## Task 8: Verification walkthrough
 
@@ -310,87 +310,91 @@ Runs from the repo root on the slice branch. The flow is exercised by opening
 `commands/analysis/understand.md` in a Claude Code session and instructing "execute this skill's
 comprehension analysis flow against this repo" (dispatcher routing is slice 366).
 
-- [ ] **8.1 Happy path** — Effort: 3/5
-  - [ ] Run the flow. Preflight reports as in 361, unchanged. Document written to the next unused
+- [x] **8.1 Happy path** — Effort: 3/5
+  - [x] Run the flow. Preflight reports as in 361, unchanged. Document written to the next unused
         index — expect **944** (943 is not overwritten).
-  - [ ] Confirm in the document: seven sections in mapping-table order; `## Provenance`
+  - [x] Confirm in the document: seven sections in mapping-table order; `## Provenance`
         immediately under the H1 with a section-sourcing line per section; every section body
         opens with an inline lead sentence naming its source fields (SC1, the 943 `From \`...\`.`
         pattern); Packaged Declarative Content reports 34 with type breakdown; coverage states
         238 analyzed files, `outputLanguage: en`, and the active pattern count;
         `grep -c 'INFERRED'` returns 0.
-  - [ ] Success: all listed checks pass on the written document.
+  - [x] Success: all listed checks pass on the written document.
 
-- [ ] **8.2 Frontmatter gate** — Effort: 1/5
-  - [ ] `cf validate frontmatter` on the new document: no inconsistencies; `model:` is a real
+- [x] **8.2 Frontmatter gate** — Effort: 1/5
+  - [x] `cf validate frontmatter` on the new document: no inconsistencies; `model:` is a real
         model id, not a placeholder.
-  - [ ] Success: gate passes.
+  - [x] Success: gate passes.
 
-- [ ] **8.3 Spot-checks against the real repo** — Effort: 1/5
-  - [ ] At least three, recorded here when done. Candidates from the design: pipeline YAML count
+- [x] **8.3 Spot-checks against the real repo** — Effort: 1/5
+  - [x] At least three, recorded here when done. Candidates from the design: pipeline YAML count
         vs reported pipeline nodes; template YAML count vs config nodes under `templates/`;
         active `.understandignore` pattern count vs reported.
-  - [ ] Success: each reported number matches, or the mismatch is reported (never reconciled by
+  - [x] Spot-checks executed: pipeline YAML 20 == 20 pipeline nodes; 7 review templates at
+        src/squadron/data/templates/; 17 active .understandignore patterns == 17 reported. One
+        caveat recorded: upstream prose reports "27 sub-commands" but 23 registrations found; not
+        reconciled per scope.
+  - [x] Success: each reported number matches, or the mismatch is reported (never reconciled by
         hand).
 
-- [ ] **8.4 Gap-marker paths (scratch graph copies)** — Effort: 2/5
-  - [ ] Build scratch copies per design walkthrough step 5 — never modify the repo's real graph.
-  - [ ] Empty `tour` → reading-order section gap marker, same marker in provenance flagged-gaps
+- [x] **8.4 Gap-marker paths (scratch graph copies)** — Effort: 2/5
+  - [x] Build scratch copies per design walkthrough step 5 — never modify the repo's real graph.
+  - [x] Empty `tour` → reading-order section gap marker, same marker in provenance flagged-gaps
         line (2 occurrences), run completes.
-  - [ ] No `entry-point` tag anywhere → entry-points gap marker naming the tag; other sections
+  - [x] No `entry-point` tag anywhere → entry-points gap marker naming the tag; other sections
         unaffected; run completes.
-  - [ ] `meta.json` removed → coverage analyzed-file line carries a gap marker; staleness records
+  - [x] `meta.json` removed → coverage analyzed-file line carries a gap marker; staleness records
         its skip per the 361 contract.
-  - [ ] Success: all three variants produce the specified markers and complete.
+  - [x] Success: all three variants produce the specified markers and complete.
 
-- [ ] **8.5 Unresolvable edge endpoints (induced)** — Effort: 2/5
-  - [ ] Per design step 5b: one scratch graph with a dangling `target`
+- [x] **8.5 Unresolvable edge endpoints (induced)** — Effort: 2/5
+  - [x] Per design step 5b: one scratch graph with a dangling `target`
         (`file:does/not/exist.py`), one with a malformed source (`malformed-endpoint-id`).
-  - [ ] Each run must exclude the edge from the inter-layer tally, report it as drift **naming
+  - [x] Each run must exclude the edge from the inter-layer tally, report it as drift **naming
         the endpoint id**, and carry the excluded count as a `[GAP: ...]` in the dependency
         section.
-  - [ ] **A run with an unchanged-looking tally and no mention of the excluded edge is a failure
+  - [x] **A run with an unchanged-looking tally and no mention of the excluded edge is a failure
         of this task, not a pass.**
-  - [ ] Success: both variants produce the drift report and gap marker.
+  - [x] Success: both variants produce the drift report and gap marker.
 
-- [ ] **8.6 Coverage discrepancy** — Effort: 1/5
-  - [ ] Scratch `meta.json` with `analyzedFiles = 999`: coverage section reports **both** numbers
+- [x] **8.6 Coverage discrepancy** — Effort: 1/5
+  - [x] Scratch `meta.json` with `analyzedFiles = 999`: coverage section reports **both** numbers
         and names the discrepancy, preferring neither.
-  - [ ] Success: both numbers present in output.
+  - [x] Success: both numbers present in output.
 
-- [ ] **8.7 Read discipline** — Effort: 1/5
-  - [ ] Confirm from the 8.1 session: only `jq` field-scoped selections touched
+- [x] **8.7 Read discipline** — Effort: 1/5
+  - [x] Confirm from the 8.1 session: only `jq` field-scoped selections touched
         `knowledge-graph.json` — no `cat`, `head`, or Read tool call against it; no
         function/class node data in any section.
-  - [ ] Success: no whole-graph read occurred.
+  - [x] Success: no whole-graph read occurred.
 
-- [ ] **8.8 Full-slice checks** — Effort: 1/5
-  - [ ] `git diff --stat main -- src/` is empty; `uv run ruff format --check .` passes;
+- [x] **8.8 Full-slice checks** — Effort: 1/5
+  - [x] `git diff --stat main -- src/` is empty; `uv run ruff format --check .` passes;
         `uv run pytest tests/skills/` passes (pack install path undisturbed).
-  - [ ] Only changed non-document files: `commands/analysis/understand.md` and the
+  - [x] Only changed non-document files: `commands/analysis/understand.md` and the
         cross-reference line in `user/reference/analyze-codebase-prompt.md`.
-  - [ ] Success: all three commands clean; changed-file set as stated.
-  - [ ] Commit: `feat: add generated 944 comprehension analysis and walkthrough fixes`
+  - [x] Success: all three commands clean; changed-file set as stated.
+  - [x] Commit: `feat: add generated 944 comprehension analysis and walkthrough fixes`
         (include any fixes found during 8.x; commit fixes with the evidence that found them)
 
 ## Task 9: Close the slice
 
-- [ ] **9.1 Update task and slice status** — Effort: 1/5
-  - [ ] All checkboxes above verified against the walkthrough evidence; dropped/skipped items (if
+- [x] **9.1 Update task and slice status** — Effort: 1/5
+  - [x] All checkboxes above verified against the walkthrough evidence; dropped/skipped items (if
         any) marked `[x]` with a note per project convention.
-  - [ ] Set this file's `status: complete`, refresh `dateUpdated`; set the slice design's
+  - [x] Set this file's `status: complete`, refresh `dateUpdated`; set the slice design's
         `status` per its frontmatter contract.
-  - [ ] Success: statuses consistent across task file and slice design.
+  - [x] Success: statuses consistent across task file and slice design.
 
-- [ ] **9.2 DEVLOG entry** — Effort: 1/5
-  - [ ] Write the slice-completion DEVLOG entry per `prompt.ai-project.system.md` → Session State
+- [x] **9.2 DEVLOG entry** — Effort: 1/5
+  - [x] Write the slice-completion DEVLOG entry per `prompt.ai-project.system.md` → Session State
         Summary: corrections landed (with the 34/6/238 confirmations), 944 generated, walkthrough
         outcomes, any deviations.
-  - [ ] Success: entry present, dated, concise.
+  - [x] Success: entry present, dated, concise.
 
-- [ ] **9.3 Final commit and hand-off** — Effort: 1/5
-  - [ ] `uv run ruff format .` before committing (project rule), commit remaining changes, confirm
+- [x] **9.3 Final commit and hand-off** — Effort: 1/5
+  - [x] `uv run ruff format .` before committing (project rule), commit remaining changes, confirm
         clean tree.
-  - [ ] Report to the Project Manager for review and merge authorization. **Do not merge** —
+  - [x] Report to the Project Manager for review and merge authorization. **Do not merge** —
         merging the slice branch is PM-gated.
-  - [ ] Success: branch complete and clean; PM notified; no merge performed.
+  - [x] Success: branch complete and clean; PM notified; no merge performed.
