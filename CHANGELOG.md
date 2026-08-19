@@ -15,7 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 20260819
+
 ### Added
+- New models available by alias: `kimi3`, `minimax`, `glm52`, and `glm53`, with pricing recorded so
+  cost reporting works for them.
 - New `/understand` analysis skill that turns an existing understand-anything knowledge graph into a
   codebase comprehension document, with a provenance block recording where every claim came from and
   how stale the graph was. Requires `jq`, and requires running the understand-anything plugin's own
@@ -29,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tells you what the analysis never looked at, so you can judge how much it leaves out.
 - Every section now states the graph fields it was written from, in the section itself, so any claim
   can be traced without opening the skill.
+
+### Changed
+- README rewritten around what you actually do with squadron — workflows first, with the install
+  steps reordered to match. Adds an architecture template.
+- Package description now says what squadron does ("Repeatable AI workflows from the terminal") in
+  place of the previous "Multi-agent squadron framework".
 
 ### Fixed
 - Layer file counts were wrong for layers holding YAML or TOML files. Packaged Declarative Content
