@@ -22,9 +22,10 @@ when the field is absent.**
 Everything here is markdown edits to the existing `commands/analysis/understand.md`. No Python is
 added and no new file is created outside `project-documents/`.
 
-Two corrections to the 361 contract are in scope and are the reason this slice is not merely
-additive — both were found by probing the real v2.8.1 graph during this design and are documented
-under **Technical Decisions → Corrections to the 361 contract**.
+Three corrections to the 361 contract are in scope and are the reason this slice is not merely
+additive — two are extraction defects found by probing the real v2.8.1 graph, and the third is a
+misleading note corrected against the upstream plugin's source. All three are documented under
+**Technical Decisions → Corrections to the 361 contract**.
 
 ## Value
 
@@ -43,8 +44,9 @@ candidates, which derives candidates from `layers[]` and complexity clusters).
 
 - A **field-to-section extraction mapping** stated as a table: every section names its source
   fields, its ordering rule, and its fallback when the fields are absent or empty.
-- **Corrections** to two claims in the 361 contract that the real graph contradicts (layer node
-  composition; the definition of "file-level").
+- **Corrections** to three claims in the 361 contract: two the real graph contradicts (layer node
+  composition; the definition of "file-level") and one whose wording misstates when
+  `fingerprints.json` churns.
 - **New sections** in the comprehension flow that the corrected reading makes sourceable:
   project identity, entry points, coverage and scope limits. Their grounding against the
   architecture's four-section shape is stated below under **Section count vs the architecture**.
@@ -116,9 +118,10 @@ the design's decisions rest on them.
 
 ### Corrections to the 361 contract
 
-Both corrections change existing text in `understand.md`. Neither is an upstream contract change —
-in both cases the graph matches what the *architecture* documented and the 361 skill text is what
-diverged, so this is a defect fix inside squadron, not an escalation.
+All three corrections change existing text in `understand.md`. None is an upstream contract change —
+in every case the graph and the plugin match what the *architecture* documented, and the 361 skill
+text is what diverged, so these are defect fixes inside squadron, not escalations. Corrections 1 and
+2 change what the flow extracts; correction 3 changes only a note's wording.
 
 **Correction 1 — `layers[].nodeIds` does not mix function and class nodes.**
 
@@ -167,6 +170,38 @@ is reported as drift.
 This also repairs the coverage arithmetic — 238 file-level nodes reconciles exactly with
 `meta.json`'s `analyzedFiles`, which is what makes the coverage section below verifiable rather than
 decorative.
+
+**Correction 3 — the `fingerprints.json` churn warning is misleading as written.**
+
+The 361 skill's `.gitignore` section says of `fingerprints.json`: "**Expect it to churn** — it
+rewrites on every graph refresh and is diff-noisy." That is literally true but reads as a warning
+about ordinary use, which it is not. Verified against the upstream plugin's own source:
+
+| Writer | When it runs | Triggered by squadron? |
+|---|---|---|
+| `/understand` Phase 7 (`build-fingerprints.mjs`) | Full graph build | No |
+| Post-commit auto-update hook (LOAD-PATCH-SAVE) | Incremental graph update, **only when `autoUpdate` is enabled** | No |
+
+Both writers modify the graph. **Reading a graph never writes fingerprints.** Squadron's `understand`
+skill only ever reads — `jq` selections against `knowledge-graph.json` — so no squadron flow in this
+initiative causes churn, at any depth. The auto-update path additionally requires `autoUpdate` in
+`config.json`, which this repo's config does not set (it carries only `outputLanguage`).
+
+**Fix:** reword the note so it says what actually causes the rewrite — a deliberate `/understand`
+re-run or an enabled auto-update hook — rather than implying that consuming the graph does. The
+tracking decision itself is unchanged and correct: `fingerprints.json` costs a large diff only on
+the occasions the PM deliberately refreshes the graph, and buys incremental analysis on a fresh
+clone.
+
+This matters because the project minimizes graph regenerations deliberately. A note implying that
+routine reads dirty the working tree would argue for untracking a file that is, in practice, stable
+between refreshes.
+
+**Ignore scope is trash-only, and stays that way.** `.gitignore` ignores
+`.understand-anything/.trash-*/` and nothing else; `knowledge-graph.json`, `meta.json`,
+`config.json`, `.understandignore`, `fingerprints.json`, and `intermediate/scan-result.json` all
+remain tracked as durable project knowledge. Confirmed on `main` at design time via
+`git check-ignore` against each path.
 
 ### Section count vs the architecture
 
@@ -391,18 +426,21 @@ the graph's size, not the graph root generally.
    against this repo's graph it yields **238** nodes, reconciling with `meta.json`'s `analyzedFiles`.
 6. The coverage section states the analyzed-file count, the `config.json` settings present, and the
    count of active `.understandignore` patterns — closing all three 361 deferrals.
-7. A decision on `analyze-codebase-prompt.md` reuse is recorded in this design and reflected in the
+7. The `fingerprints.json` note names what actually rewrites it — a deliberate `/understand` re-run
+   or an enabled `autoUpdate` hook — and states that reading a graph never does. The ignore scope
+   remains trash-only, with every other `.understand-anything/` artifact tracked.
+8. A decision on `analyze-codebase-prompt.md` reuse is recorded in this design and reflected in the
    skill; the document itself remains in `user/reference/` and gains only a cross-reference line.
-8. The generated document contains zero `[INFERRED]` markers, and the skill states why.
-9. The whole graph is never loaded into context; every graph read is a field-scoped `jq` selection
-   and no function- or class-level node is read. Dependency-endpoint resolution satisfies this by
-   parsing the edge's own `source`/`target` id string, never by reading the node it names.
-10. An edge whose endpoint cannot be resolved to a layer is excluded from the dependency tally and
+9. The generated document contains zero `[INFERRED]` markers, and the skill states why.
+10. The whole graph is never loaded into context; every graph read is a field-scoped `jq` selection
+    and no function- or class-level node is read. Dependency-endpoint resolution satisfies this by
+    parsing the edge's own `source`/`target` id string, never by reading the node it names.
+11. An edge whose endpoint cannot be resolved to a layer is excluded from the dependency tally and
     reported as drift naming the endpoint id; the excluded count appears as a `[GAP: ...]` when
     non-zero. It is never silently dropped.
-11. Running against squadron itself produces a document whose claims a reader can check against the
+12. Running against squadron itself produces a document whose claims a reader can check against the
     real repo — at least three spot-checks confirmed in the walkthrough.
-12. No file under `src/squadron/` changes. The only changed non-document files are
+13. No file under `src/squadron/` changes. The only changed non-document files are
     `commands/analysis/understand.md` and the cross-reference line in
     `user/reference/analyze-codebase-prompt.md`.
 
@@ -540,8 +578,10 @@ line in `user/reference/analyze-codebase-prompt.md`.
 
 ## Risk Assessment
 
-**The corrections rest on one graph.** Both corrections are measured against this repo's single
-v2.8.1 graph. If a layer in some other project's graph genuinely does contain function or class
+**The extraction corrections rest on one graph.** Corrections 1 and 2 are measured against this
+repo's single v2.8.1 graph. (Correction 3 is not exposed to this risk — it was verified against the
+plugin's source, not against graph data.) If a layer in some other project's graph does contain
+function or class
 nodes, correction 1's simplification (`nodeIds | length`) would overcount. This is why the design
 keeps the cross-check rather than dropping it: every `nodeIds` entry must resolve to a node carrying
 `filePath`, and an entry that resolves to a `function` or `class` is reported as upstream drift
@@ -557,15 +597,17 @@ is why section 7 reports what is present rather than checking for expected keys.
 
 Suggested order:
 
-1. Apply the two corrections to the existing 361 sections first, in isolation, and re-run the flow —
-   this alone changes two layer counts and the file-level selector, and confirms the corrections
-   before any new section is layered on top.
-2. Add the extraction mapping table to the skill as the flow's governing reference.
-3. Add sections 1, 3, and 7 (project identity, entry points, coverage) — the genuinely new ones.
-4. Deepen sections 2, 4, 5, 6 with their ordering rules and fallbacks.
-5. Record the `[INFERRED]` and `analyze-codebase-prompt.md` decisions in the skill; add the
+1. Apply the two extraction corrections (1 and 2) to the existing 361 sections first, in isolation,
+   and re-run the flow — this alone changes two layer counts and the file-level selector, and
+   confirms the corrections before any new section is layered on top.
+2. Apply correction 3 — reword the `fingerprints.json` churn note in the `.gitignore` section. Pure
+   text edit, no flow impact; doing it early keeps it from being forgotten behind the larger work.
+3. Add the extraction mapping table to the skill as the flow's governing reference.
+4. Add sections 1, 3, and 7 (project identity, entry points, coverage) — the genuinely new ones.
+5. Deepen sections 2, 4, 5, 6 with their ordering rules and fallbacks.
+6. Record the `[INFERRED]` and `analyze-codebase-prompt.md` decisions in the skill; add the
    cross-reference line to the reference document.
-6. Walkthrough runs 1-8, fixing as found.
+7. Walkthrough runs 1-8, fixing as found.
 
 The 943 document generated during slice 361 carries the two wrong layer counts. **Leave it in place
 and do not edit it** — generated analysis documents are independent samples, not revisions, per the
