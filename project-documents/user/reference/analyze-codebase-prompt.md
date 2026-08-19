@@ -2,7 +2,7 @@
 docType: reference
 project: squadron
 dateCreated: 20260426
-dateUpdated: 20260426
+dateUpdated: 20260819
 status: complete
 ---
 
@@ -19,6 +19,10 @@ status: complete
 #
 # Compatible with: Claude, GPT-4+, GLM 5.1, Gemini, or any model with sufficient context
 # Pipeline integration: Can be parameterized and run via squadron YAML pipeline
+#
+# See also: `commands/analysis/understand.md` — the graph-backed comprehension path, which reads an
+# existing understand-anything knowledge graph instead of probing source. Both paths exist on purpose:
+# this prompt reads source directly, that skill consumes a pre-built graph.
 
 ---
 

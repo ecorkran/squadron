@@ -281,9 +281,25 @@ the tour field and says that re-running the plugin's `/understand` would populat
 indirect evidence. The two differ: `[GAP: ...]` marks something absent, `[INFERRED]` marks something
 present but derived.
 
-At this slice's depth `[INFERRED]` should not be needed — every claim traces to a named graph field.
-If a section cannot be written without inference, that is a signal the section is out of scope here.
-Governing its use in deeper analysis belongs to slice 362.
+**This flow does not use `[INFERRED]`, and its appearance in a comprehension document is a defect.**
+
+Every claim in the comprehension document traces to a named field via the extraction mapping table
+below, so nothing is left for `[INFERRED]` to mark. Where inference would go, the correct output is a
+**gap marker** — the field is absent, and saying so is more useful than reasoning around it.
+
+The one apparent exception is the closing observation a section may carry — a sentence that reads a
+pattern out of the data it just presented. Those are **summaries of presented data, not new claims**,
+and the test is mechanical:
+
+> If the closing sentence is not derivable from the data presented directly above it, it does not
+> belong in the document.
+
+`[INFERRED]` is not a license to add one. **A conforming comprehension document contains zero
+`[INFERRED]` markers** — `grep -c 'INFERRED'` returns 0.
+
+The marker stays documented in these shared conventions because slice 363's interview path genuinely
+needs it: a concept's Solution Approach derived from tour ordering *is* an inference from indirect
+evidence. Governance for that use belongs to 363.
 
 ### Provenance block
 
@@ -622,3 +638,25 @@ therefore surface to users as a bogus installable command that does nothing on i
 
 Slice 365 (`commands/sq/`) copies these conventions rather than referencing them: a first-party
 squadron command cannot assume the analysis pack is installed.
+
+## Relationship to `analyze-codebase-prompt.md`
+
+`project-documents/user/reference/analyze-codebase-prompt.md` is squadron's pre-existing codebase
+analysis prompt. It is **retained unchanged** as a reference document, and this skill adopted
+**two of its conventions and none of its structure**:
+
+**Adopted:**
+
+- **Fact/inference discipline** — the explicit separation between what a source states and what a
+  reader concludes from it. This skill's `[GAP: ...]` rule and its `[INFERRED]` governance above are
+  that discipline applied to a graph-backed flow.
+- **A data-lacking section says so and names what would supply it** — which is precisely the
+  two-halves requirement on the gap marker.
+
+**Not adopted:** its ten-part document template. That template was written for a probe-plus-Repomix
+backend that reads source files directly; a knowledge graph cannot feed most of its parts, and
+adopting the shape would have produced sections this flow can only fill with gap markers. The
+extraction mapping table's seven sections are derived from what the graph actually carries.
+
+Both paths exist on purpose: the reference prompt for a source-reading analysis, this skill for a
+graph-backed one.
