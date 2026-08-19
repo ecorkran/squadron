@@ -46,7 +46,8 @@ candidates, which derives candidates from `layers[]` and complexity clusters).
 - **Corrections** to two claims in the 361 contract that the real graph contradicts (layer node
   composition; the definition of "file-level").
 - **New sections** in the comprehension flow that the corrected reading makes sourceable:
-  project identity, entry points, coverage and scope limits.
+  project identity, entry points, coverage and scope limits. Their grounding against the
+  architecture's four-section shape is stated below under **Section count vs the architecture**.
 - **Deepened existing sections** — layer architecture, complexity hotspots, reading order,
   dependency observations — each gaining an explicit ordering rule and fallback.
 - The **`[INFERRED]` governance decision** and the recorded decision on
@@ -107,6 +108,9 @@ the design's decisions rest on them.
 | `config.json` contents | `{"outputLanguage":"en"}` only |
 | `.understandignore` active (uncommented) lines | 17 |
 | `complexity` values across all 238 file-level nodes | `simple` 106, `moderate` 89, `complex` 43 |
+| Node `id` format | `<type>:<filePath>[:<name>]` — second field equals `filePath` for **all 925** nodes; no `filePath` contains a colon |
+| Edges with an endpoint absent from `nodes` | **0** (of 2184) |
+| `imports`/`depends_on` edges touching a function/class endpoint | **16** of 610 (2.6%) |
 
 ## Technical Decisions
 
@@ -164,6 +168,36 @@ This also repairs the coverage arithmetic — 238 file-level nodes reconciles ex
 `meta.json`'s `analyzedFiles`, which is what makes the coverage section below verifiable rather than
 decorative.
 
+### Section count vs the architecture
+
+The architecture names four sections for this document — "the structural findings: layers, complexity
+hotspots, entry points, dependency observations" (line 163). This design writes seven. The extra
+three are stated and grounded here rather than left for a reader to infer, since a slice that
+silently exceeds its architecture's declared shape is indistinguishable from one that drifted.
+
+| Section | Status | Grounding |
+|---|---|---|
+| Layer architecture, complexity hotspots, entry points, dependency observations | Architecture-declared | Line 163, verbatim |
+| Suggested reading order | **Inherited, not new** | Shipped in 361's flow and accepted at that slice's close. The architecture calls tour ordering "an expert judgment about which components matter and in what sequence" (line 104); this slice deepens it rather than introducing it |
+| Coverage and scope limits | **Architecture-sanctioned slot** | The output-contract table calls `.understandignore` the field "squadron may reference when explaining coverage gaps" (line 89). This section is that reference, and it closes the three deferrals 361 forwarded here |
+| Project identity | **Extension beyond the declared shape** | Justified below |
+
+**Project identity is the one genuine extension, and it is deliberate.** The architecture maps
+`project.languages` / `project.frameworks` to the *concept* document's Initial Technical Direction
+(line 220), not to this document. Including it here is a scope decision, taken for two reasons:
+
+1. **It is the only document capability (a) produces for a codebase with no concept.** Slice 363
+   writes the concept, and 363 depends on this slice. Until 363 lands, a reader of the comprehension
+   analysis has no artifact anywhere stating what the project *is* — only how it is shaped. A
+   structural read that never names the system reads as anonymous.
+2. **The cost of being wrong is one deletable section.** It is four fields, sourced and attributed,
+   with no downstream consumer that breaks if it moves. If the PM judges identity to belong solely to
+   the concept document, deleting section 1 leaves the other six untouched.
+
+**If that trade is not wanted, drop section 1 and renumber** — nothing else in this design depends
+on it, and success criteria 3 and 5 are the only places it is named. The extraction mapping it
+provides to 363 stands either way, because 363 reads the mapping table, not this document.
+
 ### Extraction mapping
 
 The core deliverable. Seven sections, in document order. Each row is binding: the section is written
@@ -176,7 +210,7 @@ from those fields, ordered by that rule, and on absence emits that fallback and 
 | 3 | Entry points | file-level `nodes[]` where `tags` contains `entry-point` | layer, then `filePath` | `[GAP: no node carries the entry-point tag — re-run /understand]` |
 | 4 | Complexity hotspots | file-level `nodes[]` (`complexity`, `filePath`, `summary`, `languageNotes`) | top ordinal tier, then layer | `[GAP: ...]` naming `complexity` |
 | 5 | Suggested reading order | `tour[]` (`order`, `title`, `description`) | `order` ascending | `[GAP: ...]` naming `tour`; preflight has already warned |
-| 6 | Dependency observations | `edges[]` (`type`, `source`, `target`, `weight`) | descending count, ties by `weight` | preflight rejects empty `edges` |
+| 6 | Dependency observations | `edges[]` (`type`, `source`, `target`, `weight`) | descending count, ties by `weight` | preflight rejects empty `edges`; an edge whose endpoint will not resolve to a layer is excluded from the tally and reported as drift, with the excluded count carried as a `[GAP: ...]` when non-zero |
 | 7 | Coverage and scope limits | `meta.json` `analyzedFiles`; `config.json`; `.understandignore` | n/a | `[GAP: ...]` naming the unreadable file |
 
 **Section ordering is identity → structure → detail → caveats.** A reader who stops after section 1
@@ -214,10 +248,40 @@ an unrecognized tier, never bucketed into a known one.
 
 **6. Dependency observations.** Edge-type counts across the whole graph, then inter-layer `imports`
 and `depends_on` connections with self-references excluded, ordered by count and broken by `weight`.
-Map an edge to a layer through the node's layer membership, which is now unambiguous — every
-file-level node belongs to exactly one layer (verified). Function- and class-level edge endpoints are
-resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions in
-different layers still counts as an inter-layer signal.
+Map an edge to a layer through the owning file's layer membership, which is unambiguous — every
+file-level node belongs to exactly one layer (verified).
+
+**Endpoint resolution is a string operation on the edge, not a node read.** Node `id` is
+type-prefixed as `<type>:<filePath>[:<name>]`. Verified across all 925 nodes in the real graph: the
+second colon-delimited field equals `filePath` exactly, for every node of every type, and no
+`filePath` contains a colon. The owning file of any edge endpoint is therefore recoverable from the
+edge's own `source`/`target` string, and **no function or class node is read to do it** — which is
+what keeps this consistent with Success Criterion 9 and the architecture's "function- and
+class-level nodes are not read" rule.
+
+This resolves a contradiction present in the first draft of this design, which said function/class
+endpoints were "resolved to their owning file's layer" while Success Criterion 9 simultaneously
+claimed no such node is read. The id-prefix derivation is what makes both true at once.
+
+**Failure path — an endpoint that does not resolve.** Every step can fail on a graph nobody has
+measured, and each failure is reported, never silently dropped:
+
+- The endpoint string does not parse as `<type>:<filePath>[:<name>]` → the edge is excluded from the
+  inter-layer tally and **reported as drift**, naming the malformed endpoint id.
+- The endpoint parses but its `filePath` matches no file-level node → same: excluded and reported as
+  drift, naming the unresolved id. (In the real graph, zero of 2184 edges have an endpoint absent
+  from `nodes` — but that is one graph.)
+- Excluded edges are counted, and the count appears in the section with a `[GAP: ...]` marker when
+  it is non-zero, so a reader knows the tally is partial and by how much.
+
+An unresolvable edge is never quietly skipped. That would make the dependency counts wrong in a way
+no reader could detect, which is precisely the failure the fallback covenant exists to prevent.
+
+**Scope note.** Only 16 of 610 `imports`/`depends_on` edges in the real graph touch a function or
+class endpoint — 2.6%. Endpoint resolution is therefore a correctness guarantee for a small tail,
+not a load-bearing feature. If the id-prefix contract fails to hold on some future graph, restricting
+the tally to file-level endpoints and reporting the excluded count is an acceptable fallback that
+loses little.
 
 **7. Coverage and scope limits.** Closes all three 361 deferrals in one section:
 
@@ -231,8 +295,9 @@ different layers still counts as an inter-layer signal.
   own file with upstream's own defaults, and squadron does not know which keys are mandatory.
 - `.understandignore` — report the count of active (uncommented, non-blank) patterns and list them.
   This is what lets the document state its own coverage limits: a reader can see what was never
-  analyzed. An all-comments file (this repo's current state has 17 active lines) is reported as
-  "defaults only", not as a gap.
+  analyzed. This repo's file measures **17 active lines** at design time. A file whose lines are all
+  comments or blank is reported as "defaults only" — that is a real state, not a gap, since the
+  upstream plugin ships the file pre-populated with commented suggestions.
 
 ### `[INFERRED]` governance
 
@@ -330,10 +395,14 @@ the graph's size, not the graph root generally.
    skill; the document itself remains in `user/reference/` and gains only a cross-reference line.
 8. The generated document contains zero `[INFERRED]` markers, and the skill states why.
 9. The whole graph is never loaded into context; every graph read is a field-scoped `jq` selection
-   and no function- or class-level node is read.
-10. Running against squadron itself produces a document whose claims a reader can check against the
+   and no function- or class-level node is read. Dependency-endpoint resolution satisfies this by
+   parsing the edge's own `source`/`target` id string, never by reading the node it names.
+10. An edge whose endpoint cannot be resolved to a layer is excluded from the dependency tally and
+    reported as drift naming the endpoint id; the excluded count appears as a `[GAP: ...]` when
+    non-zero. It is never silently dropped.
+11. Running against squadron itself produces a document whose claims a reader can check against the
     real repo — at least three spot-checks confirmed in the walkthrough.
-11. No file under `src/squadron/` changes. The only changed non-document files are
+12. No file under `src/squadron/` changes. The only changed non-document files are
     `commands/analysis/understand.md` and the cross-reference line in
     `user/reference/analyze-codebase-prompt.md`.
 
@@ -363,6 +432,27 @@ jq -r '[.nodes[]|select(.type!="function" and .type!="class")]|length' \
 
 If these three numbers do not agree, **stop and report** — the coverage section's reconciliation
 claim is false and the design needs revisiting before implementation.
+
+**1b. The id-prefix contract, which endpoint resolution depends on.** Confirm that a node's owning
+file is recoverable from its id alone, so no function/class node is ever read:
+
+```
+# every node's second colon field must equal its filePath -> expect only ok:true, n:925
+jq -r '[.nodes[]|{ok: ((.id|split(":")[1]) == .filePath)}]
+       | group_by(.ok)|map({ok:.[0].ok,n:length})' .understand-anything/knowledge-graph.json
+
+# no filePath may contain a colon (it would break the split) -> expect 0
+jq -r '[.nodes[]|select(.filePath and (.filePath|test(":")))]|length' \
+  .understand-anything/knowledge-graph.json
+
+# edges whose endpoints are absent from nodes -> expect 0 here, but the code path must exist anyway
+jq -r '([.nodes[].id]|map({name:.,value:true})|from_entries) as $N
+  | [.edges[]|select(($N[.source]|not) or ($N[.target]|not))]|length' \
+  .understand-anything/knowledge-graph.json
+```
+
+If the first check returns any `ok:false`, **stop** — endpoint resolution must fall back to
+file-level endpoints only, per the scope note in Section detail item 6.
 
 **2. Happy path.** Run the flow. Preflight reports as in 361 (unchanged). The document is written to
 the next unused index ≥ 940 in `user/analysis/` — 943 exists, so expect **944**; 943 is not
@@ -409,6 +499,20 @@ jq '[.nodes[] | if .tags then .tags -= ["entry-point"] else . end] as $n | .node
   still completes and every other section is unaffected.
 - Remove `meta.json` → coverage section's analyzed-file line carries a gap marker; staleness
   separately records its skip per the 361 contract.
+
+**5b. Unresolvable edge endpoint.** The real graph has none, so it must be induced:
+
+```
+# point one edge at a node id that does not exist
+jq '.edges[0].target = "file:does/not/exist.py"' knowledge-graph.json > kg-dangling-edge.json
+# and one at a string that does not parse as <type>:<filePath>[:<name>]
+jq '.edges[1].source = "malformed-endpoint-id"'  knowledge-graph.json > kg-malformed-edge.json
+```
+
+Each run must exclude the offending edge from the inter-layer tally, **report it as drift naming the
+endpoint id**, and carry the excluded count as a `[GAP: ...]` in the dependency section. A run that
+completes with an unchanged-looking tally and no mention of the excluded edge is a **failure of this
+step**, not a pass — silent exclusion is the specific behavior this path exists to prevent.
 
 **6. Coverage discrepancy path.** Make `analyzedFiles` disagree with the node count:
 
