@@ -398,7 +398,36 @@ Write exactly these seven sections, in this order. Each names its source graph f
 body**, so a reader can trace any claim without consulting this skill — the section-sourcing lines in
 the provenance block are in addition to that, not a substitute for it.
 
-**1. Layer architecture** — from `layers[]`.
+**Inline attribution is required in every section.** Each section body **opens with a lead sentence
+naming the fields it was written from** — the established pattern is a short `From \`<field>\`.`
+sentence, optionally carrying the one caveat a reader needs to read the numbers correctly:
+
+```
+From `layers[]`. Counts are `nodeIds | length`; layers holding non-`file` types carry a breakdown.
+From `tour[]`, in `order`.
+```
+
+This is what makes a claim traceable at the point of reading. The provenance block's section-sourcing
+lines serve a reader scanning the top of the document; they do not discharge this requirement.
+
+**1. Project identity** — from `project`.
+
+`project.name`, `project.description`, `project.languages`, `project.frameworks` — a single block, no
+internal ordering.
+
+**`project.description` is upstream-generated prose.** Quote it and attribute it to the plugin. Never
+restate it as squadron's own claim about the project: it is the graph's description of the codebase,
+and a reader must be able to tell that apart from anything squadron asserts. `languages` and
+`frameworks` are listed verbatim, not summarized or reordered.
+
+Fallback: a `[GAP: ...]` marker **per missing subfield**, naming that subfield. A missing `project`
+object as a whole is a preflight rejection (**Validation** step 3 above) and never reaches this
+section — do not re-implement that check here.
+
+This section supplies the concept document's Initial Technical Direction in slice 363, which is why
+identity is captured here rather than left to that slice.
+
+**2. Layer architecture** — from `layers[]`.
 
 For each layer: `name`, `description`, and its node count.
 
@@ -431,7 +460,31 @@ jq -r '([.nodes[]|{name:.id,value:.type}]|from_entries) as $T
 
 Any `function`, `class`, or `UNRESOLVED` entry in that breakdown is drift; report it.
 
-**2. Complexity hotspots** — from file-level `nodes[]`.
+**3. Entry points** — from file-level `nodes[]` whose `tags` contains `entry-point`.
+
+**The tag is the only signal.** No filename heuristics — do not infer an entry point from `main.py`,
+`__main__`, `app.py`, or any other naming pattern, and do not suppress one because its name looks
+unlikely. A package `__init__.py` carrying the tag is reported **as tagged**. The tag is upstream's
+judgment; this skill reports it and does not overrule it in either direction.
+
+Selection — note the file-level exclusion, not `type == "file"`:
+
+```
+jq -r '.nodes[] | select(.type != "function" and .type != "class")
+       | select(.tags and (.tags | index("entry-point"))) | "\(.type)  \(.filePath)"' \
+  .understand-anything/knowledge-graph.json
+```
+
+Ordering: **group by layer**, report the count per layer with the paths beneath it. A flat list is
+the wrong shape here — this graph tags 28 file-level nodes, and grouping is what makes the
+distribution legible.
+
+Function-level nodes also carry this tag (24 of them here) and are **not** read: they are not
+file-level, and the section reports files.
+
+Fallback, verbatim: `[GAP: no node carries the entry-point tag — re-run /understand]`.
+
+**4. Complexity hotspots** — from file-level `nodes[]`.
 
 Nodes in the highest `complexity` tier, each with its `filePath` and `summary`. File-level only
 (`select(.type != "function" and .type != "class")` — see the file-level definition in the read
@@ -447,13 +500,41 @@ outside the observed set, report it rather than bucketing it into a known tier.
 Step titles in `order`. If `tour` is empty, this section is a `[GAP: ...]` marker naming the tour
 field and the input that would supply it — preflight has already warned in this case.
 
-**4. Dependency observations** — from `edges[]`.
+**6. Dependency observations** — from `edges[]`.
 
 Edge-type counts, and the strongest inter-layer `imports` / `depends_on` connections.
 
-**Do not add sections.** Section depth, ordering, fallback behavior, and any additional sections are
-slice 362's scope. This slice proves the contract works end to end at the shallowest depth that
-exercises every element of it; growing the list here would move that boundary.
+**7. Coverage and scope limits** — from `meta.json`, `config.json`, and `.understandignore`.
+
+Last section, because it qualifies everything above it. Three inputs, each with its own rule:
+
+**`analyzedFiles` from `meta.json`, reconciled against the file-level node count.** Equality is the
+expected case and is stated as such ("238 analyzed files, matching 238 file-level nodes"). **A
+mismatch is reported as a discrepancy carrying both numbers** — never silently prefer either, and
+never reconcile them by hand. A mismatch means the graph is internally inconsistent, which is exactly
+what a reader deciding how far to trust the document needs to be told.
+
+```
+jq -r '.analyzedFiles' .understand-anything/meta.json
+jq -r '[.nodes[]|select(.type!="function" and .type!="class")]|length' \
+  .understand-anything/knowledge-graph.json
+```
+
+**`config.json` — report the settings that are present.** Nothing more. **An absent optional key is
+not a gap**: this is upstream's own file with upstream's own defaults, and squadron does not know
+which keys are mandatory. This graph's file holds only `outputLanguage`; `autoUpdate` is absent, and
+that absence is reported as nothing at all, not as a missing setting.
+
+**`.understandignore` — report the count of active patterns and list them.** Active means uncommented
+and non-blank (`grep -vE '^\s*(#|$)'`). This is what lets the document state its own coverage limits:
+a reader can see what was never analyzed. A file whose lines are **all** comments or blank is
+reported as **"defaults only"** — a real state, not a gap, because the upstream plugin ships this
+file pre-populated with commented suggestions.
+
+Fallback: `[GAP: ...]` naming the specific file that could not be read.
+
+**Do not add sections beyond these seven.** The mapping table is the full scope of this flow. Concept
+generation is slice 363 and initiative candidates are slice 364; neither is written here.
 
 ---
 
