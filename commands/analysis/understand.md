@@ -342,9 +342,36 @@ can trace any claim without consulting this skill.
 
 **1. Layer architecture** — from `layers[]`.
 
-For each layer: `name`, `description`, and the count of **file-level** nodes it contains. Note that
-`layers[].nodeIds` mixes file, function, and class nodes — intersect it with nodes whose
-`type == "file"` to get a file count. Reporting `nodeIds | length` as a file count would be wrong.
+For each layer: `name`, `description`, and its node count.
+
+**The count is `nodeIds | length`, directly.** `layers[].nodeIds` holds only file-level nodes — no
+function or class node appears in any layer. Intersecting with `type == "file"` undercounts every
+layer that carries a non-`file` file-level type, and does so silently: on this repo's graph it
+reports Packaged Declarative Content as 1 instead of 34, and Project Configuration as 2 instead of 6.
+
+**Report the type breakdown when a layer holds anything other than `file` nodes**, so the count is
+auditable rather than a bare number:
+
+```
+Packaged Declarative Content — 34 (config:13 file:1 pipeline:20)
+Project Configuration — 6 (config:4 file:2)
+```
+
+A layer that is entirely `file` nodes reports its count alone; the breakdown would add nothing.
+
+**Cross-check, and its drift rule.** Every `nodeIds` entry must resolve to a node carrying a
+`filePath`. An entry that resolves to a `function` or `class` node — or to no node at all — is
+**reported as upstream drift**, naming the offending id. It is never silently filtered out of the
+count: filtering is what produced the wrong numbers this rule replaces.
+
+```
+jq -r '([.nodes[]|{name:.id,value:.type}]|from_entries) as $T
+  | .layers[] | "\(.name)  total=\(.nodeIds|length)  " +
+    (.nodeIds|map($T[.]//"UNRESOLVED")|group_by(.)|map("\(.[0]):\(length)")|join(" "))' \
+  .understand-anything/knowledge-graph.json
+```
+
+Any `function`, `class`, or `UNRESOLVED` entry in that breakdown is drift; report it.
 
 **2. Complexity hotspots** — from file-level `nodes[]`.
 
