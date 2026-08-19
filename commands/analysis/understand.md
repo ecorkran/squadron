@@ -369,8 +369,34 @@ full first — location, validation, staleness, hygiene — then extract and wri
 Any argument other than the comprehension default is **unrecognized**. Say so and stop; do not guess
 at intent. The concept flow and the initiative-candidates flow are slices 363 and 364.
 
-Write exactly these four sections. Each names its source graph field inline, in the body, so a reader
-can trace any claim without consulting this skill.
+### Extraction mapping
+
+This table governs the flow. Seven sections, in document order. **Each row is binding**: the section
+is written from those fields, ordered by that rule, and on absence emits that fallback and nothing
+else.
+
+| # | Section | Source fields | Ordering rule | Fallback when absent/empty |
+|---|---|---|---|---|
+| 1 | Project identity | `project.name`, `.description`, `.languages`, `.frameworks` | n/a (single block) | `[GAP: ...]` per missing subfield; `project` itself missing is a preflight rejection |
+| 2 | Layer architecture | `layers[]` (`name`, `description`, `nodeIds`) | descending file count | preflight rejects empty `layers` |
+| 3 | Entry points | file-level `nodes[]` where `tags` contains `entry-point` | layer, then `filePath` | `[GAP: no node carries the entry-point tag — re-run /understand]` |
+| 4 | Complexity hotspots | file-level `nodes[]` (`complexity`, `filePath`, `summary`, `languageNotes`) | top ordinal tier, then layer | `[GAP: ...]` naming `complexity` |
+| 5 | Suggested reading order | `tour[]` (`order`, `title`, `description`) | `order` ascending | `[GAP: ...]` naming `tour`; preflight has already warned |
+| 6 | Dependency observations | `edges[]` (`type`, `source`, `target`, `weight`) | descending count, ties by `weight` | preflight rejects empty `edges`; an edge whose endpoint will not resolve to a layer is excluded from the tally and reported as drift, with the excluded count carried as a `[GAP: ...]` when non-zero |
+| 7 | Coverage and scope limits | `meta.json` `analyzedFiles`; `config.json`; `.understandignore` | n/a | `[GAP: ...]` naming the unreadable file |
+
+**Section ordering is identity → structure → detail → caveats.** A reader who stops after section 1
+knows what the project is; a reader who stops after section 2 knows how it is shaped. Coverage limits
+go last because they qualify everything above them and are meaningless read first.
+
+**The fallback column has no third option.** Every section resolves to sourced content or a gap
+marker. A section is never omitted, never shortened silently, and never filled with prose that is not
+traceable to its named fields. This is the governing rule of the graph contract applied per section
+rather than globally.
+
+Write exactly these seven sections, in this order. Each names its source graph field **inline, in the
+body**, so a reader can trace any claim without consulting this skill — the section-sourcing lines in
+the provenance block are in addition to that, not a substitute for it.
 
 **1. Layer architecture** — from `layers[]`.
 
