@@ -181,7 +181,7 @@ class StateManager:
         """Write *data* to *path* atomically via a sibling .tmp file."""
         tmp = path.with_suffix(".tmp")
         tmp.write_text(data, encoding="utf-8")
-        tmp.rename(path)
+        tmp.replace(path)
 
     def _load_raw(self, path: Path) -> RunState:
         """Read, parse, and validate a state file. Raises on version mismatch."""
