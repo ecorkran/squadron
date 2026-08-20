@@ -43,6 +43,7 @@ from squadron.pipeline.executor import (
     resolve_placeholders,
 )
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
+from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loader import (
     discover_pipelines,
     load_pipeline,
@@ -51,9 +52,10 @@ from squadron.pipeline.loader import (
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.prompt_renderer import (
     CompletionResult,
+    StepInstructions,
     render_step_instructions,
 )
-from squadron.pipeline.resolver import ModelResolver
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ModelResolver
 from squadron.pipeline.sdk_session import SDKExecutionSession
 from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError, StateManager
 from squadron.pipeline.steps.phase import PhaseStepType
@@ -581,6 +583,40 @@ def _display_result(result: PipelineResult) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _render_prompt_only_step(
+    step: StepConfig,
+    *,
+    step_index: int,
+    total_steps: int,
+    params: dict[str, object],
+    resolver: ModelResolver,
+    run_id: str,
+    verbosity: int,
+) -> StepInstructions:
+    """Render one prompt-only step, converting resolver failures to a clean CLI exit.
+
+    CLI process boundary for both ``--prompt-only`` entry points. A misconfigured
+    model alias or ``pool:`` reference in the step config raises out of
+    ``render_step_instructions`` (the renderer deliberately does not swallow it);
+    here it is logged and rendered as ``Error: ...`` + exit 1 rather than a
+    traceback, matching ``dispatch_run`` / ``spawn`` / ``summary_run``.
+    """
+    try:
+        return render_step_instructions(
+            step,
+            step_index=step_index,
+            total_steps=total_steps,
+            params=params,
+            resolver=resolver,
+            run_id=run_id,
+            verbosity=verbosity,
+        )
+    except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError) as exc:
+        _logger.exception("prompt-only: model resolution failed for step %r", step.name)
+        rprint(f"[red]Error: model resolution failed — {exc}[/red]", file=sys.stderr)
+        raise typer.Exit(1) from None
+
+
 def _handle_prompt_only_init(
     pipeline_name: str,
     target: str | None,
@@ -623,7 +659,7 @@ def _handle_prompt_only_init(
 
     # Render first step
     first_step = definition.steps[0]
-    instructions = render_step_instructions(
+    instructions = _render_prompt_only_step(
         first_step,
         step_index=0,
         total_steps=len(definition.steps),
@@ -714,7 +750,7 @@ def _handle_prompt_only_next(
     )
     params = dict(state.params)
 
-    instructions = render_step_instructions(
+    instructions = _render_prompt_only_step(
         step_config,
         step_index=step_index,
         total_steps=len(definition.steps),
