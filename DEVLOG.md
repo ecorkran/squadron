@@ -2,13 +2,60 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260818
+dateUpdated: 20260820
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260820
+
+### Slice 363: Phase 4 Slice Design Complete — Concept Generation with Interview
+
+Design written for the interview-driven half of capability (a): produce `000-concept.{project}.md`
+for a codebase that has no concept document. Markdown only — a sibling flow section in
+`commands/analysis/understand.md`, no Python, no change to `src/squadron/` and none to the
+ai-project-guide.
+
+**Three measurements against the real graph changed the design.** `project.name` is `squadron-ai`,
+the distribution name — deriving the output filename from it would write
+`000-concept.squadron-ai.md`, which no `cf` introspection would find, so the filename's `{project}`
+is the squadron project name and the graph's value is reported in provenance instead.
+`project.description` is upstream prose generated at `1bfbca1` that still calls squadron "a
+template-driven code review framework", so Overview is confirm-or-correct with `lastAnalyzedAt`
+shown at the moment of judgment rather than extract-and-accept. And `.understandignore` excludes
+`/tests/`, `.github/`, `/commands/`, `project-documents/`, and all `*.md`, leaving zero test nodes
+and zero CI nodes — so the architecture's "test/CI config nodes as weak evidence" for Development
+Approach does not hold here, and that section is interview-primary with the attempt still coded for
+differently-configured repos.
+
+**Interview wording and ordering settled** — the parent architecture's first open question. Six
+fixed questions, asked before any extracted content is shown. Intent first, for two reasons: a PM
+shown a machine's description answers in the machine's vocabulary, and intent questions are the ones
+a PM may decline, so declining early costs nothing. Question 6 is an open catch so the fixed set does
+not silently bound what the PM can contribute. Nothing structural is asked. Answers to 1–4 serve both
+as the verbatim User-Provided Concept content and as the source for the matching Refined Concept
+sections, which is the concept guide's own model.
+
+**`[INFERRED]` governance, deferred here by 362, is settled.** The concept flow uses it where the
+comprehension flow does not: a sentence carries the marker when it is derived from a named graph
+field but asserts something the field does not literally state, carries no marker when it restates
+the field, and does not belong in the document at all when no field is behind it. A PM-confirmed
+inference stays marked — the marker describes provenance, not confidence.
+
+**The concept is the initiative's one non-idempotent output.** Every other document takes a fresh
+index per run; this one has a fixed path, so a re-run necessarily meets an existing document. It is
+never overwritten. Augmenting appends to User-Provided Concept under a dated subheading and fills
+only Refined Concept sections that are empty or hold a gap marker — mechanically distinguishable,
+since a section whose body is exactly a `[GAP: ...]` marker is machine-written.
+
+**The cross-repo contract is verified at write time, and its failure is terminal, not a gap
+marker.** A missing or renamed **User-Provided Concept** section means the document cannot be
+correctly written at all, which is a different thing from a document missing something.
 
 ---
 
