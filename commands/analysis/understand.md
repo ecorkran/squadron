@@ -384,13 +384,32 @@ misattributes the document.
 `needs_review` member; `complete` would assert a review that has not happened. Review state is
 carried by the provenance block, and `not_started` correctly reflects that no human has reviewed it.
 
+## Flow selection
+
+This skill implements two flows. The invocation argument selects between them:
+
+| Argument | Flow |
+|---|---|
+| none | Flow: Comprehension Analysis |
+| `comprehension` | Flow: Comprehension Analysis |
+| `concept` | Flow: Concept Generation |
+| anything else | **unrecognized** — say so and stop |
+
+`candidates` is **not** recognized; the initiative-candidates flow is slice 364. Any other argument
+stops the same way — say the argument is unrecognized and stop; do not guess at intent.
+
+**Selection is by explicit argument only.** The skill never infers a flow from repository state. The
+absence of a concept document never auto-triggers Flow: Concept Generation, and the presence of one
+never suppresses it. A flow runs because it was named.
+
+**Preflight runs in full for both flows, unchanged** — location, validation, staleness, and the
+`.gitignore` hygiene write, which the shared contract performs at the start of every run before any
+document is written. Flow: Concept Generation adds no hygiene behavior of its own and skips none.
+
 ## Flow: Comprehension Analysis
 
-This is the default flow and the only one this skill implements. Run **Preflight: Graph Contract** in
-full first — location, validation, staleness, hygiene — then extract and write.
-
-Any argument other than the comprehension default is **unrecognized**. Say so and stop; do not guess
-at intent. The concept flow and the initiative-candidates flow are slices 363 and 364.
+This is the default flow. Run **Preflight: Graph Contract** in full first — location, validation,
+staleness, hygiene — then extract and write.
 
 ### Extraction mapping
 
@@ -626,7 +645,10 @@ file pre-populated with commented suggestions.
 Fallback: `[GAP: ...]` naming the specific file that could not be read.
 
 **Do not add sections beyond these seven.** The mapping table is the full scope of this flow. Concept
-generation is slice 363 and initiative candidates are slice 364; neither is written here.
+generation is **Flow: Concept Generation** below and initiative candidates are slice 364; neither is
+written here.
+
+## Flow: Concept Generation
 
 ---
 
