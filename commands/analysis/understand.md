@@ -691,6 +691,61 @@ brownfield path — a machine drafting from what already exists. They **compose*
 scaffolding these preconditions require) and **do not overlap**: neither contains the other's
 interaction model.
 
+### The three-source extraction model
+
+Extraction runs against three sources, **in the order below, before any human contact**. Each source
+has a distinct attribution style, and the style is what makes a claim traceable at the point of
+reading.
+
+**Source 1 — the graph (structure).**
+
+Fields read: `project.description`, `project.languages`, `project.frameworks`; `layers[]` names and
+descriptions; `tour[]` order; file-level nodes tagged `entry-point`; `config` nodes.
+
+*Attribution:* each claim **names its field inline**, exactly as the comprehension flow does.
+
+*Read discipline:* 362's discipline, unchanged — field-scoped `jq` selections only, the whole graph
+never loaded, no `function` or `class` node read. **This flow reads strictly less of the graph than
+the comprehension flow does**: no edges, no complexity tiers, no per-node summaries.
+
+**Source 2 — the repo's own prose (intent).**
+
+A repo's README states what it is, what problem it addresses, and who reaches it, in its authors'
+own words. That is the intent no graph field carries.
+
+*Resolution:* the **root-level README, case-insensitive**, with `README.md` preferred when several
+extensions exist. **Nothing below the root is read** — `docs/` trees and wikis are out of scope for
+this flow by design: unbounded cost, unpredictable relevance.
+
+*Attribution:* a claim **cites its file** (`README.md`). **Quoted material is quoted, never
+paraphrased into squadron's own voice** — the distinction between what the repo says about itself and
+what squadron asserts must survive into the document.
+
+*When there is no root README:* the run loses the prose source. Affected sections **fall back to
+graph fields where the mapping table maps them, and to gap markers where it does not**. The source
+model degrades **explicitly, never silently**.
+
+**Source 3 — filesystem signals (development practice).**
+
+The graph's ignore rules routinely exclude test trees and CI configuration from analysis; the
+filesystem cannot hide them. This source is a **closed checklist**:
+
+| Signal | Probed at |
+|---|---|
+| Test tree | `tests/` or `test/` at the repo root |
+| CI | `.github/workflows/` non-empty, or `.gitlab-ci.yml` |
+| Lint/format/test configuration | tool tables in `pyproject.toml`, `.pre-commit-config.yaml`, `.eslintrc*`/`.prettierrc*` |
+
+**The checklist is closed — a signal outside it is not probed.** Do not extend it opportunistically;
+an open-ended filesystem hunt is what this bounded list exists to prevent.
+
+*Attribution:* reported as **observations with paths** ("`tests/` present at repo root";
+"`.github/workflows/ci.yml`").
+
+**Absence of a signal is an observation, not a gap.** "No test tree observed at the repo root" is a
+true and useful statement about development practice, and the source that produced it was fully
+readable. A gap marker would wrongly imply something failed to be read.
+
 ---
 
 # Project documentation
