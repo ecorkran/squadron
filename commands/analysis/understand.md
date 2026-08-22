@@ -746,6 +746,35 @@ an open-ended filesystem hunt is what this bounded list exists to prevent.
 true and useful statement about development practice, and the source that produced it was fully
 readable. A gap marker would wrongly imply something failed to be read.
 
+### Per-section mapping
+
+The concept guide's own sections, in its order. **Each row is binding**: the section is written from
+those sources, in that order, with that human role and no other.
+
+| # | Section | Sources, in order | Human role |
+|---|---|---|---|
+| 1 | Overview | graph `project.description`; README lead | single confirm-or-correct before write |
+| 2 | User-Provided Concept | engagement answers, verbatim | the two questions |
+| 3 | Problem & Motivation | README problem statement (cited); Q1 answer for the engagement half | none beyond Q1 |
+| 4 | Target Users | README; graph entry surfaces (`entry-point` nodes, `frameworks`) | none — never asked |
+| 5 | Solution Approach | `layers[]` names + descriptions; `tour[]` order; coverage boundary | none |
+| 6 | Initial Technical Direction | `project.languages`, `.frameworks`; `config` nodes; `entry-point` nodes | none |
+| 7 | Development Approach | filesystem signals checklist; Q2 answer for unwritten constraints | none beyond Q2 |
+
+**Dropped, not gap-marked.** "Why now", audience-evolution, and methodology-preference questions
+appear **nowhere** — not asked, and not marked absent. For an existing codebase they have no useful
+answer, and a generated document is not improved by recording that nobody answered them.
+
+> A gap marker is reserved for content a section **needs** whose source is missing. These are topics
+> the document does not need.
+
+**Solution Approach's coverage boundary** is sourced from the coverage facts the comprehension flow
+already establishes (section 7): `.understandignore` active patterns, and `meta.json`'s
+`analyzedFiles` reconciled against the file-level node count. It states **which parts of the repo the
+graph never saw** — on squadron, everything outside `src/` and root configuration, including the
+markdown command surface. A concept that claims to describe the whole system while resting on a
+partial graph is the failure this boundary prevents.
+
 ---
 
 # Project documentation
