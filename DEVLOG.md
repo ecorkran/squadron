@@ -2,13 +2,43 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260820
+dateUpdated: 20260822
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260822
+
+### Slice 363: Phase 5 Task Breakdown Complete — Concept Generation with Interview
+
+Design review landed PASS (z-ai/glm-5.2, 6 pass-severity findings, no CONCERNS to carry into
+implementation) before task breakdown began. Converted the design into
+`363-tasks.concept-generation-with-interview.md`, 394 lines, ten task groups mirroring 362's proven
+shape: branch/premise verification, then one group per major design decision (flow selection,
+extract-then-ask procedure and decision table, interview questions, User-Provided Concept contract,
+re-run semantics, `[INFERRED]` governance and declines, output conventions, verification
+walkthrough, close-out), test-with cadence throughout.
+
+**Task 0 re-measures the same three graph facts the design rests on** — `project.name` vs the
+squadron project name, non-empty `languages`/`frameworks`, and zero test/CI nodes — as a stated STOP
+condition before any implementation task runs, since the per-section decision table was built
+directly on those numbers.
+
+**The cross-repo contract check (Task 4) is tested both directions on a scratch copy only** — the
+real `guide.ai-project.000-concept.md` is never mutated, matching the design's own terminal-failure
+framing for that check.
+
+**All 15 success criteria mapped to specific tasks** with no gaps: flow selection (1) → Task 1;
+extract-then-ask scoping (2) → Task 2; question wording (3) → Task 3; declines (4) → Task 6;
+User-Provided Concept verbatim/preserve/fail-loud (5, 6) → Task 4; re-run non-destructiveness (7) →
+Task 5; frontmatter and gate (8) → Task 7; provenance shape (9) → Task 7; `[INFERRED]` governance
+(10) → Task 6; filename vs `project.name` (11) → Task 7; coverage boundary (12) → Task 8; read
+discipline and scope (13, 15) → Task 8; PM-usable output (14) → Task 8.
 
 ---
 
