@@ -838,6 +838,66 @@ frameworks, tour order — is **attributed, not confirmed section-by-section**. 
 draft afterward if it is wrong; that is cheaper than a per-section confirm-or-correct cycle, and it
 is why this flow has one confirmation instead of seven.
 
+### The User-Provided Concept contract
+
+The concept guide is a **cross-repo dependency**: it lives in `ai-project-guide`, which updates
+independently of squadron. Its layout is therefore **verified at write time, never assumed**.
+
+**Before any write**, run both checks:
+
+**Check 1 — the guide is readable** at:
+
+```
+project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md
+```
+
+Unreadable or absent → **stop**, naming the path. If the **whole ai-project-guide tree** is absent,
+name the setup step (`cf init` / `/cf:onboard`) instead of just the file — the operator's problem is
+that setup has not run, and naming a single missing file would send them looking for the wrong thing.
+
+**Check 2 — the section title is exactly right.** The guide's document-structure block must contain a
+section titled exactly:
+
+```
+## User-Provided Concept
+```
+
+Absent or renamed → **stop**, naming the guide, the expected title, and that **the layout appears to
+have changed upstream**. Never write to a substitute section, and never write to a remembered layout.
+
+**Neither failure is a gap marker.** A gap marker means "this document is missing something"; these
+two mean **"this document cannot be correctly written at all"**. Nothing is written on either path.
+
+**Write rules for the section:**
+
+- **Verbatim** — the operator's answers exactly as given. Never summarized, never reworded, never
+  grammar-corrected. Their words are the artifact.
+- **Preserve what is there** — pre-existing section content survives untouched; new answers **append
+  below, under a dated subheading** (`### {YYYYMMDD}`).
+
+### Re-run semantics
+
+This flow's output path is fixed, so a re-run meets an existing document.
+
+- **No existing document** → write it.
+- **Existing document** → **never overwrite.** Report that it exists, offer **augment or stop**, and
+  **stop is the default** — an unattended or ambiguous answer stops.
+
+**Augment** does two things and nothing else:
+
+1. **Appends to User-Provided Concept** per the preservation rule above (dated subheading, verbatim).
+2. **Refills only the Refined Concept sections that are empty or hold exactly a `[GAP: ...]`
+   marker** — the **mechanical refillability test**. A section holding real content is left alone,
+   byte-identical.
+
+**The augment interaction:** an augment run performs the flow's **normal interview** — the two fixed
+questions, once — and those answers are what the append carries. A stopped run asks nothing at all.
+There is no separate augment-only question set; the flow has no other source for appended
+User-Provided Concept content.
+
+**A human-edited concept is never rewritten from a graph.** The refillability test is mechanical
+precisely so that this rule needs no judgment: content means keep, empty-or-gap means refill.
+
 ---
 
 # Project documentation
