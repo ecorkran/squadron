@@ -775,6 +775,69 @@ graph never saw** — on squadron, everything outside `src/` and root configurat
 markdown command surface. A concept that claims to describe the whole system while resting on a
 partial graph is the failure this boundary prevents.
 
+### The engagement interview
+
+**Exactly two questions.** Fixed wording — not improvised, not extended, not reworded. Asked **once,
+as one block, after extraction and before drafting**, so the answers inform Problem & Motivation and
+Development Approach in a single drafting pass.
+
+Ask these, verbatim:
+
+```
+1. What do you need to do with this codebase — add features, audit it, take over
+   maintenance, modernize it, something else?
+
+2. Are there constraints or off-limits areas that aren't written down anywhere — a
+   dependency that can't be upgraded, a directory not to touch, an API that must stay
+   stable?
+```
+
+**An improvised, added, or reworded question is a defect against Success Criterion 2, not a judgment
+call.** No third question. No follow-up prompt on an answer. No clarifying round.
+
+**Why these two and no others:** they are the only questions whose answers no artifact can hold,
+because they are facts about the **engagement** rather than about the code. Everything else a
+discovery interview would ask, an existing codebase already answers through its README, its graph,
+and its filesystem.
+
+**Both are skippable**, without argument or follow-up. A declined question produces:
+
+- a **gap marker at the point of absence**, naming the interview as the input that would supply it,
+  and
+- an entry in the provenance block's **declined-questions** line.
+
+Never a plausible guess. Never a silent omission.
+
+**Answers land verbatim in User-Provided Concept.** The operator's words about the engagement *are*
+the user-provided concept for a brownfield run. They are additionally the source for **Problem &
+Motivation's engagement half** (Q1) and **Development Approach's constraints** (Q2) — used twice,
+asked once.
+
+### The single confirmation
+
+After drafting and **before the file write**, show the operator:
+
+- the **derived project description** — the Overview paragraph assembled from `project.description`
+  and the README lead; and
+- the graph's **`lastAnalyzedAt`**, so a stale description is recognizable as stale.
+
+Ask them to **confirm or correct** it. One interaction, about content already extracted — never a
+request to author from nothing. Three outcomes:
+
+| Outcome | Body | Provenance records |
+|---|---|---|
+| Confirmed | the derived description stands | extracted-and-confirmed |
+| Corrected | **the correction** lands in the body; the original is **not** retained beside it | extracted-and-corrected |
+| Refused or unavailable | the draft proceeds, description attributed to its sources | extracted-unconfirmed |
+
+**The flow never stalls on a confirmation.** No answer is a valid outcome with its own provenance
+record, not a reason to wait.
+
+**This is the only confirmation in the flow.** Graph-derived structure — layers, languages,
+frameworks, tour order — is **attributed, not confirmed section-by-section**. The operator edits the
+draft afterward if it is wrong; that is cheaper than a per-section confirm-or-correct cycle, and it
+is why this flow has one confirmation instead of seven.
+
 ---
 
 # Project documentation
