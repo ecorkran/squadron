@@ -650,6 +650,47 @@ written here.
 
 ## Flow: Concept Generation
 
+Writes `000-concept.{project}.md` for an existing codebase that has no concept document — the Phase 0
+entry point for a repo that has never had cf/sq planning artifacts.
+
+The governing rule of this flow: **an existing codebase answers questions about its own nature
+through its artifacts, or not at all.** Three machine-readable sources are extracted **before any
+human contact**. The human is asked exactly one category of thing — engagement context, the facts no
+artifact can hold — as two fixed questions, plus one confirm-or-correct on the derived description.
+
+Run **Preflight: Graph Contract** in full first, then check the preconditions below, then extract,
+then interview, then draft, then confirm, then write.
+
+### Preconditions
+
+The target scenario is a repo with **no user-level cf/sq artifacts** — no concept, no initiative
+plan. It is not a repo with no setup at all. Three preconditions, checked before extraction:
+
+**1. The graph is present.** This is the shared **Preflight: Graph Contract** above, executed
+unchanged — location, validation, staleness, hygiene. Missing, malformed, and stale handling all
+belong to that contract; do not re-implement any part of it here.
+
+**2. The ai-project-guide is installed.** The concept guide's layout is read at write time from:
+
+```
+project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md
+```
+
+If the guide tree is absent, **stop** and name the setup step (`cf init` or `/cf:onboard`) that
+installs it. This is a **terminal precondition failure, not a gap** — the document cannot be
+correctly written at all, so no document is written.
+
+**3. The project name resolves** from the cf project registration. **Never from the graph** — see
+**Output conventions** below. If no registration resolves a name, **stop**, naming the setup step.
+Deriving a filename from the graph's `project.name` is prohibited, so there is no fallback; this
+failure is terminal, the same family as precondition 2.
+
+**Boundary with `/cf:onboard`.** `/cf:onboard` owns project setup and the conversational, greenfield
+concept path — a human describing what they intend to build. This flow owns the artifact-derived,
+brownfield path — a machine drafting from what already exists. They **compose** (onboard installs the
+scaffolding these preconditions require) and **do not overlap**: neither contains the other's
+interaction model.
+
 ---
 
 # Project documentation
