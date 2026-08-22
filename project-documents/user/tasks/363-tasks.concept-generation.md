@@ -242,6 +242,10 @@ ask in plain text.
   - [ ] Augment appends to User-Provided Concept per the preservation rule and fills only
         Refined Concept sections that are empty or hold exactly a `[GAP: ...]` marker — the
         mechanical refillability test. A section with real content is left alone.
+  - [ ] State the augment interaction: an augment run performs the flow's normal interview — the
+        two questions, once — and those answers are what the append carries; a stopped run asks
+        nothing. (This resolves an ambiguity the design leaves open; the flow has no other
+        source for appended UPC content.)
   - [ ] State: a human-edited concept is never rewritten from a graph.
   - [ ] Success: default-stop rule, mechanical refillability test, and never-rewritten rule
         present.
@@ -314,8 +318,18 @@ the concept flow. **Before 8.1, give the PM the framing described in the PM inte
         ordering, and the coverage boundary; the corrected description is in the body with
         provenance extracted-and-corrected; provenance carries the engagement-questions and
         inferred-claims lines and the graph's `project.name`.
+  - [ ] Dropped-topics absence check (SC4): search the written document for why-now,
+        audience-evolution, and methodology-preference content **and** for gap markers naming
+        those topics — expect zero occurrences of either form.
+  - [ ] `[INFERRED]` audit (SC10): enumerate every `[INFERRED]` sentence in the document; each
+        must satisfy the checkable rule (derived from a named graph field, asserting something
+        the field does not literally state) and appear in the provenance inferred-claims line.
+        Then the converse: spot-check unmarked sentences in Solution Approach and Development
+        Approach — each restates a field, cites a file, reports an observed signal, or carries a
+        gap marker; an unmarked sentence doing none of these is an unmarked inference and a
+        defect.
   - [ ] `cf validate frontmatter` passes on the file; `model:` is a real model id.
-  - [ ] Success: every listed check passes on the written document.
+  - [ ] Success: every listed check passes on the written document, including both audits.
 
 - [ ] **8.2 Decline path (scratch copy of the tree)** — Effort: 2/5
   - [ ] On a scratch copy, decline both questions. Document still written; gap markers where
@@ -323,30 +337,54 @@ the concept flow. **Before 8.1, give the PM the framing described in the PM inte
         without a source.
   - [ ] Success: all decline-path checks pass; the real tree is untouched.
 
-- [ ] **8.3 Contract failure (scratch copy of the guide only)** — Effort: 1/5
-  - [ ] Copy the concept guide to scratch, rename the section heading in the copy, point the
-        check at it. Confirm the loud stop names the guide and the expected title, and that
-        nothing is written. Never modify the real guide.
-  - [ ] Success: loud stop with both names; no file written.
+- [ ] **8.3 Contract and precondition failures (scratch paths only)** — Effort: 2/5
+  - [ ] Safe mechanism, same for every case: copy the guide (or build an empty directory tree)
+        under the session scratchpad, then instruct the session to run the write-time
+        contract/precondition checks **against the stated scratch path** for this test only. The
+        skill file and the real guide are never edited; the path substitution lives in the test
+        instruction, not in any file. After each case, `git status` confirms the repo untouched.
+  - [ ] Case 1 — renamed section: scratch copy with the `## User-Provided Concept` heading
+        renamed. Loud stop naming the guide, the expected title, and that the layout appears
+        changed upstream.
+  - [ ] Case 2 — guide file absent/unreadable: scratch tree with the guide file removed. Loud
+        stop naming the missing path.
+  - [ ] Case 3 — guide tree absent: scratch tree with no `ai-project-guide/` at all. Loud stop
+        naming the setup step (`cf init` / `/cf:onboard`), not just the file.
+  - [ ] In every case, nothing is written.
+  - [ ] Success: all three SC7 failure cases produce their distinct loud stops; no file written;
+        repo untouched after each.
 
-- [ ] **8.4 Re-run against the real document** — Effort: 2/5
-  - [ ] Re-run the flow against the step-8.1 document: reports the existing document, defaults
-        to stop. When told to augment: appends to User-Provided Concept under a dated subheading;
-        populated sections stay byte-identical (`git diff`).
-  - [ ] Success: default stop observed; augment behavior matches; byte-identity confirmed.
+- [ ] **8.4 Re-run semantics** — Effort: 2/5
+  - [ ] Default stop, against the **real** step-8.1 document: re-run the flow; it reports the
+        existing document and stops (the default). No interview, no confirmation, no write —
+        `git diff` clean. The 8.1 output remains the slice's final committed artifact; augment
+        is exercised on scratch only.
+  - [ ] Refillability, against a **scratch** copy of the 8.1 document prepared with one Refined
+        Concept section emptied, one holding exactly a `[GAP: ...]` marker, and the rest
+        untouched: instruct augment. The run asks the two engagement questions once (its normal
+        interview — the answers are what augment appends); it refills only the emptied and
+        gap-marked sections from their mapped sources; it appends the new answers to
+        User-Provided Concept under a dated subheading; every populated section stays
+        byte-identical (diff scratch copy before/after, ignoring the two prepared sections and
+        the UPC append).
+  - [ ] Success: default stop proven non-mutating on the real document; scratch augment refills
+        exactly the two prepared sections, appends under a dated subheading, and touches nothing
+        else.
 
 - [ ] **8.5 Flow selection live** — Effort: 1/5
   - [ ] No argument and `comprehension` route to the comprehension flow (unchanged behavior);
         `candidates` stops as unrecognized.
   - [ ] Success: all three routes behave as authored.
 
-- [ ] **8.6 Discipline and scope checks** — Effort: 1/5
+- [ ] **8.6 Discipline and scope checks (preliminary — final scope check is in 9.3)** — Effort: 1/5
   - [ ] From the 8.1 session: no graph read without a `jq` field selection; no `function`/`class`
         node read. `git status` on `.understand-anything/` clean.
   - [ ] `git diff --name-only main` shows only `commands/analysis/understand.md`, the generated
-        concept, this slice's documents, and the DEVLOG. `git diff --stat main -- src/` is empty.
-  - [ ] `uv run ruff format --check .` passes; `uv run pytest tests/skills/` passes (pack install
-        path undisturbed).
+        concept, and this slice's documents (the DEVLOG and status edits land in Task 9 and are
+        covered by 9.3's final check). `git diff --stat main -- src/` is empty.
+  - [ ] Project regression guards (convention, not slice-derived criteria — the slice adds no
+        Python): `uv run ruff format --check .` passes; `uv run pytest tests/skills/` passes
+        (pack install path undisturbed).
   - [ ] Success: all checks clean; changed-file set as stated.
   - [ ] Commit: `feat: add generated concept document and walkthrough fixes`
         (include any fixes found during 8.x; commit fixes with the evidence that found them)
@@ -370,6 +408,10 @@ the concept flow. **Before 8.1, give the PM the framing described in the PM inte
 - [ ] **9.3 Final commit and hand-off** — Effort: 1/5
   - [ ] `uv run ruff format .` before committing (project rule), commit remaining changes,
         confirm clean tree.
+  - [ ] Final scope check, after all close-out edits: `git diff --name-only main` shows only
+        `commands/analysis/understand.md`, the generated concept, this slice's documents, and
+        the DEVLOG — nothing else.
   - [ ] Report to the Project Manager for review and merge authorization. **Do not merge** —
         merging the slice branch is PM-gated.
-  - [ ] Success: branch complete and clean; PM notified; no merge performed.
+  - [ ] Success: branch complete and clean; final scope check passes; PM notified; no merge
+        performed.
