@@ -14,7 +14,42 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260822
 
+### Slice 363: Design Rejected and Redesigned — Concept Generation
+
+The PM rejected the original 363 design at the start of its Phase 6 verification walkthrough: the
+six fixed interview questions ("what problem does this solve and for whom?", "why now?", audience
+evolution, methodology preferences) are generic product-discovery boilerplate with no value for an
+existing codebase — the answers either sit in the repo's own artifacts or do not matter. The slice
+was reset to Phase 4; the task file and both reviews were deleted (`4628f18`), the slice branch and
+its one implementation commit deleted, and the design rewritten.
+
+**Root defect:** the architecture treated the graph as the only machine-readable source, so every
+graph gap defaulted to interviewing the human. Two measured facts expose it: squadron's README lead
+answers "what is this, what problem, who reaches it" directly (the old flow would have asked the PM
+while the answer sat in README line 3), and the filesystem carries `tests/`, `.github/workflows/`,
+and ruff/pytest config even though the graph has zero test/CI nodes — the old design made
+Development Approach interview-primary because it only looked at the graph.
+
+**Redesign** (`363-slice.concept-generation.md`, replacing
+`363-slice.concept-generation-with-interview.md`): three extraction sources — graph (structure),
+root README (intent, cited by file), filesystem signals (development practice, closed checklist) —
+all read before any human contact. Interview reduced to two skippable engagement-context questions
+(what the operator needs to do with the codebase; unwritten constraints), answers verbatim into
+User-Provided Concept. One confirm-or-correct on the derived description before write. Why-now and
+audience questions are dropped entirely, not gap-marked. Retained from the old design: flow
+selection, the User-Provided Concept cross-repo contract, re-run semantics, `[INFERRED]` governance,
+output conventions, read discipline.
+
+**Architecture amended in place** (PM-sanctioned): Flow steps 3–5 now read prose/signals before a
+two-question interview; the Interview scope section carries the new source model and per-section
+table; the settled open question on interview wording is removed. Slice plan entry 3 rewritten to
+match — risk drops to Low, effort 4/5 → 3/5. New precondition made explicit: the ai-project-guide
+must be installed (`/cf:onboard` owns setup and the greenfield conversational path; this flow owns
+brownfield artifact-derived drafting — complementary, not overlapping).
+
 ### Slice 363: Phase 5 Task Breakdown Complete — Concept Generation with Interview
+
+> **Superseded same day** — this design was rejected at Phase 6 entry; see the redesign entry above.
 
 Design review landed PASS (z-ai/glm-5.2, 6 pass-severity findings, no CONCERNS to carry into
 implementation) before task breakdown began. Converted the design into

@@ -3,7 +3,7 @@ docType: architecture
 project: squadron
 initiative: 360
 dateCreated: 20260817
-dateUpdated: 20260818
+dateUpdated: 20260822
 status: not_started
 archIndex: 360
 component: document-intelligence
@@ -148,11 +148,20 @@ Squadron does not replace or wrap either skill.
    named, announced side effect of the skill, not a silent one (see Working-tree hygiene).
 3. **Read structure.** Extract `project`, `layers[]`, `tour[]`, and file-level nodes with their
    `summary`, `filePath`, and `complexity`.
-4. **Interview.** Ask a short focused set of questions covering only what the graph cannot supply:
-   problem and motivation, target users, business context, and known constraints. Structural
-   questions are never asked — the graph already answered them.
-5. **Draft.** Emit the planning artifacts, attributing structural claims to the graph and intent
-   claims to the interview.
+4. **Read repo prose and signals.** The graph is not the only machine-readable source. The repo's
+   own prose states intent where it exists — the root README is the canonical instance — and
+   filesystem signals (a test tree, CI workflows, lint configuration) show development practice
+   directly, even where the graph's ignore rules excluded those paths from analysis. Extract from
+   these before asking a human anything.
+5. **Interview — engagement context only.** Ask only for what no artifact can hold because it is
+   about the engagement rather than the code: what the operator needs to do with this codebase, and
+   any constraints or off-limits areas written down nowhere. Two questions, both skippable.
+   Questions about the project's own nature — what problem it solves, who uses it, why it exists —
+   are never asked: an existing codebase answers those through its artifacts or not at all.
+6. **Draft.** Emit the planning artifacts, attributing structural claims to the graph, intent claims
+   to the prose source that stated them (cited by file), and engagement claims to the interview.
+   Before writing, show the derived project description for a single confirm-or-correct — the one
+   extracted value most likely to be stale.
 
 ### Outputs
 
@@ -208,32 +217,37 @@ that a machine produced this and no human has reviewed it.
 
 ### Interview scope
 
-The graph supplies structure; the interview supplies intent. Question set is bounded and derived
-from the concept guide's own section list. The table below names, per section, the graph fields to
-attempt first and what the human is asked for:
+The graph and the repo's own prose supply everything they can; the interview covers only
+**engagement context** — facts about why squadron is being pointed at this codebase, which no
+artifact can hold. Exactly two questions, asked once, both skippable:
 
-| Concept section | Graph fields attempted | Interview role |
+1. What the operator needs to do with this codebase (add features, audit, take over maintenance,
+   modernize) — the answer that makes generated initiative candidates targetable instead of generic.
+2. Constraints or off-limits areas written down nowhere (a dependency that cannot be upgraded, a
+   directory not to touch, an API that must stay stable).
+
+Questions about the project's own nature are never asked. What a project is for, who uses it, and
+how it is reached are answered by the README and the graph's surface evidence — or gap-marked when
+those sources are silent. "Why now" and audience-evolution questions are neither asked nor
+gap-marked: for an existing codebase they have no useful answer, and a generated document is not
+improved by recording that nobody answered them.
+
+The source model, per concept section:
+
+| Concept section | Sources attempted | Human role |
 |---|---|---|
-| Problem & Motivation | — | Primary; graph holds no statement of why |
-| Target Users | — | Primary; graph holds no statement of who |
-| Solution Approach | `layers[]`, `tour[]` node ordering | Confirm and correct the derived summary |
-| Initial Technical Direction | `project.languages`, `project.frameworks`, `config` nodes | Confirm; supply direction the code does not show |
-| Development Approach | test/CI `config` nodes as weak evidence | Primary; methodology is rarely inferable |
+| Overview | graph `project.description`, README lead | single confirm-or-correct before write |
+| Problem & Motivation | README's own problem statement (cited); engagement answer | Q1 supplies the engagement half |
+| Target Users | README; entry surfaces from graph | none — never asked |
+| Solution Approach | `layers[]`, `tour[]` node ordering | none |
+| Initial Technical Direction | `project.languages`, `project.frameworks`, `config` nodes | none |
+| Development Approach | filesystem signals (test tree, CI workflows, lint config); constraints answer | Q2 supplies unwritten constraints |
 
-**The extract-then-ask rule.** For each section, attempt extraction from its named graph fields
-first. Ask the human only when the fields are absent, or when what they yield is structure standing
-in for intent. This is the operative definition of "structural": *a claim is structural when it is
-supported by a named graph field, and intent when it is not.* A question is never asked for content
-already extracted — the extracted value is shown for confirmation instead, which is cheaper for the
-PM than answering from scratch.
-
-The two failure modes are asymmetric, and the rule is tuned accordingly: asking too much wastes the
-PM's time, while asking too little produces a fabricated concept. When a field is present but thin,
-ask.
-
-Anything the PM declines to answer is written as an explicit unknown, per the concept guide's "flag
-unknowns explicitly" rule, and recorded in the provenance block. It is never filled with a plausible
-guess.
+**Extraction precedes any human contact**, and extracted content is never re-asked — the derived
+project description is shown once for confirm-or-correct, which is cheaper for the PM than authoring
+from scratch. Anything the PM declines to answer is written as an explicit unknown, per the concept
+guide's "flag unknowns explicitly" rule, and recorded in the provenance block. It is never filled
+with a plausible guess.
 
 ### Working-tree hygiene
 
@@ -445,8 +459,6 @@ Settled during architecture review (20260818):
 
 ## Open Questions for Slice Design
 
-- **Interview wording for (a).** The extract-then-ask rule and the per-section graph-field mapping
-  are settled; the literal question wording and ordering are not.
 - **Reuse of `analyze-codebase-prompt.md`.** How much of its analysis template and `[INFERRED]`
   convention transfers to the graph-backed path. The document itself is retained regardless.
 - **Gap-marker syntax.** A single convention is needed for both capabilities. The retained

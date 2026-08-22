@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 360-arch.document-intelligence.md
 project: squadron
 dateCreated: 20260818
-dateUpdated: 20260818
+dateUpdated: 20260822
 status: not_started
 ---
 
@@ -108,34 +108,38 @@ where its analysis template is the direct comparable.
    - **Risk:** Low.
    - **Relative Effort:** 3/5
 
-3. [ ] **(363) Concept Generation with Interview** — The interview-driven half of capability (a):
-   produce `000-concept.{project}.md` for a codebase that has no concept document. Implements the
-   extract-then-ask rule — for each concept section, attempt extraction from its named graph fields
-   first, and ask the human only when the fields are absent or when what they yield is structure
-   standing in for intent. Settles the parent's open question on literal question wording and
-   ordering. Writes interview responses verbatim into the **User-Provided Concept** section and
-   preserves anything already there; verifies that section exists before writing and errors with a
-   pointer to `guide.ai-project.000-concept.md` if the layout has changed upstream. Declined answers
-   become explicit unknowns recorded in provenance, never plausible guesses.
+3. [ ] **(363) Concept Generation** — Produce `000-concept.{project}.md` for an existing codebase
+   that has no concept document. Non-interrogative by design: structure extracts from the graph,
+   intent extracts from the repo's own prose (root README, cited by file), and development practice
+   from filesystem signals (test tree, CI workflows, lint config) that the graph's ignore rules
+   cannot hide. The interview is engagement-context only — two skippable questions (what the
+   operator needs to do with the codebase; unwritten constraints) — with answers written verbatim
+   into the **User-Provided Concept** section, which is verified present in the concept guide's
+   layout before any write, with a loud stop naming the guide if the layout changed upstream. One
+   confirm-or-correct on the derived project description before writing. Declined answers become
+   explicit unknowns recorded in provenance, never plausible guesses; questions about the project's
+   own nature (what problem it solves, who it is for, why now) are never asked.
    - **Value:** User value — the highest-leverage output of this initiative, turning an unplanned
      codebase into squadron's Phase 0 entry point.
    - **Success Criteria:**
-     - Questions are asked only for sections the graph cannot supply; extracted content is shown for
+     - No question is asked whose answer any repo artifact or graph field supplies; the only
+       questions are the two engagement-context questions, and extracted content is shown for
        confirmation rather than re-asked from scratch.
      - A declined answer produces an explicit unknown in the document and an entry in provenance.
-     - The **User-Provided Concept** section holds interview responses verbatim, and pre-existing
+     - The **User-Provided Concept** section holds engagement answers verbatim, and pre-existing
        content there survives a re-run untouched.
      - A concept document whose User-Provided Concept section is absent causes a loud failure naming
        the governing guide, not a silent write elsewhere.
-     - Output carries `docType: concept`, `status: not_started`, and a provenance block.
+     - Output carries `docType: concept`, `status: not_started`, and a provenance block; every
+       prose-derived intent claim cites its source file.
      - Running against squadron produces a concept a PM would edit rather than discard.
    - **Dependencies:** [361], [362] (reuses the extraction mapping for Solution Approach and Initial
      Technical Direction).
    - **Interfaces:** Consumes the 361 contract and 362 mapping. Depends on the ai-project-guide's
      concept document layout — a cross-repo dependency, verified at write time.
-   - **Risk:** Medium — interview quality is the correctness criterion, and both failure directions
-     (asking too much, asking too little) degrade the result.
-   - **Relative Effort:** 4/5
+   - **Risk:** Low — extraction is inherited from 362; the prose-mining rule is bounded to the root
+     README, and the two-question interview has no wording risk left to carry.
+   - **Relative Effort:** 3/5
 
 4. [ ] **(364) Initiative Candidates** — Propose initiative-shaped work items from the graph, written
    to their own `{index}-analysis.initiative-candidates.md` and never into
