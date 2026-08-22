@@ -239,8 +239,8 @@ The source model, per concept section:
 | Overview | graph `project.description`, README lead | single confirm-or-correct before write |
 | Problem & Motivation | README's own problem statement (cited); engagement answer | Q1 supplies the engagement half |
 | Target Users | README; entry surfaces from graph | none — never asked |
-| Solution Approach | `layers[]`, `tour[]` node ordering | none |
-| Initial Technical Direction | `project.languages`, `project.frameworks`, `config` nodes | none |
+| Solution Approach | `layers[]`, `tour[]` node ordering; coverage boundary from the graph's own coverage facts | none |
+| Initial Technical Direction | `project.languages`, `project.frameworks`, `config` nodes, `entry-point` nodes | none |
 | Development Approach | filesystem signals (test tree, CI workflows, lint config); constraints answer | Q2 supplies unwritten constraints |
 
 **Extraction precedes any human contact**, and extracted content is never re-asked — the derived
@@ -429,6 +429,10 @@ exists for conversation summaries.
 
 - **[100]** — CLI command registration for any command surface.
 - **[340]** — skill pack install mechanism and the `sq:analysis` dispatcher pattern.
+- **cf-side:** the cf project registration supplies the `{project}` name for concept output, and
+  `/cf:onboard` owns the project setup (guide installation) the concept flow's preconditions
+  require, plus the greenfield conversational concept path — compositional with capability (a)'s
+  brownfield artifact-derived path, not overlapping.
 - **External:** `understand-anything` marketplace plugin (Capability 1 only). Capability 2 has no
   external dependency.
 

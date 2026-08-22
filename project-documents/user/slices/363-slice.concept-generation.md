@@ -83,7 +83,9 @@ plan. It is not a repo with no setup at all. The flow requires:
    If the guide tree is absent, stop and name the setup step — this is a terminal precondition
    failure, not a gap.
 3. **A resolvable project name** — from the cf project registration. Never from the graph (see
-   Output conventions).
+   Output conventions). If no registration resolves a name, **stop**, naming the setup step —
+   deriving a filename from the graph's `project.name` is prohibited, so there is no fallback and
+   this failure is terminal, same family as precondition 2.
 
 **Boundary:** `/cf:onboard` owns project setup and the conversational, greenfield concept path — a
 human describing what they want to build. This flow owns the artifact-derived, brownfield path — a
@@ -141,7 +143,9 @@ Unchanged mechanism from the comprehension flow's argument handling, narrowed:
 Selection is by explicit argument only. The skill never infers a flow from repo state — the absence
 of a concept document never auto-triggers this flow.
 
-Preflight runs in full for both flows, unchanged.
+Preflight runs in full for both flows, unchanged — including its `.gitignore` hygiene write, which
+the shared contract performs at the start of every run before any document is written. The concept
+flow adds no hygiene behavior of its own and skips none.
 
 ### The three-source extraction model
 
