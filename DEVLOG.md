@@ -14,6 +14,26 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260822
 
+### Slice 363: Concept Generation — Task Breakdown Complete
+
+**Phase 5 complete.** `user/tasks/363-tasks.concept-generation.md` (375 lines, frontmatter gate
+clean) converts the redesigned slice into 10 task groups: branch + premise re-verification (with
+STOP condition against the design's Verified-facts table), flow selector, preconditions and the
+`/cf:onboard` boundary, the three-source extraction model (graph / root README / filesystem
+signals), the binding per-section mapping table, the two-question engagement interview and single
+confirmation (byte-identical wording verification — an improvised question is a defect against
+SC2), the User-Provided Concept contract with re-run semantics, `[INFERRED]` governance + output
+conventions + provenance, the 6-step verification walkthrough (happy path with PM live, decline
+path, contract failure on a scratch guide copy, re-run, flow selection, discipline/scope), and
+slice close. Verification is paired with each authoring task per test-with; commits are
+distributed at seven checkpoints. Anchors re-traced today on `main` at `dfce803`: graph `1bfbca1`
+unchanged, README/tests/CI/config signals present, concept guide holds `## User-Provided Concept`
+exactly once, no existing `000-concept.*`. Task file carries an explicit PM-interaction notice:
+walkthrough 8.1 needs the PM live, framed before any question is asked, plain text only. Stale cf
+`slice`/`tasks` fields (still naming the deleted `-with-interview` documents) corrected to
+`363-slice.concept-generation` / `363-tasks.concept-generation`. Awaiting PM approval of the
+breakdown before Phase 6 (branch `363-slice.concept-generation` from `main`).
+
 ### Slice 363: Design Rejected and Redesigned — Concept Generation
 
 The PM rejected the original 363 design at the start of its Phase 6 verification walkthrough: the
