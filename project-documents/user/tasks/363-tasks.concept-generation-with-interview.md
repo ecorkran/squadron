@@ -95,14 +95,19 @@ status: not_started
         flow).
   - [ ] State that Preflight runs in full for both flows, unchanged, and that a concept run against a
         missing/malformed graph fails identically to a comprehension run.
-  - [ ] Success: the unrecognized-argument sentence is updated in place; no duplicate or conflicting
+  - [ ] Per the design's Implementation Notes, edit the existing sentence "The concept flow and the
+        initiative-candidates flow are slices 363 and 364" (in Flow: Comprehension Analysis) so it
+        no longer describes the concept flow as a future slice, since this task makes it exist.
+  - [ ] Success: the unrecognized-argument sentence is updated in place; the forward-reference
+        sentence no longer describes the concept flow as future work; no duplicate or conflicting
         statement about argument handling exists elsewhere in the file.
 
 - [ ] **1.2 Test: flow selection routes correctly** — Effort: 2/5
   - [ ] By inspection (this is a markdown skill file, not executable code): confirm the updated text
         unambiguously routes all four cases — no argument, `comprehension`, `concept`, and any other
         string (e.g. `candidates`, `foo`) — to the correct outcome, matching Success Criterion 1.
-  - [ ] This check is re-verified live in Task 8 (walkthrough step 3); no standalone execution here.
+  - [ ] This check is re-verified live in Task 8.1 (walkthrough step 3); no standalone execution
+        here.
   - [ ] Success: the four-case routing is unambiguous on read-through.
 
 ---
@@ -110,6 +115,11 @@ status: not_started
 ## Task 2: Extract-then-ask procedure and per-section decision table
 
 - [ ] **2.1 Add the extract-then-ask procedure** — Effort: 3/5
+  - [ ] Per the design's Implementation Notes: place this and every subsequent new subsection (Tasks
+        2–7) as one sibling flow section — "Flow: Concept Generation" — positioned after the
+        existing Flow: Comprehension Analysis and before the human-documentation divider. Reference
+        the existing Preflight and Document Conventions sections rather than duplicating their text;
+        duplication is what makes the two flows drift apart.
   - [ ] Add a new subsection stating the four-step procedure from design section **The
         extract-then-ask procedure** (lines 177–199): attempt, judge sufficiency, confirm-or-ask,
         record.
@@ -131,6 +141,10 @@ status: not_started
         `project.description`); Development Approach is **Ask** (primary), not weak-evidence, because
         the real graph carries zero test/CI nodes — state that the extraction attempt is still coded
         for a differently-configured repo, but its absence is the expected case here.
+  - [ ] For the Solution Approach row's "plus coverage boundary" clause: state what the boundary is
+        and where it comes from — sourced from 362's coverage facts (`.understandignore` scope,
+        `meta.json` `analyzedFiles`), naming which parts of the repo the graph did not see. Do not
+        leave this as a bare phrase with no content for the flow to act on.
   - [ ] Success: seven-row table present in the skill file, matching the design table exactly; the
         two stated deviations are called out inline, not silently merged into the generic rule.
 
@@ -167,8 +181,10 @@ status: not_started
         of the six questions mapped to it (Problem & Motivation ← Q1–2; Target Users ← Q3–4;
         Development Approach ← Q5; User-Provided Concept ← the verbatim capture of all answers), and
         no question maps to a **Confirm-or-correct** row.
+  - [ ] Commit: flow selection, extract-then-ask procedure, decision table, and interview questions
+        (Tasks 1–3) — `commands/analysis/understand.md` is buildable skill text at this checkpoint.
   - [ ] Success: the six-question set fully covers the Ask rows with no orphaned or misrouted
-        question.
+        question; commit made.
 
 ---
 
@@ -230,8 +246,9 @@ status: not_started
         marker.
   - [ ] Walk through the skill text against this fixture: confirm the populated section would be left
         untouched and the gap-marker section would be identified as refillable.
+  - [ ] Commit: User-Provided Concept cross-repo contract and re-run semantics (Tasks 4–5).
   - [ ] Success: the fixture demonstrates the mechanical distinction correctly; no changes made to
-        any file under `user/project-guides/` during this test.
+        any file under `user/project-guides/` during this test; commit made.
 
 ---
 
@@ -308,13 +325,25 @@ status: not_started
         date), and run `cf validate frontmatter` against it.
   - [ ] Confirm it passes cleanly, matching Success Criterion 8. Delete the scratch document
         afterward.
-  - [ ] Success: gate passes on the constructed frontmatter; scratch file removed.
+  - [ ] By inspection: confirm 7.1's filename/divergence rule and 7.3's four-outcome provenance
+        enumeration are present in the skill text and match the design, closing the loop on those
+        two additions before the live walkthrough exercises them in Task 8.
+  - [ ] Commit: output conventions — path, frontmatter, provenance (Task 7). All skill-text edits
+        for the concept flow (Tasks 1–7) are now complete in `commands/analysis/understand.md`.
+  - [ ] Success: gate passes on the constructed frontmatter; scratch file removed; commit made.
 
 ---
 
 ## Task 8: Verification walkthrough
 
-- [ ] **8.1 Happy path — full interview** — Effort: 4/5
+- [ ] **8.1 Flow-selection routing, live** — Effort: 1/5
+  - [ ] Execute Verification Walkthrough step 3 (design line 491): in a Claude Code session with the
+        updated skill file, confirm all four cases route correctly — no argument and `comprehension`
+        run the comprehension flow; `concept` runs this flow; `candidates` is unrecognized and stops.
+  - [ ] This is the live confirmation Task 1.2 deferred to here; 1.2 was read-through inspection only.
+  - [ ] Success: all four cases confirmed live, closing out Success Criterion 1 alongside Task 1.2.
+
+- [ ] **8.2 Happy path — full interview** — Effort: 4/5
   - [ ] Execute Verification Walkthrough step 4 (design lines 501–517): open
         `commands/analysis/understand.md` in a Claude Code session, instruct it to run the concept
         flow against this repo with argument `concept`, and answer all six questions.
@@ -324,13 +353,16 @@ status: not_started
         given); Solution Approach names layers and tour-derived ordering and states its coverage
         boundary; Initial Technical Direction lists the measured languages/frameworks; Development
         Approach sourced from interview with no gap marker misclaiming a missing field; provenance
-        distinguishes all four sourcing outcomes and carries both new lines; `grep -c 'INFERRED'`
-        returns non-zero with every marked sentence satisfying the rule; `cf validate frontmatter`
-        passes on the written file.
-  - [ ] Success: `000-concept.squadron.md` written; every checklist point confirmed; file committed
-        in Task 9.
+        distinguishes all four sourcing outcomes and carries both new lines, including the graph's
+        `project.name` value on the Source line per Task 7.1; `grep -c 'INFERRED'` returns non-zero
+        with every marked sentence satisfying the rule; `cf validate frontmatter` passes on the
+        written file.
+  - [ ] Success: `000-concept.squadron.md` written; every checklist point confirmed, including the
+        judgment call that the result is a concept a PM would edit rather than discard (Success
+        Criterion 14 — final acceptance still rests with PM review in Task 9.3); file committed at
+        the next checkpoint (Task 8.6).
 
-- [ ] **8.2 Decline path** — Effort: 3/5
+- [ ] **8.3 Decline path** — Effort: 3/5
   - [ ] Execute Verification Walkthrough step 5 (design lines 519–522) in a scratch copy of the tree:
         run the flow again, decline every question.
   - [ ] Confirm: document still written; Problem & Motivation, Target Users, and Development Approach
@@ -339,23 +371,27 @@ status: not_started
   - [ ] Success: decline path produces a valid document per design; no file under the real
         `user/project-guides/` is affected by this scratch run.
 
-- [ ] **8.3 Correction path** — Effort: 2/5
-  - [ ] Execute Verification Walkthrough step 6 (design lines 524–527): re-run and correct the
-        extracted Overview description.
+- [ ] **8.4 Correction path** — Effort: 2/5
+  - [ ] Execute Verification Walkthrough step 6 (design lines 524–527) in a **fresh scratch copy of
+        the tree containing no existing concept document** (do not reuse 8.2's real
+        `000-concept.squadron.md` — per Task 5.1's re-run semantics, a run against an existing
+        document would report it and stop rather than reach the Overview confirm-or-correct
+        interaction this task must exercise): run the flow and correct the extracted Overview
+        description.
   - [ ] Confirm: the correction lands in the body (not the original upstream description); provenance
         records the section as extracted-and-corrected, not extracted-and-confirmed.
   - [ ] Success: correction semantics confirmed live, matching design section **The extract-then-ask
         procedure**.
 
-- [ ] **8.4 Re-run against an existing document** — Effort: 3/5
+- [ ] **8.5 Re-run against an existing document** — Effort: 3/5
   - [ ] Execute Verification Walkthrough step 7 (design lines 529–532), using the real
-        `000-concept.squadron.md` written in 8.1: run the flow again.
+        `000-concept.squadron.md` written in 8.2: run the flow again.
   - [ ] Confirm: flow does not overwrite; reports the existing document; defaults to stop; when told
         to augment, appends to User-Provided Concept under a dated subheading while leaving
         already-populated Refined Concept sections byte-identical — verify with `git diff`.
   - [ ] Success: non-destructive re-run confirmed with `git diff` evidence.
 
-- [ ] **8.5 Read discipline and scope** — Effort: 2/5
+- [ ] **8.6 Read discipline, scope, and checkpoint commit** — Effort: 2/5
   - [ ] Execute Verification Walkthrough steps 8–9 (design lines 534–547): confirm no command read
         the graph without a `jq` field selection and no `function`/`class` node was read during any
         of the above runs; confirm `git status` on `.understand-anything/` shows no modification
@@ -364,7 +400,10 @@ status: not_started
         `commands/analysis/understand.md`, the generated concept document, this slice's own task and
         design documents, and the DEVLOG — nothing under `src/squadron/` or
         `project-documents/ai-project-guide/`.
-  - [ ] Success: both checks pass, matching Success Criteria 13 and 15.
+  - [ ] Commit the walkthrough's real-tree artifact (`000-concept.squadron.md` from 8.2) and any
+        skill-file fixes surfaced during the walkthrough.
+  - [ ] Success: both checks pass, matching Success Criteria 13 and 15; commit made, tree clean apart
+        from remaining close-out work.
 
 ---
 
@@ -387,8 +426,9 @@ status: not_started
   - [ ] Success: entry present, dated, concise.
 
 - [ ] **9.3 Final commit and hand-off** — Effort: 1/5
-  - [ ] `uv run ruff format .` before committing (project rule), commit remaining changes, confirm
-        clean tree.
+  - [ ] `uv run ruff format .` before committing (project rule), commit the close-out changes from
+        Task 9 (status updates, DEVLOG) — this is a checkpoint on top of the commits already made at
+        Tasks 3.2, 5.2, and 8.6, not a single end-of-slice commit. Confirm clean tree.
   - [ ] Report to the Project Manager for review and merge authorization. **Do not merge** — merging
         the slice branch is PM-gated.
   - [ ] Success: branch complete and clean; PM notified; no merge performed.
