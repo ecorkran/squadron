@@ -46,9 +46,30 @@ was never edited and the repo was clean after each. Default stop proved non-muta
 document (identical hash, clean diff); augment refilled exactly the emptied and gap-marked sections,
 appended under a dated subheading, and left populated sections byte-identical.
 
-**Generated artifact.** `user/project-guides/000-concept.squadron.md` — filename from the cf project
-name with the `squadron-ai` graph divergence stated in the Overview and recorded in provenance. The
-graph was 45 commits behind HEAD; the PM elected to proceed, and that decision is recorded.
+**Generated artifact — archived, not adopted.** The walkthrough wrote
+`000-concept.squadron.md` with the filename from the cf project name and the `squadron-ai` graph
+divergence stated in the Overview. It now lives at `user/archive/000-concept.squadron.md` as
+`docType: notes` / `status: deprecated`. It is **not** squadron's concept document: the engagement
+answers were fixtures given to exercise the interview, and squadron is under active development
+rather than a maintenance takeover. Kept because the extraction quality — and specifically the two
+places it needed correcting — is the data for tuning the flow.
+
+**Flow refinements from the walkthrough.** Three findings, all fixed in the same branch:
+
+1. **README precedence.** The Overview drew on `project.description` and the README lead with no
+   rule for disagreement. The graph's description was 45 commits stale and described an earlier,
+   narrower squadron. The flow now states that **the README wins** — it is author-maintained and
+   travels with the code, while `project.description` describes the repo as it stood when the graph
+   was built.
+2. **Disagreement is a finding, not noise.** Where the two sources describe the project as different
+   *kinds of thing*, the flow now surfaces that at the confirmation instead of blending them into an
+   averaged paragraph. A scope that moved without the graph following is worth telling the operator.
+3. **Decided-but-unbuilt intent is invisible to all three sources.** Both PM corrections in the
+   walkthrough (server surface moving to amoeba; pipelines driving the context-forge state machine)
+   were architectural intent no artifact could hold. The confirmation now carries one bounded,
+   skippable prompt for exactly that class of fact. It is **part of the confirmation, not a third
+   interview question** — SC2's two-question limit is intact, and a skipped answer adds nothing to
+   the document.
 
 **Deviations.** One beyond the task file: a second stale forward-reference at the comprehension
 flow's Project identity section ("in slice 363") was corrected alongside Task 7.4's, since it was the
