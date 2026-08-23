@@ -1028,6 +1028,28 @@ model id, or an explicit stop. Never a placeholder, never copied from another do
 
 ## Flow: Initiative Candidates
 
+Proposes initiative-shaped work items from the knowledge graph, written to a standalone
+`{index}-analysis.initiative-candidates.md` and never into `001-initiative-plan.{project}.md`.
+
+Run **Preflight: Graph Contract** in full first, then check the preconditions below, then derive,
+then confirm, then write.
+
+### Preconditions
+
+**1. The graph is present.** This is the shared **Preflight: Graph Contract** above, executed
+unchanged — location, validation, staleness, hygiene. This flow adds no hygiene behavior of its own
+and skips none; do not re-implement any part of the contract here.
+
+**2. The project name resolves** from the cf project registration. **Never from the graph** — see
+**Output conventions** above. If no registration resolves a name, **stop**, naming the setup step.
+
+**The concept document is not a precondition.** Its absence is an observation this flow records, not
+a stop — see "The optional concept read" below.
+
+**No `/cf:onboard` boundary concern applies here**, unlike Flow: Concept Generation above. This flow
+writes to `analysis/`, which Flow: Comprehension Analysis already writes to, so it requires nothing of
+`project-guides/` beyond what the two preconditions above already require.
+
 ---
 
 # Project documentation
