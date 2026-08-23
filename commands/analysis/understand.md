@@ -1075,6 +1075,47 @@ one invented candidate makes every other candidate in the document suspect.
 **Emitting zero candidates is a success, not a failure.** The document is still written (on
 confirmation), and it states that the graph supported no candidate, naming what it looked for.
 
+### The optional concept read
+
+When `project-documents/user/project-guides/000-concept.{project}.md` exists, read **two sections
+only**: **User-Provided Concept** (the verbatim engagement answers, Q1 in particular) and **Problem &
+Motivation** (the engagement half). Nothing else — not Solution Approach, not Initial Technical
+Direction, not Development Approach. Those are graph-derived in the concept itself, so reading them
+here would launder graph content through a second document and present it as independent
+corroboration.
+
+**What it changes, and what it does not:**
+
+| Aspect | Effect of the concept |
+|---|---|
+| **Which candidates exist** | **None.** Candidates are derived from graph signals only. The concept never creates a candidate, never suppresses one, and never supplies one the graph does not support. |
+| **Their order** | **This is the whole effect.** Candidates whose implicated layers align with the stated engagement intent are ordered first. |
+| **Their scope statements** | The scope paragraph may frame the work in terms of the stated intent, provided every factual claim in it still traces to a graph signal. |
+
+**The concept cannot manufacture a candidate.** This boundary is what keeps the no-padding rule
+enforceable — if engagement context could originate candidates, "we're here to modernize" would
+license proposing anything at all.
+
+**Ordering influence is stated per candidate**, not applied invisibly: a candidate ordered up by the
+engagement read says so, and names the concept as the reason.
+
+**Degradation when absent.** No concept, or a concept lacking both named sections: candidates are
+ordered by **signal strength alone** — descending count of `complex` file-level nodes for complexity
+clusters, descending `nodeIds | length` for layer boundaries.
+
+The degradation is **stated in the document body and recorded in provenance**, never silent:
+
+```
+Ordered by signal strength alone — no concept document was found at
+project-documents/user/project-guides/000-concept.{project}.md. With one present, candidates
+would additionally be ordered against the engagement intent it records.
+```
+
+A concept that exists but whose User-Provided Concept section records **both questions declined** is
+treated as absent for ordering purposes, and the provenance says which of the two cases occurred. A
+declined interview and a missing document are different facts, and collapsing them would hide that the
+interview happened.
+
 ---
 
 # Project documentation
