@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 360-arch.document-intelligence.md
 project: squadron
 dateCreated: 20260818
-dateUpdated: 20260822
+dateUpdated: 20260823
 status: not_started
 ---
 
@@ -151,21 +151,21 @@ where its analysis template is the direct comparable.
    confirmation, and what the PM confirms is that the document is worth writing at all — adopting a
    candidate into the real plan stays a deliberate manual act.
 
-   **Open at design time — does this flow read the concept?** This entry says no: dependencies are
-   [361] and [362], and every candidate derives from `layers[]`, `complexity`, and `edges[]`. But
-   363's design lists 364 as consuming Q1's engagement answer via the written concept. The two
-   disagree, and the answer decides what 364 *is*. A graph carries structure, not priorities — layer
-   boundaries and complexity clusters show where code is tangled, never where work is valuable.
-   Engagement context is the only available input that would make candidates prioritized rather than
-   merely structural, which argues for reading the concept when one exists and degrading to
-   structure-only when it does not. **Settle this in Phase 4 and reconcile whichever document is
-   wrong.**
+   **Resolved in Phase 4 — this flow reads the concept when one exists.** The disagreement between
+   this entry (graph-only) and 363's design (consumes Q1 via the written concept) is settled in
+   `364-slice.initiative-candidates.md`: the concept is an **optional input**, never a precondition.
+   It changes candidate **ordering** only — it never creates, suppresses, or supplies a candidate the
+   graph does not support. With no concept, ordering falls back to signal strength and the
+   degradation is stated in the body and in provenance. Hard dependencies remain [361] and [362];
+   363's Integration Points line is qualified with *when a concept exists*.
 
-   **Open at design time — where candidate quality gets judged.** The mechanical criteria below are
-   all verifiable against squadron. Candidate *usefulness* is not: squadron already has an
-   initiative plan written by hand, so a proposal here cannot be told apart from a restatement of
-   work already scoped. Build and verify the mechanics against squadron; judge whether the
-   suggestions are worth having on a repo nobody on this project has planned.
+   **Resolved in Phase 4 — candidate usefulness is not a success criterion of this slice.** Mechanical
+   correctness (signal named, node IDs resolve, dependencies counted from `edges[]`, nothing written
+   without confirmation) is verified against squadron. Usefulness is not verifiable here, because
+   squadron's initiative plan is already hand-written and a proposal cannot be told apart from a
+   restatement of it. Judged instead on a repo nobody on this project has planned; recorded as an
+   explicit non-criterion so a green walkthrough is not read as evidence the suggestions are good.
+
    - **Value:** Developer value — turns structural observations into reviewable proposals without
      letting a machine author a commitment document.
    - **Success Criteria:**
@@ -175,8 +175,12 @@ where its analysis template is the direct comparable.
        modified by the skill.
      - The document is written only after explicit confirmation.
      - Dependencies between candidates are derived from `edges[]`, not asserted.
+     - With a concept present, ordering is engagement-informed and each affected candidate says so;
+       with none, ordering is signal-strength-only and the degradation is stated in body and
+       provenance.
    - **Dependencies:** [361], [362].
-   - **Interfaces:** Consumes the 361 contract and 362 mapping.
+   - **Interfaces:** Consumes the 361 contract and 362 mapping. Optionally reads
+     `000-concept.{project}.md` (363's output) for ordering; runs correctly without it.
    - **Risk:** Low — output is advisory and adoption is manual.
    - **Relative Effort:** 2/5
 

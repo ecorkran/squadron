@@ -2,13 +2,67 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260822
+dateUpdated: 20260823
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260823
+
+### Slice 364: Initiative Candidates — Design Complete
+
+**Phase 4 complete.** `364-slice.initiative-candidates.md` written; both open questions the slice
+plan recorded at planning time are resolved and the two disagreeing documents reconciled.
+
+**Does 364 read the concept? Yes — as an optional input.** The slice plan said graph-only
+(dependencies [361], [362]); 363's Integration Points said 364 consumes Q1's engagement answer via
+the written concept. Settled: the flow reads `000-concept.{project}.md` when one exists and degrades
+to structure-only when it does not. The concept affects **ordering only** — it never creates,
+suppresses, or supplies a candidate the graph does not support, which is what keeps the no-padding
+rule enforceable. Hard dependencies stay [361] and [362]; the concept is an input, not a dependency,
+so the graph-only path every repo has on day one still runs.
+
+The reasoning is grounded in the real graph: ten layers, and `complex` file-level nodes distributed
+14/9/7/7/3/1/1/1 across eight of them. That is roughly eight defensible candidates with no ordering
+principle among them. Q1 ("take over maintenance and modernize" vs "audit it") is the only available
+input that orders the identical set. A both-questions-declined concept is recorded distinctly from a
+missing one — the interview happening and returning nothing is a different fact.
+
+**Where candidate quality gets judged.** Mechanical correctness — signal named, node IDs resolve,
+dependencies counted from `edges[]`, nothing written without confirmation — verifies against
+squadron and the walkthrough does exactly that. Usefulness does not: squadron's initiative plan is
+hand-written, so a proposal cannot be told apart from a restatement of already-scoped work. Recorded
+as an **explicit non-criterion** so a green walkthrough here is not read as evidence the suggestions
+are good.
+
+**Design decisions beyond the two questions:**
+
+- **One signal per candidate**, never two. A candidate citing both a layer boundary and a complexity
+  cluster is checkable against neither.
+- **Node IDs are cited, not summarized.** "Several files in Pipeline Orchestration" is not checkable
+  by someone deciding whether to adopt the proposal.
+- **Dependencies are directional edge counts, not sequencing claims.** The document says "27 imports
+  into Candidate 1's layers"; inferring order from that belongs to the human.
+- **The confirmation defaults to not writing** — the opposite of 363's, which never stalls. 363
+  writes a Phase 0 entry point a repo has no other way to obtain; this writes an advisory list that
+  costs nothing to regenerate.
+- **Zero candidates still asks, and still writes.** A negative result is a real finding about the
+  graph; suppressing it would make it indistinguishable from a failed run.
+- **`[INFERRED]` is not used in this flow**, stated explicitly so the absence reads as a decision. A
+  claim not traceable to a cited signal or node id has no place in the document at all.
+- **362's mechanics are cited, never restated** — file-level definition, `nodeIds | length` counting
+  with type breakdown, ordinal `complexity` handling, drift rule, edge endpoint string-parse.
+
+**Documents corrected:** slice plan entry 4 (both "Open at design time" blocks replaced by the
+resolutions, ordering success criterion and optional-read interface added); 363's Integration Points
+line for 364 qualified with *when a concept exists*.
+
+No Python. `cf validate frontmatter` passes on all three touched documents.
 
 ---
 

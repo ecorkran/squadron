@@ -6,7 +6,7 @@ parent: 360-slices.document-intelligence.md
 dependencies: [361, 362]
 interfaces: [364, 366]
 dateCreated: 20260822
-dateUpdated: 20260822
+dateUpdated: 20260823
 status: complete
 review: none
 ---
@@ -337,8 +337,10 @@ carry no special discipline beyond the bounded lists above.
 
 ## Integration Points
 
-- **[364]** — extends the flow-selection mechanism for `candidates`; consumes Q1's engagement answer
-  (via the written concept) to target its candidates.
+- **[364]** — extends the flow-selection mechanism for `candidates`; **when a concept exists**,
+  consumes Q1's engagement answer (via the written concept) to order its candidates. Settled in
+  364's design: the concept is an optional input there, affecting ordering only, and 364 runs
+  correctly on a repo where this flow has never been invoked.
 - **[366]** — adds `/sq:analysis understand concept` routing; this slice is exercised by invoking
   the skill file directly, as 361/362 were.
 - **`/cf:onboard`** — provides the setup this flow's preconditions require; owns the greenfield
