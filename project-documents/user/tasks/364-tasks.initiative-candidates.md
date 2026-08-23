@@ -364,7 +364,13 @@ the PM interaction notice above.
   - [ ] Check by hand: five record parts in order per candidate; exactly one signal each;
         dependency lines carry counts and assert no ordering; the body states the non-modification
         guarantee.
-  - [ ] Success (SC2, SC4, SC6, SC8): validation passes and all four hand checks hold.
+  - [ ] **The document is kept and committed.** This step writes into the real tree (unlike 8.7 and
+        8.8, which use scratch copies), taking index **945**. It is the slice's proof artifact —
+        the thing a reader checks the walkthrough's claims against — so it is committed here, on
+        its own, rather than riding along in a later commit.
+  - [ ] Commit: `docs: add generated initiative candidates from walkthrough`
+  - [ ] Success (SC2, SC4, SC6, SC8): validation passes, all four hand checks hold, and the written
+        document is committed.
 
 - [ ] **8.4 Node ID resolution** — Effort: 1/5
   - [ ] For each cited node id, confirm it resolves to a node carrying a `filePath` (design query).
@@ -423,6 +429,7 @@ the PM interaction notice above.
         discipline; node-ID list rendering.
   - [ ] Success: the walkthrough reflects reality and the four deferred decisions are recorded with
         what was chosen.
+  - [ ] Commit: `docs: reconcile 364 walkthrough and record deferred decisions`
 
 - [ ] **9.2 Mark the slice complete** — Effort: 1/5
   - [ ] Set `status: complete` on the slice design and this task file.
@@ -431,10 +438,14 @@ the PM interaction notice above.
         pending a repo with no hand-written initiative plan. Do not let a green walkthrough be
         recorded as evidence the candidates are good.
   - [ ] Success: statuses set, entry checked, the usefulness caveat recorded.
+  - [ ] Commit: `docs: mark slice 364 complete`
 
 - [ ] **9.3 DEVLOG and merge** — Effort: 1/5
   - [ ] Write the DEVLOG entry per the Session State Summary guidance.
   - [ ] `.venv/bin/ruff format --check .` before the final commit.
+  - [ ] Commit: `docs: record slice 364 in DEVLOG`
+  - [ ] Confirm the tree is clean before merging — 8.3, 9.1, and 9.2 each committed their own work,
+        so nothing from the close-out should remain uncommitted at this point.
   - [ ] Merge `364-slice.initiative-candidates` into `main`. **Do not delete the branch** — project
         rules require explicit instruction.
   - [ ] Success: DEVLOG written, format clean, merged to `main`.
