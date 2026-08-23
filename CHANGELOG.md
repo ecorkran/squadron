@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `/understand concept` generates a Phase 0 concept document for an existing codebase that has never
+  had planning artifacts. It reads the knowledge graph for structure, your README for intent, and the
+  filesystem for development practice (test tree, CI, lint config) before asking you anything — then
+  asks just two questions about the engagement plus one confirm-or-correct on the derived
+  description. Both questions are skippable, and a skipped answer is recorded as an explicit gap
+  rather than guessed at. An existing concept document is never overwritten.
+
 ## [0.11.0] - 20260819
 
 ### Added

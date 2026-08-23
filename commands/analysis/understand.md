@@ -304,9 +304,10 @@ and the test is mechanical:
 `[INFERRED]` is not a license to add one. **A conforming comprehension document contains zero
 `[INFERRED]` markers** — `grep -c 'INFERRED'` returns 0.
 
-The marker stays documented in these shared conventions because slice 363's interview path genuinely
+The marker stays documented in these shared conventions because Flow: Concept Generation genuinely
 needs it: a concept's Solution Approach derived from tour ordering *is* an inference from indirect
-evidence. Governance for that use belongs to 363.
+evidence. Governance for that use is **`[INFERRED]` governance for this flow**, in that flow's
+section below.
 
 ### Provenance block
 
@@ -384,13 +385,32 @@ misattributes the document.
 `needs_review` member; `complete` would assert a review that has not happened. Review state is
 carried by the provenance block, and `not_started` correctly reflects that no human has reviewed it.
 
+## Flow selection
+
+This skill implements two flows. The invocation argument selects between them:
+
+| Argument | Flow |
+|---|---|
+| none | Flow: Comprehension Analysis |
+| `comprehension` | Flow: Comprehension Analysis |
+| `concept` | Flow: Concept Generation |
+| anything else | **unrecognized** — say so and stop |
+
+`candidates` is **not** recognized; the initiative-candidates flow is slice 364. Any other argument
+stops the same way — say the argument is unrecognized and stop; do not guess at intent.
+
+**Selection is by explicit argument only.** The skill never infers a flow from repository state. The
+absence of a concept document never auto-triggers Flow: Concept Generation, and the presence of one
+never suppresses it. A flow runs because it was named.
+
+**Preflight runs in full for both flows, unchanged** — location, validation, staleness, and the
+`.gitignore` hygiene write, which the shared contract performs at the start of every run before any
+document is written. Flow: Concept Generation adds no hygiene behavior of its own and skips none.
+
 ## Flow: Comprehension Analysis
 
-This is the default flow and the only one this skill implements. Run **Preflight: Graph Contract** in
-full first — location, validation, staleness, hygiene — then extract and write.
-
-Any argument other than the comprehension default is **unrecognized**. Say so and stop; do not guess
-at intent. The concept flow and the initiative-candidates flow are slices 363 and 364.
+This is the default flow. Run **Preflight: Graph Contract** in full first — location, validation,
+staleness, hygiene — then extract and write.
 
 ### Extraction mapping
 
@@ -447,8 +467,8 @@ Fallback: a `[GAP: ...]` marker **per missing subfield**, naming that subfield. 
 object as a whole is a preflight rejection (**Validation** step 3 above) and never reaches this
 section — do not re-implement that check here.
 
-This section supplies the concept document's Initial Technical Direction in slice 363, which is why
-identity is captured here rather than left to that slice.
+This section supplies the concept document's Initial Technical Direction in **Flow: Concept
+Generation**, which is why identity is captured here rather than left to that flow.
 
 **2. Layer architecture** — from `layers[]`.
 
@@ -626,7 +646,382 @@ file pre-populated with commented suggestions.
 Fallback: `[GAP: ...]` naming the specific file that could not be read.
 
 **Do not add sections beyond these seven.** The mapping table is the full scope of this flow. Concept
-generation is slice 363 and initiative candidates are slice 364; neither is written here.
+generation is **Flow: Concept Generation** below and initiative candidates are slice 364; neither is
+written here.
+
+## Flow: Concept Generation
+
+Writes `000-concept.{project}.md` for an existing codebase that has no concept document — the Phase 0
+entry point for a repo that has never had cf/sq planning artifacts.
+
+The governing rule of this flow: **an existing codebase answers questions about its own nature
+through its artifacts, or not at all.** Three machine-readable sources are extracted **before any
+human contact**. The human is asked exactly one category of thing — engagement context, the facts no
+artifact can hold — as two fixed questions, plus one confirm-or-correct on the derived description.
+
+Run **Preflight: Graph Contract** in full first, then check the preconditions below, then extract,
+then interview, then draft, then confirm, then write.
+
+### Preconditions
+
+The target scenario is a repo with **no user-level cf/sq artifacts** — no concept, no initiative
+plan. It is not a repo with no setup at all. Three preconditions, checked before extraction:
+
+**1. The graph is present.** This is the shared **Preflight: Graph Contract** above, executed
+unchanged — location, validation, staleness, hygiene. Missing, malformed, and stale handling all
+belong to that contract; do not re-implement any part of it here.
+
+**2. The ai-project-guide is installed.** The concept guide's layout is read at write time from:
+
+```
+project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md
+```
+
+If the guide tree is absent, **stop** and name the setup step (`cf init` or `/cf:onboard`) that
+installs it. This is a **terminal precondition failure, not a gap** — the document cannot be
+correctly written at all, so no document is written.
+
+**3. The project name resolves** from the cf project registration. **Never from the graph** — see
+**Output conventions** below. If no registration resolves a name, **stop**, naming the setup step.
+Deriving a filename from the graph's `project.name` is prohibited, so there is no fallback; this
+failure is terminal, the same family as precondition 2.
+
+**Boundary with `/cf:onboard`.** `/cf:onboard` owns project setup and the conversational, greenfield
+concept path — a human describing what they intend to build. This flow owns the artifact-derived,
+brownfield path — a machine drafting from what already exists. They **compose** (onboard installs the
+scaffolding these preconditions require) and **do not overlap**: neither contains the other's
+interaction model.
+
+### The three-source extraction model
+
+Extraction runs against three sources, **in the order below, before any human contact**. Each source
+has a distinct attribution style, and the style is what makes a claim traceable at the point of
+reading.
+
+**Source 1 — the graph (structure).**
+
+Fields read: `project.description`, `project.languages`, `project.frameworks`; `layers[]` names and
+descriptions; `tour[]` order; file-level nodes tagged `entry-point`; `config` nodes.
+
+*Attribution:* each claim **names its field inline**, exactly as the comprehension flow does.
+
+*Read discipline:* 362's discipline, unchanged — field-scoped `jq` selections only, the whole graph
+never loaded, no `function` or `class` node read. **This flow reads strictly less of the graph than
+the comprehension flow does**: no edges, no complexity tiers, no per-node summaries.
+
+**Source 2 — the repo's own prose (intent).**
+
+A repo's README states what it is, what problem it addresses, and who reaches it, in its authors'
+own words. That is the intent no graph field carries.
+
+**Where the README and `project.description` disagree, the README wins.** `project.description` is
+upstream-generated prose describing the repo as it stood when the graph was built; the README is
+maintained by the project's own authors and travels with the code. A graph that is many commits
+behind HEAD routinely carries a description of an earlier, narrower version of the project.
+
+**Do not blend the two into a single averaged paragraph.** When they describe the project
+differently — not merely in different words, but as a different kind of thing — that disagreement is
+itself a finding: it usually means the project's scope moved and the graph did not follow. Surface it
+at the confirmation step (below) rather than resolving it silently.
+
+*Resolution:* the **root-level README, case-insensitive**, with `README.md` preferred when several
+extensions exist. **Nothing below the root is read** — `docs/` trees and wikis are out of scope for
+this flow by design: unbounded cost, unpredictable relevance.
+
+*Attribution:* a claim **cites its file** (`README.md`). **Quoted material is quoted, never
+paraphrased into squadron's own voice** — the distinction between what the repo says about itself and
+what squadron asserts must survive into the document.
+
+*When there is no root README:* the run loses the prose source. Affected sections **fall back to
+graph fields where the mapping table maps them, and to gap markers where it does not**. The source
+model degrades **explicitly, never silently**.
+
+**Source 3 — filesystem signals (development practice).**
+
+The graph's ignore rules routinely exclude test trees and CI configuration from analysis; the
+filesystem cannot hide them. This source is a **closed checklist**:
+
+| Signal | Probed at |
+|---|---|
+| Test tree | `tests/` or `test/` at the repo root |
+| CI | `.github/workflows/` non-empty, or `.gitlab-ci.yml` |
+| Lint/format/test configuration | tool tables in `pyproject.toml`, `.pre-commit-config.yaml`, `.eslintrc*`/`.prettierrc*` |
+
+**The checklist is closed — a signal outside it is not probed.** Do not extend it opportunistically;
+an open-ended filesystem hunt is what this bounded list exists to prevent.
+
+*Attribution:* reported as **observations with paths** ("`tests/` present at repo root";
+"`.github/workflows/ci.yml`").
+
+**Absence of a signal is an observation, not a gap.** "No test tree observed at the repo root" is a
+true and useful statement about development practice, and the source that produced it was fully
+readable. A gap marker would wrongly imply something failed to be read.
+
+### Per-section mapping
+
+The concept guide's own sections, in its order. **Each row is binding**: the section is written from
+those sources, in that order, with that human role and no other.
+
+| # | Section | Sources, in order | Human role |
+|---|---|---|---|
+| 1 | Overview | README lead; graph `project.description`; `layers[]` descriptions | single confirm-or-correct before write |
+| 2 | User-Provided Concept | engagement answers, verbatim | the two questions |
+| 3 | Problem & Motivation | README problem statement (cited); Q1 answer for the engagement half | none beyond Q1 |
+| 4 | Target Users | README; graph entry surfaces (`entry-point` nodes, `frameworks`) | none — never asked |
+| 5 | Solution Approach | `layers[]` names + descriptions; `tour[]` order; coverage boundary | none |
+| 6 | Initial Technical Direction | `project.languages`, `.frameworks`; `config` nodes; `entry-point` nodes | none |
+| 7 | Development Approach | filesystem signals checklist; Q2 answer for unwritten constraints | none beyond Q2 |
+
+**The Overview reads `layers[]` descriptions, not only the two top-level summaries.**
+`project.description` and the README lead are both *summaries*, and a summary drops the specific
+systems a project integrates with. Layer descriptions name them — an integration that appears in two
+layer descriptions and its own module is a fact about what this project **is**, not merely how it is
+built, and an Overview that omits it is thinner than its own sources.
+
+> Before confirming the description, check it against `layers[]`: if a system named in two or more
+> layer descriptions appears nowhere in the Overview, it belongs there.
+
+This costs no extra read — `layers[]` is already loaded for Solution Approach.
+
+**Dropped, not gap-marked.** "Why now", audience-evolution, and methodology-preference questions
+appear **nowhere** — not asked, and not marked absent. For an existing codebase they have no useful
+answer, and a generated document is not improved by recording that nobody answered them.
+
+> A gap marker is reserved for content a section **needs** whose source is missing. These are topics
+> the document does not need.
+
+**Solution Approach's coverage boundary** is sourced from the coverage facts the comprehension flow
+already establishes (section 7): `.understandignore` active patterns, and `meta.json`'s
+`analyzedFiles` reconciled against the file-level node count. It states **which parts of the repo the
+graph never saw** — on squadron, everything outside `src/` and root configuration, including the
+markdown command surface. A concept that claims to describe the whole system while resting on a
+partial graph is the failure this boundary prevents.
+
+### The engagement interview
+
+**Exactly two questions.** Fixed wording — not improvised, not extended, not reworded. Asked **once,
+as one block, after extraction and before drafting**, so the answers inform Problem & Motivation and
+Development Approach in a single drafting pass.
+
+Ask these, verbatim:
+
+```
+1. What do you need to do with this codebase — add features, audit it, take over
+   maintenance, modernize it, something else?
+
+2. Are there constraints or off-limits areas that aren't written down anywhere — a
+   dependency that can't be upgraded, a directory not to touch, an API that must stay
+   stable?
+```
+
+**An improvised, added, or reworded question is a defect against Success Criterion 2, not a judgment
+call.** No third question. No follow-up prompt on an answer. No clarifying round.
+
+**Why these two and no others:** they are the only questions whose answers no artifact can hold,
+because they are facts about the **engagement** rather than about the code. Everything else a
+discovery interview would ask, an existing codebase already answers through its README, its graph,
+and its filesystem.
+
+**Both are skippable**, without argument or follow-up. A declined question produces:
+
+- a **gap marker at the point of absence**, naming the interview as the input that would supply it,
+  and
+- an entry in the provenance block's **declined-questions** line.
+
+Never a plausible guess. Never a silent omission.
+
+**Answers land verbatim in User-Provided Concept.** The operator's words about the engagement *are*
+the user-provided concept for a brownfield run. They are additionally the source for **Problem &
+Motivation's engagement half** (Q1) and **Development Approach's constraints** (Q2) — used twice,
+asked once.
+
+### The single confirmation
+
+After drafting and **before the file write**, show the operator:
+
+- the **derived project description** — the Overview paragraph, README-led per the precedence rule
+  above;
+- the graph's **`lastAnalyzedAt`** and its distance behind HEAD, so a stale description is
+  recognizable as stale; and
+- **the disagreement, when there is one** — where `project.description` and the README describe the
+  project as different kinds of thing, say so in one line and name both framings. This is the single
+  most likely thing for the operator to correct, and showing it is what turns a vague "looks about
+  right" into a real answer.
+
+Then ask them to **confirm or correct** it, and add one prompt with it:
+
+> Anything the codebase can't tell me — a surface being moved out, a component being replaced,
+> a direction already decided but not yet built?
+
+**This is part of the confirmation, not a third interview question.** It is bounded to the
+description being confirmed, it is skippable in the same breath as the confirmation itself, and a
+skipped answer adds nothing to the document — no gap marker.
+
+Its purpose is narrow, and narrower than it may look: **a decision made but not yet built** is
+invisible to all three sources, because the artifacts show what is, never what was decided last
+week. A component moving to another system, a surface being deprecated in favor of a replacement
+elsewhere — no graph field, README line, or filesystem signal can reach those.
+
+**This prompt is not a substitute for reading the sources properly.** A fact already present in
+`layers[]`, the README, or a module name is an extraction failure when the operator has to supply
+it, not a fact the codebase could not hold. Do not lean on this prompt to cover a thin draft.
+
+Corrections from this prompt land in the body with the rest of the description and are recorded as
+`extracted-and-corrected`.
+
+One interaction, about content already extracted — never a request to author from nothing. Three
+outcomes:
+
+| Outcome | Body | Provenance records |
+|---|---|---|
+| Confirmed | the derived description stands | extracted-and-confirmed |
+| Corrected | **the correction** lands in the body; the original is **not** retained beside it | extracted-and-corrected |
+| Refused or unavailable | the draft proceeds, description attributed to its sources | extracted-unconfirmed |
+
+**The flow never stalls on a confirmation.** No answer is a valid outcome with its own provenance
+record, not a reason to wait.
+
+**This is the only confirmation in the flow.** Graph-derived structure — layers, languages,
+frameworks, tour order — is **attributed, not confirmed section-by-section**. The operator edits the
+draft afterward if it is wrong; that is cheaper than a per-section confirm-or-correct cycle, and it
+is why this flow has one confirmation instead of seven.
+
+### The User-Provided Concept contract
+
+The concept guide is a **cross-repo dependency**: it lives in `ai-project-guide`, which updates
+independently of squadron. Its layout is therefore **verified at write time, never assumed**.
+
+**Before any write**, run both checks:
+
+**Check 1 — the guide is readable** at:
+
+```
+project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md
+```
+
+Unreadable or absent → **stop**, naming the path. If the **whole ai-project-guide tree** is absent,
+name the setup step (`cf init` / `/cf:onboard`) instead of just the file — the operator's problem is
+that setup has not run, and naming a single missing file would send them looking for the wrong thing.
+
+**Check 2 — the section title is exactly right.** The guide's document-structure block must contain a
+section titled exactly:
+
+```
+## User-Provided Concept
+```
+
+Absent or renamed → **stop**, naming the guide, the expected title, and that **the layout appears to
+have changed upstream**. Never write to a substitute section, and never write to a remembered layout.
+
+**Neither failure is a gap marker.** A gap marker means "this document is missing something"; these
+two mean **"this document cannot be correctly written at all"**. Nothing is written on either path.
+
+**Write rules for the section:**
+
+- **Verbatim** — the operator's answers exactly as given. Never summarized, never reworded, never
+  grammar-corrected. Their words are the artifact.
+- **Preserve what is there** — pre-existing section content survives untouched; new answers **append
+  below, under a dated subheading** (`### {YYYYMMDD}`).
+
+### Re-run semantics
+
+This flow's output path is fixed, so a re-run meets an existing document.
+
+- **No existing document** → write it.
+- **Existing document** → **never overwrite.** Report that it exists, offer **augment or stop**, and
+  **stop is the default** — an unattended or ambiguous answer stops.
+
+**Augment** does two things and nothing else:
+
+1. **Appends to User-Provided Concept** per the preservation rule above (dated subheading, verbatim).
+2. **Refills only the Refined Concept sections that are empty or hold exactly a `[GAP: ...]`
+   marker** — the **mechanical refillability test**. A section holding real content is left alone,
+   byte-identical.
+
+**The augment interaction:** an augment run performs the flow's **normal interview** — the two fixed
+questions, once — and those answers are what the append carries. A stopped run asks nothing at all.
+There is no separate augment-only question set; the flow has no other source for appended
+User-Provided Concept content.
+
+**A human-edited concept is never rewritten from a graph.** The refillability test is mechanical
+precisely so that this rule needs no judgment: content means keep, empty-or-gap means refill.
+
+### `[INFERRED]` governance for this flow
+
+The shared **Gap markers** section reserves `[INFERRED]` for this flow. Unlike the comprehension
+flow — where every claim traces to a named field and any `[INFERRED]` marker is a defect — a
+concept's Solution Approach genuinely infers from indirect evidence: tour ordering implying
+importance is a claim the `tour[]` field does not literally make.
+
+The checkable rule:
+
+> A sentence carries `[INFERRED]` when it is derived from a named graph field but **asserts something
+> the field does not literally state**. A sentence that **restates** a field carries no marker. A
+> sentence with **no source** behind it does not belong in the document.
+
+**Prose sources interact with this rule by citation, not inference.** A claim the README states is
+**cited to `README.md` and carries no marker** — the source literally says it. Inferring from prose
+and marking the result `[INFERRED]` misreads the rule: the marker's home is **graph-structural
+inference**, not "anything squadron concluded".
+
+**A PM-confirmed inference stays marked.** Confirmation changes the **provenance entry**, not the
+body. An inference that a human agreed with is still an inference, and a reader six months later
+needs to see that.
+
+**Every `[INFERRED]` sentence is listed in the provenance block**, alongside gap markers.
+
+### Output conventions
+
+**Path:**
+
+```
+project-documents/user/project-guides/000-concept.{project}.md
+```
+
+`{project}` is resolved **from the cf project registration** — **never `project.name` from the
+graph**. The graph carries a distribution name, which is not the project name: on squadron the graph
+says `squadron-ai` while the project is `squadron`.
+
+**Where the two differ**, the difference is **stated in the Overview** and the graph's value is
+**recorded in provenance**. A reader who sees only one of the two names cannot tell which artifact
+they are holding.
+
+**Frontmatter:**
+
+```yaml
+---
+docType: concept
+layer: project
+phase: 0
+phaseName: concept
+project: {project}
+audience: [human, ai]
+description: Concept for {project}
+dependsOn: []
+dateCreated: {YYYYMMDD}
+dateUpdated: {YYYYMMDD}
+status: not_started
+model: {id of the model generating this document}
+---
+```
+
+**`model:` follows the rule in Generated document conventions above, unchanged**: the real generating
+model id, or an explicit stop. Never a placeholder, never copied from another document.
+
+**Provenance block** — the shape from **Document Conventions** above, with concept-specific content:
+
+- **Generated by** — this flow, and the model id that produced the document.
+- **Generated on** — the date of this run.
+- **Source** — the graph (with its identity), the README when one was read, the filesystem signals
+  checked, and the concept guide path **with a statement that its User-Provided Concept section was
+  verified present**.
+- **Section sourcing** — one outcome per section, drawn from this set and no other:
+  `extracted-from-graph`, `extracted-from-prose` (with the file cite), `observed-signals`,
+  `interview`, `extracted-and-confirmed`, `extracted-and-corrected`, `extracted-unconfirmed`,
+  `declined`, `gap`.
+- **Engagement questions** — both questions, each marked answered or declined.
+- **Inferred claims** — every `[INFERRED]` sentence, or an explicit statement that there are none.
+- **Flagged gaps**, **staleness**, **review state** — as in the shared block.
 
 ---
 

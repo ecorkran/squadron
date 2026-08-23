@@ -14,6 +14,80 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260822
 
+### Slice 363: Concept Generation — Implementation Complete
+
+**Phase 6 complete.** `commands/analysis/understand.md` grows from 669 to 1017 lines with a sibling
+**Flow: Concept Generation** section plus a shared flow selector. No Python; the only changed
+non-document file is the skill itself.
+
+**What landed.** A four-case flow selector (none/`comprehension` → comprehension flow, `concept` →
+the new flow, anything else stops; `candidates` stays unrecognized until 364), explicit-argument-only
+with preflight unchanged for both flows. Three preconditions with two terminal stops and the
+`/cf:onboard` boundary. The three-source extraction model — graph (structure, reading strictly less
+than the comprehension flow), root README (intent, cited by file, quoted not paraphrased), and a
+closed filesystem checklist (development practice, where absence is an observation rather than a
+gap). The binding seven-row per-section mapping table with the dropped-topics rule and Solution
+Approach's coverage boundary. The two fixed engagement questions, byte-identical to the design, plus
+the single confirm-or-correct. The User-Provided Concept write-time contract and re-run semantics.
+`[INFERRED]` governance, output conventions, and the concept provenance block.
+
+**Walkthrough outcomes.** The happy path ran live with the PM: both questions answered, and the
+derived description **corrected** on two points — the server surface is expected to move to amoeba,
+and pipelines drive the context-forge state machine rather than orchestrating agents generically.
+The correction landed in the body with provenance `extracted-and-corrected`, exercising that outcome
+as the design intended. `cf validate frontmatter` passes. The dropped-topics check found zero
+occurrences as content **and** zero as gap markers. The two-direction `[INFERRED]` audit passed: two
+marked sentences, both derived from `tour[]` ordering and `layers[]` counts, both listed in
+provenance; every unmarked sentence restates a field, cites a file, or reports an observed signal.
+
+The decline path, all three contract/precondition failure cases (renamed section, guide file absent,
+guide tree absent), and augment re-run semantics were exercised on scratch copies — the real guide
+was never edited and the repo was clean after each. Default stop proved non-mutating against the real
+document (identical hash, clean diff); augment refilled exactly the emptied and gap-marked sections,
+appended under a dated subheading, and left populated sections byte-identical.
+
+**Generated artifact — archived, not adopted.** The walkthrough wrote
+`000-concept.squadron.md` with the filename from the cf project name and the `squadron-ai` graph
+divergence stated in the Overview. It now lives at `user/archive/000-concept.squadron.md` as
+`docType: notes` / `status: deprecated`. It is **not** squadron's concept document: the engagement
+answers were fixtures given to exercise the interview, and squadron is under active development
+rather than a maintenance takeover. Kept because the extraction quality — and specifically the two
+places it needed correcting — is the data for tuning the flow.
+
+**Flow refinements from the walkthrough.** Three findings, all fixed in the same branch:
+
+1. **README precedence.** The Overview drew on `project.description` and the README lead with no
+   rule for disagreement. The graph's description was 45 commits stale and described an earlier,
+   narrower squadron. The flow now states that **the README wins** — it is author-maintained and
+   travels with the code, while `project.description` describes the repo as it stood when the graph
+   was built.
+2. **Disagreement is a finding, not noise.** Where the two sources describe the project as different
+   *kinds of thing*, the flow now surfaces that at the confirmation instead of blending them into an
+   averaged paragraph. A scope that moved without the graph following is worth telling the operator.
+3. **The Overview read only the two top-level summaries.** The context-forge correction was
+   initially recorded as unreachable intent. That was wrong, and the PM caught it: squadron has
+   driven the context-forge state machine since long before the graph was built, and the graph says
+   so — `context-forge` appears in **two** layer descriptions and in
+   `src/squadron/integrations/context_forge.py`. It was in scope and the draft missed it, because
+   the Overview drew only on `project.description` and the README lead, both of which are summaries
+   and both of which drop the specific systems a project integrates with. The Overview row now reads
+   `layers[]` descriptions too (no extra read — already loaded for Solution Approach), with a
+   checkable rule: a system named in two or more layer descriptions and absent from the Overview
+   belongs there. Verified against this graph, the check selects exactly `context-forge`.
+4. **Decided-but-unbuilt intent is invisible to all three sources.** This holds for **one** of the
+   two corrections: the server surface moving to amoeba is a decision that exists nowhere in the
+   code. The confirmation carries one bounded, skippable prompt for that class of fact — **part of
+   the confirmation, not a third interview question**, so SC2's two-question limit is intact, and a
+   skipped answer adds nothing to the document. It is explicitly **not** a substitute for reading
+   the sources properly: a fact already present in `layers[]` or a module name is an extraction
+   failure when the operator has to supply it.
+
+**Deviations.** One beyond the task file: a second stale forward-reference at the comprehension
+flow's Project identity section ("in slice 363") was corrected alongside Task 7.4's, since it was the
+same class of defect. Task 8's `[INFERRED]` audit and augment case were run as scripted checks over
+the real and scratch documents rather than by eye, which is what makes them re-runnable by an
+external agent.
+
 ### Slice 363: Concept Generation — Task Breakdown Complete
 
 **Phase 5 complete.** `user/tasks/363-tasks.concept-generation.md` (375 lines, frontmatter gate
