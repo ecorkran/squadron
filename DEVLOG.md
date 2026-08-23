@@ -14,6 +14,48 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260822
 
+### Slice 363: Concept Generation — Implementation Complete
+
+**Phase 6 complete.** `commands/analysis/understand.md` grows from 669 to 1017 lines with a sibling
+**Flow: Concept Generation** section plus a shared flow selector. No Python; the only changed
+non-document file is the skill itself.
+
+**What landed.** A four-case flow selector (none/`comprehension` → comprehension flow, `concept` →
+the new flow, anything else stops; `candidates` stays unrecognized until 364), explicit-argument-only
+with preflight unchanged for both flows. Three preconditions with two terminal stops and the
+`/cf:onboard` boundary. The three-source extraction model — graph (structure, reading strictly less
+than the comprehension flow), root README (intent, cited by file, quoted not paraphrased), and a
+closed filesystem checklist (development practice, where absence is an observation rather than a
+gap). The binding seven-row per-section mapping table with the dropped-topics rule and Solution
+Approach's coverage boundary. The two fixed engagement questions, byte-identical to the design, plus
+the single confirm-or-correct. The User-Provided Concept write-time contract and re-run semantics.
+`[INFERRED]` governance, output conventions, and the concept provenance block.
+
+**Walkthrough outcomes.** The happy path ran live with the PM: both questions answered, and the
+derived description **corrected** on two points — the server surface is expected to move to amoeba,
+and pipelines drive the context-forge state machine rather than orchestrating agents generically.
+The correction landed in the body with provenance `extracted-and-corrected`, exercising that outcome
+as the design intended. `cf validate frontmatter` passes. The dropped-topics check found zero
+occurrences as content **and** zero as gap markers. The two-direction `[INFERRED]` audit passed: two
+marked sentences, both derived from `tour[]` ordering and `layers[]` counts, both listed in
+provenance; every unmarked sentence restates a field, cites a file, or reports an observed signal.
+
+The decline path, all three contract/precondition failure cases (renamed section, guide file absent,
+guide tree absent), and augment re-run semantics were exercised on scratch copies — the real guide
+was never edited and the repo was clean after each. Default stop proved non-mutating against the real
+document (identical hash, clean diff); augment refilled exactly the emptied and gap-marked sections,
+appended under a dated subheading, and left populated sections byte-identical.
+
+**Generated artifact.** `user/project-guides/000-concept.squadron.md` — filename from the cf project
+name with the `squadron-ai` graph divergence stated in the Overview and recorded in provenance. The
+graph was 45 commits behind HEAD; the PM elected to proceed, and that decision is recorded.
+
+**Deviations.** One beyond the task file: a second stale forward-reference at the comprehension
+flow's Project identity section ("in slice 363") was corrected alongside Task 7.4's, since it was the
+same class of defect. Task 8's `[INFERRED]` audit and augment case were run as scripted checks over
+the real and scratch documents rather than by eye, which is what makes them re-runnable by an
+external agent.
+
 ### Slice 363: Concept Generation — Task Breakdown Complete
 
 **Phase 5 complete.** `user/tasks/363-tasks.concept-generation.md` (375 lines, frontmatter gate

@@ -108,7 +108,7 @@ where its analysis template is the direct comparable.
    - **Risk:** Low.
    - **Relative Effort:** 3/5
 
-3. [ ] **(363) Concept Generation** — Produce `000-concept.{project}.md` for an existing codebase
+3. [x] **(363) Concept Generation** — Produce `000-concept.{project}.md` for an existing codebase
    that has no concept document. Non-interrogative by design: structure extracts from the graph,
    intent extracts from the repo's own prose (root README, cited by file), and development practice
    from filesystem signals (test tree, CI workflows, lint config) that the graph's ignore rules
