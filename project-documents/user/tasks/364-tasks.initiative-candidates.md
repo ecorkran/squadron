@@ -164,54 +164,54 @@ is not used; ask in plain text.
 
 ## Task 4: The optional concept read
 
-- [ ] **4.1 Author what is read** — Effort: 2/5
-  - [ ] Name the path: `project-documents/user/project-guides/000-concept.{project}.md`.
-  - [ ] **Two sections only** — User-Provided Concept (verbatim engagement answers, Q1 in
+- [x] **4.1 Author what is read** — Effort: 2/5
+  - [x] Name the path: `project-documents/user/project-guides/000-concept.{project}.md`.
+  - [x] **Two sections only** — User-Provided Concept (verbatim engagement answers, Q1 in
         particular) and Problem & Motivation (the engagement half).
-  - [ ] State the exclusion and its reason: not Solution Approach, not Initial Technical Direction,
+  - [x] State the exclusion and its reason: not Solution Approach, not Initial Technical Direction,
         not Development Approach — those are graph-derived in the concept itself, so reading them
         would launder graph content through a second document and present it as independent
         corroboration.
-  - [ ] Success: path, the two sections, and the exclusion-with-reason all present.
+  - [x] Success: path, the two sections, and the exclusion-with-reason all present.
 
-- [ ] **4.2 Author what it changes and what it does not** — Effort: 2/5
-  - [ ] Write the three-row effect table: **which candidates exist** — none, the concept never
+- [x] **4.2 Author what it changes and what it does not** — Effort: 2/5
+  - [x] Write the three-row effect table: **which candidates exist** — none, the concept never
         creates, suppresses, or supplies a candidate the graph does not support; **their order** —
         this is the whole effect; **their scope statements** — may frame work in terms of stated
         intent, provided every factual claim still traces to a graph signal.
-  - [ ] State the boundary and why it matters: the concept cannot manufacture a candidate, and this
+  - [x] State the boundary and why it matters: the concept cannot manufacture a candidate, and this
         is what keeps the no-padding rule enforceable. If engagement context could originate
         candidates, "we're here to modernize" would license proposing anything at all.
-  - [ ] State that ordering influence is **declared per candidate**, not applied invisibly — an
+  - [x] State that ordering influence is **declared per candidate**, not applied invisibly — an
         ordered-up candidate says so and names the concept as the reason.
-  - [ ] Success: effect table with all three rows; the manufacture boundary with its reason; the
+  - [x] Success: effect table with all three rows; the manufacture boundary with its reason; the
         per-candidate declaration rule.
 
-- [ ] **4.3 Author the degradation path** — Effort: 2/5
-  - [ ] No concept, or a concept lacking both named sections: order by **signal strength alone** —
+- [x] **4.3 Author the degradation path** — Effort: 2/5
+  - [x] No concept, or a concept lacking both named sections: order by **signal strength alone** —
         descending count of `complex` file-level nodes for complexity clusters, descending
         `nodeIds | length` for layer boundaries.
-  - [ ] The degradation is stated **in the document body and in provenance**, never silent. Include
+  - [x] The degradation is stated **in the document body and in provenance**, never silent. Include
         the body line from the design, naming what was missing and what a concept would have
         changed.
-  - [ ] **Both-questions-declined is recorded distinctly from no-document.** A declined interview
+  - [x] **Both-questions-declined is recorded distinctly from no-document.** A declined interview
         and a missing document are different facts; collapsing them would hide that the interview
         happened.
-  - [ ] Success: degradation rule, the body line, and the declined-vs-absent distinction all
+  - [x] Success: degradation rule, the body line, and the declined-vs-absent distinction all
         present.
 
-- [ ] **4.4 Verify the concept read** — Effort: 1/5
-  - [ ] Check against the design's "The optional concept read": two sections read, three-row effect
+- [x] **4.4 Verify the concept read** — Effort: 1/5
+  - [x] Check against the design's "The optional concept read": two sections read, three-row effect
         table, degradation with the distinct declined case.
-  - [ ] Confirm no sentence anywhere in the new flow makes the concept a precondition or a
+  - [x] Confirm no sentence anywhere in the new flow makes the concept a precondition or a
         dependency.
-  - [ ] Success: correspondence confirmed; no precondition language.
-  - [ ] Commit: `docs: add optional concept read and degradation path`
+  - [x] Success: correspondence confirmed; no precondition language.
+  - [x] Commit: `docs: add optional concept read and degradation path`
 
 ## Task 5: Candidate record shape and dependency derivation
 
-- [ ] **5.1 Author the five-part record** — Effort: 3/5
-  - [ ] Write the record table in order: **title** (authored — names the work, not the observation;
+- [x] **5.1 Author the five-part record** — Effort: 3/5
+  - [x] Write the record table in order: **title** (authored — names the work, not the observation;
         include the design's contrasting example), **derivation signal** (one, named, with its
         field), **supporting node IDs** (actual ids; every id must resolve to a node carrying a
         `filePath`; an unresolvable id is drift per 362, and a candidate whose supporting ids are
@@ -219,38 +219,38 @@ is not used; ask in plain text.
         to the signal or a cited node; no effort estimates, timelines, or business value
         judgments), **observed dependencies** (derived, never asserted; an empty result is written
         as "none observed", not omitted).
-  - [ ] State the citation rule: **node IDs are cited, not summarized.** A candidate supported by
+  - [x] State the citation rule: **node IDs are cited, not summarized.** A candidate supported by
         fourteen nodes lists them. Give the reason — the document is a working artifact for someone
         deciding whether to adopt, and "several files in Pipeline Orchestration" is not checkable.
-  - [ ] State the authored/extracted asymmetry: title and scope are the only authored parts, both
+  - [x] State the authored/extracted asymmetry: title and scope are the only authored parts, both
         constrained by the three extracted parts. Prose checkable against cited ids is safe; prose
         standing alone is not.
-  - [ ] Success: five parts in order with their rules; citation rule with reason; asymmetry stated.
+  - [x] Success: five parts in order with their rules; citation rule with reason; asymmetry stated.
 
-- [ ] **5.2 Author dependency derivation** — Effort: 3/5
-  - [ ] Cite 362's endpoint mechanics by reference: string parse of the edge's own `source`/`target`
+- [x] **5.2 Author dependency derivation** — Effort: 3/5
+  - [x] Cite 362's endpoint mechanics by reference: string parse of the edge's own `source`/`target`
         id (second colon-delimited field is the owning file's path, which resolves to a layer),
         `imports` and `depends_on` types, self-references excluded, **no node read to resolve an
         endpoint** and specifically no `function` or `class` node.
-  - [ ] Write the three-step derivation: collect each candidate's implicated layer set; for each
+  - [x] Write the three-step derivation: collect each candidate's implicated layer set; for each
         ordered pair count inter-layer edges; a non-zero count is a stated dependency **carrying
         the count**.
-  - [ ] State the non-sequencing rule prominently: a stated dependency is a **directional edge
+  - [x] State the non-sequencing rule prominently: a stated dependency is a **directional edge
         count, not a claim about ordering**. The document says "Candidate 3's layers hold 27
         imports into Candidate 1's layers"; it does not say Candidate 1 must be done first. That
         inference belongs to the human adopting the candidates.
-  - [ ] State the two edge cases: unresolvable endpoints excluded and reported as drift per 362;
+  - [x] State the two edge cases: unresolvable endpoints excluded and reported as drift per 362;
         two candidates implicating the same layer have that overlap **stated**, not expressed as a
         dependency — a layer does not depend on itself.
-  - [ ] Success: mechanics cited not restated; three-step derivation; non-sequencing rule; both
+  - [x] Success: mechanics cited not restated; three-step derivation; non-sequencing rule; both
         edge cases.
 
-- [ ] **5.3 Verify record and dependency sections** — Effort: 1/5
-  - [ ] Check against the design's "Candidate record shape" and "Dependency derivation": five parts
+- [x] **5.3 Verify record and dependency sections** — Effort: 1/5
+  - [x] Check against the design's "Candidate record shape" and "Dependency derivation": five parts
         in the design's order; the non-sequencing rule present and unhedged.
-  - [ ] Confirm no dependency language implies sequencing anywhere in the new flow text.
-  - [ ] Success: correspondence confirmed.
-  - [ ] Commit: `docs: add candidate record shape and dependency derivation`
+  - [x] Confirm no dependency language implies sequencing anywhere in the new flow text.
+  - [x] Success: correspondence confirmed.
+  - [x] Commit: `docs: add candidate record shape and dependency derivation`
 
 ## Task 6: The write confirmation
 
