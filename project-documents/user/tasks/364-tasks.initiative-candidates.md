@@ -254,89 +254,89 @@ is not used; ask in plain text.
 
 ## Task 6: The write confirmation
 
-- [ ] **6.1 Author the confirmation** — Effort: 2/5
-  - [ ] One interaction, **after derivation and before any file write.** Show: the candidate
+- [x] **6.1 Author the confirmation** — Effort: 2/5
+  - [x] One interaction, **after derivation and before any file write.** Show: the candidate
         **count**; each candidate's **title and derivation signal**, one line apiece; the
         **ordering basis** — engagement-informed (naming the concept) or signal-strength-only
         (naming the concept's absence).
-  - [ ] State what is being confirmed: **that the document is worth writing at all** — not the
+  - [x] State what is being confirmed: **that the document is worth writing at all** — not the
         correctness of individual candidates, not their adoption. Give the reason this makes the
         interaction cheap: the operator answers "is this set worth a file?", answerable from titles
         and signals, not "is candidate 4 correct?", which is not.
-  - [ ] Write the three-outcome table: confirmed → written, provenance `confirmed`; declined →
+  - [x] Write the three-outcome table: confirmed → written, provenance `confirmed`; declined →
         **nothing written**, set shown in console and discarded; no answer → **nothing written**.
-  - [ ] Success: the three shown items; the scope-of-confirmation statement with its reason; the
+  - [x] Success: the three shown items; the scope-of-confirmation statement with its reason; the
         outcome table.
 
-- [ ] **6.2 Author the default-to-not-writing rule and its contrast** — Effort: 2/5
-  - [ ] State plainly: **this flow's confirmation defaults to not writing.**
-  - [ ] State the contrast with 363 and the reason, from the design: 363's confirmation never
+- [x] **6.2 Author the default-to-not-writing rule and its contrast** — Effort: 2/5
+  - [x] State plainly: **this flow's confirmation defaults to not writing.**
+  - [x] State the contrast with 363 and the reason, from the design: 363's confirmation never
         stalls and proceeds on no answer because it writes a Phase 0 entry point a repo has no
         other way to obtain; this writes an advisory list that costs nothing to regenerate. 363's
         failure mode is a lost interview; this flow's is an unwanted file in `analysis/`.
-  - [ ] State the zero-candidate case: a run deriving nothing **still asks** — showing "0
+  - [x] State the zero-candidate case: a run deriving nothing **still asks** — showing "0
         candidates, derived from N layers and M complex file-level nodes" — and on confirm writes
         the document recording the negative result. Give the reason: the negative result is a real
         finding, and suppressing the question would make an empty result indistinguishable from a
         failed run.
-  - [ ] Success: default stated; contrast with 363 including both failure modes; zero-candidate
+  - [x] Success: default stated; contrast with 363 including both failure modes; zero-candidate
         case with its reason.
 
-- [ ] **6.3 Verify the confirmation section** — Effort: 1/5
-  - [ ] Check against the design's "The write confirmation": outcome table matches row-for-row;
+- [x] **6.3 Verify the confirmation section** — Effort: 1/5
+  - [x] Check against the design's "The write confirmation": outcome table matches row-for-row;
         the default-to-not-writing rule is explicit, not implied by the table alone.
-  - [ ] Confirm the zero-candidate path asks and writes rather than exiting silently.
-  - [ ] Success: correspondence confirmed.
-  - [ ] Commit: `docs: add candidates write confirmation`
+  - [x] Confirm the zero-candidate path asks and writes rather than exiting silently.
+  - [x] Success: correspondence confirmed.
+  - [x] Commit: `docs: add candidates write confirmation`
 
 ## Task 7: Output conventions, gap markers, read discipline
 
-- [ ] **7.1 Author output conventions** — Effort: 2/5
-  - [ ] Path: `project-documents/user/analysis/{index}-analysis.initiative-candidates.md`.
-  - [ ] Index selection: cite the shared Generated document conventions rule — lowest unused index
+- [x] **7.1 Author output conventions** — Effort: 2/5
+  - [x] Path: `project-documents/user/analysis/{index}-analysis.initiative-candidates.md`.
+  - [x] Index selection: cite the shared Generated document conventions rule — lowest unused index
         ≥ 940, **new index per run**, never overwriting. Do not restate the rule's mechanics.
-  - [ ] Frontmatter block: `docType: analysis`, `project`, `topic: initiative-candidates`,
+  - [x] Frontmatter block: `docType: analysis`, `project`, `topic: initiative-candidates`,
         `dateCreated`, `dateUpdated`, `status: not_started`, `model`.
-  - [ ] State that `{project}` resolves from the cf project registration, never `project.name` from
+  - [x] State that `{project}` resolves from the cf project registration, never `project.name` from
         the graph, and that `model:` follows the shared rule unchanged — the real generating model
         id or an explicit stop, never a placeholder.
-  - [ ] Success: path, cited index rule, frontmatter block, both resolution rules.
+  - [x] Success: path, cited index rule, frontmatter block, both resolution rules.
 
-- [ ] **7.2 Author the provenance block** — Effort: 2/5
-  - [ ] Flow-specific content: **generated by** (flow + model id); **generated on**; **source**
+- [x] **7.2 Author the provenance block** — Effort: 2/5
+  - [x] Flow-specific content: **generated by** (flow + model id); **generated on**; **source**
         (graph identity — `gitCommitHash`, `lastAnalyzedAt`; the concept path when read, or an
         explicit statement that none was found); **ordering basis** (`engagement-informed` or
         `signal-strength-only`, citing the concept's absence or both-declined); **candidate count**
         and the signal counts it derived from; **drift** per 362; **flagged gaps**, **staleness**,
         **review state** as in the shared block.
-  - [ ] Author the **non-modification statement in the document body** — not only in provenance:
+  - [x] Author the **non-modification statement in the document body** — not only in provenance:
         the document states it is advisory, that adoption is manual, and that
         `001-initiative-plan.{project}.md` was not read for writing and not modified.
-  - [ ] Success: every provenance line present; the body-level non-modification statement authored.
+  - [x] Success: every provenance line present; the body-level non-modification statement authored.
 
-- [ ] **7.3 Author gap markers, `[INFERRED]` exclusion, and read discipline** — Effort: 2/5
-  - [ ] Gap markers use the shared 361 syntax. This flow's genuine absences: no concept document, a
+- [x] **7.3 Author gap markers, `[INFERRED]` exclusion, and read discipline** — Effort: 2/5
+  - [x] Gap markers use the shared 361 syntax. This flow's genuine absences: no concept document, a
         concept with no usable engagement content, zero candidates derived. Each gets a marker
         naming the input that would have supplied it.
-  - [ ] State that **`[INFERRED]` is not used in this flow**, with the structural reason: a claim
+  - [x] State that **`[INFERRED]` is not used in this flow**, with the structural reason: a claim
         not traceable to a cited signal or node id has no place in the document at all — the record
         shape's whole design is that authored parts are checkable against extracted parts. A
         sentence needing `[INFERRED]` is a sentence to delete.
-  - [ ] State this explicitly in the skill text so the absence reads as a decision, not an
+  - [x] State this explicitly in the skill text so the absence reads as a decision, not an
         oversight. Update the shared Gap markers section's pointer if it enumerates per-flow
         `[INFERRED]` governance.
-  - [ ] Read discipline: cite 362's unchanged. Name the fields this flow reads — `layers[]`,
+  - [x] Read discipline: cite 362's unchanged. Name the fields this flow reads — `layers[]`,
         file-level `nodes[]` (`complexity`, `filePath`), `edges[]` (`type`, `source`, `target`) —
         and nothing else. The concept read is a bounded read of two named sections.
-  - [ ] Success: gap-marker cases; `[INFERRED]` exclusion with reason and explicit statement; read
+  - [x] Success: gap-marker cases; `[INFERRED]` exclusion with reason and explicit statement; read
         discipline citing 362 with the field list.
 
-- [ ] **7.4 Verify conventions sections** — Effort: 1/5
-  - [ ] Check against the design's "Output conventions", "Gap markers and `[INFERRED]`", and "Read
+- [x] **7.4 Verify conventions sections** — Effort: 1/5
+  - [x] Check against the design's "Output conventions", "Gap markers and `[INFERRED]`", and "Read
         discipline".
-  - [ ] Confirm the flow reads no field outside the named list.
-  - [ ] Success: correspondence confirmed.
-  - [ ] Commit: `docs: add candidates output conventions and read discipline`
+  - [x] Confirm the flow reads no field outside the named list.
+  - [x] Success: correspondence confirmed.
+  - [x] Commit: `docs: add candidates output conventions and read discipline`
 
 ## Task 8: Verification walkthrough
 
