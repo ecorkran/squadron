@@ -150,6 +150,22 @@ where its analysis template is the direct comparable.
    not proposed; the skill emits fewer rather than padding to a count. Written only on explicit PM
    confirmation, and what the PM confirms is that the document is worth writing at all — adopting a
    candidate into the real plan stays a deliberate manual act.
+
+   **Open at design time — does this flow read the concept?** This entry says no: dependencies are
+   [361] and [362], and every candidate derives from `layers[]`, `complexity`, and `edges[]`. But
+   363's design lists 364 as consuming Q1's engagement answer via the written concept. The two
+   disagree, and the answer decides what 364 *is*. A graph carries structure, not priorities — layer
+   boundaries and complexity clusters show where code is tangled, never where work is valuable.
+   Engagement context is the only available input that would make candidates prioritized rather than
+   merely structural, which argues for reading the concept when one exists and degrading to
+   structure-only when it does not. **Settle this in Phase 4 and reconcile whichever document is
+   wrong.**
+
+   **Open at design time — where candidate quality gets judged.** The mechanical criteria below are
+   all verifiable against squadron. Candidate *usefulness* is not: squadron already has an
+   initiative plan written by hand, so a proposal here cannot be told apart from a restatement of
+   work already scoped. Build and verify the mechanics against squadron; judge whether the
+   suggestions are worth having on a repo nobody on this project has planned.
    - **Value:** Developer value — turns structural observations into reviewable proposals without
      letting a machine author a commitment document.
    - **Success Criteria:**
@@ -172,14 +188,23 @@ where its analysis template is the direct comparable.
    the missing input, and no third outcome in which the skill supplies content itself. Applies the
    translation rules: strip slice/phase/initiative indices and docType frontmatter, render features as
    outcomes rather than mechanisms, describe not-started work as planned rather than implying
-   completion. Degrades gracefully when no concept exists, which is squadron's own situation and
-   therefore the tested path rather than an edge case. One neutral document, not per-audience
-   variants.
+   completion. Degrades gracefully when no concept exists — the case a client repo hits whenever the
+   overview is wanted before Phase 0 has run, which is why it is a first-class path rather than an
+   edge case. One neutral document, not per-audience variants.
+
+   **On testing degradation against squadron.** Squadron has no concept document for a reason no
+   other repo will share: concept generation (363) postdates the project that built it. That makes
+   squadron a convenient *fixture* for the missing-concept path — it exercises the mechanics — but
+   **not evidence that the path is common**, and not a representative instance of it. On a client
+   repo the absence means Phase 0 has not run yet and running it would resolve the absence; on
+   squadron it is a bootstrap ordering fact. Verify the mechanics here; judge the degraded output's
+   usefulness on a repo whose concept is genuinely pending.
    - **Value:** User value — the first artifact squadron produces that can be handed to a client,
      manager, or colleague.
    - **Success Criteria:**
-     - Runs against squadron itself, which has no concept document, and produces a complete overview
-       with gap markers where concept-sourced content would have gone.
+     - Runs against squadron itself — used here as a fixture for the missing-concept path, not as a
+       representative instance of it — and produces a complete overview with gap markers where
+       concept-sourced content would have gone.
      - No slice index, phase number, initiative index, or frontmatter field appears in the body.
      - Not-started initiatives are described as planned; nothing implies more progress than the
        inputs support.
