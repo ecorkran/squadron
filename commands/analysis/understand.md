@@ -394,14 +394,17 @@ This skill implements two flows. The invocation argument selects between them:
 | none | Flow: Comprehension Analysis |
 | `comprehension` | Flow: Comprehension Analysis |
 | `concept` | Flow: Concept Generation |
+| `candidates` | Flow: Initiative Candidates |
 | anything else | **unrecognized** — say so and stop |
 
-`candidates` is **not** recognized; the initiative-candidates flow is slice 364. Any other argument
-stops the same way — say the argument is unrecognized and stop; do not guess at intent.
+Any unrecognized argument stops the same way — say the argument is unrecognized and stop; do not
+guess at intent.
 
 **Selection is by explicit argument only.** The skill never infers a flow from repository state. The
 absence of a concept document never auto-triggers Flow: Concept Generation, and the presence of one
-never suppresses it. A flow runs because it was named.
+never suppresses it. A flow runs because it was named. The presence or absence of a concept document
+selects nothing here either — it changes only what Flow: Initiative Candidates reads once it has
+been named.
 
 **Preflight runs in full for both flows, unchanged** — location, validation, staleness, and the
 `.gitignore` hygiene write, which the shared contract performs at the start of every run before any
@@ -646,8 +649,8 @@ file pre-populated with commented suggestions.
 Fallback: `[GAP: ...]` naming the specific file that could not be read.
 
 **Do not add sections beyond these seven.** The mapping table is the full scope of this flow. Concept
-generation is **Flow: Concept Generation** below and initiative candidates are slice 364; neither is
-written here.
+generation is **Flow: Concept Generation** below and initiative candidates are **Flow: Initiative
+Candidates** below; neither is written here.
 
 ## Flow: Concept Generation
 
@@ -1022,6 +1025,8 @@ model id, or an explicit stop. Never a placeholder, never copied from another do
 - **Engagement questions** — both questions, each marked answered or declined.
 - **Inferred claims** — every `[INFERRED]` sentence, or an explicit statement that there are none.
 - **Flagged gaps**, **staleness**, **review state** — as in the shared block.
+
+## Flow: Initiative Candidates
 
 ---
 
