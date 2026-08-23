@@ -1,19 +1,24 @@
 ---
-docType: concept
-layer: project
-phase: 0
-phaseName: concept
+docType: notes
 project: squadron
-audience: [human, ai]
-description: Concept for squadron
-dependsOn: []
 dateCreated: 20260822
 dateUpdated: 20260822
-status: not_started
+status: deprecated
 model: claude-opus-5
 ---
 
-# Squadron
+# Squadron — Generated Concept (archived walkthrough output)
+
+**This is not squadron's concept document.** It is the artifact produced by slice 363's verification
+walkthrough on 20260822, kept as data for tuning the flow.
+
+Two passages are test fixtures rather than facts: the engagement answers below describe a
+maintenance takeover with anticipated containerization, which was answered to exercise the interview
+and is not true of squadron. Everything derived from the graph, the README, and the filesystem
+signals is accurate as of the graph snapshot named in provenance.
+
+Retained because the extraction quality — and the two places it needed correcting — is the input for
+improving the flow's first-pass output.
 
 ## Provenance
 

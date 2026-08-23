@@ -714,6 +714,16 @@ the comprehension flow does**: no edges, no complexity tiers, no per-node summar
 A repo's README states what it is, what problem it addresses, and who reaches it, in its authors'
 own words. That is the intent no graph field carries.
 
+**Where the README and `project.description` disagree, the README wins.** `project.description` is
+upstream-generated prose describing the repo as it stood when the graph was built; the README is
+maintained by the project's own authors and travels with the code. A graph that is many commits
+behind HEAD routinely carries a description of an earlier, narrower version of the project.
+
+**Do not blend the two into a single averaged paragraph.** When they describe the project
+differently — not merely in different words, but as a different kind of thing — that disagreement is
+itself a finding: it usually means the project's scope moved and the graph did not follow. Surface it
+at the confirmation step (below) rather than resolving it silently.
+
 *Resolution:* the **root-level README, case-insensitive**, with `README.md` preferred when several
 extensions exist. **Nothing below the root is read** — `docs/` trees and wikis are out of scope for
 this flow by design: unbounded cost, unpredictable relevance.
@@ -818,12 +828,33 @@ asked once.
 
 After drafting and **before the file write**, show the operator:
 
-- the **derived project description** — the Overview paragraph assembled from `project.description`
-  and the README lead; and
-- the graph's **`lastAnalyzedAt`**, so a stale description is recognizable as stale.
+- the **derived project description** — the Overview paragraph, README-led per the precedence rule
+  above;
+- the graph's **`lastAnalyzedAt`** and its distance behind HEAD, so a stale description is
+  recognizable as stale; and
+- **the disagreement, when there is one** — where `project.description` and the README describe the
+  project as different kinds of thing, say so in one line and name both framings. This is the single
+  most likely thing for the operator to correct, and showing it is what turns a vague "looks about
+  right" into a real answer.
 
-Ask them to **confirm or correct** it. One interaction, about content already extracted — never a
-request to author from nothing. Three outcomes:
+Then ask them to **confirm or correct** it, and add one prompt with it:
+
+> Anything the codebase can't tell me — a surface being moved out, a component being replaced,
+> a direction already decided but not yet built?
+
+**This is part of the confirmation, not a third interview question.** It is bounded to the
+description being confirmed, it is skippable in the same breath as the confirmation itself, and a
+skipped answer adds nothing to the document — no gap marker. Its purpose is narrow: **architectural
+intent that has been decided but is not yet in the code** is invisible to every one of the three
+sources, and it is exactly the class of fact that makes a generated concept wrong in a way no
+extraction can catch. A component moving to another system, a surface being deprecated, a
+subsystem's real purpose — the artifacts show what is, never what was decided last week.
+
+Corrections from this prompt land in the body with the rest of the description and are recorded as
+`extracted-and-corrected`.
+
+One interaction, about content already extracted — never a request to author from nothing. Three
+outcomes:
 
 | Outcome | Body | Provenance records |
 |---|---|---|
