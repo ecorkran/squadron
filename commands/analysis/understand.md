@@ -1162,6 +1162,39 @@ Unresolvable endpoints are excluded from the count and reported as drift, per 36
 candidates implicate the same layer, that overlap is stated rather than expressed as a dependency — a
 layer does not depend on itself.
 
+### The write confirmation
+
+**One interaction, after derivation and before any file write.** Show the operator:
+
+- the **count** of candidates derived;
+- each candidate's **title and derivation signal** — one line apiece;
+- the **ordering basis** — engagement-informed (naming the concept) or signal-strength-only (naming
+  the concept's absence).
+
+Then ask whether to write the document.
+
+**What is being confirmed is that the document is worth writing at all** — not the correctness of
+individual candidates, not their adoption. This is what makes the interaction cheap: the operator is
+answering "is this set worth a file?", answerable from titles and signals, not "is candidate 4
+correct?", which is not.
+
+| Outcome | Effect | Provenance |
+|---|---|---|
+| Confirmed | document written | `confirmed` |
+| Declined | **nothing is written**; the derived set is shown in the console and discarded | n/a — no document exists |
+| No answer / unavailable | **nothing is written** | n/a — no document exists |
+
+**This flow's confirmation defaults to not writing.** This is deliberately the opposite of Flow:
+Concept Generation's confirmation, which never stalls and proceeds on no answer. The reason is the
+artifact class: that flow writes the Phase 0 entry point a repo has no other way to obtain, while this
+flow writes an advisory list that costs nothing to regenerate. Where that flow's failure mode is a
+lost interview, this flow's is an unwanted file in `analysis/`.
+
+**Zero candidates still asks.** A run that derives nothing shows "0 candidates, derived from N layers
+and M complex file-level nodes" and asks whether to write the document recording that. The negative
+result is a real finding — it says the graph does not support proposals — and suppressing the question
+would make an empty result indistinguishable from a failed run.
+
 ---
 
 # Project documentation
