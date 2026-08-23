@@ -64,48 +64,48 @@ is not used; ask in plain text.
 
 ## Task 0: Branch and premise verification
 
-- [ ] **0.1 Create the slice branch** — Effort: 1/5
-  - [ ] Confirm working tree is clean and current branch is `main` (integration branch is unset;
+- [x] **0.1 Create the slice branch** — Effort: 1/5
+  - [x] Confirm working tree is clean and current branch is `main` (integration branch is unset;
         target is `main`).
-  - [ ] `git checkout -b 364-slice.initiative-candidates main`
-  - [ ] Success: on the new branch, clean tree.
+  - [x] `git checkout -b 364-slice.initiative-candidates main`
+  - [x] Success: on the new branch, clean tree.
 
-- [ ] **0.2 Re-verify the design's premises** — Effort: 1/5
-  - [ ] Confirm the graph identity is unchanged: `gitCommitHash` is `1bfbca1`.
-  - [ ] Re-run the two derivation queries from the design's Verification Walkthrough step 2
+- [x] **0.2 Re-verify the design's premises** — Effort: 1/5
+  - [x] Confirm the graph identity is unchanged: `gitCommitHash` is `1bfbca1`.
+  - [x] Re-run the two derivation queries from the design's Verification Walkthrough step 2
         (layer sizes; complex file-level nodes per layer) and compare against the Verified anchors
         table above.
-  - [ ] Confirm `user/project-guides/` still holds no `000-concept.*`, and
+  - [x] Confirm `user/project-guides/` still holds no `000-concept.*`, and
         `user/archive/000-concept.squadron.md` is still present.
-  - [ ] Confirm both `candidates` references are still at the recorded locations (search the skill
+  - [x] Confirm both `candidates` references are still at the recorded locations (search the skill
         file; line numbers may have shifted).
-  - [ ] **STOP condition:** if the layer or complexity figures diverge from the anchors table, stop
+  - [x] **STOP condition:** if the layer or complexity figures diverge from the anchors table, stop
         and report to the Project Manager — the design's reasoning about candidate count and
         ordering was measured against these figures.
-  - [ ] Success: all checks match, or work is stopped.
+  - [x] Success: all checks match, or work is stopped.
 
 ## Task 1: Flow selection
 
-- [ ] **1.1 Add `candidates` to the flow selector** — Effort: 2/5
-  - [ ] In `commands/analysis/understand.md`, add the `candidates` row to the flow-selection
+- [x] **1.1 Add `candidates` to the flow selector** — Effort: 2/5
+  - [x] In `commands/analysis/understand.md`, add the `candidates` row to the flow-selection
         table, routing to Flow: Initiative Candidates.
-  - [ ] **Remove** the paragraph beginning "`candidates` is **not** recognized" (skill line ~399).
+  - [x] **Remove** the paragraph beginning "`candidates` is **not** recognized" (skill line ~399).
         Remove, do not amend — an amended exclusion note reads as a live exclusion.
-  - [ ] Preserve the "anything else → unrecognized, stop" case and the explicit-argument-only rule
+  - [x] Preserve the "anything else → unrecognized, stop" case and the explicit-argument-only rule
         unchanged. Add one sentence: the presence or absence of a concept document selects nothing
         — it changes only what this flow reads once named.
-  - [ ] Add the empty sibling section shell "Flow: Initiative Candidates" after Flow: Concept
+  - [x] Add the empty sibling section shell "Flow: Initiative Candidates" after Flow: Concept
         Generation, before the human-documentation divider.
-  - [ ] Success: selector covers all five argument cases; exclusion paragraph gone; concept-selects-
+  - [x] Success: selector covers all five argument cases; exclusion paragraph gone; concept-selects-
         nothing sentence present; section shell in the stated position.
 
-- [ ] **1.2 Fix the comprehension flow's cross-reference** — Effort: 1/5
-  - [ ] At skill line ~649, the comprehension flow says "initiative candidates are slice 364".
+- [x] **1.2 Fix the comprehension flow's cross-reference** — Effort: 1/5
+  - [x] At skill line ~649, the comprehension flow says "initiative candidates are slice 364".
         Edit to reflect that the flow now exists, matching how 363 fixed the equivalent sentence
         for the concept flow.
-  - [ ] Success: no remaining sentence in the skill describes this flow as future work. Verify by
+  - [x] Success: no remaining sentence in the skill describes this flow as future work. Verify by
         searching the file for `364` and confirming every hit is a live reference.
-  - [ ] Commit: `feat: add candidates flow selector to understand skill`
+  - [x] Commit: `feat: add candidates flow selector to understand skill`
 
 ## Task 2: Preconditions
 

@@ -1050,6 +1050,31 @@ a stop — see "The optional concept read" below.
 writes to `analysis/`, which Flow: Comprehension Analysis already writes to, so it requires nothing of
 `project-guides/` beyond what the two preconditions above already require.
 
+### The candidate derivation model
+
+A candidate is derived from exactly one of two signal classes:
+
+| Signal | Source fields | What it observes |
+|---|---|---|
+| **Layer boundary** | `layers[]` (`name`, `description`, `nodeIds`) | A layer whose size or described responsibility marks it as a unit of work |
+| **Complexity cluster** | file-level `nodes[]` (`complexity`, `filePath`) intersected with `layers[].nodeIds` | A concentration of `complex` files inside one layer |
+
+**A candidate names exactly one signal.** Where the same layer supports both a boundary observation
+and a complexity observation, that is two candidates or one — never one candidate citing two signals.
+A candidate citing both is checkable against neither.
+
+Field mechanics are **362's, cited and not restated**: the file-level definition, the `nodeIds |
+length` counting rule with its type breakdown, the ordinal handling of `complexity`, and the layer
+cross-check drift rule all apply unchanged. This flow reads strictly less of the graph than Flow:
+Comprehension Analysis: no `tour[]`, no `entry-point` tags, no `meta.json` coverage read.
+
+**The no-padding rule.** Candidates the graph does not support are not proposed. There is no target
+count, no minimum, and no maximum. A padded list is indistinguishable from a real one to a reader, and
+one invented candidate makes every other candidate in the document suspect.
+
+**Emitting zero candidates is a success, not a failure.** The document is still written (on
+confirmation), and it states that the graph supported no candidate, naming what it looked for.
+
 ---
 
 # Project documentation
