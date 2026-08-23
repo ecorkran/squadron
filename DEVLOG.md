@@ -14,6 +14,57 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260823
 
+### Slice 364: Initiative Candidates — Task Breakdown Complete
+
+**Phase 5 complete.** `364-tasks.initiative-candidates.md` — 440 lines, ten task groups (0–9),
+test-with pattern throughout: every authoring task is followed by its verification task before the
+next section begins.
+
+**Slice review passed first time.** Five findings, all `severity: pass`, nothing to resolve —
+architectural alignment across derivation, the initiative-plan boundary, the optional concept read,
+read discipline, and output conventions.
+
+**Anchors re-traced at write time** (`88e299e`), and two diverged from the design's measurements in
+ways worth recording:
+
+- **The graph is now 56 commits behind HEAD**, up from 45 at 363's walkthrough. Same
+  `gitCommitHash` `1bfbca1`, so the derivation figures are unchanged; preflight warns and proceeds.
+  Recorded as an expected observation rather than a blocker.
+- **Two `candidates` references in the skill, not one.** Line 399 is the flow-selection exclusion
+  note; line 649 is a cross-reference inside the comprehension flow saying initiative candidates
+  are slice 364. Both need updating — 363 hit the same shape and fixed only the equivalent single
+  sentence. Task 1.2 exists specifically for the second one, with a search-for-`364` check so a
+  third reference cannot hide.
+
+Next free analysis index is **945** (`940`–`944` taken).
+
+**Task-file decisions:**
+
+- **Task 0.2 carries a STOP condition** on the layer and complexity figures. The design's reasoning
+  about candidate count and ordering was measured against those numbers; if the graph is
+  re-analyzed before implementation, the reasoning needs re-checking rather than the tasks being
+  run anyway.
+- **The removal in Task 1.1 is "remove, do not amend."** An amended exclusion note still reads as a
+  live exclusion.
+- **362's mechanics are cited, never restated** — repeated as an instruction in Tasks 3.1, 5.2,
+  7.3, and checked in the verify tasks. A restated rule drifts from its original.
+- **Walkthrough Task 8.7 covers all three concept states** — degraded (the default on this repo),
+  engagement-informed, and both-questions-declined — with an explicit prohibition on restoring the
+  archived concept into the real tree. Scratch copies only; it is `docType: notes` /
+  `status: deprecated` and was archived deliberately.
+- **Task 9.2 requires the close-out to state "mechanically verified, usefulness unjudged."** The
+  non-criterion is only useful if it survives into the record; without it a green walkthrough reads
+  later as evidence the candidates are good.
+- **Task 9.1 records the four decisions Phase 4 deferred** — layer-boundary candidacy threshold,
+  per-candidate ordering-influence phrasing, scope-statement length discipline, node-ID list
+  rendering — so they land in the design rather than only in the implementation.
+
+No Python; no test added (`tests/skills/` runs as a regression guard only).
+
+---
+
+## 20260823
+
 ### Slice 364: Initiative Candidates — Design Complete
 
 **Phase 4 complete.** `364-slice.initiative-candidates.md` written; both open questions the slice
