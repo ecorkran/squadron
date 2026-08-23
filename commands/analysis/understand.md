@@ -1116,6 +1116,52 @@ treated as absent for ordering purposes, and the provenance says which of the tw
 declined interview and a missing document are different facts, and collapsing them would hide that the
 interview happened.
 
+### Candidate record shape
+
+Each candidate carries exactly five parts, in this order:
+
+| # | Part | Sourced from | Rule |
+|---|---|---|---|
+| 1 | **Title** | authored | Names the work, not the observation. "Extract pipeline step classification" — never "Pipeline Orchestration is complex". |
+| 2 | **Derivation signal** | `layers[]` or `complexity` | One signal, named explicitly, with the field it came from. |
+| 3 | **Supporting node IDs** | `layers[].nodeIds`, file-level `nodes[]` | The actual ids. Every id must resolve to a node carrying a `filePath`; an unresolvable id is drift, reported per the 362 rule, and a candidate whose supporting ids are all drift is not emitted. |
+| 4 | **Scope statement** | authored, constrained | **One paragraph.** Every factual claim traces to the signal or to a cited node. Effort estimates, timelines, and value judgments about the business are out of scope. |
+| 5 | **Observed dependencies** | `edges[]` | Derived, never asserted — see below. An empty result is written as "none observed", not omitted. |
+
+**Node IDs are cited, not summarized.** A candidate supported by fourteen nodes lists them; the
+document is a working artifact for someone deciding whether to adopt the proposal, and "several files
+in Pipeline Orchestration" is not checkable. Where a list is long, it is still written out — the
+alternative is an unfalsifiable claim.
+
+**The title and the scope statement are the only two authored parts** of the record, and both are
+constrained by parts 2, 3, and 5, which are all extracted. That asymmetry is intentional: prose that a
+reader can check against cited ids is safe; prose that stands alone is not.
+
+### Dependency derivation
+
+Dependencies between candidates come from `edges[]` between the layers each candidate implicates —
+**observed, never asserted**.
+
+Mechanics are **362's, unchanged**: endpoint resolution is a string parse of the edge's own
+`source`/`target` id (the second colon-delimited field is the owning file's path, which resolves to a
+layer), `imports` and `depends_on` edge types, self-references excluded. **No node is read to resolve
+an endpoint**, and specifically no `function` or `class` node.
+
+The derivation:
+
+1. For each candidate, collect the set of layers its supporting nodes belong to.
+2. For each ordered pair of candidates, count inter-layer `imports`/`depends_on` edges from the
+   first's layers to the second's.
+3. A non-zero count is a stated dependency, **carrying the count**.
+
+**A stated dependency is a directional edge count, not a claim about sequencing.** The document says
+"Candidate 3's layers hold 27 imports into Candidate 1's layers" — it does not say Candidate 1 must be
+done first. That inference belongs to the human adopting the candidates.
+
+Unresolvable endpoints are excluded from the count and reported as drift, per 362. Where two
+candidates implicate the same layer, that overlap is stated rather than expressed as a dependency — a
+layer does not depend on itself.
+
 ---
 
 # Project documentation

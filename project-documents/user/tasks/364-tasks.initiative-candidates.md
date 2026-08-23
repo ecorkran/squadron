@@ -109,58 +109,58 @@ is not used; ask in plain text.
 
 ## Task 2: Preconditions
 
-- [ ] **2.1 Author the preconditions** — Effort: 1/5
-  - [ ] Precondition 1 — graph present: the 361 preflight, executed unchanged and in full
+- [x] **2.1 Author the preconditions** — Effort: 1/5
+  - [x] Precondition 1 — graph present: the 361 preflight, executed unchanged and in full
         (location, validation, staleness, `.gitignore` hygiene). Reference the shared contract; do
         not duplicate it. State that this flow adds no hygiene behavior and skips none.
-  - [ ] Precondition 2 — resolvable project name from the cf project registration, never
+  - [x] Precondition 2 — resolvable project name from the cf project registration, never
         `project.name` from the graph.
-  - [ ] State explicitly: **the concept document is not a precondition.** Its absence is an
+  - [x] State explicitly: **the concept document is not a precondition.** Its absence is an
         observation the flow records, not a stop.
-  - [ ] State that there is no `/cf:onboard` boundary concern here — this flow writes to
+  - [x] State that there is no `/cf:onboard` boundary concern here — this flow writes to
         `analysis/`, which the comprehension flow already writes to.
-  - [ ] Success: two preconditions authored; the concept's non-precondition status stated; no
+  - [x] Success: two preconditions authored; the concept's non-precondition status stated; no
         preflight logic duplicated.
 
-- [ ] **2.2 Verify preconditions against the design** — Effort: 1/5
-  - [ ] Check the section against the design's Preconditions: two numbered items, the
+- [x] **2.2 Verify preconditions against the design** — Effort: 1/5
+  - [x] Check the section against the design's Preconditions: two numbered items, the
         concept-not-a-precondition statement, and the `/cf:onboard` note.
-  - [ ] Success: exact correspondence; no third precondition introduced.
-  - [ ] Commit: `docs: add candidates flow preconditions`
+  - [x] Success: exact correspondence; no third precondition introduced.
+  - [x] Commit: `docs: add candidates flow preconditions`
 
 ## Task 3: The candidate derivation model
 
-- [ ] **3.1 Author the two signal classes** — Effort: 3/5
-  - [ ] Write the signal table: **layer boundary** (`layers[]` — `name`, `description`, `nodeIds`)
+- [x] **3.1 Author the two signal classes** — Effort: 3/5
+  - [x] Write the signal table: **layer boundary** (`layers[]` — `name`, `description`, `nodeIds`)
         and **complexity cluster** (file-level `nodes[]` `complexity`, `filePath`, intersected with
         `layers[].nodeIds`). Exactly two classes; no third.
-  - [ ] State the one-signal rule: **a candidate names exactly one signal.** Where one layer
+  - [x] State the one-signal rule: **a candidate names exactly one signal.** Where one layer
         supports both observations, that is two candidates or one — never one candidate citing
         two. Give the reason: a candidate citing both is checkable against neither.
-  - [ ] Cite 362's mechanics by reference — file-level definition, `nodeIds | length` counting with
+  - [x] Cite 362's mechanics by reference — file-level definition, `nodeIds | length` counting with
         type breakdown, ordinal `complexity` handling, layer cross-check drift rule. **Do not
         restate them.**
-  - [ ] State what this flow does **not** read: no `tour[]`, no `entry-point` tags, no `meta.json`
+  - [x] State what this flow does **not** read: no `tour[]`, no `entry-point` tags, no `meta.json`
         coverage read.
-  - [ ] Success: two signal classes with source fields; one-signal rule with its reason; 362
+  - [x] Success: two signal classes with source fields; one-signal rule with its reason; 362
         mechanics cited not restated; the not-read list present.
 
-- [ ] **3.2 Author the no-padding rule** — Effort: 2/5
-  - [ ] State it plainly: candidates the graph does not support are not proposed. **No target
+- [x] **3.2 Author the no-padding rule** — Effort: 2/5
+  - [x] State it plainly: candidates the graph does not support are not proposed. **No target
         count, no minimum, no maximum.**
-  - [ ] Give the reason the design records: a padded list is indistinguishable from a real one to a
+  - [x] Give the reason the design records: a padded list is indistinguishable from a real one to a
         reader, and one invented candidate makes every other candidate suspect.
-  - [ ] State that **emitting zero candidates is a success, not a failure** — the document is still
+  - [x] State that **emitting zero candidates is a success, not a failure** — the document is still
         written (on confirmation) and states that the graph supported no candidate, naming what was
         looked for.
-  - [ ] Success: rule, reason, and zero-is-success statement all present and unhedged.
+  - [x] Success: rule, reason, and zero-is-success statement all present and unhedged.
 
-- [ ] **3.3 Verify the derivation model** — Effort: 1/5
-  - [ ] Check against the design's "The candidate derivation model": signal table matches
+- [x] **3.3 Verify the derivation model** — Effort: 1/5
+  - [x] Check against the design's "The candidate derivation model": signal table matches
         field-for-field; the one-signal rule is stated as a rule, not a preference; no 362
         mechanic has been restated in place of a citation.
-  - [ ] Success: correspondence confirmed.
-  - [ ] Commit: `docs: add candidate derivation model and no-padding rule`
+  - [x] Success: correspondence confirmed.
+  - [x] Commit: `docs: add candidate derivation model and no-padding rule`
 
 ## Task 4: The optional concept read
 
