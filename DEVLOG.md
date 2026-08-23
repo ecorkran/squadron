@@ -64,12 +64,23 @@ places it needed correcting — is the data for tuning the flow.
 2. **Disagreement is a finding, not noise.** Where the two sources describe the project as different
    *kinds of thing*, the flow now surfaces that at the confirmation instead of blending them into an
    averaged paragraph. A scope that moved without the graph following is worth telling the operator.
-3. **Decided-but-unbuilt intent is invisible to all three sources.** Both PM corrections in the
-   walkthrough (server surface moving to amoeba; pipelines driving the context-forge state machine)
-   were architectural intent no artifact could hold. The confirmation now carries one bounded,
-   skippable prompt for exactly that class of fact. It is **part of the confirmation, not a third
-   interview question** — SC2's two-question limit is intact, and a skipped answer adds nothing to
-   the document.
+3. **The Overview read only the two top-level summaries.** The context-forge correction was
+   initially recorded as unreachable intent. That was wrong, and the PM caught it: squadron has
+   driven the context-forge state machine since long before the graph was built, and the graph says
+   so — `context-forge` appears in **two** layer descriptions and in
+   `src/squadron/integrations/context_forge.py`. It was in scope and the draft missed it, because
+   the Overview drew only on `project.description` and the README lead, both of which are summaries
+   and both of which drop the specific systems a project integrates with. The Overview row now reads
+   `layers[]` descriptions too (no extra read — already loaded for Solution Approach), with a
+   checkable rule: a system named in two or more layer descriptions and absent from the Overview
+   belongs there. Verified against this graph, the check selects exactly `context-forge`.
+4. **Decided-but-unbuilt intent is invisible to all three sources.** This holds for **one** of the
+   two corrections: the server surface moving to amoeba is a decision that exists nowhere in the
+   code. The confirmation carries one bounded, skippable prompt for that class of fact — **part of
+   the confirmation, not a third interview question**, so SC2's two-question limit is intact, and a
+   skipped answer adds nothing to the document. It is explicitly **not** a substitute for reading
+   the sources properly: a fact already present in `layers[]` or a module name is an extraction
+   failure when the operator has to supply it.
 
 **Deviations.** One beyond the task file: a second stale forward-reference at the comprehension
 flow's Project identity section ("in slice 363") was corrected alongside Task 7.4's, since it was the

@@ -764,13 +764,24 @@ those sources, in that order, with that human role and no other.
 
 | # | Section | Sources, in order | Human role |
 |---|---|---|---|
-| 1 | Overview | graph `project.description`; README lead | single confirm-or-correct before write |
+| 1 | Overview | README lead; graph `project.description`; `layers[]` descriptions | single confirm-or-correct before write |
 | 2 | User-Provided Concept | engagement answers, verbatim | the two questions |
 | 3 | Problem & Motivation | README problem statement (cited); Q1 answer for the engagement half | none beyond Q1 |
 | 4 | Target Users | README; graph entry surfaces (`entry-point` nodes, `frameworks`) | none — never asked |
 | 5 | Solution Approach | `layers[]` names + descriptions; `tour[]` order; coverage boundary | none |
 | 6 | Initial Technical Direction | `project.languages`, `.frameworks`; `config` nodes; `entry-point` nodes | none |
 | 7 | Development Approach | filesystem signals checklist; Q2 answer for unwritten constraints | none beyond Q2 |
+
+**The Overview reads `layers[]` descriptions, not only the two top-level summaries.**
+`project.description` and the README lead are both *summaries*, and a summary drops the specific
+systems a project integrates with. Layer descriptions name them — an integration that appears in two
+layer descriptions and its own module is a fact about what this project **is**, not merely how it is
+built, and an Overview that omits it is thinner than its own sources.
+
+> Before confirming the description, check it against `layers[]`: if a system named in two or more
+> layer descriptions appears nowhere in the Overview, it belongs there.
+
+This costs no extra read — `layers[]` is already loaded for Solution Approach.
 
 **Dropped, not gap-marked.** "Why now", audience-evolution, and methodology-preference questions
 appear **nowhere** — not asked, and not marked absent. For an existing codebase they have no useful
@@ -844,11 +855,16 @@ Then ask them to **confirm or correct** it, and add one prompt with it:
 
 **This is part of the confirmation, not a third interview question.** It is bounded to the
 description being confirmed, it is skippable in the same breath as the confirmation itself, and a
-skipped answer adds nothing to the document — no gap marker. Its purpose is narrow: **architectural
-intent that has been decided but is not yet in the code** is invisible to every one of the three
-sources, and it is exactly the class of fact that makes a generated concept wrong in a way no
-extraction can catch. A component moving to another system, a surface being deprecated, a
-subsystem's real purpose — the artifacts show what is, never what was decided last week.
+skipped answer adds nothing to the document — no gap marker.
+
+Its purpose is narrow, and narrower than it may look: **a decision made but not yet built** is
+invisible to all three sources, because the artifacts show what is, never what was decided last
+week. A component moving to another system, a surface being deprecated in favor of a replacement
+elsewhere — no graph field, README line, or filesystem signal can reach those.
+
+**This prompt is not a substitute for reading the sources properly.** A fact already present in
+`layers[]`, the README, or a module name is an extraction failure when the operator has to supply
+it, not a fact the codebase could not hold. Do not lean on this prompt to cover a thin draft.
 
 Corrections from this prompt land in the body with the rest of the description and are recorded as
 `extracted-and-corrected`.
