@@ -307,7 +307,8 @@ and the test is mechanical:
 The marker stays documented in these shared conventions because Flow: Concept Generation genuinely
 needs it: a concept's Solution Approach derived from tour ordering *is* an inference from indirect
 evidence. Governance for that use is **`[INFERRED]` governance for this flow**, in that flow's
-section below.
+section below. **Flow: Initiative Candidates does not use `[INFERRED]` at all** — see that flow's
+"Gap markers, `[INFERRED]`, and read discipline" section for the structural reason.
 
 ### Provenance block
 
@@ -394,14 +395,17 @@ This skill implements two flows. The invocation argument selects between them:
 | none | Flow: Comprehension Analysis |
 | `comprehension` | Flow: Comprehension Analysis |
 | `concept` | Flow: Concept Generation |
+| `candidates` | Flow: Initiative Candidates |
 | anything else | **unrecognized** — say so and stop |
 
-`candidates` is **not** recognized; the initiative-candidates flow is slice 364. Any other argument
-stops the same way — say the argument is unrecognized and stop; do not guess at intent.
+Any unrecognized argument stops the same way — say the argument is unrecognized and stop; do not
+guess at intent.
 
 **Selection is by explicit argument only.** The skill never infers a flow from repository state. The
 absence of a concept document never auto-triggers Flow: Concept Generation, and the presence of one
-never suppresses it. A flow runs because it was named.
+never suppresses it. A flow runs because it was named. The presence or absence of a concept document
+selects nothing here either — it changes only what Flow: Initiative Candidates reads once it has
+been named.
 
 **Preflight runs in full for both flows, unchanged** — location, validation, staleness, and the
 `.gitignore` hygiene write, which the shared contract performs at the start of every run before any
@@ -646,8 +650,8 @@ file pre-populated with commented suggestions.
 Fallback: `[GAP: ...]` naming the specific file that could not be read.
 
 **Do not add sections beyond these seven.** The mapping table is the full scope of this flow. Concept
-generation is **Flow: Concept Generation** below and initiative candidates are slice 364; neither is
-written here.
+generation is **Flow: Concept Generation** below and initiative candidates are **Flow: Initiative
+Candidates** below; neither is written here.
 
 ## Flow: Concept Generation
 
@@ -1022,6 +1026,238 @@ model id, or an explicit stop. Never a placeholder, never copied from another do
 - **Engagement questions** — both questions, each marked answered or declined.
 - **Inferred claims** — every `[INFERRED]` sentence, or an explicit statement that there are none.
 - **Flagged gaps**, **staleness**, **review state** — as in the shared block.
+
+## Flow: Initiative Candidates
+
+Proposes initiative-shaped work items from the knowledge graph, written to a standalone
+`{index}-analysis.initiative-candidates.md` and never into `001-initiative-plan.{project}.md`.
+
+Run **Preflight: Graph Contract** in full first, then check the preconditions below, then derive,
+then confirm, then write.
+
+### Preconditions
+
+**1. The graph is present.** This is the shared **Preflight: Graph Contract** above, executed
+unchanged — location, validation, staleness, hygiene. This flow adds no hygiene behavior of its own
+and skips none; do not re-implement any part of the contract here.
+
+**2. The project name resolves** from the cf project registration. **Never from the graph** — see
+**Output conventions** above. If no registration resolves a name, **stop**, naming the setup step.
+
+**The concept document is not a precondition.** Its absence is an observation this flow records, not
+a stop — see "The optional concept read" below.
+
+**No `/cf:onboard` boundary concern applies here**, unlike Flow: Concept Generation above. This flow
+writes to `analysis/`, which Flow: Comprehension Analysis already writes to, so it requires nothing of
+`project-guides/` beyond what the two preconditions above already require.
+
+### The candidate derivation model
+
+A candidate is derived from exactly one of two signal classes:
+
+| Signal | Source fields | What it observes |
+|---|---|---|
+| **Layer boundary** | `layers[]` (`name`, `description`, `nodeIds`) | A layer whose size or described responsibility marks it as a unit of work |
+| **Complexity cluster** | file-level `nodes[]` (`complexity`, `filePath`) intersected with `layers[].nodeIds` | A concentration of `complex` files inside one layer |
+
+**A candidate names exactly one signal.** Where the same layer supports both a boundary observation
+and a complexity observation, that is two candidates or one — never one candidate citing two signals.
+A candidate citing both is checkable against neither.
+
+Field mechanics are **362's, cited and not restated**: the file-level definition, the `nodeIds |
+length` counting rule with its type breakdown, the ordinal handling of `complexity`, and the layer
+cross-check drift rule all apply unchanged. This flow reads strictly less of the graph than Flow:
+Comprehension Analysis: no `tour[]`, no `entry-point` tags, no `meta.json` coverage read.
+
+**The no-padding rule.** Candidates the graph does not support are not proposed. There is no target
+count, no minimum, and no maximum. A padded list is indistinguishable from a real one to a reader, and
+one invented candidate makes every other candidate in the document suspect.
+
+**Emitting zero candidates is a success, not a failure.** The document is still written (on
+confirmation), and it states that the graph supported no candidate, naming what it looked for.
+
+### The optional concept read
+
+When `project-documents/user/project-guides/000-concept.{project}.md` exists, read **two sections
+only**: **User-Provided Concept** (the verbatim engagement answers, Q1 in particular) and **Problem &
+Motivation** (the engagement half). Nothing else — not Solution Approach, not Initial Technical
+Direction, not Development Approach. Those are graph-derived in the concept itself, so reading them
+here would launder graph content through a second document and present it as independent
+corroboration.
+
+**What it changes, and what it does not:**
+
+| Aspect | Effect of the concept |
+|---|---|
+| **Which candidates exist** | **None.** Candidates are derived from graph signals only. The concept never creates a candidate, never suppresses one, and never supplies one the graph does not support. |
+| **Their order** | **This is the whole effect.** Candidates whose implicated layers align with the stated engagement intent are ordered first. |
+| **Their scope statements** | The scope paragraph may frame the work in terms of the stated intent, provided every factual claim in it still traces to a graph signal. |
+
+**The concept cannot manufacture a candidate.** This boundary is what keeps the no-padding rule
+enforceable — if engagement context could originate candidates, "we're here to modernize" would
+license proposing anything at all.
+
+**Ordering influence is stated per candidate**, not applied invisibly: a candidate ordered up by the
+engagement read says so, and names the concept as the reason.
+
+**Degradation when absent.** No concept, or a concept lacking both named sections: candidates are
+ordered by **signal strength alone** — descending count of `complex` file-level nodes for complexity
+clusters, descending `nodeIds | length` for layer boundaries.
+
+The degradation is **stated in the document body and recorded in provenance**, never silent:
+
+```
+Ordered by signal strength alone — no concept document was found at
+project-documents/user/project-guides/000-concept.{project}.md. With one present, candidates
+would additionally be ordered against the engagement intent it records.
+```
+
+A concept that exists but whose User-Provided Concept section records **both questions declined** is
+treated as absent for ordering purposes, and the provenance says which of the two cases occurred. A
+declined interview and a missing document are different facts, and collapsing them would hide that the
+interview happened.
+
+### Candidate record shape
+
+Each candidate carries exactly five parts, in this order:
+
+| # | Part | Sourced from | Rule |
+|---|---|---|---|
+| 1 | **Title** | authored | Names the work, not the observation. "Extract pipeline step classification" — never "Pipeline Orchestration is complex". |
+| 2 | **Derivation signal** | `layers[]` or `complexity` | One signal, named explicitly, with the field it came from. |
+| 3 | **Supporting node IDs** | `layers[].nodeIds`, file-level `nodes[]` | The actual ids. Every id must resolve to a node carrying a `filePath`; an unresolvable id is drift, reported per the 362 rule, and a candidate whose supporting ids are all drift is not emitted. |
+| 4 | **Scope statement** | authored, constrained | **One paragraph.** Every factual claim traces to the signal or to a cited node. Effort estimates, timelines, and value judgments about the business are out of scope. |
+| 5 | **Observed dependencies** | `edges[]` | Derived, never asserted — see below. An empty result is written as "none observed", not omitted. |
+
+**Node IDs are cited, not summarized.** A candidate supported by fourteen nodes lists them; the
+document is a working artifact for someone deciding whether to adopt the proposal, and "several files
+in Pipeline Orchestration" is not checkable. Where a list is long, it is still written out — the
+alternative is an unfalsifiable claim.
+
+**The title and the scope statement are the only two authored parts** of the record, and both are
+constrained by parts 2, 3, and 5, which are all extracted. That asymmetry is intentional: prose that a
+reader can check against cited ids is safe; prose that stands alone is not.
+
+### Dependency derivation
+
+Dependencies between candidates come from `edges[]` between the layers each candidate implicates —
+**observed, never asserted**.
+
+Mechanics are **362's, unchanged**: endpoint resolution is a string parse of the edge's own
+`source`/`target` id (the second colon-delimited field is the owning file's path, which resolves to a
+layer), `imports` and `depends_on` edge types, self-references excluded. **No node is read to resolve
+an endpoint**, and specifically no `function` or `class` node.
+
+The derivation:
+
+1. For each candidate, collect the set of layers its supporting nodes belong to.
+2. For each ordered pair of candidates, count inter-layer `imports`/`depends_on` edges from the
+   first's layers to the second's.
+3. A non-zero count is a stated dependency, **carrying the count**.
+
+**A stated dependency is a directional edge count, not a claim about sequencing.** The document says
+"Candidate 3's layers hold 27 imports into Candidate 1's layers" — it does not say Candidate 1 must be
+done first. That inference belongs to the human adopting the candidates.
+
+Unresolvable endpoints are excluded from the count and reported as drift, per 362. Where two
+candidates implicate the same layer, that overlap is stated rather than expressed as a dependency — a
+layer does not depend on itself.
+
+### The write confirmation
+
+**One interaction, after derivation and before any file write.** Show the operator:
+
+- the **count** of candidates derived;
+- each candidate's **title and derivation signal** — one line apiece;
+- the **ordering basis** — engagement-informed (naming the concept) or signal-strength-only (naming
+  the concept's absence).
+
+Then ask whether to write the document.
+
+**What is being confirmed is that the document is worth writing at all** — not the correctness of
+individual candidates, not their adoption. This is what makes the interaction cheap: the operator is
+answering "is this set worth a file?", answerable from titles and signals, not "is candidate 4
+correct?", which is not.
+
+| Outcome | Effect | Provenance |
+|---|---|---|
+| Confirmed | document written | `confirmed` |
+| Declined | **nothing is written**; the derived set is shown in the console and discarded | n/a — no document exists |
+| No answer / unavailable | **nothing is written** | n/a — no document exists |
+
+**This flow's confirmation defaults to not writing.** This is deliberately the opposite of Flow:
+Concept Generation's confirmation, which never stalls and proceeds on no answer. The reason is the
+artifact class: that flow writes the Phase 0 entry point a repo has no other way to obtain, while this
+flow writes an advisory list that costs nothing to regenerate. Where that flow's failure mode is a
+lost interview, this flow's is an unwanted file in `analysis/`.
+
+**Zero candidates still asks.** A run that derives nothing shows "0 candidates, derived from N layers
+and M complex file-level nodes" and asks whether to write the document recording that. The negative
+result is a real finding — it says the graph does not support proposals — and suppressing the question
+would make an empty result indistinguishable from a failed run.
+
+### Output conventions
+
+**Path:**
+
+```
+project-documents/user/analysis/{index}-analysis.initiative-candidates.md
+```
+
+**Index selection** — the shared rule in **Generated document conventions** above, unchanged: lowest
+unused index ≥ 940, a **new index per run**, never overwriting.
+
+**Frontmatter:**
+
+```yaml
+---
+docType: analysis
+project: {project}
+topic: initiative-candidates
+dateCreated: {YYYYMMDD}
+dateUpdated: {YYYYMMDD}
+status: not_started
+model: {id of the model generating this document}
+---
+```
+
+`{project}` resolves from the cf project registration, never `project.name` from the graph. `model:`
+follows the shared rule in **Generated document conventions** unchanged — the real generating model
+id, or an explicit stop. Never a placeholder.
+
+**Provenance block** — the shared shape above, with flow-specific content:
+
+- **Generated by** — this flow, and the model id.
+- **Generated on** — the date of this run.
+- **Source** — the graph and its identity (`gitCommitHash`, `lastAnalyzedAt`); the concept document
+  path **when one was read**, or an explicit statement that none was found.
+- **Ordering basis** — `engagement-informed` (citing the concept) or `signal-strength-only` (citing
+  the concept's absence, or both-questions-declined).
+- **Candidate count**, and the signal counts it was derived from.
+- **Drift** — unresolvable node ids and edge endpoints, per 362.
+- **Flagged gaps**, **staleness**, **review state** — as in the shared block.
+
+**The non-modification statement is written into the document body**, not only into provenance: the
+document states that it is advisory, that adoption is manual, and that
+`001-initiative-plan.{project}.md` was not read for writing and not modified.
+
+### Gap markers, `[INFERRED]`, and read discipline
+
+**Gap markers** use the shared syntax above. This flow's genuine absences are: no concept document, a
+concept with no usable engagement content, and zero candidates derived. Each gets a marker naming the
+input that would have supplied it.
+
+**`[INFERRED]` is not used in this flow.** The reason is structural, not stylistic: a claim not
+traceable to a cited signal or node id has no place in the document at all — the candidate record's
+whole design is that its authored parts are checkable against its extracted parts. A sentence that
+would need `[INFERRED]` is a sentence to delete. This is stated here explicitly so the absence reads as
+a decision, not an oversight.
+
+**Read discipline** is 362's, unchanged: field-scoped `jq` selections only, the whole graph never
+loaded, no `function` or `class` node read. Fields read by this flow: `layers[]`, file-level `nodes[]`
+(`complexity`, `filePath`), and `edges[]` (`type`, `source`, `target`). Nothing else. The concept read
+is a bounded read of two named sections — not a full-document load, and not a read of any other
+document in `project-guides/`.
 
 ---
 

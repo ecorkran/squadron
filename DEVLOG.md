@@ -14,6 +14,59 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260823
 
+### Slice 364: Initiative Candidates — Implementation Complete
+
+**Phase 6 complete.** All ten task groups executed; all ten success criteria verified per the
+Verification Walkthrough. Everything is markdown — `commands/analysis/understand.md` gained a third
+sibling flow section (Flow: Initiative Candidates), plus the two cross-reference sentence fixes the
+task file anticipated. No Python, no test added.
+
+**Invocation-syntax correction found during the walkthrough.** The design's draft walkthrough used
+`/sq:analysis understand candidates`, but `/sq:analysis` only recognizes `tech-debt-audit` today —
+dispatcher routing for `understand` is slice 366, not yet built. The skill's actual present-day
+invocation is `/understand <argument>` per its own frontmatter. All walkthrough steps were executed
+by tracing the skill's protocol text directly. Doesn't affect any success criterion; corrected in the
+reconciled walkthrough so a future reader isn't sent looking for a command that doesn't exist yet.
+
+**Full run against squadron's real graph derived 8 candidates**, one per layer carrying at least one
+`complex` file-level node — matching the count the design's own Rationale section predicted. No
+concept document exists at the concept path, so ordering was signal-strength-only, as expected on
+this repo. Declined once (Task 8.2: nothing written, `git status` clean, every candidate verified
+traceable to the graph) then confirmed once (Task 8.3: written to
+`945-analysis.initiative-candidates.md`, `cf validate frontmatter` clean, all hand-checks passed).
+Node-id resolution, one independent dependency recount (24, matching exactly), and the initiative-plan
+untouched check (Task 8.4–8.6) all passed.
+
+**All three concept-ordering states exercised (Task 8.7)**, the engagement-informed and
+both-declined cases on scratch copies outside the repo entirely — never in `project-guides/`. The
+archived concept's Q1 answer ("take over maintenance, and modernize it") shifted the Shared
+Foundation candidate up, with the reason declared on the candidate per the design's rule. The
+zero-candidate path (Task 8.8) was simulated against a synthetic one-layer fixture rather than
+executed as a real write, since PM confirmed a fixture graph doesn't warrant a real `analysis/` file.
+
+**Four decisions the design deferred to Phase 6 are now recorded** (in the reconciled Verification
+Walkthrough): the layer-boundary candidacy threshold (resolved as complexity-cluster-only for this
+run — layer-boundary candidates weren't derived, since the design gave no numeric cutoff for when a
+layer boundary alone is "defensible"), per-candidate ordering-influence phrasing (a fixed
+structural-fact → engagement-framing → conclusion shape), scope-statement length (settled at 3–5
+sentences), and node-ID list rendering (a Markdown bullet list per candidate, directly greppable for
+the resolution check).
+
+**Close-out states the slice is mechanically verified, usefulness unjudged** — the non-criterion from
+Phase 4 design is repeated explicitly so a green walkthrough here is never later read as evidence the
+8 real candidates are worth adopting.
+
+Guards green: `ruff format --check .` (446 files), `pytest tests/skills/` (62 passed).
+
+**Commits:** `cf40bd3` flow selector · `a0fe779` preconditions · `3a351b3` derivation model ·
+`3305f99` record shape and dependencies · `f38a325` concept read · `04daf32` write confirmation ·
+`7115147` output conventions · `071890d` walkthrough proof artifact (`945-analysis.initiative-candidates.md`)
+· `7d0da0f` walkthrough reconciliation · `f8257e5` slice complete.
+
+**Next:** slice 365 (Overview Command, independent) or slice 366 (Dispatcher Routing and
+Documentation, last — also where `/sq:analysis understand candidates` becomes real). Issue #68
+(review `allowed_tools` silently ignored by non-SDK providers) remains open and unsized.
+
 ### Slice 364: Initiative Candidates — Task Breakdown Complete
 
 **Phase 5 complete.** `364-tasks.initiative-candidates.md` — 440 lines, ten task groups (0–9),

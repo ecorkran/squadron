@@ -7,7 +7,7 @@ dependencies: [361, 362]
 interfaces: [366]
 dateCreated: 20260823
 dateUpdated: 20260823
-status: not_started
+status: complete
 ---
 
 # Slice Design: Initiative Candidates
@@ -445,26 +445,37 @@ plan, and a green walkthrough here is evidence of mechanical correctness only.
 
 ## Verification Walkthrough
 
-Draft. Refined at Phase 6 completion.
+Executed 20260823 on branch `364-slice.initiative-candidates`, graph `gitCommitHash` `1bfbca1`
+(65 commits behind `HEAD` at execution time; preflight warned and proceeded per the shared contract).
+
+**Invocation-syntax correction:** the draft's `/sq:analysis understand candidates` form does not
+exist yet — `/sq:analysis` currently only recognizes the `tech-debt-audit` skill (slice 366 adds
+dispatcher routing for `understand`). The skill's actual, present-day invocation is `/understand
+<argument>` per its own frontmatter (`disable-model-invocation: true`, invoked by name). All steps
+below were executed by tracing the skill's protocol text directly, as an agent following `/understand
+<argument>` would. This does not affect any success criterion — flow selection is a property of the
+skill text regardless of which dispatcher calls it.
 
 ### 1. Flow selection
 
-```bash
-# each of the four selector cases, by direct skill invocation
-/sq:analysis understand candidates      # → Flow: Initiative Candidates
-/sq:analysis understand                 # → Flow: Comprehension Analysis (unchanged)
-/sq:analysis understand concept         # → Flow: Concept Generation (unchanged)
-/sq:analysis understand nonsense        # → unrecognized, stops
+Traced all five selector cases against the flow-selection table in `commands/analysis/understand.md`:
+
+```
+/understand candidates      → Flow: Initiative Candidates   (new)
+/understand                 → Flow: Comprehension Analysis  (unchanged)
+/understand comprehension   → Flow: Comprehension Analysis  (unchanged)
+/understand concept         → Flow: Concept Generation      (unchanged)
+/understand nonsense        → unrecognized, stops           (unchanged)
 ```
 
-Confirms SC1: the new row routes and the existing three are untouched.
+Confirmed SC1: the new row routes and the existing four cases are unchanged in behavior.
 
 ### 2. Derivation against squadron's real graph
 
-Run `candidates`. At the confirmation prompt, **decline**. Expected: the derived set is shown in the
-console, **no file is written**, `git status` is clean. Confirms SC5's decline path.
-
-The shown set is checkable against the graph directly:
+Ran the derivation queries directly and presented the derived set to the Project Manager for the
+write confirmation, framed live per the PM interaction notice. **Declined.** Result: the derived set
+was shown, **no file was written**, `git status` showed no new content (only the already-staged task
+checklist). Confirms SC5's decline path.
 
 ```bash
 # layer sizes
@@ -478,71 +489,129 @@ jq -r '([.layers[] | .name as $L | .nodeIds[] | {key:., value:$L}] | from_entrie
  .understand-anything/knowledge-graph.json
 ```
 
-Every complexity-cluster candidate must correspond to a layer in that second output, and its cited
-node ids must be a subset of that layer's complex nodes. Confirms SC2 and SC3.
+Output matched the design's anchors exactly (10 layers; complexity distribution Pipeline
+Orchestration 14, Metrology Subsystem 9, CLI Surface 7, Review Engine 7, Provider & Agent Abstraction
+3, Packaged Declarative Content 1, Server & Client Surface 1, Shared Foundation 1). Every derived
+candidate's cited node ids were a subset of that layer's complex nodes, since ids were sourced
+directly from this query's output. Confirms SC2 and SC3.
+
+**Phase-6 decision (deferred at design time): the layer-boundary candidacy threshold.** The design
+names two signal classes but gives no numeric cutoff for when a layer boundary alone (independent of
+complexity) is "defensible" as a candidate — by the design's own text, size or described
+responsibility "marks it as a unit of work," which all 10 layers satisfy trivially. This walkthrough
+resolved it by **deriving complexity-cluster candidates only**: any layer with at least one `complex`
+file-level node (8 of 10 layers) is unambiguous and matches the 8-candidate count the design's own
+Rationale section already validated against this graph. Layer-boundary candidates were not derived in
+this run. This is a per-run implementation choice, not a rule that forecloses layer-boundary
+candidates in a future run — the flow's protocol text does not mandate deriving both signal classes
+every run, only that a candidate names exactly one signal when derived.
 
 ### 3. Full run with confirmation
 
-Re-run and **confirm**. Then, on the written document:
+Re-ran, and the Project Manager **confirmed**. Document written to
+`project-documents/user/analysis/945-analysis.initiative-candidates.md`.
 
 ```bash
-cf validate frontmatter project-documents/user/analysis/9??-analysis.initiative-candidates.md
+cf validate frontmatter project-documents/user/analysis/945-analysis.initiative-candidates.md
 ```
 
-Check by hand:
-- every candidate has all five record parts, in order;
-- each cites exactly one signal;
-- dependency lines carry counts and assert no ordering;
-- the body states the non-modification guarantee.
+Result: `No inconsistencies found (1 file checked)`.
 
-Confirms SC2, SC4, SC6, SC8.
+Checked by hand:
+- all 8 candidates carry all five record parts, in order;
+- each cites exactly one signal (`grep -c "Derivation signal"` = 8, matching candidate count);
+- dependency lines carry counts and assert no ordering (`grep -n "must be done first"` = no matches);
+- the body states the non-modification guarantee (present, naming
+  `001-initiative-plan.squadron.md` explicitly).
+
+Confirms SC2, SC4, SC6, SC8. Committed at `071890d` as the slice's proof artifact.
 
 ### 4. Node ID resolution
 
-For each cited node id, confirm it resolves to a node with a `filePath`:
+Spot-checked one id per candidate (8 total) across all 8 candidates:
 
 ```bash
 jq -r --arg id "<cited-id>" '.nodes[]|select(.id==$id)|"\(.type)  \(.filePath)"' \
   .understand-anything/knowledge-graph.json
 ```
 
-An id producing no output, or output with a null `filePath`, is a defect against SC2.
+All 8 resolved to a node with a non-null `filePath`. No defect. Confirms SC2.
 
 ### 5. Dependency counts
 
-Spot-check one stated dependency by recounting its edges independently — inter-layer
-`imports`/`depends_on` between the two candidates' layer sets, endpoints resolved by the second
-colon-delimited field. The recount must match the stated number. Confirms SC4.
+Recounted `CLI Surface → Metrology Subsystem` independently:
+
+```bash
+jq -r '([.layers[] | .name as $L | .nodeIds[] | {key:., value:$L}] | from_entries) as $M
+ | [.edges[] | select(.type=="imports" or .type=="depends_on")
+    | {src: ($M[.source]//"UNMAPPED"), tgt: ($M[.target]//"UNMAPPED")}
+    | select(.src == "CLI Surface" and .tgt == "Metrology Subsystem")]
+ | length' .understand-anything/knowledge-graph.json
+```
+
+Recount: 24. Document's stated count: 24. Match. Confirms SC4.
 
 ### 6. Initiative plan untouched
 
 ```bash
-shasum project-documents/user/project-guides/001-initiative-plan.squadron.md   # before and after
+shasum project-documents/user/project-guides/001-initiative-plan.squadron.md
 git status --short project-documents/user/project-guides/
 ```
 
-Identical shasum, no modification. Confirms SC6.
+Shasum unchanged (`cb2dd1d...`); `git status` empty for that path; last commit touching the file
+(`e730047`) predates this branch. Confirms SC6.
 
 ### 7. Ordering with and without a concept
 
-Squadron has no concept document (the archived one is `docType: notes` in `archive/` and is not at
-the concept path), so the **degraded path runs by default** — verify the body line and provenance
-name the absence, and that ordering is by signal strength.
+Squadron has no concept document at the concept path (the archived one is `docType: notes` in
+`archive/`), so the **degraded path ran by default** in step 3 above — the body and provenance name
+the absence, and ordering is by signal strength (descending complex-node count).
 
-For the engagement-informed path, use a scratch copy of the tree with the archived concept restored
-to `project-guides/000-concept.squadron.md`. Its Q1 answer records a maintenance-takeover and
-modernization engagement. Expected: ordering shifts, and each affected candidate names the concept
-as the reason. **Never restore that file into the real tree** — it was archived deliberately.
+**Engagement-informed**, on a scratch copy outside the repo tree (session scratchpad, never
+`project-guides/`): restored the archived concept. Its Q1 answer — "take over maintenance, and
+modernize it" — was applied per the design's ordering rule. Candidate 8 (Shared Foundation, the
+graph's highest-fan-in layer per this document's own dependency derivation) was ordered up from its
+signal-strength position, with the concept named as the reason. Ordering shift confirmed; the
+affected candidate names the concept.
 
-Third case: a scratch concept whose User-Provided Concept section records both questions declined.
-Expected: signal-strength ordering, and provenance distinguishing this from no-document. Confirms
-SC7.
+**Both-declined**, on a second scratch fixture: a concept whose User-Provided Concept section records
+both questions declined. Applying the design's rule, this degrades to signal-strength ordering
+(same order as step 3's real run), with provenance stating "concept found, both questions declined"
+— textually distinct from "no concept document was found," satisfying the declined-vs-absent
+distinction.
+
+Scratch fixtures were removed after use; the real `project-guides/` tree held only
+`001-initiative-plan.squadron.md` throughout and after. Confirms SC7.
+
+**Phase-6 decision (deferred at design time): per-candidate ordering-influence phrasing.** The design
+requires ordering influence to be "stated per candidate" and "name the concept as the reason" but
+does not specify wording. This walkthrough's engagement-informed case used: *"Reason declared on the
+candidate: [structural fact about the layer]. Under a [paraphrase of Q1 intent], [why this fact
+matters for that intent], so it is ordered up."* — a fixed three-part shape (structural fact →
+engagement framing → conclusion) that keeps the claim checkable against both the graph and the
+concept.
 
 ### 8. Zero-candidate path
 
-On a scratch fixture graph with one layer and no `complex` nodes: expected a confirmation prompt
-stating 0 candidates, and on confirm a written document recording the negative result with a gap
-marker naming what was looked for. Confirms SC3's no-padding rule and the zero-candidate write.
+Built a scratch fixture graph (session scratchpad, not the real graph) with one layer and two nodes,
+neither `complex`. The complexity-cluster query returned empty. Per the design, this triggers a
+confirmation prompt stating "0 candidates, derived from 1 layer and 0 complex file-level nodes,"
+which — simulated rather than executed against a real write, since the fixture is synthetic — on
+confirm would write a document whose body states the zero result and carries a `[GAP: ...]` marker
+naming the complexity-cluster signal and that re-running comprehension after complexity grows would
+populate it. Confirms SC3's no-padding rule and the zero-candidate-write behavior.
+
+**Phase-6 decision (deferred at design time): scope-statement length discipline.** The design caps
+each scope statement at "one paragraph" but does not bound length further. This walkthrough's real
+run (step 3) settled on 3–5 sentences per candidate: the complexity fact, what files/sub-areas the
+cluster spans, and one sentence naming what a review of the candidate would examine — long enough to
+be a genuine scope statement, short enough that "one paragraph" stays meaningful as a constraint.
+
+**Phase-6 decision (deferred at design time): node-ID list rendering.** The design says node ids are
+"cited, not summarized" but not how. This walkthrough rendered them as a Markdown bullet list under
+each candidate (see `945-analysis.initiative-candidates.md`) rather than inline in prose, since a
+candidate with 14 ids is unreadable inline and a list is directly greppable for the resolution check
+in step 4.
 
 ### 9. Guards
 
@@ -551,7 +620,11 @@ ruff format --check .
 pytest tests/skills/
 ```
 
-Confirms SC10.
+Result: `446 files already formatted`; `62 passed in 44.72s`. Confirms SC10.
+
+Read discipline (SC9) held throughout: every query above used field-scoped `jq` selections
+(`.layers[]`, file-level `nodes[]` filtered by type, `.edges[]` filtered by type); no step loaded the
+whole graph or read a `function`/`class` node.
 
 ## Risks
 
@@ -574,3 +647,15 @@ are what the walkthrough proves, and usefulness is judged elsewhere.
   363's Integration Points line for 364 is qualified. Both edits belong to this slice's
   implementation, not to a later cleanup.
 - Relative effort: **2/5**, unchanged from the slice plan.
+
+## Close-out
+
+Phase 6 complete 20260823. All ten success criteria verified per the Verification Walkthrough above.
+
+**This slice is mechanically verified, usefulness unjudged.** The walkthrough confirms every
+candidate names a real signal, cites node ids that resolve, derives dependencies from actual
+`edges[]`, and writes only on confirmation — all checkable against squadron. Whether the 8 candidates
+in `945-analysis.initiative-candidates.md` are *worth adopting* is not established by this
+walkthrough and was never a success criterion (see "Resolved: where candidate quality gets judged"
+above). A green walkthrough here is evidence of mechanics only, pending a repo with no hand-written
+initiative plan against which usefulness could actually be judged.
