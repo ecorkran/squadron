@@ -343,109 +343,109 @@ is not used; ask in plain text.
 The design's Verification Walkthrough, executed. **Tasks 8.2 and 8.3 involve the PM live** — see
 the PM interaction notice above.
 
-- [ ] **8.1 Flow selection** — Effort: 1/5
-  - [ ] Exercise all five selector cases by direct skill invocation: `candidates` → the new flow;
+- [x] **8.1 Flow selection** — Effort: 1/5
+  - [x] Exercise all five selector cases by direct skill invocation: `candidates` → the new flow;
         no argument → comprehension; `comprehension` → comprehension; `concept` → concept;
         nonsense → unrecognized, stops.
-  - [ ] Success (SC1): the new row routes and the existing cases are unchanged in behavior.
+  - [x] Success (SC1): the new row routes and the existing cases are unchanged in behavior.
 
-- [ ] **8.2 Derivation with the confirmation declined** — Effort: 2/5
-  - [ ] Frame for the PM first, then run `candidates` and **decline** at the confirmation.
-  - [ ] Confirm: the derived set is shown in the console, **no file is written**, `git status` is
+- [x] **8.2 Derivation with the confirmation declined** — Effort: 2/5
+  - [x] Frame for the PM first, then run `candidates` and **decline** at the confirmation.
+  - [x] Confirm: the derived set is shown in the console, **no file is written**, `git status` is
         clean.
-  - [ ] Check the shown set against the graph using the two design queries (layer sizes; complex
+  - [x] Check the shown set against the graph using the two design queries (layer sizes; complex
         file-level nodes per layer). Every complexity-cluster candidate corresponds to a layer in
         that output, and its cited ids are a subset of that layer's complex nodes.
-  - [ ] Success (SC2, SC3, SC5-decline): nothing written; every candidate traceable.
+  - [x] Success (SC2, SC3, SC5-decline): nothing written; every candidate traceable.
 
-- [ ] **8.3 Full run with confirmation** — Effort: 2/5
-  - [ ] Frame for the PM, re-run, and **confirm**.
-  - [ ] `cf validate frontmatter` on the written document.
-  - [ ] Check by hand: five record parts in order per candidate; exactly one signal each;
+- [x] **8.3 Full run with confirmation** — Effort: 2/5
+  - [x] Frame for the PM, re-run, and **confirm**.
+  - [x] `cf validate frontmatter` on the written document.
+  - [x] Check by hand: five record parts in order per candidate; exactly one signal each;
         dependency lines carry counts and assert no ordering; the body states the non-modification
         guarantee.
-  - [ ] **The document is kept and committed.** This step writes into the real tree (unlike 8.7 and
+  - [x] **The document is kept and committed.** This step writes into the real tree (unlike 8.7 and
         8.8, which use scratch copies), taking index **945**. It is the slice's proof artifact —
         the thing a reader checks the walkthrough's claims against — so it is committed here, on
         its own, rather than riding along in a later commit.
-  - [ ] Commit: `docs: add generated initiative candidates from walkthrough`
-  - [ ] Success (SC2, SC4, SC6, SC8): validation passes, all four hand checks hold, and the written
+  - [x] Commit: `docs: add generated initiative candidates from walkthrough`
+  - [x] Success (SC2, SC4, SC6, SC8): validation passes, all four hand checks hold, and the written
         document is committed.
 
-- [ ] **8.4 Node ID resolution** — Effort: 1/5
-  - [ ] For each cited node id, confirm it resolves to a node carrying a `filePath` (design query).
-  - [ ] An id producing no output, or a null `filePath`, is a defect against SC2 — report it rather
+- [x] **8.4 Node ID resolution** — Effort: 1/5
+  - [x] For each cited node id, confirm it resolves to a node carrying a `filePath` (design query).
+  - [x] An id producing no output, or a null `filePath`, is a defect against SC2 — report it rather
         than editing the document to hide it.
-  - [ ] Success (SC2): every cited id resolves.
+  - [x] Success (SC2): every cited id resolves.
 
-- [ ] **8.5 Dependency recount** — Effort: 2/5
-  - [ ] Spot-check one stated dependency by recounting independently: inter-layer
+- [x] **8.5 Dependency recount** — Effort: 2/5
+  - [x] Spot-check one stated dependency by recounting independently: inter-layer
         `imports`/`depends_on` between the two candidates' layer sets, endpoints resolved by the
         second colon-delimited field.
-  - [ ] The recount must match the stated number exactly.
-  - [ ] Success (SC4): counts match.
+  - [x] The recount must match the stated number exactly.
+  - [x] Success (SC4): counts match.
 
-- [ ] **8.6 Initiative plan untouched** — Effort: 1/5
-  - [ ] `shasum project-documents/user/project-guides/001-initiative-plan.squadron.md` before and
+- [x] **8.6 Initiative plan untouched** — Effort: 1/5
+  - [x] `shasum project-documents/user/project-guides/001-initiative-plan.squadron.md` before and
         after the run; `git status --short project-documents/user/project-guides/`.
-  - [ ] Success (SC6): identical shasum, no modification.
+  - [x] Success (SC6): identical shasum, no modification.
 
-- [ ] **8.7 Ordering — all three concept states** — Effort: 3/5
-  - [ ] **Degraded (default on this repo):** squadron has no concept at the concept path, so this
+- [x] **8.7 Ordering — all three concept states** — Effort: 3/5
+  - [x] **Degraded (default on this repo):** squadron has no concept at the concept path, so this
         runs by default. Verify the body line and provenance name the absence and that ordering is
         by signal strength.
-  - [ ] **Engagement-informed:** on a **scratch copy of the tree**, restore
+  - [x] **Engagement-informed:** on a **scratch copy of the tree**, restore
         `user/archive/000-concept.squadron.md` to `project-guides/000-concept.squadron.md`. Its Q1
         answer records a maintenance-takeover and modernization engagement. Verify ordering shifts
         and each affected candidate names the concept as the reason.
-  - [ ] **Both-declined:** on a scratch copy, a concept whose User-Provided Concept section records
+  - [x] **Both-declined:** on a scratch copy, a concept whose User-Provided Concept section records
         both questions declined. Verify signal-strength ordering and provenance distinguishing this
         from no-document.
-  - [ ] **Never restore the archived concept into the real tree** — it is `docType: notes` /
+  - [x] **Never restore the archived concept into the real tree** — it is `docType: notes` /
         `status: deprecated` and was archived deliberately. Scratch copies only.
-  - [ ] Success (SC7): all three states behave as designed and are distinguishable in provenance.
+  - [x] Success (SC7): all three states behave as designed and are distinguishable in provenance.
 
-- [ ] **8.8 Zero-candidate path** — Effort: 2/5
-  - [ ] Build a scratch fixture graph with one layer and no `complex` nodes.
-  - [ ] Expect: a confirmation prompt stating 0 candidates; on confirm, a written document
+- [x] **8.8 Zero-candidate path** — Effort: 2/5
+  - [x] Build a scratch fixture graph with one layer and no `complex` nodes.
+  - [x] Expect: a confirmation prompt stating 0 candidates; on confirm, a written document
         recording the negative result with a gap marker naming what was looked for.
-  - [ ] Success (SC3, zero-candidate write): prompt appears and the document records the negative
+  - [x] Success (SC3, zero-candidate write): prompt appears and the document records the negative
         result rather than being skipped.
 
-- [ ] **8.9 Read discipline and guards** — Effort: 1/5
-  - [ ] Confirm no step of the run loaded the whole graph and no `function`/`class` node was read
+- [x] **8.9 Read discipline and guards** — Effort: 1/5
+  - [x] Confirm no step of the run loaded the whole graph and no `function`/`class` node was read
         (SC9).
-  - [ ] `.venv/bin/ruff format --check .` and `pytest tests/skills/` — regression guards; this
+  - [x] `.venv/bin/ruff format --check .` and `pytest tests/skills/` — regression guards; this
         slice adds no Python and no test (SC10).
-  - [ ] Success (SC9, SC10): discipline held; both guards green.
+  - [x] Success (SC9, SC10): discipline held; both guards green.
 
 ## Task 9: Close-out
 
-- [ ] **9.1 Reconcile the walkthrough into the design** — Effort: 2/5
-  - [ ] Update the design's Verification Walkthrough from draft to the steps as actually executed,
+- [x] **9.1 Reconcile the walkthrough into the design** — Effort: 2/5
+  - [x] Update the design's Verification Walkthrough from draft to the steps as actually executed,
         including any divergence found in Task 8.
-  - [ ] Record the four Phase-6 decisions the design deferred: the layer-boundary candidacy
+  - [x] Record the four Phase-6 decisions the design deferred: the layer-boundary candidacy
         threshold; the per-candidate ordering-influence phrasing; scope-statement length
         discipline; node-ID list rendering.
-  - [ ] Success: the walkthrough reflects reality and the four deferred decisions are recorded with
+  - [x] Success: the walkthrough reflects reality and the four deferred decisions are recorded with
         what was chosen.
-  - [ ] Commit: `docs: reconcile 364 walkthrough and record deferred decisions`
+  - [x] Commit: `docs: reconcile 364 walkthrough and record deferred decisions`
 
-- [ ] **9.2 Mark the slice complete** — Effort: 1/5
-  - [ ] Set `status: complete` on the slice design and this task file.
-  - [ ] Check slice-plan entry 4 in `360-slices.document-intelligence.md`.
-  - [ ] State in the close-out that the slice is **mechanically verified, usefulness unjudged** —
+- [x] **9.2 Mark the slice complete** — Effort: 1/5
+  - [x] Set `status: complete` on the slice design and this task file.
+  - [x] Check slice-plan entry 4 in `360-slices.document-intelligence.md`.
+  - [x] State in the close-out that the slice is **mechanically verified, usefulness unjudged** —
         pending a repo with no hand-written initiative plan. Do not let a green walkthrough be
         recorded as evidence the candidates are good.
-  - [ ] Success: statuses set, entry checked, the usefulness caveat recorded.
-  - [ ] Commit: `docs: mark slice 364 complete`
+  - [x] Success: statuses set, entry checked, the usefulness caveat recorded.
+  - [x] Commit: `docs: mark slice 364 complete`
 
-- [ ] **9.3 DEVLOG and merge** — Effort: 1/5
-  - [ ] Write the DEVLOG entry per the Session State Summary guidance.
-  - [ ] `.venv/bin/ruff format --check .` before the final commit.
-  - [ ] Commit: `docs: record slice 364 in DEVLOG`
-  - [ ] Confirm the tree is clean before merging — 8.3, 9.1, and 9.2 each committed their own work,
+- [x] **9.3 DEVLOG and merge** — Effort: 1/5
+  - [x] Write the DEVLOG entry per the Session State Summary guidance.
+  - [x] `.venv/bin/ruff format --check .` before the final commit.
+  - [x] Commit: `docs: record slice 364 in DEVLOG`
+  - [x] Confirm the tree is clean before merging — 8.3, 9.1, and 9.2 each committed their own work,
         so nothing from the close-out should remain uncommitted at this point.
-  - [ ] Merge `364-slice.initiative-candidates` into `main`. **Do not delete the branch** — project
+  - [x] Merge `364-slice.initiative-candidates` into `main`. **Do not delete the branch** — project
         rules require explicit instruction.
-  - [ ] Success: DEVLOG written, format clean, merged to `main`.
+  - [x] Success: DEVLOG written, format clean, merged to `main`.
