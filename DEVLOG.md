@@ -33,10 +33,19 @@ a silently degraded document, not a loud error. Accepted consequence: the conven
 divergences are enumerated in the design; a parity check is carried into the walkthrough. A shared
 fragment was rejected because it needs the installer change this initiative has committed not to make.
 
-**Two missing-input cases are deliberately not symmetric.** A missing initiative plan stops the run
-with an actionable error and writes nothing — five of nine fields source from it, and a document that
-is mostly markers is a report that the project was never planned, not an overview. A missing concept
-degrades: those fields become gap markers and the run proceeds.
+**Degradation is per field, across a range of incompleteness — not per document.** The governing rule
+is: produce as much useful output as the inputs actually support, and state plainly what could not be
+produced and why. Incompleteness is the normal condition of a real project, not an error state. Seven
+input conditions are enumerated (concept absent; headings unmatched; section present but empty; plan
+without dependencies, without non-goals, of one-line stubs, without statuses), each degrading only the
+fields it feeds. A section that exists but is empty behaves exactly as an absent one — the failure to
+guard against is a field rendering blank or getting filled with plausible prose because *something*
+was technically read.
+
+**Two hard stops, both about the required input:** a missing or unreadable initiative plan, and a plan
+present but yielding no parseable initiatives. The second is new — five of nine fields source from the
+plan, and a document that is mostly markers is a report that the project has not been planned, so
+saying that directly beats emitting a hollow document. Everything short of those produces a document.
 
 **Purpose is the one field with a real fallback rather than a marker.** With no concept it derives
 from the initiative plan and states that fallback in place. Problem, Audience, and Approach get no
@@ -47,16 +56,38 @@ inferring the latter from the former is exactly the invention the sourced-or-gap
 new commitment; inputs are read-only and the index rule never overwrites, so an unwanted run costs one
 deletable file. 364's gate exists because adopting a candidate *is* a commitment.
 
-**The plan's warning about squadron-as-fixture is carried into the success criteria.** Squadron has no
-concept because concept generation (363) postdates the project that built it — a bootstrap ordering
-fact, not the client-repo case where Phase 0 simply hasn't run. The slice verifies the *mechanics* of
-degradation; degraded-output usefulness is recorded as an explicit non-criterion, to be judged on a
-repo whose concept is genuinely pending.
+**Squadron is a sample, not the baseline.** An earlier draft fitted the design to squadron's
+particular shape of incompleteness (concept absent, plan complete), which is one point in the range
+above. Verification instead runs constructed fixtures spanning all seven conditions, with squadron
+included as one real-world instance — valuable there for scale, since thirteen initiatives of real
+prose exercise the translation rules in a way a synthetic fixture cannot. This also relocates the
+usefulness question: accurate and complete degradation is now verifiable *here*, rather than deferred
+to a hypothetical repo, while stakeholder usefulness of a heavily gap-marked document stays a
+non-criterion.
 
-Twelve success criteria, a twelve-step draft walkthrough, and two non-blocking Phase 6 questions
-(concept section-name matching leniency — unsettleable on squadron since there is no concept to match
-against; and Benefits granularity). Relative effort 3/5, matching the slice plan. Next: Phase 5 task
-breakdown.
+**Graph-derived artifacts are not read, even when present** — not the knowledge graph, the
+comprehension analyses, or the candidates document. The graph describes code structure, not intent;
+the candidates document is explicitly advisory, and rendering unadopted machine proposals as a
+roadmap is the overstates-progress failure the translation rules exist to prevent. But this does
+*not* cut inherited projects off from a good overview: the chain runs understand → generate concept
+and candidates → **human reviews and adopts** → overview reads the resulting planning documents
+normally. The overview never touches the graph; the generated artifacts arrive as reviewed planning
+documents. The human adoption step is load-bearing and deliberate. Whether those generated documents
+are good enough to adopt is genuinely open — 364 deferred that judgment itself — so the path is
+architecturally sound with unproven output quality, recorded as such rather than assumed.
+
+**Topic argument dropped.** The naming convention still permits `overview.{topic}`, but nothing asks
+for it and an unused argument is an untested path. The command takes no arguments.
+
+**Shared conventions fragment: deferred, not rejected.** An earlier draft asserted a shared fragment
+would need installer work; that is unverified, and both install paths already copy directories of
+markdown, so it might need no code change at all. Recorded as an open structural option to be
+answered with evidence when someone next touches either file. Until then, drift control is a manual
+parity diff — process, not machinery, and named as the honest weakness.
+
+Fourteen success criteria, a thirteen-step draft walkthrough, and two non-blocking Phase 6 questions
+(concept heading-match leniency, now testable via fixtures rather than blocked on a real concept; and
+Benefits granularity). Relative effort 3/5, matching the slice plan. Next: Phase 5 task breakdown.
 
 ---
 

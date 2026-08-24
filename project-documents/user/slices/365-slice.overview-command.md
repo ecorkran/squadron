@@ -18,16 +18,21 @@ status: not_started
 
 ## Scope
 
-Deliver `/sq:overview` as a first-party command in `commands/sq/`, reading squadron's own planning
+Deliver `/sq:overview` as a first-party command in `commands/sq/`, reading a project's planning
 artifacts and writing `{index}-analysis.overview.md` for a non-engineering reader.
 
-**One file is added: `commands/sq/overview.md`.** No Python, no installer change, no manifest
-change, no CLI registration. `sq install-commands` copies `commands/sq/*.md` wholesale
+**One file is added: `commands/sq/overview.md`.** The slice adds no Python source — not because
+squadron avoids Python (squadron *is* a Python project and this command runs on it), but because
+the installer already copies `commands/sq/*.md` wholesale
 (`src/squadron/cli/commands/install.py:48-55` — `sorted(sub.glob("*.md"))` per subdirectory into
-`~/.claude/commands/{sub}/`), so the file's presence is its registration.
+`~/.claude/commands/{sub}/`). The file's presence is its registration, so no installer, manifest,
+or CLI-registration change is required. A slice in this initiative concluding otherwise is a signal
+that scope has drifted, per the slice plan.
 
-This slice has **no dependency on the knowledge graph, on `understand-anything`, or on slices
-361–364**. It is capability (b) in full.
+The command reads **planning documents only** — the concept and the initiative plan. It has no
+dependency on the knowledge graph, on `understand-anything`, or on slices 361–364, and does not
+read their outputs even when present (see D8, which also covers how an inherited project reaches a
+good overview *through* those slices rather than around them).
 
 ---
 
@@ -58,14 +63,25 @@ delivery section makes the same split for the same reason: capability (b) "belon
 
 **Consequence accepted:** the provenance-block line list, the gap-marker syntax, the frontmatter
 block, and the index-selection rule appear in two files. This is duplication of a *convention
-statement*, not of logic, and the alternative — a shared fragment installed by both paths — would
-require an installer change this initiative has committed to not making, in an initiative whose
-plan states plainly that no slice adds Python.
+statement*, not of logic.
 
-**Drift control:** the two statements must remain identical in substance. The task breakdown carries
-an explicit step that diffs this file's convention sections against `commands/analysis/understand.md`
-and records any deliberate divergence in the file itself. Two divergences are already known and
-intended, listed in D2.
+**A shared fragment read by both files remains open, deliberately deferred — not rejected.** It may
+well be the right structure. It is not done now because this slice adds one file and a shared
+fragment changes two install paths, which is a wider blast radius than the slice needs. Whether it
+requires installer code is **unverified**: both paths already copy directories of markdown, so a
+shared file might ride along with no code change at all. That question should be answered with
+evidence — by reading the install paths — at the point someone next touches either file, and not
+assumed either way before then. This design does not claim the fragment is costly; it claims only
+that this slice is not the place to find out.
+
+**Drift control until then:** the two statements must remain identical in substance. The task
+breakdown carries an explicit step that diffs this file's convention sections against
+`commands/analysis/understand.md` and records any deliberate divergence in the file itself. The
+known, intended divergences are listed in D2.
+
+This is process, not machinery — the weakest form of drift control, and the honest reason to
+revisit the shared fragment later. The file itself should say so where a reader will see it, rather
+than let them assume the conventions are shared by construction when they are shared by convention.
 
 ### D2 — Known, intended divergences from the 361 conventions
 
@@ -82,28 +98,58 @@ failed to read — it does not require carrying a line for a concept that does n
 provenance block states, in the Source line, that the inputs are live repo files read at generation
 time, which is the equivalent honest statement.
 
-### D3 — Inputs, and the two missing-input cases are not the same
+### D3 — Inputs degrade per field, across a range of incompleteness
 
-| Input | Path | Required? | If absent |
-|---|---|---|---|
-| Initiative plan | `project-documents/user/project-guides/001-initiative-plan.{project}.md` | **Yes** | Stop with an actionable error. No document is written. |
-| Concept | `project-documents/user/project-guides/000-concept.{project}.md` | No | Proceed; concept-sourced fields become gap markers. |
+| Input | Path | Required? |
+|---|---|---|
+| Initiative plan | `project-documents/user/project-guides/001-initiative-plan.{project}.md` | **Yes** |
+| Concept | `project-documents/user/project-guides/000-concept.{project}.md` | No |
 
-**A missing initiative plan is a stop, not a gap.** Five of the nine fields source from it, and a
-document in which the majority of fields are markers is not an overview — it is a report that the
-project has not been planned. The error names the expected path and points at Phase 1 of the
-process guide as what produces it.
+**The governing rule: produce as much useful output as the inputs actually support, and state
+plainly what could not be produced and why.** Incompleteness is the normal condition of a real
+project, not an error state. A document carrying accurate gap markers is a successful run.
 
-**A missing concept is a first-class path**, not an edge case, and is the path this slice is
-verified on (see Verification Walkthrough). Squadron itself has no `000-concept.squadron.md` —
-confirmed: `project-documents/user/project-guides/` contains only the initiative plan.
+**Degradation is per field, not per document.** A whole input being absent is only the coarsest
+case. Real projects present a wide range, and each of these degrades the fields it feeds while
+leaving every other field intact:
 
-**The plan's caution is carried into this design.** Squadron is a *fixture* for the missing-concept
-path, not evidence the path is common, and not a representative instance of it. On a client repo
-the absence means Phase 0 has not yet run and running it would resolve the absence; on squadron it
-is a bootstrap ordering fact — concept generation (363) postdates the project that built it. This
-slice verifies the **mechanics** of degradation. Whether the degraded output is *useful* is judged
-on a repo whose concept is genuinely pending, and is recorded here as an explicit non-criterion.
+| Input condition | Effect |
+|---|---|
+| Concept absent entirely | Concept-sourced fields become markers; Purpose falls back (D4) |
+| Concept present, headings differ or are missing | The affected fields become markers naming the section they expected |
+| Concept present but a section is empty | Treated the same as absent — a marker, never an empty field and never filler |
+| Plan states no dependencies | Roadmap orders by plan order and says so |
+| Plan states no non-goals | Scope carries included work; excluded work is a marker |
+| Plan entries are one-line stubs | Benefits and Scope carry what is there; thinness is visible, not padded |
+| Plan has no status values or checkboxes | Status becomes a marker rather than an assumed state |
+
+**A section that exists but is empty behaves exactly as an absent one.** This is the rule that
+keeps thin inputs honest: the failure to guard against is a field that renders blank or gets filled
+with plausible prose because *something* was technically read.
+
+**Two hard stops, both about the required input:**
+
+1. **The initiative plan is missing or unreadable.** It is the only required input; with it gone
+   there is nothing to derive from. The error names the expected path and points at Phase 1 of the
+   process guide as what produces it.
+2. **The initiative plan is present but yields no parseable initiatives.** Five of the nine fields
+   source from it, and a document where the majority of fields are markers is not an overview — it
+   is a report that the project has not been planned. Saying that directly is more useful than
+   emitting a hollow document. The error states what was found and what was expected.
+
+Everything short of those two produces a document.
+
+**On using squadron for verification.** Squadron is available because we are working inside it, and
+it is a legitimate sample — it genuinely has no concept. It is **not** the baseline. Its particular
+shape of incompleteness (concept absent, plan rich and complete) is one point in the range above,
+and designing to it would leave the other conditions unverified. Squadron's own missing concept is
+also a bootstrap ordering fact — concept generation postdates the project that built it — rather
+than the client-repo case where Phase 0 simply has not run yet.
+
+Verification therefore runs against **constructed fixtures spanning the range**, with squadron as
+one real-world sample among them (see Verification Walkthrough). This is what makes the "useful
+output or a clear statement of what is missing" claim testable here rather than deferred to a
+hypothetical future repo.
 
 **Project name resolution.** The `{project}` in both paths is resolved from the initiative plan's
 own `project:` frontmatter field, which is authoritative because that file is required. Filename
@@ -116,6 +162,10 @@ This is the structural enforcement of "derive, never invent" from the architectu
 guideline in the command file — it is the shape of the generation loop: the skill walks the nine
 fields in order, and for each one either extracts from its named source or emits a marker naming
 what is missing and which input would supply it.
+
+**"Absent source" means absent, unmatched, or empty** — per D3, a section that exists but yields no
+content takes the same branch as one that is not there. The marker names what was expected, so a
+reader can tell an unwritten section from a mis-titled one.
 
 **Field schema** (from the architecture's table, with the source resolved to a concrete section):
 
@@ -203,37 +253,86 @@ are none), Review state (always: machine-generated draft, no human review).
 required, appearing twice (body at the point of absence, and in the provenance flagged-gaps line).
 A document containing markers is a valid output, not a failed run.
 
-### D7 — One neutral document; no emphasis parameter
+### D7 — One neutral document; the command takes no arguments
 
 The command takes no audience argument. Client, management, and colleague readings differ in
 emphasis, not in fact, and three variants means three artifacts to keep true. Per-audience emphasis
 is already recorded as Future Work item (1) in the slice plan, dependent on this slice, to be
 pursued only if real use shows one document is insufficient.
 
-The command does accept an optional **topic** argument, because the naming convention already
-provides for it: `{index}-analysis.overview.{topic}.md` where a project needs more than one. With
-no argument, the plain form is written. This is a filename affordance, not a content variant — the
-generation rules are identical either way.
+**No topic argument either.** The naming convention provides for `{index}-analysis.overview.{topic}.md`
+where a project needs more than one, but nothing asks for it yet and an unused argument is an
+untested path. The convention still permits it, so a later slice can add the affordance when a real
+need appears. The command writes the plain form.
+
+### D8 — Graph-derived artifacts are not read, and how an inherited project still works
+
+**Direct consumption: no.** The command reads planning documents only — the concept and the
+initiative plan. Even when `.understand-anything/knowledge-graph.json`, a comprehension analysis, or
+an initiative-candidates document is present in the repo, none is read.
+
+The reason differs per artifact:
+
+- **The graph and comprehension analysis** describe *code structure*. An overview that mixed
+  structural observations into purpose, audience, or benefit would be asserting things about intent
+  that no planning document ever claimed.
+- **The initiative-candidates document** is the sharper case. It is explicitly advisory — proposals
+  nobody has adopted, written to a standalone analysis file precisely so they never reach the
+  initiative plan by machine. Rendering it into a stakeholder overview would present unadopted
+  machine suggestions as the project's roadmap, which is exactly the overstates-progress failure the
+  translation rules exist to prevent.
+
+This exclusion is stated in the command file, not merely here, because the next reasonable-sounding
+question a maintainer asks is "we already have a comprehension analysis — why not use it?" The
+answer should be written down rather than rediscovered.
+
+**Indirect consumption: yes, and it is the inherited-project path.** Excluding those artifacts does
+not cut an inherited project off from a good overview. The chain runs through a human:
+
+```
+understand the codebase (upstream plugin)
+   └─► generate concept draft + initiative candidates (slices 363, 364)
+          └─► HUMAN reviews, edits, adopts into a real concept and initiative plan
+                 └─► /sq:overview reads those planning documents normally
+```
+
+The overview never touches the graph at any point in that chain. The generated artifacts arrive as
+*reviewed planning documents*, which is the input this command was designed for. The human adoption
+step is load-bearing and deliberate: candidates are advisory by design and adoption is a manual act.
+
+**A known dependency on unproven quality.** Whether the generated concept and candidates are good
+enough to adopt is genuinely open — slice 364 recorded candidate usefulness as an explicit
+non-criterion, to be judged on a repo nobody here has planned. So the inherited-project path is
+architecturally sound and its output quality is unverified. This slice does not resolve that and
+should not claim to.
+
+**One useful consequence:** run on an inherited project, the overview doubles as an end-to-end read
+on the whole initiative. A thin or gap-riddled overview there has two possible causes — weak
+generated planning documents, or a defect in this command — and the walkthrough must be able to tell
+them apart. The provenance block's section-sourcing lines are what make that possible: they name
+what each field resolved from, so a gap traceable to a thin concept section is distinguishable from
+one traceable to a failed read.
 
 ---
 
 ## Data Flow
 
 ```
-/sq:overview [topic]
+/sq:overview
       │
       ├─ 1. Resolve project name ── initiative plan frontmatter `project:`
       │
       ├─ 2. Read required input ─── 001-initiative-plan.{project}.md
-      │        └─ absent ──► STOP, name the path, point at Phase 1. Nothing written.
+      │        ├─ absent/unreadable ──► STOP, name the path, point at Phase 1. Nothing written.
+      │        └─ no parseable initiatives ──► STOP, state found vs expected. Nothing written.
       │
       ├─ 3. Read optional input ─── 000-concept.{project}.md
       │        └─ absent ──► record in provenance Source line; concept-sourced fields → markers
       │
       ├─ 4. Field loop (nine fields, in schema order)
-      │        for each: extract from named source ──► content
-      │                  source absent/empty      ──► [GAP: what — which input]
-      │        (no third branch)
+      │        for each: extract from named source        ──► content
+      │                  source absent, unmatched, empty  ──► [GAP: what — which input]
+      │        (no third branch — never blank, never filler)
       │
       ├─ 5. Apply translation rules to assembled content (D5)
       │
@@ -241,6 +340,9 @@ generation rules are identical either way.
       │
       └─ 7. Write ── frontmatter, H1, ## Provenance, nine field sections
 ```
+
+Graph-derived artifacts are absent from this flow by design, whether or not they exist in the repo
+(D8).
 
 There is no confirmation gate. This differs deliberately from slice 364, where the PM confirms
 whether the document is worth writing at all: 364 proposes work items whose adoption is a
@@ -276,15 +378,23 @@ the slice plan's implementation order runs 365 → 366.
 **Interface provided:** `{index}-analysis.overview.md` with the nine-field schema. Future Work
 item (1) (emphasis parameter) extends the command's argument surface; nothing else consumes it.
 
+**Relationship to 361–364, restated:** no build-time or run-time dependency in either direction. The
+connection is the human-mediated chain in D8 — those slices can produce planning documents a human
+adopts, and this command reads adopted planning documents. Neither half needs the other to exist.
+
 ---
 
 ## Success Criteria
 
 1. `commands/sq/overview.md` exists and is the only file added by the slice; `git diff --stat`
    shows no `.py` file touched.
-2. Running the command against squadron — used as a **fixture** for the missing-concept path, not
-   as a representative instance of it — produces a complete nine-field overview with gap markers
-   where concept-sourced content would have gone.
+2. Across the fixture range in D3 — concept absent, concept present with unmatched headings,
+   concept section empty, plan without dependencies, plan without non-goals, plan of one-line
+   stubs, plan without statuses — every run either produces a nine-field document whose gap markers
+   accurately name what was missing, or hits one of the two defined stops. No run produces a blank
+   field, filler prose, or an unexplained omission.
+2a. Squadron is included as one real-world sample of that range (concept absent, plan complete),
+    not as the baseline the design is fitted to.
 3. No slice index, phase number, initiative index, or frontmatter field name appears in the
    document body. `grep -nE 'docType|Phase [0-9]|initiative [0-9]|slice [0-9]' body` returns
    nothing.
@@ -295,8 +405,12 @@ item (1) (emphasis parameter) extends the command's argument surface; nothing el
 6. A `[GAP: ...]` marker names both what is missing and which input would supply it.
 7. Purpose with no concept is derived from the initiative plan and says so in place — it is not a
    gap (D4).
-8. With the initiative plan absent, the command stops with an error naming the expected path, and
-   writes nothing.
+8. Both stops behave correctly and write nothing: a missing or unreadable initiative plan produces
+   an error naming the expected path, and a plan with no parseable initiatives produces an error
+   stating what was found versus expected.
+8a. Graph-derived artifacts present in the repo are not read. With a knowledge graph, comprehension
+    analysis, and candidates document all present, the provenance section-sourcing lines name only
+    the concept and initiative plan.
 9. `sq install-commands` places `overview.md` in `~/.claude/commands/sq/` with no installer change.
 10. Output carries `docType: analysis`, `topic: overview`, `status: not_started`, a real `model:`
     id, and a provenance block placed above all content; `cf validate frontmatter` passes.
@@ -304,11 +418,20 @@ item (1) (emphasis parameter) extends the command's argument surface; nothing el
 12. The convention sections in `overview.md` match `commands/analysis/understand.md` in substance,
     with only the divergences listed in D2, each stated in the file.
 
-**Explicit non-criterion — degraded-output usefulness.** Whether the missing-concept output is
-*useful* is not verified by this slice. Squadron's missing concept is a bootstrap ordering fact, not
-a representative instance of the client-repo case, so a green walkthrough here is evidence the
-mechanics work — not evidence the degraded document is worth handing to a stakeholder. That
-judgment belongs on a repo whose concept is genuinely pending.
+**What the fixtures do and do not establish.** Running the range in criterion 2 establishes that
+degradation is *accurate and complete* — every missing input is named, nothing is invented, nothing
+renders blank. That is verifiable here and is a real claim.
+
+**Explicit non-criterion — stakeholder usefulness of a degraded document.** Whether a heavily
+gap-marked overview is worth handing to a stakeholder is a judgment about content quality on a real
+project, not a property the fixtures can show. A green walkthrough is evidence the mechanics are
+sound, not evidence the output reads well to a manager. That judgment needs a real project with a
+real reader.
+
+**Explicit non-criterion — quality of generated planning documents.** Where an inherited project's
+concept and initiative plan came from the generation chain in D8, this slice does not assess whether
+those documents were good enough to adopt. That question belongs to the slices that produce them,
+which deferred it themselves.
 
 ---
 
@@ -329,15 +452,33 @@ ls ~/.claude/commands/sq/overview.md
 
 Expect the file present, with no installer change in the diff.
 
-### W2 — Preflight, missing required input
+### W2 — The degradation range, against constructed fixtures
 
-Temporarily point the command at a path with no initiative plan (a scratch tree **outside the repo
-working directory** — never by moving squadron's own plan).
+This is the core verification step, and it replaces a single missing-input check. Build each fixture
+as a minimal `project-documents/user/project-guides/` tree in a scratch directory **outside the repo
+working tree**, and run the command against each. Squadron's own documents are never moved or
+modified to create a fixture.
 
-Expect: an error naming the expected initiative-plan path and pointing at Phase 1; **nothing
-written**; `git status` clean.
+| # | Fixture | Expected outcome |
+|---|---|---|
+| a | No initiative plan | **Stop.** Error names the expected path and points at Phase 1. Nothing written. |
+| b | Plan present, no parseable initiatives | **Stop.** Error states what was found versus expected. Nothing written. |
+| c | Plan complete, no concept | Document written. Problem, Audience, Approach are markers; Purpose falls back to the plan and says so. |
+| d | Concept present, headings differ from expected | Document written. Affected fields are markers naming the section that was expected — not silently empty. |
+| e | Concept present, a section exists but is empty | Same as (d): a marker, never a blank field, never filler. |
+| f | Plan states no dependencies | Roadmap orders by plan order and states that fallback in place. |
+| g | Plan states no non-goals | Scope carries included work; excluded work is a marker. |
+| h | Plan entries are one-line stubs | Benefits and Scope carry only what is there. Thinness is visible; nothing is padded to look fuller. |
+| i | Plan has no statuses or checkboxes | Status is a marker, not an assumed state. |
 
-### W3 — The real run, missing-concept path
+For every fixture that produces a document, confirm the same three properties: **no blank field, no
+invented content, and every gap marker names something genuinely absent.** A marker naming the wrong
+missing input is as much a failure as no marker at all.
+
+The most informative failures here are (d), (e), and (h) — the cases where something was technically
+read. Those are where a field renders blank or gets quietly filled.
+
+### W3 — Squadron as one real-world sample
 
 Confirm the starting state first:
 
@@ -345,10 +486,15 @@ Confirm the starting state first:
 ls project-documents/user/project-guides/
 ```
 
-Expect only `001-initiative-plan.squadron.md` — no concept. Then run the command.
+Expect only `001-initiative-plan.squadron.md` — no concept. This matches fixture (c), and squadron
+is run here as a real instance of that shape, not as the reference case the design was fitted to.
 
 Expect a new `946-analysis.overview.md` (or the lowest unused index ≥ 940 at execution time) in
 `project-documents/user/analysis/`.
+
+The value of this run over fixture (c) is scale: squadron's plan carries thirteen initiatives with
+real prose, so it exercises the translation rules (D5) against content a synthetic fixture cannot
+reproduce.
 
 ### W4 — Field completeness and the sourced-or-gapped rule
 
@@ -405,19 +551,29 @@ Expect a clean pass and a count of 0.
 Diff this file's convention sections against `commands/analysis/understand.md`'s Document
 Conventions. Expect only the D2 divergences, each stated in `overview.md`.
 
-### W11 — Idempotence and non-destructiveness
+### W11 — Graph-derived artifacts are not read
+
+Squadron's repo already carries `.understand-anything/knowledge-graph.json`, two comprehension
+analyses, and an initiative-candidates document — so the W3 run is already this test. Confirm the
+provenance section-sourcing lines name **only** the concept and initiative plan, and that no field's
+content traces to any of those artifacts (criterion 8a).
+
+Confirm the command file states the exclusion and the reason (D8), so a future maintainer finds the
+answer rather than re-deriving it.
+
+### W12 — Idempotence and non-destructiveness
 
 Run the command a second time. Expect a **new** index (947), the first document untouched, and
 `001-initiative-plan.squadron.md` byte-identical (`shasum` before and after).
 
-### W12 — Guards
+### W13 — Guards
 
 ```bash
 .venv/bin/ruff format --check .
 .venv/bin/pytest tests/skills/
 ```
 
-Expect clean and green. No Python changed, so these confirm the slice broke nothing.
+Expect clean and green. No Python source changed, so these confirm the slice broke nothing.
 
 ---
 
@@ -427,10 +583,10 @@ Expect clean and green. No Python changed, so these confirm the slice broke noth
 
 **Convention drift between the two files (D1).** Restating conventions in two places means a later
 change to gap-marker syntax or provenance-line composition can land in one file and not the other.
-Mitigated by W10 and by task-level explicitness, not by machinery — a shared fragment would require
-the installer change this initiative has ruled out. If drift recurs in practice, the correct fix is
-a Future Work item for a shared-fragment install path, not an ad-hoc reference from a first-party
-command to an opt-in pack.
+Mitigated by W10 and by task-level explicitness — process, not machinery, which is the honest
+weakness. A shared fragment read by both files stays open as the structural fix, deferred rather
+than rejected, with its actual installer cost unverified (D1). Whoever next touches either file is
+the right person to answer that with evidence.
 
 ---
 
@@ -447,9 +603,12 @@ the generated-document conventions.
 None blocking. Two items to resolve during implementation and record at close-out:
 
 1. **Concept section-name matching.** The field schema names concept sections (*Overview*,
-   *Problem & Motivation*, *Target Users*, *Solution Approach*). Whether matching is exact-heading
-   or lenient should follow the project's parsing rule (prefer lenient over strict) and be settled
-   against the concept guide's actual layout when a concept is first available. Squadron's run
-   cannot settle it — there is no concept to match against.
+   *Problem & Motivation*, *Target Users*, *Solution Approach*). Matching should be lenient per the
+   project's parsing rule, and the concept guide's actual layout is the authority on the expected
+   headings — read it during implementation rather than matching the names in this design.
+   Fixtures (d) and (e) in W2 make the behavior testable without waiting for a real concept: the
+   requirement is that an unmatched or empty section yields a marker naming what was expected, so
+   a reader can tell a mis-titled section from an unwritten one.
 2. **Benefits granularity.** Whether Benefits renders one outcome per initiative or a consolidated
-   set of themes. Decide against the real output, where over-enumeration will be visible.
+   set of themes. Decide against the real output in W3, where squadron's thirteen initiatives make
+   over-enumeration visible; fixture (h) covers the thin-input end of the same question.
