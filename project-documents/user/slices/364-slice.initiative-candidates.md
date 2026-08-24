@@ -7,7 +7,7 @@ dependencies: [361, 362]
 interfaces: [366]
 dateCreated: 20260823
 dateUpdated: 20260823
-status: not_started
+status: complete
 ---
 
 # Slice Design: Initiative Candidates
@@ -647,3 +647,15 @@ are what the walkthrough proves, and usefulness is judged elsewhere.
   363's Integration Points line for 364 is qualified. Both edits belong to this slice's
   implementation, not to a later cleanup.
 - Relative effort: **2/5**, unchanged from the slice plan.
+
+## Close-out
+
+Phase 6 complete 20260823. All ten success criteria verified per the Verification Walkthrough above.
+
+**This slice is mechanically verified, usefulness unjudged.** The walkthrough confirms every
+candidate names a real signal, cites node ids that resolve, derives dependencies from actual
+`edges[]`, and writes only on confirmation — all checkable against squadron. Whether the 8 candidates
+in `945-analysis.initiative-candidates.md` are *worth adopting* is not established by this
+walkthrough and was never a success criterion (see "Resolved: where candidate quality gets judged"
+above). A green walkthrough here is evidence of mechanics only, pending a repo with no hand-written
+initiative plan against which usefulness could actually be judged.

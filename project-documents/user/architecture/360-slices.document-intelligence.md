@@ -141,7 +141,7 @@ where its analysis template is the direct comparable.
      README, and the two-question interview has no wording risk left to carry.
    - **Relative Effort:** 3/5
 
-4. [ ] **(364) Initiative Candidates** — Propose initiative-shaped work items from the graph, written
+4. [x] **(364) Initiative Candidates** — Propose initiative-shaped work items from the graph, written
    to their own `{index}-analysis.initiative-candidates.md` and never into
    `001-initiative-plan.{project}.md`. Each candidate is derived from one stated signal — a layer
    boundary from `layers[]`, or a complexity cluster from file-level `complexity` within a layer — and
