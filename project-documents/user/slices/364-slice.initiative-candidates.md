@@ -6,8 +6,9 @@ parent: 360-slices.document-intelligence.md
 dependencies: [361, 362]
 interfaces: [366]
 dateCreated: 20260823
-dateUpdated: 20260823
+dateUpdated: 20260824
 status: complete
+review: none
 ---
 
 # Slice Design: Initiative Candidates
