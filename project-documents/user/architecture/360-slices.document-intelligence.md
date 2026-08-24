@@ -184,7 +184,8 @@ where its analysis template is the direct comparable.
    - **Risk:** Low — output is advisory and adoption is manual.
    - **Relative Effort:** 2/5
 
-5. [ ] **(365) Overview Command** — Capability (b), independent of everything above: `/sq:overview`
+5. [ ] **(365) Overview Command** *(designed: `365-slice.overview-command.md`)* — Capability (b),
+   independent of everything above: `/sq:overview`
    as a first-party command in `commands/sq/`, reading the initiative plan (required) and concept
    (optional) and writing `{index}-analysis.overview.md` for a non-engineering reader. Implements the
    nine-field schema — purpose, problem, audience, approach, benefits, scope, status, roadmap, risks —

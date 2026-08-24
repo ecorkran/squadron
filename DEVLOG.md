@@ -2,13 +2,61 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260823
+dateUpdated: 20260824
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260824
+
+### Slice 365: Overview Command — Design Complete (Phase 4)
+
+**Design written** to `365-slice.overview-command.md`. Capability (b) of the Document Intelligence
+initiative: `/sq:overview` as a first-party command reading the initiative plan (required) and
+concept (optional), writing `{index}-analysis.overview.md` for a non-engineering reader. One file
+added — `commands/sq/overview.md`. No Python, no installer change; `install.py:48-55` copies
+`commands/sq/*.md` wholesale, so the file's presence is its registration.
+
+**Central decision: the command file is self-contained and does not reference the analysis pack.**
+`commands/analysis/understand.md:344` already anticipated 365 reusing its provenance-block shape, but
+"reuse" here means restating the conventions in this file, not cross-referencing. The reason is an
+install-path fact: `install-commands` puts `overview.md` in `~/.claude/commands/sq/` unconditionally,
+while `understand.md` arrives only via the opt-in `sq skills install analysis`. A user with squadron
+installed and no analysis pack would have a reference resolving to nothing — and the failure would be
+a silently degraded document, not a loud error. Accepted consequence: the convention statement
+(gap markers, provenance lines, frontmatter, index selection) exists in two files. Four intended
+divergences are enumerated in the design; a parity check is carried into the walkthrough. A shared
+fragment was rejected because it needs the installer change this initiative has committed not to make.
+
+**Two missing-input cases are deliberately not symmetric.** A missing initiative plan stops the run
+with an actionable error and writes nothing — five of nine fields source from it, and a document that
+is mostly markers is a report that the project was never planned, not an overview. A missing concept
+degrades: those fields become gap markers and the run proceeds.
+
+**Purpose is the one field with a real fallback rather than a marker.** With no concept it derives
+from the initiative plan and states that fallback in place. Problem, Audience, and Approach get no
+such fallback — the initiative plan describes what is being built, not whose problem it solves, and
+inferring the latter from the former is exactly the invention the sourced-or-gapped rule forbids.
+
+**No confirmation gate**, unlike 364. An overview renders artifacts that already exist and asserts no
+new commitment; inputs are read-only and the index rule never overwrites, so an unwanted run costs one
+deletable file. 364's gate exists because adopting a candidate *is* a commitment.
+
+**The plan's warning about squadron-as-fixture is carried into the success criteria.** Squadron has no
+concept because concept generation (363) postdates the project that built it — a bootstrap ordering
+fact, not the client-repo case where Phase 0 simply hasn't run. The slice verifies the *mechanics* of
+degradation; degraded-output usefulness is recorded as an explicit non-criterion, to be judged on a
+repo whose concept is genuinely pending.
+
+Twelve success criteria, a twelve-step draft walkthrough, and two non-blocking Phase 6 questions
+(concept section-name matching leniency — unsettleable on squadron since there is no concept to match
+against; and Benefits granularity). Relative effort 3/5, matching the slice plan. Next: Phase 5 task
+breakdown.
 
 ---
 
