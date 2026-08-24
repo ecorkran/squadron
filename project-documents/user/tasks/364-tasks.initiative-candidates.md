@@ -7,8 +7,8 @@ parent: project-documents/user/architecture/360-slices.document-intelligence.md
 dependencies: [361, 362]
 projectState: Slices 361, 362, 363 merged to main. 364 design committed 192cdcf, slice review PASS with five pass-severity findings and nothing to resolve (88e299e). Real v2.8.1 graph present at .understand-anything/, gitCommitHash 1bfbca1, unchanged since 363 — now 56 commits behind HEAD.
 dateCreated: 20260823
-dateUpdated: 20260823
-status: complete
+dateUpdated: 20260824
+status: in_progress
 ---
 
 # Tasks: Initiative Candidates
@@ -449,3 +449,138 @@ the PM interaction notice above.
   - [x] Merge `364-slice.initiative-candidates` into `main`. **Do not delete the branch** — project
         rules require explicit instruction.
   - [x] Success: DEVLOG written, format clean, merged to `main`.
+
+---
+
+# Reopened 20260824 — Adoption
+
+The slice shipped half a workflow: derivation writes a candidates document whose only route into the
+initiative plan was hand-editing. Tasks 10–12 are the reopened scope. Everything above is done and
+merged; none of it is being redone.
+
+**Design reference:** "Flow: Candidate Adoption" in `364-slice.initiative-candidates.md`, success
+criteria 11–21, walkthrough steps 10–17.
+
+**Branch:** work continues on `364-slice.initiative-candidates` (preserved after the first merge, per
+project rules). Re-fork from `main` if it has moved.
+
+## Task 10: The adoption flow
+
+- [ ] **10.1 Flow selection** — Effort: 1/5
+  - [ ] Add the `candidates adopt` row to the flow-selection table in `commands/analysis/understand.md`.
+  - [ ] State that adoption is a separate invocation, never chained onto a derivation run.
+  - [ ] Success: six selector cases documented; the five pre-existing ones unchanged.
+
+- [ ] **10.2 Preconditions and stops** — Effort: 1/5
+  - [ ] Locate the highest-indexed `{index}-analysis.initiative-candidates.md` in
+        `project-documents/user/analysis/`. Absent → stop, naming `candidates` as the flow that
+        produces one. Never derive implicitly.
+  - [ ] Initiative plan absent or read-only → stop **before** the triage interaction, naming the path.
+  - [ ] State that this flow runs no graph preflight and reads no graph.
+  - [ ] Success: both stops fire before any operator interaction.
+
+- [ ] **10.3 The triage interaction** — Effort: 2/5
+  - [ ] Parse candidate records: number, title, derivation signal, and any existing decision line.
+  - [ ] Present only undecided candidates — number, title, signal, one line apiece. Report
+        already-decided ones as a count, not re-presented.
+  - [ ] All-decided → report counts and stop; no empty interaction.
+  - [ ] Batch subset selection. Selection is the only per-candidate input.
+  - [ ] Outcome table: some selected → adopt those, decline the rest; none selected → decline all,
+        write nothing to the plan; abandoned → write nothing anywhere.
+  - [ ] Success: the three outcomes behave as specified, and declining is recorded as a decision.
+
+- [ ] **10.4 Rendering into the initiative plan** — Effort: 2/5
+  - [ ] One entry per adopted candidate, in the plan's existing format: numbered checklist item,
+        base index, title, description, dependencies, status.
+  - [ ] `status: not_started`, unchecked box, description reworded from the scope statement to plan
+        voice — not pasted.
+  - [ ] Index assignment per the plan's stated convention: next available base index in the working
+        range, respecting existing gaps.
+  - [ ] Append without reordering; never modify an existing entry.
+  - [ ] **Never convert an observed edge count into a stated dependency.** Dependencies are the
+        operator's or `None`. Cite the candidates document by filename for the observed counts.
+  - [ ] All adopted candidates written in one pass.
+  - [ ] Success: entries render correctly, existing entries byte-identical, no fabricated dependency.
+
+- [ ] **10.5 Recording decisions** — Effort: 2/5
+  - [ ] Append a decision line per presented candidate: `adopted as initiative {index} on {date}` or
+        `declined on {date}`. Absent line = undecided; existing documents need no migration.
+  - [ ] Never modify signal, node IDs, scope statement, or dependencies. Never remove a candidate.
+  - [ ] Update `dateUpdated` and add a provenance adoption line: date, adopted candidates with
+        assigned indices, declined candidates.
+  - [ ] Document the deliberate break from 361's sampling rule — adoption amends, derivation still
+        writes a new document each run.
+  - [ ] Success: decisions recorded, records otherwise untouched, the break stated in the file.
+
+- [ ] **10.6 Failure modes** — Effort: 1/5
+  - [ ] Malformed or unparseable candidates document → stop naming the file and what failed to parse.
+        Never partially adopt.
+  - [ ] Plan write succeeds, candidates-document write fails → report loudly, naming which candidates
+        were adopted and that their decision lines are unrecorded. Plan left intact.
+  - [ ] State that the two writes are not atomic and why the plan is the one left intact.
+  - [ ] Success: every failure mode in the design's table is implemented and observable.
+  - [ ] Commit: `feat: add candidate adoption flow to understand skill`
+
+## Task 11: Verification walkthrough — adoption
+
+Execute walkthrough steps 10–17 against squadron. **PM interaction required** at the triage steps —
+frame each as a real decision, not a simulation.
+
+**Squadron's plan is hand-written and already contains this work.** Adopted entries are verification
+artifacts, reverted in 11.7 unless the PM decides otherwise. Say so before writing anything to the plan.
+
+- [ ] **11.1 Flow selection and preconditions** — Effort: 1/5
+  - [ ] Trace all six selector cases (step 10). Confirms SC11.
+  - [ ] Both stops in a scratch tree / with a read-only plan (step 11). Confirms SC19.
+
+- [ ] **11.2 Triage and abandon** — Effort: 1/5
+  - [ ] All 8 candidates in `945-analysis.initiative-candidates.md` present as undecided (step 12).
+        Confirms SC12.
+  - [ ] Abandon without answering; `git status` clean (step 13). Confirms SC16.
+
+- [ ] **11.3 Adopt a subset** — Effort: 2/5 — **PM decision**
+  - [ ] Copy the plan and candidates document before writing, for the diff and the revert.
+  - [ ] Select 2 of 8. Verify: two entries appended with next available indices, `not_started`,
+        unchecked; other entries byte-identical and unreordered; no fabricated dependencies.
+        Confirms SC13, SC14.
+  - [ ] Verify all 8 gain decision lines — 2 adopted with indices, 6 declined, dated — with records
+        otherwise unmodified. Confirms SC15.
+
+- [ ] **11.4 Re-run and derivation** — Effort: 1/5
+  - [ ] Re-run adoption: reports counts, stops, no empty interaction (step 15). Confirms SC17.
+  - [ ] Run derivation: new document at a new index, `945` byte-identical including decision lines
+        (step 16). Confirms SC18.
+
+- [ ] **11.5 Gate and partial-write** — Effort: 1/5
+  - [ ] `cf validate frontmatter` on both documents. Confirms SC21.
+  - [ ] Trace the partial-write path; confirm the report names adopted candidates and unrecorded
+        decision lines. Simulating is acceptable — record which was done. Confirms SC20.
+
+- [ ] **11.6 Guards** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format --check .` and `.venv/bin/pytest tests/skills/`.
+
+- [ ] **11.7 Revert verification artifacts** — Effort: 1/5 — **PM decision**
+  - [ ] Ask whether any adopted entry should stay in squadron's plan.
+  - [ ] Revert the plan and candidates document to their pre-walkthrough state otherwise.
+  - [ ] Delete the derivation document written in 11.4 unless the PM wants it kept.
+  - [ ] Confirm with `git status`.
+  - [ ] Commit: `docs: record 364 adoption walkthrough`
+
+## Task 12: Close-out
+
+- [ ] **12.1 Reconcile the walkthrough** — Effort: 1/5
+  - [ ] Rewrite walkthrough steps 10–17 as-executed, with real results.
+  - [ ] Record any correction discovered during execution.
+
+- [ ] **12.2 Mark the slice complete** — Effort: 1/5
+  - [ ] Set `status: complete` on the slice design and this task file.
+  - [ ] Check slice-plan entry 4 in `360-slices.document-intelligence.md`.
+  - [ ] Replace the "Reopened" close-out section with the as-executed record, keeping the first
+        close-out's derivation record intact.
+  - [ ] State plainly what squadron's run does and does not establish: mechanics verified, candidate
+        usefulness still unjudged, adoption exercised on a plan that already contained the work.
+
+- [ ] **12.3 DEVLOG and merge** — Effort: 1/5
+  - [ ] DEVLOG entry per the Session State Summary guidance — including why the slice was reopened.
+  - [ ] `.venv/bin/ruff format --check .` before the final commit.
+  - [ ] Confirm the tree is clean, then merge into `main`. **Do not delete the branch.**

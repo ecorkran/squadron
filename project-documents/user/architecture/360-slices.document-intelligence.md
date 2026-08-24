@@ -141,7 +141,7 @@ where its analysis template is the direct comparable.
      README, and the two-question interview has no wording risk left to carry.
    - **Relative Effort:** 3/5
 
-4. [x] **(364) Initiative Candidates** — Propose initiative-shaped work items from the graph, written
+4. [ ] **(364) Initiative Candidates** — Propose initiative-shaped work items from the graph, written
    to their own `{index}-analysis.initiative-candidates.md` and never into
    `001-initiative-plan.{project}.md`. Each candidate is derived from one stated signal — a layer
    boundary from `layers[]`, or a complexity cluster from file-level `complexity` within a layer — and
@@ -159,6 +159,17 @@ where its analysis template is the direct comparable.
    degradation is stated in the body and in provenance. Hard dependencies remain [361] and [362];
    363's Integration Points line is qualified with *when a concept exists*.
 
+   **Reopened 20260824 — adoption is in scope.** Derivation alone shipped half a workflow: a
+   candidates document whose only route into the initiative plan was hand-editing costs more to act
+   on than to ignore. A second flow, `candidates adopt`, reads the candidates document, triages
+   undecided candidates in one batch interaction, renders the selected ones into
+   `001-initiative-plan.{project}.md`, and records each decision back into the candidates document.
+   The non-modification guarantee now scopes to the **derivation** flow; adoption writes to the plan,
+   but only candidates the operator selected in that run. Recording decisions breaks 361's
+   never-overwrite sampling rule for adoption only — derivation still writes a new document each run.
+   The original design deferred candidate *usefulness* knowingly; it did not notice *actionability*
+   was a separate question, which is what this correction addresses.
+
    **Resolved in Phase 4 — candidate usefulness is not a success criterion of this slice.** Mechanical
    correctness (signal named, node IDs resolve, dependencies counted from `edges[]`, nothing written
    without confirmation) is verified against squadron. Usefulness is not verifiable here, because
@@ -172,8 +183,12 @@ where its analysis template is the direct comparable.
      - Every candidate names its derivation signal and the node IDs supporting it.
      - No candidate is emitted that the graph does not support; a thin graph yields few or none.
      - Output is a standalone `analysis` document; `001-initiative-plan.{project}.md` is never
-       modified by the skill.
+       modified by the **derivation** flow.
      - The document is written only after explicit confirmation.
+     - `candidates adopt` presents only undecided candidates, appends one plan entry per selected
+       candidate without touching or reordering existing entries, and records every presented
+       candidate's decision back into the candidates document. Abandoning the interaction writes
+       nothing; an absent or read-only plan stops before triage.
      - Dependencies between candidates are derived from `edges[]`, not asserted.
      - With a concept present, ordering is engagement-informed and each affected candidate says so;
        with none, ordering is signal-strength-only and the degradation is stated in body and
@@ -181,8 +196,9 @@ where its analysis template is the direct comparable.
    - **Dependencies:** [361], [362].
    - **Interfaces:** Consumes the 361 contract and 362 mapping. Optionally reads
      `000-concept.{project}.md` (363's output) for ordering; runs correctly without it.
-   - **Risk:** Low — output is advisory and adoption is manual.
-   - **Relative Effort:** 2/5
+   - **Risk:** Low — derivation output is advisory, and adoption writes only what the operator
+     selected in that run, appending without touching existing entries.
+   - **Relative Effort:** 3/5 (2/5 derivation, shipped; +1 for the adoption flow)
 
 5. [ ] **(365) Overview Command** *(designed: `365-slice.overview-command.md`)* — Capability (b),
    independent of everything above: `/sq:overview`

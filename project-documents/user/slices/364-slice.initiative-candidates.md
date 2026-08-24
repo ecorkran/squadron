@@ -7,7 +7,7 @@ dependencies: [361, 362]
 interfaces: [366]
 dateCreated: 20260823
 dateUpdated: 20260824
-status: complete
+status: in_progress
 review: none
 ---
 
@@ -115,7 +115,12 @@ walkthrough on squadron from being read as evidence the suggestions are good.
 - **Dependency derivation** from `edges[]` between implicated layers.
 - **The write confirmation** — one interaction, on whether the document is worth writing at all.
 - **Output conventions** — path, index selection, frontmatter, provenance.
-- **Non-modification guarantee** for `001-initiative-plan.{project}.md`.
+- **Non-modification guarantee** for `001-initiative-plan.{project}.md` **during derivation**. The
+  derivation flow has no code path that opens that file for writing. Adoption is a separate,
+  explicitly invoked flow — see "The adoption flow" below.
+- **The adoption flow** (`candidates adopt`) — read the candidates document, triage undecided
+  candidates in one batch interaction, render the selected ones into the initiative plan, and record
+  each decision back into the candidates document.
 
 **Excluded (owned elsewhere):**
 
@@ -123,8 +128,9 @@ walkthrough on squadron from being read as evidence the suggestions are good.
 - Dispatcher routing, README, plugin-absent guidance — slice 366.
 - Any change to the Preflight Graph Contract, the comprehension flow, the concept flow, `src/`, the
   installer, or the frontmatter gate.
-- Any write to `001-initiative-plan.{project}.md`, under any condition. Not a configurable behavior,
-  not a flag — the flow has no code path that opens that file for writing.
+- Any write to `001-initiative-plan.{project}.md` **from the derivation flow**, under any condition.
+  Not a configurable behavior, not a flag. Writing to the plan happens only in the adoption flow,
+  only on candidates the operator selected in that run.
 
 ## Preconditions
 
@@ -149,8 +155,14 @@ The existing table gains one row, and the exclusion note is removed:
 | none | Flow: Comprehension Analysis |
 | `comprehension` | Flow: Comprehension Analysis |
 | `concept` | Flow: Concept Generation |
-| `candidates` | Flow: Initiative Candidates |
+| `candidates` | Flow: Initiative Candidates (derivation) |
+| `candidates adopt` | Flow: Candidate Adoption |
 | anything else | **unrecognized** — say so and stop |
+
+**Adoption is a separate invocation, never chained onto derivation.** A derivation run ends at the
+written document. This keeps the derivation confirmation answering one cheap question ("is this set
+worth a file?") rather than silently becoming a commitment gate, and it means adoption can be run
+repeatedly against a document written days earlier.
 
 Selection remains **by explicit argument only**. The flow is never inferred from repository state:
 the absence of an initiative plan never auto-triggers it, and the presence of one never suppresses
@@ -393,6 +405,119 @@ oversight.
 The concept read is an ordinary bounded file read of two named sections — not a full-document load,
 and not a read of any other document in `project-guides/`.
 
+## Flow: Candidate Adoption
+
+### Why this is in 364 and not a later slice
+
+A candidates document whose only route into the plan is hand-editing is a worklist that costs more
+to act on than to ignore. Derivation without adoption delivers half a workflow, so adoption belongs
+to the slice that created the need rather than to a follow-on that defers the value indefinitely.
+
+This is a correction to 364 as originally shipped. The original design treated the written document
+as the terminal artifact and recorded candidate *usefulness* as a deferred question — but usefulness
+in principle and actionability in practice are separate, and only the first was deferred knowingly.
+
+### Scope discipline
+
+The flow does exactly enough to remove the manual transcription. Deliberately excluded, and not
+because they lack merit:
+
+- Re-deriving or refreshing candidates against a changed graph — that is a derivation run.
+- Un-adopting, or reversing a decision already written into the plan — hand-edit, as with any other
+  planning correction.
+- Preserving derivation provenance (signals, node IDs) into the plan entry — the candidates document
+  remains the record, reachable by its filename.
+- Any interaction per candidate beyond selection.
+
+### Preconditions
+
+1. **A candidates document exists.** Locate the highest-indexed
+   `{index}-analysis.initiative-candidates.md` in `project-documents/user/analysis/`. If none
+   exists, stop and say so, naming `candidates` as the flow that produces one. Never derive
+   implicitly.
+2. **The initiative plan exists and is writable.** It is the write target; absent or read-only is a
+   loud stop before any interaction, not a failure discovered after the operator has triaged.
+3. **No graph preflight.** This flow reads two markdown documents and never touches the graph.
+   Running it with no graph present, or a stale one, is correct and unremarkable.
+
+### The triage interaction
+
+**One batch interaction, listing only undecided candidates.** For each, show its number, title, and
+derivation signal — the same one-line-apiece shape as the derivation confirmation, for the same
+reason: the operator is deciding what to adopt, not re-reading scope statements. Already-decided
+candidates are listed separately as a count, not re-presented.
+
+The operator selects any subset — all, none, or some. Selection is the only per-candidate input.
+
+| Outcome | Effect |
+|---|---|
+| Some selected | Selected candidates are adopted; unselected ones are recorded as **declined** |
+| None selected | Nothing is written to the plan; all listed candidates are recorded as **declined** |
+| No answer / unavailable | **Nothing is written anywhere** — neither plan nor candidates document |
+
+**Declining is a decision and is recorded.** That is the point of tracking state: a candidate you
+considered and rejected should not return identically on the next run. Abandoning the interaction is
+not a decision, and records nothing.
+
+### Rendering into the initiative plan
+
+Each adopted candidate becomes one initiative entry, in the plan's existing format: a numbered
+checklist item with a base index, title, description, dependencies, and status. The rendered entry
+carries `status: not_started`, an unchecked box, and a description derived from the candidate's scope
+statement — reworded to plan voice, not pasted.
+
+**Index assignment** follows the plan's stated convention: the next available base index in the
+working range, respecting the gaps the plan already uses. Entries are appended in the plan's existing
+ordering; the flow does not reorder existing initiatives.
+
+**Dependencies are the operator's, not the flow's.** 364 is explicit that a candidate's edge counts
+are directional facts, not sequencing claims. The rendered entry's dependency field states what the
+operator selected, or `None` where nothing was stated — it never converts an edge count into a
+dependency. Where the candidate's observed dependencies are informative, they stay in the candidates
+document, which the plan entry cites by filename.
+
+**One entry per adopted candidate, appended in one edit.** Adopting six candidates writes six entries
+in a single pass, not six separate interactions.
+
+### Recording decisions back into the candidates document
+
+Each candidate gains a **decision line** in its record:
+
+```
+- **Decision** — adopted as initiative {index} on {YYYYMMDD} | declined on {YYYYMMDD} | undecided
+```
+
+A candidate with no decision line is undecided; that is the state every candidate starts in, so
+existing documents need no migration.
+
+**This amends a generated document in place, and that is a deliberate break from the sampling rule.**
+361's convention — each run takes a new index, never overwrite — was written for documents nobody
+acts on, where each run is an independent sample. A triage worklist is not that. Without recorded
+state, every run re-presents decisions already made, which is a milder form of the friction this flow
+exists to remove.
+
+The break is bounded: the flow appends decision lines and updates `dateUpdated`. It never rewrites a
+candidate's signal, node IDs, scope statement, or dependencies, and never removes a candidate. A
+subsequent derivation run still writes a **new** document at a new index — the sampling rule holds for
+derivation, and only adoption amends.
+
+**Provenance is updated** with an adoption line per run: the date, which candidates were adopted with
+their assigned indices, and which were declined.
+
+### Failure modes
+
+| Condition | Behavior |
+|---|---|
+| No candidates document | Stop, name `candidates` as the flow that produces one |
+| Initiative plan absent or read-only | Stop before the interaction, name the path |
+| All candidates already decided | Report the counts and stop — no empty interaction |
+| Candidates document malformed or unparseable | Stop, name the file and what could not be parsed. Never partially adopt. |
+| Plan write succeeds, candidates-document write fails | Report loudly, naming which candidates were adopted and that their decision lines are unrecorded. The plan is the commitment and is left intact; the recovery is re-running adoption, where the already-adopted candidates will re-present as undecided. |
+
+The last case is the one asymmetry worth stating plainly: the two writes are not atomic, and the plan
+is the more important of the two. A duplicate-adoption risk that announces itself beats a silent
+half-write.
+
 ## Integration Points
 
 ### Consumes from other slices
@@ -430,7 +555,8 @@ and not a read of any other document in `project-guides/`.
    stated with their counts, and assert no sequencing.
 5. `project-documents/user/analysis/{index}-analysis.initiative-candidates.md` is written only after
    explicit confirmation; a declined or unanswered confirmation writes nothing at all.
-6. `001-initiative-plan.{project}.md` is never modified, and the output document states so.
+6. `001-initiative-plan.{project}.md` is never modified **by the derivation flow**, and the output
+   document states so.
 7. With a concept present, ordering is engagement-informed and each affected candidate says so; with
    no concept, ordering is signal-strength-only and the degradation is stated in the body and in
    provenance. Both-questions-declined is recorded distinctly from no-document.
@@ -440,9 +566,37 @@ and not a read of any other document in `project-guides/`.
 10. `ruff format --check` and `pytest tests/skills/` remain green (the slice adds no Python; this is
     a regression guard on the skill-file tests).
 
+**Adoption flow:**
+
+11. `candidates adopt` routes to the adoption flow; the four pre-existing selector cases and
+    `candidates` itself are unchanged.
+12. Only undecided candidates are presented; already-decided ones are reported as a count. A run
+    where everything is decided reports and stops without an empty interaction.
+13. Selecting a subset appends one initiative entry per selected candidate to
+    `001-initiative-plan.{project}.md`, in the plan's existing format, with the next available base
+    indices, `status: not_started`, and unchecked boxes. Existing entries are untouched and unreordered.
+14. No rendered entry converts an observed edge count into a stated dependency.
+15. Every candidate presented in a completed run gains a decision line — `adopted as initiative
+    {index}` or `declined` — with the run's date. Signal, node IDs, scope statement, and dependencies
+    are unmodified, and no candidate is removed.
+16. Abandoning the interaction writes nothing to either document.
+17. A second adoption run presents only what remains undecided.
+18. A subsequent **derivation** run still writes a new document at a new index, leaving the amended
+    one intact — the sampling rule holds for derivation.
+19. Both stops fire before any interaction: no candidates document (naming `candidates`), and an
+    absent or read-only initiative plan (naming the path).
+20. A partial-write failure reports which candidates were adopted and that their decision lines are
+    unrecorded, rather than failing silently.
+21. `cf validate frontmatter` passes on both documents after adoption.
+
 **Explicitly not a success criterion:** that the candidates are *useful*. See "Resolved: where
 candidate quality gets judged" — usefulness is deferred to a repo with no hand-written initiative
 plan, and a green walkthrough here is evidence of mechanical correctness only.
+
+**Also not a success criterion: that squadron's adopted entries stay in the plan.** Squadron's plan
+is hand-written and already carries the work these candidates describe, so adoption here is exercised
+for its mechanics. Entries written during verification are reverted at close-out unless the PM
+decides otherwise — the walkthrough says so explicitly at the point it writes them.
 
 ## Verification Walkthrough
 
@@ -627,14 +781,100 @@ Read discipline (SC9) held throughout: every query above used field-scoped `jq` 
 (`.layers[]`, file-level `nodes[]` filtered by type, `.edges[]` filtered by type); no step loaded the
 whole graph or read a `function`/`class` node.
 
+---
+
+## Verification Walkthrough — Adoption (draft)
+
+Steps 10–17 cover the reopened scope and are **not yet executed**. To be rewritten as-executed at the
+second close-out.
+
+**Squadron is the test repo, deliberately.** Its plan is hand-written and already contains this work,
+so adopted entries are verification artifacts, not real planning decisions — reverted at close-out
+per the stated non-criterion. What squadron proves is the mechanics: parsing, rendering, index
+assignment, state recording, and the failure modes.
+
+`945-analysis.initiative-candidates.md` is the input, with 8 candidates and no decision lines — the
+undecided starting state, requiring no migration.
+
+### 10. Flow selection
+
+Trace all six selector cases. Expect `candidates adopt` to route to the adoption flow, `candidates`
+to still route to derivation, and the four pre-existing cases unchanged. Confirms SC11.
+
+### 11. Both preconditions stop before any interaction
+
+Run adoption in a scratch tree with no candidates document. Expect a stop naming `candidates` as the
+flow that produces one, and no interaction offered.
+
+Then make the initiative plan read-only and run against squadron. Expect a stop naming the path,
+**before** triage — verifying the operator is never asked to decide and then told the write was
+impossible. Confirms SC19.
+
+### 12. Triage presents all 8 as undecided
+
+Run adoption against squadron. Expect all 8 listed with number, title, and derivation signal, one
+line apiece, and no already-decided count. Confirms SC12.
+
+### 13. Abandon writes nothing
+
+Abandon the interaction without answering. Expect `git status` clean — neither the plan nor the
+candidates document modified. Confirms SC16.
+
+### 14. Adopt a subset
+
+Re-run and select 2 of the 8. Expect: two entries appended to `001-initiative-plan.squadron.md` in
+its existing format, carrying the next available base indices, `status: not_started`, unchecked
+boxes; the other 11 existing initiative entries byte-identical and unreordered (`diff` against a
+pre-run copy); and no entry converting an edge count into a stated dependency. Confirms SC13, SC14.
+
+In the candidates document, expect all 8 to gain decision lines — 2 adopted with their assigned
+indices, 6 declined — each dated, with signals, node IDs, scope statements, and dependencies
+unmodified and no candidate removed. Confirms SC15.
+
+### 15. Re-run reports everything decided
+
+Run adoption again. Expect a report of counts and a stop, with no empty interaction offered.
+Confirms SC12's second half and SC17.
+
+### 16. Derivation still samples
+
+Run `candidates` (derivation). Expect a **new** document at the next index, and
+`945-analysis.initiative-candidates.md` byte-identical including its decision lines. Confirms SC18.
+
+### 17. Gate, partial-write behavior, and revert
+
+```bash
+cf validate frontmatter project-documents/user/analysis/945-analysis.initiative-candidates.md
+cf validate frontmatter project-documents/user/project-guides/001-initiative-plan.squadron.md
+```
+
+Expect clean passes (SC21). Trace the partial-write path — plan written, candidates-document write
+fails — and confirm the flow reports which candidates were adopted and that their decision lines are
+unrecorded (SC20). Simulating this rather than forcing a real failure is acceptable; record which was
+done.
+
+**Then revert squadron's plan and candidates document to their pre-walkthrough state** unless the PM
+decides an adopted entry should stay, and confirm the revert with `git status`.
+
 ## Risks
 
-**Low overall** — output is advisory, adoption is manual, and no Python changes.
+**Low overall** — no Python changes, and adoption writes only what the operator selected in that run.
 
-The one risk worth naming: **candidates that restate work already in squadron's initiative plan will
-look like successful output during the walkthrough.** That is the verification gap this design
-records rather than closes. The mitigation is the explicit non-criterion above — mechanical checks
-are what the walkthrough proves, and usefulness is judged elsewhere.
+**Candidates that restate work already in squadron's initiative plan will look like successful output
+during the walkthrough.** That is the verification gap this design records rather than closes. The
+mitigation is the explicit non-criterion above — mechanical checks are what the walkthrough proves,
+and usefulness is judged elsewhere.
+
+**Adoption writes to the initiative plan, which is the project's commitment document.** This is the
+first flow in the initiative that does. Three things bound the risk: nothing is written without
+explicit per-candidate selection, entries are appended without touching or reordering existing ones,
+and the plan is a tracked file whose diff is reviewable before commit. The plan being read-only or
+absent stops the flow before the operator is asked to decide anything.
+
+**The two writes are not atomic** (plan, then candidates document). Named in the failure-mode table
+with its recovery: the plan is the commitment and is left intact, the failure is reported loudly with
+the affected candidates listed, and re-running re-presents them. A duplicate-adoption risk that
+announces itself is preferable to a silent half-write.
 
 ## Implementation Notes
 
@@ -651,12 +891,38 @@ are what the walkthrough proves, and usefulness is judged elsewhere.
 
 ## Close-out
 
-Phase 6 complete 20260823. All ten success criteria verified per the Verification Walkthrough above.
+### First close-out — derivation, 20260823 (superseded, not withdrawn)
 
-**This slice is mechanically verified, usefulness unjudged.** The walkthrough confirms every
-candidate names a real signal, cites node ids that resolve, derives dependencies from actual
-`edges[]`, and writes only on confirmation — all checkable against squadron. Whether the 8 candidates
-in `945-analysis.initiative-candidates.md` are *worth adopting* is not established by this
-walkthrough and was never a success criterion (see "Resolved: where candidate quality gets judged"
-above). A green walkthrough here is evidence of mechanics only, pending a repo with no hand-written
-initiative plan against which usefulness could actually be judged.
+Phase 6 completed 20260823 for the derivation flow. Success criteria 1–10 verified per the executed
+Verification Walkthrough above; that work merged to `main` and stands unchanged.
+
+**Mechanically verified, usefulness unjudged.** The walkthrough confirms every candidate names a real
+signal, cites node ids that resolve, derives dependencies from actual `edges[]`, and writes only on
+confirmation. Whether the 8 candidates in `945-analysis.initiative-candidates.md` are *worth
+adopting* was never a success criterion.
+
+### Reopened 20260824 — adoption
+
+**The slice shipped half a workflow.** Derivation writes a candidates document whose only route into
+the initiative plan was hand-editing, which costs more than ignoring it. That makes the derivation
+output close to unusable in practice, independent of whether the candidates themselves are good.
+
+The original design deferred candidate *usefulness* knowingly and said so. It did not notice that
+*actionability* was a separate question, and left it unexamined — the walkthrough stopped at
+"document written." A candidate can be excellent and still not worth transcribing by hand.
+
+Reopened rather than deferred to a new slice: adoption belongs to the slice that created the need,
+and a follow-on slice would have been ceremony around admitting incompleteness.
+
+**Two decisions taken at reopening:**
+
+1. **Decisions are recorded in the candidates document**, breaking 361's never-overwrite sampling
+   rule for this flow only. That rule was written for documents nobody acts on; a triage worklist
+   without state re-presents settled decisions forever. Derivation still samples — only adoption
+   amends.
+2. **Squadron is the test repo**, for time. Its hand-written plan makes adoption artificial as a
+   planning act, but the mechanics are what need verifying and squadron exercises them fully.
+   Verification entries are reverted at close-out.
+
+Status returns to `in_progress`. Criteria 11–21 and walkthrough steps 10–17 are the reopened scope.
+The second close-out replaces this section with the as-executed record.
