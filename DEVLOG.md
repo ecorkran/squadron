@@ -2,13 +2,37 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260824
+dateUpdated: 20260825
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260825
+
+### Slice 261: Tool Registry, Descriptor Protocol, and Core Tools — Design Complete (Phase 4)
+
+**Design written** to `261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations.md`.
+Foundation slice for initiative 260 (non-SDK agent tool use): `ToolDescriptor` (frozen dataclass —
+one shape, no Protocol), `ToolResult`, a process-level registry mirroring `providers/registry.py`,
+and three core tools (`read_file`, `write_file`, `bash`) in a new `src/squadron/tools/` package —
+sibling to `providers/`, diverging from the arch doc's tentative `core/tools/` to keep `core/` from
+accreting. No agent, executor, or pipeline change; after landing, tools exist fully tested with no
+behavior change anywhere.
+
+Decisions of note: registry `register()` rejects duplicate names (unlike the provider registry's
+silent overwrite — a tool collision is a security-relevant surface); `materialize()` raises
+`ToolNotRegisteredError` for unknown names (caller config error; model-requested-unknown is 262's
+concern); `cwd` is closure-bound by factories and never appears in a tool's JSON schema; all limits
+(`MAX_READ_BYTES`, `MAX_OUTPUT_BYTES`, `BASH_TIMEOUT_S`) live in one `limits.py`; bash gets a
+process-group kill on timeout so a hung command cannot hang 262's future loop. Names registered
+here start the canonical tool vocabulary (templates migrate to it in 265).
+
+Effort 2/5, `status: not_started`, slice-plan entry updated with design pointer.
 
 ---
 
