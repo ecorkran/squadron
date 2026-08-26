@@ -6,7 +6,7 @@ parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: []
 interfaces: [262, 263, 264, 265]
 dateCreated: 20260825
-dateUpdated: 20260825
+dateUpdated: 20260826
 status: not_started
 ---
 
@@ -182,6 +182,17 @@ is a model loop, and an unexpected tool bug must become an observable error resu
 crashed review. This is (a)+(c) under the project exception rules: logged loudly, never
 swallowed silently.
 
+**Observability of expected failures (review F003).** Error results returned to the model are
+not by themselves operator-visible, so this slice — not 262 — sets the logging contract:
+
+- **WARNING:** jail violations (tool name + rejected path — CWD is the trust boundary, and an
+  escape attempt must be visible without `-vv`) and bash timeouts (command + limit). One test
+  per case asserts the log record via `caplog`.
+- **INFO:** every other `is_error=True` result (missing file, permission denied, non-zero
+  exit, truncation), with tool name and reason. These are routine model-probing outcomes that
+  the model itself reacts to; elevating them to WARNING would teach operators to ignore
+  warnings. INFO keeps them observable in normal logs without crying wolf.
+
 ## Integration Points
 
 ### Provides to Other Slices
@@ -192,6 +203,12 @@ swallowed silently.
 
 ### Consumes from Other Slices
 Nothing. Stdlib only (`asyncio`, `pathlib`, `dataclasses`, `os`); no new dependencies.
+
+Frontmatter `dependencies: []` vs. the slice plan's "Dependencies: [100, 140]" (review F004):
+the plan lists *initiative* context — the registry idiom copied from 100's provider registry
+and the pipeline machinery whose consumers arrive in 262/263. At the artifact level this
+slice imports nothing from either, so the design's `[]` is the accurate sequencing input;
+the plan entry is initiative-scoped and stands as written.
 
 ## Success Criteria
 
@@ -213,7 +230,9 @@ Nothing. Stdlib only (`asyncio`, `pathlib`, `dataclasses`, `os`); no new depende
    a command exceeding `BASH_TIMEOUT_S` is killed (process group) and reports timeout;
    oversized output is truncated with a visible marker.
 8. All limits are named constants in `limits.py`; no limit literal appears anywhere else.
-9. Every failure mode above is asserted by at least one test (Failure-Mode Enumeration rule).
+9. Every failure mode above is asserted by at least one test (Failure-Mode Enumeration
+   rule), including `caplog` assertions that jail violations and bash timeouts log at
+   WARNING and that other error results log at INFO.
 10. No change to `providers/`, `pipeline/`, `review/`, or `core/models.py`; full existing
     test suite still passes.
 
