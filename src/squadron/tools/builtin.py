@@ -161,3 +161,65 @@ READ_FILE = ToolDescriptor(
 )
 
 register(READ_FILE)
+
+
+WRITE_FILE_PARAMETERS: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Path to the file to write, relative to the working directory.",
+        },
+        "content": {
+            "type": "string",
+            "description": "Full text content to write. Existing files are overwritten.",
+        },
+    },
+    "required": ["path", "content"],
+}
+
+
+def _write_file_factory(cwd: Path) -> ToolExecutor:
+    async def execute(args: dict[str, object]) -> ToolResult:
+        async def run() -> ToolResult:
+            path = _require_str(args, "path")
+            content = _require_str(args, "content")
+
+            target = _resolve_in_jail(cwd, path)
+            if target is None:
+                return _jail_violation(WRITE_FILE_NAME, path)
+            # The parent is jail-checked before any directory is created, so a rejected path
+            # never leaves a directory behind outside the jail.
+            if _resolve_in_jail(cwd, str(target.parent)) is None:
+                return _jail_violation(WRITE_FILE_NAME, path)
+            if target.is_dir():
+                return _error(WRITE_FILE_NAME, f"path is an existing directory: {path}")
+
+            existed = target.exists()
+            payload = content.encode()
+
+            def _write() -> None:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(payload)
+
+            await asyncio.to_thread(_write)
+
+            verb = "Overwrote" if existed else "Created"
+            return ToolResult(content=f"{verb} {path} ({len(payload)} bytes).")
+
+        return await _guarded(WRITE_FILE_NAME, run)
+
+    return execute
+
+
+WRITE_FILE = ToolDescriptor(
+    name=WRITE_FILE_NAME,
+    description=(
+        "Write a UTF-8 text file inside the working directory, creating parent directories as "
+        "needed. Existing files are overwritten."
+    ),
+    parameters=WRITE_FILE_PARAMETERS,
+    factory=_write_file_factory,
+)
+
+register(WRITE_FILE)
