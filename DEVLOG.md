@@ -2,13 +2,61 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260825
+dateUpdated: 20260827
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260827
+
+### Slice 261: Task Breakdown Complete (Phase 5)
+
+**Tasks written** to `261-tasks.tool-registry-descriptor-protocol-and-core-tool-implementations.md`
+(426 lines, 8 task groups, 20 subtasks, test-with pattern throughout — each implementation task
+immediately followed by its test task).
+
+**Sequencing:** package skeleton + pure types (1) → registry (2) → shared jail/wrapper plumbing (3)
+→ `read_file` (4) → `write_file` (5) → `bash` (6) → package wiring (7) → verification and close-out
+(8). This follows the design's suggested order, with the path-jail helper and shared executor
+wrapper pulled forward into their own group so both file tools consume one implementation rather
+than duplicating the check.
+
+**Anchors traced on `b05fadc`** and recorded in the task file's Context Summary, so the
+implementing agent does not have to rediscover them:
+
+- `src/squadron/tools/` does not exist; `src/squadron/mcp/` is an empty package.
+- `asyncio_mode = "auto"` in pytest config — `async def` tests need no decorator.
+- Ruff selects `BLE`, so the design's justified catch-all needs `# noqa: BLE001`; the established
+  idiom is at `pipeline/emit.py:157` and `pipeline/sdk_session.py:108`.
+- Pyright runs `strict` over `src`, so the new package must be fully annotated and must narrow
+  `dict[str, object]` values before use.
+- Async subprocess idiom mirrors `events/builtin/frontmatter_gate.py:46`.
+
+**Three constraints added that the design implies but does not state:** the `noqa` requirement
+above; pyright-strict narrowing; and `caplog.set_level(logging.INFO)` being necessary for the
+INFO-level logging assertions the design's F003 fix requires (caplog propagates at WARNING by
+default, so those assertions would silently pass-by-absence without it).
+
+**Two implementation hazards called out in the tasks:**
+
+- The registry is module-level and the built-ins register at import, so registry tests need a
+  snapshot/restore fixture or test doubles leak across modules.
+- The bash timeout test monkeypatches `BASH_TIMEOUT_S`; if the executor captures the constant at
+  import rather than reading the module attribute at call time, the monkeypatch is inert and the
+  test hangs for the full 120 s. The task instructs changing the code, not the test.
+
+**Verification group (8)** enforces the slice's behavior-neutrality guarantee explicitly: a grep
+proving no limit literal escapes `limits.py`, a grep proving nothing outside the package imports
+`squadron.tools`, and a `git status` check that no file outside `src/squadron/tools/` and
+`tests/tools/` was modified.
+
+**Next:** Phase 6 — implementation on branch
+`261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations`, forked from `main`.
 
 ---
 
