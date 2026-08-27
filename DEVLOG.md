@@ -14,6 +14,52 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260827
 
+### Slice 262: Agentic Loop Design (Phase 4)
+
+Slice design written for `262-slice.openaicompatibleagent-agentic-loop.md`. Read the
+initiative-260 architecture and slice plan, then the actual code the slice touches
+(`providers/openai/{agent,translation,provider}.py`, `core/models.py`, the slice-261 tool
+API, and the existing openai test harness) before designing.
+
+Three findings from reading the code shaped the design beyond what the slice-plan entry
+specified:
+
+**The agent never receives `allowed_tools` or `cwd`.** `OpenAICompatibleAgent.__init__` takes
+only `name`, `client`, `model`, `system_prompt` — the config fields stop at
+`OpenAICompatibleProvider.create_agent`. Threading them through the constructor is part of
+this slice, not an assumed precondition. Both new params are keyword-only with defaults so
+existing construction sites are unaffected.
+
+**Shipped review templates would crash the loop (D1).** All seven templates in
+`data/templates/` declare Claude vocabulary (`[Read, Glob, Grep, Bash]`); `review_client.py`
+already passes `template.allowed_tools` and `cwd` into `AgentConfig`. Activating the non-SDK
+consumer of that field would make `registry.materialize` raise `ToolNotRegisteredError` on
+every non-SDK review — turning a working tool-less review into a hard failure until slice 265
+migrates the vocabulary. Design decision: the agent pre-filters names through
+`registry.lookup`, dropping unknown ones with a WARNING that names each dropped name and the
+registered vocabulary. Loud and observable, not a silent fallback; surviving behavior equals
+today's. `materialize`'s fail-fast contract is unchanged — it is right for a caller that
+controls its own name list. Load-time validation belongs where names are declared (263 for
+pipeline YAML, 265 for templates).
+
+**`_call_api` cannot be reused as-is.** It interleaves the request, delta aggregation, and
+`translation.build_messages`. A loop needs turns 1..n-1 aggregated but not translated. Design
+splits out `_stream_turn` as a single-turn primitive returning raw `TurnResult`; the
+no-tools path and every loop iteration share it, and exactly one code path translates a turn
+into caller Messages — which makes "intermediate turns are never yielded" structural rather
+than conventional.
+
+Also decided: materialize once at construction rather than per message (`cwd` is fixed for an
+agent's lifetime); max-iterations raises `ProviderError` rather than returning partial
+intermediate text (a plausible-looking non-answer); the history-budget guard warns and
+continues once rather than terminating, leaving `max_iterations` as the hard stop; loop limits
+live in a new `providers/openai/limits.py` following the slice-261 module-attribute pattern so
+monkeypatched tests see patched values at call time. `dispatch.py` hardcodes `cwd=None`, so
+the design specifies an explicit INFO-logged `Path.cwd()` fallback rather than leaving the
+jail root undefined.
+
+Slice-plan entry 2 updated with the design pointer. No code changes.
+
 ### Slice 261: Code Review Findings Addressed (Phase 6)
 
 Review `261-review.code...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `a64b741`):

@@ -1,0 +1,429 @@
+---
+docType: slice-design
+project: squadron
+slice: 262-slice.openaicompatibleagent-agentic-loop
+parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
+dependencies: [261]
+interfaces: [263, 264, 265, 266]
+dateCreated: 20260827
+dateUpdated: 20260827
+status: not_started
+---
+
+# Slice Design: OpenAICompatibleAgent Agentic Loop
+
+## Parent Documents
+
+- Architecture: `260-arch.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md`
+- Slice Plan: `260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md`, entry 2
+
+## Overview
+
+Slice 261 shipped tools that nothing consumes. This slice makes `OpenAICompatibleAgent`
+consume them: it replaces the single API round-trip in `handle_message` with an agentic loop
+that passes tool schemas to the model, executes returned tool calls against the slice-261
+registry, accumulates the OpenAI-protocol message history across turns, and re-invokes until
+the model returns an assistant message with no `tool_calls`.
+
+The loop is gated entirely by `AgentConfig.allowed_tools`. With no tools configured — every
+caller today — the agent takes a path that is byte-for-byte the current behavior, including
+the existing "tool call surfaced as a system Message" case. After this slice, the agent uses
+tools **when given them**, but no pipeline YAML yet declares them (263) and the review path
+still declares Claude-vocabulary names it cannot use (265). Default-path behavior is
+unchanged.
+
+Two structural gaps in the current code must close here, and they are the real work of the
+slice: the agent constructor never receives `allowed_tools` or `cwd` (they stop at
+`OpenAICompatibleProvider.create_agent`), and `_call_api` both performs I/O and builds
+caller-facing Messages, which a loop cannot reuse as-is.
+
+## Value
+
+This is the slice where the initiative's premise becomes true: a capable non-SDK model can
+actually write a file. 261 was enablement with no observable effect; 263 and 265 are wiring
+onto this loop. Everything downstream — pipeline `allowed_tools`, review file-access (issue
+#68), the MCP bridge, `--no-tools` comparison runs — consumes the loop built here.
+
+It is also the seam the future orchestration initiative lifts: `_run_agentic_loop` is
+deliberately a single named private method with no executor-visible surface, so a later layer
+can intercept it without re-shaping the `Agent` protocol.
+
+## Technical Scope
+
+**In scope**
+
+- `AgentConfig.allowed_tools` and `cwd` threaded from `OpenAICompatibleProvider.create_agent`
+  into `OpenAICompatibleAgent.__init__`.
+- `_run_agentic_loop` inside `handle_message`: schema materialization, multi-turn history
+  accumulation, tool execution, termination conditions.
+- Refactor of `_call_api` into a reusable single-turn primitive that returns raw turn data
+  rather than caller-facing Messages.
+- Tool-schema construction from `ToolDescriptor` into OpenAI `tools[]` shape.
+- OpenAI-protocol message construction (assistant-with-`tool_calls`, `role: "tool"` results),
+  placed in `translation.py`.
+- Three termination conditions: no `tool_calls`, `max_iterations`, history-size budget.
+- Per-tool-call error surfacing back to the model (malformed JSON args, unknown tool,
+  executor failure).
+- Unknown-name tolerance at materialization time (see D1) — required so non-SDK reviews
+  degrade predictably rather than crashing before 265 lands.
+- Logging contract for loop visibility (DEBUG per call, INFO summary, WARNING for guards).
+
+**Out of scope**
+
+- Pipeline YAML surface and `dispatch` wiring — slice 263.
+- Review injection-skip logic, `list_files`/`grep`, template vocabulary migration — slice 265.
+- `tool_use` capability field and `--no-tools` — slice 266.
+- MCP-bridged tools — slice 264.
+- Streaming intermediate turns to the caller. Final turn only (arch §Streaming contract).
+- History truncation/summarization. The budget guard returns an error to the model instead.
+- Any `ClaudeSDKAgent` or `CodexAgent` change.
+
+## Architecture
+
+### Current shape and why it cannot host a loop
+
+`handle_message` appends the user message to `self._history`, calls `_call_api()` once, and
+yields the resulting Messages. `_call_api` does three things at once: issues the streaming
+request, aggregates deltas, and calls `translation.build_messages` to produce caller-facing
+`Message` objects. A loop needs turns 1..n-1 aggregated but *not* translated, and only turn n
+translated. So `_call_api` splits:
+
+```
+_call_api()                  # today: request + aggregate + translate + append history
+  ->  _stream_turn(messages, tools) -> TurnResult(text, tool_calls)   # request + aggregate only
+```
+
+`_stream_turn` is the single-turn primitive. Both the no-tools path and every loop iteration
+call it. The delta-aggregation logic moves into it unchanged — it is already correct and
+already handles multi-chunk tool-call assembly.
+
+### Control flow
+
+```
+handle_message(message)
+  append {"role": "user", ...} to self._history
+  if not self._tool_executors:          # no tools configured -> today's behavior exactly
+      turn = await _stream_turn(history, tools=None)
+      append assistant turn to history
+      yield *translation.build_messages(turn.text, turn.tool_calls, ...)
+  else:
+      yield *await _run_agentic_loop()
+
+_run_agentic_loop() -> list[Message]
+  for iteration in 1..max_iterations:
+      turn = await _stream_turn(self._history, tools=self._tool_schemas)
+      append assistant turn to self._history        # verbatim, content + tool_calls
+      if not turn.tool_calls:
+          return translation.build_messages(turn.text, [], ...)   # FINAL — only yield point
+      for tc in turn.tool_calls:                    # in order
+          result = await _execute_tool_call(tc)
+          append {"role": "tool", "tool_call_id": tc.id, "content": result.content}
+      if _history_chars() > MAX_HISTORY_CHARS:
+          append budget-exceeded tool message ... (see Budget guard)
+  return max-iterations error            # structured, via normal failure path
+```
+
+Only one `return` translates a turn into caller Messages: the no-`tool_calls` exit. That is
+what makes "intermediate turns are not yielded" structurally true rather than a convention a
+future edit can break.
+
+### Where state lives
+
+`allowed_tools` and `cwd` are resolved **once, at construction**, not per message:
+
+- `OpenAICompatibleProvider.create_agent` passes `config.allowed_tools` and `config.cwd` to
+  the constructor.
+- The constructor calls `registry.materialize(names, cwd)` once and stores
+  `self._tool_executors: dict[str, ToolExecutor]` plus `self._tool_schemas: list[dict]`.
+
+Rationale: `materialize` is the slice-261 contract for binding `cwd` to executors, and the
+agent's `cwd` cannot change during its lifetime. Materializing per-message would repeat
+filesystem resolution on every turn for no gain. An agent with empty/None `allowed_tools`
+holds an empty executor dict, which is the flag the no-tools branch tests.
+
+### cwd resolution
+
+`AgentConfig.cwd` is `None` on the dispatch path today (`dispatch.py:63` hardcodes it) and
+set on the review path. The loop needs a jail root, and a silent wrong default is the failure
+mode the project rules forbid.
+
+**Decision:** when `allowed_tools` is non-empty and `cwd` is `None`, fall back to
+`Path.cwd()` — the process working directory — and log at INFO that the tool jail defaulted
+to it. This is an explicit, observable default, not a silent one. Populating `cwd` on the
+dispatch path is slice 263's job (it is the slice that gives pipelines tools at all); until
+then no non-SDK dispatch has tools, so the fallback is unreachable from that path in
+practice. When `allowed_tools` is empty, `cwd` is not consulted at all.
+
+### Tool schema construction
+
+`ToolDescriptor` already carries OpenAI-shaped `parameters`. Schema construction is a pure
+mapping and belongs next to the other OpenAI-shape helpers in `translation.py`:
+
+```python
+{"type": "function",
+ "function": {"name": d.name, "description": d.description, "parameters": d.parameters}}
+```
+
+Built once at construction from the same descriptor lookups `materialize` uses.
+
+### Message-history shape (OpenAI protocol)
+
+Two constructors, both in `translation.py`, so the protocol shape lives in one place
+(arch §Message history shape):
+
+- `build_assistant_history_entry(text, tool_calls)` — the existing
+  `_append_assistant_history` logic, moved. `content` is `None` when empty and `tool_calls`
+  are present; `tool_calls` is included verbatim as assembled from the stream.
+- `build_tool_result_entry(tool_call_id, content)` -> `{"role": "tool", "tool_call_id": ...,
+  "content": ...}`.
+
+**Append-only invariant.** The loop never mutates an existing history entry — no re-rendered
+content, no injected timestamps, no rewritten system prompt. Each request is therefore a
+strict prefix-extension of the previous one, which is what provider-side automatic prefix
+caching matches (arch §Cache-friendly history). This is a correctness-of-cost property, and
+it is asserted by test, not just by convention: a test captures the `messages` argument of
+each successive `create()` call and asserts call N+1's list starts with call N's list.
+
+### Termination conditions
+
+| Condition | Detection | Result |
+|---|---|---|
+| Normal | assistant message has no `tool_calls` | final `content` yielded as Messages |
+| Max iterations | loop counter reaches `max_iterations` | `ProviderError` via normal failure path; WARNING logged |
+| History budget | accumulated history chars > threshold | budget-exceeded `role: "tool"` message appended; loop continues so the model can finalize; WARNING logged once |
+
+Max-iterations raises rather than returning a partial response, because a loop that hit 20
+turns without finalizing produced no answer — returning its last intermediate text would be
+a plausible-looking non-answer. `ProviderError` is what `handle_message` already surfaces to
+the executor, so no new failure channel is introduced.
+
+The budget guard is deliberately *not* a termination: it appends one extra tool-result
+message telling the model the budget is exhausted and it must finalize now. If the model
+ignores that and keeps calling tools, `max_iterations` still terminates the loop. The guard
+fires at most once per loop to avoid appending a message per iteration.
+
+### Constants
+
+`max_iterations` and the history-char threshold are module-level constants in the openai
+provider package, referenced as module attributes (the slice-261 `limits.py` pattern, which
+makes monkeypatched tests see the patched value at call time). Defaults: `MAX_ITERATIONS = 20`
+(arch §Loop iteration cost), `MAX_HISTORY_CHARS = 400_000`. Making them user-configurable is
+out of scope; they are constants with one definition, not magic numbers at use sites.
+
+Placement: a `limits` module in the openai provider package, mirroring `tools/limits.py`. They
+are provider-loop limits, not tool limits, so they do not belong in `tools/limits.py`.
+
+### Error surfacing inside the loop
+
+Per arch §Tool argument validation, a bad tool call is data for the model, not a crash:
+
+| Failure | Handling |
+|---|---|
+| `arguments` is not valid JSON | `role: "tool"` result, error text naming the parse failure |
+| tool name not in `self._tool_executors` | `role: "tool"` result listing the allowed names |
+| executor returns `is_error=True` | passed through verbatim — the tool owns its message |
+| executor raises | caught, logged via `logger.exception`, converted to an error tool result |
+
+Executors returning `ToolResult(is_error=True)` is the slice-261 contract; the "executor
+raises" row is defense against a future or MCP-bridged tool that violates it, and is the only
+place the loop logs at ERROR.
+
+Every branch produces exactly one `role: "tool"` message per `tool_call_id`. This is a
+protocol requirement — a missing tool result for an issued call id makes the next request
+malformed — and is asserted directly by test.
+
+### D1: unknown tool names must not crash the loop
+
+`registry.materialize` raises `ToolNotRegisteredError` on an unknown name. The review path
+already passes `template.allowed_tools` into `AgentConfig`, and every shipped template
+declares Claude vocabulary (`[Read, Glob, Grep, Bash]` in `code.yaml`, `[Read, Glob, Grep]`
+in the other six). Vocabulary migration is slice 265. So the moment this slice activates the
+non-SDK consumer of `allowed_tools`, a non-SDK review would call `materialize(["Read", ...])`
+and raise — turning a working (if tool-less) review into a hard failure.
+
+**Decision:** the agent filters names through `registry.lookup` before materializing.
+Unknown names are dropped with a **WARNING** naming each dropped name and the registered
+vocabulary; known names materialize normally. `materialize` itself is unchanged — its
+fail-fast contract is right for a caller that controls its own name list.
+
+This is not a silent fallback: it is loud, observable, and the surviving behavior (a review
+with no tools) is exactly today's behavior. The alternative — crashing every non-SDK review
+until 265 lands — makes 262 un-shippable on its own and violates the slice-plan requirement
+that each slice leave the system in a working state. Load-time validation of declared names
+belongs where names are declared: pipeline YAML (263) and templates (265).
+
+Consequence to accept knowingly: between 262 and 265, a non-SDK review logs a WARNING and
+runs tool-less. That is issue #68's current behavior plus a diagnostic, and 265 closes it.
+
+### Logging contract
+
+Asserted by `caplog` tests, following the 261 precedent:
+
+| Level | Event |
+|---|---|
+| DEBUG | each tool call (name, args) and each result (truncated), each iteration boundary |
+| INFO | per-loop summary on exit: iterations used, tool-call count; tool-jail cwd fallback |
+| WARNING | dropped unknown tool names; budget guard fired; max-iterations reached |
+| ERROR | executor raised (via `logger.exception`) |
+
+Intermediate turn *content* is DEBUG only — that is the observability substitute for not
+streaming intermediate turns (arch §Loop visibility).
+
+## Implementation Details
+
+Files changed:
+
+| File | Change |
+|---|---|
+| `providers/openai/agent.py` | constructor params; `_stream_turn` split; `_run_agentic_loop`; `_execute_tool_call` |
+| `providers/openai/translation.py` | `build_tool_schemas`, `build_assistant_history_entry`, `build_tool_result_entry` |
+| `providers/openai/limits.py` | **new** — `MAX_ITERATIONS`, `MAX_HISTORY_CHARS` |
+| `providers/openai/provider.py` | pass `config.allowed_tools` and `config.cwd` to the agent |
+
+`agent.py` is 141 lines today; the loop and its helper add roughly 100, keeping it inside the
+~300-line project guideline. Keeping the loop in `agent.py` (rather than a new module) is
+deliberate — arch §Design Goals calls for it to live inside `handle_message` behind a clean
+caller boundary, as a clearly named private method that a future orchestration layer lifts.
+
+`TurnResult` is a small frozen dataclass (`text: str`, `tool_calls: list[dict]`) defined in
+`agent.py`. It is internal plumbing between two private methods, not part of any protocol.
+
+**Constructor signature.** New parameters are keyword-only with defaults
+(`allowed_tools: list[str] | None = None`, `cwd: str | None = None`), so the existing
+test-helper construction and any other caller keep working unchanged. Registration side
+effects require `squadron.tools` to be imported for the built-ins to exist in the registry;
+the agent imports the registry module, which does not itself trigger `builtin` registration —
+so the agent must import `squadron.tools` (the package `__init__`, which performs the
+registration import) to guarantee the built-ins are present.
+
+## Integration Points
+
+**Consumes (slice 261):** `registry.lookup`, `registry.materialize`, `ToolDescriptor`,
+`ToolResult`, `ToolExecutor`. No change to any of them. `ToolNotRegisteredError` becomes
+unreachable from this caller because of the D1 pre-filter, which is intentional.
+
+**Provides:**
+
+- *263* — a working non-SDK tool loop keyed off `AgentConfig.allowed_tools`; 263 only has to
+  populate that field (and `cwd`) from step YAML.
+- *265* — the same activation for the review path; 265 adds injection-skip and vocabulary
+  migration, and its migration is what makes D1's WARNING stop firing.
+- *266* — the effective-tool-set computation intersects into `allowed_tools` upstream of the
+  agent; no agent change needed.
+- *264* — MCP-bridged descriptors execute through `_execute_tool_call` unchanged, because the
+  loop depends only on the `ToolExecutor` alias.
+
+**Unchanged:** `Agent` protocol, executor, `ClaudeSDKAgent`, `CodexAgent`,
+`ProviderCapabilities` (the `supports_tool_use` signal is 265's decision), pipeline schema.
+
+## Success Criteria
+
+- [ ] With `allowed_tools` empty or `None`, agent behavior is unchanged: existing
+      `tests/providers/openai/` suite passes without modification, including
+      `test_handle_message_yields_system_for_tool_call`.
+- [ ] `OpenAICompatibleProvider.create_agent` threads `config.allowed_tools` and `config.cwd`
+      into the agent.
+- [ ] Tool schemas are sent as the `tools` parameter only when tools are configured; never
+      otherwise (asserted on the captured `create()` kwargs).
+- [ ] An assistant turn with `tool_calls` continues the loop; a turn without them terminates
+      it and its content is the yielded response.
+- [ ] Intermediate turn content is never yielded to the caller.
+- [ ] A multi-tool single turn dispatches every call and appends one `role: "tool"` result per
+      `tool_call_id`, in call order.
+- [ ] Malformed JSON arguments produce an error tool result, not an exception; the loop
+      continues.
+- [ ] An unknown tool name in a model response produces an error tool result naming the
+      allowed tools; the loop continues.
+- [ ] Unknown names in `allowed_tools` are dropped with a WARNING; known names still
+      materialize (D1).
+- [ ] `max_iterations` fires a `ProviderError` through the normal failure path with a WARNING.
+- [ ] The history budget guard appends a budget-exceeded tool message once and logs WARNING.
+- [ ] History is append-only: each request's `messages` is a strict prefix-extension of the
+      previous request's.
+- [ ] Full suite passes (~3078 tests, no regression); `ruff check` clean;
+      `pyright src/squadron/providers/openai/` clean.
+
+## Design Decisions
+
+- **D1 — unknown names are dropped, not fatal.** Recorded above. Driven by the shipped
+  templates' Claude vocabulary and the requirement that 262 ship independently.
+- **D2 — materialize once at construction, not per message.** `cwd` is fixed for an agent's
+  lifetime; per-message materialization repeats path resolution for no benefit.
+- **D3 — max-iterations raises rather than returning partial text.** A partial intermediate
+  turn is a plausible-looking non-answer; the project rule against silent fallbacks applies.
+- **D4 — budget guard warns and continues rather than terminating.** It gives the model one
+  chance to finalize; `max_iterations` remains the hard stop. Truncation is out of scope.
+- **D5 — protocol message construction lives in `translation.py`.** One home for OpenAI wire
+  shapes prevents drift between the assistant-entry and tool-result builders.
+- **D6 — loop stays in `agent.py` as a named private method.** Matches arch §Design Goals and
+  keeps the future orchestration seam explicit.
+
+## Risks
+
+- **Tool-call protocol fidelity across providers.** Some OpenAI-compatible endpoints emit
+  non-standard tool-call shapes. Mitigation: the "tools requested but model returned plain
+  text" case is treated as a normal final response (arch §Provider-side support varies); no
+  coercion is attempted. Tests cover the graceful path.
+- **Multi-chunk tool-call aggregation.** Already implemented and tested in the current
+  `_call_api`; the refactor moves it verbatim into `_stream_turn` rather than rewriting it.
+
+## Verification Walkthrough
+
+*Draft — to be replaced with actual commands and real output at Phase 6 close-out.*
+
+All commands run from the project root. `ruff`/`pyright`/`pytest` are not on PATH; invoke from
+`.venv/bin/`.
+
+**1. No-tools path is untouched.** The strongest regression signal is the pre-existing suite
+passing unmodified:
+
+```bash
+.venv/bin/pytest tests/providers/openai/ -q
+```
+
+Expect the original 15 agent tests plus the new loop tests, all passing.
+
+**2. Loop drives a real tool against a real filesystem.** With a mocked endpoint scripted to
+return a `write_file` tool call on turn 1 and plain text on turn 2, pointed at a temp dir:
+
+```bash
+.venv/bin/pytest tests/providers/openai/test_agentic_loop.py -q
+```
+
+The test asserts the file exists on disk with the expected content, and that the yielded
+Messages contain only turn 2's text.
+
+**3. Intermediate turns are not surfaced.** Same fixture, asserting no yielded Message carries
+turn 1's content and no `MessageType.system` tool-call message is emitted when tools are
+configured.
+
+**4. Error paths return to the model rather than crashing.** Scripted responses for malformed
+JSON args and an unknown tool name; assert the loop reaches turn 2 and the history contains a
+`role: "tool"` entry whose content names the failure.
+
+**5. Guards fire.** With `MAX_ITERATIONS` monkeypatched to 2 and an endpoint that always
+returns a tool call, assert `ProviderError` is raised and a WARNING is logged. With
+`MAX_HISTORY_CHARS` monkeypatched low, assert the budget message appears exactly once.
+
+**6. Cache-friendly prefix.** Capture each `create()` call's `messages`; assert
+`calls[n].messages[:len(calls[n-1].messages)] == calls[n-1].messages` for every n.
+
+**7. Unknown declared names degrade loudly (D1).** Construct an agent with
+`allowed_tools=["Read", "read_file"]`; assert `read_file` is materialized, `Read` is dropped,
+and a WARNING naming `Read` is logged.
+
+**8. Full-suite and static checks.**
+
+```bash
+.venv/bin/ruff check .
+.venv/bin/pyright src/squadron/providers/openai/
+.venv/bin/pytest -q
+```
+
+Note: whole-repo `pyright` reports a large pre-existing error count unrelated to this work;
+verify with the scoped invocation above.
+
+**9. Live smoke (optional, requires credentials).** A non-SDK review against a tool-capable
+model, run at `-vv`, shows the DEBUG tool-call lines and the INFO loop summary. Until slice
+265 migrates template vocabulary, this run logs the D1 WARNING and proceeds tool-less — that
+is the expected intermediate state, not a defect.
