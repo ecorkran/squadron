@@ -14,6 +14,96 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260827
 
+### Slice 261: Code Review Findings Addressed (Phase 6)
+
+Review `261-review.code...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `a64b741`):
+2 pass, 2 concerns, 1 note. All three actionable findings verified valid and fixed.
+
+**F001 — blocking syscalls on the event loop.** `_resolve_in_jail` calls
+`Path.resolve(strict=False)`, which stats every existing path component; `write_file` also
+called `is_dir()` and `exists()` synchronously. The reads and writes were correctly pushed
+into `asyncio.to_thread`, but the syscalls *gating* them were not, violating
+`rules/python.md` ("synchronous code inside an async def must run in <1ms worst case"). Both
+executors now do all blocking work — resolve, stat, and the read/write — inside a single
+`to_thread` call, which also drops a thread hop.
+
+**F002 — no hang protection on the file tools.** The serious one, and worse than the review
+stated. A FIFO inside the jail is legal input (the jail admits any path under the working
+directory), and `read_bytes()` on it blocks forever. The reproducer did not merely stall the
+loop: wrapping it in `asyncio.wait_for(timeout=3)` did **not** rescue the process, because
+`asyncio.to_thread` workers cannot be cancelled — `wait_for` abandoned the coroutine and the
+interpreter then hung joining the stuck thread at shutdown. A caller-side timeout is therefore
+not a defense; refusing before `open()` is. Added `_reject_special_file`, which returns an
+INFO-logged error result for anything that exists and is neither a regular file nor a
+directory (directories keep their own specific message). The reproducer now returns in 0.002s.
+Three new tests cover it, including the log-level assertion.
+
+**F003 — redundant parent jail check in `write_file`.** Verified empirically across accepted
+and rejected paths: the second `_resolve_in_jail(cwd, str(target.parent))` never rejects
+anything the first check accepted, because `resolve()` de-symlinks every existing component,
+so a target inside the jail always has a parent inside it. The check was dead code whose
+comment claimed TOCTOU protection it did not provide. Removed, with a comment recording why a
+second check cannot add coverage — `test_path_whose_parent_resolves_outside_the_jail_is_rejected`
+is satisfied by the first check and still passes.
+
+Walkthrough output is byte-identical to the pre-fix run, so the changes are behavior-preserving
+on the documented paths. 57 tools tests (up from 54); full suite 3078 passed, 2 skipped.
+
+### Slice 261: Tool Registry and Core Tools Implemented (Phase 6)
+
+New package `src/squadron/tools/` — the tool abstraction boundary for the rest of initiative
+260. Six modules: `limits.py` (the single home for every tool limit), `errors.py`, `models.py`
+(pure data types), `registry.py`, `builtin.py` (the three tools), `__init__.py` (public API).
+
+**Types.** `ToolResult(content, is_error=False)` and `ToolDescriptor(name, description,
+parameters, factory)`, both frozen dataclasses, plus the `ToolExecutor` / `ToolFactory`
+aliases. No `Protocol` — design decision D2: one shape, one implementer, no polymorphism to
+justify the indirection. Errors are values, never exceptions: an executor returns
+`is_error=True` rather than raising to its caller.
+
+**Registry.** Module-level dict and free functions, mirroring `providers/registry.py`, with
+one deliberate divergence — a duplicate `register` raises `ValueError` instead of silently
+overwriting. A tool name is a security-relevant surface, so two definitions of it must fail
+fast rather than resolve by import order. `materialize(names, cwd)` resolves `cwd` exactly
+once and hands the same resolved path to every factory; an unknown name raises
+`ToolNotRegisteredError` naming the offender and listing what is registered.
+
+**Jail rule.** `(cwd / path).resolve(strict=False).is_relative_to(cwd)`. One expression covers
+relative input, absolute input, and `..` traversal, because `Path.__truediv__` with an
+absolute right-hand operand yields that absolute path; `resolve()` follows symlinks first, so
+a link pointing out of the jail is rejected too. String prefix comparison is explicitly not
+used — `/tmp/jail_evil` starts with `/tmp/jail` but is not inside it, and `tests/tools/
+test_jail.py` pins exactly that case as a regression test. `write_file` jail-checks the parent
+directory *before* creating anything, so a rejected write never leaves a directory behind
+outside the jail; the tests assert the rejection is effective, not merely reported.
+
+**Logging contract** (not a suggestion — asserted by `caplog` tests on all three tools):
+WARNING for jail violations and bash timeouts, INFO for every other `is_error=True` result
+(missing file, permission denied, non-zero exit, truncation), ERROR only for the
+unexpected-exception catch-all via `logger.exception`. The INFO cases are routine
+model-probing outcomes the model itself reacts to; elevating them would train operators to
+ignore warnings.
+
+**Tools.** `read_file` (byte-truncated at `MAX_READ_BYTES` with a visible trailing marker —
+truncation is never silent), `write_file` (creates parent dirs, reports created-vs-overwritten
+plus byte count), `bash` (spawned with `start_new_session=True` so the timeout path can
+`os.killpg` the whole group, labeled stdout/stderr each truncated at `MAX_OUTPUT_BYTES`,
+non-zero exit carries the captured output back because the model needs it to react).
+Blocking filesystem work goes through `asyncio.to_thread`.
+
+Limits are read as module attributes at call time, never captured at import — that is what
+makes the monkeypatched-constant tests work, and it kept the bash timeout test at 0.5s instead
+of hanging for the real 120s. Verified separately that the process-group kill leaves no
+orphan: a command backgrounding a child dies whole.
+
+**Nothing consumes tools yet** — that is 262. `git diff --stat main..HEAD` touches only
+`src/squadron/tools/` and `tests/tools/`, 1088 insertions, 0 deletions, so behavior-neutrality
+holds by construction rather than by inspection. 54 new tests; full suite 3075 passed, 2
+skipped, no regression. Whole-repo pyright reports 1752 errors both before and after this
+branch, none of them in `squadron/tools/`, which is strict-clean on its own.
+
+Committed per task group (8 commits) rather than once at the end, per review finding F003.
+
 ### Slice 261: Task Review Findings Addressed (Phase 5)
 
 Review `261-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `94348c8`):

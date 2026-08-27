@@ -6,8 +6,8 @@ parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: []
 interfaces: [262, 263, 264, 265]
 dateCreated: 20260825
-dateUpdated: 20260826
-status: not_started
+dateUpdated: 20260827
+status: complete
 ---
 
 # Slice Design: Tool Registry, Descriptor Protocol, and Core Tool Implementations
@@ -238,37 +238,154 @@ the plan entry is initiative-scoped and stands as written.
 
 ## Verification Walkthrough
 
-Draft — refined at Phase 6 completion.
+Verified at Phase 6 completion (20260827) on branch
+`261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations`. Every command
+below was run from the repo root and produced the output shown. `ruff`, `pyright`, and
+`pytest` are not on PATH directly — invoke them from `.venv/bin/`.
 
-1. `pytest tests/tools/ -q` — new suite passes.
-2. `pytest -q` — no regression anywhere else.
-3. Registry demo (from repo root):
-   ```
-   python -c "from squadron import tools; print(tools.list_tools())"
-   # → ['read_file', 'write_file', 'bash']
-   ```
-4. Jail demo in a scratch tree:
-   ```
-   python - << 'EOF'
-   import asyncio, tempfile
-   from squadron import tools
-   cwd = tempfile.mkdtemp()
-   ex = tools.materialize(["read_file", "write_file", "bash"], cwd)
-   async def demo():
-       print(await ex["write_file"]({"path": "notes/a.txt", "content": "hello"}))
-       print(await ex["read_file"]({"path": "notes/a.txt"}))
-       print(await ex["read_file"]({"path": "../../etc/hosts"}))   # is_error=True
-       print(await ex["bash"]({"command": "ls notes"}))
-   asyncio.run(demo())
-   EOF
-   ```
-   Expected: write reports created/5 bytes; read returns `hello`; escape attempt returns an
-   error result naming the path; bash lists `a.txt`.
-5. Timeout demo: `bash` with `{"command": "sleep 300"}` returns an error naming
-   `BASH_TIMEOUT_S` in well under 300 s (test uses a lowered constant via monkeypatch; the
-   demo may skip waiting).
-6. Confirm nothing consumes tools yet: `grep -rn "squadron.tools\|squadron import tools" src/`
-   shows only the `tools/` package itself.
+**1. New suite passes.**
+
+```
+$ .venv/bin/pytest tests/tools/ -q
+57 passed in 0.57s
+```
+
+**2. No regression anywhere else.**
+
+```
+$ .venv/bin/pytest -q
+3078 passed, 2 skipped, 5 warnings in 478.98s (0:07:58)
+```
+
+The full suite takes about 8 minutes. The pre-existing `RuntimeWarning: coroutine
+'_run_pipeline' was never awaited` from `tests/documents/test_schema_drift.py` is unrelated to
+this slice and also present on `main`.
+
+**3. Lint and type gate.**
+
+```
+$ .venv/bin/ruff format . && .venv/bin/ruff check .
+460 files left unchanged
+All checks passed!
+
+$ .venv/bin/pyright src/squadron/tools/
+0 errors, 0 warnings, 0 informations
+```
+
+Caveat: a whole-repo `.venv/bin/pyright` reports **1752 errors**. That count is identical on
+`main` and on this branch, and `pyright 2>&1 | grep -c "squadron/tools/"` returns `0` — the
+errors are pre-existing in other packages. The new package is strict-clean; verify it with the
+scoped invocation above rather than the whole-repo run.
+
+**4. Registry demo.**
+
+```
+$ .venv/bin/python -c "from squadron import tools; print(tools.list_tools())"
+['read_file', 'write_file', 'bash']
+```
+
+**5. Jail demo in a scratch tree.**
+
+```
+$ .venv/bin/python - << 'EOF'
+import asyncio, tempfile
+from squadron import tools
+cwd = tempfile.mkdtemp()
+ex = tools.materialize(["read_file", "write_file", "bash"], cwd)
+async def demo():
+    print(await ex["write_file"]({"path": "notes/a.txt", "content": "hello"}))
+    print(await ex["read_file"]({"path": "notes/a.txt"}))
+    print(await ex["read_file"]({"path": "../../etc/hosts"}))
+    print(await ex["bash"]({"command": "ls notes"}))
+asyncio.run(demo())
+EOF
+```
+
+Actual output (the `read_file:` line is the WARNING log record on stderr, interleaved ahead of
+stdout — its presence at default verbosity is itself part of the contract):
+
+```
+read_file: rejected path outside working directory: ../../etc/hosts
+ToolResult(content='Created notes/a.txt (5 bytes).', is_error=False)
+ToolResult(content='hello', is_error=False)
+ToolResult(content="Error: path '../../etc/hosts' resolves outside the working directory and was rejected.", is_error=True)
+ToolResult(content='stdout:\na.txt\n\nstderr:\n', is_error=False)
+```
+
+**6. Timeout demo.** `BASH_TIMEOUT_S` is read as a module attribute at call time, so assigning
+it (or monkeypatching it in tests) takes effect on the next call — the demo need not wait 120s.
+
+```
+$ .venv/bin/python - << 'EOF'
+import asyncio, tempfile, time
+from squadron import tools
+from squadron.tools import limits
+limits.BASH_TIMEOUT_S = 2.0
+ex = tools.materialize(["bash"], tempfile.mkdtemp())
+async def demo():
+    t = time.monotonic()
+    r = await ex["bash"]({"command": "sleep 300"})
+    print(f"elapsed={time.monotonic()-t:.1f}s")
+    print(r)
+asyncio.run(demo())
+EOF
+
+bash: command timed out after 2.0s and was killed: sleep 300
+elapsed=2.0s
+ToolResult(content='Error: command timed out after 2.0s and was killed: sleep 300', is_error=True)
+```
+
+The kill targets the whole process group (`start_new_session=True` at spawn, `os.killpg` on
+timeout), so backgrounded children die too. Confirmed separately: running
+`{"command": "sleep 987 & sleep 988"}` against a lowered limit leaves no matching process
+behind (`pgrep -f "sleep 98"` returns nothing).
+
+**6a. Special files are refused, not opened.** Added after the Phase 6 code review (F002).
+
+```
+$ .venv/bin/python - << 'EOF'
+import asyncio, os, tempfile, time
+from squadron import tools
+cwd = tempfile.mkdtemp()
+os.mkfifo(os.path.join(cwd, "pipe"))
+ex = tools.materialize(["read_file", "write_file"], cwd)
+async def main():
+    t = time.monotonic()
+    print("read: ", await ex["read_file"]({"path": "pipe"}))
+    print("write:", await ex["write_file"]({"path": "pipe", "content": "x"}))
+    print(f"elapsed={time.monotonic()-t:.3f}s")
+asyncio.run(main())
+EOF
+
+read:  ToolResult(content='Error: path is not a regular file: pipe', is_error=True)
+write: ToolResult(content='Error: path is not a regular file: pipe', is_error=True)
+elapsed=0.002s
+```
+
+Before the fix this reproducer hung indefinitely. Note that wrapping the call in
+`asyncio.wait_for` did **not** rescue it: `asyncio.to_thread` workers cannot be cancelled, so
+the interpreter joined the stuck thread at shutdown and hung anyway. Refusing before `open()`
+is the only reliable defense, which is why the check is a guard rather than a timeout.
+
+**7. Limits are not scattered.**
+
+```
+$ grep -rn "256_000\|256000\|64_000\|64000\|120\.0" src/squadron/tools/
+src/squadron/tools/limits.py:15:MAX_READ_BYTES = 256_000
+src/squadron/tools/limits.py:18:MAX_OUTPUT_BYTES = 64_000
+src/squadron/tools/limits.py:21:BASH_TIMEOUT_S = 120.0
+```
+
+**8. Nothing consumes tools yet.**
+
+```
+$ grep -rn "squadron.tools\|squadron import tools" src/
+```
+
+Every hit is inside `src/squadron/tools/` itself. `git diff --stat main..HEAD` touches only
+`src/squadron/tools/` (6 files) and `tests/tools/` (8 files) —
+the behavior-neutrality guarantee holds by construction.
+
 
 ## Implementation Notes
 
