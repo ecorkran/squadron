@@ -58,6 +58,14 @@ monkeypatched tests see patched values at call time. `dispatch.py` hardcodes `cw
 the design specifies an explicit INFO-logged `Path.cwd()` fallback rather than leaving the
 jail root undefined.
 
+**Revised after review (D7):** the two loop limits moved from source constants to
+registered config keys (`agent.max_tool_iterations`, `agent.max_history_chars`),
+following the existing `review.max_file_size_bytes` precedent in `config/keys.py`. PM runs
+non-SDK (OpenRouter) reviews frequently across models with very different context windows,
+so a source-baked cap would need a code edit to tune. Read once at loop start so a mid-run
+config change cannot alter termination behavior halfway through. PM accepted the D1 warning
+window; sequencing stays 262 then 265.
+
 Slice-plan entry 2 updated with the design pointer. No code changes.
 
 ### Slice 261: Code Review Findings Addressed (Phase 6)

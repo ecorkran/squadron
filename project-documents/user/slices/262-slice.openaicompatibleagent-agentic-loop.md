@@ -118,7 +118,7 @@ _run_agentic_loop() -> list[Message]
       for tc in turn.tool_calls:                    # in order
           result = await _execute_tool_call(tc)
           append {"role": "tool", "tool_call_id": tc.id, "content": result.content}
-      if _history_chars() > MAX_HISTORY_CHARS:
+      if _history_chars() > max_history_chars:      # read once, before the loop
           append budget-exceeded tool message ... (see Budget guard)
   return max-iterations error            # structured, via normal failure path
 ```
@@ -202,16 +202,34 @@ message telling the model the budget is exhausted and it must finalize now. If t
 ignores that and keeps calling tools, `max_iterations` still terminates the loop. The guard
 fires at most once per loop to avoid appending a message per iteration.
 
-### Constants
+### Loop limits (configurable)
 
-`max_iterations` and the history-char threshold are module-level constants in the openai
-provider package, referenced as module attributes (the slice-261 `limits.py` pattern, which
-makes monkeypatched tests see the patched value at call time). Defaults: `MAX_ITERATIONS = 20`
-(arch §Loop iteration cost), `MAX_HISTORY_CHARS = 400_000`. Making them user-configurable is
-out of scope; they are constants with one definition, not magic numbers at use sites.
+Both loop limits are **config keys**, not hard-coded constants, following the established
+`review.max_file_size_bytes` precedent (`config/keys.py`, read via `get_typed_config`):
 
-Placement: a `limits` module in the openai provider package, mirroring `tools/limits.py`. They
-are provider-loop limits, not tool limits, so they do not belong in `tools/limits.py`.
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `agent.max_tool_iterations` | int | 20 | Max loop turns before the guard fires (arch §Loop iteration cost) |
+| `agent.max_history_chars` | int | 400_000 | Accumulated history size that triggers the budget guard |
+
+Rationale: these are operational caps whose right value varies by model context window and by
+user, and non-SDK reviews run frequently against models with very different windows. A value
+baked into source would eventually need a code edit to change. Registering them in
+`CONFIG_KEYS` keeps exactly one definition per value (the `default=` field) with no magic
+number at any use site, and gives users `sq config set` without a later retrofit.
+
+Both are read **once at loop start**, not per iteration, and held as locals — so a mid-run
+config change cannot alter a loop's termination behavior halfway through. Read via
+`get_typed_config(key, int, cwd=...)`, which raises on a type mismatch rather than silently
+coercing.
+
+The `400_000` default is an unmeasured starting value (arch notes a typical loop finishes in
+2–5 turns, so it should rarely fire). Configurability is what makes an unmeasured default
+acceptable rather than a guess baked into source.
+
+This does not overlap slice 266, which adds the orthogonal `tool_use` model-capability field
+and the `--no-tools` run flag — those govern *whether* tools are offered, not how long the
+loop may run.
 
 ### Error surfacing inside the loop
 
@@ -277,7 +295,7 @@ Files changed:
 |---|---|
 | `providers/openai/agent.py` | constructor params; `_stream_turn` split; `_run_agentic_loop`; `_execute_tool_call` |
 | `providers/openai/translation.py` | `build_tool_schemas`, `build_assistant_history_entry`, `build_tool_result_entry` |
-| `providers/openai/limits.py` | **new** — `MAX_ITERATIONS`, `MAX_HISTORY_CHARS` |
+| `config/keys.py` | register `agent.max_tool_iterations`, `agent.max_history_chars` |
 | `providers/openai/provider.py` | pass `config.allowed_tools` and `config.cwd` to the agent |
 
 `agent.py` is 141 lines today; the loop and its helper add roughly 100, keeping it inside the
@@ -336,8 +354,11 @@ unreachable from this caller because of the D1 pre-filter, which is intentional.
       allowed tools; the loop continues.
 - [ ] Unknown names in `allowed_tools` are dropped with a WARNING; known names still
       materialize (D1).
-- [ ] `max_iterations` fires a `ProviderError` through the normal failure path with a WARNING.
+- [ ] `agent.max_tool_iterations` fires a `ProviderError` through the normal failure path with
+      a WARNING.
 - [ ] The history budget guard appends a budget-exceeded tool message once and logs WARNING.
+- [ ] Both loop limits are registered config keys read via `get_typed_config`, honoring a
+      user-set value and falling back to the registered default.
 - [ ] History is append-only: each request's `messages` is a strict prefix-extension of the
       previous request's.
 - [ ] Full suite passes (~3078 tests, no regression); `ruff check` clean;
@@ -353,6 +374,11 @@ unreachable from this caller because of the D1 pre-filter, which is intentional.
   turn is a plausible-looking non-answer; the project rule against silent fallbacks applies.
 - **D4 — budget guard warns and continues rather than terminating.** It gives the model one
   chance to finalize; `max_iterations` remains the hard stop. Truncation is out of scope.
+- **D7 — loop limits are config keys, not source constants.** Revised 20260827 after review.
+  Both caps follow the `review.max_file_size_bytes` precedent. Non-SDK reviews run frequently
+  against models with widely differing context windows; a source-baked cap would require a
+  code edit to tune. Read once at loop start so a mid-run change cannot alter termination
+  behavior.
 - **D5 — protocol message construction lives in `translation.py`.** One home for OpenAI wire
   shapes prevents drift between the assistant-entry and tool-result builders.
 - **D6 — loop stays in `agent.py` as a named private method.** Matches arch §Design Goals and
@@ -401,9 +427,11 @@ configured.
 JSON args and an unknown tool name; assert the loop reaches turn 2 and the history contains a
 `role: "tool"` entry whose content names the failure.
 
-**5. Guards fire.** With `MAX_ITERATIONS` monkeypatched to 2 and an endpoint that always
-returns a tool call, assert `ProviderError` is raised and a WARNING is logged. With
-`MAX_HISTORY_CHARS` monkeypatched low, assert the budget message appears exactly once.
+**5. Guards fire.** With `agent.max_tool_iterations` set to 2 in a temp-dir config and an
+endpoint that always returns a tool call, assert `ProviderError` is raised and a WARNING is
+logged. With `agent.max_history_chars` set low, assert the budget message appears exactly
+once. Both use the real config path rather than patching module attributes, which also proves
+the keys are wired.
 
 **6. Cache-friendly prefix.** Capture each `create()` call's `messages`; assert
 `calls[n].messages[:len(calls[n-1].messages)] == calls[n-1].messages` for every n.
