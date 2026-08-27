@@ -24,6 +24,9 @@ status: not_started
 - Stdlib only. No new dependencies in `pyproject.toml`.
 - The names registered here (`read_file`, `write_file`, `bash`) are the start of the **canonical
   squadron tool vocabulary**. Slice 265 adds `list_files` and `grep` through this same registry.
+- **Commit per task group, not once at the end** (review F003). Task 0 creates the branch; groups
+  1–7 each end with a commit step; group 8 commits the close-out documentation. Every commit
+  leaves `pytest tests/tools/ -q` passing.
 
 ### Verified anchors (traced 20260827 on `b05fadc`)
 
@@ -47,6 +50,28 @@ status: not_started
    be narrowed before use (e.g. `isinstance(raw, str)`), not indexed and passed blind.
 3. **Logging assertions need a level.** `caplog` defaults to WARNING propagation; tests asserting
    INFO records must set `caplog.set_level(logging.INFO)`.
+
+---
+
+## Task 0: Branch
+
+- [ ] **0.1 Create the slice branch** — Effort: 1/5
+  - [ ] Confirm the integration target: `cf config get git.integration_branch`. An empty value
+        means the target is `main`.
+  - [ ] From the target, create and switch to
+        `261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations`:
+        `git checkout -b 261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations <target>`.
+  - [ ] If the branch already exists, `git checkout` it instead. Never start from another unit's
+        branch.
+  - [ ] Success: `git branch --show-current` prints the slice branch and `git status` is clean.
+
+### Commit cadence for this slice
+
+Every task group below ends with a commit step. Commit from the project root, on the slice
+branch, and run `.venv/bin/ruff format .` immediately before each one. Each commit must leave the
+tree in a state where `.venv/bin/pytest tests/tools/ -q` passes — the groups are ordered so this
+is always achievable. Do not merge, push, or delete the branch at any point without explicit
+instruction from the Project Manager.
 
 ---
 
@@ -98,6 +123,11 @@ status: not_started
         (use a trivial inline factory; no real tool needed here).
   - [ ] Success: `pytest tests/tools/test_models.py -q` passes.
 
+- [ ] **1.5 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit:
+        `chore: add squadron.tools package skeleton and pure types`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
+
 ---
 
 ## Task 2: Registry
@@ -142,6 +172,10 @@ status: not_started
         containing `..`, and assert the recorded path equals `Path(that).resolve()`.
   - [ ] Success: `pytest tests/tools/test_registry.py -q` passes.
 
+- [ ] **2.3 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit: `feat: add tool registry`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
+
 ---
 
 ## Task 3: Shared executor plumbing
@@ -160,6 +194,23 @@ status: not_started
   - [ ] Do not use string prefix comparison (`str(candidate).startswith(str(cwd))`) — it is
         wrong across path-component boundaries.
   - [ ] Success: helper is annotated, passes pyright strict, and is referenced by both file tools.
+
+- [ ] **3.1a Test the jail helper directly** — Effort: 2/5
+  - [ ] Create `tests/tools/test_jail.py` testing the helper in isolation, not through a tool.
+        Tasks 4.2/5.2 exercise it end-to-end; this task pins the rule itself, so a jail regression
+        names the jail rather than surfacing as two confusing tool-test failures.
+  - [ ] With `tmp_path` as the resolved jail root, assert **accepted**: a plain relative path; a
+        nested relative path; an absolute path inside the root; a path containing `..` that stays
+        inside the root (e.g. `sub/../file.txt`).
+  - [ ] Assert **rejected**: `../escape`; a deep `../../..` traversal; an absolute path outside the
+        root; a symlink inside the root whose target is outside it; a path whose *parent* resolves
+        outside the root (this is the case `write_file` relies on before creating directories).
+  - [ ] Assert the root itself and the sibling-prefix case behave correctly: a sibling directory
+        whose name shares a string prefix with the root (e.g. root `…/jail`, target `…/jail_evil`)
+        is **rejected**. This is the case string-prefix comparison gets wrong and
+        `is_relative_to` gets right — it is the direct regression test for the "do not use
+        `startswith`" instruction in 3.1.
+  - [ ] Success: `pytest tests/tools/test_jail.py -q` passes.
 
 - [ ] **3.2 Implement the shared executor wrapper and logging contract** — Effort: 2/5
   - [ ] Add a module-private wrapper used by every executor that:
@@ -183,7 +234,14 @@ status: not_started
   - [ ] Module logger obtained the same way as elsewhere in the codebase
         (`logging.getLogger(__name__)`).
   - [ ] Success: `ruff check src/squadron/tools/` clean (the `noqa` marker is present and
-        correctly scoped); wrapper is used by all three tools.
+        correctly scoped). The wrapper has no consumer yet — Tasks 4.1, 5.1, and 6.1 each route
+        their executor through it, and Task 8.3's full gate is where "used by all three" is
+        actually confirmed.
+
+- [ ] **3.3 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit:
+        `feat: add tool path jail and shared executor wrapper`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
 
 ---
 
@@ -223,6 +281,10 @@ status: not_started
         **INFO** (`caplog.set_level(logging.INFO)` is required for the INFO assertion).
   - [ ] Success: `pytest tests/tools/test_read_file.py -q` passes.
 
+- [ ] **4.3 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit: `feat: add read_file tool`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
+
 ---
 
 ## Task 5: `write_file`
@@ -254,6 +316,10 @@ status: not_started
   - [ ] Path-is-an-existing-directory returns `is_error=True`.
   - [ ] `caplog`: jail rejection at **WARNING**; a non-jail error case at **INFO**.
   - [ ] Success: `pytest tests/tools/test_write_file.py -q` passes.
+
+- [ ] **5.3 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit: `feat: add write_file tool`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
 
 ---
 
@@ -303,6 +369,10 @@ status: not_started
   - [ ] Success: `pytest tests/tools/test_bash.py -q` passes and the whole file runs in a few
         seconds, not minutes.
 
+- [ ] **6.3 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit: `feat: add bash tool`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
+
 ---
 
 ## Task 7: Package wiring and import surface
@@ -327,6 +397,10 @@ status: not_started
   - [ ] Assert every name in `__all__` is accessible on the package.
   - [ ] Assert `materialize(tools.list_tools(), tmp_path)` returns three callables.
   - [ ] Success: `pytest tests/tools/test_package.py -q` passes.
+
+- [ ] **7.3 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`, then commit: `feat: wire squadron.tools public API`.
+  - [ ] Success: clean tree; `pytest tests/tools/ -q` passes.
 
 ---
 
@@ -378,15 +452,12 @@ status: not_started
         three registered tools, the jail rule, the logging contract, and the fact that nothing
         consumes tools yet.
   - [ ] Set this task file's `status` to `complete` and update `dateUpdated`.
-  - [ ] `.venv/bin/ruff format .` immediately before committing.
-  - [ ] Commit on branch
-        `261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations`, forked from
-        `main` (`git config` shows no `git.integration_branch` — confirm with
-        `cf config get git.integration_branch` before branching). Suggested message:
-        `feat: add tool registry, descriptor protocol, and core tools`.
+  - [ ] `.venv/bin/ruff format .`, then commit the documentation updates from 8.5 and 8.6:
+        `docs: close out slice 261 — tool registry and core tools`.
   - [ ] Do **not** merge, push, or delete the branch without explicit instruction from the
-        Project Manager.
-  - [ ] Success: clean tree, one commit on the slice branch, frontmatter gate passes.
+        Project Manager. The slice branch stays open until the PM says otherwise.
+  - [ ] Success: clean tree; the frontmatter gate passes; `git log --oneline <target>..HEAD` shows
+        the per-task commits from groups 1–7 plus this close-out commit.
 
 ---
 
@@ -399,7 +470,8 @@ status: not_started
 - [ ] 3. `from squadron import tools` yields exactly `read_file`, `write_file`, `bash`, with no
       other import side effects (Task 7).
 - [ ] 4. Path jail rejects `../escape`, absolute-outside, and outward symlinks for **both** file
-      tools, naming the rejected path; inside-jail absolute and relative paths work (Tasks 4.2, 5.2).
+      tools, naming the rejected path; inside-jail absolute and relative paths work
+      (Task 3.1a directly, Tasks 4.2 and 5.2 end-to-end).
 - [ ] 5. `read_file` happy path, visible truncation, and specific missing-file / directory errors
       (Task 4.2).
 - [ ] 6. `write_file` creates nested dirs, overwrites, and reports created/overwritten + bytes

@@ -14,6 +14,44 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260827
 
+### Slice 261: Task Review Findings Addressed (Phase 5)
+
+Review `261-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `94348c8`):
+2 pass, 1 concern, 2 notes. Both actionable findings addressed.
+
+**F003 (concern) — all commits batched at the end.** Correct call, and it violated the project's
+own rule ("git add and commit from project root at least once per task"). The original breakdown
+had exactly one commit checkpoint, at Task 8.6, after all eight groups were implemented; an
+interruption after Task 5 would have left nothing to resume from or bisect against. Fixed by
+distributing commits: new **Task 0** creates the slice branch (previously conflated into 8.6,
+which no longer makes sense once commits are spread out), groups 1–7 each end with a commit step
+naming its own semantic message, and 8.6 commits only the close-out documentation. A "Commit
+cadence" note under Task 0 states the invariant every commit must hold — `pytest tests/tools/ -q`
+passes — which the group ordering already makes achievable.
+
+**F005 (note) — jail helper had no task-local test.** Its stated success criterion was
+annotation/pyright-clean only, with behavioral coverage borrowed entirely from the `read_file` and
+`write_file` test tasks. Added **Task 3.1a**, testing the helper in isolation. Beyond mirroring the
+tool-level cases it adds two the tool tests do not cover: a path whose *parent* resolves outside
+the jail (the case `write_file` depends on before creating directories), and a sibling directory
+sharing a string prefix with the jail root (`…/jail` vs `…/jail_evil`) — the direct regression test
+for 3.1's "do not use `startswith`" instruction, since that is exactly the case prefix comparison
+gets wrong and `is_relative_to` gets right. A jail regression now names the jail instead of
+surfacing as two confusing tool-test failures.
+
+**F004 (note) — no load-test/CI-gating criterion.** Confirmed out of scope, no change: the byte
+limits and `BASH_TIMEOUT_S` are correctness/safety bounds verified by unit tests with monkeypatched
+constants, not a performance SLA.
+
+Also corrected while in the file: Task 3.2's success criterion claimed the wrapper "is used by all
+three tools", which is unverifiable at that point in the sequence — no tool exists yet. It now
+points at Task 8.3's full gate as the place that confirmation actually happens.
+
+Task file grew 426 → 498 lines. Over the 450 target but within the ~100-line overrun allowance, so
+it stays one file.
+
+---
+
 ### Slice 261: Task Breakdown Complete (Phase 5)
 
 **Tasks written** to `261-tasks.tool-registry-descriptor-protocol-and-core-tool-implementations.md`
