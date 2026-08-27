@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -110,3 +112,13 @@ async def test_directory_error_logs_at_info(
     records = [r for r in caplog.records if r.levelno == logging.INFO]
     assert records
     assert "directory" in records[0].getMessage()
+
+
+async def test_fifo_is_refused_instead_of_hanging(tmp_path: Path, write_file: ToolExecutor) -> None:
+    """Writing to a FIFO with no reader blocks uninterruptibly; refuse before opening."""
+    os.mkfifo(tmp_path / "pipe")
+
+    result = await asyncio.wait_for(write_file({"path": "pipe", "content": "x"}), timeout=10)
+
+    assert result.is_error is True
+    assert "not a regular file" in result.content

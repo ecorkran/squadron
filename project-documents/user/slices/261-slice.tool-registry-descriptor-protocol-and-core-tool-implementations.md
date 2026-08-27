@@ -247,14 +247,14 @@ below was run from the repo root and produced the output shown. `ruff`, `pyright
 
 ```
 $ .venv/bin/pytest tests/tools/ -q
-54 passed in 0.55s
+57 passed in 0.57s
 ```
 
 **2. No regression anywhere else.**
 
 ```
 $ .venv/bin/pytest -q
-3075 passed, 2 skipped, 5 warnings in 485.85s (0:08:05)
+3078 passed, 2 skipped, 5 warnings in 478.98s (0:07:58)
 ```
 
 The full suite takes about 8 minutes. The pre-existing `RuntimeWarning: coroutine
@@ -340,6 +340,33 @@ timeout), so backgrounded children die too. Confirmed separately: running
 `{"command": "sleep 987 & sleep 988"}` against a lowered limit leaves no matching process
 behind (`pgrep -f "sleep 98"` returns nothing).
 
+**6a. Special files are refused, not opened.** Added after the Phase 6 code review (F002).
+
+```
+$ .venv/bin/python - << 'EOF'
+import asyncio, os, tempfile, time
+from squadron import tools
+cwd = tempfile.mkdtemp()
+os.mkfifo(os.path.join(cwd, "pipe"))
+ex = tools.materialize(["read_file", "write_file"], cwd)
+async def main():
+    t = time.monotonic()
+    print("read: ", await ex["read_file"]({"path": "pipe"}))
+    print("write:", await ex["write_file"]({"path": "pipe", "content": "x"}))
+    print(f"elapsed={time.monotonic()-t:.3f}s")
+asyncio.run(main())
+EOF
+
+read:  ToolResult(content='Error: path is not a regular file: pipe', is_error=True)
+write: ToolResult(content='Error: path is not a regular file: pipe', is_error=True)
+elapsed=0.002s
+```
+
+Before the fix this reproducer hung indefinitely. Note that wrapping the call in
+`asyncio.wait_for` did **not** rescue it: `asyncio.to_thread` workers cannot be cancelled, so
+the interpreter joined the stuck thread at shutdown and hung anyway. Refusing before `open()`
+is the only reliable defense, which is why the check is a guard rather than a timeout.
+
 **7. Limits are not scattered.**
 
 ```
@@ -356,7 +383,7 @@ $ grep -rn "squadron.tools\|squadron import tools" src/
 ```
 
 Every hit is inside `src/squadron/tools/` itself. `git diff --stat main..HEAD` touches only
-`src/squadron/tools/` (6 files) and `tests/tools/` (8 files), 1088 insertions, 0 deletions —
+`src/squadron/tools/` (6 files) and `tests/tools/` (8 files) —
 the behavior-neutrality guarantee holds by construction.
 
 

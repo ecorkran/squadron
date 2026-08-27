@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -119,3 +121,30 @@ async def test_missing_file_logs_at_info(
     records = [r for r in caplog.records if r.levelno == logging.INFO]
     assert records
     assert "not found" in records[0].getMessage()
+
+
+async def test_fifo_is_refused_instead_of_hanging(tmp_path: Path, read_file: ToolExecutor) -> None:
+    """A FIFO inside the jail must not block the thread pool forever.
+
+    ``asyncio.to_thread`` workers cannot be cancelled, so an uninterruptible open() here would
+    hang the process even against a caller-side timeout. The tool refuses before opening.
+    """
+    os.mkfifo(tmp_path / "pipe")
+
+    result = await asyncio.wait_for(read_file({"path": "pipe"}), timeout=10)
+
+    assert result.is_error is True
+    assert "not a regular file" in result.content
+
+
+async def test_special_file_refusal_logs_at_info(
+    tmp_path: Path, read_file: ToolExecutor, caplog: pytest.LogCaptureFixture
+) -> None:
+    os.mkfifo(tmp_path / "pipe")
+    caplog.set_level(logging.INFO, logger="squadron.tools.builtin")
+
+    await asyncio.wait_for(read_file({"path": "pipe"}), timeout=10)
+
+    records = [r for r in caplog.records if r.levelno == logging.INFO]
+    assert records
+    assert "not a regular file" in records[0].getMessage()

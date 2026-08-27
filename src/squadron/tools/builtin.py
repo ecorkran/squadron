@@ -47,6 +47,26 @@ def _resolve_in_jail(cwd: Path, path: str) -> Path | None:
     return candidate
 
 
+def _reject_special_file(tool: str, target: Path) -> ToolResult | None:
+    """Return an error result if *target* exists and is not a regular file, else None.
+
+    A read or write against a FIFO, device node, or socket blocks in the thread pool with no
+    way to cancel it — unlike ``bash``, which can kill its subprocess. ``asyncio.to_thread``
+    workers are not interruptible, so a caller-side ``wait_for`` does not rescue the process
+    either: the interpreter joins the stuck thread at shutdown and hangs anyway. The jail
+    admits any path under the working directory, so a special file inside it is realistic
+    input, not a hypothetical. The only reliable defense is to refuse before opening.
+
+    Directories are deliberately not rejected here — the file tools report those with their own
+    specific messages.
+    """
+    if not target.exists() or target.is_dir():
+        return None
+    if not target.is_file():
+        return _error(tool, f"path is not a regular file: {target.name}")
+    return None
+
+
 def _jail_violation(tool: str, path: str) -> ToolResult:
     """Build the error result for a rejected path and log it at WARNING.
 
@@ -140,12 +160,22 @@ def _read_file_factory(cwd: Path) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             path = _require_str(args, "path")
-            target = _resolve_in_jail(cwd, path)
-            if target is None:
-                return _jail_violation(READ_FILE_NAME, path)
 
-            data = await asyncio.to_thread(target.read_bytes)
-            return ToolResult(content=_truncate(data, limits.MAX_READ_BYTES, str(target)))
+            # Every blocking syscall — the resolve/stat walk, the special-file check, and the
+            # read itself — runs in one worker thread. Resolving on the event loop would
+            # stall it on a slow or network filesystem (rules/python.md: synchronous work
+            # inside an async def must complete in under 1ms).
+            def _read() -> ToolResult:
+                target = _resolve_in_jail(cwd, path)
+                if target is None:
+                    return _jail_violation(READ_FILE_NAME, path)
+                rejection = _reject_special_file(READ_FILE_NAME, target)
+                if rejection is not None:
+                    return rejection
+                data = target.read_bytes()
+                return ToolResult(content=_truncate(data, limits.MAX_READ_BYTES, str(target)))
+
+            return await asyncio.to_thread(_read)
 
         return await _guarded(READ_FILE_NAME, run)
 
@@ -187,27 +217,31 @@ def _write_file_factory(cwd: Path) -> ToolExecutor:
             path = _require_str(args, "path")
             content = _require_str(args, "content")
 
-            target = _resolve_in_jail(cwd, path)
-            if target is None:
-                return _jail_violation(WRITE_FILE_NAME, path)
-            # The parent is jail-checked before any directory is created, so a rejected path
-            # never leaves a directory behind outside the jail.
-            if _resolve_in_jail(cwd, str(target.parent)) is None:
-                return _jail_violation(WRITE_FILE_NAME, path)
-            if target.is_dir():
-                return _error(WRITE_FILE_NAME, f"path is an existing directory: {path}")
-
-            existed = target.exists()
             payload = content.encode()
 
-            def _write() -> None:
+            # As in read_file, every blocking syscall runs in one worker thread rather than on
+            # the event loop. No separate jail check on target.parent: resolve() de-symlinks
+            # every existing component, so a target inside the jail always has a parent inside
+            # the jail — a second check cannot reject anything the first accepted, and nothing
+            # is created before that check runs.
+            def _write() -> ToolResult:
+                target = _resolve_in_jail(cwd, path)
+                if target is None:
+                    return _jail_violation(WRITE_FILE_NAME, path)
+                if target.is_dir():
+                    return _error(WRITE_FILE_NAME, f"path is an existing directory: {path}")
+                rejection = _reject_special_file(WRITE_FILE_NAME, target)
+                if rejection is not None:
+                    return rejection
+
+                existed = target.exists()
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(payload)
 
-            await asyncio.to_thread(_write)
+                verb = "Overwrote" if existed else "Created"
+                return ToolResult(content=f"{verb} {path} ({len(payload)} bytes).")
 
-            verb = "Overwrote" if existed else "Created"
-            return ToolResult(content=f"{verb} {path} ({len(payload)} bytes).")
+            return await asyncio.to_thread(_write)
 
         return await _guarded(WRITE_FILE_NAME, run)
 

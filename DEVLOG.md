@@ -14,6 +14,41 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260827
 
+### Slice 261: Code Review Findings Addressed (Phase 6)
+
+Review `261-review.code...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `a64b741`):
+2 pass, 2 concerns, 1 note. All three actionable findings verified valid and fixed.
+
+**F001 — blocking syscalls on the event loop.** `_resolve_in_jail` calls
+`Path.resolve(strict=False)`, which stats every existing path component; `write_file` also
+called `is_dir()` and `exists()` synchronously. The reads and writes were correctly pushed
+into `asyncio.to_thread`, but the syscalls *gating* them were not, violating
+`rules/python.md` ("synchronous code inside an async def must run in <1ms worst case"). Both
+executors now do all blocking work — resolve, stat, and the read/write — inside a single
+`to_thread` call, which also drops a thread hop.
+
+**F002 — no hang protection on the file tools.** The serious one, and worse than the review
+stated. A FIFO inside the jail is legal input (the jail admits any path under the working
+directory), and `read_bytes()` on it blocks forever. The reproducer did not merely stall the
+loop: wrapping it in `asyncio.wait_for(timeout=3)` did **not** rescue the process, because
+`asyncio.to_thread` workers cannot be cancelled — `wait_for` abandoned the coroutine and the
+interpreter then hung joining the stuck thread at shutdown. A caller-side timeout is therefore
+not a defense; refusing before `open()` is. Added `_reject_special_file`, which returns an
+INFO-logged error result for anything that exists and is neither a regular file nor a
+directory (directories keep their own specific message). The reproducer now returns in 0.002s.
+Three new tests cover it, including the log-level assertion.
+
+**F003 — redundant parent jail check in `write_file`.** Verified empirically across accepted
+and rejected paths: the second `_resolve_in_jail(cwd, str(target.parent))` never rejects
+anything the first check accepted, because `resolve()` de-symlinks every existing component,
+so a target inside the jail always has a parent inside it. The check was dead code whose
+comment claimed TOCTOU protection it did not provide. Removed, with a comment recording why a
+second check cannot add coverage — `test_path_whose_parent_resolves_outside_the_jail_is_rejected`
+is satisfied by the first check and still passes.
+
+Walkthrough output is byte-identical to the pre-fix run, so the changes are behavior-preserving
+on the documented paths. 57 tools tests (up from 54); full suite 3078 passed, 2 skipped.
+
 ### Slice 261: Tool Registry and Core Tools Implemented (Phase 6)
 
 New package `src/squadron/tools/` — the tool abstraction boundary for the rest of initiative
