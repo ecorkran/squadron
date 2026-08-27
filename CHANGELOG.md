@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Internal groundwork for letting non-Claude models read files, write files, and run commands
+  during a run: a tool registry and the first three tools (`read_file`, `write_file`, `bash`),
+  each confined to the working directory. Nothing uses them yet — no change to how any command
+  behaves today.
 - `/understand concept` generates a Phase 0 concept document for an existing codebase that has never
   had planning artifacts. It reads the knowledge graph for structure, your README for intent, and the
   filesystem for development practice (test tree, CI, lint config) before asking you anything — then

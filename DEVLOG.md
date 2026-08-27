@@ -14,6 +14,61 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260827
 
+### Slice 261: Tool Registry and Core Tools Implemented (Phase 6)
+
+New package `src/squadron/tools/` — the tool abstraction boundary for the rest of initiative
+260. Six modules: `limits.py` (the single home for every tool limit), `errors.py`, `models.py`
+(pure data types), `registry.py`, `builtin.py` (the three tools), `__init__.py` (public API).
+
+**Types.** `ToolResult(content, is_error=False)` and `ToolDescriptor(name, description,
+parameters, factory)`, both frozen dataclasses, plus the `ToolExecutor` / `ToolFactory`
+aliases. No `Protocol` — design decision D2: one shape, one implementer, no polymorphism to
+justify the indirection. Errors are values, never exceptions: an executor returns
+`is_error=True` rather than raising to its caller.
+
+**Registry.** Module-level dict and free functions, mirroring `providers/registry.py`, with
+one deliberate divergence — a duplicate `register` raises `ValueError` instead of silently
+overwriting. A tool name is a security-relevant surface, so two definitions of it must fail
+fast rather than resolve by import order. `materialize(names, cwd)` resolves `cwd` exactly
+once and hands the same resolved path to every factory; an unknown name raises
+`ToolNotRegisteredError` naming the offender and listing what is registered.
+
+**Jail rule.** `(cwd / path).resolve(strict=False).is_relative_to(cwd)`. One expression covers
+relative input, absolute input, and `..` traversal, because `Path.__truediv__` with an
+absolute right-hand operand yields that absolute path; `resolve()` follows symlinks first, so
+a link pointing out of the jail is rejected too. String prefix comparison is explicitly not
+used — `/tmp/jail_evil` starts with `/tmp/jail` but is not inside it, and `tests/tools/
+test_jail.py` pins exactly that case as a regression test. `write_file` jail-checks the parent
+directory *before* creating anything, so a rejected write never leaves a directory behind
+outside the jail; the tests assert the rejection is effective, not merely reported.
+
+**Logging contract** (not a suggestion — asserted by `caplog` tests on all three tools):
+WARNING for jail violations and bash timeouts, INFO for every other `is_error=True` result
+(missing file, permission denied, non-zero exit, truncation), ERROR only for the
+unexpected-exception catch-all via `logger.exception`. The INFO cases are routine
+model-probing outcomes the model itself reacts to; elevating them would train operators to
+ignore warnings.
+
+**Tools.** `read_file` (byte-truncated at `MAX_READ_BYTES` with a visible trailing marker —
+truncation is never silent), `write_file` (creates parent dirs, reports created-vs-overwritten
+plus byte count), `bash` (spawned with `start_new_session=True` so the timeout path can
+`os.killpg` the whole group, labeled stdout/stderr each truncated at `MAX_OUTPUT_BYTES`,
+non-zero exit carries the captured output back because the model needs it to react).
+Blocking filesystem work goes through `asyncio.to_thread`.
+
+Limits are read as module attributes at call time, never captured at import — that is what
+makes the monkeypatched-constant tests work, and it kept the bash timeout test at 0.5s instead
+of hanging for the real 120s. Verified separately that the process-group kill leaves no
+orphan: a command backgrounding a child dies whole.
+
+**Nothing consumes tools yet** — that is 262. `git diff --stat main..HEAD` touches only
+`src/squadron/tools/` and `tests/tools/`, 1088 insertions, 0 deletions, so behavior-neutrality
+holds by construction rather than by inspection. 54 new tests; full suite 3075 passed, 2
+skipped, no regression. Whole-repo pyright reports 1752 errors both before and after this
+branch, none of them in `squadron/tools/`, which is strict-clean on its own.
+
+Committed per task group (8 commits) rather than once at the end, per review finding F003.
+
 ### Slice 261: Task Review Findings Addressed (Phase 5)
 
 Review `261-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `94348c8`):
