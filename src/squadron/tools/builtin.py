@@ -11,11 +11,19 @@ scope here.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from squadron.tools.models import ToolResult
+from squadron.tools import limits
+from squadron.tools.models import ToolDescriptor, ToolExecutor, ToolResult
+from squadron.tools.registry import register
+
+# Canonical tool names. Defined once here and referenced everywhere else.
+READ_FILE_NAME = "read_file"
+WRITE_FILE_NAME = "write_file"
+BASH_NAME = "bash"
 
 _logger = logging.getLogger(__name__)
 
@@ -99,3 +107,57 @@ def _require_str(args: dict[str, object], key: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"argument '{key}' must be a string, got {type(value).__name__}")
     return value
+
+
+def _truncate(data: bytes, limit: int, label: str) -> str:
+    """Decode *data*, truncating to *limit* bytes with a visible trailing marker.
+
+    Truncation is never silent: the model has to know it did not see everything. Decoding
+    after the byte-level cut with ``errors="replace"`` also absorbs a split codepoint at the
+    boundary.
+    """
+    if len(data) <= limit:
+        return data.decode(errors="replace")
+    kept = data[:limit].decode(errors="replace")
+    return f"{kept}\n[truncated: {label} is {len(data)} bytes, showing first {limit}]"
+
+
+READ_FILE_PARAMETERS: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Path to the file to read, relative to the working directory.",
+        }
+    },
+    "required": ["path"],
+}
+
+
+def _read_file_factory(cwd: Path) -> ToolExecutor:
+    async def execute(args: dict[str, object]) -> ToolResult:
+        async def run() -> ToolResult:
+            path = _require_str(args, "path")
+            target = _resolve_in_jail(cwd, path)
+            if target is None:
+                return _jail_violation(READ_FILE_NAME, path)
+
+            data = await asyncio.to_thread(target.read_bytes)
+            return ToolResult(content=_truncate(data, limits.MAX_READ_BYTES, str(target)))
+
+        return await _guarded(READ_FILE_NAME, run)
+
+    return execute
+
+
+READ_FILE = ToolDescriptor(
+    name=READ_FILE_NAME,
+    description=(
+        "Read a UTF-8 text file from the working directory. Output beyond the size limit is "
+        "truncated with a visible marker."
+    ),
+    parameters=READ_FILE_PARAMETERS,
+    factory=_read_file_factory,
+)
+
+register(READ_FILE)
