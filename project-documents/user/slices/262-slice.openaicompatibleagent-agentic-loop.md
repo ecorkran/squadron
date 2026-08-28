@@ -6,7 +6,7 @@ parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: [261]
 interfaces: [263, 264, 265, 266]
 dateCreated: 20260827
-dateUpdated: 20260827
+dateUpdated: 20260828
 status: not_started
 ---
 
@@ -147,12 +147,26 @@ holds an empty executor dict, which is the flag the no-tools branch tests.
 set on the review path. The loop needs a jail root, and a silent wrong default is the failure
 mode the project rules forbid.
 
-**Decision:** when `allowed_tools` is non-empty and `cwd` is `None`, fall back to
-`Path.cwd()` — the process working directory — and log at INFO that the tool jail defaulted
-to it. This is an explicit, observable default, not a silent one. Populating `cwd` on the
-dispatch path is slice 263's job (it is the slice that gives pipelines tools at all); until
-then no non-SDK dispatch has tools, so the fallback is unreachable from that path in
-practice. When `allowed_tools` is empty, `cwd` is not consulted at all.
+**Decision (revised 20260828 — review F002):** when `allowed_tools` resolves to a non-empty
+tool set and `cwd` is `None`, **raise `ProviderError`** at agent construction. There is no
+default jail root.
+
+The original decision here was to fall back to `Path.cwd()` with an INFO log, defended as
+"explicit and observable." That defense was wrong. `cwd` is the trust boundary for `write_file`
+and `bash` (arch §CWD as the trust boundary), and the project rule is "never use silent
+fallback values" — logging a fallback does not stop it from being one. A caller that asks for
+write-capable tools without saying where they may write has a configuration defect, and the
+correct response is to refuse, not to guess the process working directory and write into
+whatever tree the process happens to be running from.
+
+Reachability today (verified, not assumed): `dispatch.py:63` sets `cwd=None` but never sets
+`allowed_tools`, so it materializes no tools and never reaches this check.
+`review_client.py:116` and `metrology/audit.py:621` both set `cwd`. So no current caller trips
+the raise; it exists to keep a future one — a partial 263 rollout, a new integration, a test
+harness — from silently escaping the jail.
+
+When `allowed_tools` is empty or `None`, `cwd` is not consulted at all and no error is raised;
+that is the path every caller takes today.
 
 ### Tool schema construction
 
@@ -279,12 +293,25 @@ Asserted by `caplog` tests, following the 261 precedent:
 
 | Level | Event |
 |---|---|
-| DEBUG | each tool call (name, args) and each result (truncated), each iteration boundary |
-| INFO | per-loop summary on exit: iterations used, tool-call count; tool-jail cwd fallback |
-| WARNING | dropped unknown tool names; budget guard fired; max-iterations reached |
+| DEBUG | each successful tool call (name, args) and its result (truncated), each iteration boundary |
+| INFO | per-loop summary on exit: iterations used, tool-call count |
+| WARNING | **malformed JSON in `arguments`**; **model named a tool not in the allowed set**; dropped unknown declared names (D1); budget guard fired; max-iterations reached |
 | ERROR | executor raised (via `logger.exception`) |
 
-Intermediate turn *content* is DEBUG only — that is the observability substitute for not
+**Revised 20260828 (review F001).** The two bolded rows were originally DEBUG, folded in with
+routine per-call logging. They are protocol violations by the model, they originate in
+loop code written by this slice, and `.claude/rules/review-code.md` (Failure-Mode Enumeration)
+requires every identified failure mode to be observable at WARNING+ or by metric — DEBUG does
+not meet that bar. The asymmetry was real and verified: the slice-261 tool layer already logs
+path-escape at WARNING ([builtin.py:76](src/squadron/tools/builtin.py#L76)) and bash timeout at
+WARNING ([builtin.py:308](src/squadron/tools/builtin.py#L308)), so the loop calling those tools
+would have been quieter than the tools themselves.
+
+These stay non-fatal — they still return an error tool result so the model can correct itself
+(arch §Tool argument validation). WARNING reflects that a turn was wasted on a malformed call,
+which is exactly what a user debugging a bad model needs to see without `-vv`.
+
+Intermediate turn *content* remains DEBUG only — that is the observability substitute for not
 streaming intermediate turns (arch §Loop visibility).
 
 ## Implementation Details
@@ -349,9 +376,11 @@ unreachable from this caller because of the D1 pre-filter, which is intentional.
 - [ ] A multi-tool single turn dispatches every call and appends one `role: "tool"` result per
       `tool_call_id`, in call order.
 - [ ] Malformed JSON arguments produce an error tool result, not an exception; the loop
-      continues.
+      continues; **a WARNING is logged** (asserted via `caplog`).
 - [ ] An unknown tool name in a model response produces an error tool result naming the
-      allowed tools; the loop continues.
+      allowed tools; the loop continues; **a WARNING is logged** (asserted via `caplog`).
+- [ ] Constructing an agent with a non-empty tool set and `cwd=None` raises `ProviderError`;
+      constructing with an empty tool set and `cwd=None` does not.
 - [ ] Unknown names in `allowed_tools` are dropped with a WARNING; known names still
       materialize (D1).
 - [ ] `agent.max_tool_iterations` fires a `ProviderError` through the normal failure path with
@@ -374,6 +403,13 @@ unreachable from this caller because of the D1 pre-filter, which is intentional.
   turn is a plausible-looking non-answer; the project rule against silent fallbacks applies.
 - **D4 — budget guard warns and continues rather than terminating.** It gives the model one
   chance to finalize; `max_iterations` remains the hard stop. Truncation is out of scope.
+- **D8 — no `cwd` fallback; refuse instead.** Revised 20260828 (review F002). A non-empty tool
+  set with `cwd=None` raises `ProviderError` at construction. Supersedes the original
+  `Path.cwd()`-with-INFO-log decision, which was a silent fallback wearing a log line. No
+  current caller trips it (verified: dispatch sets no tools; review and audit both set `cwd`).
+- **D9 — model protocol violations log at WARNING.** Revised 20260828 (review F001). Malformed
+  tool-call JSON and unknown tool names in model responses are WARNING, not DEBUG, matching the
+  slice-261 tool layer and the Failure-Mode Enumeration rule. They remain non-fatal.
 - **D7 — loop limits are config keys, not source constants.** Revised 20260827 after review.
   Both caps follow the `review.max_file_size_bytes` precedent. Non-SDK reviews run frequently
   against models with widely differing context windows; a source-baked cap would require a
@@ -423,9 +459,20 @@ Messages contain only turn 2's text.
 turn 1's content and no `MessageType.system` tool-call message is emitted when tools are
 configured.
 
-**4. Error paths return to the model rather than crashing.** Scripted responses for malformed
-JSON args and an unknown tool name; assert the loop reaches turn 2 and the history contains a
-`role: "tool"` entry whose content names the failure.
+**4. Error paths return to the model rather than crashing, and are observable.** Scripted
+responses for malformed JSON args and an unknown tool name; assert the loop reaches turn 2,
+the history contains a `role: "tool"` entry whose content names the failure, and `caplog`
+captured a WARNING for each (D9). The log assertion is the half that catches a regression
+silently swallowing a model protocol violation.
+
+**4a. A tool set with no jail root is refused (D8).**
+
+```bash
+.venv/bin/pytest tests/providers/openai/test_agentic_loop.py -q -k cwd
+```
+
+Assert `ProviderError` on constructing an agent with `allowed_tools=["read_file"]` and
+`cwd=None`, and no error with an empty tool set and `cwd=None`.
 
 **5. Guards fire.** With `agent.max_tool_iterations` set to 2 in a temp-dir config and an
 endpoint that always returns a tool call, assert `ProviderError` is raised and a WARNING is

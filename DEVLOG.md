@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260827
+dateUpdated: 20260828
 
 ---
 
@@ -11,6 +11,41 @@ dateUpdated: 20260827
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260828
+
+### Slice 262: Slice Review Findings Addressed (Phase 5)
+
+Review `262-review.slice...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `f576aaf`):
+2 pass, 2 concerns. Both concerns verified valid against the shipped code and fixed in the
+design.
+
+**F002 — `cwd` fallback for a security-relevant jail root.** The original design fell back to
+`Path.cwd()` with an INFO log when tools were configured but `cwd` was None, defended as
+"explicit and observable." That defense was wrong: logging a fallback does not stop it being
+one, and `cwd` is the trust boundary for `write_file` and `bash`. Revised (D8) to raise
+`ProviderError` at construction — no default jail root. Checked every caller rather than
+assuming: `dispatch.py:63` sets `cwd=None` but never sets `allowed_tools` (materializes no
+tools, never reaches the check); `review_client.py:116` and `metrology/audit.py:621` both set
+`cwd`. So nothing trips the raise today; it exists so a future caller cannot silently write
+into whatever tree the process happens to be running from.
+
+**F001 — loop protocol failures were DEBUG-only.** Malformed tool-call JSON and unknown tool
+names in model responses originate in loop code this slice writes, and the Failure-Mode
+Enumeration rule requires WARNING+ observability. The asymmetry the review claimed is real and
+verified: slice 261's tool layer already logs path-escape (`builtin.py:76`) and bash timeout
+(`builtin.py:308`) at WARNING, so the loop would have been quieter than the tools it calls.
+Revised (D9) to WARNING; both stay non-fatal and still return an error tool result. Success
+criteria updated to assert the log signal via `caplog`, not just the returned result — the
+review correctly noted a regression swallowing a protocol violation would have passed the
+original criteria.
+
+Incidental finding while verifying F002: `metrology/audit.py` is a fourth caller passing Claude
+vocabulary (`[Read, Glob, Grep, Bash]`), alongside the six review templates. Strengthens D1 —
+the unknown-name filter is not review-template-specific.
+
+Both PASS findings (scope/dependency alignment; bash-hang handling delegated to the tool layer)
+needed no action.
 
 ## 20260827
 
