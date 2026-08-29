@@ -1,8 +1,18 @@
-"""Translation helpers: OpenAI response data → squadron Message objects."""
+"""Translation helpers: OpenAI response data → squadron Message objects.
+
+Also hosts the OpenAI wire-protocol shapes for tool schemas and message-history
+entries (D5) — one home for the request/response shape prevents drift between
+callers that build them.
+"""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from squadron.core.models import Message, MessageType
+
+if TYPE_CHECKING:
+    from squadron.tools import ToolDescriptor
 
 
 def build_text_message(
@@ -58,3 +68,41 @@ def build_messages(
     for tc in tool_calls_list:
         messages.append(build_tool_call_message(tc, agent_name))
     return messages
+
+
+def build_tool_schemas(descriptors: list[ToolDescriptor]) -> list[dict[str, object]]:
+    """Map tool descriptors to the OpenAI ``tools[]`` request shape."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": d.name,
+                "description": d.description,
+                "parameters": d.parameters,
+            },
+        }
+        for d in descriptors
+    ]
+
+
+def build_assistant_history_entry(
+    text: str,
+    tool_calls: list[dict[str, object]],
+) -> dict[str, object]:
+    """Build the assistant turn's history entry in OpenAI format.
+
+    ``content`` is ``None`` when ``text`` is empty and ``tool_calls`` are present;
+    otherwise a plain ``{"role": "assistant", "content": text}`` entry.
+    """
+    if tool_calls:
+        return {
+            "role": "assistant",
+            "content": text if text else None,
+            "tool_calls": tool_calls,
+        }
+    return {"role": "assistant", "content": text}
+
+
+def build_tool_result_entry(tool_call_id: str, content: str) -> dict[str, object]:
+    """Build a ``role: "tool"`` history entry for a single tool-call result."""
+    return {"role": "tool", "tool_call_id": tool_call_id, "content": content}

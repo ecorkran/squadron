@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from squadron.core.models import MessageType
 from squadron.providers.openai.translation import (
+    build_assistant_history_entry,
     build_messages,
     build_text_message,
     build_tool_call_message,
+    build_tool_result_entry,
+    build_tool_schemas,
 )
+from squadron.tools import ToolDescriptor, ToolResult
 
 _AGENT = "test-agent"
 _MODEL = "gpt-4o-mini"
@@ -75,3 +79,75 @@ class TestBuildMessages:
 
     def test_empty_returns_empty_list(self) -> None:
         assert build_messages("", [], _AGENT, _MODEL) == []
+
+
+def _make_descriptor(name: str) -> ToolDescriptor:
+    async def _executor(_args: dict[str, object]) -> ToolResult:
+        return ToolResult(content="ok")
+
+    return ToolDescriptor(
+        name=name,
+        description=f"{name} description",
+        parameters={"type": "object", "properties": {}},
+        factory=lambda _cwd: _executor,
+    )
+
+
+class TestBuildToolSchemas:
+    def test_maps_descriptors_to_openai_shape(self) -> None:
+        descriptors = [_make_descriptor("read_file"), _make_descriptor("write_file")]
+        schemas = build_tool_schemas(descriptors)
+        assert schemas == [
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_file",
+                    "description": "read_file description",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_file",
+                    "description": "write_file description",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+        ]
+
+    def test_parameters_passed_through_unchanged(self) -> None:
+        params = {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]}
+        descriptor = ToolDescriptor(
+            name="t",
+            description="d",
+            parameters=params,
+            factory=lambda _cwd: lambda _args: None,  # type: ignore[arg-type,return-value]
+        )
+        schemas = build_tool_schemas([descriptor])
+        assert schemas[0]["function"]["parameters"] is params
+
+    def test_empty_list_returns_empty_list(self) -> None:
+        assert build_tool_schemas([]) == []
+
+
+class TestBuildAssistantHistoryEntry:
+    def test_text_only(self) -> None:
+        entry = build_assistant_history_entry("Hello", [])
+        assert entry == {"role": "assistant", "content": "Hello"}
+
+    def test_tool_calls_only_empty_text(self) -> None:
+        tcs = [{"id": "c1", "function": {"name": "tool_a", "arguments": "{}"}}]
+        entry = build_assistant_history_entry("", tcs)
+        assert entry == {"role": "assistant", "content": None, "tool_calls": tcs}
+
+    def test_mixed_text_and_tool_calls(self) -> None:
+        tcs = [{"id": "c1", "function": {"name": "tool_a", "arguments": "{}"}}]
+        entry = build_assistant_history_entry("Some text", tcs)
+        assert entry == {"role": "assistant", "content": "Some text", "tool_calls": tcs}
+
+
+class TestBuildToolResultEntry:
+    def test_exact_shape(self) -> None:
+        entry = build_tool_result_entry("call_1", "the result")
+        assert entry == {"role": "tool", "tool_call_id": "call_1", "content": "the result"}

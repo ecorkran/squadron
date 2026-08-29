@@ -81,14 +81,14 @@ status: not_started
 
 ## Task 0: Branch
 
-- [ ] **0.1 Create the slice branch** — Effort: 1/5
-  - [ ] Confirm the integration target: `cf config get git.integration_branch`. An empty value
+- [x] **0.1 Create the slice branch** — Effort: 1/5
+  - [x] Confirm the integration target: `cf config get git.integration_branch`. An empty value
         means the target is `main`.
-  - [ ] From the target, create and switch to `262-slice.openaicompatibleagent-agentic-loop`:
+  - [x] From the target, create and switch to `262-slice.openaicompatibleagent-agentic-loop`:
         `git checkout -b 262-slice.openaicompatibleagent-agentic-loop <target>`.
-  - [ ] If the branch already exists, `git checkout` it instead. Never start from another unit's
+  - [x] If the branch already exists, `git checkout` it instead. Never start from another unit's
         branch.
-  - [ ] Success: `git branch --show-current` prints the slice branch and `git status` is clean.
+  - [x] Success: `git branch --show-current` prints the slice branch and `git status` is clean.
 
 ### Commit cadence for this slice
 
@@ -101,27 +101,27 @@ push, or delete the branch at any point without explicit instruction from the Pr
 
 ## Task 1: Config keys for loop limits
 
-- [ ] **1.1 Register `agent.max_tool_iterations` and `agent.max_history_chars`** — Effort: 1/5
-  - [ ] In `src/squadron/config/keys.py`, add two `ConfigKey` entries to `CONFIG_KEYS`
+- [x] **1.1 Register `agent.max_tool_iterations` and `agent.max_history_chars`** — Effort: 1/5
+  - [x] In `src/squadron/config/keys.py`, add two `ConfigKey` entries to `CONFIG_KEYS`
         following the exact shape of `review.max_file_size_bytes` (line 98):
         `agent.max_tool_iterations` (`type_=int`, `default=20`, description referencing the
         max-iterations guard) and `agent.max_history_chars` (`type_=int`, `default=400_000`,
         description referencing the history-budget guard).
-  - [ ] Do not add any config plumbing beyond the `CONFIG_KEYS` entries — reading them is the
+  - [x] Do not add any config plumbing beyond the `CONFIG_KEYS` entries — reading them is the
         agent's job (Task 6).
-  - [ ] Success: `python -c "from squadron.config.keys import get_default; print(get_default('agent.max_tool_iterations'), get_default('agent.max_history_chars'))"`
+  - [x] Success: `python -c "from squadron.config.keys import get_default; print(get_default('agent.max_tool_iterations'), get_default('agent.max_history_chars'))"`
         prints `20 400000`.
 
-- [ ] **1.2 Test the new keys** — Effort: 1/5
-  - [ ] Add or extend a config-keys test asserting both keys exist in `CONFIG_KEYS`, have the
+- [x] **1.2 Test the new keys** — Effort: 1/5
+  - [x] Add or extend a config-keys test asserting both keys exist in `CONFIG_KEYS`, have the
         correct `type_` and `default`, and round-trip through `get_config`/`get_typed_config`
         with a temp-dir `cwd` that has no override (returns the default).
-  - [ ] Success: `.venv/bin/pytest tests/config/ -q` passes, including the new/extended test.
+  - [x] Success: `.venv/bin/pytest tests/config/ -q` passes, including the new/extended test.
 
-- [ ] **1.3 Commit** — Effort: 1/5
-  - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "feat: add agent loop-limit config keys"`
-  - [ ] Success: clean tree; `pytest tests/config/ -q` passes on the new commit.
+- [x] **1.3 Commit** — Effort: 1/5
+  - [x] `.venv/bin/ruff format .`
+  - [x] `git add -A && git commit -m "feat: add agent loop-limit config keys"`
+  - [x] Success: clean tree; `pytest tests/config/ -q` passes on the new commit.
 
 ---
 
