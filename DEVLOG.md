@@ -14,6 +14,34 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260828
 
+### Slice 262: Task Breakdown (Phase 5)
+
+Task file written: `262-tasks.openaicompatibleagent-agentic-loop.md`, 8 task groups (branch;
+config keys; constructor threading; translation helpers; `_call_api`/`_stream_turn` split;
+tool-call execution; the loop itself; full-suite verification; close-out), each ending in a
+commit, mirroring slice 261's per-group cadence.
+
+Structured around the design's two structural gaps and two review-driven fixes:
+
+- Task 2 threads `allowed_tools`/`cwd` through the constructor and applies D8 (raise
+  `ProviderError` when a non-empty tool set has no `cwd`) and D1 (drop unknown declared names
+  with a WARNING) at construction time — before any registry call, per the design's ordering
+  requirement (Constraint 3: the D8 check must use the *requested* set, not the post-D1-filter
+  one, or a caller requesting only unknown names with no `cwd` would silently skip the check).
+- Task 4 extracts `_stream_turn` from `_call_api` and pins the no-tools path as a hard
+  regression gate: the existing 15-test suite, including
+  `test_handle_message_yields_system_for_tool_call`, must pass with **zero source
+  modifications** before Task 5 proceeds.
+- Task 5 implements D9 (WARNING, not DEBUG, for malformed tool-call JSON and unknown tool
+  names) with a five-branch test matrix (malformed JSON, unknown name, executor error-result,
+  executor raises, success) asserting the log level of each.
+- Task 6 tests all three termination conditions (normal, max-iterations, history-budget)
+  against real temp-dir config files rather than monkeypatched module attributes — the loop
+  limits are config keys (Task 1), not source constants, so the test needs to prove the keys
+  are actually wired, not just that a patched variable is read.
+- Task 8 explicitly notes the D1 WARNING window continues on every non-SDK review until slice
+  265 migrates template vocabulary — not a defect to chase down in this slice's close-out.
+
 ### Slice 262: Slice Review Findings Addressed (Phase 5)
 
 Review `262-review.slice...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `f576aaf`):
