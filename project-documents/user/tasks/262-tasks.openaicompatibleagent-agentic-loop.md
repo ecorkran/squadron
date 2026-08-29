@@ -5,9 +5,9 @@ project: squadron
 lldReference: project-documents/user/slices/262-slice.openaicompatibleagent-agentic-loop.md
 parent: project-documents/user/architecture/260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: [261]
-projectState: Phase 5 design complete; both slice-review CONCERNS findings (F001, F002) addressed in the design (commit 0f88c66). Slice 261 (tool registry) is merged to main. No agent, provider, or config code has changed for this slice yet.
+projectState: Phase 5 tasks complete; tasks-review CONCERNS findings (F001, F002) and note (F006) addressed. Task 2/3 swapped so translation helpers precede constructor threading; added a create_agent-level test for the tools-configured wiring path; Task 4.3 resolved to inline the no-tools path rather than keep a `_call_api` wrapper. Slice 261 (tool registry) is merged to main. No agent, provider, or config code has changed for this slice yet.
 dateCreated: 20260828
-dateUpdated: 20260828
+dateUpdated: 20260829
 status: not_started
 ---
 
@@ -72,7 +72,7 @@ status: not_started
    Order matters: the empty-vs-non-empty check for the D8 raise is against the *requested*
    `allowed_tools` from config, not the post-D1-filter materialized set — otherwise a caller
    requesting only unknown names with no `cwd` would silently skip the cwd check. Confirm this
-   against the design's decision text in Task 2 before writing the raise condition.
+   against the design's decision text in Task 3 before writing the raise condition.
 4. **`caplog` needs an explicit level.** Tests asserting WARNING or INFO records must call
    `caplog.set_level(logging.WARNING)` / `logging.INFO` — default propagation captures WARNING+
    only from the root, and this project's tests set the level explicitly per the 261 precedent.
@@ -108,7 +108,7 @@ push, or delete the branch at any point without explicit instruction from the Pr
         max-iterations guard) and `agent.max_history_chars` (`type_=int`, `default=400_000`,
         description referencing the history-budget guard).
   - [ ] Do not add any config plumbing beyond the `CONFIG_KEYS` entries — reading them is the
-        agent's job (Task 4).
+        agent's job (Task 6).
   - [ ] Success: `python -c "from squadron.config.keys import get_default; print(get_default('agent.max_tool_iterations'), get_default('agent.max_history_chars'))"`
         prints `20 400000`.
 
@@ -125,9 +125,54 @@ push, or delete the branch at any point without explicit instruction from the Pr
 
 ---
 
-## Task 2: Thread `allowed_tools` and `cwd` into the agent constructor
+## Task 2: Protocol helpers in `translation.py`
 
-- [ ] **2.1 Extend `OpenAICompatibleAgent.__init__`** — Effort: 2/5
+*(Reordered ahead of constructor threading — review F001: the constructor task needs
+`build_tool_schemas`, so the helper must exist first. Translation helpers have no dependency
+on the constructor work.)*
+
+- [ ] **2.1 `build_tool_schemas`** — Effort: 2/5
+  - [ ] Add `build_tool_schemas(descriptors: list[ToolDescriptor]) -> list[dict[str, object]]` to
+        `src/squadron/providers/openai/translation.py`, mapping each descriptor to
+        `{"type": "function", "function": {"name": d.name, "description": d.description,
+        "parameters": d.parameters}}` per the design's Tool Schema Construction section. Pure
+        function, no I/O.
+  - [ ] Success: unit test with two hand-built `ToolDescriptor` values asserts the exact output
+        shape, including that `parameters` is passed through unchanged.
+
+- [ ] **2.2 `build_assistant_history_entry`** — Effort: 2/5
+  - [ ] Move the logic currently in `agent.py`'s `_append_assistant_history` (lines 122-136) into
+        `translation.py` as `build_assistant_history_entry(text: str, tool_calls: list[dict[str,
+        object]]) -> dict[str, object]`, preserving behavior exactly: `content=None` when `text`
+        is empty and `tool_calls` is non-empty; plain `{"role": "assistant", "content": text}`
+        when there are no tool calls.
+  - [ ] Success: a test with (a) text-only, (b) tool-calls-only (empty text), and (c) mixed
+        text+tool-calls inputs asserts the three known output shapes match what
+        `_append_assistant_history` produces today (compare against the pre-move behavior, e.g.
+        by running the existing `test_agent.py` history-shape assertions before and after).
+
+- [ ] **2.3 `build_tool_result_entry`** — Effort: 1/5
+  - [ ] Add `build_tool_result_entry(tool_call_id: str, content: str) -> dict[str, object]`
+        returning `{"role": "tool", "tool_call_id": tool_call_id, "content": content}`.
+  - [ ] Success: a one-line unit test asserts the exact dict shape.
+
+- [ ] **2.4 Test all three together** — Effort: 1/5
+  - [ ] Add `tests/providers/openai/test_translation.py` cases for 2.1–2.3 if not already
+        colocated with the implementation tasks above (this task exists to confirm nothing was
+        skipped — check the file, do not duplicate tests already written).
+  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_translation.py -q` passes with the
+        three new functions covered.
+
+- [ ] **2.5 Commit** — Effort: 1/5
+  - [ ] `.venv/bin/ruff format .`
+  - [ ] `git add -A && git commit -m "feat: add OpenAI tool-protocol helpers to translation.py"`
+  - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
+
+---
+
+## Task 3: Thread `allowed_tools` and `cwd` into the agent constructor
+
+- [ ] **3.1 Extend `OpenAICompatibleAgent.__init__`** — Effort: 2/5
   - [ ] Add two keyword-only parameters with defaults so existing call sites are unaffected:
         `allowed_tools: list[str] | None = None`, `cwd: str | None = None`.
   - [ ] Import `squadron.tools` (the package, not `squadron.tools.registry`) so built-in tools
@@ -144,14 +189,14 @@ push, or delete the branch at any point without explicit instruction from the Pr
   - [ ] If the requested set is empty, set `self._tool_executors = {}` and do not touch `cwd` at
         all (no check, no registry call) — this is the path every current caller takes.
   - [ ] Build `self._tool_schemas` once from the materialized names via the schema helper
-        (Task 3.1) — empty list when there are no tools.
-  - [ ] Store `self._cwd = cwd` for later use by the config reads in Task 4.
-  - [ ] Success (interim, proven by 2.2): constructing with no tools behaves as before;
+        (Task 2.1) — empty list when there are no tools.
+  - [ ] Store `self._cwd = cwd` for later use by the config reads in Task 6.
+  - [ ] Success (interim, proven by 3.2): constructing with no tools behaves as before;
         constructing with a mix of one known and one unknown name materializes the known one and
         logs a WARNING for the unknown one; constructing with a non-empty known set and
         `cwd=None` raises `ProviderError`.
 
-- [ ] **2.2 Test constructor behavior** — Effort: 2/5
+- [ ] **3.2 Test constructor behavior** — Effort: 2/5
   - [ ] `tests/providers/openai/test_agent.py` or a new `tests/providers/openai/
         test_agentic_loop.py` (Task 8 decides the final file split — write here for now):
         constructing with `allowed_tools=None` and `cwd=None` does not raise and yields empty
@@ -167,7 +212,7 @@ push, or delete the branch at any point without explicit instruction from the Pr
   - [ ] Success: `.venv/bin/pytest tests/providers/openai/ -q -k "construct or cwd or tool_set"`
         passes (adjust the `-k` filter to match the test names actually written).
 
-- [ ] **2.3 Thread the fields through `OpenAICompatibleProvider.create_agent`** — Effort: 1/5
+- [ ] **3.3 Thread the fields through `OpenAICompatibleProvider.create_agent`** — Effort: 1/5
   - [ ] In `src/squadron/providers/openai/provider.py`, pass `allowed_tools=config.allowed_tools`
         and `cwd=config.cwd` into the `OpenAICompatibleAgent(...)` construction at line 57.
   - [ ] No other change to `create_agent` — credential resolution and client construction are
@@ -176,50 +221,22 @@ push, or delete the branch at any point without explicit instruction from the Pr
         (it exercises `create_agent` without tools, so behavior is unchanged there); a manual
         read of the diff shows only the two new keyword arguments added.
 
-- [ ] **2.4 Commit** — Effort: 1/5
-  - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "feat: thread allowed_tools and cwd into OpenAICompatibleAgent"`
-  - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
-
----
-
-## Task 3: Protocol helpers in `translation.py`
-
-- [ ] **3.1 `build_tool_schemas`** — Effort: 2/5
-  - [ ] Add `build_tool_schemas(descriptors: list[ToolDescriptor]) -> list[dict[str, object]]` to
-        `src/squadron/providers/openai/translation.py`, mapping each descriptor to
-        `{"type": "function", "function": {"name": d.name, "description": d.description,
-        "parameters": d.parameters}}` per the design's Tool Schema Construction section. Pure
-        function, no I/O.
-  - [ ] Success: unit test with two hand-built `ToolDescriptor` values asserts the exact output
-        shape, including that `parameters` is passed through unchanged.
-
-- [ ] **3.2 `build_assistant_history_entry`** — Effort: 2/5
-  - [ ] Move the logic currently in `agent.py`'s `_append_assistant_history` (lines 122-136) into
-        `translation.py` as `build_assistant_history_entry(text: str, tool_calls: list[dict[str,
-        object]]) -> dict[str, object]`, preserving behavior exactly: `content=None` when `text`
-        is empty and `tool_calls` is non-empty; plain `{"role": "assistant", "content": text}`
-        when there are no tool calls.
-  - [ ] Success: a test with (a) text-only, (b) tool-calls-only (empty text), and (c) mixed
-        text+tool-calls inputs asserts the three known output shapes match what
-        `_append_assistant_history` produces today (compare against the pre-move behavior, e.g.
-        by running the existing `test_agent.py` history-shape assertions before and after).
-
-- [ ] **3.3 `build_tool_result_entry`** — Effort: 1/5
-  - [ ] Add `build_tool_result_entry(tool_call_id: str, content: str) -> dict[str, object]`
-        returning `{"role": "tool", "tool_call_id": tool_call_id, "content": content}`.
-  - [ ] Success: a one-line unit test asserts the exact dict shape.
-
-- [ ] **3.4 Test all three together** — Effort: 1/5
-  - [ ] Add `tests/providers/openai/test_translation.py` cases for 3.1–3.3 if not already
-        colocated with the implementation tasks above (this task exists to confirm nothing was
-        skipped — check the file, do not duplicate tests already written).
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_translation.py -q` passes with the
-        three new functions covered.
+- [ ] **3.4 Test `create_agent` with tools configured (review F002)** — Effort: 2/5
+  - [ ] Task 3.3's success bar alone (unmodified `test_provider.py` + a manual diff read) does
+        not exercise the tools-configured path through `create_agent` — it only proves the
+        no-tools case is unchanged. Add a dedicated test that builds an `AgentConfig` with a
+        non-empty `allowed_tools` (e.g. `["read_file"]`) and a valid `cwd`, calls
+        `OpenAICompatibleProvider.create_agent(config)`, and asserts on the **returned agent
+        object** — not just on the constructor directly — that its materialized tool set and
+        `cwd` reflect what was passed in (e.g. `agent._tool_executors` contains `read_file`,
+        `agent._cwd == config.cwd`). This is the wiring correctness-of-cost property the slice
+        exists to guarantee; without it, a future edit to `create_agent` could silently drop the
+        threading and nothing would catch it.
+  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_provider.py -q -k tools` passes.
 
 - [ ] **3.5 Commit** — Effort: 1/5
   - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "feat: add OpenAI tool-protocol helpers to translation.py"`
+  - [ ] `git add -A && git commit -m "feat: thread allowed_tools and cwd into OpenAICompatibleAgent"`
   - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
 
 ---
@@ -252,8 +269,12 @@ push, or delete the branch at any point without explicit instruction from the Pr
         kwarg in the captured `create()` call; a stream with `tools=[...]` passed does.
   - [ ] Success: `.venv/bin/pytest tests/providers/openai/ -q -k stream_turn` passes.
 
-- [ ] **4.3 Rebuild `_call_api` (or inline it into `handle_message`) on top of `_stream_turn`**
-      — Effort: 2/5
+- [ ] **4.3 Inline the no-tools path into `handle_message`, removing `_call_api`** — Effort: 2/5
+  - [ ] Delete `_call_api` as a named method; its call-and-translate logic (now just a few lines
+        given `_stream_turn` does the request/aggregate work) lives directly in `handle_message`
+        for the no-tools branch (review F006 — resolves the task's original open choice between
+        keeping `_call_api` as a wrapper or inlining it: inline, since a same-file
+        one-line-forwarding wrapper adds indirection `_stream_turn` already replaced).
   - [ ] With no tools configured, `handle_message` must call `_stream_turn(self._history,
         tools=None)`, append the assistant turn to `self._history` via
         `translation.build_assistant_history_entry`, and yield
@@ -261,7 +282,7 @@ push, or delete the branch at any point without explicit instruction from the Pr
         output, including the tool-call-as-system-Message case, reproduced through the new
         primitive rather than the old monolithic `_call_api`.
   - [ ] Delete the now-unused parts of the old `_call_api`/`_append_assistant_history` bodies
-        once their logic lives in `_stream_turn` (Task 4.1) and `translation.py` (Task 3.2). Do
+        once their logic lives in `_stream_turn` (Task 4.1) and `translation.py` (Task 2.2). Do
         not leave dead code.
   - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_agent.py -q` passes **unmodified**
         — every one of the original 15 tests, byte-for-byte, including
@@ -473,7 +494,7 @@ push, or delete the branch at any point without explicit instruction from the Pr
 - [ ] 1. No-tools behavior unchanged: `tests/providers/openai/test_agent.py` passes with zero
       source modifications, including `test_handle_message_yields_system_for_tool_call` (Task
       4.3).
-- [ ] 2. `create_agent` threads `allowed_tools` and `cwd` into the agent (Task 2.3).
+- [ ] 2. `create_agent` threads `allowed_tools` and `cwd` into the agent (Tasks 3.3, 3.4).
 - [ ] 3. `tools` schema sent only when tools are configured, verified on captured `create()`
       kwargs (Tasks 4.1, 4.2).
 - [ ] 4. Tool-call turn continues the loop; no-tool-call turn terminates and its content is
@@ -485,9 +506,9 @@ push, or delete the branch at any point without explicit instruction from the Pr
 - [ ] 8. Unknown tool name in a response → error tool result + WARNING, loop continues (Tasks
       5.1, 5.2).
 - [ ] 9. Non-empty tool set with `cwd=None` raises `ProviderError`; empty set with `cwd=None`
-      does not (Tasks 2.1, 2.2).
+      does not (Tasks 3.1, 3.2).
 - [ ] 10. Unknown *declared* names dropped with WARNING; known names still materialize (Tasks
-      2.1, 2.2).
+      3.1, 3.2).
 - [ ] 11. `agent.max_tool_iterations` fires `ProviderError` + WARNING (Task 6.4).
 - [ ] 12. History budget guard appends its message once and logs WARNING once (Task 6.5).
 - [ ] 13. Both loop limits are registered config keys via `get_typed_config`, honoring a

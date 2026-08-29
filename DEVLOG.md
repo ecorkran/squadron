@@ -2,13 +2,48 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260828
+dateUpdated: 20260829
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260829
+
+### Slice 262: Task Review Findings Addressed (Phase 5)
+
+Review `262-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `e9bc278`):
+2 pass, 2 concerns, 1 note. All three actionable findings verified against the task file's
+actual text and fixed.
+
+**F001 — Task 2 called a helper Task 3 hadn't built yet.** The original constructor-threading
+task (then Task 2) built `self._tool_schemas` via `translation.build_tool_schemas`, which
+wasn't implemented until Task 3.1 — sequenced after Task 2's own commit checkpoint. Executed in
+order, Task 2's commit would have referenced a function that didn't exist. Fixed by swapping
+the two groups: translation helpers are now Task 2 (no dependency on constructor work),
+constructor threading is Task 3. All internal cross-references (six of them, found by a full
+grep sweep) updated to match, including two pre-existing stale references the swap did not
+cause (config-limit reads pointed at "Task 4" when they actually happen in the loop, Task 6).
+
+**F002 — no dedicated test for the `create_agent`-level wiring path.** Task 3.3 (threading
+`allowed_tools`/`cwd` through `create_agent`) had only "existing test passes unmodified" (which
+exercises just the no-tools case) plus a manual diff read as its success bar — nothing would
+catch a future edit silently dropping the wiring. Added Task 3.4: a test that calls
+`create_agent` with a populated `AgentConfig.allowed_tools`/`cwd` and asserts on the *returned
+agent object* that materialization actually happened, not just on the constructor called
+directly.
+
+**F006 (note) — Task 4.3 left `_call_api` vs. inline as an open choice.** Resolved: `_call_api`
+is removed once `_stream_turn` exists, since a same-file one-line-forwarding wrapper adds
+indirection the split already replaced. Title and body updated to state this directly rather
+than leave it as a judgment call for whoever implements it.
+
+The three remaining PASS findings (success-criteria traceability; distributed commit cadence;
+no NFR restated so no load-test task needed) required no action.
 
 ---
 
