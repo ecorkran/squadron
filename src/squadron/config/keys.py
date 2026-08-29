@@ -271,6 +271,24 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "Exceeding it is treated as a Fail, attributed to the action."
         ),
     ),
+    "agent.max_tool_iterations": ConfigKey(
+        name="agent.max_tool_iterations",
+        type_=int,
+        default=20,
+        description=(
+            "Max agentic-loop turns for OpenAI-compatible agents before the "
+            "max-iterations guard fires a ProviderError."
+        ),
+    ),
+    "agent.max_history_chars": ConfigKey(
+        name="agent.max_history_chars",
+        type_=int,
+        default=400_000,
+        description=(
+            "Accumulated message-history size (characters) that triggers the "
+            "agentic loop's history-budget guard for OpenAI-compatible agents."
+        ),
+    ),
 }
 
 
