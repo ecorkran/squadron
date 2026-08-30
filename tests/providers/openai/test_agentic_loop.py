@@ -4,6 +4,7 @@ loop control flow, and their termination/error-surfacing behavior.
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from squadron.config.manager import set_config
+from squadron.core.models import Message, MessageType
 from squadron.providers.errors import ProviderError
 from squadron.providers.openai.agent import OpenAICompatibleAgent, TurnResult
 from squadron.tools import ToolResult
@@ -18,6 +21,7 @@ from squadron.tools import ToolResult
 from .conftest import text_chunk, tool_chunk
 
 _MODEL = "gpt-4o-mini"
+_USER_MSG = Message(sender="human", recipients=["bot"], content="hello")
 
 
 def _make_client() -> Any:
@@ -219,3 +223,158 @@ class TestExecuteToolCall:
         content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert content == "the answer"
         assert any(r.levelno == logging.DEBUG for r in caplog.records)
+
+
+async def _collect(agent: OpenAICompatibleAgent, msg: Message) -> list[Message]:
+    return [m async for m in agent.handle_message(msg)]
+
+
+class TestAgenticLoop:
+    @pytest.mark.asyncio
+    async def test_normal_termination_suppresses_intermediate_turn(self, tmp_path: Path) -> None:
+        write_call = tool_chunk(
+            0, "call_1", "write_file", json.dumps({"path": "out.txt", "content": "hi"})
+        )
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(write_call),
+                _async_stream(text_chunk("all done")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["write_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert client.chat.completions.create.call_count == 2
+        assert len(msgs) == 1
+        assert msgs[0].message_type == MessageType.chat
+        assert msgs[0].content == "all done"
+        assert not any(m.message_type == MessageType.system for m in msgs)
+        assert (tmp_path / "out.txt").read_text() == "hi"
+
+    @pytest.mark.asyncio
+    async def test_multi_tool_single_turn_dispatches_all_in_order(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        (tmp_path / "b.txt").write_text("B")
+        call_a = tool_chunk(0, "call_a", "read_file", json.dumps({"path": "a.txt"}))
+        call_b = tool_chunk(1, "call_b", "read_file", json.dumps({"path": "b.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(call_a, call_b),
+                _async_stream(text_chunk("read both")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert client.chat.completions.create.call_count == 2
+        assert len(msgs) == 1
+        assert msgs[0].content == "read both"
+
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        tool_entries = [e for e in history if e["role"] == "tool"]
+        assert len(tool_entries) == 2
+        assert tool_entries[0]["tool_call_id"] == "call_a"
+        assert tool_entries[1]["tool_call_id"] == "call_b"
+        assert "A" in tool_entries[0]["content"]
+        assert "B" in tool_entries[1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_max_iterations_guard_raises_and_logs_warning(
+        self,
+        tmp_path: Path,
+        patch_config_paths: dict[str, Path],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        set_config("agent.max_tool_iterations", "2")
+        # Every turn calls a tool — the loop never finalizes.
+        never_ending_call = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
+        (tmp_path / "a.txt").write_text("A")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(never_ending_call))
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+
+        with pytest.raises(ProviderError):
+            await _collect(agent, _USER_MSG)
+
+        assert client.chat.completions.create.call_count == 2
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("max_tool_iterations" in r.getMessage() for r in warnings)
+
+    @pytest.mark.asyncio
+    async def test_history_budget_guard_fires_once_and_continues(
+        self,
+        tmp_path: Path,
+        patch_config_paths: dict[str, Path],
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        set_config("agent.max_history_chars", "10")
+        (tmp_path / "a.txt").write_text("A")
+        read_call = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(read_call),
+                _async_stream(read_call),
+                _async_stream(text_chunk("done")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert len(msgs) == 1
+        assert msgs[0].content == "done"
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        budget_entries = [
+            e
+            for e in history
+            if e.get("role") == "tool" and "budget" in str(e.get("content", "")).lower()
+        ]
+        assert len(budget_entries) == 1
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        budget_warnings = [r for r in warnings if "max_history_chars" in r.getMessage()]
+        assert len(budget_warnings) == 1
+
+    @pytest.mark.asyncio
+    async def test_append_only_history_is_strict_prefix_extension(self, tmp_path: Path) -> None:
+        # _stream_turn is called with self._history by reference, so Mock's
+        # call_args_list holds the *same* list object across calls (it grows
+        # in place). Snapshot a deep copy at call time via side_effect.
+        (tmp_path / "a.txt").write_text("A")
+        read_call = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
+        streams = [
+            _async_stream(read_call),
+            _async_stream(read_call),
+            _async_stream(text_chunk("done")),
+        ]
+        snapshots: list[list[dict[str, Any]]] = []
+
+        async def _create(**kwargs: Any) -> Any:
+            snapshots.append([dict(e) for e in kwargs["messages"]])
+            return streams[len(snapshots) - 1]
+
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(side_effect=_create)
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        await _collect(agent, _USER_MSG)
+
+        assert len(snapshots) == 3
+        for earlier, later in zip(snapshots, snapshots[1:], strict=False):
+            assert later[: len(earlier)] == earlier
+            assert len(later) > len(earlier)
+
+    @pytest.mark.asyncio
+    async def test_tools_configured_but_unused_returns_plain_text(self, tmp_path: Path) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(text_chunk("no tools needed"))
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert client.chat.completions.create.call_count == 1
+        assert len(msgs) == 1
+        assert msgs[0].content == "no tools needed"

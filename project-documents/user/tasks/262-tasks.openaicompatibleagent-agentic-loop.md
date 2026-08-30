@@ -299,8 +299,8 @@ on the constructor work.)*
 
 ## Task 5: Tool-call execution and error surfacing
 
-- [ ] **5.1 `_execute_tool_call`** — Effort: 3/5
-  - [ ] Add `async def _execute_tool_call(self, tool_call: dict[str, object]) -> str` (returns
+- [x] **5.1 `_execute_tool_call`** — Effort: 3/5
+  - [x] Add `async def _execute_tool_call(self, tool_call: dict[str, object]) -> str` (returns
         the content string for the `role: "tool"` message) implementing the design's error
         table (§Error surfacing inside the loop):
         - Parse `tool_call["function"]["arguments"]` as JSON. On `json.JSONDecodeError`, log a
@@ -315,28 +315,28 @@ on the constructor work.)*
           error content string. This is the only ERROR-level path in the loop (design
           §Error surfacing).
         - On success, log at DEBUG (name, args, truncated result) and return `content`.
-  - [ ] Success (interim, proven by 5.2): each of the five branches is independently testable by
+  - [x] Success (interim, proven by 5.2): each of the five branches is independently testable by
         calling `_execute_tool_call` directly with a hand-built `tool_call` dict and a
         pre-populated `self._tool_executors`.
 
-- [ ] **5.2 Test `_execute_tool_call`** — Effort: 3/5
-  - [ ] Malformed JSON args → error content mentions the parse failure; `caplog` (level WARNING)
+- [x] **5.2 Test `_execute_tool_call`** — Effort: 3/5
+  - [x] Malformed JSON args → error content mentions the parse failure; `caplog` (level WARNING)
         captured exactly one WARNING naming the tool.
-  - [ ] Unknown tool name → error content lists the allowed tool names; `caplog` (level WARNING)
+  - [x] Unknown tool name → error content lists the allowed tool names; `caplog` (level WARNING)
         captured exactly one WARNING.
-  - [ ] Executor returns `ToolResult(is_error=True, content="boom")` → returned content is
+  - [x] Executor returns `ToolResult(is_error=True, content="boom")` → returned content is
         exactly `"boom"`; `caplog` (level INFO) captured an INFO record, no WARNING.
-  - [ ] Executor raises `RuntimeError` → returned content is an error string (not a crash);
+  - [x] Executor raises `RuntimeError` → returned content is an error string (not a crash);
         `caplog` (level ERROR) captured an ERROR record from `logger.exception`.
-  - [ ] Executor succeeds → returned content matches `ToolResult.content`; a DEBUG record was
+  - [x] Executor succeeds → returned content matches `ToolResult.content`; a DEBUG record was
         emitted (assert via `caplog.set_level(logging.DEBUG)`).
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/ -q -k execute_tool_call` passes, five
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/ -q -k execute_tool_call` passes, five
         distinct test cases green.
 
-- [ ] **5.3 Commit** — Effort: 1/5
-  - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "feat: add tool-call execution with WARNING-level error surfacing"`
-  - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
+- [x] **5.3 Commit** — Effort: 1/5
+  - [x] `.venv/bin/ruff format .`
+  - [x] `git add -A && git commit -m "feat: add tool-call execution with WARNING-level error surfacing"`
+  - [x] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
 
 ---
 

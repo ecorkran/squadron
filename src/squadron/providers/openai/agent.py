@@ -16,6 +16,7 @@ from openai.types.chat import ChatCompletionChunk, ChatCompletionMessageParam
 # registration side effect: it guarantees built-in tools are registered before this
 # module's constructor calls registry.lookup/materialize.
 import squadron.tools as tools
+from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentState, Message
 from squadron.logging import get_logger
 from squadron.providers.errors import (
@@ -107,9 +108,16 @@ class OpenAICompatibleAgent:
         self._state = AgentState.processing
         self._history.append({"role": "user", "content": message.content})
         try:
-            turn = await self._stream_turn(self._history, tool_schemas=None)
-            self._history.append(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
-            messages = translation.build_messages(turn.text, turn.tool_calls, self._name, self._model)
+            if not self._tool_executors:
+                turn = await self._stream_turn(self._history, tool_schemas=None)
+                self._history.append(
+                    translation.build_assistant_history_entry(turn.text, turn.tool_calls)
+                )
+                messages = translation.build_messages(
+                    turn.text, turn.tool_calls, self._name, self._model
+                )
+            else:
+                messages = await self._run_agentic_loop()
             for msg in messages:
                 yield msg
         except openai.AuthenticationError as exc:
@@ -232,6 +240,60 @@ class OpenAICompatibleAgent:
                 result.content,
             )
         return result.content
+
+    async def _run_agentic_loop(self) -> list[Message]:
+        """Drive turns until the model stops calling tools, or a guard fires.
+
+        Only the no-``tool_calls`` exit translates a turn into caller-facing Messages
+        (design §Control flow) — intermediate turns are appended to history and
+        executed against, but never yielded.
+        """
+        assert self._cwd is not None  # guaranteed by D8 whenever tools are configured
+        max_iterations = get_typed_config("agent.max_tool_iterations", int, cwd=self._cwd)
+        max_history_chars = get_typed_config("agent.max_history_chars", int, cwd=self._cwd)
+        budget_guard_fired = False
+
+        for _iteration in range(max_iterations):
+            turn = await self._stream_turn(self._history, tool_schemas=self._tool_schemas)
+            self._history.append(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
+
+            if not turn.tool_calls:
+                return translation.build_messages(turn.text, [], self._name, self._model)
+
+            for tool_call in turn.tool_calls:
+                content = await self._execute_tool_call(tool_call)
+                self._history.append(
+                    translation.build_tool_result_entry(tool_call.get("id", ""), content)
+                )
+
+            if not budget_guard_fired and self._history_chars() > max_history_chars:
+                budget_guard_fired = True
+                _log.warning(
+                    "Agentic loop history exceeded agent.max_history_chars (%d); "
+                    "prompting model to finalize",
+                    max_history_chars,
+                )
+                self._history.append(
+                    translation.build_tool_result_entry(
+                        "",
+                        "System notice: the conversation history budget has been "
+                        "exceeded. Finalize your response now without calling any "
+                        "more tools.",
+                    )
+                )
+
+        _log.warning(
+            "Agentic loop reached agent.max_tool_iterations (%d) without finalizing",
+            max_iterations,
+        )
+        raise ProviderError(
+            f"Agentic loop exceeded agent.max_tool_iterations ({max_iterations}) "
+            "without the model producing a final response."
+        )
+
+    def _history_chars(self) -> int:
+        """Return the total character count of ``self._history`` (budget-guard input)."""
+        return sum(len(str(entry)) for entry in self._history)
 
     async def shutdown(self) -> None:
         """Close the AsyncOpenAI client and mark as terminated."""
