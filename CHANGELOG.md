@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   during a run: a tool registry and the first three tools (`read_file`, `write_file`, `bash`),
   each confined to the working directory. Nothing uses them yet — no change to how any command
   behaves today.
+- Non-Claude (OpenAI-compatible) agents can now actually use those tools when given them: the
+  agent calls the model, executes any tool calls it requests against the working directory, and
+  keeps going until the model finishes — instead of stopping after one API round-trip. Nothing
+  configures tools yet (no pipeline step or review template declares them), so this has no
+  effect on any run today; it's the mechanism the next slice wires up.
 - `/understand concept` generates a Phase 0 concept document for an existing codebase that has never
   had planning artifacts. It reads the knowledge graph for structure, your README for intent, and the
   filesystem for development practice (test tree, CI, lint config) before asking you anything — then

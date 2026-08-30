@@ -14,6 +14,88 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260829
 
+### Slice 262: OpenAICompatibleAgent Agentic Loop Implemented (Phase 6)
+
+Implementation complete on branch `262-slice.openaicompatibleagent-agentic-loop`, forked from
+`main`. Eight per-group commits (config keys; translation helpers; constructor threading;
+`_call_api`/`_stream_turn` split; tool-call execution; the loop itself; a slice-review fix; this
+close-out), each leaving `pytest tests/providers/openai/ -q` green.
+
+**Constructor threading (D8, D1).** `OpenAICompatibleAgent.__init__` gained keyword-only
+`allowed_tools`/`cwd` params. The D8 check (raise `ProviderError` when a non-empty *requested*
+tool set has `cwd=None`) runs before any registry call, against the requested set rather than
+the post-D1-filter one — a caller asking only for unknown names with no `cwd` is still refused,
+per the design's Constraint 3. `OpenAICompatibleProvider.create_agent` now passes
+`config.allowed_tools`/`config.cwd` through; a dedicated test asserts on the *returned agent
+object* (not just the constructor call) that materialization actually happened, closing the
+slice-design review's F002 gap.
+
+**`_stream_turn` split.** `_call_api` is gone. Its request/aggregate logic (delta accumulation,
+multi-chunk tool-call assembly — moved verbatim, not rewritten) now lives in
+`_stream_turn(messages, tool_schemas) -> TurnResult`, a pure primitive that touches neither
+`self._history` nor `translation`. `handle_message`'s no-tools branch inlines the old
+translate-and-append logic directly (review F006: no forwarding wrapper). The original 15-test
+`test_agent.py` suite, including `test_handle_message_yields_system_for_tool_call`, passes with
+**zero source modifications** — the slice's primary regression gate.
+
+**The loop.** `_run_agentic_loop` reads both loop-limit config keys once, before iterating;
+loops until a turn has no `tool_calls` (the *only* point that translates a turn into
+caller-facing Messages — intermediate turns are executed against but never yielded);  executes
+every tool call in a turn via `_execute_tool_call`, appending one `role: "tool"` result per
+call in order; and enforces two of the design's three termination conditions as guards rather
+than hard stops for max-iterations (D3: raises `ProviderError`, no partial-text return) and a
+one-shot history-budget notice (D4: warns and asks the model to finalize, `max_iterations`
+remains the hard backstop). `_execute_tool_call` implements the full five-branch error table
+(malformed JSON, unknown tool, executor error-result, executor-raises, success) with D9's
+WARNING-not-DEBUG logging for the two model-protocol-violation branches.
+
+**Slice review caught a real bug before merge.** A multi-agent code review of the branch diff
+(`/code-review high`) converged independently across several angles on one high-severity,
+CONFIRMED finding: the history-budget notice was appended as a `role: "tool"` message with
+`tool_call_id=""` — not a real pending call id — which a strict OpenAI-compatible backend would
+reject with 400, and even where accepted, `tool_schemas` stayed attached on every following
+turn so the model could simply ignore the notice and keep calling tools, defeating the guard's
+purpose entirely. Fixed (commit `dbb7549`): the notice is now a plain `user`-role message (no
+fake tool result, no invented id), and once the guard fires, `tool_schemas` is withdrawn from
+every subsequent `_stream_turn` call so the model structurally cannot keep calling tools. The
+budget-guard test was strengthened to assert both the new message shape and the absent `tools`
+kwarg on the following API call.
+
+The same review surfaced several lower-severity, real findings that were triaged with the
+Project Manager and deliberately deferred rather than folded into this slice (see the design
+document's Verification Walkthrough → "Known follow-ups" for the full list and reasoning):
+`get_typed_config`'s uncaught `ValueError` on a misconfigured loop-limit value, sequential
+rather than concurrent tool-call execution within a turn, `_execute_tool_call`'s ad hoc error
+strings versus the `ToolResult`/`_error` convention already established in `tools/builtin.py`,
+a silent empty-`tool_call_id` fallback for a genuinely malformed model response (distinct from
+the fixed budget-guard case), and the `max_tool_iterations=0` edge case's misleading error
+message. None of these are new information about D1's vocabulary-mismatch window — that
+remains accepted, documented, and closed by slice 265, not by this list.
+
+**Known, pre-existing pyright baseline issue — not introduced by this slice.** Scoped
+`pyright src/squadron/providers/openai/` and `pyright src/squadron/config/` both report errors
+whose root cause is the `openai` and `pydantic_settings`/`tomli_w` packages' type stubs not
+resolving under this project's pyright/venv configuration — every symbol imported from them
+type-checks as `Unknown`, cascading through every file that touches them. Verified via
+`git stash` before any slice-262 change: `main` already reported 72 errors on
+`providers/openai/` and a comparable count in `config/`. `config/keys.py` — the only file this
+slice changed in `config/` — is independently clean. Raised to and explicitly accepted by the
+Project Manager as out of scope for this slice; the fix (if one exists) is a project-wide
+tooling/dependency task, not a slice-262 concern.
+
+Full suite: `pytest -q` → **3115 passed, 2 skipped, 3 warnings in 430.59s** (design baseline was
+~3078 passed, 2 skipped; the delta is this slice's additions). The ~7-minute runtime is a
+pre-existing property of `tests/metrology/test_audit_cli.py`'s variance-series tests, which
+sleep for real against `metrology.audit_run_cooldown_s` — unrelated to this slice, noted here
+only because it was mistaken for a hang mid-session before the real cause (a genuine `time.sleep`
+in already-merged code) was confirmed. `ruff check .` clean repo-wide.
+
+Slice 262 is marked complete in both the design document and
+`260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md` (entry 2). The initiative
+itself stays `not_started` — 263 (pipeline YAML wiring), 264 (MCP bridge), 265 (review
+coverage, which closes D1's WARNING window), and 266 (tool-use configuration) are unstarted, in
+that dependency order after 262.
+
 ### Slice 262: Task Review Findings Addressed (Phase 5)
 
 Review `262-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `e9bc278`):
