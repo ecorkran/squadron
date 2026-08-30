@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -24,7 +25,7 @@ from squadron.providers.errors import (
     ProviderTimeoutError,
 )
 from squadron.providers.openai import translation
-from squadron.tools import ToolExecutor
+from squadron.tools import ToolExecutor, ToolResult
 
 _log = get_logger("squadron.providers.openai.agent")
 
@@ -179,6 +180,58 @@ class OpenAICompatibleAgent:
 
         tool_calls_list = [tool_calls_dict[k] for k in sorted(tool_calls_dict)]
         return TurnResult(text=text_buffer, tool_calls=tool_calls_list)
+
+    async def _execute_tool_call(self, tool_call: dict[str, Any]) -> str:
+        """Execute one model-issued tool call and return its result content.
+
+        Never raises: malformed arguments, an unknown tool name, and an executor
+        that raises are all converted to an error content string so the loop can
+        hand the failure back to the model instead of crashing (arch §Tool
+        argument validation).
+        """
+        function = tool_call.get("function", {})
+        tool_name = function.get("name", "")
+        raw_arguments = function.get("arguments", "")
+
+        try:
+            arguments = json.loads(raw_arguments) if raw_arguments else {}
+        except json.JSONDecodeError as exc:
+            _log.warning(
+                "Tool call %r has malformed JSON arguments (%s): %r",
+                tool_name,
+                exc,
+                raw_arguments,
+            )
+            return f"Error: arguments for tool '{tool_name}' are not valid JSON: {exc}"
+
+        executor = self._tool_executors.get(tool_name)
+        if executor is None:
+            allowed = list(self._tool_executors)
+            _log.warning(
+                "Model called unknown tool %r; allowed tools: %s",
+                tool_name,
+                allowed,
+            )
+            return f"Error: tool '{tool_name}' is not available. Allowed tools: {allowed}"
+
+        try:
+            result: ToolResult = await executor(arguments)
+        except Exception:  # noqa: BLE001 — executor contract says never raise; this is
+            # defense against a future/MCP-bridged tool violating it (design §Error
+            # surfacing), converted to a tool-result error rather than crashing the loop.
+            _log.exception("Tool %r raised during execution", tool_name)
+            return f"Error: tool '{tool_name}' raised an unexpected exception during execution."
+
+        if result.is_error:
+            _log.info("Tool %r returned an error result: %s", tool_name, result.content)
+        else:
+            _log.debug(
+                "Tool %r succeeded (args=%r, result=%.200r)",
+                tool_name,
+                arguments,
+                result.content,
+            )
+        return result.content
 
     async def shutdown(self) -> None:
         """Close the AsyncOpenAI client and mark as terminated."""

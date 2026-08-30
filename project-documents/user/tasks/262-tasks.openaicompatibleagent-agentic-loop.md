@@ -243,56 +243,56 @@ on the constructor work.)*
 
 ## Task 4: Split `_call_api` into `_stream_turn`
 
-- [ ] **4.1 Extract `_stream_turn`** — Effort: 3/5
-  - [ ] Add a small frozen dataclass `TurnResult(text: str, tool_calls: list[dict[str,
+- [x] **4.1 Extract `_stream_turn`** — Effort: 3/5
+  - [x] Add a small frozen dataclass `TurnResult(text: str, tool_calls: list[dict[str,
         object]])` in `agent.py` (internal plumbing only, not exported).
-  - [ ] Extract the request-and-aggregate logic currently in `_call_api` (lines 88-117: the
+  - [x] Extract the request-and-aggregate logic currently in `_call_api` (lines 88-117: the
         `chat.completions.create` call, the `async for chunk in stream` loop, tool-call delta
         assembly) into `async def _stream_turn(self, messages: list[dict[str, object]], tools:
         list[dict[str, object]] | None) -> TurnResult`. Move the aggregation logic verbatim — do
         not rewrite the multi-chunk tool-call assembly, it is already correct (design
         §Current shape and why it cannot host a loop).
-  - [ ] Pass `tools=tools` to `chat.completions.create` only when `tools` is non-empty/not None
+  - [x] Pass `tools=tools` to `chat.completions.create` only when `tools` is non-empty/not None
         — never send an empty `tools` list (matches "tool schemas sent only when tools are
         configured" success criterion).
-  - [ ] `_stream_turn` does not touch `self._history` and does not call `translation` — it is a
+  - [x] `_stream_turn` does not touch `self._history` and does not call `translation` — it is a
         pure request/aggregate primitive returning `TurnResult`.
-  - [ ] Success (interim, proven by 4.2): a direct test of `_stream_turn` against a mocked
+  - [x] Success (interim, proven by 4.2): a direct test of `_stream_turn` against a mocked
         streamed response returns the correct `TurnResult` for text-only, tool-call-only, and
         mixed streams.
 
-- [ ] **4.2 Test `_stream_turn` in isolation** — Effort: 2/5
-  - [ ] Reuse `tests/providers/openai/conftest.py`'s `text_chunk`/`tool_chunk`/`_async_stream`
+- [x] **4.2 Test `_stream_turn` in isolation** — Effort: 2/5
+  - [x] Reuse `tests/providers/openai/conftest.py`'s `text_chunk`/`tool_chunk`/`_async_stream`
         helpers. Assert: text-only stream → `TurnResult(text=..., tool_calls=[])`; tool-call
         stream → `TurnResult(text="", tool_calls=[...])` with the assembled call matching the
         chunk's id/name/arguments; a stream with `tools=None` passed does not include a `tools`
         kwarg in the captured `create()` call; a stream with `tools=[...]` passed does.
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/ -q -k stream_turn` passes.
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/ -q -k stream_turn` passes.
 
-- [ ] **4.3 Inline the no-tools path into `handle_message`, removing `_call_api`** — Effort: 2/5
-  - [ ] Delete `_call_api` as a named method; its call-and-translate logic (now just a few lines
+- [x] **4.3 Inline the no-tools path into `handle_message`, removing `_call_api`** — Effort: 2/5
+  - [x] Delete `_call_api` as a named method; its call-and-translate logic (now just a few lines
         given `_stream_turn` does the request/aggregate work) lives directly in `handle_message`
         for the no-tools branch (review F006 — resolves the task's original open choice between
         keeping `_call_api` as a wrapper or inlining it: inline, since a same-file
         one-line-forwarding wrapper adds indirection `_stream_turn` already replaced).
-  - [ ] With no tools configured, `handle_message` must call `_stream_turn(self._history,
+  - [x] With no tools configured, `handle_message` must call `_stream_turn(self._history,
         tools=None)`, append the assistant turn to `self._history` via
         `translation.build_assistant_history_entry`, and yield
         `translation.build_messages(turn.text, turn.tool_calls, ...)` — i.e., today's exact
         output, including the tool-call-as-system-Message case, reproduced through the new
         primitive rather than the old monolithic `_call_api`.
-  - [ ] Delete the now-unused parts of the old `_call_api`/`_append_assistant_history` bodies
+  - [x] Delete the now-unused parts of the old `_call_api`/`_append_assistant_history` bodies
         once their logic lives in `_stream_turn` (Task 4.1) and `translation.py` (Task 2.2). Do
         not leave dead code.
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_agent.py -q` passes **unmodified**
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/test_agent.py -q` passes **unmodified**
         — every one of the original 15 tests, byte-for-byte, including
         `test_handle_message_yields_system_for_tool_call`. This is the slice's primary
         regression gate; do not proceed to Task 5 until it is green.
 
-- [ ] **4.4 Commit** — Effort: 1/5
-  - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "refactor: split _call_api into _stream_turn primitive"`
-  - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes, all 15 original tests
+- [x] **4.4 Commit** — Effort: 1/5
+  - [x] `.venv/bin/ruff format .`
+  - [x] `git add -A && git commit -m "refactor: split _call_api into _stream_turn primitive"`
+  - [x] Success: clean tree; `pytest tests/providers/openai/ -q` passes, all 15 original tests
         green with zero modifications to their source.
 
 ---

@@ -13,6 +13,7 @@ import pytest
 
 from squadron.providers.errors import ProviderError
 from squadron.providers.openai.agent import OpenAICompatibleAgent, TurnResult
+from squadron.tools import ToolResult
 
 from .conftest import text_chunk, tool_chunk
 
@@ -137,3 +138,84 @@ class TestStreamTurn:
         await agent._stream_turn([], tool_schemas=schemas)  # pyright: ignore[reportPrivateUsage]
         _, kwargs = client.chat.completions.create.call_args
         assert kwargs["tools"] == schemas
+
+
+def _tool_call(tool_call_id: str, name: str, arguments: str) -> dict[str, Any]:
+    return {
+        "id": tool_call_id,
+        "type": "function",
+        "function": {"name": name, "arguments": arguments},
+    }
+
+
+class TestExecuteToolCall:
+    @pytest.mark.asyncio
+    async def test_malformed_json_args_returns_error_and_logs_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        agent = _make_agent()
+        tc = _tool_call("c1", "read_file", "{not json")
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert "not valid JSON" in content
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert "read_file" in warnings[0].getMessage()
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_name_returns_error_and_logs_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        agent = _make_agent()
+        tc = _tool_call("c1", "no_such_tool", "{}")
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert "no_such_tool" in content
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+
+    @pytest.mark.asyncio
+    async def test_executor_error_result_passed_through_verbatim(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.INFO)
+        agent = _make_agent()
+        agent._tool_executors["boom_tool"] = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+            return_value=ToolResult(content="boom", is_error=True)
+        )
+        tc = _tool_call("c1", "boom_tool", "{}")
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert content == "boom"
+        assert any(r.levelno == logging.INFO for r in caplog.records)
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_executor_raises_returns_error_and_logs_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.ERROR)
+
+        async def _raising(_args: dict[str, object]) -> ToolResult:
+            raise RuntimeError("kaboom")
+
+        agent = _make_agent()
+        agent._tool_executors["raising_tool"] = _raising  # pyright: ignore[reportPrivateUsage]
+        tc = _tool_call("c1", "raising_tool", "{}")
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert "raising_tool" in content
+        errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert len(errors) == 1
+
+    @pytest.mark.asyncio
+    async def test_executor_success_returns_content_and_logs_debug(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.DEBUG)
+        agent = _make_agent()
+        agent._tool_executors["ok_tool"] = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+            return_value=ToolResult(content="the answer")
+        )
+        tc = _tool_call("c1", "ok_tool", "{}")
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert content == "the answer"
+        assert any(r.levelno == logging.DEBUG for r in caplog.records)
