@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 import openai
@@ -26,6 +27,18 @@ from squadron.providers.openai import translation
 from squadron.tools import ToolExecutor
 
 _log = get_logger("squadron.providers.openai.agent")
+
+
+@dataclass(frozen=True)
+class TurnResult:
+    """Raw aggregated output of a single streamed API turn.
+
+    Internal plumbing between ``_stream_turn`` and its callers — not translated into
+    caller-facing Messages and not appended to history by ``_stream_turn`` itself.
+    """
+
+    text: str
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
 
 class OpenAICompatibleAgent:
@@ -93,7 +106,9 @@ class OpenAICompatibleAgent:
         self._state = AgentState.processing
         self._history.append({"role": "user", "content": message.content})
         try:
-            messages = await self._call_api()
+            turn = await self._stream_turn(self._history, tool_schemas=None)
+            self._history.append(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
+            messages = translation.build_messages(turn.text, turn.tool_calls, self._name, self._model)
             for msg in messages:
                 yield msg
         except openai.AuthenticationError as exc:
@@ -111,19 +126,33 @@ class OpenAICompatibleAgent:
         finally:
             self._state = AgentState.idle
 
-    async def _call_api(self) -> list[Message]:
-        """Call the API, accumulate streaming response, return built Messages."""
+    async def _stream_turn(
+        self,
+        messages: list[dict[str, Any]],
+        tool_schemas: list[dict[str, object]] | None,
+    ) -> TurnResult:
+        """Issue one streaming request and aggregate its deltas into a TurnResult.
+
+        Pure request/aggregate primitive: does not touch ``self._history`` and does
+        not build caller-facing Messages.
+        """
         text_buffer = ""
         tool_calls_dict: dict[int, dict[str, Any]] = {}
 
         app_name = os.environ.get("SQUADRON_APP_NAME")
         extra_body = {"user": app_name} if app_name else None
 
+        create_kwargs: dict[str, Any] = {
+            "model": self._model,
+            "messages": cast(list[ChatCompletionMessageParam], messages),
+            "stream": True,
+            "extra_body": extra_body,
+        }
+        if tool_schemas:
+            create_kwargs["tools"] = tool_schemas
+
         stream: AsyncStream[ChatCompletionChunk] = await self._client.chat.completions.create(
-            model=self._model,
-            messages=cast(list[ChatCompletionMessageParam], self._history),
-            stream=True,
-            extra_body=extra_body,
+            **create_kwargs
         )
         async for chunk in stream:
             if not chunk.choices:
@@ -149,25 +178,7 @@ class OpenAICompatibleAgent:
                             tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
 
         tool_calls_list = [tool_calls_dict[k] for k in sorted(tool_calls_dict)]
-        messages = translation.build_messages(text_buffer, tool_calls_list, self._name, self._model)
-        self._append_assistant_history(text_buffer, tool_calls_list)
-        return messages
-
-    def _append_assistant_history(
-        self,
-        text: str,
-        tool_calls: list[dict[str, Any]],
-    ) -> None:
-        """Append the assistant turn to history in OpenAI format."""
-        if tool_calls:
-            entry: dict[str, Any] = {
-                "role": "assistant",
-                "content": text if text else None,
-                "tool_calls": tool_calls,
-            }
-        else:
-            entry = {"role": "assistant", "content": text}
-        self._history.append(entry)
+        return TurnResult(text=text_buffer, tool_calls=tool_calls_list)
 
     async def shutdown(self) -> None:
         """Close the AsyncOpenAI client and mark as terminated."""

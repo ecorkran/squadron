@@ -172,57 +172,57 @@ on the constructor work.)*
 
 ## Task 3: Thread `allowed_tools` and `cwd` into the agent constructor
 
-- [ ] **3.1 Extend `OpenAICompatibleAgent.__init__`** — Effort: 2/5
-  - [ ] Add two keyword-only parameters with defaults so existing call sites are unaffected:
+- [x] **3.1 Extend `OpenAICompatibleAgent.__init__`** — Effort: 2/5
+  - [x] Add two keyword-only parameters with defaults so existing call sites are unaffected:
         `allowed_tools: list[str] | None = None`, `cwd: str | None = None`.
-  - [ ] Import `squadron.tools` (the package, not `squadron.tools.registry`) so built-in tools
+  - [x] Import `squadron.tools` (the package, not `squadron.tools.registry`) so built-in tools
         are guaranteed registered — see Constraint 1.
-  - [ ] Resolve the *requested* tool set (`allowed_tools or []`) and, **before** any
+  - [x] Resolve the *requested* tool set (`allowed_tools or []`) and, **before** any
         registry call, apply the D8 check: if the requested set is non-empty and `cwd is None`,
         raise `ProviderError` with a message naming the missing `cwd` and the requested tools.
         Confirm this check uses the requested set per Constraint 3, not the post-filter one.
-  - [ ] If the requested set is non-empty, filter each name through `registry.lookup`; log one
+  - [x] If the requested set is non-empty, filter each name through `registry.lookup`; log one
         WARNING per dropped (unknown) name naming it and the full registered vocabulary
         (`registry.list_tools()`); call `registry.materialize` only with the surviving known
         names and the given `cwd`. Store the result as `self._tool_executors: dict[str,
         ToolExecutor]`.
-  - [ ] If the requested set is empty, set `self._tool_executors = {}` and do not touch `cwd` at
+  - [x] If the requested set is empty, set `self._tool_executors = {}` and do not touch `cwd` at
         all (no check, no registry call) — this is the path every current caller takes.
-  - [ ] Build `self._tool_schemas` once from the materialized names via the schema helper
+  - [x] Build `self._tool_schemas` once from the materialized names via the schema helper
         (Task 2.1) — empty list when there are no tools.
-  - [ ] Store `self._cwd = cwd` for later use by the config reads in Task 6.
-  - [ ] Success (interim, proven by 3.2): constructing with no tools behaves as before;
+  - [x] Store `self._cwd = cwd` for later use by the config reads in Task 6.
+  - [x] Success (interim, proven by 3.2): constructing with no tools behaves as before;
         constructing with a mix of one known and one unknown name materializes the known one and
         logs a WARNING for the unknown one; constructing with a non-empty known set and
         `cwd=None` raises `ProviderError`.
 
-- [ ] **3.2 Test constructor behavior** — Effort: 2/5
-  - [ ] `tests/providers/openai/test_agent.py` or a new `tests/providers/openai/
+- [x] **3.2 Test constructor behavior** — Effort: 2/5
+  - [x] `tests/providers/openai/test_agent.py` or a new `tests/providers/openai/
         test_agentic_loop.py` (Task 8 decides the final file split — write here for now):
         constructing with `allowed_tools=None` and `cwd=None` does not raise and yields empty
         `self._tool_executors`.
-  - [ ] Constructing with `allowed_tools=["read_file"]` and a valid temp-dir `cwd` materializes
+  - [x] Constructing with `allowed_tools=["read_file"]` and a valid temp-dir `cwd` materializes
         `read_file` with no WARNING logged.
-  - [ ] Constructing with `allowed_tools=["Read", "read_file"]` and a valid `cwd`: `read_file` is
+  - [x] Constructing with `allowed_tools=["Read", "read_file"]` and a valid `cwd`: `read_file` is
         materialized, `Read` is dropped, and `caplog` (level WARNING) captured exactly one
         WARNING naming `Read`.
-  - [ ] Constructing with `allowed_tools=["read_file"]` and `cwd=None` raises `ProviderError`.
-  - [ ] Constructing with `allowed_tools=[]` (or `None`) and `cwd=None` does **not** raise (D8
+  - [x] Constructing with `allowed_tools=["read_file"]` and `cwd=None` raises `ProviderError`.
+  - [x] Constructing with `allowed_tools=[]` (or `None`) and `cwd=None` does **not** raise (D8
         applies only to a non-empty requested set).
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/ -q -k "construct or cwd or tool_set"`
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/ -q -k "construct or cwd or tool_set"`
         passes (adjust the `-k` filter to match the test names actually written).
 
-- [ ] **3.3 Thread the fields through `OpenAICompatibleProvider.create_agent`** — Effort: 1/5
-  - [ ] In `src/squadron/providers/openai/provider.py`, pass `allowed_tools=config.allowed_tools`
+- [x] **3.3 Thread the fields through `OpenAICompatibleProvider.create_agent`** — Effort: 1/5
+  - [x] In `src/squadron/providers/openai/provider.py`, pass `allowed_tools=config.allowed_tools`
         and `cwd=config.cwd` into the `OpenAICompatibleAgent(...)` construction at line 57.
-  - [ ] No other change to `create_agent` — credential resolution and client construction are
+  - [x] No other change to `create_agent` — credential resolution and client construction are
         untouched.
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_provider.py -q` passes unmodified
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/test_provider.py -q` passes unmodified
         (it exercises `create_agent` without tools, so behavior is unchanged there); a manual
         read of the diff shows only the two new keyword arguments added.
 
-- [ ] **3.4 Test `create_agent` with tools configured (review F002)** — Effort: 2/5
-  - [ ] Task 3.3's success bar alone (unmodified `test_provider.py` + a manual diff read) does
+- [x] **3.4 Test `create_agent` with tools configured (review F002)** — Effort: 2/5
+  - [x] Task 3.3's success bar alone (unmodified `test_provider.py` + a manual diff read) does
         not exercise the tools-configured path through `create_agent` — it only proves the
         no-tools case is unchanged. Add a dedicated test that builds an `AgentConfig` with a
         non-empty `allowed_tools` (e.g. `["read_file"]`) and a valid `cwd`, calls
@@ -232,12 +232,12 @@ on the constructor work.)*
         `agent._cwd == config.cwd`). This is the wiring correctness-of-cost property the slice
         exists to guarantee; without it, a future edit to `create_agent` could silently drop the
         threading and nothing would catch it.
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_provider.py -q -k tools` passes.
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/test_provider.py -q -k tools` passes.
 
-- [ ] **3.5 Commit** — Effort: 1/5
-  - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "feat: thread allowed_tools and cwd into OpenAICompatibleAgent"`
-  - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
+- [x] **3.5 Commit** — Effort: 1/5
+  - [x] `.venv/bin/ruff format .`
+  - [x] `git add -A && git commit -m "feat: thread allowed_tools and cwd into OpenAICompatibleAgent"`
+  - [x] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
 
 ---
 

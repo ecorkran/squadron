@@ -12,7 +12,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squadron.providers.errors import ProviderError
-from squadron.providers.openai.agent import OpenAICompatibleAgent
+from squadron.providers.openai.agent import OpenAICompatibleAgent, TurnResult
+
+from .conftest import text_chunk, tool_chunk
 
 _MODEL = "gpt-4o-mini"
 
@@ -79,3 +81,59 @@ class TestConstructorToolSetWiring:
         # a caller requesting only unknown names with no cwd must still be refused.
         with pytest.raises(ProviderError):
             _make_agent(allowed_tools=["Read"], cwd=None)
+
+
+def _async_stream(*chunks: Any) -> AsyncMock:
+    """Return an AsyncMock whose __aiter__ yields the given chunks."""
+
+    async def _gen() -> Any:
+        for chunk in chunks:
+            yield chunk
+
+    mock = AsyncMock()
+    mock.__aiter__ = lambda _: _gen()
+    return mock
+
+
+class TestStreamTurn:
+    @pytest.mark.asyncio
+    async def test_text_only_stream_returns_text_result(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("hi")))
+        agent = _make_agent(client=client)
+        result = await agent._stream_turn([], tool_schemas=None)  # pyright: ignore[reportPrivateUsage]
+        assert result == TurnResult(text="hi", tool_calls=[])
+
+    @pytest.mark.asyncio
+    async def test_tool_call_stream_returns_assembled_call(self) -> None:
+        client = _make_client()
+        chunk = tool_chunk(0, "call_1", "search", '{"q": "hi"}')
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(chunk))
+        agent = _make_agent(client=client)
+        result = await agent._stream_turn([], tool_schemas=None)  # pyright: ignore[reportPrivateUsage]
+        assert result.text == ""
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0]["id"] == "call_1"
+        assert result.tool_calls[0]["function"]["name"] == "search"
+        assert result.tool_calls[0]["function"]["arguments"] == '{"q": "hi"}'
+
+    @pytest.mark.asyncio
+    async def test_no_tools_kwarg_when_tool_schemas_none(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("hi")))
+        agent = _make_agent(client=client)
+        await agent._stream_turn([], tool_schemas=None)  # pyright: ignore[reportPrivateUsage]
+        _, kwargs = client.chat.completions.create.call_args
+        assert "tools" not in kwargs
+
+    @pytest.mark.asyncio
+    async def test_tools_kwarg_present_when_tool_schemas_given(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("hi")))
+        agent = _make_agent(client=client)
+        schemas = [
+            {"type": "function", "function": {"name": "t", "description": "d", "parameters": {}}}
+        ]
+        await agent._stream_turn([], tool_schemas=schemas)  # pyright: ignore[reportPrivateUsage]
+        _, kwargs = client.chat.completions.create.call_args
+        assert kwargs["tools"] == schemas
