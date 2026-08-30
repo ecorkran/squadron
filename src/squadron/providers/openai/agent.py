@@ -254,7 +254,11 @@ class OpenAICompatibleAgent:
         budget_guard_fired = False
 
         for _iteration in range(max_iterations):
-            turn = await self._stream_turn(self._history, tool_schemas=self._tool_schemas)
+            # Once the budget guard has fired, stop offering tools: the notice below
+            # asks the model to finalize, and continuing to advertise tool_schemas
+            # would let it ignore that and keep calling tools anyway.
+            turn_tool_schemas = None if budget_guard_fired else self._tool_schemas
+            turn = await self._stream_turn(self._history, tool_schemas=turn_tool_schemas)
             self._history.append(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
 
             if not turn.tool_calls:
@@ -273,13 +277,18 @@ class OpenAICompatibleAgent:
                     "prompting model to finalize",
                     max_history_chars,
                 )
+                # A plain user-role message, not a fake tool result: a role:"tool"
+                # entry must carry a tool_call_id matching a real pending call, and
+                # this notice isn't a response to any tool call the model made.
                 self._history.append(
-                    translation.build_tool_result_entry(
-                        "",
-                        "System notice: the conversation history budget has been "
-                        "exceeded. Finalize your response now without calling any "
-                        "more tools.",
-                    )
+                    {
+                        "role": "user",
+                        "content": (
+                            "System notice: the conversation history budget has been "
+                            "exceeded. Finalize your response now; no more tools will "
+                            "be offered."
+                        ),
+                    }
                 )
 
         _log.warning(

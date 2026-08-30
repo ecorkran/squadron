@@ -328,15 +328,24 @@ class TestAgenticLoop:
         assert len(msgs) == 1
         assert msgs[0].content == "done"
         history = agent._history  # pyright: ignore[reportPrivateUsage]
+        # A plain user-role notice, not a fake tool result: a role:"tool" entry must
+        # carry a tool_call_id matching a real pending call, which this isn't.
         budget_entries = [
             e
             for e in history
-            if e.get("role") == "tool" and "budget" in str(e.get("content", "")).lower()
+            if e.get("role") == "user" and "budget" in str(e.get("content", "")).lower()
         ]
         assert len(budget_entries) == 1
+        assert not any(e.get("role") == "tool" and e.get("tool_call_id") == "" for e in history)
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         budget_warnings = [r for r in warnings if "max_history_chars" in r.getMessage()]
         assert len(budget_warnings) == 1
+
+        # Once the guard has fired, no more tool schemas are offered — the notice
+        # asks the model to finalize, and continuing to advertise tools would let it
+        # ignore that and keep calling them anyway.
+        last_call_kwargs = client.chat.completions.create.call_args_list[-1].kwargs
+        assert "tools" not in last_call_kwargs
 
     @pytest.mark.asyncio
     async def test_append_only_history_is_strict_prefix_extension(self, tmp_path: Path) -> None:
