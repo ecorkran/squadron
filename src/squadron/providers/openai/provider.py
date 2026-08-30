@@ -59,6 +59,8 @@ class OpenAICompatibleProvider:
             client=client,
             model=config.model,
             system_prompt=config.instructions,
+            allowed_tools=config.allowed_tools,
+            cwd=config.cwd,
         )
 
     async def validate_credentials(self) -> bool:

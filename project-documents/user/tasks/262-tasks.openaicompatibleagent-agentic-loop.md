@@ -131,42 +131,42 @@ push, or delete the branch at any point without explicit instruction from the Pr
 `build_tool_schemas`, so the helper must exist first. Translation helpers have no dependency
 on the constructor work.)*
 
-- [ ] **2.1 `build_tool_schemas`** — Effort: 2/5
-  - [ ] Add `build_tool_schemas(descriptors: list[ToolDescriptor]) -> list[dict[str, object]]` to
+- [x] **2.1 `build_tool_schemas`** — Effort: 2/5
+  - [x] Add `build_tool_schemas(descriptors: list[ToolDescriptor]) -> list[dict[str, object]]` to
         `src/squadron/providers/openai/translation.py`, mapping each descriptor to
         `{"type": "function", "function": {"name": d.name, "description": d.description,
         "parameters": d.parameters}}` per the design's Tool Schema Construction section. Pure
         function, no I/O.
-  - [ ] Success: unit test with two hand-built `ToolDescriptor` values asserts the exact output
+  - [x] Success: unit test with two hand-built `ToolDescriptor` values asserts the exact output
         shape, including that `parameters` is passed through unchanged.
 
-- [ ] **2.2 `build_assistant_history_entry`** — Effort: 2/5
-  - [ ] Move the logic currently in `agent.py`'s `_append_assistant_history` (lines 122-136) into
+- [x] **2.2 `build_assistant_history_entry`** — Effort: 2/5
+  - [x] Move the logic currently in `agent.py`'s `_append_assistant_history` (lines 122-136) into
         `translation.py` as `build_assistant_history_entry(text: str, tool_calls: list[dict[str,
         object]]) -> dict[str, object]`, preserving behavior exactly: `content=None` when `text`
         is empty and `tool_calls` is non-empty; plain `{"role": "assistant", "content": text}`
         when there are no tool calls.
-  - [ ] Success: a test with (a) text-only, (b) tool-calls-only (empty text), and (c) mixed
+  - [x] Success: a test with (a) text-only, (b) tool-calls-only (empty text), and (c) mixed
         text+tool-calls inputs asserts the three known output shapes match what
         `_append_assistant_history` produces today (compare against the pre-move behavior, e.g.
         by running the existing `test_agent.py` history-shape assertions before and after).
 
-- [ ] **2.3 `build_tool_result_entry`** — Effort: 1/5
-  - [ ] Add `build_tool_result_entry(tool_call_id: str, content: str) -> dict[str, object]`
+- [x] **2.3 `build_tool_result_entry`** — Effort: 1/5
+  - [x] Add `build_tool_result_entry(tool_call_id: str, content: str) -> dict[str, object]`
         returning `{"role": "tool", "tool_call_id": tool_call_id, "content": content}`.
-  - [ ] Success: a one-line unit test asserts the exact dict shape.
+  - [x] Success: a one-line unit test asserts the exact dict shape.
 
-- [ ] **2.4 Test all three together** — Effort: 1/5
-  - [ ] Add `tests/providers/openai/test_translation.py` cases for 2.1–2.3 if not already
+- [x] **2.4 Test all three together** — Effort: 1/5
+  - [x] Add `tests/providers/openai/test_translation.py` cases for 2.1–2.3 if not already
         colocated with the implementation tasks above (this task exists to confirm nothing was
         skipped — check the file, do not duplicate tests already written).
-  - [ ] Success: `.venv/bin/pytest tests/providers/openai/test_translation.py -q` passes with the
+  - [x] Success: `.venv/bin/pytest tests/providers/openai/test_translation.py -q` passes with the
         three new functions covered.
 
-- [ ] **2.5 Commit** — Effort: 1/5
-  - [ ] `.venv/bin/ruff format .`
-  - [ ] `git add -A && git commit -m "feat: add OpenAI tool-protocol helpers to translation.py"`
-  - [ ] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
+- [x] **2.5 Commit** — Effort: 1/5
+  - [x] `.venv/bin/ruff format .`
+  - [x] `git add -A && git commit -m "feat: add OpenAI tool-protocol helpers to translation.py"`
+  - [x] Success: clean tree; `pytest tests/providers/openai/ -q` passes.
 
 ---
 

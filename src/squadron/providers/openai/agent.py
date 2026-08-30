@@ -10,6 +10,10 @@ import openai
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletionChunk, ChatCompletionMessageParam
 
+# squadron.tools (the package, not squadron.tools.registry) is imported for its
+# registration side effect: it guarantees built-in tools are registered before this
+# module's constructor calls registry.lookup/materialize.
+import squadron.tools as tools
 from squadron.core.models import AgentState, Message
 from squadron.logging import get_logger
 from squadron.providers.errors import (
@@ -19,6 +23,7 @@ from squadron.providers.errors import (
     ProviderTimeoutError,
 )
 from squadron.providers.openai import translation
+from squadron.tools import ToolExecutor
 
 _log = get_logger("squadron.providers.openai.agent")
 
@@ -32,15 +37,44 @@ class OpenAICompatibleAgent:
         client: AsyncOpenAI,
         model: str,
         system_prompt: str | None,
+        *,
+        allowed_tools: list[str] | None = None,
+        cwd: str | None = None,
     ) -> None:
         self._name = name
         self._client = client
         self._model = model
         self._history: list[dict[str, Any]] = []
         self._state = AgentState.idle
+        self._cwd = cwd
 
         if system_prompt is not None:
             self._history.append({"role": "system", "content": system_prompt})
+
+        requested_tools = allowed_tools or []
+        if requested_tools and cwd is None:
+            raise ProviderError(
+                f"allowed_tools {requested_tools!r} configured but cwd is None; "
+                "tool-capable agents require an explicit working directory."
+            )
+
+        self._tool_executors: dict[str, ToolExecutor] = {}
+        self._tool_schemas: list[dict[str, object]] = []
+        if requested_tools:
+            assert cwd is not None  # narrowed by the raise above
+            known_names = []
+            for tool_name in requested_tools:
+                if tools.lookup(tool_name) is None:
+                    _log.warning(
+                        "Dropping unknown tool %r from allowed_tools; registered tools: %s",
+                        tool_name,
+                        tools.list_tools(),
+                    )
+                    continue
+                known_names.append(tool_name)
+            self._tool_executors = tools.materialize(known_names, cwd)
+            descriptors = [d for n in known_names if (d := tools.lookup(n)) is not None]
+            self._tool_schemas = translation.build_tool_schemas(descriptors)
 
     @property
     def name(self) -> str:
