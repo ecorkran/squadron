@@ -53,9 +53,11 @@ class AgentConfig(BaseModel):
     api_key: str | None = None
     auth_token: str | None = None
     base_url: str | None = None
-    cwd: str | None = None  # SDK agents: working directory
+    cwd: str | None = None  # SDK and API agents: working directory
     setting_sources: list[str] | None = None  # SDK agents: e.g. ["project"]
-    allowed_tools: list[str] | None = None  # SDK agents: tool whitelist
+    # SDK and API agents: tool whitelist. Note the vocabularies differ — SDK names
+    # (e.g. "Read") vs. squadron registry names — see slice-262 decision D1.
+    allowed_tools: list[str] | None = None
     permission_mode: str | None = None  # SDK agents: permission handling
     credentials: dict[str, Any] = Field(default_factory=dict)
 

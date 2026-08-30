@@ -9,14 +9,18 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 import openai
-from openai import AsyncOpenAI, AsyncStream
-from openai.types.chat import ChatCompletionChunk, ChatCompletionMessageParam
+from openai import AsyncOpenAI, AsyncStream, omit
+from openai.types.chat import (
+    ChatCompletionChunk,
+    ChatCompletionMessageParam,
+    ChatCompletionToolUnionParam,
+)
 
 # squadron.tools (the package, not squadron.tools.registry) is imported for its
 # registration side effect: it guarantees built-in tools are registered before this
 # module's constructor calls registry.lookup/materialize.
 import squadron.tools as tools
-from squadron.config.manager import get_typed_config
+from squadron.config.keys import CONFIG_KEYS
 from squadron.core.models import AgentState, Message
 from squadron.logging import get_logger
 from squadron.providers.errors import (
@@ -31,6 +35,14 @@ from squadron.tools import ToolExecutor, ToolResult
 _log = get_logger("squadron.providers.openai.agent")
 
 
+def _int_key_default(key: str) -> int:
+    """Return a registered ConfigKey's declared default, without touching config files."""
+    default = CONFIG_KEYS[key].default
+    if not isinstance(default, int):
+        raise TypeError(f"config key {key!r} default must be an int, got {default!r}")
+    return default
+
+
 @dataclass(frozen=True)
 class TurnResult:
     """Raw aggregated output of a single streamed API turn.
@@ -40,7 +52,7 @@ class TurnResult:
     """
 
     text: str
-    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
 
 
 class OpenAICompatibleAgent:
@@ -55,6 +67,8 @@ class OpenAICompatibleAgent:
         *,
         allowed_tools: list[str] | None = None,
         cwd: str | None = None,
+        max_tool_iterations: int | None = None,
+        max_history_chars: int | None = None,
     ) -> None:
         self._name = name
         self._client = client
@@ -62,6 +76,19 @@ class OpenAICompatibleAgent:
         self._history: list[dict[str, Any]] = []
         self._state = AgentState.idle
         self._cwd = cwd
+        # Loop bounds are resolved by the caller (the provider reads user config) so
+        # that no config file I/O happens inside an async turn. Falling back to the
+        # registered ConfigKey default keeps the single source of truth in keys.py.
+        self._max_tool_iterations = (
+            max_tool_iterations
+            if max_tool_iterations is not None
+            else _int_key_default("agent.max_tool_iterations")
+        )
+        self._max_history_chars = (
+            max_history_chars
+            if max_history_chars is not None
+            else _int_key_default("agent.max_history_chars")
+        )
 
         if system_prompt is not None:
             self._history.append({"role": "system", "content": system_prompt})
@@ -77,7 +104,7 @@ class OpenAICompatibleAgent:
         self._tool_schemas: list[dict[str, object]] = []
         if requested_tools:
             assert cwd is not None  # narrowed by the raise above
-            known_names = []
+            known_names: list[str] = []
             for tool_name in requested_tools:
                 if tools.lookup(tool_name) is None:
                     _log.warning(
@@ -151,17 +178,15 @@ class OpenAICompatibleAgent:
         app_name = os.environ.get("SQUADRON_APP_NAME")
         extra_body = {"user": app_name} if app_name else None
 
-        create_kwargs: dict[str, Any] = {
-            "model": self._model,
-            "messages": cast(list[ChatCompletionMessageParam], messages),
-            "stream": True,
-            "extra_body": extra_body,
-        }
-        if tool_schemas:
-            create_kwargs["tools"] = tool_schemas
-
+        # Arguments are passed explicitly rather than unpacked from a dict[str, Any]:
+        # **kwargs unpacking erases the SDK's typed overload, leaving the whole
+        # chunk-aggregation block below untyped.
         stream: AsyncStream[ChatCompletionChunk] = await self._client.chat.completions.create(
-            **create_kwargs
+            model=self._model,
+            messages=cast(list[ChatCompletionMessageParam], messages),
+            stream=True,
+            extra_body=extra_body,
+            tools=cast(list[ChatCompletionToolUnionParam], tool_schemas) if tool_schemas else omit,
         )
         async for chunk in stream:
             if not chunk.choices:
@@ -202,7 +227,7 @@ class OpenAICompatibleAgent:
         raw_arguments = function.get("arguments", "")
 
         try:
-            arguments = json.loads(raw_arguments) if raw_arguments else {}
+            parsed: object = json.loads(raw_arguments) if raw_arguments else {}
         except json.JSONDecodeError as exc:
             _log.warning(
                 "Tool call %r has malformed JSON arguments (%s): %r",
@@ -211,6 +236,18 @@ class OpenAICompatibleAgent:
                 raw_arguments,
             )
             return f"Error: arguments for tool '{tool_name}' are not valid JSON: {exc}"
+
+        # Executors take a keyword mapping; valid JSON of any other shape (a list,
+        # a bare scalar) is still an unusable argument set.
+        if not isinstance(parsed, dict):
+            _log.warning(
+                "Tool call %r arguments are %s, not a JSON object: %r",
+                tool_name,
+                type(parsed).__name__,
+                raw_arguments,
+            )
+            return f"Error: arguments for tool '{tool_name}' must be a JSON object."
+        arguments = cast(dict[str, object], parsed)
 
         executor = self._tool_executors.get(tool_name)
         if executor is None:
@@ -248,9 +285,8 @@ class OpenAICompatibleAgent:
         (design §Control flow) — intermediate turns are appended to history and
         executed against, but never yielded.
         """
-        assert self._cwd is not None  # guaranteed by D8 whenever tools are configured
-        max_iterations = get_typed_config("agent.max_tool_iterations", int, cwd=self._cwd)
-        max_history_chars = get_typed_config("agent.max_history_chars", int, cwd=self._cwd)
+        max_iterations = self._max_tool_iterations
+        max_history_chars = self._max_history_chars
         budget_guard_fired = False
 
         for _iteration in range(max_iterations):
@@ -265,10 +301,19 @@ class OpenAICompatibleAgent:
                 return translation.build_messages(turn.text, [], self._name, self._model)
 
             for tool_call in turn.tool_calls:
+                tool_call_id = tool_call.get("id", "")
+                if not tool_call_id:
+                    # An OpenAI-compatible backend streamed a tool call with no id.
+                    # The result entry cannot be matched to its call, and the next
+                    # request will be rejected for an unmatched tool_call_id — surface
+                    # it here rather than as an opaque API error several turns later.
+                    _log.warning(
+                        "Model streamed a tool call with no id (function=%r); "
+                        "the resulting history entry cannot be matched to its call",
+                        tool_call.get("function", {}).get("name", ""),
+                    )
                 content = await self._execute_tool_call(tool_call)
-                self._history.append(
-                    translation.build_tool_result_entry(tool_call.get("id", ""), content)
-                )
+                self._history.append(translation.build_tool_result_entry(tool_call_id, content))
 
             if not budget_guard_fired and self._history_chars() > max_history_chars:
                 budget_guard_fired = True

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squadron.config.manager import set_config
 from squadron.core.models import AgentConfig
 from squadron.providers.errors import ProviderAuthError, ProviderError
 from squadron.providers.openai.provider import OpenAICompatibleProvider
@@ -101,6 +102,26 @@ class TestCreateAgent:
             agent = await provider.create_agent(config)
         assert "read_file" in agent._tool_executors  # pyright: ignore[reportPrivateUsage]
         assert agent._cwd == config.cwd  # pyright: ignore[reportPrivateUsage]
+
+    @pytest.mark.asyncio
+    async def test_resolves_loop_bounds_from_config_into_agent(
+        self,
+        provider: OpenAICompatibleProvider,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        patch_config_paths: dict[str, Path],
+    ) -> None:
+        # Loop bounds are resolved here, at the composition boundary, so the agent
+        # never does blocking config file I/O from inside an async turn.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        set_config("agent.max_tool_iterations", "7")
+        set_config("agent.max_history_chars", "1234")
+        config = AgentConfig(**{**_BASE_CONFIG, "cwd": str(tmp_path)})
+        with patch("squadron.providers.openai.provider.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            agent = await provider.create_agent(config)
+        assert agent._max_tool_iterations == 7  # pyright: ignore[reportPrivateUsage]
+        assert agent._max_history_chars == 1234  # pyright: ignore[reportPrivateUsage]
 
 
 class TestEnhancedCredentialResolution:

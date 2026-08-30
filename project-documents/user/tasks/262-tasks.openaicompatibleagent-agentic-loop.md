@@ -453,35 +453,35 @@ on the constructor work.)*
 
 ## Task 8: Close-out
 
-- [ ] **8.1 Request a slice review** — Effort: 1/5
-  - [ ] Follow the project's standard code-review process against the implementation on this
+- [x] **8.1 Request a slice review** — Effort: 1/5
+  - [x] Follow the project's standard code-review process against the implementation on this
         branch, per `.claude/rules/review-code.md`.
-  - [ ] Address any CONCERNS findings before proceeding, verifying each against the actual code
+  - [x] Address any CONCERNS findings before proceeding, verifying each against the actual code
         (as was done for the slice-design review, commit `0f88c66`) rather than accepting
         findings at face value.
-  - [ ] Success: review verdict is PASS, or all CONCERNS are addressed and documented.
+  - [x] Success: review verdict is PASS, or all CONCERNS are addressed and documented.
 
-- [ ] **8.2 Refine the design's Verification Walkthrough** — Effort: 1/5
-  - [ ] The design's Verification Walkthrough is marked "Draft — to be replaced with actual
+- [x] **8.2 Refine the design's Verification Walkthrough** — Effort: 1/5
+  - [x] The design's Verification Walkthrough is marked "Draft — to be replaced with actual
         commands and real output at Phase 6 close-out." Replace it with the commands actually
         run in Tasks 6–7 and their real output.
-  - [ ] Set the design document's `status` to `complete` and update `dateUpdated`.
-  - [ ] Check off slice 262 in
+  - [x] Set the design document's `status` to `complete` and update `dateUpdated`.
+  - [x] Check off slice 262 in
         `project-documents/user/architecture/260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md`
         (Feature Slices entry 2), materializing the checkbox the way entry 1 was checked off for
         261. Leave the initiative itself `not_started` — 263–266 remain.
 
-- [ ] **8.3 DEVLOG and commit** — Effort: 1/5
-  - [ ] Append a DEVLOG entry to `DEVLOG.md` at the repo root covering: the constructor threading,
+- [x] **8.3 DEVLOG and commit** — Effort: 1/5
+  - [x] Append a DEVLOG entry to `DEVLOG.md` at the repo root covering: the constructor threading,
         the `_stream_turn` split, the loop's three termination conditions, the D8/D9 fixes
         carried from the design review, and the fact that no pipeline or review caller declares
         tools in canonical vocabulary yet (D1's WARNING window continues until 265).
-  - [ ] Set this task file's `status` to `complete` and update `dateUpdated`.
-  - [ ] `.venv/bin/ruff format .`, then commit:
+  - [x] Set this task file's `status` to `complete` and update `dateUpdated`.
+  - [x] `.venv/bin/ruff format .`, then commit:
         `docs: close out slice 262 — agentic loop implementation`.
-  - [ ] Do **not** merge, push, or delete the branch without explicit instruction from the
+  - [x] Do **not** merge, push, or delete the branch without explicit instruction from the
         Project Manager.
-  - [ ] Success: clean tree; the frontmatter gate passes; `git log --oneline <target>..HEAD`
+  - [x] Success: clean tree; the frontmatter gate passes; `git log --oneline <target>..HEAD`
         shows the per-task commits from groups 1–7 plus this close-out commit.
 
 ---

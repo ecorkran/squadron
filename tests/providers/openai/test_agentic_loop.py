@@ -11,8 +11,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from openai import omit
 
-from squadron.config.manager import set_config
 from squadron.core.models import Message, MessageType
 from squadron.providers.errors import ProviderError
 from squadron.providers.openai.agent import OpenAICompatibleAgent, TurnResult
@@ -36,7 +36,11 @@ def _make_agent(
     allowed_tools: list[str] | None = None,
     cwd: str | None = None,
     client: Any = None,
+    max_tool_iterations: int | None = None,
+    max_history_chars: int | None = None,
 ) -> OpenAICompatibleAgent:
+    # Loop bounds are injected, not read from config: the agent resolves them at
+    # construction time (in the provider), so no test touches the real user config.
     return OpenAICompatibleAgent(
         name="bot",
         client=client if client is not None else _make_client(),
@@ -44,6 +48,8 @@ def _make_agent(
         system_prompt=None,
         allowed_tools=allowed_tools,
         cwd=cwd,
+        max_tool_iterations=max_tool_iterations,
+        max_history_chars=max_history_chars,
     )
 
 
@@ -129,7 +135,9 @@ class TestStreamTurn:
         agent = _make_agent(client=client)
         await agent._stream_turn([], tool_schemas=None)  # pyright: ignore[reportPrivateUsage]
         _, kwargs = client.chat.completions.create.call_args
-        assert "tools" not in kwargs
+        # omit is the SDK's "parameter not sent" sentinel — it is dropped from the
+        # wire payload, unlike an explicit tools=None.
+        assert kwargs["tools"] is omit
 
     @pytest.mark.asyncio
     async def test_tools_kwarg_present_when_tool_schemas_given(self) -> None:
@@ -284,17 +292,20 @@ class TestAgenticLoop:
     async def test_max_iterations_guard_raises_and_logs_warning(
         self,
         tmp_path: Path,
-        patch_config_paths: dict[str, Path],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         caplog.set_level(logging.WARNING)
-        set_config("agent.max_tool_iterations", "2")
         # Every turn calls a tool — the loop never finalizes.
         never_ending_call = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
         (tmp_path / "a.txt").write_text("A")
         client = _make_client()
         client.chat.completions.create = AsyncMock(return_value=_async_stream(never_ending_call))
-        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        agent = _make_agent(
+            allowed_tools=["read_file"],
+            cwd=str(tmp_path),
+            client=client,
+            max_tool_iterations=2,
+        )
 
         with pytest.raises(ProviderError):
             await _collect(agent, _USER_MSG)
@@ -307,11 +318,9 @@ class TestAgenticLoop:
     async def test_history_budget_guard_fires_once_and_continues(
         self,
         tmp_path: Path,
-        patch_config_paths: dict[str, Path],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         caplog.set_level(logging.WARNING)
-        set_config("agent.max_history_chars", "10")
         (tmp_path / "a.txt").write_text("A")
         read_call = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
         client = _make_client()
@@ -322,7 +331,12 @@ class TestAgenticLoop:
                 _async_stream(text_chunk("done")),
             ]
         )
-        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        agent = _make_agent(
+            allowed_tools=["read_file"],
+            cwd=str(tmp_path),
+            client=client,
+            max_history_chars=10,
+        )
         msgs = await _collect(agent, _USER_MSG)
 
         assert len(msgs) == 1
@@ -345,7 +359,7 @@ class TestAgenticLoop:
         # asks the model to finalize, and continuing to advertise tools would let it
         # ignore that and keep calling them anyway.
         last_call_kwargs = client.chat.completions.create.call_args_list[-1].kwargs
-        assert "tools" not in last_call_kwargs
+        assert last_call_kwargs["tools"] is omit
 
     @pytest.mark.asyncio
     async def test_append_only_history_is_strict_prefix_extension(self, tmp_path: Path) -> None:
@@ -387,3 +401,43 @@ class TestAgenticLoop:
         assert client.chat.completions.create.call_count == 1
         assert len(msgs) == 1
         assert msgs[0].content == "no tools needed"
+
+    @pytest.mark.asyncio
+    async def test_tool_call_without_id_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # An OpenAI-*compatible* backend may stream a tool call with no id. The
+        # resulting history entry cannot be matched to its call, so the next request
+        # is rejected upstream — the loop must make that observable here rather than
+        # letting it surface as an opaque API error several turns later.
+        caplog.set_level(logging.WARNING)
+        (tmp_path / "a.txt").write_text("A")
+        idless_call = tool_chunk(0, "", "read_file", json.dumps({"path": "a.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(idless_call),
+                _async_stream(text_chunk("done")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[0].content == "done"
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("no id" in r.getMessage() for r in warnings)
+
+    @pytest.mark.asyncio
+    async def test_non_object_json_args_returns_error_and_logs_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Valid JSON that isn't an object still can't be splatted into an executor,
+        # which takes a keyword mapping.
+        caplog.set_level(logging.WARNING)
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path))
+        tc = _tool_call("c1", "read_file", "[1, 2]")
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+
+        assert "must be a JSON object" in content
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("not a JSON object" in r.getMessage() for r in warnings)
