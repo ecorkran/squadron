@@ -7,7 +7,7 @@ dependencies: [262]
 interfaces: [264, 265]
 dateCreated: 20260831
 dateUpdated: 20260831
-status: not_started
+status: complete
 ---
 
 # Slice Design: Dispatch Action Wiring and Pipeline YAML Surface
@@ -313,6 +313,13 @@ or a `StepSchema` field most step types ignore (ISP violation). The step-type va
 the existing, already-surfaced extension point and yields squadron's own `ValidationError`
 type. This supersedes the slice plan's reference to the `auth_policy` pattern, which is
 pipeline-level and not applicable to a per-step field.
+
+The architecture doc's phrasing for this slice — "Pipeline schema validates the field (list of
+registered tool names)" (`260-arch...md:93`) — is satisfied by this choice, not departed from.
+It names the *requirement* (the field is validated against the registry before a run starts),
+and `validate_pipeline` calls each step type's `validate()` for every step, so a bad tool name
+fails at load time through the single entry point every CLI path already uses. What changes is
+only which layer houses the check, for the SRP/ISP reasons above.
 
 **D2 — `cwd` is threaded unconditionally, not only when tools are declared.** Conditional
 threading would create a second code path whose only difference is a field the agent ignores
