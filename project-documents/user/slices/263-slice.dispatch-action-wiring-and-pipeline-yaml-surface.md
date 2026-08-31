@@ -7,7 +7,7 @@ dependencies: [262]
 interfaces: [264, 265]
 dateCreated: 20260831
 dateUpdated: 20260831
-status: complete
+status: in_progress
 ---
 
 # Slice Design: Dispatch Action Wiring and Pipeline YAML Surface
@@ -353,26 +353,32 @@ cheap; the failure is loud either way.
 
 ## Verification Walkthrough
 
+Verified during implementation on 20260831. Commands below are the actual invocations run,
+with observed output. One correction applies throughout: `sq run` takes the slice index as a
+**positional** argument, not `--slice`. The pre-implementation draft of this section used
+`--slice <n>`, which exits with `No such option: --slice`.
+
 ### 1. Validation rejects a bad tool name before spending a token
 
-Create a scratch pipeline with a typo:
-
-```yaml
-name: tool-validation-check
-params:
-  slice: required
-steps:
-  - dispatch:
-      prompt: "hello"
-      allowed_tools: [read_file, write_fil]
-```
+Copy the shipped pipeline with a typo in one tool name, then validate it:
 
 ```bash
-uv run sq run tool-validation-check --slice 263 --dry-run
+sed 's/allowed_tools: \[read_file, write_file\]/allowed_tools: [read_fil, write_file]/' \
+  src/squadron/data/pipelines/test-p4.yaml > /tmp/bad-tools.yaml
+uv run sq run /tmp/bad-tools.yaml 263 --validate
 ```
 
-Expect a non-zero exit and an error naming `write_fil` and listing the registered tools
-(`read_file`, `write_file`, `bash`). No model call is made.
+Observed — exit code 1, no model call:
+
+```
+Validation errors for 'P4':
+  allowed_tools: Tool 'read_fil' is not registered. Available tools:
+['read_file', 'write_file', 'bash']
+```
+
+The registered-tool list comes from `tools.list_tools()`, so it stays correct as tools are
+added. `--dry-run` reaches the same gate and prints the same errors, so either flag
+demonstrates the check.
 
 ### 2. Absent field changes nothing
 
@@ -380,8 +386,13 @@ Expect a non-zero exit and an error naming `write_fil` and listing the registere
 uv run pytest tests/pipeline/ -q
 ```
 
-The existing exact-equality `expand()` tests for `dispatch` and the phase step types pass
-unmodified — that is the regression gate proving criterion 4.
+Observed: `1212 passed, 2 skipped`. The pre-existing exact-equality `expand()` tests for
+`dispatch` and the phase step types pass **unmodified** — criterion 4's regression gate.
+
+Confirmed to be a live guard, not a vacuous one: temporarily rewriting the conditional
+pass-through as unconditional (`action_config["allowed_tools"] = cfg.get("allowed_tools")`)
+fails 5 tests in `tests/pipeline/steps/test_dispatch_step.py`, including
+`test_expand_omits_allowed_tools_when_absent`.
 
 ### 3. Tool call actually writes a file (mocked endpoint)
 
@@ -389,25 +400,60 @@ unmodified — that is the regression gate proving criterion 4.
 uv run pytest tests/pipeline/test_dispatch_tools.py -v
 ```
 
-The integration test stands up a mocked OpenAI-compatible endpoint returning a `write_file`
-tool call followed by a final text turn, runs a one-step pipeline in a `tmp_path` cwd, and
-asserts the file exists with the expected content and the `ActionResult` carries the final
-turn's text.
+Observed: 2 passed.
 
-### 4. End-to-end with a real non-SDK model
+`test_dispatch_tool_call_writes_file_to_disk` drives the real
+`DispatchAction` -> `one_shot_dispatch` -> agent registry -> `OpenAICompatibleAgent` ->
+squadron tool registry -> filesystem path, mocking only `AsyncOpenAI`. It asserts the file
+**exists on disk** in a `tmp_path` cwd with the expected content, and that
+`ActionResult.outputs["response"]` carries the final turn's text rather than the tool-call
+turn.
+
+`test_reverting_cwd_threading_fails_loudly` is the D2 regression guard. It patches
+`one_shot_dispatch` to pass `cwd=None` — what an actual revert of the threading does — and
+asserts the dispatch fails with `cwd` named in the error and no file written. Note the guard
+must model the revert as `cwd=None`, not `cwd=""`: the agent's check is `cwd is None`, and an
+empty string instead resolves to the process working directory, writing the file somewhere
+unexpected rather than failing.
+
+### 4. End-to-end with a real non-SDK model — NOT VERIFIED
+
+**Status: deferred. This step could not be executed from the implementing session and remains
+outstanding.**
 
 ```bash
-uv run sq run test-p4 --slice <some-unstarted-slice> -v
+uv run sq run test-p4 <unstarted-slice-index> -v
 ```
 
-Expect: the design step dispatches to `kimi27` with `tools` in the request; the model issues a
-`write_file` call; the slice-design file exists at
-`project-documents/user/slices/<nnn>-slice.<name>.md` after the step; the subsequent review
-step finds it as input rather than reporting a missing artifact.
+Attempted against slice 264. The run exits immediately:
 
-Compare against `git stash`-ing the `allowed_tools` line from `test-p4.yaml` and re-running:
-the model produces prose describing the design and no file appears. That contrast is the
-slice's whole point.
+```
+Error: SDK pipeline execution cannot run inside a Claude Code session.
+Use --prompt-only mode or run from a standard terminal.
+```
+
+This is a pre-existing, unconditional guard in
+[cli/commands/run.py:148](../../../src/squadron/cli/commands/run.py#L148): it triggers on the
+`CLAUDECODE` environment variable before any pipeline-shape classification, so it blocks even
+a Claude-free pipeline. `uv run sq run test-p4 264 --explain` confirms this pipeline needs no
+persistent session and routes every step non-SDK — the guard is simply broader than its
+message suggests. Slice 263 neither introduced nor should change this behavior.
+
+To complete this step, run the two cases **from a standard terminal**, outside any Claude Code
+session:
+
+1. **Positive case.** `uv run sq run test-p4 <unstarted-slice-index> -v`. Expect the design
+   step to dispatch to `kimi27` with `tools` in the request, the model to issue a `write_file`
+   call, the slice-design file to exist at
+   `project-documents/user/slices/<nnn>-slice.<name>.md` after the step, and the review step to
+   find it as input rather than reporting a missing artifact. The run pauses at an interactive
+   human checkpoint after review.
+2. **Contrast case.** Remove the `allowed_tools` line from
+   `src/squadron/data/pipelines/test-p4.yaml`, re-run, and confirm the model produces prose
+   describing the design while no file appears. That contrast is the slice's whole point.
+
+Until both are observed, the end-to-end claim rests on step 3's automated coverage, which
+exercises the same code path against a mocked endpoint rather than a real model.
 
 ### 5. Quality gates
 
