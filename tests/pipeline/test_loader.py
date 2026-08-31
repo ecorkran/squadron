@@ -262,3 +262,36 @@ class TestValidatePipelineSummaryStep:
         defn = self._make_pipeline({"template": "minimal-sdk", "emit": ["rotate"]})
         errors = validate_pipeline(defn)
         assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# Slice 263 — validate_pipeline surfaces allowed_tools errors
+# ---------------------------------------------------------------------------
+
+
+class TestValidatePipelineAllowedTools:
+    """The registry check is reachable from the real entry point, not just in isolation."""
+
+    def _make_pipeline(self, step_cfg: dict[str, object]) -> PipelineDefinition:
+        from squadron.pipeline.models import PipelineDefinition, StepConfig
+
+        return PipelineDefinition(
+            name="test",
+            description="test",
+            params={},
+            steps=[StepConfig(step_type="dispatch", name="dispatch-step", config=step_cfg)],
+        )
+
+    def test_unknown_tool_produces_validation_error(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        defn = self._make_pipeline({"prompt": "hi", "allowed_tools": ["read_fil"]})
+        errors = validate_pipeline(defn)
+        assert errors
+        assert any(e.field == "allowed_tools" and "read_fil" in e.message for e in errors)
+
+    def test_known_tools_validate_clean(self) -> None:
+        from squadron.pipeline.loader import validate_pipeline
+
+        defn = self._make_pipeline({"prompt": "hi", "allowed_tools": ["read_file"]})
+        assert validate_pipeline(defn) == []
