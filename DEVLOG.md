@@ -14,6 +14,44 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260831
 
+### Slice 263: Task Breakdown (Phase 5)
+
+Twelve tasks written to
+`project-documents/user/tasks/263-tasks.dispatch-action-wiring-and-pipeline-yaml-surface.md`
+(297 lines, no split needed); slice plan entry 3 updated with the tasks reference. Phase 4
+review came back PASS with all five findings at severity `pass`, so the breakdown follows the
+design unchanged.
+
+**Ordering.** Tasks are sequenced so each leaves the suite green: 1-4 add the validation helper
+and wire it into the four step types while nothing yet produces the field; 5-6 add the
+conditional `expand()` pass-through; 7-8 thread `allowed_tools` and `cwd` into `AgentConfig`;
+9-11 prove the end-to-end path. Test tasks sit immediately after their implementation task
+rather than batched at the end.
+
+**Two guards written directly into the task text**, because both are places a junior
+implementer would plausibly do the reasonable-looking wrong thing. First, the `expand()` change
+must be conditional — an absent key has to leave the expanded dict byte-identical, and the
+existing exact-equality tests will fail on an added `"allowed_tools": None`. The task says
+explicitly that this failure is the guard working, not a test to update. Second, task 3 says
+that if the implementer finds themselves editing `loader.py`, stop: `validate_pipeline` already
+calls every step type's `validate()`, and needing a loader change means the design's D1 was
+departed from.
+
+**Assertion quality is specified, not left to taste.** Task 8 requires assertions on the
+resulting `AgentConfig` field values rather than on mock call counts, and task 9 requires
+asserting the file exists on disk. That is deliberate: the failure mode this slice exists to
+prevent — a step running tool-less and the model describing a file it never wrote — is
+invisible to a test that only checks a mock was called. Task 2 likewise requires the
+unknown-name test to assert the bad name appears in the message, since a count-only assertion
+would pass against a message naming the wrong tool.
+
+Task 12 pins the expected diff shape: exactly five source files, with `schema.py`, `loader.py`,
+`executor.py`, `core/models.py`, the agent, and the provider unmodified. Any change there means
+the design was departed from and is a stop-and-reconcile condition rather than a judgment call
+at commit time.
+
+---
+
 ### Slice 263: Dispatch Action Wiring and Pipeline YAML Surface Designed (Phase 4)
 
 Design written to
