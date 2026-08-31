@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squadron.config.manager import set_config
 from squadron.core.models import AgentConfig
 from squadron.providers.errors import ProviderAuthError, ProviderError
 from squadron.providers.openai.provider import OpenAICompatibleProvider
@@ -75,6 +77,51 @@ class TestCreateAgent:
             await provider.create_agent(config)
         _, kwargs = mock_cls.call_args
         assert kwargs["base_url"] == "http://localhost:11434/v1"
+
+    @pytest.mark.asyncio
+    async def test_threads_allowed_tools_and_cwd_into_agent(
+        self,
+        provider: OpenAICompatibleProvider,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        # Review F002: create_agent's tools-configured path was previously exercised
+        # only via an unmodified no-tools test suite plus a manual diff read. Assert
+        # on the *returned agent object* so a future edit that silently drops the
+        # threading is caught.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        config = AgentConfig(
+            **{
+                **_BASE_CONFIG,
+                "allowed_tools": ["read_file"],
+                "cwd": str(tmp_path),
+            }
+        )
+        with patch("squadron.providers.openai.provider.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            agent = await provider.create_agent(config)
+        assert "read_file" in agent._tool_executors  # pyright: ignore[reportPrivateUsage]
+        assert agent._cwd == config.cwd  # pyright: ignore[reportPrivateUsage]
+
+    @pytest.mark.asyncio
+    async def test_resolves_loop_bounds_from_config_into_agent(
+        self,
+        provider: OpenAICompatibleProvider,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        patch_config_paths: dict[str, Path],
+    ) -> None:
+        # Loop bounds are resolved here, at the composition boundary, so the agent
+        # never does blocking config file I/O from inside an async turn.
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        set_config("agent.max_tool_iterations", "7")
+        set_config("agent.max_history_chars", "1234")
+        config = AgentConfig(**{**_BASE_CONFIG, "cwd": str(tmp_path)})
+        with patch("squadron.providers.openai.provider.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            agent = await provider.create_agent(config)
+        assert agent._max_tool_iterations == 7  # pyright: ignore[reportPrivateUsage]
+        assert agent._max_history_chars == 1234  # pyright: ignore[reportPrivateUsage]
 
 
 class TestEnhancedCredentialResolution:

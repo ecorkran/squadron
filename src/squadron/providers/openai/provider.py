@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
 
+from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
 from squadron.providers.auth import resolve_auth_strategy
@@ -53,12 +54,27 @@ class OpenAICompatibleProvider:
 
         from squadron.providers.openai.agent import OpenAICompatibleAgent
 
+        # Agentic-loop bounds are resolved once here rather than on every turn, so a
+        # long agentic loop does not repeat this config read per iteration.
+        config_cwd = config.cwd or "."
+        try:
+            max_tool_iterations = int(
+                get_typed_config("agent.max_tool_iterations", int, cwd=config_cwd)
+            )
+            max_history_chars = int(get_typed_config("agent.max_history_chars", int, cwd=config_cwd))
+        except ValueError as exc:
+            raise ProviderError(f"invalid agentic-loop configuration: {exc}") from exc
+
         _log.debug("Creating OpenAI agent %r (model=%s)", config.name, config.model)
         return OpenAICompatibleAgent(
             name=config.name,
             client=client,
             model=config.model,
             system_prompt=config.instructions,
+            allowed_tools=config.allowed_tools,
+            cwd=config.cwd,
+            max_tool_iterations=max_tool_iterations,
+            max_history_chars=max_history_chars,
         )
 
     async def validate_credentials(self) -> bool:

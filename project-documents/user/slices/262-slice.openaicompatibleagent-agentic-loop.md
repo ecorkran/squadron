@@ -6,8 +6,8 @@ parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: [261]
 interfaces: [263, 264, 265, 266]
 dateCreated: 20260827
-dateUpdated: 20260828
-status: not_started
+dateUpdated: 20260829
+status: complete
 ---
 
 # Slice Design: OpenAICompatibleAgent Agentic Loop
@@ -431,39 +431,37 @@ unreachable from this caller because of the D1 pre-filter, which is intentional.
 
 ## Verification Walkthrough
 
-*Draft — to be replaced with actual commands and real output at Phase 6 close-out.*
-
-All commands run from the project root. `ruff`/`pyright`/`pytest` are not on PATH; invoke from
-`.venv/bin/`.
+Run from the project root. `ruff`/`pyright`/`pytest` are not on PATH; invoke from `.venv/bin/`.
+Commands and output below are real, captured at close-out on commit `dbb7549`.
 
 **1. No-tools path is untouched.** The strongest regression signal is the pre-existing suite
-passing unmodified:
+passing unmodified, plus the new loop/constructor/tool-execution tests alongside it:
 
 ```bash
 .venv/bin/pytest tests/providers/openai/ -q
 ```
 
-Expect the original 15 agent tests plus the new loop tests, all passing.
-
-**2. Loop drives a real tool against a real filesystem.** With a mocked endpoint scripted to
-return a `write_file` tool call on turn 1 and plain text on turn 2, pointed at a temp dir:
-
-```bash
-.venv/bin/pytest tests/providers/openai/test_agentic_loop.py -q
+```
+........................................................................ [100%]
+72 passed in 0.52s
 ```
 
-The test asserts the file exists on disk with the expected content, and that the yielded
-Messages contain only turn 2's text.
+The original 15 `test_agent.py` tests (including
+`test_handle_message_yields_system_for_tool_call`) are unmodified and pass; 57 further tests
+cover Tasks 2–6.
 
-**3. Intermediate turns are not surfaced.** Same fixture, asserting no yielded Message carries
-turn 1's content and no `MessageType.system` tool-call message is emitted when tools are
-configured.
+**2–3. Loop drives a real tool against a real filesystem; intermediate turns are not
+surfaced.** `TestAgenticLoop.test_normal_termination_suppresses_intermediate_turn`
+(`tests/providers/openai/test_agentic_loop.py`) scripts a `write_file` tool call on turn 1 and
+plain text on turn 2 against a real temp directory (via the real slice-261 registry, not a
+mock), then asserts: exactly 2 `create()` calls; the yielded Messages contain only turn 2's
+text; no `MessageType.system` tool-call Message is emitted; the file exists on disk with the
+expected content. Included in the 72 passing above.
 
-**4. Error paths return to the model rather than crashing, and are observable.** Scripted
-responses for malformed JSON args and an unknown tool name; assert the loop reaches turn 2,
-the history contains a `role: "tool"` entry whose content names the failure, and `caplog`
-captured a WARNING for each (D9). The log assertion is the half that catches a regression
-silently swallowing a model protocol violation.
+**4. Error paths return to the model rather than crashing, and are observable (D9).**
+`TestExecuteToolCall` (5 cases: malformed JSON, unknown tool, executor error-result,
+executor-raises, success) asserts both the returned tool-result content and the `caplog`
+level for each branch. Included in the 72 passing above.
 
 **4a. A tool set with no jail root is refused (D8).**
 
@@ -471,34 +469,149 @@ silently swallowing a model protocol violation.
 .venv/bin/pytest tests/providers/openai/test_agentic_loop.py -q -k cwd
 ```
 
-Assert `ProviderError` on constructing an agent with `allowed_tools=["read_file"]` and
-`cwd=None`, and no error with an empty tool set and `cwd=None`.
+```
+.....                                                                    [100%]
+5 passed, 16 deselected in 0.02s
+```
 
-**5. Guards fire.** With `agent.max_tool_iterations` set to 2 in a temp-dir config and an
-endpoint that always returns a tool call, assert `ProviderError` is raised and a WARNING is
-logged. With `agent.max_history_chars` set low, assert the budget message appears exactly
-once. Both use the real config path rather than patching module attributes, which also proves
-the keys are wired.
+Covers: no tools + no `cwd` doesn't raise; a known tool + no `cwd` raises `ProviderError`;
+requesting only unknown names + no `cwd` also raises (Constraint 3 — the check is against the
+*requested* set, not the post-filter one).
 
-**6. Cache-friendly prefix.** Capture each `create()` call's `messages`; assert
-`calls[n].messages[:len(calls[n-1].messages)] == calls[n-1].messages` for every n.
+**5. Guards fire, using the real config path.**
 
-**7. Unknown declared names degrade loudly (D1).** Construct an agent with
-`allowed_tools=["Read", "read_file"]`; assert `read_file` is materialized, `Read` is dropped,
-and a WARNING naming `Read` is logged.
+```bash
+.venv/bin/pytest tests/providers/openai/test_agentic_loop.py -q -k max_iterations
+```
+
+```
+.                                                                        [100%]
+1 passed, 20 deselected in 0.34s
+```
+
+```bash
+.venv/bin/pytest tests/providers/openai/test_agentic_loop.py -q -k budget
+```
+
+```
+.                                                                        [100%]
+1 passed, 20 deselected in 0.34s
+```
+
+Both tests set the config key via `set_config` against a real temp-dir `.squadron.toml` (the
+`patch_config_paths` fixture), not a monkeypatched module attribute — proving the keys are
+actually wired through `get_typed_config`. The history-budget test additionally asserts that
+once the guard fires, no `tools` kwarg is sent on the following `create()` call (a slice-review
+fix: the notice is a plain `user`-role message, not a fake `role: "tool"` entry with an empty
+`tool_call_id`, and tool schemas are withdrawn so the model cannot simply ignore the notice and
+keep calling tools).
+
+**6. Cache-friendly prefix.** `test_append_only_history_is_strict_prefix_extension` snapshots
+each `create()` call's `messages` (deep-copied at call time, since the mock otherwise captures
+a reference into the same growing list) and asserts every successive call's list is a strict
+prefix-extension of the previous one. Included in the 72 passing above.
+
+**7. Unknown declared names degrade loudly (D1).**
+`test_mixed_known_and_unknown_drops_unknown_with_one_warning` constructs an agent with
+`allowed_tools=["Read", "read_file"]`; asserts `read_file` is materialized, `Read` is dropped,
+and exactly one WARNING naming `Read` is logged. Included in the 72 passing above.
 
 **8. Full-suite and static checks.**
 
 ```bash
-.venv/bin/ruff check .
-.venv/bin/pyright src/squadron/providers/openai/
 .venv/bin/pytest -q
 ```
 
-Note: whole-repo `pyright` reports a large pre-existing error count unrelated to this work;
-verify with the scoped invocation above.
+```
+3115 passed, 2 skipped, 3 warnings in 430.59s (0:07:10)
+```
+
+(Design baseline was ~3078 passed, 2 skipped, prior to this slice's additions; the delta is
+this slice's new tests. The suite takes ~7 minutes end-to-end because
+`tests/metrology/test_audit_cli.py`'s variance-series tests sleep for real against
+`metrology.audit_run_cooldown_s` — pre-existing, unrelated to this slice. The 3 warnings are
+pre-existing `coroutine ... was never awaited` `RuntimeWarning`s in
+`tests/cli/commands/test_run.py` / `test_run_pipeline_lazy.py`, also unrelated.)
+
+```bash
+.venv/bin/ruff check .
+```
+
+```
+All checks passed!
+```
+
+```bash
+.venv/bin/pyright src/squadron/providers/openai/
+.venv/bin/pyright src/squadron/config/
+```
+
+Both report errors — **known and pre-existing, not introduced by this slice.** The `openai`
+and `pydantic_settings`/`tomli_w` packages' type stubs are not resolving in this project's
+pyright/venv configuration; every symbol imported from them type-checks as `Unknown`, cascading
+into every file that touches them. Verified via `git stash` before any slice-262 change: `main`
+already reported 72 errors on `src/squadron/providers/openai/` and equivalent counts in
+`config/`. `src/squadron/config/keys.py` — the only file this slice changed in `config/` — is
+independently clean (`pyright src/squadron/config/keys.py` → 0 errors). This baseline issue was
+raised to and explicitly accepted by the Project Manager as out of scope for slice 262; fixing
+the stub-resolution problem project-wide is a separate task.
+
+Do **not** run whole-repo `pyright` as a pass/fail gate — it reports a large pre-existing error
+count unrelated to this work, for the same reason (261 precedent).
 
 **9. Live smoke (optional, requires credentials).** A non-SDK review against a tool-capable
 model, run at `-vv`, shows the DEBUG tool-call lines and the INFO loop summary. Until slice
 265 migrates template vocabulary, this run logs the D1 WARNING and proceeds tool-less — that
-is the expected intermediate state, not a defect.
+is the expected intermediate state, not a defect. Not run at close-out (no live credentials in
+this environment); the mocked-endpoint tests above are the verified substitute.
+
+### Known follow-ups (not fixed in this slice)
+
+Raised by a multi-agent code review of the branch diff at close-out; verified against the
+actual code, triaged with the Project Manager, and deliberately deferred rather than expanded
+into this slice's scope:
+
+- `get_typed_config` can raise a bare `ValueError` on a misconfigured (non-integer)
+  `agent.max_tool_iterations`/`agent.max_history_chars` value; nothing between
+  `_run_agentic_loop` and `handle_message`'s `except` clauses catches it, so it would propagate
+  uncaught instead of surfacing as a `ProviderError`.
+- Multiple tool calls within a single turn are awaited sequentially in `_run_agentic_loop`
+  rather than concurrently (`asyncio.gather`) — correct today, but leaves wall-clock
+  performance on the table for multi-tool turns.
+- `_execute_tool_call` builds ad hoc `f"Error: ..."` strings for the malformed-JSON and
+  unknown-tool branches instead of reusing the `ToolResult`/`_error` convention already
+  established in `tools/builtin.py`.
+- `agent.max_tool_iterations` set to `0` skips the loop body entirely (`range(0)`) and raises
+  `ProviderError` with a message implying iterations were attempted, when zero API calls were
+  made. Undocumented, untested edge case.
+- The `AgentConfig.allowed_tools`/`cwd` vocabulary mismatch between SDK-style names (`Read`,
+  `Bash`) and this slice's registry names (`read_file`, `bash`) is **not** a new finding — it
+  is D1, already documented and accepted as the expected state until slice 265 migrates
+  template vocabulary.
+
+Two items previously listed here were **resolved** during review follow-up (commit `7d49d58`
+and the one following it): the uncaught `get_typed_config` `ValueError` is now wrapped as
+`ProviderError` in `create_agent`, and the id-less tool call no longer substitutes `""` — it
+raises before executing the tool.
+
+#### Raised by the second review pass (verdict CONCERNS, at `7d49d58`)
+
+Verified against the code and deferred as pre-existing gaps rather than regressions:
+
+- **No cancellation safety around the tool-dispatch loop.** `asyncio.CancelledError` /
+  `GeneratorExit` propagate through `_run_agentic_loop` (they are `BaseException`, so
+  `_execute_tool_call`'s `except Exception` does not catch them). A client disconnecting mid-
+  `bash` leaves an assistant `tool_calls` entry with only some of its results appended; the
+  agent object survives and every later `handle_message` sends that unmatched history. Nothing
+  logs at WARNING+ at the moment of corruption.
+- **No wall-clock deadline.** The loop bounds turns and history size, never time. `AsyncOpenAI`
+  is constructed with no `timeout=` (SDK default 600s) and `bash` allows 120s per call, so a
+  worst-case turn at `max_tool_iterations=20` runs for tens of minutes yielding no intermediate
+  output — externally indistinguishable from a hang.
+- **Loop bounds are not range-validated.** `get_typed_config` checks the type but not the value,
+  and `ConfigKey` has no range facility; a non-positive `agent.max_tool_iterations` is accepted
+  at the boundary and surfaces later as the misleading max-iterations error above.
+- **`self._cwd` is stored but has no reader in `src/`** — it became dead when the `assert` that
+  used it was removed. Its only consumer is a test assertion.
+- **No `tests/load/` tier exists repo-wide**, though this slice adds a network + concurrency
+  path that the Python rules say warrants one. Predates this slice.
