@@ -260,3 +260,22 @@ def test_validate_rejects_unknown_tool(design_step: PhaseStepType) -> None:
     assert errors[0].field == "allowed_tools"
     assert "read_fil" in errors[0].message
     assert errors[0].action_type == "design"
+
+
+def test_expand_forwards_allowed_tools(design_step: PhaseStepType) -> None:
+    """263: declared tools land on the dispatch action and nowhere else."""
+    actions = design_step.expand(
+        _make_config({"phase": 4, "review": "some-template", "allowed_tools": ["write_file"]})
+    )
+    assert actions[3] == (
+        "dispatch",
+        {"model": None, "slice": "{slice}", "allowed_tools": ["write_file"]},
+    )
+    for action_type, action_config in actions:
+        if action_type != "dispatch":
+            assert "allowed_tools" not in action_config
+
+
+def test_expand_omits_allowed_tools_when_absent(design_step: PhaseStepType) -> None:
+    actions = design_step.expand(_make_config({"phase": 4}))
+    assert "allowed_tools" not in actions[3][1]

@@ -85,3 +85,14 @@ def test_validate_rejects_unknown_tool() -> None:
     assert errors[0].field == "allowed_tools"
     assert "read_fil" in errors[0].message
     assert errors[0].action_type == "dispatch"
+
+
+def test_expand_forwards_allowed_tools() -> None:
+    """263: declared tools thread through to the dispatch action config."""
+    actions = _make().expand(_step({"prompt": "Do something.", "allowed_tools": ["write_file"]}))
+    assert actions == [("dispatch", {"prompt": "Do something.", "allowed_tools": ["write_file"]})]
+
+
+def test_expand_omits_allowed_tools_when_absent() -> None:
+    actions = _make().expand(_step({"prompt": "Do something."}))
+    assert "allowed_tools" not in actions[0][1]
