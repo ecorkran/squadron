@@ -49,6 +49,22 @@ list in source; read it via `tools.list_tools()`.
 with nothing yet producing the field; task 4 threads it; tasks 5–6 prove the end-to-end path.
 Test tasks immediately follow their implementation task.
 
+**Commit protocol — applies to every task below.** Because each task leaves the suite green,
+each task ends with a commit rather than batching them at close-out. For every task:
+
+1. `uv run ruff format .` — immediately before the commit, never skipped
+2. `git add` from the project root and commit with a semantic message
+   (`feat:`, `test:`, `refactor:`, `docs:`, `chore:` — see CLAUDE.md Git Rules)
+3. The relevant scoped test command passes first; a task is not done until it is committed
+
+This keeps an interruption from losing prior work and makes the history match the task-by-task
+narrative. Each task's success criteria restate the commit as its final checkbox.
+
+**Branch.** This is Phase 6 implementation work, so it happens on
+`263-slice.dispatch-action-wiring-and-pipeline-yaml-surface`. Before creating it, read
+`cf config get git.integration_branch` and fork from that value (or `main` if empty) — do not
+assume the value recorded at plan-authoring time is still current.
+
 ---
 
 ## Task 1: Shared `validate_allowed_tools` helper
@@ -72,6 +88,7 @@ Test tasks immediately follow their implementation task.
   - [ ] Non-list value, and list-with-non-string, each return exactly one error with distinct messages
   - [ ] Two unknown names return two errors
   - [ ] No hard-coded tool-name list anywhere in the function
+  - [ ] `ruff format` run, then committed: `feat: add validate_allowed_tools helper for pipeline step configs`
 
 ## Task 2: Test the helper
 
@@ -91,6 +108,7 @@ Test tasks immediately follow their implementation task.
 - [ ] **Task 2 success criteria**
   - [ ] `uv run pytest tests/pipeline/steps/test_allowed_tools_validation.py -q` green
   - [ ] Tests call the helper directly; no pipeline load or model call involved
+  - [ ] `ruff format` run, then committed: `test: add coverage for validate_allowed_tools`
 
 ## Task 3: Wire validation into the four step types
 
@@ -111,6 +129,7 @@ Test tasks immediately follow their implementation task.
   - [ ] A pipeline definition with a bad tool name on a `dispatch` step yields a `ValidationError` from `validate_pipeline`
   - [ ] The same is true for a `design` step
   - [ ] `loader.py` is unmodified in the diff
+  - [ ] `ruff format` run, then committed: `feat: validate allowed_tools in dispatch and phase step types`
 
 ## Task 4: Test step-type validation through the loader
 
@@ -127,6 +146,7 @@ Test tasks immediately follow their implementation task.
 - [ ] **Task 4 success criteria**
   - [ ] `uv run pytest tests/pipeline/ -q` green
   - [ ] Pre-existing exact-equality `expand()` tests in both files still pass **unmodified**
+  - [ ] `ruff format` run, then committed: `test: cover allowed_tools validation through validate_pipeline`
 
 ## Task 5: Conditional pass-through in `expand()`
 
@@ -147,6 +167,7 @@ Test tasks immediately follow their implementation task.
 - [ ] **Task 5 success criteria**
   - [ ] Declared field reaches the expanded dispatch action config unchanged
   - [ ] Absent field leaves expansion byte-identical; existing tests pass with zero edits
+  - [ ] `ruff format` run, then committed: `feat: forward allowed_tools through dispatch and phase expand`
 
 ## Task 6: Test expansion
 
@@ -162,6 +183,7 @@ Test tasks immediately follow their implementation task.
 
 - [ ] **Task 6 success criteria**
   - [ ] All four tests green; the omission tests fail if the conditional is made unconditional
+  - [ ] `ruff format` run, then committed: `test: cover allowed_tools expansion pass-through`
 
 ## Task 7: Thread `allowed_tools` and `cwd` through the dispatch action
 
@@ -191,6 +213,7 @@ Test tasks immediately follow their implementation task.
   - [ ] `AgentConfig.cwd` is populated from `context.cwd` on every agent dispatch
   - [ ] `AgentConfig.allowed_tools` carries the declared names exactly
   - [ ] No tool-name registry lookup exists in `actions/dispatch.py`
+  - [ ] `ruff format` run, then committed: `feat: thread allowed_tools and cwd into AgentConfig from dispatch`
 
 ## Task 8: Test the threading
 
@@ -213,6 +236,7 @@ Test tasks immediately follow their implementation task.
 - [ ] **Task 8 success criteria**
   - [ ] `uv run pytest tests/pipeline/actions/ -q` green
   - [ ] Every assertion inspects the resulting `AgentConfig` field values
+  - [ ] `ruff format` run, then committed: `test: assert allowed_tools and cwd reach AgentConfig`
 
 ## Task 9: End-to-end integration test with a mocked endpoint
 
@@ -232,6 +256,7 @@ Test tasks immediately follow their implementation task.
 - [ ] **Task 9 success criteria**
   - [ ] Test passes and fails loudly if `cwd` threading is reverted
   - [ ] No network access; no real model call
+  - [ ] `ruff format` run, then committed: `test: add end-to-end dispatch tool-call integration test`
 
 ## Task 10: Ship `allowed_tools` in `test-p4.yaml`
 
@@ -249,6 +274,7 @@ Test tasks immediately follow their implementation task.
 - [ ] **Task 10 success criteria**
   - [ ] `test-p4.yaml` declares exactly `read_file` and `write_file` on the design step
   - [ ] Dry-run validation passes
+  - [ ] `ruff format` run, then committed: `feat: declare allowed_tools on test-p4 design step`
 
 ## Task 11: Manual end-to-end verification
 
@@ -268,6 +294,7 @@ Test tasks immediately follow their implementation task.
 
 - [ ] **Task 11 success criteria**
   - [ ] All three cases behave as described, with the observed results recorded
+  - [ ] `ruff format` run, then committed: `docs: record slice 263 end-to-end verification results`
 
 ## Task 12: Quality gates and close-out
 
@@ -285,13 +312,20 @@ Test tasks immediately follow their implementation task.
     are unmodified. Any change there means the design was departed from — stop and reconcile
     before committing
 - [ ] **12.3** Close out
-  - [ ] `ruff format .` immediately before committing
   - [ ] Mark this task file and the slice design complete; check off slice 263 in
     `260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md`
   - [ ] Write the DEVLOG entry
-  - [ ] Merge the slice branch to `main` (integration branch is unset)
+  - [ ] `ruff format` run, then commit the close-out docs: `docs: close out slice 263`
+- [ ] **12.4** Merge
+  - [ ] Re-read `cf config get git.integration_branch` **now**, at merge time — do not rely on
+    the value recorded when this file was written, or on what the branch was forked from. The
+    merge target is that value, or `main` if it is empty
+  - [ ] Merge the slice branch into that target with `--no-ff`
+  - [ ] Do not delete the branch, and do not push — both are PM actions
   - [ ] Effort: 1/5
 
 - [ ] **Task 12 success criteria**
   - [ ] All four gates clean
   - [ ] Diff touches only the five named source files plus tests
+  - [ ] Every task 1–11 landed its own commit; the history reads as the task sequence
+  - [ ] Merge target was re-read at merge time, not assumed

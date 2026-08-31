@@ -50,6 +50,17 @@ Task 12 pins the expected diff shape: exactly five source files, with `schema.py
 the design was departed from and is a stop-and-reconcile condition rather than a judgment call
 at commit time.
 
+**Review pass (CONCERNS → addressed).** Both non-pass findings were real and are fixed. F001:
+commits were batched into close-out, contradicting the project's commit-once-per-task rule and
+wasting the fact that every task already leaves the suite green — a mid-sequence interruption
+would have lost everything uncommitted. A commit protocol now sits in the Context Summary and
+each of tasks 1-11 carries a commit checkbox with its own semantic message, so the history will
+read as the task sequence. F002: task 12 asserted "integration branch is unset" as a fact frozen
+at authoring time. Merge is now its own subtask (12.4) that re-reads
+`cf config get git.integration_branch` at merge time and takes the target from that, not from
+what the branch was forked from. The two PASS findings (success-criteria coverage, no circular
+dependencies) needed no action.
+
 ---
 
 ### Slice 263: Dispatch Action Wiring and Pipeline YAML Surface Designed (Phase 4)
