@@ -2,13 +2,67 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260829
+dateUpdated: 20260831
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260831
+
+### Slice 263: Dispatch Action Wiring and Pipeline YAML Surface Designed (Phase 4)
+
+Design written to
+`project-documents/user/slices/263-slice.dispatch-action-wiring-and-pipeline-yaml-surface.md`;
+slice plan entry 3 updated with its design reference. No code changed.
+
+**Two shipped-code facts revised the slice plan's assumptions.** The plan predated slice 262's
+implementation and got two things wrong that reading the merged code corrected.
+
+First, `cwd` must be threaded alongside `allowed_tools`, not treated as a separate concern.
+`OpenAICompatibleAgent.__init__` raises `ProviderError` when `allowed_tools` is non-empty and
+`cwd is None` (the D8 check added in 262), while `one_shot_dispatch` hardcodes `cwd=None`.
+Wiring tools without `cwd` would fail 100% of the time on any step declaring a tool.
+`ActionContext.cwd` already carries the executor's `effective_cwd` and is the source; the design
+threads it unconditionally (D2) so the tool path cannot be reached with `cwd` unset.
+
+Second, the plan's "matching the slice 245 `auth_policy` pattern" does not apply. `auth_policy`
+is a **pipeline-level** typed field on `PipelineSchema`; step configs are a deliberately untyped
+`dict[str, object]` so step types own their own contracts. A typed per-step field would need
+either a schema model per step type (a refactor outside this slice) or a `StepSchema` field most
+step types ignore (ISP violation). Validation goes in the step types' existing
+`validate() -> list[ValidationError]` hook, which `validate_pipeline` already calls and all six
+CLI entry points already surface — and which yields squadron's own `ValidationError` rather than
+the `pydantic.ValidationError` the plan anticipated (D1).
+
+**Load-time validation is the substance, not decoration.** The agent drops unknown tool names
+with a WARNING and continues (262's D1, kept deliberately so shipped review templates carrying
+Claude-vocabulary names keep working until 265). That tolerance is right for templates and wrong
+for YAML: `allowed_tools: [read_fil]` would run the step with no tools and the model would
+describe a file it never wrote — the same silent-no-op class as issue #15. The design keeps the
+agent's WARNING (D5) and protects YAML with a registry check at load time instead, so each
+surface gets the strictness it needs. Registry bootstrap follows `validate_pipeline`'s existing
+lazy-import convention (`bootstrap_step_types()`, `load_all_templates()`); `squadron.tools`
+registers built-ins as an import side effect and is otherwise only reachable through the lazily
+loaded openai provider.
+
+**Scope.** Five files: a shared `validate_allowed_tools` helper in `pipeline/steps/utils.py`
+(one home, not four copies across `DispatchStepType` and three `PhaseStepType` instances),
+validate/expand changes in `steps/dispatch.py` and `steps/phase.py`, threading in
+`actions/dispatch.py`, and `allowed_tools: [read_file, write_file]` on `test-p4.yaml`'s design
+step. `bash` is excluded from the shipped pipeline (D4) — the demo proves file writing and
+`bash` is unrestricted beyond CWD scoping. Nothing changes in `schema.py`, `loader.py`,
+`executor.py`, `AgentConfig`, the agent, or the provider; the absence of loader changes is the
+signal that the design uses the existing extension point rather than adding one.
+
+One risk carried forward: `allowed_tools` is the first list-valued step-config field to travel
+the param-placeholder resolution path. The action narrows the type at the boundary and raises on
+a malformed value rather than silently dropping tools (D3), and a test asserts the list arrives
+intact at `AgentConfig`.
 
 ---
 
