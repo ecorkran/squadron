@@ -15,7 +15,11 @@ from openai import omit
 
 from squadron.core.models import Message, MessageType
 from squadron.providers.errors import ProviderError
-from squadron.providers.openai.agent import OpenAICompatibleAgent, TurnResult
+from squadron.providers.openai.agent import (
+    OpenAICompatibleAgent,
+    TurnResult,
+    _entry_chars,  # pyright: ignore[reportPrivateUsage]
+)
 from squadron.tools import ToolResult
 
 from .conftest import text_chunk, tool_chunk
@@ -403,29 +407,50 @@ class TestAgenticLoop:
         assert msgs[0].content == "no tools needed"
 
     @pytest.mark.asyncio
-    async def test_tool_call_without_id_logs_warning(
+    async def test_tool_call_without_id_raises_without_executing_tool(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
-        # An OpenAI-*compatible* backend may stream a tool call with no id. The
-        # resulting history entry cannot be matched to its call, so the next request
-        # is rejected upstream — the loop must make that observable here rather than
-        # letting it surface as an opaque API error several turns later.
+        # An OpenAI-*compatible* backend may stream a tool call with no id. Its result
+        # could never be matched back to the call, so the loop must abort rather than
+        # run a side effect whose output is undeliverable and poison history.
         caplog.set_level(logging.WARNING)
-        (tmp_path / "a.txt").write_text("A")
-        idless_call = tool_chunk(0, "", "read_file", json.dumps({"path": "a.txt"}))
+        idless_call = tool_chunk(0, "", "write_file", json.dumps({"path": "x.txt", "content": "z"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(idless_call))
+        agent = _make_agent(allowed_tools=["write_file"], cwd=str(tmp_path), client=client)
+
+        with pytest.raises(ProviderError, match="no id"):
+            await _collect(agent, _USER_MSG)
+
+        # The side-effecting tool must not have run.
+        assert not (tmp_path / "x.txt").exists()
+        # No unmatched tool result was appended to history.
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        assert not any(e.get("role") == "tool" for e in history)
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("no id" in r.getMessage() for r in warnings)
+
+    @pytest.mark.asyncio
+    async def test_history_char_counter_matches_full_rescan(self, tmp_path: Path) -> None:
+        # The running counter replaces an O(n^2) per-iteration rescan, so it must stay
+        # exactly in step with what a fresh scan of the final history would produce.
+        (tmp_path / "a.txt").write_text("A" * 50)
+        read_call = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
         client = _make_client()
         client.chat.completions.create = AsyncMock(
             side_effect=[
-                _async_stream(idless_call),
+                _async_stream(read_call),
+                _async_stream(read_call),
                 _async_stream(text_chunk("done")),
             ]
         )
         agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
-        msgs = await _collect(agent, _USER_MSG)
+        await _collect(agent, _USER_MSG)
 
-        assert msgs[0].content == "done"
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("no id" in r.getMessage() for r in warnings)
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        expected = sum(_entry_chars(e) for e in history)
+        assert agent._history_chars == expected  # pyright: ignore[reportPrivateUsage]
+        assert expected > 0
 
     @pytest.mark.asyncio
     async def test_non_object_json_args_returns_error_and_logs_warning(

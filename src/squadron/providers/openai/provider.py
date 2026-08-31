@@ -54,8 +54,8 @@ class OpenAICompatibleProvider:
 
         from squadron.providers.openai.agent import OpenAICompatibleAgent
 
-        # Agentic-loop bounds are resolved here, at the composition boundary, so the
-        # agent never does blocking config file I/O from inside an async turn.
+        # Agentic-loop bounds are resolved once here rather than on every turn, so a
+        # long agentic loop does not repeat this config read per iteration.
         config_cwd = config.cwd or "."
         try:
             max_tool_iterations = int(

@@ -35,6 +35,23 @@ from squadron.tools import ToolExecutor, ToolResult
 _log = get_logger("squadron.providers.openai.agent")
 
 
+def _entry_chars(entry: dict[str, Any]) -> int:
+    """Return the character size of one history entry.
+
+    Counts the payload actually sent on the wire — message content plus any
+    tool-call arguments — so ``agent.max_history_chars`` means what its config
+    description says ("message-history size (characters)"). A whole-dict ``str()``
+    would also count dict-repr punctuation and key names.
+    """
+    total = len(str(entry.get("content", "") or ""))
+    tool_calls: list[dict[str, Any]] = entry.get("tool_calls") or []
+    for tool_call in tool_calls:
+        function: dict[str, Any] = tool_call.get("function") or {}
+        total += len(str(function.get("name") or ""))
+        total += len(str(function.get("arguments") or ""))
+    return total
+
+
 def _int_key_default(key: str) -> int:
     """Return a registered ConfigKey's declared default, without touching config files."""
     default = CONFIG_KEYS[key].default
@@ -74,6 +91,7 @@ class OpenAICompatibleAgent:
         self._client = client
         self._model = model
         self._history: list[dict[str, Any]] = []
+        self._history_chars = 0
         self._state = AgentState.idle
         self._cwd = cwd
         # Loop bounds are resolved by the caller (the provider reads user config) so
@@ -91,7 +109,7 @@ class OpenAICompatibleAgent:
         )
 
         if system_prompt is not None:
-            self._history.append({"role": "system", "content": system_prompt})
+            self._append_history({"role": "system", "content": system_prompt})
 
         requested_tools = allowed_tools or []
         if requested_tools and cwd is None:
@@ -133,11 +151,11 @@ class OpenAICompatibleAgent:
     async def handle_message(self, message: Message) -> AsyncIterator[Message]:
         """Append message to history, stream from API, yield response Messages."""
         self._state = AgentState.processing
-        self._history.append({"role": "user", "content": message.content})
+        self._append_history({"role": "user", "content": message.content})
         try:
             if not self._tool_executors:
                 turn = await self._stream_turn(self._history, tool_schemas=None)
-                self._history.append(
+                self._append_history(
                     translation.build_assistant_history_entry(turn.text, turn.tool_calls)
                 )
                 messages = translation.build_messages(
@@ -295,7 +313,7 @@ class OpenAICompatibleAgent:
             # would let it ignore that and keep calling tools anyway.
             turn_tool_schemas = None if budget_guard_fired else self._tool_schemas
             turn = await self._stream_turn(self._history, tool_schemas=turn_tool_schemas)
-            self._history.append(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
+            self._append_history(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
 
             if not turn.tool_calls:
                 return translation.build_messages(turn.text, [], self._name, self._model)
@@ -304,18 +322,24 @@ class OpenAICompatibleAgent:
                 tool_call_id = tool_call.get("id", "")
                 if not tool_call_id:
                     # An OpenAI-compatible backend streamed a tool call with no id.
-                    # The result entry cannot be matched to its call, and the next
-                    # request will be rejected for an unmatched tool_call_id — surface
-                    # it here rather than as an opaque API error several turns later.
+                    # Its result could never be matched back to the call, so executing
+                    # the tool would run a side effect (write_file, bash) whose output
+                    # is undeliverable, and appending the result would leave history
+                    # permanently unusable. Fail here instead.
+                    tool_name = tool_call.get("function", {}).get("name", "")
                     _log.warning(
                         "Model streamed a tool call with no id (function=%r); "
-                        "the resulting history entry cannot be matched to its call",
-                        tool_call.get("function", {}).get("name", ""),
+                        "aborting the turn without executing it",
+                        tool_name,
+                    )
+                    raise ProviderError(
+                        f"Model streamed a tool call for {tool_name!r} with no id; "
+                        "its result cannot be matched to the call."
                     )
                 content = await self._execute_tool_call(tool_call)
-                self._history.append(translation.build_tool_result_entry(tool_call_id, content))
+                self._append_history(translation.build_tool_result_entry(tool_call_id, content))
 
-            if not budget_guard_fired and self._history_chars() > max_history_chars:
+            if not budget_guard_fired and self._history_chars > max_history_chars:
                 budget_guard_fired = True
                 _log.warning(
                     "Agentic loop history exceeded agent.max_history_chars (%d); "
@@ -325,7 +349,7 @@ class OpenAICompatibleAgent:
                 # A plain user-role message, not a fake tool result: a role:"tool"
                 # entry must carry a tool_call_id matching a real pending call, and
                 # this notice isn't a response to any tool call the model made.
-                self._history.append(
+                self._append_history(
                     {
                         "role": "user",
                         "content": (
@@ -345,9 +369,15 @@ class OpenAICompatibleAgent:
             "without the model producing a final response."
         )
 
-    def _history_chars(self) -> int:
-        """Return the total character count of ``self._history`` (budget-guard input)."""
-        return sum(len(str(entry)) for entry in self._history)
+    def _append_history(self, entry: dict[str, Any]) -> None:
+        """Append a history entry and update the running character count.
+
+        Every append goes through here so the counter cannot drift from the list:
+        rescanning the whole history per loop iteration is O(n^2) in turns and does
+        CPU-bound work inside an async turn.
+        """
+        self._history.append(entry)
+        self._history_chars += _entry_chars(entry)
 
     async def shutdown(self) -> None:
         """Close the AsyncOpenAI client and mark as terminated."""

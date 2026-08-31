@@ -581,10 +581,6 @@ into this slice's scope:
 - `_execute_tool_call` builds ad hoc `f"Error: ..."` strings for the malformed-JSON and
   unknown-tool branches instead of reusing the `ToolResult`/`_error` convention already
   established in `tools/builtin.py`.
-- `tool_call.get("id", "")` silently substitutes an empty string if a streamed tool call from
-  the model itself (not the budget guard, which no longer does this) never carries an `id`.
-  Low-likelihood (most OpenAI-compatible backends send `id` on the first chunk), unobserved
-  today, and not covered by a test.
 - `agent.max_tool_iterations` set to `0` skips the loop body entirely (`range(0)`) and raises
   `ProviderError` with a message implying iterations were attempted, when zero API calls were
   made. Undocumented, untested edge case.
@@ -592,3 +588,30 @@ into this slice's scope:
   `Bash`) and this slice's registry names (`read_file`, `bash`) is **not** a new finding — it
   is D1, already documented and accepted as the expected state until slice 265 migrates
   template vocabulary.
+
+Two items previously listed here were **resolved** during review follow-up (commit `7d49d58`
+and the one following it): the uncaught `get_typed_config` `ValueError` is now wrapped as
+`ProviderError` in `create_agent`, and the id-less tool call no longer substitutes `""` — it
+raises before executing the tool.
+
+#### Raised by the second review pass (verdict CONCERNS, at `7d49d58`)
+
+Verified against the code and deferred as pre-existing gaps rather than regressions:
+
+- **No cancellation safety around the tool-dispatch loop.** `asyncio.CancelledError` /
+  `GeneratorExit` propagate through `_run_agentic_loop` (they are `BaseException`, so
+  `_execute_tool_call`'s `except Exception` does not catch them). A client disconnecting mid-
+  `bash` leaves an assistant `tool_calls` entry with only some of its results appended; the
+  agent object survives and every later `handle_message` sends that unmatched history. Nothing
+  logs at WARNING+ at the moment of corruption.
+- **No wall-clock deadline.** The loop bounds turns and history size, never time. `AsyncOpenAI`
+  is constructed with no `timeout=` (SDK default 600s) and `bash` allows 120s per call, so a
+  worst-case turn at `max_tool_iterations=20` runs for tens of minutes yielding no intermediate
+  output — externally indistinguishable from a hang.
+- **Loop bounds are not range-validated.** `get_typed_config` checks the type but not the value,
+  and `ConfigKey` has no range facility; a non-positive `agent.max_tool_iterations` is accepted
+  at the boundary and surfaces later as the misleading max-iterations error above.
+- **`self._cwd` is stored but has no reader in `src/`** — it became dead when the `assert` that
+  used it was removed. Its only consumer is a test assertion.
+- **No `tests/load/` tier exists repo-wide**, though this slice adds a network + concurrency
+  path that the Python rules say warrants one. Predates this slice.
