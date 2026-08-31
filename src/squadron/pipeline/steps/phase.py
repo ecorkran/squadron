@@ -8,6 +8,7 @@ from typing import cast
 from squadron.pipeline.actions.checkpoint import CheckpointTrigger
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import validate_allowed_tools
 
 
 class ArtifactKind(StrEnum):
@@ -125,6 +126,8 @@ class PhaseStepType:
                     action_type=self._phase_name,
                 )
             )
+
+        errors.extend(validate_allowed_tools(config, self._phase_name))
 
         return errors
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import validate_allowed_tools
 
 
 class DispatchStepType:
@@ -51,6 +52,8 @@ class DispatchStepType:
                     action_type=self.step_type,
                 )
             )
+
+        errors.extend(validate_allowed_tools(config, self.step_type))
 
         return errors
 
