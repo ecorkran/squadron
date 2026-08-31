@@ -47,6 +47,8 @@ async def one_shot_dispatch(
     step_name: str = "dispatch",
     run_id: str = "cli",
     branch_idx: object = None,
+    allowed_tools: list[str] | None = None,
+    cwd: str | None = None,
 ) -> str:
     """Spawn a one-shot agent and return the concatenated response text."""
     profile = get_profile(profile_name)
@@ -60,7 +62,8 @@ async def one_shot_dispatch(
         model=model_id,
         instructions=system_prompt,
         base_url=profile.base_url,
-        cwd=None,
+        cwd=cwd,
+        allowed_tools=allowed_tools,
         credentials={
             "api_key_env": profile.api_key_env,
             "default_headers": profile.default_headers,
@@ -368,6 +371,23 @@ class DispatchAction:
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         return context.resolver.resolve(action_model, step_model)
 
+    @staticmethod
+    def _resolve_allowed_tools(context: ActionContext) -> list[str] | None:
+        """Narrow ``context.params["allowed_tools"]`` to a list of tool names.
+
+        Names are not re-checked against the tool registry here: load-time
+        validation is the single authority (design D3). A malformed value is a
+        defect that validation should have caught, so it raises rather than
+        silently dropping tools — a silent drop reproduces exactly the
+        no-op-with-prose failure this slice exists to prevent.
+        """
+        raw = context.params.get("allowed_tools")
+        if raw is None:
+            return None
+        if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):  # pyright: ignore[reportUnknownVariableType]
+            raise ValueError(f"dispatch: 'allowed_tools' must be a list of tool names, got {raw!r}")
+        return cast(list[str], raw)
+
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""
         action_model = str(context.params["model"]) if "model" in context.params else None
@@ -388,6 +408,11 @@ class DispatchAction:
             step_name=context.step_name,
             run_id=context.run_id,
             branch_idx=context.params.get("_fan_out_branch_index"),
+            allowed_tools=self._resolve_allowed_tools(context),
+            # Unconditional (design D2): AgentConfig.cwd is inert for the non-SDK
+            # agent unless tools are configured, and threading it always removes
+            # the latent ProviderError path where tools arrive without a cwd.
+            cwd=context.cwd,
         )
 
         if error_result := _check_cli_error(response_text):
