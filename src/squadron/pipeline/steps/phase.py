@@ -148,6 +148,9 @@ class PhaseStepType:
         # existing exact-equality expand() tests assert.
         if "pre_emption_fragment" in cfg:
             dispatch_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
+        # Tools go only to the dispatch action; the review path is slice 265.
+        if "allowed_tools" in cfg:
+            dispatch_config["allowed_tools"] = cfg["allowed_tools"]
 
         actions: list[tuple[str, dict[str, object]]] = [
             ("cf-op", {"operation": "set_phase", "phase": phase}),

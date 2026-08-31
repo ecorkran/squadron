@@ -69,6 +69,8 @@ class DispatchStepType:
             action_config["model"] = cfg["model"]
         if "pre_emption_fragment" in cfg:
             action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
+        if "allowed_tools" in cfg:
+            action_config["allowed_tools"] = cfg["allowed_tools"]
 
         return [("dispatch", action_config)]
 
