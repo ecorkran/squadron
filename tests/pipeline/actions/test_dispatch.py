@@ -410,3 +410,81 @@ async def test_execute_agent_cli_error_response_returns_failure(
     assert result.success is False
     assert result.error == error_text
     assert result.outputs["response"] == error_text
+
+
+# --- allowed_tools and cwd threading (slice 263) ---
+
+
+async def _spawned_config(action: DispatchAction, ctx: ActionContext) -> object:
+    """Execute *action* against *ctx* and return the AgentConfig it spawned."""
+    mock_agent = _make_agent_mock("ok")
+    mock_registry = _make_registry(mock_agent)
+
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_openrouter_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        await action.execute(ctx)
+
+    return mock_registry.spawn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_passes_allowed_tools_to_agent_config(action: DispatchAction) -> None:
+    ctx = _make_context(params={"prompt": "test", "allowed_tools": ["read_file", "write_file"]})
+    config = await _spawned_config(action, ctx)
+    assert config.allowed_tools == ["read_file", "write_file"]  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_passes_cwd_to_agent_config(action: DispatchAction) -> None:
+    ctx = _make_context(params={"prompt": "test", "allowed_tools": ["read_file"]})
+    config = await _spawned_config(action, ctx)
+    assert config.cwd == ctx.cwd  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_passes_cwd_even_without_tools(action: DispatchAction) -> None:
+    """D2 regression guard: cwd threads unconditionally, not only with tools."""
+    ctx = _make_context(params={"prompt": "test"})
+    config = await _spawned_config(action, ctx)
+    assert config.cwd == ctx.cwd  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_without_allowed_tools_leaves_field_none(action: DispatchAction) -> None:
+    ctx = _make_context(params={"prompt": "test"})
+    config = await _spawned_config(action, ctx)
+    assert config.allowed_tools is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_allowed_tools_list_survives_param_resolution(action: DispatchAction) -> None:
+    """The one named risk: first list-valued step config field on the param path."""
+    ctx = _make_context(params={"prompt": "test", "allowed_tools": ["read_file", "write_file"]})
+    config = await _spawned_config(action, ctx)
+    tools_value = config.allowed_tools  # type: ignore[attr-defined]
+    assert isinstance(tools_value, list)
+    assert all(isinstance(name, str) for name in tools_value)  # pyright: ignore[reportUnknownVariableType]
+    assert tools_value == ["read_file", "write_file"]
+
+
+@pytest.mark.asyncio
+async def test_malformed_allowed_tools_fails_rather_than_dropping(action: DispatchAction) -> None:
+    """A non-list value must fail loudly; silently dropping tools is the bug class
+    this slice exists to prevent."""
+    ctx = _make_context(params={"prompt": "test", "allowed_tools": "read_file"})
+    mock_agent = _make_agent_mock("ok")
+    mock_registry = _make_registry(mock_agent)
+
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_openrouter_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.success is False
+    assert "allowed_tools" in (result.error or "")
+    mock_registry.spawn.assert_not_called()
