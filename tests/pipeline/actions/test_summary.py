@@ -756,3 +756,140 @@ def test_validate_restore_non_bool() -> None:
     errors = _make_action().validate({"restore": "yes"})
     assert len(errors) == 1
     assert errors[0].field == "restore"
+
+
+# ---------------------------------------------------------------------------
+# allowed_tools wiring (slice 265)
+# ---------------------------------------------------------------------------
+
+
+def test_validate_rejects_unknown_tool() -> None:
+    """A pipeline `summary:` step with a bad tool name fails before any model call."""
+    from squadron.pipeline.models import StepConfig
+    from squadron.pipeline.steps.summary import SummaryStepType
+
+    step = StepConfig(step_type="summary", name="s", config={"allowed_tools": ["read_fil"]})
+    errors = SummaryStepType().validate(step)
+
+    assert [e.field for e in errors] == ["allowed_tools"]
+    assert "read_fil" in errors[0].message
+
+
+def test_validate_accepts_registered_tools() -> None:
+    from squadron.pipeline.models import StepConfig
+    from squadron.pipeline.steps.summary import SummaryStepType
+
+    step = StepConfig(step_type="summary", name="s", config={"allowed_tools": ["read_file", "grep"]})
+
+    assert SummaryStepType().validate(step) == []
+
+
+def test_expand_forwards_allowed_tools_to_action() -> None:
+    from squadron.pipeline.models import StepConfig
+    from squadron.pipeline.steps.summary import SummaryStepType
+
+    step = StepConfig(step_type="summary", name="s", config={"allowed_tools": ["read_file"]})
+    actions = SummaryStepType().expand(step)
+
+    assert actions[0][1]["allowed_tools"] == ["read_file"]
+
+
+def test_expand_omits_allowed_tools_when_absent() -> None:
+    from squadron.pipeline.models import StepConfig
+    from squadron.pipeline.steps.summary import SummaryStepType
+
+    step = StepConfig(step_type="summary", name="s", config={})
+    actions = SummaryStepType().expand(step)
+
+    assert "allowed_tools" not in actions[0][1]
+
+
+@pytest.mark.asyncio
+async def test_summary_passes_allowed_tools_to_agent_config() -> None:
+    """The resolved list reaches capture_summary_via_profile, along with a cwd to jail it to."""
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(params={"allowed_tools": ["read_file", "grep"]}, sdk_session=None)
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile",
+        new=AsyncMock(return_value="SUMMARY"),
+    ) as mock_oneshot:
+        with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
+            result = await _execute_summary(
+                context=ctx,
+                instructions="summarize",
+                summary_model_alias="minimax",
+                emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+                action_type="summary",
+            )
+
+    assert result.success is True
+    assert mock_oneshot.call_args.kwargs["allowed_tools"] == ["read_file", "grep"]
+    assert mock_oneshot.call_args.kwargs["cwd"] == ctx.cwd
+
+
+@pytest.mark.asyncio
+async def test_summary_without_allowed_tools_leaves_field_none() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile",
+        new=AsyncMock(return_value="SUMMARY"),
+    ) as mock_oneshot:
+        with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
+            await _execute_summary(
+                context=ctx,
+                instructions="summarize",
+                summary_model_alias="minimax",
+                emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+                action_type="summary",
+            )
+
+    assert mock_oneshot.call_args.kwargs["allowed_tools"] is None
+
+
+@pytest.mark.asyncio
+async def test_capture_summary_via_profile_defaults_stay_tool_less() -> None:
+    """Regression guard: the no-tools call still builds today's exact AgentConfig."""
+    from squadron.pipeline import summary_oneshot
+
+    captured: dict[str, object] = {}
+
+    async def _create_agent(config: object) -> MagicMock:
+        captured["config"] = config
+        agent = MagicMock()
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: object):
+            return
+            yield  # pragma: no cover — empty async generator
+
+        agent.handle_message = _handle
+        return agent
+
+    provider = MagicMock()
+    provider.create_agent = _create_agent
+    profile = MagicMock()
+    profile.provider = "openai"
+    profile.base_url = None
+    profile.api_key_env = "OPENAI_API_KEY"
+    profile.default_headers = {}
+
+    with (
+        patch.object(summary_oneshot, "_logger"),
+        patch("squadron.providers.profiles.get_profile", return_value=profile),
+        patch("squadron.providers.registry.get_provider", return_value=provider),
+        patch("squadron.providers.loader.ensure_provider_loaded"),
+    ):
+        await summary_oneshot.capture_summary_via_profile(
+            instructions="x", model_id=None, profile="openrouter"
+        )
+
+    config = captured["config"]
+    assert config.allowed_tools == []  # pyright: ignore[reportAttributeAccessIssue]
+    assert config.cwd is None  # pyright: ignore[reportAttributeAccessIssue]
