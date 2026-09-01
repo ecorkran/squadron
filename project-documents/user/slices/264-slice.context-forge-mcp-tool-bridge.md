@@ -288,9 +288,10 @@ a real duplication appears, not now.
 
 ## Verification Walkthrough
 
-Verified during Phase 6 implementation (20260901). Steps 1–3 and 5 were run and their real
-output is recorded below. Step 4 needs a standard terminal (the `sq run` CLAUDECODE guard
-refuses to execute inside a Claude Code session) and remains **open**.
+Verified during Phase 6 implementation (20260901); every step has been run and its real
+output recorded below. Steps 1–3 and 5 ran during implementation. Step 4 required a standard
+terminal (the `sq run` CLAUDECODE guard refuses to execute inside a Claude Code session) and
+was completed the same day, closing SC6.
 
 All commands run from the squadron repo root. `uv run` is required — the package is not on
 the ambient interpreter's path.
@@ -422,19 +423,62 @@ The remaining failure-mode rows (timeout with process-group teardown, server `is
 result, protocol error) are covered by `tests/tools/test_mcp_bridge.py` against the fake
 stdio server, each asserting its WARNING via `caplog`.
 
-### 4. End-to-end with a real non-SDK model (standard terminal) — OPEN
+### 4. End-to-end with a real non-SDK model (standard terminal)
 
-- [ ] **Open — requires a standard terminal.** Not run at close-out: `sq run` refuses to
-  execute inside a Claude Code session (CLAUDECODE guard), so this is the one success-criteria
-  item (SC6's dispatch half) carried past slice close. SC6's executor half is evidenced by
-  step 2 above and by `tests/tools/test_cf_contract_live.py`.
+- [x] **Verified 20260901**, from a plain terminal (`sq run` refuses to execute inside a
+  Claude Code session — unconditional `CLAUDECODE` guard, `cli/commands/run.py:148`). This
+  completes SC6: its executor half is evidenced by step 2 and the live contract test, its
+  dispatch half by this run.
 
-Scratch pipeline step with `model: kimi25` and
-`allowed_tools: [cf_workflow_status, cf_build_context]`, prompt instructing the model to
-report current workflow state and build context for the active slice. Run `sq run <pipeline>
-<slice> -v` from a plain terminal; confirm the transcript shows the tool calls and the final
-response contains real CF-derived state (not hallucinated). Tool-call visibility at `-v`
-beyond DEBUG logs arrives with slice 265's observability work.
+The scratch pipeline lives at `project-documents/user/pipelines/cf-tools-demo.yaml`
+(`model: kimi27`, `allowed_tools: [cf_workflow_status, cf_build_context]`). Note the design
+originally named `kimi25`, which is not a registered alias — the real options are `kimi27`
+(used here, and the model 263 confirmed tool calls with) and `kimi3`. The prompt asks the
+model to report state, task progress, context length, and the context's first line, and
+explicitly instructs it to quote any tool error rather than substitute a plausible answer —
+so a silent failure surfaces as a wrong-shaped report instead of convincing prose.
+
+```bash
+sq run cf-tools-demo 264 -v
+```
+
+Actual terminal output — note **two** `Server started` lines, one real spawn per tool call,
+exactly as the per-call session design (D3) predicts:
+
+```
+step cf-tools-demo [dispatch]: 1 actions
+  action 1/1: dispatch model=kimi27
+[context-forge-mcp] Server started
+[context-forge-mcp] Server started
+    -> ok (model=moonshotai/kimi-k2.7-code)
+
+Pipeline 'cf-tools-demo' — completed
+```
+
+Every specific value the model reported was cross-checked against live CF state and matched:
+
+| Model reported | Actual |
+|---|---|
+| squadron, Phase 6: Implementation | same |
+| slice `context-forge-mcp-tool-bridge`, index 264, status complete | same |
+| task progress 130 / 130 | 130 / 130 |
+| slice plan 4 / 6 | 4 / 6 |
+| first line "Working on squadron. Project information, environment context, …" | verbatim |
+| context "approximately 4,500 characters" | 5,743 (an estimate, hedged; the only soft number) |
+
+This is not hallucination-compatible: `130/130` and `4/6` changed *that day* as a result of
+this slice's own close-out, and the exact first line of built context is not guessable.
+
+Caveats for whoever repeats this:
+
+- **Verification is manual today.** Nothing in `~/.config/squadron/runs/*.json` records that
+  tools were offered or called — confirming the run meant cross-checking reported values
+  against live CF state by hand. This is precisely the friction slice 265 exists to remove,
+  and why 265 promoted tool-use observability to primary acceptance.
+- The run JSON records `execution_mode: sdk` while `metadata.model` is
+  `moonshotai/kimi-k2.7-code` on the `openrouter` profile. That field labels the pipeline
+  executor, not the agent path — the tool calls demonstrably went through the non-SDK bridge.
+  Possibly a mislabeled field; cosmetic, and outside this slice.
 
 
 ### 5. Quality gates

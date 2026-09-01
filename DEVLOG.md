@@ -14,6 +14,38 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 264: Walkthrough Step 4 Verified — SC6 Closed
+
+The one open success-criteria item is closed. `sq run cf-tools-demo 264 -v` was run from a
+plain terminal (the CLAUDECODE guard blocks it inside a Claude Code session), driving
+`kimi27` against `allowed_tools: [cf_workflow_status, cf_build_context]`.
+
+Two `[context-forge-mcp] Server started` lines appeared — one real spawn per tool call, which
+is the per-call session design (D3) behaving as specified. Every specific value the model
+reported matched live CF state: project squadron, Phase 6, slice 264 status complete, task
+progress 130/130, slice plan 4/6, and the verbatim first line of built context. The only soft
+number was its "approximately 4,500 characters" estimate against an actual 5,743 — hedged, and
+the one figure it estimated rather than read. The matching values are not guessable: 130/130
+and 4/6 changed that same day as a result of this slice's own close-out.
+
+The scratch pipeline is committed at `project-documents/user/pipelines/cf-tools-demo.yaml`.
+Its prompt tells the model to quote any tool error rather than substitute a plausible answer,
+so a silent failure would surface as a wrong-shaped report instead of convincing prose.
+
+**Two things this run surfaced.**
+
+- The design named `kimi25`, which is not a registered alias. Real options are `kimi27` and
+  `kimi3`. Corrected in the walkthrough.
+- Confirming the run required cross-checking reported values against live CF state by hand —
+  nothing in the run JSON records that tools were offered or called. This is exactly the gap
+  slice 265 exists to close, and independently re-justifies 265 promoting tool-use
+  observability to primary acceptance. Separately, the run JSON records `execution_mode: sdk`
+  while `metadata.model` is `moonshotai/kimi-k2.7-code` on the `openrouter` profile: that
+  field labels the pipeline executor rather than the agent path. Cosmetic, possibly
+  mislabeled, outside this slice.
+
+---
+
 ### Slice 264: Code Review — F001 Was a Real Bug, Not Just a Coverage Gap
 
 sonnet-5 code review at the merge commit `d06a446`: CONCERNS, one concern and two notes.

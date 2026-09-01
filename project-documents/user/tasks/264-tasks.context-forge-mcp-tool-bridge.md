@@ -302,7 +302,10 @@ Test infrastructure first: tasks 5, 6 both need a real stdio peer.
     close-out. Track it explicitly, in both places: annotate walkthrough §4 in the slice
     design as "open — requires standard terminal" with the checkbox left unchecked, and
     name it as an open item in the close-out DEVLOG entry. SC6's executor half (8.2) is
-    evidenced at close-out; the dispatch half is evidenced by this follow-up
+    evidenced at close-out; the dispatch half is evidenced by this follow-up.
+    **Resolved 20260901:** the follow-up ran — `sq run cf-tools-demo 264 -v` with `kimi27`
+    from a plain terminal made two real tool calls whose reported values all matched live CF
+    state. SC6 is fully evidenced; walkthrough §4 is checked in the slice design
 - [x] **9.4** Merge `264-slice.context-forge-mcp-tool-bridge` into the target read in the
   Branch note (integration branch, or `main` if unset); do not delete the branch
   - [x] Effort: 2/5
