@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from squadron.core.models import AgentConfig
+from squadron.providers.errors import ProviderError
 from squadron.providers.sdk.provider import ClaudeSDKProvider
 
 # Patch target: the deferred import inside create_agent resolves from this module.
@@ -204,3 +205,59 @@ class TestValidateCredentials:
             # When the module entry is None, Python raises ImportError
             result = await provider.validate_credentials()
             assert result is False
+
+
+# ---------------------------------------------------------------------------
+# create_agent — canonical -> Claude tool name translation
+# ---------------------------------------------------------------------------
+
+
+class TestToolNameTranslation:
+    """Canonical squadron names become Claude names on the built ClaudeAgentOptions.
+
+    Every assertion here reads the built config object rather than inferring translation from
+    a mock call, because the built object is what the CLI actually receives.
+    """
+
+    async def _build_options(self, provider: ClaudeSDKProvider, allowed_tools: list[str] | None):
+        config = AgentConfig(
+            name="tooled",
+            agent_type="sdk",
+            provider="sdk",
+            allowed_tools=allowed_tools,
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+            return mock_cls.call_args.kwargs["options"]
+
+    @pytest.mark.asyncio
+    async def test_canonical_names_translate_to_claude_names(self, provider: ClaudeSDKProvider) -> None:
+        opts = await self._build_options(provider, ["read_file", "list_files", "grep"])
+
+        assert opts.allowed_tools == ["Read", "Glob", "Grep"]
+
+    @pytest.mark.asyncio
+    async def test_write_and_bash_translate(self, provider: ClaudeSDKProvider) -> None:
+        opts = await self._build_options(provider, ["write_file", "bash"])
+
+        assert opts.allowed_tools == ["Write", "Bash"]
+
+    @pytest.mark.asyncio
+    async def test_unmapped_canonical_name_raises_provider_error(
+        self, provider: ClaudeSDKProvider
+    ) -> None:
+        with pytest.raises(ProviderError, match="not_a_tool"):
+            await self._build_options(provider, ["read_file", "not_a_tool"])
+
+    @pytest.mark.asyncio
+    async def test_claude_name_is_not_accepted_as_input(self, provider: ClaudeSDKProvider) -> None:
+        """Guards against a half-migrated template quietly passing through."""
+        with pytest.raises(ProviderError, match="Read"):
+            await self._build_options(provider, ["Read"])
+
+    @pytest.mark.asyncio
+    async def test_none_allowed_tools_skips_translation(self, provider: ClaudeSDKProvider) -> None:
+        opts = await self._build_options(provider, None)
+
+        assert opts.allowed_tools == []
