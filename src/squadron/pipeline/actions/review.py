@@ -7,6 +7,7 @@ from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_thresholds
+from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
@@ -204,12 +205,15 @@ class ReviewAction:
         )
 
         # Execute review
+        # A step-level allowed_tools overrides the template's default; None leaves the
+        # template authoritative (slice 265).
         result = await run_review_with_profile(
             template,
             inputs,
             profile=profile_name,
             model=model_id,
             rules_content=rules_content,
+            allowed_tools=resolve_allowed_tools(context, self.action_type),
         )
 
         # Judge enforcement runs before persistence: judge templates instruct

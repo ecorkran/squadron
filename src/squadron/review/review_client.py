@@ -60,6 +60,7 @@ async def run_review_with_profile(
     rules_content: str | None = None,
     model: str | None = None,
     verbosity: int = 0,
+    allowed_tools: list[str] | None = None,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
@@ -70,6 +71,11 @@ async def run_review_with_profile(
     4. Collect response → parse into ReviewResult
     """
     import sys
+
+    # A step-level declaration takes precedence over the template's default; absent one,
+    # the template stays authoritative. Callers that never pass it (the `sq review` CLI
+    # path) keep today's template-only behavior exactly.
+    resolved_allowed_tools = allowed_tools if allowed_tools is not None else template.allowed_tools
 
     provider_profile = get_profile(profile)
     ensure_provider_loaded(provider_profile.provider)
@@ -86,7 +92,7 @@ async def run_review_with_profile(
     # natively nor a read_file tool the run was actually given (slice 265, design D1).
     if should_inject_file_bodies(
         can_read_files=provider.capabilities.can_read_files,
-        allowed_tools=template.allowed_tools,
+        allowed_tools=resolved_allowed_tools,
         provider=provider_profile.provider,
     ):
         prompt = _inject_file_contents(prompt, inputs, template.diff_exclude_patterns)
@@ -119,7 +125,7 @@ async def run_review_with_profile(
         api_key=None,
         base_url=provider_profile.base_url,
         cwd=inputs.get("cwd"),
-        allowed_tools=template.allowed_tools,
+        allowed_tools=resolved_allowed_tools,
         permission_mode=template.permission_mode,
         setting_sources=template.setting_sources,
         credentials={

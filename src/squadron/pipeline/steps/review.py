@@ -5,6 +5,7 @@ from __future__ import annotations
 from squadron.pipeline.actions.checkpoint import CheckpointTrigger
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import validate_allowed_tools
 
 
 class ReviewStepType:
@@ -52,6 +53,8 @@ class ReviewStepType:
                 )
             )
 
+        errors.extend(validate_allowed_tools(config, self.step_type))
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -65,6 +68,8 @@ class ReviewStepType:
             review_dict["slice"] = cfg["slice"]
         if "judge" in cfg:
             review_dict["judge"] = cfg["judge"]
+        if "allowed_tools" in cfg:
+            review_dict["allowed_tools"] = cfg["allowed_tools"]
 
         actions: list[tuple[str, dict[str, object]]] = [
             ("review", review_dict),

@@ -220,29 +220,29 @@ records this as a deliberate close-out call.
 
 ## Task 6: Test `grep`, including the timeout bound
 
-- [ ] **6.1** Create `tests/tools/test_grep.py`
-  - [ ] `test_matches_pattern_across_files`
-  - [ ] `test_glob_filters_files_searched`
-  - [ ] `test_max_results_caps_output`
-  - [ ] `test_path_escaping_jail_returns_error`
-  - [ ] `test_invalid_regex_returns_error_not_raise`
-  - [ ] `test_output_truncated_beyond_limit`
-- [ ] **6.2** The bounded-timeout test — this is the direct regression test for D9 (rejects the
+- [x] **6.1** Create `tests/tools/test_grep.py`
+  - [x] `test_matches_pattern_across_files`
+  - [x] `test_glob_filters_files_searched`
+  - [x] `test_max_results_caps_output`
+  - [x] `test_path_escaping_jail_returns_error`
+  - [x] `test_invalid_regex_returns_error_not_raise`
+  - [x] `test_output_truncated_beyond_limit`
+- [x] **6.2** The bounded-timeout test — this is the direct regression test for D9 (rejects the
   Phase 4 review's original `asyncio.wait_for` suggestion, which measured at 72.8s against a
   1.0s timeout for `(a+)+$`)
-  - [ ] `test_pathological_pattern_times_out` — monkeypatch `limits.GREP_TIMEOUT_S` down to
+  - [x] `test_pathological_pattern_times_out` — monkeypatch `limits.GREP_TIMEOUT_S` down to
     keep the suite fast (e.g. `0.5`), search for a pattern the `regex` engine's optimizer
     cannot fold to instant (the slice design verified `(a|a)*$` against a long non-matching run
     of `a`s bounds at ~1.02s at a 1.0s limit — use the same pattern class, scaled to the
     monkeypatched limit)
-  - [ ] Assert the call returns within a small multiple of the monkeypatched timeout (not that
+  - [x] Assert the call returns within a small multiple of the monkeypatched timeout (not that
     it hangs), returns `is_error=True`, and a WARNING was logged naming the pattern
-  - [ ] Effort: 3/5
+  - [x] Effort: 3/5
 
-- [ ] **Task 6 success criteria**
-  - [ ] `uv run pytest tests/tools/test_grep.py -q` green, including the timeout test running
+- [x] **Task 6 success criteria**
+  - [x] `uv run pytest tests/tools/test_grep.py -q` green, including the timeout test running
     in well under a second of wall time
-  - [ ] `ruff format` run, then committed: `test: add coverage for grep tool including timeout bound`
+  - [x] `ruff format` run, then committed: `test: add coverage for grep tool including timeout bound`
 
 ## Task 7: Load test — `grep` timeout bound under realistic conditions
 
@@ -258,34 +258,34 @@ this repo — this is the first. No separate CI-wiring task is needed: `pyprojec
 runs plain `uv run pytest` with no path or marker filter, so a file under `tests/load/` is
 already gated by the existing CI job once it exists.
 
-- [ ] **7.1** Create `tests/load/test_grep_timeout.py`
-  - [ ] `test_walk_budget_holds_at_real_timeout` — run `grep` against a realistic-sized fixture
+- [x] **7.1** Create `tests/load/test_grep_timeout.py`
+  - [x] `test_walk_budget_holds_at_real_timeout` — run `grep` against a realistic-sized fixture
     tree (dozens of files, not the handful used in Task 6's unit tests) with the **real,
     non-monkeypatched** `limits.GREP_TIMEOUT_S` value, containing one file with a pathological
     pattern match candidate; assert the call returns within a bounded multiple of
     `GREP_TIMEOUT_S` (not merely "eventually"), proving the whole-walk budget in Task 5.2 holds
     end to end rather than only for the single-pattern case Task 6.2 isolates
-  - [ ] `test_concurrent_grep_calls_do_not_starve_the_event_loop` — issue several concurrent
+  - [x] `test_concurrent_grep_calls_do_not_starve_the_event_loop` — issue several concurrent
     `grep` calls (including at least one pathological pattern) via `asyncio.gather`, each
     running under `asyncio.to_thread`; assert total wall time stays bounded (no call waits
     materially longer than `GREP_TIMEOUT_S` for the thread pool to free up) and the event loop
     remains responsive to a concurrently-scheduled no-op coroutine throughout — this is the
     check a unit test cannot make, since unit tests exercise one call at a time
-  - [ ] Assert on wall-clock bounds and/or a resource metric (thread count, elapsed time), not
+  - [x] Assert on wall-clock bounds and/or a resource metric (thread count, elapsed time), not
     only on `is_error`/return-value correctness — correctness is Task 6's job, this task's job
     is the bound holding under load
-  - [ ] Effort: 3/5
+  - [x] Effort: 3/5
 
-- [ ] **Task 7 success criteria**
-  - [ ] `uv run pytest tests/load/test_grep_timeout.py -q` green, using the real
+- [x] **Task 7 success criteria**
+  - [x] `uv run pytest tests/load/test_grep_timeout.py -q` green, using the real
     `GREP_TIMEOUT_S` value (not monkeypatched down)
-  - [ ] Both tests assert a quantitative bound (elapsed time or resource count), not just
+  - [x] Both tests assert a quantitative bound (elapsed time or resource count), not just
     pass/fail correctness
-  - [ ] `ruff format` run, then committed: `test: add load test for grep timeout bound under realistic conditions`
+  - [x] `ruff format` run, then committed: `test: add load test for grep timeout bound under realistic conditions`
 
 ## Task 8: Canonical → Claude tool name translation at the SDK edge
 
-- [ ] **8.1** Add a module-level mapping (new file `providers/sdk/tool_names.py`, or inline in
+- [x] **8.1** Add a module-level mapping (new file `providers/sdk/tool_names.py`, or inline in
   `providers/sdk/provider.py` — pick whichever keeps `provider.py` under its current length;
   prefer the new module if `provider.py` is already near 300 lines) with exactly:
   ```python
@@ -297,98 +297,98 @@ already gated by the existing CI job once it exists.
       "bash": "Bash",
   }
   ```
-- [ ] **8.2** At `providers/sdk/provider.py:56-57`, replace the direct passthrough
+- [x] **8.2** At `providers/sdk/provider.py:56-57`, replace the direct passthrough
   (`kwargs["allowed_tools"] = config.allowed_tools`) with a translation step: map each name in
   `config.allowed_tools` through `CANONICAL_TO_CLAUDE`; a name with no entry raises
   `ProviderError` naming the offending tool (mirrors the non-SDK raise in task 10 — both
   directions of "name I don't recognize" become loud, per design D3)
-  - [ ] `config.allowed_tools is None` still skips translation entirely (today's behavior for
+  - [x] `config.allowed_tools is None` still skips translation entirely (today's behavior for
     "no tools declared")
-  - [ ] Effort: 3/5
+  - [x] Effort: 3/5
 
-- [ ] **Task 8 success criteria**
-  - [ ] A migrated template's canonical names produce the equivalent Claude names in the built
+- [x] **Task 8 success criteria**
+  - [x] A migrated template's canonical names produce the equivalent Claude names in the built
     `ClaudeAgentOptions.allowed_tools`
-  - [ ] An unmapped canonical name raises `ProviderError` at config-build time
-  - [ ] `ruff format` run, then committed: `feat: translate canonical tool names at SDK config edge`
+  - [x] An unmapped canonical name raises `ProviderError` at config-build time
+  - [x] `ruff format` run, then committed: `feat: translate canonical tool names at SDK config edge`
 
 ## Task 9: Test SDK translation, asserting the built config directly
 
-- [ ] **9.1** Add to `tests/providers/sdk/test_provider.py` (or `test_translation.py` if that
+- [x] **9.1** Add to `tests/providers/sdk/test_provider.py` (or `test_translation.py` if that
   is where config-build tests for this provider already live — check before choosing)
-  - [ ] `test_canonical_names_translate_to_claude_names` — build a config from
+  - [x] `test_canonical_names_translate_to_claude_names` — build a config from
     `["read_file", "list_files", "grep"]` and assert the resulting
     `ClaudeAgentOptions.allowed_tools == ["Read", "Glob", "Grep"]` **on the built config
     object**, not inferred from a mock call — this is SC3's literal assertion
-  - [ ] `test_unmapped_canonical_name_raises_provider_error`
-  - [ ] `test_none_allowed_tools_skips_translation` — regression guard for the pre-migration
+  - [x] `test_unmapped_canonical_name_raises_provider_error`
+  - [x] `test_none_allowed_tools_skips_translation` — regression guard for the pre-migration
     no-tools path
-  - [ ] Effort: 2/5
+  - [x] Effort: 2/5
 
-- [ ] **Task 9 success criteria**
-  - [ ] `uv run pytest tests/providers/sdk/ -q` green
-  - [ ] `ruff format` run, then committed: `test: assert SDK config translation of canonical tool names`
+- [x] **Task 9 success criteria**
+  - [x] `uv run pytest tests/providers/sdk/ -q` green
+  - [x] `ruff format` run, then committed: `test: assert SDK config translation of canonical tool names`
 
 ## Task 10: Non-SDK unknown-name policy — raise instead of warn
 
-- [ ] **10.1** In `providers/openai/agent.py`, replace the warn-and-continue block (125-134)
+- [x] **10.1** In `providers/openai/agent.py`, replace the warn-and-continue block (125-134)
   with a raise: on the first (or accumulated, matching whichever the existing loop shape
   favors — accumulate all unknown names into one `ProviderError` message, do not stop at the
   first) unknown name, raise `ProviderError` naming the offending tool(s) and listing
   `tools.list_tools()`
-  - [ ] Remove the `_log.warning(...)` call this replaces — a raised error is loud on its own,
+  - [x] Remove the `_log.warning(...)` call this replaces — a raised error is loud on its own,
     a preceding warning would be redundant noise before the crash
-  - [ ] Effort: 2/5
+  - [x] Effort: 2/5
 
-- [ ] **Task 10 success criteria**
-  - [ ] Constructing the agent with an unknown tool name raises `ProviderError` naming it
-  - [ ] Constructing with only known names is unaffected
-  - [ ] `uv run pytest tests/providers/openai/ -q` green (existing tests that relied on the old
+- [x] **Task 10 success criteria**
+  - [x] Constructing the agent with an unknown tool name raises `ProviderError` naming it
+  - [x] Constructing with only known names is unaffected
+  - [x] `uv run pytest tests/providers/openai/ -q` green (existing tests that relied on the old
     warn-and-drop behavior are updated to expect the raise — check `test_agent.py` and
     `test_agentic_loop.py` for any such test before editing)
-  - [ ] `ruff format` run, then committed: `feat: raise on unknown tool name in non-SDK agent`
+  - [x] `ruff format` run, then committed: `feat: raise on unknown tool name in non-SDK agent`
 
 ## Task 11: Test the non-SDK raise
 
-- [ ] **11.1** Add/update tests in `tests/providers/openai/test_agent.py`
-  - [ ] `test_unknown_tool_name_raises_provider_error` — assert the message contains the bad
+- [x] **11.1** Add/update tests in `tests/providers/openai/test_agent.py`
+  - [x] `test_unknown_tool_name_raises_provider_error` — assert the message contains the bad
     name and the registered-tools list
-  - [ ] `test_two_unknown_names_both_named_in_error` (if the implementation accumulates rather
+  - [x] `test_two_unknown_names_both_named_in_error` (if the implementation accumulates rather
     than raising on the first — match task 10's actual choice)
-  - [ ] `test_known_tool_names_construct_successfully` — regression guard
-  - [ ] Effort: 2/5
+  - [x] `test_known_tool_names_construct_successfully` — regression guard
+  - [x] Effort: 2/5
 
-- [ ] **Task 11 success criteria**
-  - [ ] `uv run pytest tests/providers/openai/ -q` green
-  - [ ] `ruff format` run, then committed: `test: cover unknown tool name raise in non-SDK agent`
+- [x] **Task 11 success criteria**
+  - [x] `uv run pytest tests/providers/openai/ -q` green
+  - [x] `ruff format` run, then committed: `test: cover unknown tool name raise in non-SDK agent`
 
 ## Task 12: Effective-tools helper and injection decision
 
-- [ ] **12.1** Add a small helper (in `review/review_client.py` or a new
+- [x] **12.1** Add a small helper (in `review/review_client.py` or a new
   `review/tool_support.py` if it grows beyond a few lines) computing the effective tool set for
   a run: the template's `allowed_tools` filtered to names `tools.list_tools()` knows for
   non-SDK profiles, passed through untouched for SDK profiles (which resolve names themselves
   per task 8)
-  - [ ] No new field on `ProviderCapabilities` (design D1) — this is computed per-call, not
+  - [x] No new field on `ProviderCapabilities` (design D1) — this is computed per-call, not
     stored
-- [ ] **12.2** Replace the bare check at `review_client.py:85-86`
+- [x] **12.2** Replace the bare check at `review_client.py:85-86`
   (`if not provider.capabilities.can_read_files:`) with:
   ```python
   inject_file_bodies = not provider.capabilities.can_read_files and not effective_tools_include_a_reader
   ```
   where `effective_tools_include_a_reader` is true iff `"read_file"` is in the effective tool
   set computed in 12.1
-  - [ ] `can_read_files` itself is untouched — it keeps its current meaning and current call
+  - [x] `can_read_files` itself is untouched — it keeps its current meaning and current call
     sites elsewhere in the codebase are unaffected
-  - [ ] A template with no `allowed_tools` and a provider with `can_read_files=False` must
+  - [x] A template with no `allowed_tools` and a provider with `can_read_files=False` must
     inject exactly as it does today — this is the byte-identical regression case SC5 requires
-  - [ ] Effort: 3/5
+  - [x] Effort: 3/5
 
-- [ ] **Task 12 success criteria**
-  - [ ] Tool-capable provider + template allowing `read_file` → prompt contains the diff, no
+- [x] **Task 12 success criteria**
+  - [x] Tool-capable provider + template allowing `read_file` → prompt contains the diff, no
     injected file bodies
-  - [ ] No allowed tools declared → prompt byte-identical to pre-slice behavior
-  - [ ] `ruff format` run, then committed: `feat: compute run-scoped injection decision from effective tool set`
+  - [x] No allowed tools declared → prompt byte-identical to pre-slice behavior
+  - [x] `ruff format` run, then committed: `feat: compute run-scoped injection decision from effective tool set`
 
 ## Task 13: Test the injection decision
 
