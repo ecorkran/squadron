@@ -74,7 +74,8 @@ class TestCreateAgent:
             opts = mock_cls.call_args.kwargs["options"]
             assert opts.system_prompt == "You are a code reviewer."
             assert opts.model == "claude-opus-4-20250514"
-            assert opts.allowed_tools == ["read_file", "bash"]
+            # Canonical names are translated to Claude vocabulary at the config-build edge.
+            assert opts.allowed_tools == ["Read", "Bash"]
             assert opts.cwd == "/workspace"
             assert opts.setting_sources == ["project"]
             assert opts.permission_mode == "bypassPermissions"

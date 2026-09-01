@@ -10,6 +10,7 @@ from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
 from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
+from squadron.providers.sdk.tool_names import translate_tool_names
 
 if TYPE_CHECKING:
     from squadron.providers.sdk.agent import ClaudeSDKAgent
@@ -54,7 +55,8 @@ class ClaudeSDKProvider:
         if config.model is not None:
             kwargs["model"] = config.model
         if config.allowed_tools is not None:
-            kwargs["allowed_tools"] = config.allowed_tools
+            # Canonical -> Claude vocabulary happens here and only here; see tool_names.
+            kwargs["allowed_tools"] = translate_tool_names(config.allowed_tools)
         if config.cwd is not None:
             kwargs["cwd"] = config.cwd
         if config.setting_sources is not None:
