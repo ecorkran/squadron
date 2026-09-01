@@ -102,9 +102,10 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
             extras.append(f"model={model}")
         # A step that was offered tools always renders a tools= segment, even at zero calls:
         # "offered three, called none" must read differently from "never had tools" (SC8).
-        if (given := result.metadata.get("tools_given")) is not None:
+        given = result.metadata.get("tools_given")
+        if isinstance(given, list):
             made = result.metadata.get("tool_calls_made", 0)
-            extras.append(f"tools={len(given)}/{made} calls")
+            extras.append(f"tools={len(given)}/{made} calls")  # pyright: ignore[reportUnknownArgumentType]
         suffix = f" ({', '.join(extras)})" if extras else ""
         _logger.info("    -> ok%s", suffix)
     else:

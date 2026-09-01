@@ -9,7 +9,7 @@ the migration cannot silently degrade Claude-backed reviews while fixing non-SDK
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
