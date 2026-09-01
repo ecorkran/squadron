@@ -377,7 +377,7 @@ different things on the two paths:
 **Net effect on an SDK code review: none.** It could run Bash before this slice and can after.
 The read-only subset is real on the non-SDK path and nominal on the SDK path; closing that gap
 (via `tools`/`--tools` or `disallowed_tools`) is deliberately out of scope here — it would
-change SDK reviewer behavior, which this slice must not do.
+change SDK reviewer behavior, which this slice must not do. Tracked as issue #69.
 
 **D7 — `grep` is implemented in Python, not by shelling to `rg`.** No dependency on an
 external binary, and the jail check stays in one place rather than being re-expressed as
