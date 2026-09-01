@@ -1,4 +1,4 @@
-"""Built-in tool implementations: ``read_file``, ``write_file``, ``bash``.
+"""Built-in tool implementations: ``read_file``, ``write_file``, ``bash``, ``list_files``.
 
 These names are the start of the canonical squadron tool vocabulary. Every executor is bound
 to a resolved working directory by its factory; the file tools treat that directory as a jail
@@ -26,6 +26,7 @@ from squadron.tools.registry import register
 READ_FILE_NAME = "read_file"
 WRITE_FILE_NAME = "write_file"
 BASH_NAME = "bash"
+LIST_FILES_NAME = "list_files"
 
 _logger = logging.getLogger(__name__)
 
@@ -343,3 +344,99 @@ BASH = ToolDescriptor(
 )
 
 register(BASH)
+
+
+LIST_FILES_PARAMETERS: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "path": {
+            "type": "string",
+            "description": "Directory to list, relative to the working directory. Defaults to '.'.",
+        },
+        "pattern": {
+            "type": "string",
+            "description": "Optional glob filter, e.g. '*.py'. Defaults to every entry.",
+        },
+        "recursive": {
+            "type": "boolean",
+            "description": "Descend into subdirectories. Defaults to false.",
+        },
+    },
+    "required": [],
+}
+
+
+def _optional_str(args: dict[str, object], key: str, default: str) -> str:
+    """Return ``args[key]`` as a string, falling back to *default* when absent or null.
+
+    Same boundary-narrowing rationale as ``_require_str``: model-supplied arguments are
+    untyped, and an optional argument that arrives with the wrong type is a caller error the
+    model can correct, not something to coerce silently.
+    """
+    value = args.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ValueError(f"argument '{key}' must be a string, got {type(value).__name__}")
+    return value
+
+
+def _optional_bool(args: dict[str, object], key: str, default: bool) -> bool:
+    """Return ``args[key]`` as a bool, falling back to *default* when absent or null."""
+    value = args.get(key)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"argument '{key}' must be a boolean, got {type(value).__name__}")
+    return value
+
+
+def _format_entry(entry: Path, root: Path) -> str:
+    """Render *entry* relative to jail root *root*, marking directories with a trailing slash."""
+    rendered = str(entry.relative_to(root))
+    return f"{rendered}/" if entry.is_dir() else rendered
+
+
+def _list_files_factory(cwd: Path) -> ToolExecutor:
+    async def execute(args: dict[str, object]) -> ToolResult:
+        async def run() -> ToolResult:
+            path = _optional_str(args, "path", ".")
+            pattern = _optional_str(args, "pattern", "*")
+            recursive = _optional_bool(args, "recursive", False)
+
+            # As in read_file, the whole blocking walk — resolve, stat, iterate — runs in one
+            # worker thread rather than on the event loop.
+            def _walk() -> ToolResult:
+                target = _resolve_in_jail(cwd, path)
+                if target is None:
+                    return _jail_violation(LIST_FILES_NAME, path)
+                if not target.exists():
+                    return _error(LIST_FILES_NAME, f"path does not exist: {path}")
+                if not target.is_dir():
+                    return _error(LIST_FILES_NAME, f"path is not a directory: {path}")
+
+                matches = target.rglob(pattern) if recursive else target.glob(pattern)
+                lines = sorted(_format_entry(entry, cwd) for entry in matches)
+                body = "\n".join(lines)
+                # Read the limit at call time (module attribute), never captured at import.
+                return ToolResult(content=_truncate(body.encode(), limits.MAX_OUTPUT_BYTES, "listing"))
+
+            return await asyncio.to_thread(_walk)
+
+        return await _guarded(LIST_FILES_NAME, run)
+
+    return execute
+
+
+LIST_FILES = ToolDescriptor(
+    name=LIST_FILES_NAME,
+    description=(
+        "List files and directories inside the working directory, optionally filtered by a "
+        "glob pattern and optionally recursive. Directories are marked with a trailing slash; "
+        "long listings are truncated with a visible marker."
+    ),
+    parameters=LIST_FILES_PARAMETERS,
+    factory=_list_files_factory,
+)
+
+register(LIST_FILES)
