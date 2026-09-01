@@ -120,6 +120,9 @@ class OpenAICompatibleAgent:
 
         self._tool_executors: dict[str, ToolExecutor] = {}
         self._tool_schemas: list[dict[str, object]] = []
+        # Empty when no tools were configured. The telemetry stamp distinguishes "offered
+        # but unused" from "never offered" (design D5), so the two cases must not collapse.
+        self._tools_given: list[str] = []
         if requested_tools:
             assert cwd is not None  # narrowed by the raise above
             # An unknown name is a configuration error, not something to route around:
@@ -133,6 +136,7 @@ class OpenAICompatibleAgent:
                     f"Registered tools: {', '.join(sorted(tools.list_tools()))}."
                 )
             known_names: list[str] = list(requested_tools)
+            self._tools_given = known_names
             self._tool_executors = tools.materialize(known_names, cwd)
             descriptors = [d for n in known_names if (d := tools.lookup(n)) is not None]
             self._tool_schemas = translation.build_tool_schemas(descriptors)
@@ -162,6 +166,9 @@ class OpenAICompatibleAgent:
                 messages = translation.build_messages(
                     turn.text, turn.tool_calls, self._name, self._model
                 )
+                # The tool-less fast path never calls a tool, but it is still reached with
+                # tools configured when the model declines to use them — the zero-calls case.
+                self._stamp_tool_telemetry(messages, tool_calls_made=0)
             else:
                 messages = await self._run_agentic_loop()
             for msg in messages:
@@ -307,6 +314,7 @@ class OpenAICompatibleAgent:
         max_iterations = self._max_tool_iterations
         max_history_chars = self._max_history_chars
         budget_guard_fired = False
+        tool_calls_made = 0
 
         for _iteration in range(max_iterations):
             # Once the budget guard has fired, stop offering tools: the notice below
@@ -317,7 +325,9 @@ class OpenAICompatibleAgent:
             self._append_history(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
 
             if not turn.tool_calls:
-                return translation.build_messages(turn.text, [], self._name, self._model)
+                messages = translation.build_messages(turn.text, [], self._name, self._model)
+                self._stamp_tool_telemetry(messages, tool_calls_made=tool_calls_made)
+                return messages
 
             for tool_call in turn.tool_calls:
                 tool_call_id = tool_call.get("id", "")
@@ -338,6 +348,7 @@ class OpenAICompatibleAgent:
                         "its result cannot be matched to the call."
                     )
                 content = await self._execute_tool_call(tool_call)
+                tool_calls_made += 1
                 self._append_history(translation.build_tool_result_entry(tool_call_id, content))
 
             if not budget_guard_fired and self._history_chars > max_history_chars:
@@ -369,6 +380,19 @@ class OpenAICompatibleAgent:
             f"Agentic loop exceeded agent.max_tool_iterations ({max_iterations}) "
             "without the model producing a final response."
         )
+
+    def _stamp_tool_telemetry(self, messages: list[Message], *, tool_calls_made: int) -> None:
+        """Stamp tool-use telemetry on the final Message of a response.
+
+        Only the final Message carries it: intermediate turns are never surfaced to callers
+        (slice 262's contract), so anything stamped earlier would be discarded. When no tools
+        were configured the keys are absent entirely — a caller must be able to tell "offered
+        three tools, called none" apart from "never had tools" (design D5).
+        """
+        if not self._tools_given or not messages:
+            return
+        messages[-1].metadata["tools_given"] = list(self._tools_given)
+        messages[-1].metadata["tool_calls_made"] = tool_calls_made
 
     def _append_history(self, entry: dict[str, Any]) -> None:
         """Append a history entry and update the running character count.
