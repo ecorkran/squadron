@@ -259,11 +259,20 @@ blow the model's context.
 
 Parameters: `pattern` (string, required, treated as a regex), `path` (string, optional,
 default `"."`), `glob` (string, optional file filter), `max_results` (integer, optional).
-Returns `path:line:text` per match. Implemented in Python (`re` + directory walk) rather than
-shelling out to `rg`/`grep`: the review path must not depend on a binary that may be absent,
-and staying in-process keeps the jail check in one place. Runs under `asyncio.to_thread`. An
-invalid regex is a returned `is_error=True` result, not a raise — the model must be able to
-correct itself.
+Returns `path:line:text` per match, via a directory walk rather than shelling out to
+`rg`/`grep`: the review path must not depend on a binary that may be absent, and staying
+in-process keeps the jail check in one place. Runs under `asyncio.to_thread`. An invalid regex
+is a returned `is_error=True` result, not a raise — the model must be able to correct itself.
+
+**Matching is bounded against catastrophic backtracking (D9).** The `pattern` is
+model-supplied and runs against arbitrary file content, so a pathological-but-valid pattern is
+a realistic hang. The matcher is the `regex` package with its `timeout=` argument, not stdlib
+`re`; the bound is `GREP_TIMEOUT_S` in `tools/limits.py`, alongside the existing
+`BASH_TIMEOUT_S`. On expiry the tool logs at WARNING (naming the pattern) and returns
+`is_error=True` telling the model its pattern was too expensive, mirroring `bash`'s timeout
+path ([builtin.py:305-318](src/squadron/tools/builtin.py#L305-L318)). The budget covers the
+whole walk, not each file, so a cheap pattern over a huge tree is bounded too. `regex` is a new
+runtime dependency.
 
 Both tools follow the established `builtin.py` shape exactly: module-level `NAME` constant,
 `_*_factory(cwd)` closure, frozen `ToolDescriptor`, `register(...)` at import.
@@ -285,6 +294,12 @@ review action, the `sq review` CLI path) keep working unchanged.
 **SC1 — Read-only search tools exist.** `list_files` and `grep` are registered; both enforce
 the CWD jail (escape attempts return `is_error=True`); both return usable content on the happy
 path; both cap their output.
+
+**SC1a — `grep` is bounded and says so.** An invalid regex returns `is_error=True` with a
+message the model can act on. A pathological-but-valid pattern (e.g. `(a|a)*$` against a
+non-matching run of `a`s) terminates within `GREP_TIMEOUT_S` rather than hanging, logs at
+WARNING, and returns `is_error=True`. Both are asserted by test, with the timeout test
+monkeypatching `limits.GREP_TIMEOUT_S` down so the suite stays fast.
 
 **SC2 — Templates speak canonical vocabulary.** All seven shipped templates declare squadron
 names. No `Read`/`Glob`/`Grep`/`Bash` string remains in `data/templates/*.yaml`.
@@ -386,12 +401,37 @@ argument sanitation for a subprocess.
 **D8 — No `RunState.schema_version` bump.** `action_results` is untyped
 `list[dict[str, object]]`; adding keys is backward-compatible in both directions.
 
+**D9 — `grep` uses the `regex` package for a real timeout; `asyncio.wait_for` around
+`to_thread` does not work here.** Raised as F001 in the Phase 4 slice review, whose suggested
+fix was a per-call `asyncio.wait_for`. Measured, that does not bound anything: a thread running
+C-level `re` code cannot be cancelled, so `wait_for` does not observe its deadline until the
+regex finishes on its own. With a 1.0s timeout on `(a+)+$` against `"a"*30 + "b"`, `wait_for`
+returned after **72.8s** — it reports the hang after it ends rather than preventing it, and the
+worker thread stays burnt either way.
+
+A line-length cap is no better: backtracking is exponential in input length, and the same
+pattern needs only 30 characters to reach 73s (20 chars: 0.08s; 24: 1.4s; 26: 4.9s; 28: 20.7s).
+No cap that leaves `grep` useful is low enough to bound it.
+
+That leaves running the match where it can actually be stopped. The `regex` package accepts a
+`timeout=` and raises `TimeoutError` from inside the matching engine — verified bounding
+`(a|a)*$` at 1.02s, the case its optimizer cannot fold away. Subprocess isolation (mirroring
+`bash`'s killable process group) would also work but costs a process spawn per call on the
+review hot path for no added safety.
+
+Cost: one new runtime dependency (`regex`, a mature C-extension). Accepted over shipping a
+tool with an unbounded hang on model-supplied input.
+
+
 ## Risks
 
 - **The vocabulary migration silently changes SDK review behavior.** This is the one change
   that touches a working path. Mitigated by SC3 asserting the built SDK config directly. Note
   that D6 (dropping `Bash` from `code.yaml`) is *not* such a change — it alters the emitted
   `--allowedTools` string without altering SDK reviewer capability; see D6.
+- **`regex` is a new runtime dependency.** Justified in D9 — stdlib `re` cannot be bounded
+  from outside. It is a mature, widely-used C extension, and the dependency is confined to the
+  `grep` tool.
 - **A tool-enabled reviewer under-reads.** Skipping body injection is only an improvement if
   the model actually uses its tools; a lazy model reviews from the diff alone. SC10's live run
   is the check, and the `-v` counts make a zero-call review immediately obvious rather than
@@ -408,7 +448,9 @@ cd /Users/manta/source/repos/manta/squadron
 uv run pytest tests/tools/test_builtin.py -k "list_files or grep" -q
 ```
 
-Expect: escape attempts return errors, happy paths return content, output is capped.
+Expect: escape attempts return errors, happy paths return content, output is capped, an
+invalid regex returns `is_error=True`, and a pathological pattern trips the timeout with a
+WARNING instead of hanging.
 
 ### 2. No Claude vocabulary remains in templates
 

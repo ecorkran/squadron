@@ -14,6 +14,44 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 265: Phase 4 Review — F001 Was Right, Its Suggested Fix Was Not
+
+Slice review came back CONCERNS: one concern (F001), one note (F002), four passes. Both
+addressed; the concern turned into a measured design decision (D9).
+
+**F001 — `grep` has no bound on regex execution time.** Correct and accepted. The pattern is
+model-supplied and runs against arbitrary file content, so a valid-but-pathological regex is a
+realistic hang, and the design covered only invalid patterns and output size.
+
+The suggested fix — a per-call `asyncio.wait_for` around the `to_thread` call — does not work,
+which I found by measuring rather than reasoning. A thread running C-level `re` code cannot be
+cancelled, so `wait_for` never observes its deadline until the regex returns on its own. With a
+**1.0s** timeout on `(a+)+$` against `"a"*30 + "b"`, `wait_for` returned after **72.8s**. It
+reports the hang after it ends; the worker thread is burnt either way. Worth noting because it
+looks like a bound and is not one.
+
+A line-length cap fails for the same underlying reason: backtracking is exponential in input
+length, and that pattern needs only 30 characters to reach 73s (n=20: 0.08s, n=24: 1.4s,
+n=26: 4.9s, n=28: 20.7s). No cap that leaves `grep` useful is low enough.
+
+So the match has to run somewhere it can actually be stopped. Chose the `regex` package, whose
+`timeout=` raises from inside the matching engine — verified bounding `(a|a)*$` at 1.02s, the
+case its optimizer cannot fold away. (Its optimizer *does* fold `(a+)+$` to instant, which is
+why the verification used a pattern it cannot.) Subprocess isolation, mirroring `bash`'s
+killable process group, would also work but costs a spawn per call on the review hot path for
+no added safety. Cost is one new runtime dependency; accepted over shipping an unbounded hang
+on model-supplied input. `GREP_TIMEOUT_S` joins `BASH_TIMEOUT_S` in `tools/limits.py`, and the
+expiry path mirrors bash's: WARNING log plus `is_error=True` back to the model.
+
+**F002 — invalid-regex handling not wired into a success criterion.** Fair. Added SC1a covering
+both failure modes, with the timeout test monkeypatching the limit down so the suite stays fast.
+
+The four PASS findings confirmed D1's capability signal against the arch's provider-identity
+constraint, the canonical vocabulary table, scope discipline, and — checked against source —
+that D3's construction-time raise does not collide with 262's runtime unknown-tool-call path.
+
+---
+
 ### Slice 265: Phase 4 Slice Design — Review Coverage
 
 Design written for `265-slice.review-coverage-standalone-client-and-pipeline-actions`. Reading
