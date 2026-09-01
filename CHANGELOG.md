@@ -42,6 +42,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model is called. The error names the bad tool and lists the ones that are registered.
   Previously an unrecognized name meant the step ran silently without tools, and the model
   produced prose describing a file it never created.
+- Reviews run by non-Claude models can now read the code they are reviewing. Shipped review
+  templates give the model `read_file`, `list_files`, and `grep`, so it can open files, list a
+  directory, and search the tree on demand instead of judging only the excerpt pasted into its
+  prompt. Claude-backed reviews are unchanged. Previously these models were handed tool names
+  they did not recognize and reviewed with no file access at all, without saying so.
+- Two new tools are available to any model given them: `list_files` (list a directory,
+  optionally filtered by a glob and optionally recursive) and `grep` (search files for a regular
+  expression, returning `path:line:text`). Both stay inside the working directory, and `grep`
+  abandons a pattern that takes too long rather than hanging the run.
+- Tool use is now visible without digging through run files. `sq run -v` prints
+  `tools=N/M calls` on each step that was offered tools — so a step that was given three tools
+  and used none reads differently from one that was never given any — and the same counts are
+  saved into run state and review results.
+- Pipeline `review` and `summary` steps now accept `allowed_tools`, like `dispatch` already
+  did. A misspelled name is caught when the pipeline is validated, before any model is called.
+- Reviews that can read files no longer have whole file bodies pasted into their prompt: the
+  diff still anchors the review and the model fetches what it needs. Reviews without tools are
+  unaffected.
 - `/understand concept` generates a Phase 0 concept document for an existing codebase that has never
   had planning artifacts. It reads the knowledge graph for structure, your README for intent, and the
   filesystem for development practice (test tree, CI, lint config) before asking you anything — then

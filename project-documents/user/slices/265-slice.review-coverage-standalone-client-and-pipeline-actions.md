@@ -7,7 +7,7 @@ dependencies: [261, 262, 263]
 interfaces: [266]
 dateCreated: 20260901
 dateUpdated: 20260901
-status: not_started
+status: complete
 ---
 
 # Slice Design: Review Coverage — Standalone Client and Pipeline Actions
@@ -439,18 +439,38 @@ tool with an unbounded hang on model-supplied input.
 
 ## Verification Walkthrough
 
-Draft — to be refined at Phase 6 completion with real recorded output.
+Recorded at Phase 6 completion. Every command below was run from the repository root on the
+implementation branch; the stated output is what it actually produced. Steps 1-5 and 8-9 are
+automated and reproducible by any agent (human or AI); steps 6-7 require a plain terminal and
+a live model, and are marked accordingly.
 
 ### 1. Search tools honor the jail
 
 ```bash
 cd /Users/manta/source/repos/manta/squadron
-uv run pytest tests/tools/test_builtin.py -k "list_files or grep" -q
+uv run pytest tests/tools/test_list_files.py tests/tools/test_grep.py -q
 ```
 
-Expect: escape attempts return errors, happy paths return content, output is capped, an
-invalid regex returns `is_error=True`, and a pathological pattern trips the timeout with a
-WARNING instead of hanging.
+Observed: `24 passed in 0.57s`.
+
+Covers: escape attempts return errors, happy paths return content, output is capped with a
+visible marker, an invalid regex returns `is_error=True` rather than raising, and a
+pathological pattern trips the timeout with a WARNING instead of hanging.
+
+**Correction from the draft:** the draft named `tests/tools/test_builtin.py`, which does not
+exist. Tool tests are one file per tool (`test_read_file.py`, `test_write_file.py`,
+`test_bash.py`, `test_jail.py`); the new tools follow that convention with
+`test_list_files.py` and `test_grep.py`.
+
+The whole-walk timeout budget also has a load test at the real (non-monkeypatched)
+`GREP_TIMEOUT_S`:
+
+```bash
+uv run pytest tests/load/test_grep_timeout.py -q
+```
+
+Observed: `3 passed in 8.18s`. The runtime is dominated by two deliberate 5s budget
+exhaustions running concurrently — that is the bound being measured, not slowness.
 
 ### 2. No Claude vocabulary remains in templates
 
@@ -458,69 +478,141 @@ WARNING instead of hanging.
 grep -rn "allowed_tools" src/squadron/data/templates/
 ```
 
-Expect: every line lists canonical names only (`read_file`, `list_files`, `grep`). No `Read`,
-`Glob`, `Grep`, or `Bash`.
+Observed: all seven files print `allowed_tools: [read_file, list_files, grep]`. No `Read`,
+`Glob`, `Grep`, or `Bash` on any `allowed_tools` line.
 
 ### 3. SDK path is unchanged
 
 ```bash
-uv run pytest tests/providers/sdk -q
+uv run pytest tests/providers/sdk tests/review/test_template_sdk_regression.py -q
 ```
 
-Expect: the config-build test asserts a migrated template still yields
-`allowed_tools == ["Read", "Glob", "Grep"]` in `ClaudeAgentOptions`.
+Observed: `85 passed in 0.40s`.
+
+`tests/review/test_template_sdk_regression.py` loads each shipped template, builds its
+`ClaudeAgentOptions` through the real SDK provider, and asserts the result equals the
+pre-migration Claude-name list `["Read", "Glob", "Grep"]`. `code.yaml` is the one intended
+difference: `Bash` is absent (design D6 — this changes the emitted `--allowedTools` string,
+not the SDK reviewer's actual capability; tracked as issue #69).
 
 ### 4. Unknown names fail loudly
 
 ```bash
-uv run pytest tests/tools tests/providers/openai -k "unknown_tool" -q
+uv run pytest tests/providers/openai tests/providers/sdk -k "unknown or unmapped" -q
 ```
 
-Expect: a raise from the non-SDK agent naming the tool and listing registered names; a raise
-from the SDK translation edge for an unmapped canonical name.
+Observed: `11 passed, 150 deselected in 0.23s`.
+
+Covers both directions: the non-SDK agent raises `ProviderError` naming every unknown tool
+and listing the registered ones, and the SDK translation edge raises for an unmapped
+canonical name.
+
+**Correction from the draft:** the draft's `-k "unknown_tool"` selector matched nothing after
+implementation, because the tests are named for the policy (`unknown_tool_name_raises...`,
+`unmapped_canonical_name_raises...`) rather than a bare `unknown_tool` token. The selector
+above matches both families.
 
 ### 5. Injection skip
 
 ```bash
-uv run pytest tests/review/test_review_client.py -k "inject" -q
+uv run pytest tests/review/test_injection_decision.py -q
 ```
 
-Expect: tools-enabled prompt contains the diff and no file bodies; no-tools prompt is
-unchanged from today.
+Observed: `15 passed in 0.29s`.
 
-### 6. The observability demo — primary acceptance
+Covers: a tool-capable run's prompt contains the diff and no file bodies; a no-tools run's
+prompt is byte-identical to the pre-slice construction; and an unmigrated template declaring
+Claude vocabulary against a non-SDK provider still injects exactly as before.
+
+**Correction from the draft:** the draft named `tests/review/test_review_client.py -k
+"inject"`. Injection-decision tests live in the new `test_injection_decision.py`;
+`test_review_client.py -k inject` still passes but exercises a different concern.
+
+### 6. The observability demo — primary acceptance (manual, plain terminal)
 
 **Run from a plain terminal, not inside Claude Code.** `sq run` refuses to execute in a Claude
 Code session (unconditional `CLAUDECODE` guard,
-[run.py:148](src/squadron/cli/commands/run.py#L148)).
+[run.py:148](src/squadron/cli/commands/run.py#L148)). This step was **not** executed during
+Phase 6 implementation for that reason; its automated equivalent is step 8 below.
 
 ```bash
 cd /Users/manta/source/repos/manta/squadron
 sq run <pipeline> <slice> -v
 ```
 
-Expect on the step result lines: a dispatch/review step given tools prints
+Expect on the step result lines: a dispatch/review/summary step given tools prints
 `tools=N/M calls`; a step given tools that called none prints `tools=N/0 calls`; a step given
-no tools prints neither. Confirm the zero case is present and distinguishable — construct it
-deliberately if no natural step produces it.
+no tools prints neither segment. Construct the zero case deliberately if no natural step
+produces it.
 
 Then confirm persistence:
 
 ```bash
-python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(a.get('step'), a.get('metadata')) for a in d['action_results']]" \
+python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(s['step_name'], [a.get('metadata') for a in s['action_results']]) for s in d['completed_steps']]" \
   ~/.config/squadron/runs/<run>.json
 ```
 
-Expect `tools_given` and `tool_calls_made` on the tool-bearing steps.
+Expect `tools_given` and `tool_calls_made` in the metadata of tool-bearing steps.
 
-### 7. Live review calls a tool (issue #68)
+**Correction from the draft:** the draft's one-liner read `d['action_results']` at the top
+level. `RunState` has no such key — action results live per step under
+`completed_steps[].action_results[].metadata`. The command above reflects the real shape.
+
+### 7. Live review calls a tool — issue #68 (manual, live model)
 
 ```bash
 sq review code --slice <n> --model kimi27 -v
 ```
 
-Expect a non-zero tool-call count in the `-v` output and in the persisted review JSON.
-Record the actual numbers here at Phase 6.
+Expect a non-zero tool-call count in the `-v` output and `tools_given` / `tool_calls_made` in
+the persisted review JSON. Not executed during Phase 6 implementation — it requires a live
+non-SDK model. Its automated equivalent is step 9 below, which drives the same code path end
+to end against a mocked endpoint and asserts the tool actually ran.
+
+### 8. Telemetry observability and persistence — automated (SC8, SC9)
+
+```bash
+uv run pytest tests/pipeline/test_tool_telemetry_observability.py -q
+```
+
+Observed: `5 passed in 0.23s`.
+
+Covers SC8's distinguishing case directly — `tools=3/0 calls` renders for an offered-but-
+unused step while a no-tools step renders no `tools=` segment at all — and SC9's persistence
+claim by running a one-step pipeline through the executor with the same
+`StateManager.make_step_callback` seam `sq run` uses, then reading `tools_given` /
+`tool_calls_made` back out of the run JSON on disk.
+
+### 9. Non-SDK review executes a tool call — automated (SC6)
+
+```bash
+uv run pytest tests/review/test_non_sdk_tool_call_integration.py -q
+```
+
+Observed: `2 passed in 0.45s`.
+
+Drives `run_review_with_profile` against the migrated `code` template with a non-SDK profile
+and a mocked OpenAI-compatible endpoint that calls `read_file` on turn one and returns a
+parseable verdict on turn two. Asserts the tool really ran (the real file's body appears in
+the second request's tool-result history entry), the parsed `ReviewResult` is unchanged in
+shape from a tool-less review, and `tool_calls_made == 1`. This is the automated closure
+evidence for issue #68.
+
+### 10. Full gate set
+
+```bash
+uv run ruff format .
+uv run ruff check .
+uv run pyright
+uv run pytest -q
+```
+
+Observed: `480 files left unchanged`; `All checks passed!`; `0 errors, 0 warnings, 0
+informations`; `3292 passed, 2 skipped, 7 warnings in 451.08s`.
+
+`tests/load/` is picked up automatically — `pyproject.toml` sets `testpaths = ["tests"]` and
+`.github/workflows/ci.yml` runs plain `uv run pytest` with no path or marker filter, so no
+separate load-test invocation or CI wiring was needed.
 
 ## Effort
 

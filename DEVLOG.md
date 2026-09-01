@@ -14,6 +14,71 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 265: Phase 6 Implementation Complete
+
+All 30 tasks landed, one commit each, on branch
+`265-slice.review-coverage-standalone-client-and-pipeline-actions` (forked from `main`;
+`git.integration_branch` empty). Gates clean: ruff format/check, pyright 0 errors,
+`uv run pytest -q` → 3292 passed, 2 skipped.
+
+**Issue #68 is closed.** The chain was: templates declared Claude vocabulary
+(`[Read, Glob, Grep, Bash]`) → the non-SDK agent looked those names up in the squadron
+registry, found nothing, logged a WARNING and dropped them → the review ran tool-less and still
+reported a verdict. Fixed at both ends: templates migrated to canonical names, and the
+warn-and-drop loop in `providers/openai/agent.py` replaced with an accumulating `ProviderError`
+naming every unknown tool (D3). The SDK side keeps its old behavior via a single mapping table
+at the config-build edge (`providers/sdk/tool_names.py`), the only place canonical → Claude
+translation happens.
+
+**Two new tools.** `list_files` and `grep` in `tools/builtin.py`, both jailed and truncated
+like the existing three. `grep` compiles with the `regex` package (new runtime dependency) and
+bounds catastrophic backtracking with an engine-level `timeout=` scoped to the *remaining*
+whole-walk budget, not per-file — D9's rejection of `asyncio.wait_for`, which measured 72.8s
+against a 1.0s timeout during Phase 4 because a thread running the regex engine cannot be
+cancelled from outside. `tests/load/test_grep_timeout.py` is the repo's first `tests/load/`
+file; it asserts the bound at the real `GREP_TIMEOUT_S` and that concurrent pathological calls
+leave the event loop responsive. No CI wiring was needed — `testpaths = ["tests"]` and CI's
+unfiltered `uv run pytest` pick it up.
+
+**Injection decision is now run-scoped** (D1). `review/tool_support.py` computes the effective
+tool set per call — SDK names pass through untouched, non-SDK names filter against the registry
+— and file bodies are injected only when neither the provider natively nor a `read_file` tool
+in the effective set can fetch them. `ProviderCapabilities` gained no field. The
+byte-identical no-tools regression case is asserted directly, including the case that matters
+during migration: an unmigrated template's Claude names filter to empty against a non-SDK
+provider, so injection is unchanged.
+
+**Telemetry threads end to end.** The agent stamps `tools_given`/`tool_calls_made` on the
+final `Message.metadata` only (262's intermediate-turns contract unchanged), from both the
+tool-less fast path and the agentic loop — a test asserts the two cannot drift. `ReviewResult`
+gained both fields in the always-included `to_dict()` group. Because `one_shot_dispatch` and
+`capture_summary_via_profile` return bare strings and have other callers, both grew
+telemetry-carrying siblings rather than changing signature; `capture_summary_via_profile` now
+delegates to its sibling so there is still one code path. The `-v` line renders
+`tools=N/M calls` via the same walrus-guard/`extras` idiom already used for `verdict=`/`model=`.
+
+**Ordering and scope notes.** Two deliberate non-changes, both flagged at close-out rather
+than passed over silently: `pipeline/schema.py` does not appear in the diff even though the
+design's Integration Points table lists it — there is no per-step-type Pydantic schema to
+extend (`StepSchema.config` is a flat `dict[str, object]`), so validation goes through the
+shared `validate_allowed_tools` helper instead. And `tools/builtin.py` grew to 597 lines, past
+the ~300-line guideline; accepted rather than split, since the file has one clear
+responsibility and the codebase has larger precedent (`pipeline/executor.py` ~1700 lines).
+
+Three pre-existing tests needed updating because they asserted the old behavior: the SDK
+config test expected untranslated names, the agentic-loop test expected warn-and-drop, and
+`test_reverting_cwd_threading_fails_loudly` patched `one_shot_dispatch` — which the action no
+longer calls, so it was repointed at the telemetry-carrying entry point rather than left
+guarding nothing.
+
+**Not executed here:** Task 29's two manual steps. `sq run` refuses to execute inside a Claude
+Code session (unconditional `CLAUDECODE` guard, `cli/commands/run.py:148`), and the live
+non-SDK review needs a real model. Both have automated equivalents driving the same code paths
+(walkthrough steps 8 and 9); the walkthrough marks them as requiring a plain terminal and
+records the placeholders they still need.
+
+---
+
 ### Slice 265: Phase 5 Task Breakdown Complete
 
 25 tasks written across two files (`265-tasks...-1.md`, tasks 1-12; `265-tasks...-2.md`, tasks
