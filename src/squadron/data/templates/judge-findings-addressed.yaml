@@ -47,7 +47,7 @@ system_prompt: |
   Emit one line for every prior finding you were given, using that finding's
   id exactly as it was given to you. Emit no line for any other id.
 
-allowed_tools: [Read, Glob, Grep]
+allowed_tools: [read_file, list_files, grep]
 permission_mode: bypassPermissions
 model: sonnet
 setting_sources: null

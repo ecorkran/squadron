@@ -23,7 +23,9 @@ class TestCodeTemplate:
         assert t.prompt_builder is not None
         assert callable(t.prompt_builder)
         assert t.prompt_template is None
-        assert t.allowed_tools == ["Read", "Glob", "Grep", "Bash"]
+        # Bash is deliberately absent post-migration (slice 265, design D6): it gates the
+        # emitted --allowedTools string, not the SDK reviewer's actual capability.
+        assert t.allowed_tools == ["read_file", "list_files", "grep"]
         assert t.permission_mode == "bypassPermissions"
         assert t.setting_sources == ["project"]
         assert t.model == "sonnet"

@@ -20,7 +20,7 @@ class TestTasksTemplate:
         t = load_template(_tasks_yaml())
         assert t.name == "tasks"
         assert "task" in t.description.lower()
-        assert t.allowed_tools == ["Read", "Glob", "Grep"]
+        assert t.allowed_tools == ["read_file", "list_files", "grep"]
         assert t.permission_mode == "bypassPermissions"
         assert t.setting_sources is None
         assert t.prompt_builder is None
