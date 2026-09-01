@@ -466,6 +466,8 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
         instructions="summarize",
         model_id="minimax-01",
         profile="openrouter",
+        allowed_tools=None,
+        cwd=ctx.cwd,
     )
 
 

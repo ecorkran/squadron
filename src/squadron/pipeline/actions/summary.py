@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile
@@ -250,6 +251,8 @@ async def _execute_summary(
                 instructions=augmented_instructions,
                 model_id=model_id,
                 profile=profile,
+                allowed_tools=resolve_allowed_tools(context, action_type),
+                cwd=context.cwd,
             )
     except Exception as exc:  # noqa: BLE001
         # Boundary by design: this wraps SDK session dispatch (capture_summary)

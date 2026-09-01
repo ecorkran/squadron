@@ -20,6 +20,8 @@ async def capture_summary_via_profile(
     instructions: str,
     model_id: str | None,
     profile: str,
+    allowed_tools: list[str] | None = None,
+    cwd: str | None = None,
 ) -> str:
     """Execute a one-shot summary call through the specified provider profile.
 
@@ -44,8 +46,10 @@ async def capture_summary_via_profile(
         instructions="",
         api_key=None,
         base_url=provider_profile.base_url,
-        cwd=None,
-        allowed_tools=[],
+        # A tool-capable agent needs a working directory to jail its tools to; both stay
+        # at today's no-tools defaults when the step declares nothing (slice 265).
+        cwd=cwd if allowed_tools else None,
+        allowed_tools=allowed_tools if allowed_tools is not None else [],
         permission_mode="default",
         setting_sources=[],
         credentials={

@@ -6,6 +6,7 @@ from squadron.pipeline.actions.checkpoint import CheckpointTrigger
 from squadron.pipeline.emit import parse_emit_list
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import validate_allowed_tools
 
 
 class SummaryStepType:
@@ -67,6 +68,8 @@ class SummaryStepType:
                     )
                 )
 
+        errors.extend(validate_allowed_tools(config, self.step_type))
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -79,6 +82,8 @@ class SummaryStepType:
             summary_config["model"] = cfg["model"]
         if "emit" in cfg:
             summary_config["emit"] = cfg["emit"]
+        if "allowed_tools" in cfg:
+            summary_config["allowed_tools"] = cfg["allowed_tools"]
 
         actions: list[tuple[str, dict[str, object]]] = [("summary", summary_config)]
 
