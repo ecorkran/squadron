@@ -207,6 +207,36 @@ intact at `AgentConfig`.
 
 ---
 
+## 20260831
+
+### Slice 264: Context-Forge MCP Tool Bridge — Design Complete
+
+**Phase 4 design created:** `264-slice.context-forge-mcp-tool-bridge.md`; slice plan entry 4
+updated with the design reference.
+
+Delivered:
+- Five curated CF tools via the 261 descriptor protocol: `cf_set_phase`, `cf_set_slice`,
+  `cf_build_context`, `cf_prompt_get`, `cf_workflow_status` (status added beyond the plan's
+  four — mutating tools without a read tool force the model to mutate blind).
+- Real MCP stdio transport (D1), not a `cf` CLI wrapper: generic `tools/mcp_bridge.py`
+  single-call helper + `tools/cf_tools.py` descriptors. Purely additive — no agent,
+  executor, dispatch, or schema changes (263's validation is registry-driven).
+- Narrow squadron-semantic schemas mapped to CF MCP calls in one table (D2); per-call
+  spawn→call→teardown sessions since the descriptor protocol has no teardown hook (D3);
+  unconditional registration for deterministic pipeline validation (D4).
+- Config keys `cf.mcp_command` (default `npx -y @context-forge/mcp`) and `cf.mcp_timeout_s`.
+
+Verified while designing: `@context-forge/mcp` is published (0.13.0); installed python `mcp`
+1.26.0 supports `StdioServerParameters.cwd`; CF MCP schemas for `project_update`,
+`context_build`, `prompt_get`, `workflow_status` confirmed against the live server. Schema
+drift is covered by an availability-gated live contract test in the design.
+
+Context for sequencing: with 261–263 landed plus this slice, a tool-capable non-SDK model
+can run any phase's work end to end (files, bash, CF state/context). Review-path file access
+remains slice 265.
+
+---
+
 ## 20260829
 
 ### Slice 262: OpenAICompatibleAgent Agentic Loop Implemented (Phase 6)
