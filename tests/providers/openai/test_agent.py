@@ -213,3 +213,48 @@ class TestShutdown:
         await agent.shutdown()
         client.close.assert_called_once()
         assert agent.state == AgentState.terminated
+
+
+class TestUnknownToolNamePolicy:
+    """Slice 265 / design D3: an unknown tool name raises rather than being dropped.
+
+    Before this, a template declaring Claude vocabulary (``Read``, ``Glob``, ``Grep``) had
+    every name dropped by the registry lookup and the review ran tool-less while still
+    reporting a verdict — issue #68. A raise makes the misconfiguration impossible to miss.
+    """
+
+    def _agent_with_tools(self, tools: list[str], cwd: str) -> OpenAICompatibleAgent:
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock()
+        client.close = AsyncMock()
+        return OpenAICompatibleAgent(
+            name="bot",
+            client=client,
+            model=_MODEL,
+            system_prompt=None,
+            allowed_tools=tools,
+            cwd=cwd,
+        )
+
+    def test_unknown_tool_name_raises_provider_error(self, tmp_path: Any) -> None:
+        with pytest.raises(ProviderError) as excinfo:
+            self._agent_with_tools(["Read"], str(tmp_path))
+
+        message = str(excinfo.value)
+        assert "Read" in message
+        # The registered-tool list travels with the error so the fix needs no second lookup.
+        assert "read_file" in message
+
+    def test_two_unknown_names_both_named_in_error(self, tmp_path: Any) -> None:
+        with pytest.raises(ProviderError) as excinfo:
+            self._agent_with_tools(["Glob", "read_file", "Grep"], str(tmp_path))
+
+        message = str(excinfo.value)
+        assert "Glob" in message
+        assert "Grep" in message
+
+    def test_known_tool_names_construct_successfully(self, tmp_path: Any) -> None:
+        agent = self._agent_with_tools(["read_file", "list_files", "grep"], str(tmp_path))
+
+        executors = agent._tool_executors  # pyright: ignore[reportPrivateUsage]
+        assert sorted(executors) == ["grep", "list_files", "read_file"]
