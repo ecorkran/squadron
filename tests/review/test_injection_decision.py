@@ -198,3 +198,77 @@ async def test_sdk_provider_unaffected_by_effective_tools_change(tmp_path: Path)
     assert "SENTINEL FILE BODY" not in with_tools
     assert "SENTINEL FILE BODY" not in without_tools
     assert with_tools == without_tools
+
+
+# ---------------------------------------------------------------------------
+# Step-vs-template allowed_tools precedence (slice 265, task 16)
+# ---------------------------------------------------------------------------
+
+
+async def _run_capturing_config(
+    tmp_path: Path, *, template_tools: list[str] | None, step_tools: list[str] | None
+) -> list[str] | None:
+    """Return the allowed_tools that reached the built AgentConfig."""
+    captured: dict[str, object] = {}
+    agent = MagicMock()
+    agent.state = AgentState.idle
+    agent.shutdown = AsyncMock()
+
+    async def _handle(message: Message) -> AsyncIterator[Message]:
+        yield Message(
+            sender="mock-agent",
+            recipients=[],
+            content=_SAMPLE_REVIEW_OUTPUT,
+            message_type=MessageType.chat,
+        )
+
+    agent.handle_message = _handle
+
+    async def _create_agent(config: object) -> MagicMock:
+        captured["config"] = config
+        return agent
+
+    provider = MagicMock()
+    provider.capabilities = ProviderCapabilities(can_read_files=False)
+    provider.create_agent = _create_agent
+
+    profile = ProviderProfile(name="openai", provider="openai", api_key_env="OPENAI_API_KEY")
+    with (
+        patch(f"{_P}.get_profile", return_value=profile),
+        patch(f"{_P}.get_provider", return_value=provider),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        await run_review_with_profile(
+            _make_template(template_tools),
+            {"input": "unused", "cwd": str(tmp_path)},
+            profile=profile.name,
+            allowed_tools=step_tools,
+        )
+    config = captured["config"]
+    return config.allowed_tools  # pyright: ignore[reportAttributeAccessIssue]
+
+
+@pytest.mark.asyncio
+async def test_step_allowed_tools_overrides_template_allowed_tools(tmp_path: Path) -> None:
+    resolved = await _run_capturing_config(
+        tmp_path, template_tools=["read_file"], step_tools=["grep", "list_files"]
+    )
+
+    assert resolved == ["grep", "list_files"]
+
+
+@pytest.mark.asyncio
+async def test_template_allowed_tools_used_when_step_declares_nothing(tmp_path: Path) -> None:
+    resolved = await _run_capturing_config(
+        tmp_path, template_tools=["read_file", "grep"], step_tools=None
+    )
+
+    assert resolved == ["read_file", "grep"]
+
+
+@pytest.mark.asyncio
+async def test_step_empty_list_overrides_template_to_no_tools(tmp_path: Path) -> None:
+    """An explicit empty list is a declaration, not an absence — it disables the template's."""
+    resolved = await _run_capturing_config(tmp_path, template_tools=["read_file"], step_tools=[])
+
+    assert resolved == []

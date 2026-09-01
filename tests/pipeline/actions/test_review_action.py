@@ -1194,3 +1194,133 @@ class TestResolveSliceInputsRegression:
             result = ReviewAction()._resolve_slice_inputs("slice", 999, cf, inputs)
         assert result is None
         assert inputs == {"cwd": "/tmp"}
+
+
+# ---------------------------------------------------------------------------
+# allowed_tools wiring (slice 265)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewAllowedToolsValidation:
+    """A pipeline `review:` step with a bad tool name must fail before any model call."""
+
+    def test_validate_rejects_unknown_tool(self) -> None:
+        from squadron.pipeline.models import StepConfig
+        from squadron.pipeline.steps.review import ReviewStepType
+
+        step = StepConfig(
+            step_type="review",
+            name="r",
+            config={"template": "code", "allowed_tools": ["read_fil"]},
+        )
+        errors = ReviewStepType().validate(step)
+
+        assert [e.field for e in errors] == ["allowed_tools"]
+        assert "read_fil" in errors[0].message
+
+    def test_validate_accepts_registered_tools(self) -> None:
+        from squadron.pipeline.models import StepConfig
+        from squadron.pipeline.steps.review import ReviewStepType
+
+        step = StepConfig(
+            step_type="review",
+            name="r",
+            config={"template": "code", "allowed_tools": ["read_file", "grep"]},
+        )
+
+        assert ReviewStepType().validate(step) == []
+
+    def test_expand_forwards_allowed_tools_to_action(self) -> None:
+        from squadron.pipeline.models import StepConfig
+        from squadron.pipeline.steps.review import ReviewStepType
+
+        step = StepConfig(
+            step_type="review",
+            name="r",
+            config={"template": "code", "allowed_tools": ["read_file"]},
+        )
+        actions = ReviewStepType().expand(step)
+
+        assert actions[0][1]["allowed_tools"] == ["read_file"]
+
+    def test_expand_omits_allowed_tools_when_absent(self) -> None:
+        from squadron.pipeline.models import StepConfig
+        from squadron.pipeline.steps.review import ReviewStepType
+
+        step = StepConfig(step_type="review", name="r", config={"template": "code"})
+        actions = ReviewStepType().expand(step)
+
+        assert "allowed_tools" not in actions[0][1]
+
+
+class TestReviewAllowedToolsThreading:
+    """The resolved tool list must reach run_review_with_profile, not merely be read."""
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_step_allowed_tools_reaches_run_review_with_profile(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(params={"template": "code", "allowed_tools": ["read_file", "grep"]})
+        await ReviewAction().execute(ctx)
+
+        assert mock_run_review.call_args.kwargs["allowed_tools"] == ["read_file", "grep"]
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_absent_step_allowed_tools_leaves_parameter_none(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """Regression guard for the `sq review` CLI path, which never sets this parameter."""
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context()
+        await ReviewAction().execute(ctx)
+
+        assert mock_run_review.call_args.kwargs["allowed_tools"] is None
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_malformed_step_allowed_tools_fails_the_action(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """A malformed shape raises rather than silently dropping tools (design D3)."""
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(params={"template": "code", "allowed_tools": "read_file"})
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        mock_run_review.assert_not_called()
