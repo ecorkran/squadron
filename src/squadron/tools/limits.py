@@ -19,3 +19,8 @@ MAX_OUTPUT_BYTES = 64_000
 
 # Wall-clock seconds a ``bash`` command may run before its process group is killed.
 BASH_TIMEOUT_S = 120.0
+
+# Wall-clock seconds the ``grep`` tool's regex matching may consume across an entire
+# walk before the search is abandoned. Bounds catastrophic backtracking on
+# model-supplied patterns; the ``regex`` package enforces it at the engine level.
+GREP_TIMEOUT_S = 5.0
