@@ -464,3 +464,103 @@ class TestAgenticLoop:
         assert "must be a JSON object" in content
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert any("not a JSON object" in r.getMessage() for r in warnings)
+
+
+class TestToolUseTelemetry:
+    """Tool-use telemetry on the final Message (slice 265, design D4/D5).
+
+    Before this, nothing recorded whether tools were offered or called: a review that ran
+    tool-less looked identical in every artifact to one that read a dozen files.
+    """
+
+    @pytest.mark.asyncio
+    async def test_final_message_has_tools_given_and_zero_calls_when_unused(
+        self, tmp_path: Path
+    ) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(text_chunk("no tools needed"))
+        )
+        agent = _make_agent(allowed_tools=["read_file", "grep"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["tools_given"] == ["read_file", "grep"]
+        assert msgs[-1].metadata["tool_calls_made"] == 0
+
+    @pytest.mark.asyncio
+    async def test_final_message_has_tool_calls_made_matching_actual_calls(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        (tmp_path / "b.txt").write_text("B")
+        call_a = tool_chunk(0, "call_a", "read_file", json.dumps({"path": "a.txt"}))
+        call_b = tool_chunk(1, "call_b", "read_file", json.dumps({"path": "b.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(call_a, call_b),
+                _async_stream(text_chunk("read both")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["tools_given"] == ["read_file"]
+        assert msgs[-1].metadata["tool_calls_made"] == 2
+
+    @pytest.mark.asyncio
+    async def test_calls_across_multiple_turns_accumulate(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        call_one = tool_chunk(0, "call_1", "read_file", json.dumps({"path": "a.txt"}))
+        call_two = tool_chunk(0, "call_2", "read_file", json.dumps({"path": "a.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(call_one),
+                _async_stream(call_two),
+                _async_stream(text_chunk("done")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["tool_calls_made"] == 2
+
+    @pytest.mark.asyncio
+    async def test_tool_less_response_has_no_tools_given_key(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(text_chunk("plain answer"))
+        )
+        agent = _make_agent(allowed_tools=None, cwd=None, client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert "tools_given" not in msgs[-1].metadata
+        assert "tool_calls_made" not in msgs[-1].metadata
+
+    @pytest.mark.asyncio
+    async def test_fast_path_and_loop_path_stamp_metadata_identically(self, tmp_path: Path) -> None:
+        """The two branches must not drift: same keys, differing only in the count."""
+        (tmp_path / "a.txt").write_text("A")
+
+        fast_client = _make_client()
+        fast_client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(text_chunk("declined the tools"))
+        )
+        fast_agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=fast_client)
+        fast_msgs = await _collect(fast_agent, _USER_MSG)
+
+        loop_client = _make_client()
+        loop_client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(tool_chunk(0, "c1", "read_file", json.dumps({"path": "a.txt"}))),
+                _async_stream(text_chunk("used the tools")),
+            ]
+        )
+        loop_agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=loop_client)
+        loop_msgs = await _collect(loop_agent, _USER_MSG)
+
+        assert set(fast_msgs[-1].metadata) == set(loop_msgs[-1].metadata)
+        assert fast_msgs[-1].metadata["tools_given"] == loop_msgs[-1].metadata["tools_given"]
+        assert fast_msgs[-1].metadata["tool_calls_made"] == 0
+        assert loop_msgs[-1].metadata["tool_calls_made"] == 1
