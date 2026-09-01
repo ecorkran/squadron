@@ -392,16 +392,16 @@ already gated by the existing CI job once it exists.
 
 ## Task 13: Test the injection decision
 
-- [ ] **13.1** Add to `tests/review/test_review_client.py` (or `test_content_injection.py` if
+- [x] **13.1** Add to `tests/review/test_review_client.py` (or `test_content_injection.py` if
   injection-specific tests already live there — check before choosing)
-  - [ ] `test_tool_capable_review_skips_file_body_injection` — assert diff present, file bodies
+  - [x] `test_tool_capable_review_skips_file_body_injection` — assert diff present, file bodies
     absent
-  - [ ] `test_no_tools_review_injects_file_bodies_unchanged` — byte-for-byte comparison against
+  - [x] `test_no_tools_review_injects_file_bodies_unchanged` — byte-for-byte comparison against
     the pre-slice prompt construction for a fixture input
-  - [ ] `test_sdk_provider_unaffected_by_effective_tools_change` — `can_read_files=True`
+  - [x] `test_sdk_provider_unaffected_by_effective_tools_change` — `can_read_files=True`
     providers keep skipping injection regardless of `allowed_tools`
-  - [ ] Effort: 2/5
+  - [x] Effort: 2/5
 
-- [ ] **Task 13 success criteria**
-  - [ ] `uv run pytest tests/review/ -k "inject" -q` green
-  - [ ] `ruff format` run, then committed: `test: cover run-scoped injection decision`
+- [x] **Task 13 success criteria**
+  - [x] `uv run pytest tests/review/ -k "inject" -q` green
+  - [x] `ruff format` run, then committed: `test: cover run-scoped injection decision`
