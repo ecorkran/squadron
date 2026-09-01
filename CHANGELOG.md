@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps going until the model finishes — instead of stopping after one API round-trip. Nothing
   configures tools yet (no pipeline step or review template declares them), so this has no
   effect on any run today; it's the mechanism the next slice wires up.
+- Pipeline steps can now declare which tools a model may use, via `allowed_tools` on a
+  `dispatch`, `design`, `tasks`, or `implement` step — e.g.
+  `allowed_tools: [read_file, write_file]`. Non-Claude models given tools this way write real
+  files during a run instead of only describing what they would write. The shipped `test-p4`
+  pipeline uses this on its design step.
+- A misspelled tool name in a pipeline is now caught when the pipeline is validated, before any
+  model is called. The error names the bad tool and lists the ones that are registered.
+  Previously an unrecognized name meant the step ran silently without tools, and the model
+  produced prose describing a file it never created.
 - `/understand concept` generates a Phase 0 concept document for an existing codebase that has never
   had planning artifacts. It reads the knowledge graph for structure, your README for intent, and the
   filesystem for development practice (test tree, CI, lint config) before asking you anything — then

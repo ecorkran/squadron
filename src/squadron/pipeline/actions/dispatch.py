@@ -12,7 +12,7 @@ from squadron.metrology.preemption import read_fragment_body, read_fragment_head
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
-from squadron.providers.base import ProfileName
+from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile
 
@@ -47,9 +47,21 @@ async def one_shot_dispatch(
     step_name: str = "dispatch",
     run_id: str = "cli",
     branch_idx: object = None,
+    allowed_tools: list[str] | None = None,
+    cwd: str | None = None,
 ) -> str:
     """Spawn a one-shot agent and return the concatenated response text."""
     profile = get_profile(profile_name)
+    # Registry tool names are not the SDK's vocabulary (Read/Write/Bash), so an
+    # SDK-backed profile would silently receive names it cannot resolve and run
+    # tool-less. Fail instead — a silent drop is the exact no-op-with-prose
+    # failure this path exists to prevent. Slice 265 owns the SDK mapping.
+    if allowed_tools and profile.provider == ProviderType.SDK:
+        raise ValueError(
+            f"Step '{step_name}' declares allowed_tools {allowed_tools!r} but profile "
+            f"'{profile_name}' routes to the Claude Code SDK, whose tool vocabulary differs "
+            "from the squadron tool registry. Use a non-SDK model, or remove 'allowed_tools'."
+        )
     ensure_provider_loaded(profile.provider)
 
     branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
@@ -60,7 +72,12 @@ async def one_shot_dispatch(
         model=model_id,
         instructions=system_prompt,
         base_url=profile.base_url,
-        cwd=None,
+        # The SDK provider forwards a non-None cwd into ClaudeAgentOptions and
+        # previously never received the key; only the non-SDK agent needs it (it
+        # is the jail root for registry tools). Gate on the resolved provider so
+        # this slice does not change SDK one-shot behavior.
+        cwd=None if profile.provider == ProviderType.SDK else cwd,
+        allowed_tools=allowed_tools,
         credentials={
             "api_key_env": profile.api_key_env,
             "default_headers": profile.default_headers,
@@ -185,6 +202,23 @@ class DispatchAction:
         ``stdout`` as the prompt.  This is the normal flow for phase steps:
         cf-op(build_context) produces the context text, dispatch sends it.
         """
+        # The SDK session path does not carry allowed_tools (slice 265 owns that
+        # wiring). Failing here is deliberate: running the step tool-less would
+        # return success with the model describing a file it never wrote — the
+        # exact silent no-op this slice exists to prevent. Load-time validation
+        # cannot catch it, because the routing decision is made at runtime.
+        if self._resolve_allowed_tools(context):
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=(
+                    f"Step '{context.step_name}' declares 'allowed_tools' but resolved to the "
+                    "SDK session path, which does not yet support them. Use a non-SDK model "
+                    "for this step, or remove 'allowed_tools'."
+                ),
+            )
+
         action_model = str(context.params["model"]) if "model" in context.params else None
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         model_id, _ = context.resolver.resolve(action_model, step_model)
@@ -368,6 +402,23 @@ class DispatchAction:
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         return context.resolver.resolve(action_model, step_model)
 
+    @staticmethod
+    def _resolve_allowed_tools(context: ActionContext) -> list[str] | None:
+        """Narrow ``context.params["allowed_tools"]`` to a list of tool names.
+
+        Names are not re-checked against the tool registry here: load-time
+        validation is the single authority (design D3). A malformed value is a
+        defect that validation should have caught, so it raises rather than
+        silently dropping tools — a silent drop reproduces exactly the
+        no-op-with-prose failure this slice exists to prevent.
+        """
+        raw = context.params.get("allowed_tools")
+        if raw is None:
+            return None
+        if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):  # pyright: ignore[reportUnknownVariableType]
+            raise ValueError(f"dispatch: 'allowed_tools' must be a list of tool names, got {raw!r}")
+        return cast(list[str], raw)
+
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""
         action_model = str(context.params["model"]) if "model" in context.params else None
@@ -380,6 +431,8 @@ class DispatchAction:
             else alias_profile or ProfileName.SDK
         )
 
+        allowed_tools = self._resolve_allowed_tools(context)
+
         response_text = await one_shot_dispatch(
             prompt=self._resolve_prompt(context),
             model_id=model_id,
@@ -388,6 +441,14 @@ class DispatchAction:
             step_name=context.step_name,
             run_id=context.run_id,
             branch_idx=context.params.get("_fan_out_branch_index"),
+            allowed_tools=allowed_tools,
+            # Threaded unconditionally for the non-SDK agent (design D2), where
+            # AgentConfig.cwd is inert without tools and passing it always removes
+            # the latent ProviderError path where tools arrive without a cwd. Not
+            # sent to the SDK provider, which forwards a non-None cwd into
+            # ClaudeAgentOptions and previously never received the key — threading
+            # it there would change one-shot SDK behavior beyond this slice.
+            cwd=context.cwd,
         )
 
         if error_result := _check_cli_error(response_text):

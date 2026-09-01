@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import validate_allowed_tools
 
 
 class DispatchStepType:
@@ -52,6 +53,8 @@ class DispatchStepType:
                 )
             )
 
+        errors.extend(validate_allowed_tools(config, self.step_type))
+
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -66,6 +69,8 @@ class DispatchStepType:
             action_config["model"] = cfg["model"]
         if "pre_emption_fragment" in cfg:
             action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
+        if "allowed_tools" in cfg:
+            action_config["allowed_tools"] = cfg["allowed_tools"]
 
         return [("dispatch", action_config)]
 

@@ -12,7 +12,99 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
-## 20260831
+## 20260901
+
+### Slice 263: Code Review and Live Verification
+
+**The tool wiring is confirmed working against a real non-SDK model.** `sq run test-p4 264 -v`
+from a standard terminal dispatched to `kimi27` and the model's response enumerated specific
+filesystem paths it had probed and found missing — evidence only a model actually calling
+`read_file` can produce. A tool-less model cannot know a path is absent; it would have invented
+a design. The step nonetheless reported failure, for two reasons unrelated to this slice:
+
+1. **The 909 post-condition cannot pass for an undesigned slice.** `expected_artifact_paths`
+   resolves the target via the slice plan's `design_file`, which is `None` until a design exists
+   (verified: 262/263 have paths, 264/265 are `None`), so the check fails closed before touching
+   the disk. P4 exists to *create* that file — a chicken-and-egg in the post-condition.
+2. **CF prompt-template guide paths do not match the tree** (`guide.ai-project.process` without
+   `.md`; `file-naming-conventions.md` under `project-guides/` rather than one level up). The
+   model correctly refused to invent a design it could not ground.
+
+Both are pre-existing and worth filing separately.
+
+**Code review found four issues; all four fixed.** Two were consequential and both were in code
+this slice wrote:
+
+- **The SDK session path silently dropped `allowed_tools`.** `_dispatch_via_session` never reads
+  the field, so a step declaring tools that routed there ran tool-less and returned
+  `success=True` — precisely the no-op-with-prose failure this slice exists to prevent, and
+  invisible to load-time validation because the routing decision happens at runtime. Now both
+  SDK paths fail loudly: the session path returns a failed `ActionResult`, and `one_shot_dispatch`
+  raises when the resolved profile's provider is the SDK, since registry names
+  (`read_file`) are not SDK vocabulary (`Read`). Slice 265 owns the mapping.
+- **Unconditional `cwd` changed SDK one-shot behavior.** `providers/sdk/provider.py` forwards a
+  non-None `cwd` into `ClaudeAgentOptions`, which previously never received the key. D2's
+  "inert" justification only ever covered the non-SDK agent. Now gated on the resolved provider
+  inside `one_shot_dispatch`, where the provider is actually known.
+
+Two false starts worth recording, both caught by existing tests rather than by inspection: the
+guard was first written against `profile_name == ProfileName.SDK`, which wrongly catches the
+`None`-alias fallback (that case names the SDK profile but still routes through the one-shot
+agent), and the `cwd` suppression was first put at the call site, where the provider is not yet
+resolved. Both belong on `profile.provider`, not the profile name.
+
+The remaining two findings were small: `validate_allowed_tools` returned on the first non-string
+element instead of accumulating, contradicting its own batch-reporting docstring; and
+`test-p4.yaml`'s tools could route to SDK under a `--model` override, which the new guard now
+turns into a loud failure.
+
+Four regression tests added for the guards.
+
+### Slice 263: Implementation (Phase 6)
+
+Tasks 1-10 and 12 complete on branch
+`263-slice.dispatch-action-wiring-and-pipeline-yaml-surface`, one commit per task. Task 11's
+manual end-to-end verification is partially done and the rest is deferred — see below.
+
+**Diff shape matches the design exactly.** Five source files:
+`pipeline/steps/utils.py` (the `validate_allowed_tools` helper), `pipeline/steps/dispatch.py`
+and `pipeline/steps/phase.py` (validate + conditional expand pass-through),
+`pipeline/actions/dispatch.py` (threading into `AgentConfig`), and
+`data/pipelines/test-p4.yaml`. `schema.py`, `loader.py`, `executor.py`, `core/models.py`, the
+agent, and the provider are untouched — the absence of a `loader.py` change is the signal that
+D1's existing extension point carried the validation rather than a new one being added.
+
+**Three corrections to the task file, found by running the commands rather than trusting
+them.** First, `sq run` takes the slice index as a positional argument; the task file and the
+design's walkthrough both used `--slice <n>`, which exits with `No such option: --slice`. The
+walkthrough is corrected. Second, task 8's malformed-value case surfaces as
+`ActionResult(success=False)` with `allowed_tools` named in the error, not as a propagating
+exception — `execute` is a process boundary that wraps exceptions. The raise still happens in
+`_resolve_allowed_tools` and no agent is spawned, so the fail-loudly requirement holds; only
+the observable shape differs. Third, task 9's D2 guard has to model a reverted `cwd` as `None`,
+not `""`: the agent's check is `cwd is None`, so an empty string slips past it and
+`Path("").resolve()` silently writes to the process working directory instead — a subtly wrong
+test that would have passed for the wrong reason.
+
+**The conditional-expand guard was verified as live, not assumed.** Temporarily rewriting the
+pass-through as unconditional fails five tests including
+`test_expand_omits_allowed_tools_when_absent`, which is what the task text predicted.
+
+**Task 11.2/11.3 deferred — environment, not defect.** `uv run sq run test-p4 264 -v` exits
+immediately with "SDK pipeline execution cannot run inside a Claude Code session". The guard at
+`cli/commands/run.py:148` triggers on the `CLAUDECODE` environment variable unconditionally,
+before any pipeline-shape classification, so it blocks even a pipeline `--explain` reports as
+Claude-free and needing no persistent session. Bypassing it would defeat a deliberate project
+guard, so the live positive and contrast runs must be done from a standard terminal. Recorded
+as an explicit NOT VERIFIED section in the slice design's walkthrough with the exact commands
+to run.
+
+The negative case (11.1) *was* verified through the shipped CLI: a pipeline with `read_fil`
+exits 1 naming the bad tool and listing `['read_file', 'write_file', 'bash']` from
+`tools.list_tools()`, before any model call. Both `--validate` and `--dry-run` reach that gate.
+
+**Gates:** `ruff format` clean, `ruff check` all passed, `pyright` 0 errors, full suite
+3144 passed / 2 skipped in 7m12s.
 
 ### Slice 263: Task Breakdown (Phase 5)
 

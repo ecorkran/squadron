@@ -353,26 +353,32 @@ cheap; the failure is loud either way.
 
 ## Verification Walkthrough
 
+Verified during implementation on 20260831. Commands below are the actual invocations run,
+with observed output. One correction applies throughout: `sq run` takes the slice index as a
+**positional** argument, not `--slice`. The pre-implementation draft of this section used
+`--slice <n>`, which exits with `No such option: --slice`.
+
 ### 1. Validation rejects a bad tool name before spending a token
 
-Create a scratch pipeline with a typo:
-
-```yaml
-name: tool-validation-check
-params:
-  slice: required
-steps:
-  - dispatch:
-      prompt: "hello"
-      allowed_tools: [read_file, write_fil]
-```
+Copy the shipped pipeline with a typo in one tool name, then validate it:
 
 ```bash
-uv run sq run tool-validation-check --slice 263 --dry-run
+sed 's/allowed_tools: \[read_file, write_file\]/allowed_tools: [read_fil, write_file]/' \
+  src/squadron/data/pipelines/test-p4.yaml > /tmp/bad-tools.yaml
+uv run sq run /tmp/bad-tools.yaml 263 --validate
 ```
 
-Expect a non-zero exit and an error naming `write_fil` and listing the registered tools
-(`read_file`, `write_file`, `bash`). No model call is made.
+Observed — exit code 1, no model call:
+
+```
+Validation errors for 'P4':
+  allowed_tools: Tool 'read_fil' is not registered. Available tools:
+['read_file', 'write_file', 'bash']
+```
+
+The registered-tool list comes from `tools.list_tools()`, so it stays correct as tools are
+added. `--dry-run` reaches the same gate and prints the same errors, so either flag
+demonstrates the check.
 
 ### 2. Absent field changes nothing
 
@@ -380,8 +386,13 @@ Expect a non-zero exit and an error naming `write_fil` and listing the registere
 uv run pytest tests/pipeline/ -q
 ```
 
-The existing exact-equality `expand()` tests for `dispatch` and the phase step types pass
-unmodified — that is the regression gate proving criterion 4.
+Observed: `1212 passed, 2 skipped`. The pre-existing exact-equality `expand()` tests for
+`dispatch` and the phase step types pass **unmodified** — criterion 4's regression gate.
+
+Confirmed to be a live guard, not a vacuous one: temporarily rewriting the conditional
+pass-through as unconditional (`action_config["allowed_tools"] = cfg.get("allowed_tools")`)
+fails 5 tests in `tests/pipeline/steps/test_dispatch_step.py`, including
+`test_expand_omits_allowed_tools_when_absent`.
 
 ### 3. Tool call actually writes a file (mocked endpoint)
 
@@ -389,25 +400,75 @@ unmodified — that is the regression gate proving criterion 4.
 uv run pytest tests/pipeline/test_dispatch_tools.py -v
 ```
 
-The integration test stands up a mocked OpenAI-compatible endpoint returning a `write_file`
-tool call followed by a final text turn, runs a one-step pipeline in a `tmp_path` cwd, and
-asserts the file exists with the expected content and the `ActionResult` carries the final
-turn's text.
+Observed: 2 passed.
 
-### 4. End-to-end with a real non-SDK model
+`test_dispatch_tool_call_writes_file_to_disk` drives the real
+`DispatchAction` -> `one_shot_dispatch` -> agent registry -> `OpenAICompatibleAgent` ->
+squadron tool registry -> filesystem path, mocking only `AsyncOpenAI`. It asserts the file
+**exists on disk** in a `tmp_path` cwd with the expected content, and that
+`ActionResult.outputs["response"]` carries the final turn's text rather than the tool-call
+turn.
+
+`test_reverting_cwd_threading_fails_loudly` is the D2 regression guard. It patches
+`one_shot_dispatch` to pass `cwd=None` — what an actual revert of the threading does — and
+asserts the dispatch fails with `cwd` named in the error and no file written. Note the guard
+must model the revert as `cwd=None`, not `cwd=""`: the agent's check is `cwd is None`, and an
+empty string instead resolves to the process working directory, writing the file somewhere
+unexpected rather than failing.
+
+### 4. End-to-end with a real non-SDK model — PARTIALLY VERIFIED
+
+Run from a standard terminal (the command exits immediately inside a Claude Code session — an
+unconditional `CLAUDECODE` guard at
+[cli/commands/run.py:148](../../../src/squadron/cli/commands/run.py#L148) fires before any
+pipeline-shape check, so it blocks even this Claude-free pipeline):
 
 ```bash
-uv run sq run test-p4 --slice <some-unstarted-slice> -v
+uv run sq run test-p4 264 -v
 ```
 
-Expect: the design step dispatches to `kimi27` with `tools` in the request; the model issues a
-`write_file` call; the slice-design file exists at
-`project-documents/user/slices/<nnn>-slice.<name>.md` after the step; the subsequent review
-step finds it as input rather than reporting a missing artifact.
+Observed 20260901 — the dispatch reached the model and the tools were live:
 
-Compare against `git stash`-ing the `allowed_tools` line from `test-p4.yaml` and re-running:
-the model produces prose describing the design and no file appears. That contrast is the
-slice's whole point.
+```
+  action 4/7: dispatch model=kimi27
+    -> ok (model=moonshotai/kimi-k2.7-code)
+dispatch post-condition: no design artifact path registered for slice 264
+```
+
+**What this establishes.** The model's response enumerated specific filesystem paths it had
+probed and found missing (`ai-project-guide/project-guides/guide.ai-project.process`,
+`ai-project-guide/tool-guides/context-forge/introduction.md`, and others). It could only report
+those misses by actually calling `read_file` against the working directory — a tool-less model
+has no way to know a path is absent and would have produced a design from imagination instead.
+The `allowed_tools` -> `AgentConfig` -> registry -> filesystem path therefore works end to end
+against a real non-SDK model.
+
+**Two unrelated pre-existing issues surfaced, neither caused by this slice.**
+
+1. **The post-condition cannot pass for an undesigned slice.** `expected_artifact_paths`
+   resolves the target through the slice plan's `design_file` field, which is `None` for a slice
+   that has never been designed (confirmed: 262 and 263 have paths; 264 and 265 are `None`). The
+   check then fails closed at
+   [dispatch_artifact.py:46](../../../src/squadron/events/builtin/dispatch_artifact.py#L46) with
+   "no design artifact path registered" before ever looking at the disk. Since P4's purpose is
+   to *create* that file, the post-condition can only be satisfied for a slice whose design file
+   is already registered — a chicken-and-egg in the slice-909 post-condition, not in tool
+   wiring.
+
+2. **The prompt's guide paths do not match the tree.** The model probed
+   `ai-project-guide/project-guides/guide.ai-project.process` and
+   `project-guides/file-naming-conventions.md`; the real files are
+   `project-documents/ai-project-guide/project-guides/guide.ai-project.process.md` (note the
+   `.md`) and `project-documents/ai-project-guide/file-naming-conventions.md` (one level up).
+   The paths originate in the CF prompt templates. A tool-less model never noticed because it
+   never looked; a tool-equipped one checks and correctly refuses to invent a design. Fixing
+   this is prerequisite to a clean positive run.
+
+**Still outstanding:** the contrast case (11.3) — remove the `allowed_tools` line from
+`src/squadron/data/pipelines/test-p4.yaml`, re-run, and confirm the model produces prose and
+probes no paths. Also a positive run that produces a design file on disk, which needs issue 2
+resolved first (and a slice whose design file is already registered, or a post-condition fix,
+for issue 1).
 
 ### 5. Quality gates
 

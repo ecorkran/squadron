@@ -10,6 +10,7 @@ steps:
   - design:
       phase: 4
       model: "{model}"
+      allowed_tools: [read_file, write_file]
       review:
         template: slice
         model: "{review-model}"
