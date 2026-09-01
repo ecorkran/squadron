@@ -14,6 +14,52 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 265: Phase 5 Task Breakdown Complete
+
+25 tasks written across two files (`265-tasks...-1.md`, tasks 1-12; `265-tasks...-2.md`, tasks
+13-25) — one file overran the ~450-line guideline by more than the ~100-line tolerance, so it
+split at the natural seam between provider-level work and pipeline-action wiring, following the
+project's numbered-suffix convention.
+
+Sequencing follows the dependency order the design implies rather than the Integration Points
+table's listing order: new tools and their timeout dependency first (1-2), the tools themselves
+with tests (3-6), the two provider-side vocabulary changes that make everything else meaningful
+— SDK-edge translation and the non-SDK unknown-name raise (7-10) — then the injection decision
+(11-12), pipeline-action wiring for review and summary (13-15), tool-use observability threaded
+from the agent through `ActionResult.metadata`, `ReviewResult`, and the `-v` log line (16-20),
+template migration deliberately last since it depends on the vocabulary fix actually working
+(21-22), and the live SC6/SC8/SC10 evidence tasks plus close-out (23-25).
+
+Reading the current source rather than trusting the design doc's line numbers surfaced one
+correction: the design's Integration Points table cites `dispatch.py:205` for the
+metadata-discarding response join. The actual location, confirmed against the file as it
+stands after slice 263 landed, is `dispatch.py:96-100` — `one_shot_dispatch`'s
+`"".join(response_parts)` loop, which reads only `response.metadata.get("sdk_type")` and drops
+everything else. Task 18 cites the corrected location. Also confirmed against source: `review.py`
+and `summary.py` have no `allowed_tools` plumbing at all today — slice 263 built it only for
+`dispatch.py` (`_resolve_allowed_tools`, `dispatch.py:405-420`) — so tasks 13-15 build it from
+scratch for the other two actions via an extracted shared helper, rather than assuming a
+schema-level pattern to mirror (`pipeline/schema.py` has no per-step-type schema; step config is
+a flat `dict[str, object]` in all three actions).
+
+Two tasks are marked with an open implementation choice rather than a prescribed one, because
+the design is silent and the current code doesn't settle it either: task 14 asks whether a
+step-level `allowed_tools` on a pipeline `review` step should override the template's own
+`allowed_tools` or the reverse, defaulting to step-overrides-template as the more useful reading
+but flagging it for confirmation during implementation; task 16 leaves open whether
+`translation.build_messages` grows a parameter or the final `Message` is constructed directly in
+`agent.py`, deferring to whichever produces the smaller diff.
+
+All ten success criteria (SC1, SC1a, SC2-SC10) map onto specific tasks with no gaps: SC1/SC1a →
+tasks 3-6, SC2 → task 21, SC3 → tasks 7-8 and 22, SC4 → tasks 7 and 9-10, SC5 → tasks 11-12,
+SC6 → task 23, SC7 → tasks 14-15, SC8 → tasks 20 and 24.1, SC9 → task 19, SC10 → task 24.2.
+
+**Next:** Phase 6 implementation on branch
+`265-slice.review-coverage-standalone-client-and-pipeline-actions`, forked from `main`
+(`git.integration_branch` reads empty).
+
+---
+
 ### Slice 265: Phase 4 Review — F001 Was Right, Its Suggested Fix Was Not
 
 Slice review came back CONCERNS: one concern (F001), one note (F002), four passes. Both
