@@ -209,6 +209,20 @@ intact at `AgentConfig`.
 
 ## 20260831
 
+### Slice 264: Task Breakdown (Phase 5)
+
+Converted the 264 design into `user/tasks/264-tasks.context-forge-mcp-tool-bridge.md` — nine
+sequential tasks, test-with ordering (fake MCP server fixture lands before the bridge it
+tests; each implementation task is immediately followed by its test task). Structure follows
+the design's dependency order: config keys → fake-server fixture → `mcp_bridge.py` → bridge
+tests (real stdio round-trips incl. timeout asserting the child process is reaped) →
+`cf_tools.py` descriptors → mocked-transport arg-mapping tests → availability-gated live
+contract test → walkthrough/close-out. Context summary pins the seven design facts an
+implementer must not lose (one-way layering, errors-as-values, WARNING floor, single
+mapping-table home for CF argument names, no project identity in schemas, SDK-owned process
+teardown, unconditional registration). Next: PM approval, then Phase 6 on branch
+`264-slice.context-forge-mcp-tool-bridge`.
+
 ### Slice 264: Slice-Design Review Findings Addressed
 
 Two reviews of the 264 design at `054cb78`: claude-sonnet-5 (CONCERNS, 2 concerns + 1 note)
