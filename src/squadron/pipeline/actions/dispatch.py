@@ -105,6 +105,79 @@ async def one_shot_dispatch(
     return "".join(response_parts)
 
 
+async def one_shot_dispatch_with_telemetry(
+    *,
+    prompt: str,
+    model_id: str,
+    profile_name: str,
+    system_prompt: str = "",
+    step_name: str = "dispatch",
+    run_id: str = "cli",
+    branch_idx: object = None,
+    allowed_tools: list[str] | None = None,
+    cwd: str | None = None,
+) -> tuple[str, dict[str, object]]:
+    """Spawn a one-shot agent and return its text alongside tool-use telemetry.
+
+    ``one_shot_dispatch`` joins the response stream into a bare string and discards every
+    metadata key but ``sdk_type``, which threw away the tool-call counts slice 265 needs. Its
+    signature is unchanged for its other callers; this sibling carries both.
+
+    The telemetry dict is empty when the run had no tools, so callers can copy it into
+    ``ActionResult.metadata`` unconditionally without inventing keys (design D5).
+    """
+    profile = get_profile(profile_name)
+    if allowed_tools and profile.provider == ProviderType.SDK:
+        raise ValueError(
+            f"Step '{step_name}' declares allowed_tools {allowed_tools!r} but profile "
+            f"'{profile_name}' routes to the Claude Code SDK, whose tool vocabulary differs "
+            "from the squadron tool registry. Use a non-SDK model, or remove 'allowed_tools'."
+        )
+    ensure_provider_loaded(profile.provider)
+
+    branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
+    config = AgentConfig(
+        name=f"dispatch-{step_name}{branch_suffix}-{run_id[:8]}",
+        agent_type=profile.provider,
+        provider=profile.provider,
+        model=model_id,
+        instructions=system_prompt,
+        base_url=profile.base_url,
+        cwd=None if profile.provider == ProviderType.SDK else cwd,
+        allowed_tools=allowed_tools,
+        credentials={
+            "api_key_env": profile.api_key_env,
+            "default_headers": profile.default_headers,
+        },
+    )
+
+    registry = get_registry()
+    agent = await registry.spawn(config)
+    telemetry: dict[str, object] = {}
+    try:
+        message = Message(
+            sender="pipeline",
+            recipients=[config.name],
+            content=prompt,
+            message_type=MessageType.chat,
+        )
+        response_parts: list[str] = []
+        async for response in agent.handle_message(message):
+            # Read before the sdk_type filter: the message carrying telemetry can be one
+            # this loop skips for prose.
+            given = response.metadata.get("tools_given")
+            if given is not None:
+                telemetry["tools_given"] = given
+                telemetry["tool_calls_made"] = response.metadata.get("tool_calls_made", 0)
+            if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
+                continue
+            response_parts.append(response.content)
+    finally:
+        await registry.shutdown_agent(config.name)
+
+    return "".join(response_parts), telemetry
+
+
 class DispatchAction:
     """Pipeline action that dispatches a prompt to a language model.
 
@@ -417,7 +490,7 @@ class DispatchAction:
 
         allowed_tools = resolve_allowed_tools(context, self.action_type)
 
-        response_text = await one_shot_dispatch(
+        response_text, tool_telemetry = await one_shot_dispatch_with_telemetry(
             prompt=self._resolve_prompt(context),
             model_id=model_id,
             profile_name=profile_name,
@@ -438,6 +511,8 @@ class DispatchAction:
         if error_result := _check_cli_error(response_text):
             return error_result
 
+        # tool_telemetry is empty when the run had no tools, so the keys stay absent rather
+        # than reporting a misleading zero (design D5).
         return ActionResult(
             success=True,
             action_type=self.action_type,
@@ -445,6 +520,7 @@ class DispatchAction:
             metadata={
                 "model": model_id,
                 "profile": profile_name,
+                **tool_telemetry,
             },
         )
 

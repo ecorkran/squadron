@@ -17,7 +17,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from squadron.pipeline.actions.dispatch import DispatchAction, one_shot_dispatch
+from squadron.pipeline.actions.dispatch import (
+    DispatchAction,
+    one_shot_dispatch,
+    one_shot_dispatch_with_telemetry,
+)
 from squadron.pipeline.models import ActionContext
 from squadron.providers.profiles import ProviderProfile
 from tests.providers.openai.conftest import text_chunk, tool_chunk
@@ -112,19 +116,108 @@ async def test_reverting_cwd_threading_fails_loudly(
     dispatch surfaces a failed ActionResult with no file written.
     """
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-    original = one_shot_dispatch
+    # Patches the telemetry-carrying entry point the action actually calls (slice 265);
+    # patching the bare one_shot_dispatch would guard nothing.
+    original = one_shot_dispatch_with_telemetry
 
-    async def _without_cwd(**kwargs: Any) -> str:
+    async def _without_cwd(**kwargs: Any) -> tuple[str, dict[str, object]]:
         kwargs["cwd"] = None
         return await original(**kwargs)
 
     with (
         patch(f"{_ACTION_MODULE}.get_profile", return_value=_openrouter_profile()),
         patch(f"{_PROVIDER_MODULE}.AsyncOpenAI", return_value=_make_client()),
-        patch(f"{_ACTION_MODULE}.one_shot_dispatch", _without_cwd),
+        patch(f"{_ACTION_MODULE}.one_shot_dispatch_with_telemetry", _without_cwd),
     ):
         result = await DispatchAction().execute(_make_context(tmp_path))
 
     assert result.success is False
     assert "cwd" in (result.error or "")
     assert not (tmp_path / _TARGET_NAME).exists()
+
+
+# ---------------------------------------------------------------------------
+# Tool-use telemetry on ActionResult.metadata (slice 265, task 22)
+# ---------------------------------------------------------------------------
+
+
+def _tool_less_context(cwd: Path) -> ActionContext:
+    """Same context with no allowed_tools — the "never offered" case."""
+    resolver = MagicMock()
+    resolver.resolve.return_value = ("gpt-4o-mini", "openrouter")
+    return ActionContext(  # type: ignore[arg-type]
+        pipeline_name="test-pipeline",
+        run_id="run-12345678",
+        params={"prompt": "Say hello.", "profile": "openrouter"},
+        step_name="design",
+        step_index=0,
+        prior_outputs={},
+        resolver=resolver,
+        cf_client=MagicMock(),
+        cwd=str(cwd),
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_result_metadata_carries_tools_given_and_calls_made(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    client = _make_client()
+
+    with (
+        patch(f"{_ACTION_MODULE}.get_profile", return_value=_openrouter_profile()),
+        patch(f"{_PROVIDER_MODULE}.AsyncOpenAI", return_value=client),
+    ):
+        result = await DispatchAction().execute(_make_context(tmp_path))
+
+    assert result.success is True
+    assert result.metadata["tools_given"] == ["write_file"]
+    assert result.metadata["tool_calls_made"] == 1
+
+
+@pytest.mark.asyncio
+async def test_dispatch_result_metadata_omits_tools_keys_when_no_tools_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    client = MagicMock()
+    client.close = AsyncMock()
+    client.chat.completions.create = AsyncMock(return_value=_stream([text_chunk("hello")]))
+
+    with (
+        patch(f"{_ACTION_MODULE}.get_profile", return_value=_openrouter_profile()),
+        patch(f"{_PROVIDER_MODULE}.AsyncOpenAI", return_value=client),
+    ):
+        result = await DispatchAction().execute(_tool_less_context(tmp_path))
+
+    assert result.success is True
+    assert "tools_given" not in result.metadata
+    assert "tool_calls_made" not in result.metadata
+
+
+@pytest.mark.asyncio
+async def test_one_shot_dispatch_return_type_unchanged_for_existing_callers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression guard: one_shot_dispatch still returns a bare str for its other callers."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    client = _make_client()
+
+    with (
+        patch(f"{_ACTION_MODULE}.get_profile", return_value=_openrouter_profile()),
+        patch(f"{_PROVIDER_MODULE}.AsyncOpenAI", return_value=client),
+    ):
+        returned = await one_shot_dispatch(
+            prompt=f"Write {_TARGET_NAME}.",
+            model_id="gpt-4o-mini",
+            profile_name="openrouter",
+            allowed_tools=["write_file"],
+            cwd=str(tmp_path),
+        )
+
+    assert isinstance(returned, str)
+    assert returned == _FINAL_TEXT
