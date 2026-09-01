@@ -24,6 +24,7 @@ from squadron.review.models import ReviewResult
 from squadron.review.parsers import parse_review_output
 from squadron.review.template_inputs import FILE_INPUT_KEYS
 from squadron.review.templates import ReviewTemplate
+from squadron.review.tool_support import should_inject_file_bodies
 
 _logger = logging.getLogger(__name__)
 
@@ -81,8 +82,13 @@ async def run_review_with_profile(
     if rules_content:
         system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
 
-    # Inject file contents only if the provider can't read files directly
-    if not provider.capabilities.can_read_files:
+    # Inject file contents only when nothing in this run can fetch them: neither the provider
+    # natively nor a read_file tool the run was actually given (slice 265, design D1).
+    if should_inject_file_bodies(
+        can_read_files=provider.capabilities.can_read_files,
+        allowed_tools=template.allowed_tools,
+        provider=provider_profile.provider,
+    ):
         prompt = _inject_file_contents(prompt, inputs, template.diff_exclude_patterns)
 
     resolved_model = model if model is not None else template.model
