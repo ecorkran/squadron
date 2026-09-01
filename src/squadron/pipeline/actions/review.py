@@ -314,6 +314,16 @@ class ReviewAction:
                 "model": model_id,
                 "profile": profile_name,
                 "template": template_name,
+                # Absent when the review ran without tools, so a zero count always means
+                # "offered and declined" rather than "never offered" (design D5).
+                **(
+                    {
+                        "tools_given": result.tools_given,
+                        "tool_calls_made": result.tool_calls_made or 0,
+                    }
+                    if result.tools_given
+                    else {}
+                ),
             },
         )
 

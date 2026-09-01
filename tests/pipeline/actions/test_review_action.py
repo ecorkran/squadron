@@ -1324,3 +1324,79 @@ class TestReviewAllowedToolsThreading:
 
         assert result.success is False
         mock_run_review.assert_not_called()
+
+
+class TestReviewToolTelemetryMetadata:
+    """ReviewResult's telemetry reaches ActionResult.metadata (slice 265, task 23)."""
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_review_result_metadata_carries_tools_given_and_calls_made(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        review_result = _make_review_result()
+        review_result.tools_given = ["read_file", "grep"]
+        review_result.tool_calls_made = 5
+        mock_run_review.return_value = review_result
+
+        result = await ReviewAction().execute(_make_context())
+
+        assert result.metadata["tools_given"] == ["read_file", "grep"]
+        assert result.metadata["tool_calls_made"] == 5
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_zero_calls_still_reports_tools_given(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        review_result = _make_review_result()
+        review_result.tools_given = ["read_file"]
+        review_result.tool_calls_made = 0
+        mock_run_review.return_value = review_result
+
+        result = await ReviewAction().execute(_make_context())
+
+        assert result.metadata["tools_given"] == ["read_file"]
+        assert result.metadata["tool_calls_made"] == 0
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_review_result_metadata_omits_tools_keys_when_no_tools_configured(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        result = await ReviewAction().execute(_make_context())
+
+        assert "tools_given" not in result.metadata
+        assert "tool_calls_made" not in result.metadata
