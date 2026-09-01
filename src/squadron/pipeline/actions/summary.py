@@ -8,7 +8,7 @@ from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.summary_oneshot import capture_summary_via_profile
+from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
 from squadron.providers.profiles import is_sdk_profile
 
 _logger = logging.getLogger(__name__)
@@ -230,6 +230,8 @@ async def _execute_summary(
             error="rotate emit requires an SDK session",
         )
 
+    # Empty unless a non-SDK run was given tools; splatted into metadata below.
+    tool_telemetry: dict[str, object] = {}
     try:
         if is_sdk_profile(profile):
             assert context.sdk_session is not None  # narrowed above
@@ -247,7 +249,7 @@ async def _execute_summary(
             augmented_instructions = (
                 f"{context_block}\n\n{instructions}" if context_block else instructions
             )
-            summary = await capture_summary_via_profile(
+            summary, tool_telemetry = await capture_summary_via_profile_with_telemetry(
                 instructions=augmented_instructions,
                 model_id=model_id,
                 profile=profile,
@@ -306,7 +308,7 @@ async def _execute_summary(
             "source_step_name": context.step_name,
             "summary_model": model_id,
         },
-        metadata={"summary_model": model_id or ""},
+        metadata={"summary_model": model_id or "", **tool_telemetry},
     )
 
 

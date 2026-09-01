@@ -448,8 +448,8 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
     ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
 
     with patch(
-        "squadron.pipeline.actions.summary.capture_summary_via_profile",
-        new=AsyncMock(return_value="ONESHOT SUMMARY"),
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("ONESHOT SUMMARY", {})),
     ) as mock_oneshot:
         with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
             result = await _execute_summary(
@@ -482,8 +482,8 @@ async def test_execute_summary_non_sdk_profile_with_rotate_fails() -> None:
     ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
 
     with patch(
-        "squadron.pipeline.actions.summary.capture_summary_via_profile",
-        new=AsyncMock(return_value="SHOULD NOT REACH"),
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SHOULD NOT REACH", {})),
     ) as mock_oneshot:
         result = await _execute_summary(
             context=ctx,
@@ -573,8 +573,8 @@ async def test_non_sdk_summary_injects_prior_context() -> None:
     ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
 
     with patch(
-        "squadron.pipeline.actions.summary.capture_summary_via_profile",
-        new=AsyncMock(return_value="SUMMARY WITH CONTEXT"),
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SUMMARY WITH CONTEXT", {})),
     ) as mock_oneshot:
         with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
             result = await _execute_summary(
@@ -813,8 +813,8 @@ async def test_summary_passes_allowed_tools_to_agent_config() -> None:
     ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
 
     with patch(
-        "squadron.pipeline.actions.summary.capture_summary_via_profile",
-        new=AsyncMock(return_value="SUMMARY"),
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SUMMARY", {})),
     ) as mock_oneshot:
         with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
             result = await _execute_summary(
@@ -838,8 +838,8 @@ async def test_summary_without_allowed_tools_leaves_field_none() -> None:
     ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
 
     with patch(
-        "squadron.pipeline.actions.summary.capture_summary_via_profile",
-        new=AsyncMock(return_value="SUMMARY"),
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SUMMARY", {})),
     ) as mock_oneshot:
         with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
             await _execute_summary(
@@ -893,3 +893,76 @@ async def test_capture_summary_via_profile_defaults_stay_tool_less() -> None:
     config = captured["config"]
     assert config.allowed_tools == []  # pyright: ignore[reportAttributeAccessIssue]
     assert config.cwd is None  # pyright: ignore[reportAttributeAccessIssue]
+
+
+@pytest.mark.asyncio
+async def test_summary_result_metadata_carries_tools_given_and_calls_made() -> None:
+    """Telemetry from the one-shot call reaches ActionResult.metadata (slice 265, task 24)."""
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(params={"allowed_tools": ["read_file"]}, sdk_session=None)
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SUMMARY", {"tools_given": ["read_file"], "tool_calls_made": 2})),
+    ):
+        with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
+            result = await _execute_summary(
+                context=ctx,
+                instructions="summarize",
+                summary_model_alias="minimax",
+                emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+                action_type="summary",
+            )
+
+    assert result.success is True
+    assert result.metadata["tools_given"] == ["read_file"]
+    assert result.metadata["tool_calls_made"] == 2
+
+
+@pytest.mark.asyncio
+async def test_summary_result_metadata_omits_tools_keys_when_no_tools_configured() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve.return_value = ("minimax-01", "openrouter")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SUMMARY", {})),
+    ):
+        with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
+            result = await _execute_summary(
+                context=ctx,
+                instructions="summarize",
+                summary_model_alias="minimax",
+                emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+                action_type="summary",
+            )
+
+    assert "tools_given" not in result.metadata
+    assert "tool_calls_made" not in result.metadata
+
+
+@pytest.mark.asyncio
+async def test_sdk_summary_path_has_no_tools_keys() -> None:
+    """The SDK session path never populates these keys — telemetry is the non-SDK path's."""
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    session = AsyncMock()
+    session.current_model = "sonnet-id"
+    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    ctx = _make_context(sdk_session=session)
+
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias=None,
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    assert result.success is True
+    assert "tools_given" not in result.metadata
