@@ -3,8 +3,8 @@ docType: slice-design
 project: squadron
 slice: 264-slice.context-forge-mcp-tool-bridge
 parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
-dependencies: [261, 262]
-interfaces: []
+dependencies: [261, 262, 263]
+interfaces: [265]
 dateCreated: 20260831
 dateUpdated: 20260831
 status: not_started
@@ -141,13 +141,20 @@ model emits tool_call cf_set_phase {"phase": "Phase 5: Task Breakdown"}
 | Failure | Behavior | Observable signal |
 |---|---|---|
 | Spawn fails (npx absent, package fetch fails, command misconfigured) | `is_error=True` result telling the model the CF bridge is unavailable and why | `logger.warning` with the launch command |
-| Call exceeds timeout (hang) | `asyncio.timeout` cancels; session teardown kills the subprocess; `is_error=True` | `logger.warning` with tool name and timeout value |
-| Server returns `isError` | passed through as `is_error=True` | DEBUG log (model-level error, not a bridge fault) |
+| Call exceeds timeout (hang) | `asyncio.timeout` cancels; session teardown kills the server process tree; `is_error=True` | `logger.warning` with tool name and timeout value |
+| Server returns `isError` | passed through as `is_error=True` | `logger.warning` (CF-reported failure; meets the WARNING+ observability floor uniformly) |
 | Protocol/transport error mid-call (`McpError`, closed stream) | `is_error=True` | `logger.warning` |
 | Model omits a required argument | `is_error=True` before any spawn | no log needed; result text names the missing field |
 
 Executors never raise to the loop (261 contract: errors are values). Each row above has a
 test asserting the observable signal.
+
+Teardown reaches npx grandchildren (verified against the installed SDK, mcp 1.26.0): the
+stdio client spawns the server with `start_new_session=True` and terminates via
+`os.killpg` on the process group, escalating to SIGKILL after 2s (Windows: process-tree
+kill). So the node process `npx` forks is in the same group and is reaped on timeout — no
+orphaned servers. The implementation relies on this SDK behavior; the fake-server timeout
+test asserts the child process is gone after cancellation.
 
 ### Configuration
 

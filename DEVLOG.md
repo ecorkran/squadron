@@ -209,6 +209,22 @@ intact at `AgentConfig`.
 
 ## 20260831
 
+### Slice 264: Slice-Design Review Findings Addressed
+
+Two reviews of the 264 design at `054cb78`: claude-sonnet-5 (CONCERNS, 2 concerns + 1 note)
+and a comparative kimi-k3 run (PASS, 2 notes). All actionable findings addressed:
+
+- **F001 (isError below WARNING+ floor):** bumped the CF-reported `isError` row from DEBUG
+  to WARNING — uniform compliance beats a prose exception.
+- **F002 (npx grandchild survival on timeout):** verified against installed mcp 1.26.0
+  rather than assumed — the SDK spawns with `start_new_session=True` and tears down via
+  `os.killpg` with SIGKILL escalation (Windows tree-kill), so npx's forked node is reaped.
+  Documented in the design; timeout test now asserts the child is gone.
+- **Fifth-tool scope note (both reviews):** slice plan entry 4 now names all five tools with
+  the `cf_workflow_status` rationale.
+- **kimi F005 (metadata):** design frontmatter now `dependencies: [261, 262, 263]`,
+  `interfaces: [265]`.
+
 ### Slice 264: Context-Forge MCP Tool Bridge — Design Complete
 
 **Phase 4 design created:** `264-slice.context-forge-mcp-tool-bridge.md`; slice plan entry 4
