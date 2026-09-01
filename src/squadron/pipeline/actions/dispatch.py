@@ -10,6 +10,7 @@ from squadron.core.agent_registry import get_registry
 from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName, ProviderType
@@ -207,7 +208,7 @@ class DispatchAction:
         # return success with the model describing a file it never wrote — the
         # exact silent no-op this slice exists to prevent. Load-time validation
         # cannot catch it, because the routing decision is made at runtime.
-        if self._resolve_allowed_tools(context):
+        if resolve_allowed_tools(context, self.action_type):
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
@@ -402,23 +403,6 @@ class DispatchAction:
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         return context.resolver.resolve(action_model, step_model)
 
-    @staticmethod
-    def _resolve_allowed_tools(context: ActionContext) -> list[str] | None:
-        """Narrow ``context.params["allowed_tools"]`` to a list of tool names.
-
-        Names are not re-checked against the tool registry here: load-time
-        validation is the single authority (design D3). A malformed value is a
-        defect that validation should have caught, so it raises rather than
-        silently dropping tools — a silent drop reproduces exactly the
-        no-op-with-prose failure this slice exists to prevent.
-        """
-        raw = context.params.get("allowed_tools")
-        if raw is None:
-            return None
-        if not isinstance(raw, list) or not all(isinstance(name, str) for name in raw):  # pyright: ignore[reportUnknownVariableType]
-            raise ValueError(f"dispatch: 'allowed_tools' must be a list of tool names, got {raw!r}")
-        return cast(list[str], raw)
-
     async def _dispatch_via_agent(self, context: ActionContext) -> ActionResult:
         """Dispatch via a one-shot agent from the registry (existing path)."""
         action_model = str(context.params["model"]) if "model" in context.params else None
@@ -431,7 +415,7 @@ class DispatchAction:
             else alias_profile or ProfileName.SDK
         )
 
-        allowed_tools = self._resolve_allowed_tools(context)
+        allowed_tools = resolve_allowed_tools(context, self.action_type)
 
         response_text = await one_shot_dispatch(
             prompt=self._resolve_prompt(context),

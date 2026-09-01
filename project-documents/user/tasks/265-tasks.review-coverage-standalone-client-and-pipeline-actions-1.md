@@ -7,7 +7,7 @@ parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: [261, 262, 263]
 dateCreated: 20260901
 dateUpdated: 20260901
-status: not_started
+status: complete
 ---
 
 # Tasks: Review Coverage — Standalone Client and Pipeline Actions (1 of 2)
@@ -105,78 +105,78 @@ current.
 
 ## Task 1: `GREP_TIMEOUT_S` limit
 
-- [ ] **1.1** Add `GREP_TIMEOUT_S = 5.0` to `src/squadron/tools/limits.py`, alongside
+- [x] **1.1** Add `GREP_TIMEOUT_S = 5.0` to `src/squadron/tools/limits.py`, alongside
   `BASH_TIMEOUT_S`, matching the module's existing bare-constant style and docstring
-  - [ ] Value is a starting point for review-time greps over source trees; task 6's timeout
+  - [x] Value is a starting point for review-time greps over source trees; task 6's timeout
     test will monkeypatch it down regardless, so the exact number is not load-bearing
-  - [ ] Effort: 1/5
+  - [x] Effort: 1/5
 
-- [ ] **Task 1 success criteria**
-  - [ ] `limits.GREP_TIMEOUT_S` importable and equal to the chosen float
-  - [ ] `ruff format` run, then committed: `chore: add GREP_TIMEOUT_S limit`
+- [x] **Task 1 success criteria**
+  - [x] `limits.GREP_TIMEOUT_S` importable and equal to the chosen float
+  - [x] `ruff format` run, then committed: `chore: add GREP_TIMEOUT_S limit`
 
 ## Task 2: Add `regex` dependency
 
-- [ ] **2.1** Add `"regex>=2024.0.0"` to the flat `dependencies` list in `pyproject.toml`
+- [x] **2.1** Add `"regex>=2024.0.0"` to the flat `dependencies` list in `pyproject.toml`
   (there is no extras group to gate it behind — it goes directly in the main list, matching
   entries like `"pydantic>=2.0"`)
-- [ ] **2.2** `uv sync` (or `uv lock` then `uv sync`, whichever this project's lockfile
+- [x] **2.2** `uv sync` (or `uv lock` then `uv sync`, whichever this project's lockfile
   workflow uses) to update the lockfile
-  - [ ] Effort: 1/5
+  - [x] Effort: 1/5
 
-- [ ] **Task 2 success criteria**
-  - [ ] `uv run python -c "import regex"` succeeds
-  - [ ] Lockfile updated and included in the diff
-  - [ ] `ruff format` run, then committed: `chore: add regex dependency for bounded grep tool`
+- [x] **Task 2 success criteria**
+  - [x] `uv run python -c "import regex"` succeeds
+  - [x] Lockfile updated and included in the diff
+  - [x] `ruff format` run, then committed: `chore: add regex dependency for bounded grep tool`
 
 ## Task 3: `list_files` tool
 
-- [ ] **3.1** Add `LIST_FILES_NAME = "list_files"` to the module-level name constants in
+- [x] **3.1** Add `LIST_FILES_NAME = "list_files"` to the module-level name constants in
   `tools/builtin.py`, alongside `READ_FILE_NAME` / `WRITE_FILE_NAME` / `BASH_NAME`
-- [ ] **3.2** Implement `_list_files_factory(cwd: Path) -> ToolExecutor`, mirroring the
+- [x] **3.2** Implement `_list_files_factory(cwd: Path) -> ToolExecutor`, mirroring the
   `_read_file_factory` shape (159-195): async `execute(args)` wrapped in `_guarded`, a nested
   sync function doing the blocking `Path.iterdir`/`Path.rglob` walk run via
   `await asyncio.to_thread(...)`
-  - [ ] Parameters: `path` (string, optional, default `"."`), `pattern` (string, optional
+  - [x] Parameters: `path` (string, optional, default `"."`), `pattern` (string, optional
     glob, e.g. `"*.py"`), `recursive` (boolean, optional, default `false`)
-  - [ ] Resolve `path` via `_resolve_in_jail(cwd, path)`; `None` result returns
+  - [x] Resolve `path` via `_resolve_in_jail(cwd, path)`; `None` result returns
     `_jail_violation(LIST_FILES_NAME, path)`
-  - [ ] Non-recursive: `Path.glob(pattern or "*")`. Recursive: `Path.rglob(pattern or "*")`
-  - [ ] Returns newline-joined paths **relative to the jail root** (`cwd`), directories marked
+  - [x] Non-recursive: `Path.glob(pattern or "*")`. Recursive: `Path.rglob(pattern or "*")`
+  - [x] Returns newline-joined paths **relative to the jail root** (`cwd`), directories marked
     with a trailing `/`
-  - [ ] Apply the same truncation pattern as `read_file` (`_truncate`, using
+  - [x] Apply the same truncation pattern as `read_file` (`_truncate`, using
     `limits.MAX_OUTPUT_BYTES` read as a module attribute at call time, not imported by value —
     matching the existing comment explaining why)
-- [ ] **3.3** Construct the `ToolDescriptor` (name, description, parameters schema, factory)
+- [x] **3.3** Construct the `ToolDescriptor` (name, description, parameters schema, factory)
   and call `register(LIST_FILES)` at module level, following the exact `read_file` pattern at
   line 195
-  - [ ] Effort: 3/5
+  - [x] Effort: 3/5
 
-- [ ] **Task 3 success criteria**
-  - [ ] `list_files` appears in `tools.list_tools()`
-  - [ ] Happy path against a small fixture tree returns expected relative paths
-  - [ ] A `path` escaping the jail returns `is_error=True` via `_jail_violation`
-  - [ ] Output is capped by the shared truncation limit with the same visible marker
-  - [ ] `ruff format` run, then committed: `feat: add list_files tool`
+- [x] **Task 3 success criteria**
+  - [x] `list_files` appears in `tools.list_tools()`
+  - [x] Happy path against a small fixture tree returns expected relative paths
+  - [x] A `path` escaping the jail returns `is_error=True` via `_jail_violation`
+  - [x] Output is capped by the shared truncation limit with the same visible marker
+  - [x] `ruff format` run, then committed: `feat: add list_files tool`
 
 ## Task 4: Test `list_files`
 
-- [ ] **4.1** Create `tests/tools/test_list_files.py`, mirroring `test_read_file.py`'s
+- [x] **4.1** Create `tests/tools/test_list_files.py`, mirroring `test_read_file.py`'s
   structure and fixture setup
-  - [ ] `test_lists_files_in_default_path` — `path` omitted, defaults to `"."`
-  - [ ] `test_pattern_filters_results` — e.g. `pattern="*.py"` excludes non-matching files
-  - [ ] `test_recursive_true_descends_subdirectories`
-  - [ ] `test_recursive_false_default_stays_shallow`
-  - [ ] `test_directories_marked_with_trailing_slash`
-  - [ ] `test_path_escaping_jail_returns_error` — mirror the jail-violation test in
+  - [x] `test_lists_files_in_default_path` — `path` omitted, defaults to `"."`
+  - [x] `test_pattern_filters_results` — e.g. `pattern="*.py"` excludes non-matching files
+  - [x] `test_recursive_true_descends_subdirectories`
+  - [x] `test_recursive_false_default_stays_shallow`
+  - [x] `test_directories_marked_with_trailing_slash`
+  - [x] `test_path_escaping_jail_returns_error` — mirror the jail-violation test in
     `test_jail.py` for the existing tools
-  - [ ] `test_output_truncated_beyond_limit` — monkeypatch `limits.MAX_OUTPUT_BYTES` down,
+  - [x] `test_output_truncated_beyond_limit` — monkeypatch `limits.MAX_OUTPUT_BYTES` down,
     assert the visible truncation marker appears
-  - [ ] Effort: 2/5
+  - [x] Effort: 2/5
 
-- [ ] **Task 4 success criteria**
-  - [ ] `uv run pytest tests/tools/test_list_files.py -q` green
-  - [ ] `ruff format` run, then committed: `test: add coverage for list_files tool`
+- [x] **Task 4 success criteria**
+  - [x] `uv run pytest tests/tools/test_list_files.py -q` green
+  - [x] `ruff format` run, then committed: `test: add coverage for list_files tool`
 
 ## Task 5: `grep` tool with bounded matching
 
@@ -188,35 +188,35 @@ precedent elsewhere (`pipeline/executor.py` ~1700 lines) — but implement `grep
 not a new one, so the decision is made once here rather than reconsidered per task. Task 30.2
 records this as a deliberate close-out call.
 
-- [ ] **5.1** Add `GREP_NAME = "grep"` to the module-level name constants
-- [ ] **5.2** Implement `_grep_factory(cwd: Path) -> ToolExecutor`, same closure/`_guarded`/
+- [x] **5.1** Add `GREP_NAME = "grep"` to the module-level name constants
+- [x] **5.2** Implement `_grep_factory(cwd: Path) -> ToolExecutor`, same closure/`_guarded`/
   `asyncio.to_thread` shape as the other tools
-  - [ ] Parameters: `pattern` (string, required), `path` (string, optional, default `"."`),
+  - [x] Parameters: `pattern` (string, required), `path` (string, optional, default `"."`),
     `glob` (string, optional file filter), `max_results` (integer, optional)
-  - [ ] Resolve `path` via `_resolve_in_jail`; jail violation returns `_jail_violation(GREP_NAME, path)`
-  - [ ] Compile `pattern` with the `regex` package (not stdlib `re`) — an invalid pattern is
+  - [x] Resolve `path` via `_resolve_in_jail`; jail violation returns `_jail_violation(GREP_NAME, path)`
+  - [x] Compile `pattern` with the `regex` package (not stdlib `re`) — an invalid pattern is
     caught and returned as `ToolResult(is_error=True, content=...)`, **not raised**; the model
     must be able to correct itself
-  - [ ] Walk the resolved path (respecting `glob` as a file filter, matching every readable
+  - [x] Walk the resolved path (respecting `glob` as a file filter, matching every readable
     file if `path` is a directory), matching `pattern` against each line via
     `compiled.search(line, timeout=limits.GREP_TIMEOUT_S)` — **the budget covers the whole
     walk, not each file**: track elapsed time across the loop, or pass a per-call timeout
     scoped so the sum cannot exceed `limits.GREP_TIMEOUT_S` for the call
-  - [ ] On `regex.TimeoutError` (or equivalent from the `regex` package): log at WARNING naming
+  - [x] On `regex.TimeoutError` (or equivalent from the `regex` package): log at WARNING naming
     the pattern (mirror the bash timeout log at `builtin.py` ~303-317), return
     `ToolResult(is_error=True, content=...)` telling the model its pattern was too expensive
-  - [ ] Format matches as `path:line:text`, one per line, paths relative to jail root
-  - [ ] Respect `max_results` by stopping the walk early when given
-  - [ ] Apply the same output truncation as the other tools
-- [ ] **5.3** Construct `ToolDescriptor` and `register(GREP)` at module level
-  - [ ] Effort: 4/5
+  - [x] Format matches as `path:line:text`, one per line, paths relative to jail root
+  - [x] Respect `max_results` by stopping the walk early when given
+  - [x] Apply the same output truncation as the other tools
+- [x] **5.3** Construct `ToolDescriptor` and `register(GREP)` at module level
+  - [x] Effort: 4/5
 
-- [ ] **Task 5 success criteria**
-  - [ ] `grep` appears in `tools.list_tools()`
-  - [ ] Happy path returns `path:line:text` matches against a fixture tree
-  - [ ] `glob` filter and `max_results` both work
-  - [ ] Invalid regex returns `is_error=True`, not a raise
-  - [ ] `ruff format` run, then committed: `feat: add bounded grep tool`
+- [x] **Task 5 success criteria**
+  - [x] `grep` appears in `tools.list_tools()`
+  - [x] Happy path returns `path:line:text` matches against a fixture tree
+  - [x] `glob` filter and `max_results` both work
+  - [x] Invalid regex returns `is_error=True`, not a raise
+  - [x] `ruff format` run, then committed: `feat: add bounded grep tool`
 
 ## Task 6: Test `grep`, including the timeout bound
 
