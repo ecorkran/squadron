@@ -146,6 +146,11 @@ async def run_review_with_profile(
     # Create agent, send prompt, collect response, shut down
     agent = await provider.create_agent(config)
     output_parts: list[str] = []
+    # Tool-use telemetry rides the final Message's metadata (design D4). Captured from every
+    # response rather than only the ones kept for prose, because the filtered-out SDK result
+    # message can be the last one yielded.
+    tools_given: list[str] | None = None
+    tool_calls_made: int | None = None
     try:
         review_message = Message(
             sender="review-system",
@@ -161,6 +166,10 @@ async def run_review_with_profile(
             # (e.g. "Using tool: Bash", command stdout) that are not part of
             # the review's actual prose and must not be mixed into it — non-SDK
             # providers never set sdk_type and are unaffected by this filter.
+            given = response.metadata.get("tools_given")
+            if given is not None:
+                tools_given = given
+                tool_calls_made = response.metadata.get("tool_calls_made", 0)
             if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
                 continue
             output_parts.append(response.content)
@@ -186,6 +195,9 @@ async def run_review_with_profile(
         diff_files=diff_files,
         cwd=cwd_for_checks,
     )
+
+    result.tools_given = tools_given
+    result.tool_calls_made = tool_calls_made
 
     # Populate prompt capture fields at verbosity >= 2
     if verbosity >= 2:

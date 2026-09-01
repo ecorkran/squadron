@@ -429,3 +429,55 @@ class TestStructuredFindingsProperty:
             input_files={},
         )
         assert r.structured_findings == []
+
+
+# ---------------------------------------------------------------------------
+# Tool-use telemetry fields (slice 265)
+# ---------------------------------------------------------------------------
+
+
+def _bare_result(**overrides: object) -> ReviewResult:
+    defaults: dict[str, object] = {
+        "verdict": Verdict.PASS,
+        "findings": [],
+        "raw_output": "",
+        "template_name": "code",
+        "input_files": {},
+    }
+    defaults.update(overrides)
+    return ReviewResult(**defaults)  # type: ignore[arg-type]
+
+
+def test_tool_telemetry_fields_default_to_none() -> None:
+    result = _bare_result()
+
+    assert result.tools_given is None
+    assert result.tool_calls_made is None
+
+
+def test_to_dict_always_includes_tool_telemetry() -> None:
+    """The new keys join the always-included group, not the verbosity-gated one."""
+    payload = _bare_result().to_dict()
+
+    assert payload["tools_given"] is None
+    assert payload["tool_calls_made"] is None
+    # The gated prompt-capture fields stay excluded.
+    assert "system_prompt" not in payload
+
+
+def test_to_dict_carries_populated_tool_telemetry() -> None:
+    payload = _bare_result(tools_given=["read_file", "grep"], tool_calls_made=3).to_dict()
+
+    assert payload["tools_given"] == ["read_file", "grep"]
+    assert payload["tool_calls_made"] == 3
+
+
+def test_to_dict_distinguishes_zero_calls_from_no_tools() -> None:
+    """Design D5: "offered three tools, called none" must not look like "never had tools"."""
+    offered = _bare_result(tools_given=["read_file"], tool_calls_made=0).to_dict()
+    never = _bare_result().to_dict()
+
+    assert offered["tools_given"] == ["read_file"]
+    assert offered["tool_calls_made"] == 0
+    assert never["tools_given"] is None
+    assert never["tool_calls_made"] is None

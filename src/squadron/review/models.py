@@ -70,6 +70,11 @@ class ReviewResult:
     score: float | None = None
     criteria: dict[str, float] | None = None
     provenance: str | None = None
+    # Tool-use telemetry (slice 265). Both None when the review ran without tools; a
+    # populated tools_given with tool_calls_made == 0 is the distinct "offered but unused"
+    # case, which is exactly what issue #68 made invisible.
+    tools_given: list[str] | None = None
+    tool_calls_made: int | None = None
     # Prompt capture fields — populated at verbosity >= 2, excluded from to_dict()
     system_prompt: str | None = None
     user_prompt: str | None = None
@@ -114,6 +119,8 @@ class ReviewResult:
             "score": self.score,
             "criteria": self.criteria,
             "provenance": self.provenance,
+            "tools_given": self.tools_given,
+            "tool_calls_made": self.tool_calls_made,
         }
 
     @property

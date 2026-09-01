@@ -621,3 +621,66 @@ class TestWritePromptLog:
         )
         content = path.read_text()
         assert "\nNone\n" in content
+
+
+# ---------------------------------------------------------------------------
+# Tool-use telemetry carried onto ReviewResult (slice 265, task 21)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewResultToolTelemetry:
+    def _provider_yielding(self, metadata: dict[str, object] | None) -> MagicMock:
+        agent = MagicMock()
+        agent.state = AgentState.idle
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content=_SAMPLE_REVIEW_OUTPUT,
+                message_type=MessageType.chat,
+                metadata=metadata or {},
+            )
+
+        agent.handle_message = _handle
+        provider = MagicMock()
+        provider.capabilities = ProviderCapabilities(can_read_files=False)
+        provider.create_agent = AsyncMock(return_value=agent)
+        return provider
+
+    async def _run(self, metadata: dict[str, object] | None) -> ReviewResult:
+        from squadron.providers.profiles import ProviderProfile
+
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=self._provider_yielding(metadata)),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
+            )
+            return await run_review_with_profile(
+                _make_template(), {"input": "file.md"}, profile="openai"
+            )
+
+    @pytest.mark.asyncio
+    async def test_telemetry_from_final_message_lands_on_result(self) -> None:
+        result = await self._run({"tools_given": ["read_file", "grep"], "tool_calls_made": 4})
+
+        assert result.tools_given == ["read_file", "grep"]
+        assert result.tool_calls_made == 4
+
+    @pytest.mark.asyncio
+    async def test_zero_calls_is_preserved_not_collapsed_to_none(self) -> None:
+        result = await self._run({"tools_given": ["read_file"], "tool_calls_made": 0})
+
+        assert result.tools_given == ["read_file"]
+        assert result.tool_calls_made == 0
+
+    @pytest.mark.asyncio
+    async def test_no_telemetry_leaves_fields_none(self) -> None:
+        result = await self._run(None)
+
+        assert result.tools_given is None
+        assert result.tool_calls_made is None
