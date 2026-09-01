@@ -1,4 +1,4 @@
-"""Built-in tool implementations: ``read_file``, ``write_file``, ``bash``, ``list_files``.
+"""Built-in tool implementations: ``read_file``, ``write_file``, ``bash``, ``list_files``, ``grep``.
 
 These names are the start of the canonical squadron tool vocabulary. Every executor is bound
 to a resolved working directory by its factory; the file tools treat that directory as a jail
@@ -15,8 +15,11 @@ import asyncio
 import logging
 import os
 import signal
+import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+
+import regex
 
 from squadron.tools import limits
 from squadron.tools.models import ToolDescriptor, ToolExecutor, ToolResult
@@ -27,6 +30,7 @@ READ_FILE_NAME = "read_file"
 WRITE_FILE_NAME = "write_file"
 BASH_NAME = "bash"
 LIST_FILES_NAME = "list_files"
+GREP_NAME = "grep"
 
 _logger = logging.getLogger(__name__)
 
@@ -440,3 +444,154 @@ LIST_FILES = ToolDescriptor(
 )
 
 register(LIST_FILES)
+
+
+GREP_PARAMETERS: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "pattern": {
+            "type": "string",
+            "description": "Regular expression matched against each line.",
+        },
+        "path": {
+            "type": "string",
+            "description": (
+                "File or directory to search, relative to the working directory. Defaults to '.'."
+            ),
+        },
+        "glob": {
+            "type": "string",
+            "description": "Optional filename filter applied when path is a directory, e.g. '*.py'.",
+        },
+        "max_results": {
+            "type": "integer",
+            "description": "Stop after this many matches.",
+        },
+    },
+    "required": ["pattern"],
+}
+
+
+def _optional_int(args: dict[str, object], key: str) -> int | None:
+    """Return ``args[key]`` as an int, or None when absent or null.
+
+    ``bool`` is rejected explicitly: it is a subclass of ``int``, so a model passing ``true``
+    would otherwise silently become a cap of 1.
+    """
+    value = args.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"argument '{key}' must be an integer, got {type(value).__name__}")
+    return value
+
+
+def _grep_candidates(target: Path, glob: str | None) -> list[Path]:
+    """Return the files *target* expands to, filtered by *glob* when it is a directory."""
+    if target.is_file():
+        return [target]
+    return sorted(entry for entry in target.rglob(glob or "*") if entry.is_file())
+
+
+def _grep_factory(cwd: Path) -> ToolExecutor:
+    async def execute(args: dict[str, object]) -> ToolResult:
+        async def run() -> ToolResult:
+            pattern = _require_str(args, "pattern")
+            path = _optional_str(args, "path", ".")
+            glob = args.get("glob")
+            if glob is not None and not isinstance(glob, str):
+                raise ValueError(f"argument 'glob' must be a string, got {type(glob).__name__}")
+            max_results = _optional_int(args, "max_results")
+
+            # The whole walk — resolve, directory expansion, every file read, and all regex
+            # matching — runs in one worker thread. Matching is CPU-bound by construction (the
+            # timeout exists precisely because a model-supplied pattern can backtrack
+            # catastrophically), so it must never run on the event loop.
+            def _search() -> ToolResult:
+                target = _resolve_in_jail(cwd, path)
+                if target is None:
+                    return _jail_violation(GREP_NAME, path)
+                if not target.exists():
+                    return _error(GREP_NAME, f"path does not exist: {path}")
+
+                try:
+                    compiled = regex.compile(pattern)
+                except regex.error as exc:
+                    # Returned, never raised: the model supplied the pattern and is the one
+                    # that has to correct it.
+                    return _error(GREP_NAME, f"invalid regular expression {pattern!r}: {exc}")
+
+                # Read the limit at call time (module attribute), never captured at import.
+                budget = limits.GREP_TIMEOUT_S
+                deadline = time.monotonic() + budget
+
+                matches: list[str] = []
+                for candidate in _grep_candidates(target, glob):
+                    try:
+                        text = candidate.read_text(errors="replace")
+                    except (OSError, UnicodeDecodeError):
+                        # An unreadable or undecodable file inside the tree is normal input for
+                        # a whole-directory search; skipping it is correct, and the remaining
+                        # files still produce results.
+                        continue
+
+                    relative = candidate.relative_to(cwd)
+                    for number, line in enumerate(text.splitlines(), start=1):
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            return _grep_timeout(pattern, budget)
+                        try:
+                            # The per-call timeout is scoped to what is left of the whole-walk
+                            # budget, so the sum across every line of every file cannot exceed
+                            # GREP_TIMEOUT_S for the call.
+                            found = compiled.search(line, timeout=remaining)
+                        except TimeoutError:
+                            return _grep_timeout(pattern, budget)
+                        if found is None:
+                            continue
+                        matches.append(f"{relative}:{number}:{line}")
+                        if max_results is not None and len(matches) >= max_results:
+                            break
+                    if max_results is not None and len(matches) >= max_results:
+                        break
+
+                body = "\n".join(matches)
+                return ToolResult(content=_truncate(body.encode(), limits.MAX_OUTPUT_BYTES, "matches"))
+
+            return await asyncio.to_thread(_search)
+
+        return await _guarded(GREP_NAME, run)
+
+    return execute
+
+
+def _grep_timeout(pattern: str, budget: float) -> ToolResult:
+    """Build the error result for an exhausted grep budget and log it at WARNING.
+
+    Mirrors the bash timeout path: an abandoned search is an operator-visible event, and the
+    model needs to know its pattern — not the tree — was the problem.
+    """
+    _logger.warning(
+        "%s: pattern exceeded the %ss budget and was abandoned: %s", GREP_NAME, budget, pattern
+    )
+    return ToolResult(
+        content=(
+            f"Error: pattern {pattern!r} exceeded the {budget}s search budget and was abandoned. "
+            "Use a simpler or more anchored pattern."
+        ),
+        is_error=True,
+    )
+
+
+GREP = ToolDescriptor(
+    name=GREP_NAME,
+    description=(
+        "Search files under the working directory for lines matching a regular expression. "
+        "Returns 'path:line:text' matches; long output is truncated with a visible marker and "
+        "expensive patterns are abandoned against a wall-clock budget."
+    ),
+    parameters=GREP_PARAMETERS,
+    factory=_grep_factory,
+)
+
+register(GREP)
