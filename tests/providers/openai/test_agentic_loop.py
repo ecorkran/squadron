@@ -75,17 +75,15 @@ class TestConstructorToolSetWiring:
         assert "read_file" in agent._tool_executors  # pyright: ignore[reportPrivateUsage]
         assert not any(r.levelno == logging.WARNING for r in caplog.records)
 
-    def test_mixed_known_and_unknown_drops_unknown_with_one_warning(
+    def test_mixed_known_and_unknown_raises_naming_the_unknown(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
+        # Slice 265 (design D3) replaced warn-and-drop with a raise: a dropped tool name left
+        # non-SDK reviews running tool-less while still reporting a verdict (issue #68).
         caplog.set_level(logging.WARNING)
-        agent = _make_agent(allowed_tools=["Read", "read_file"], cwd=str(tmp_path))
-        executors = agent._tool_executors  # pyright: ignore[reportPrivateUsage]
-        assert "read_file" in executors
-        assert "Read" not in executors
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warnings) == 1
-        assert "Read" in warnings[0].getMessage()
+        with pytest.raises(ProviderError, match="Read"):
+            _make_agent(allowed_tools=["Read", "read_file"], cwd=str(tmp_path))
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
 
     def test_known_tool_no_cwd_raises_provider_error(self) -> None:
         with pytest.raises(ProviderError):

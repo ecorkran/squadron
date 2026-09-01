@@ -122,16 +122,17 @@ class OpenAICompatibleAgent:
         self._tool_schemas: list[dict[str, object]] = []
         if requested_tools:
             assert cwd is not None  # narrowed by the raise above
-            known_names: list[str] = []
-            for tool_name in requested_tools:
-                if tools.lookup(tool_name) is None:
-                    _log.warning(
-                        "Dropping unknown tool %r from allowed_tools; registered tools: %s",
-                        tool_name,
-                        tools.list_tools(),
-                    )
-                    continue
-                known_names.append(tool_name)
+            # An unknown name is a configuration error, not something to route around:
+            # silently dropping it produces a confident review by a model that could not read
+            # any of the files it was asked about (design D3). Every unknown name is reported
+            # at once so a mis-declared template is fixed in one pass.
+            unknown = [name for name in requested_tools if tools.lookup(name) is None]
+            if unknown:
+                raise ProviderError(
+                    f"Unknown tool name(s) in allowed_tools: {', '.join(unknown)}. "
+                    f"Registered tools: {', '.join(sorted(tools.list_tools()))}."
+                )
+            known_names: list[str] = list(requested_tools)
             self._tool_executors = tools.materialize(known_names, cwd)
             descriptors = [d for n in known_names if (d := tools.lookup(n)) is not None]
             self._tool_schemas = translation.build_tool_schemas(descriptors)
