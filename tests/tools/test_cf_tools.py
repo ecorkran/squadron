@@ -48,6 +48,11 @@ def _sent(mock: AsyncMock) -> tuple[str, dict[str, object]]:
     return tool, arguments
 
 
+def _resolved(path: Path) -> str:
+    """Resolve *path* outside any coroutine — ASYNC240 forbids Path I/O inside async def."""
+    return str(path.resolve())
+
+
 async def _invoke(name: str, args: dict[str, object], cwd: Path) -> ToolResult:
     executor = tools.materialize([name], cwd)[name]
     return await executor(args)
@@ -187,6 +192,8 @@ async def test_executor_reads_command_and_cwd_from_config(
     set_config(cf_tools.CF_MCP_COMMAND_KEY, "node /opt/cf/index.js --stdio")
     set_config(cf_tools.CF_MCP_TIMEOUT_KEY, "17")
 
+    expected_cwd = _resolved(tmp_path)
+
     await _invoke(cf_tools.CF_WORKFLOW_STATUS_NAME, {}, tmp_path)
 
     call = patched_transport.await_args
@@ -195,7 +202,7 @@ async def test_executor_reads_command_and_cwd_from_config(
     assert isinstance(server, StdioServerParameters)
     assert server.command == "node"
     assert server.args == ["/opt/cf/index.js", "--stdio"]
-    assert server.cwd == str(tmp_path.resolve())
+    assert server.cwd == expected_cwd
     assert timeout == 17
 
 
