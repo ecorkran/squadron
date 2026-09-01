@@ -95,3 +95,33 @@ class TestAgentLoopLimitConfigKeys:
     ) -> None:
         set_config(key, "5")
         assert get_typed_config(key, int) == 5
+
+
+class TestCfMcpBridgeConfigKeys:
+    """Tests for the cf.* config keys used by the context-forge MCP bridge."""
+
+    def test_cf_mcp_command_registered(self) -> None:
+        key = CONFIG_KEYS["cf.mcp_command"]
+        assert key.name == "cf.mcp_command"
+        assert key.type_ is str
+        assert key.default == "npx -y @context-forge/mcp"
+
+    def test_cf_mcp_timeout_registered(self) -> None:
+        key = CONFIG_KEYS["cf.mcp_timeout_s"]
+        assert key.name == "cf.mcp_timeout_s"
+        assert key.type_ is int
+        assert key.default == 60
+
+    def test_cf_mcp_command_default(self, patch_config_paths: dict[str, Path]) -> None:
+        assert get_default("cf.mcp_command") == "npx -y @context-forge/mcp"
+        assert get_config("cf.mcp_command") == "npx -y @context-forge/mcp"
+
+    def test_cf_mcp_timeout_default(self, patch_config_paths: dict[str, Path]) -> None:
+        assert get_default("cf.mcp_timeout_s") == 60
+        value = get_typed_config("cf.mcp_timeout_s", int)
+        assert value == 60
+        assert isinstance(value, int)
+
+    def test_cf_mcp_command_override_roundtrip(self, patch_config_paths: dict[str, Path]) -> None:
+        set_config("cf.mcp_command", "node /path/to/index.js")
+        assert get_config("cf.mcp_command") == "node /path/to/index.js"
