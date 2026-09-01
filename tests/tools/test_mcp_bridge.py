@@ -13,7 +13,9 @@ import time
 from pathlib import Path
 
 import pytest
-from mcp import StdioServerParameters
+from mcp import ClientSession, StdioServerParameters
+from mcp.shared.exceptions import McpError
+from mcp.types import CallToolResult, ErrorData
 
 from squadron.tools.mcp_bridge import call_mcp_tool
 from tests.tools.conftest import fake_server_params
@@ -134,3 +136,79 @@ async def test_spawn_failure_is_error_result(caplog: pytest.LogCaptureFixture) -
     assert "definitely-not-a-command" in result.content
     assert "unavailable" in result.content
     assert any("could not launch" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_protocol_error_maps_to_error_result(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A genuine McpError mid-call becomes an error result, not an exception.
+
+    The fake server cannot produce one on demand — the SDK converts a server-side handler
+    exception into an ``isError`` result instead (see ``test_unknown_tool_name``). So the
+    protocol failure is injected at the session boundary, which still drives the real
+    ``except McpError`` branch in ``call_mcp_tool``.
+    """
+
+    async def raise_mcp_error(self: ClientSession, *args: object, **kwargs: object) -> CallToolResult:
+        raise McpError(ErrorData(code=-32601, message="method not found"))
+
+    monkeypatch.setattr(ClientSession, "call_tool", raise_mcp_error)
+
+    with caplog.at_level(logging.WARNING, logger="squadron.tools.mcp_bridge"):
+        result = await call_mcp_tool(fake_server_params(), "echo", {"text": "x"}, ROUND_TRIP_TIMEOUT_S)
+
+    assert result.is_error is True
+    assert "protocol error" in result.content.lower()
+    assert "method not found" in result.content
+    assert any("protocol error" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_exception_maps_to_error_result(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The process-boundary handler: an unclassified failure still reaches the model as a value.
+
+    Executors must never raise into the agentic loop (261 contract), so even a bug or an
+    unforeseen SDK failure has to come back as ``is_error=True`` — logged with a traceback so
+    the cause is not lost.
+    """
+
+    async def raise_unexpected(self: ClientSession, *args: object, **kwargs: object) -> CallToolResult:
+        raise RuntimeError("unclassified SDK failure")
+
+    monkeypatch.setattr(ClientSession, "call_tool", raise_unexpected)
+
+    with caplog.at_level(logging.WARNING, logger="squadron.tools.mcp_bridge"):
+        result = await call_mcp_tool(fake_server_params(), "echo", {"text": "x"}, ROUND_TRIP_TIMEOUT_S)
+
+    assert result.is_error is True
+    assert "unexpected failure" in result.content
+    assert "unclassified SDK failure" in result.content
+    records = [r for r in caplog.records if "unexpected failure" in r.getMessage()]
+    assert records, "the process-boundary handler must log the failure"
+    assert records[0].exc_info is not None, "logger.exception must attach the traceback"
+
+
+@pytest.mark.asyncio
+async def test_grouped_timeout_is_not_reported_as_spawn_failure(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """TimeoutError subclasses OSError, so classification order is load-bearing.
+
+    If the spawn-failure check ran first, a timeout surfacing inside the SDK's task group
+    would be reported as an unlaunchable server — the wrong cause and the wrong remediation.
+    """
+
+    async def raise_timeout(self: ClientSession, *args: object, **kwargs: object) -> CallToolResult:
+        raise TimeoutError("read timed out")
+
+    monkeypatch.setattr(ClientSession, "call_tool", raise_timeout)
+
+    with caplog.at_level(logging.WARNING, logger="squadron.tools.mcp_bridge"):
+        result = await call_mcp_tool(fake_server_params(), "echo", {"text": "x"}, ROUND_TRIP_TIMEOUT_S)
+
+    assert result.is_error is True
+    assert "timed out" in result.content
+    assert "could not launch" not in result.content

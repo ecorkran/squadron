@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import cast
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -58,6 +59,75 @@ def _map_result(tool: str, result: CallToolResult) -> ToolResult:
     return ToolResult(content=content)
 
 
+def _leaves(exc: BaseException) -> list[BaseException]:
+    """Flatten *exc* into its leaf exceptions, unwrapping nested exception groups.
+
+    The mcp SDK runs its transport inside anyio task groups, so a failure raised in-band
+    (a protocol error, a broken pipe) reaches the caller wrapped in a ``BaseExceptionGroup``
+    rather than as itself. Classification has to see through that wrapper.
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        # BaseExceptionGroup is generic and the SDK gives it no parameter, so the member
+        # access is Unknown to strict pyright; the runtime contract is exact.
+        inners = cast(
+            "tuple[BaseException, ...]",
+            exc.exceptions,  # pyright: ignore[reportUnknownMemberType]
+        )
+        return [leaf for inner in inners for leaf in _leaves(inner)]
+    return [exc]
+
+
+def _classify_failure(server: StdioServerParameters, tool: str, exc: BaseException) -> ToolResult:
+    """Map a raised failure onto the error result and WARNING its failure-mode row requires.
+
+    Errors are values (261 contract), so every branch returns rather than re-raises. The
+    order matters: spawn failure is checked before protocol error because a server that never
+    started also produces a closed-stream protocol error downstream, and the launch problem is
+    the one an operator has to fix.
+    """
+    leaves = _leaves(exc)
+
+    # TimeoutError is an OSError subclass, so it must be split off before the spawn check or a
+    # grouped timeout would be reported as an unlaunchable server — wrong cause, wrong fix.
+    # The ungrouped case is handled by the caller's own `except TimeoutError`.
+    timeouts = [leaf for leaf in leaves if isinstance(leaf, TimeoutError)]
+    if timeouts:
+        _logger.warning("mcp_bridge: tool '%s' timed out", tool)
+        return ToolResult(
+            content=f"Error: MCP tool '{tool}' timed out and was cancelled.", is_error=True
+        )
+
+    spawn_errors = [leaf for leaf in leaves if isinstance(leaf, OSError)]
+    if spawn_errors:
+        # Spawn failure: the launch command is missing, not executable, or its cwd is bad.
+        command = _describe(server)
+        cause = spawn_errors[0]
+        _logger.warning("mcp_bridge: could not launch MCP server '%s': %s", command, cause)
+        return ToolResult(
+            content=(
+                f"Error: could not launch the MCP server '{command}': {cause}. "
+                f"The bridge is unavailable."
+            ),
+            is_error=True,
+        )
+
+    protocol_errors = [leaf for leaf in leaves if isinstance(leaf, McpError)]
+    if protocol_errors:
+        cause = protocol_errors[0]
+        _logger.warning("mcp_bridge: protocol error calling tool '%s': %s", tool, cause)
+        return ToolResult(content=f"Error: MCP protocol error calling '{tool}': {cause}", is_error=True)
+
+    # Anything else is unclassified: a transport teardown race or an SDK failure we have no
+    # specific handling for. It must still reach the model as a value rather than end the run,
+    # and it is logged with a traceback so the cause is never lost. The leaf is reported rather
+    # than the group, whose own message names nothing actionable.
+    cause = leaves[0] if leaves else exc
+    _logger.exception("mcp_bridge: unexpected failure calling tool '%s'", tool, exc_info=exc)
+    return ToolResult(
+        content=f"Error: unexpected failure calling MCP tool '{tool}': {cause}", is_error=True
+    )
+
+
 async def call_mcp_tool(
     server: StdioServerParameters,
     tool: str,
@@ -86,24 +156,11 @@ async def call_mcp_tool(
             content=f"Error: MCP tool '{tool}' timed out after {timeout_s}s and was cancelled.",
             is_error=True,
         )
-    except (FileNotFoundError, PermissionError, NotADirectoryError, OSError) as exc:
-        # Spawn failure: the launch command is missing, not executable, or its cwd is bad.
-        command = _describe(server)
-        _logger.warning("mcp_bridge: could not launch MCP server '%s': %s", command, exc)
-        return ToolResult(
-            content=(
-                f"Error: could not launch the MCP server '{command}': {exc}. The bridge is unavailable."
-            ),
-            is_error=True,
-        )
-    except McpError as exc:
-        _logger.warning("mcp_bridge: protocol error calling tool '%s': %s", tool, exc)
-        return ToolResult(content=f"Error: MCP protocol error calling '{tool}': {exc}", is_error=True)
     except Exception as exc:  # noqa: BLE001
-        # Process boundary for the model loop: a transport teardown race or an unexpected SDK
-        # failure must reach the model as an error result, never as an exception that ends the
-        # run. Logged with a traceback so the cause is never lost.
-        _logger.exception("mcp_bridge: unexpected failure calling tool '%s'", tool)
-        return ToolResult(
-            content=f"Error: unexpected failure calling MCP tool '{tool}': {exc}", is_error=True
-        )
+        # Single classifying handler at the process boundary for the model loop. It is one
+        # `except` rather than a chain because the SDK's internal anyio task groups re-raise
+        # in-band failures wrapped in a BaseExceptionGroup: a bare `except McpError` never
+        # matches a real protocol error, and the group's own message ("unhandled errors in a
+        # TaskGroup") names nothing the model or an operator could act on. Classification
+        # therefore runs over the flattened leaves.
+        return _classify_failure(server, tool, exc)

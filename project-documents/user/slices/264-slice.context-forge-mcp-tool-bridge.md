@@ -149,6 +149,18 @@ model emits tool_call cf_set_phase {"phase": "Phase 5: Task Breakdown"}
 Executors never raise to the loop (261 contract: errors are values). Each row above has a
 test asserting the observable signal.
 
+**Exception grouping (learned in implementation, 20260901).** The SDK runs its transport
+inside anyio task groups, so a failure raised in-band — a protocol error, a broken pipe —
+reaches the caller wrapped in a `BaseExceptionGroup`, not as itself. A plain `except McpError`
+therefore never matches a real protocol error: it falls through to the catch-all and reports
+the group's own message, "unhandled errors in a TaskGroup", which names nothing a model or an
+operator can act on. `call_mcp_tool` consequently uses one classifying handler that flattens
+the group to its leaves and classifies on those, checking spawn failure before protocol error
+(a server that never started also yields a closed-stream protocol error downstream, and the
+launch problem is the one to report). Spawn failure alone escapes ungrouped, which is why an
+early test of that path passed while the protocol-error row was in fact unimplemented — found
+by the slice-264 code review (F001).
+
 Teardown reaches npx grandchildren (verified against the installed SDK, mcp 1.26.0): the
 stdio client spawns the server with `start_new_session=True` and terminates via
 `os.killpg` on the process group, escalating to SIGKILL after 2s (Windows: process-tree

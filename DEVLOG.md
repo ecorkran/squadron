@@ -14,6 +14,59 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 264: Code Review — F001 Was a Real Bug, Not Just a Coverage Gap
+
+sonnet-5 code review at the merge commit `d06a446`: CONCERNS, one concern and two notes.
+Writing the test F001 asked for immediately failed, and the failure was in the implementation
+rather than the test.
+
+**F001 (concern) — accepted, and it found a defect.** The review noted that `except McpError`
+and the final `except Exception` in `mcp_bridge.call_mcp_tool` had no tests despite the module
+docstring claiming every failure path was covered. Adding those tests showed the `McpError`
+branch was **unreachable**: the SDK runs its transport inside anyio task groups, so an in-band
+protocol error arrives wrapped in a `BaseExceptionGroup`. The bare `except McpError` never
+matched; the error fell to the catch-all and was reported as "unexpected failure ... unhandled
+errors in a TaskGroup (1 sub-exception)" — logged at ERROR instead of WARNING, with a message
+naming nothing actionable. The failure-mode table's protocol-error row was documented, coded,
+and non-functional.
+
+The spawn-failure path passed its test throughout because `FileNotFoundError` escapes the
+group ungrouped. One reachable branch masking an unreachable sibling is exactly the shape a
+"we have a test for that row" claim hides.
+
+Fix: `call_mcp_tool` now has a single classifying handler that flattens the exception to its
+leaves (`_leaves`, recursive for nested groups) and classifies on those, spawn failure before
+protocol error — a server that never started also produces a closed-stream protocol error
+downstream, and the launch problem is the one an operator must fix. The unclassified branch
+reports the leaf rather than the group. Two tests were added that inject failures at the
+`ClientSession.call_tool` boundary so the real `except` path runs; the generic-branch test also
+asserts `exc_info` is attached, since `logger.exception` inside a handler that no longer sees
+the live exception context needed an explicit `exc_info=exc`.
+
+Fixing that surfaced a second latent trap in the same handler: `TimeoutError` is an `OSError`
+subclass, so a timeout arriving *inside* the group would have matched the spawn-failure check
+and been reported as an unlaunchable server — wrong cause, wrong remediation. Classification
+now splits timeouts off first, and a test pins that ordering so it cannot silently regress.
+
+**F002 (note) — rejected, with evidence.** The review called
+`field(default_factory=lambda: {})` an unnecessary lambda, suggesting bare `dict`. Tried it:
+bare `dict` produces two `reportUnknownVariableType` errors under this project's strict pyright
+config, and pyright-zero is a merge blocker here. The lambda is load-bearing, not cosmetic.
+Reverted and left as-is.
+
+**F003 (note) — acknowledged, no change.** Sync TOML config reads inside the async executor.
+The review is right about the letter of the <1ms rule, and equally right that this mirrors
+`providers/openai/provider.py` and is not a regression. A single small TOML read precedes
+spawning a node process that takes ~1.3s; changing it only here would diverge from the
+established pattern for no measurable gain. Worth addressing codebase-wide if it ever matters.
+
+**Process note.** The slice was merged to `main` before the code review ran. The PM has flagged
+that the review gate should block the merge, and will update the guidelines; `workflow_check`
+had in fact reported the missing review artifact at close-out. Had the gate been enforced, this
+defect would have been caught before it reached `main` rather than after.
+
+---
+
 ### Slice 264: Context-Forge MCP Tool Bridge Implemented
 
 Phase 6 complete on branch `264-slice.context-forge-mcp-tool-bridge` (forked from `main`;
