@@ -14,6 +14,22 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 264: Task-Breakdown Review Findings Addressed
+
+kimi-k3 review of the 264 task file at `af1f3c9`: CONCERNS — one concern, three notes, all
+addressed in the task file:
+
+- **F001 (concern):** non-text-block mapping rule had implementation (4.2) but no test.
+  Added a `nontext` tool to the fake-server fixture (3.1) and
+  `test_nontext_block_noted_by_type` (5.1).
+- **F002 (note):** protocol-error WARNING assertion was implicit. `test_unknown_tool_name`
+  now names the caplog assertion explicitly; 5.4's enumeration includes the row.
+- **F003 (note):** timeout test's PID capture relied on unspecified fixture behavior. The
+  fixture now specifies a `--pid-file` argument (3.1) and 5.2 uses it (fallback removed).
+- **F004 (note):** SC6's live-model demo deferral is now explicitly tracked — 9.3 requires
+  annotating walkthrough §4 as open in the slice design and naming it in the close-out
+  DEVLOG entry, rather than a silent `status: complete`.
+
 ### Slice 263: Code Review and Live Verification
 
 **The tool wiring is confirmed working against a real non-SDK model.** `sq run test-p4 264 -v`

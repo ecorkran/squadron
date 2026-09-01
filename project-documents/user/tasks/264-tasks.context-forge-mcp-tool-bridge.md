@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/264-slice.context-forge-mcp-tool-bri
 parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: [261, 262, 263]
 dateCreated: 20260831
-dateUpdated: 20260831
+dateUpdated: 20260901
 status: not_started
 ---
 
@@ -108,6 +108,11 @@ Test infrastructure first: tasks 5, 6 both need a real stdio peer.
     timeout test)
   - [ ] `empty` tool — returns a result with zero content blocks (drives the no-silent-
     no-op mapping rule)
+  - [ ] `nontext` tool — returns a result whose blocks include a non-text block (e.g. an
+    `ImageContent` with a tiny inline payload) alongside optional text (drives the
+    non-text-block mapping rule)
+  - [ ] Accept a `--pid-file <path>` argument: when given, write `os.getpid()` to that
+    path at startup (supports Task 5.2's teardown assertion)
   - [ ] Keep it under ~80 lines; it is a fixture, not a product
 - [ ] **3.2** Add a shared helper (in `tests/tools/conftest.py` or the fixture module) that
   builds `StdioServerParameters` pointing at the fake server via `sys.executable`, so tests
@@ -159,21 +164,25 @@ Test infrastructure first: tasks 5, 6 both need a real stdio peer.
   - [ ] `test_server_is_error_maps_to_error_result` — `fail` tool → `is_error is True`
   - [ ] `test_empty_result_is_explicit_error` — `empty` tool → `is_error is True`, content
     names the condition (guards the no-silent-no-op rule)
+  - [ ] `test_nontext_block_noted_by_type` — `nontext` tool → content mentions the block's
+    type (guards the not-dropped-silently mapping rule)
   - [ ] `test_unknown_tool_name` — calling a tool the fake server lacks → error result,
-    not an exception
+    not an exception; asserts the WARNING via `caplog` (this is the failure-mode table's
+    protocol-error row — its observable signal is asserted here, explicitly)
 - [ ] **5.2** Timeout test
   - [ ] Call `sleep` with a duration well past a short `timeout_s` (e.g. sleep 10, timeout
     1) → `is_error is True` within ~timeout wall-clock
-  - [ ] Assert the server child process is gone after the call returns (capture the child
-    PID via the fake server printing it to a temp file at startup, or scan for the fixture's
-    command line) — this pins the SDK process-group teardown fact from the design
+  - [ ] Assert the server child process is gone after the call returns — launch the fake
+    server with `--pid-file` (Task 3.1), read the PID, and check the process no longer
+    exists. This pins the SDK process-group teardown fact from the design
 - [ ] **5.3** Spawn-failure test
   - [ ] `StdioServerParameters(command="definitely-not-a-command")` → `is_error is True`,
     no exception escapes
 - [ ] **5.4** Observability assertions
   - [ ] Each failure-mode test above also asserts its WARNING via `caplog` (per the
-    failure-mode table: timeout, server isError, spawn failure each have an observable
-    signal)
+    failure-mode table: timeout, server isError, spawn failure, and protocol error each
+    have an observable signal — protocol error's assertion lives in
+    `test_unknown_tool_name`, 5.1)
   - [ ] Effort: 3/5
 
 - [ ] **Task 5 success criteria**
@@ -287,9 +296,13 @@ Test infrastructure first: tasks 5, 6 both need a real stdio peer.
   - [ ] DEVLOG entry under today's date (per prompt.ai-project.system.md Session State
     Summary); CHANGELOG bullet only if user-facing behavior warrants one
   - [ ] Mark this task file and the slice design `status: complete` (delegate checklist
-    updates to task-checker); note walkthrough step 4 (live non-SDK model demo) runs from a
-    standard terminal — the `sq run` CLAUDECODE guard refuses inside Claude Code — and
-    remains open alongside 263's demo
+    updates to task-checker)
+  - [ ] Walkthrough step 4 (SC6 live non-SDK model demo) runs from a standard terminal —
+    the `sq run` CLAUDECODE guard refuses inside Claude Code — so it stays open past
+    close-out. Track it explicitly, in both places: annotate walkthrough §4 in the slice
+    design as "open — requires standard terminal" with the checkbox left unchecked, and
+    name it as an open item in the close-out DEVLOG entry. SC6's executor half (8.2) is
+    evidenced at close-out; the dispatch half is evidenced by this follow-up
 - [ ] **9.4** Merge `264-slice.context-forge-mcp-tool-bridge` into the target read in the
   Branch note (integration branch, or `main` if unset); do not delete the branch
   - [ ] Effort: 2/5
