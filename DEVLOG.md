@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260831
+dateUpdated: 20260901
 
 ---
 
@@ -13,6 +13,72 @@ A lightweight, append-only record of development activity. Newest entries first.
 ---
 
 ## 20260901
+
+### Slice 264: Context-Forge MCP Tool Bridge Implemented
+
+Phase 6 complete on branch `264-slice.context-forge-mcp-tool-bridge` (forked from `main`;
+`git.integration_branch` read as empty at execution time). Five curated context-forge tools
+now let a tool-capable non-SDK model drive the workflow itself.
+
+**What landed.** `src/squadron/tools/mcp_bridge.py` is a generic single-call MCP stdio
+transport: spawn, initialize, call one tool, map the result, tear down — with the whole span
+inside `asyncio.timeout` and no context-forge vocabulary anywhere in it (verified by grep).
+`src/squadron/tools/cf_tools.py` holds the five descriptors (`cf_set_phase`, `cf_set_slice`,
+`cf_build_context`, `cf_prompt_get`, `cf_workflow_status`), built from one `CF_TOOL_SPECS`
+mapping table via a single shared factory builder rather than five near-identical closures.
+That table is the only place the CF argument names `developmentPhase`, `fileSlice`,
+`instruction`, and `templateName` appear. Two config keys were added (`cf.mcp_command`,
+`cf.mcp_timeout_s`), and `tools/__init__.py` gained the registration side-effect import. No
+agent, executor, dispatch, or pipeline-schema change was needed — 263's `validate_allowed_tools`
+is registry-driven, so `cf_*` names became valid step YAML the moment they registered.
+
+**Verified against the real server, not just mocks.** The live contract test spawns the actual
+`@context-forge/mcp` server and confirms all four curated MCP tool names still exist and every
+argument squadron sends still appears in their schemas — reading those names from the
+`cf_tools` constants so the test cannot drift from the code it defends. The bridge's own tests
+run real subprocess round-trips against a fake stdio MCP server (`tests/tools/fake_mcp_server.py`,
+built on the low-level `Server` API so it can return hand-made `CallToolResult` values that
+FastMCP hides): echo, server `isError`, zero content blocks, a non-text `ImageContent` block,
+an unknown tool name, spawn failure, and a timeout that asserts the server PID is gone
+afterwards. Each failure-mode row asserts its WARNING via `caplog`.
+
+The design's ephemeral-override claim for `cf_build_context` was checked against the real
+server rather than taken on faith: building context with a `phase` override returned 5741
+characters of assembled context and left the stored phase untouched.
+
+**Things worth remembering.**
+
+- The mcp SDK converts a server-side handler exception into a `CallToolResult` with `isError`
+  set, so an unknown tool name arrives through the isError mapping path rather than as an
+  `McpError`. The failure-mode table's protocol-error row still gets its observable WARNING;
+  the test documents which path delivers it.
+- Timeout teardown costs real wall-clock beyond the deadline: a 2s timeout returned in ~4s,
+  the extra time being the SDK's SIGTERM-then-SIGKILL escalation on the process group. The
+  test bounds elapsed at `timeout + 10` rather than assuming it returns at the deadline.
+- `caplog` assertions need `record.getMessage()`, not `record.message % record.args` —
+  `record.message` is not populated until a formatter runs, and the naive form raises
+  `TypeError`.
+- `ruff format` does not sort imports; only `ruff check --fix` does. Two lint findings
+  (`I001`, `ASYNC240` on `Path.resolve()` inside an `async def`) survived a format-only pass
+  and had to be caught by `ruff check` before the close-out commit.
+- Two slice-261 tests hard-coded the registry as exactly three tools
+  (`test_exactly_the_three_builtin_tools_are_registered`, and a `len(executors) == 3`
+  assertion). Both were assertions about registry *size* rather than about the builtins, so
+  they were widened to a subset check and a "binds every registered tool" check — which is
+  what the second test's name already claimed.
+
+**Open item.** Walkthrough step 4 — the end-to-end demo with a real non-SDK model (SC6's
+dispatch half) — was not run. `sq run` refuses to execute inside a Claude Code session
+(CLAUDECODE guard), so it needs a standard terminal. It is annotated as open and unchecked in
+the slice design's walkthrough §4. SC6's executor half is evidenced by walkthrough step 2 and
+the live contract test's round-trip. Every other success criterion is met.
+
+**Gates at close-out.** Full `uv run pytest -q` green; `uv run pyright` zero errors; `uv run
+ruff check .` clean. Walkthrough steps 1–3 were run and their actual output — including the
+CF server's `[context-forge-mcp] Server started` stderr line and the ~1.3s warm round-trip —
+is recorded in the slice design.
+
+---
 
 ### Slice 264: Task-Breakdown Review Findings Addressed
 

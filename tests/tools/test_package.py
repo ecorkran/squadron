@@ -7,8 +7,8 @@ from pathlib import Path
 from squadron import tools
 
 
-def test_exactly_the_three_builtin_tools_are_registered() -> None:
-    assert set(tools.list_tools()) == {"read_file", "write_file", "bash"}
+def test_builtin_tools_are_registered() -> None:
+    assert {"read_file", "write_file", "bash"} <= set(tools.list_tools())
 
 
 def test_every_exported_name_is_accessible() -> None:
@@ -17,7 +17,8 @@ def test_every_exported_name_is_accessible() -> None:
 
 
 def test_materialize_binds_every_registered_tool(tmp_path: Path) -> None:
-    executors = tools.materialize(tools.list_tools(), tmp_path)
+    registered = tools.list_tools()
+    executors = tools.materialize(registered, tmp_path)
 
-    assert len(executors) == 3
+    assert set(executors) == set(registered)
     assert all(callable(ex) for ex in executors.values())

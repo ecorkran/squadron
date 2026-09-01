@@ -6,8 +6,8 @@ parent: 260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md
 dependencies: [261, 262, 263]
 interfaces: [265]
 dateCreated: 20260831
-dateUpdated: 20260831
-status: not_started
+dateUpdated: 20260901
+status: complete
 ---
 
 # Slice Design: Context-Forge MCP Tool Bridge
@@ -276,44 +276,146 @@ a real duplication appears, not now.
 
 ## Verification Walkthrough
 
-Draft — refined after Phase 6. Steps 1–3 run anywhere; step 4 needs a standard terminal
-(the `sq run` CLAUDECODE guard refuses to execute inside a Claude Code session).
+Verified during Phase 6 implementation (20260901). Steps 1–3 and 5 were run and their real
+output is recorded below. Step 4 needs a standard terminal (the `sq run` CLAUDECODE guard
+refuses to execute inside a Claude Code session) and remains **open**.
+
+All commands run from the squadron repo root. `uv run` is required — the package is not on
+the ambient interpreter's path.
 
 ### 1. Tools registered and valid in pipeline YAML
 
+- [x] Verified.
+
 ```bash
-python -c "import squadron.tools as t; print([n for n in t.list_tools() if n.startswith('cf_')])"
-# expect: ['cf_set_phase', 'cf_set_slice', 'cf_build_context', 'cf_prompt_get', 'cf_workflow_status']
+uv run python -c "import squadron.tools as t; print([n for n in t.list_tools() if n.startswith('cf_')])"
 ```
 
-Add `allowed_tools: [read_file, cf_workflow_status]` to any dispatch step in a scratch
-pipeline and load it — validation passes. Change one name to `cf_bogus` — load fails naming
-the unknown tool.
+Actual output:
 
-### 2. Live single-call smoke (no model, no pipeline)
+```
+['cf_set_phase', 'cf_set_slice', 'cf_build_context', 'cf_prompt_get', 'cf_workflow_status']
+```
 
-From the squadron repo root, materialize and invoke one executor:
+For the pipeline-YAML half, write a scratch pipeline with a dispatch step carrying
+`allowed_tools: [read_file, cf_workflow_status]`, then load and validate it — and repeat with
+one name changed to `cf_bogus`:
 
 ```bash
-python -c "
-import asyncio, squadron.tools as t
-ex = t.materialize(['cf_workflow_status'], '.')
-print(asyncio.run(ex['cf_workflow_status']({})).content)
+uv run python -c "
+from squadron.pipeline.loader import load_pipeline, validate_pipeline
+d = load_pipeline('<path-to-scratch>.yaml')
+print([e.message for e in validate_pipeline(d)] or 'VALID')
 "
 ```
 
-Expect the real CF status for project squadron (phase, active slice). This proves spawn,
-initialize, call, result mapping, and teardown against the real server in one command.
+Actual output — the good pipeline prints `VALID`; the `cf_bogus` variant prints one error
+naming the unknown tool and listing all eight registered names:
+
+```
+["Tool 'cf_bogus' is not registered. Available tools: ['read_file', 'write_file', 'bash', 'cf_set_phase', 'cf_set_slice', 'cf_build_context', 'cf_prompt_get', 'cf_workflow_status']"]
+```
+
+No pipeline-schema change was needed: 263's `validate_allowed_tools` is registry-driven.
+
+### 2. Live single-call smoke (no model, no pipeline)
+
+- [x] Verified.
+
+```bash
+uv run python -c "
+import asyncio, squadron.tools as t
+ex = t.materialize(['cf_workflow_status'], '.')
+r = asyncio.run(ex['cf_workflow_status']({}))
+print('is_error:', r.is_error)
+print(r.content[:300])
+"
+```
+
+Actual output — real CF state for project squadron, `is_error: False`, JSON beginning:
+
+```
+[context-forge-mcp] Server started
+is_error: False
+{
+  "project": "squadron",
+  "phase": "Phase 6: Implementation",
+  "activeSlice": {
+    "name": "context-forge-mcp-tool-bridge",
+    "index": 264,
+    ...
+```
+
+Caveats discovered:
+
+- The CF MCP server writes `[context-forge-mcp] Server started` to stderr. It is not part of
+  the tool result and is not an error.
+- Warm round-trip is ~1.3s wall-clock (package already fetched). A cold `npx -y` first run
+  also downloads the package, which is why `cf.mcp_timeout_s` defaults to 60 and the live
+  contract test allows 180s for its availability probe.
+
+### 2b. `cf_build_context` overrides really are ephemeral
+
+- [x] Verified.
+
+The design claims CF's `context_build` applies overrides without writing the store. Confirmed
+against the real server — read the phase, build context with a *different* phase override, then
+read the phase again:
+
+```bash
+uv run python -c "
+import asyncio, json, squadron.tools as t
+ex = t.materialize(['cf_workflow_status', 'cf_build_context'], '.')
+before = asyncio.run(ex['cf_workflow_status']({})).content
+r = asyncio.run(ex['cf_build_context']({'phase': 'Phase 3: Architecture'}))
+after = asyncio.run(ex['cf_workflow_status']({})).content
+print('build is_error:', r.is_error, '| len', len(r.content))
+print('phase before:', json.loads(before)['phase'])
+print('phase after :', json.loads(after)['phase'])
+"
+```
+
+Actual output — real context came back, and the stored phase did not move:
+
+```
+build is_error: False | len 5741
+phase before: Phase 6: Implementation
+phase after : Phase 6: Implementation
+```
 
 ### 3. Failure modes are observable
 
+- [x] Verified.
+
 ```bash
-sq config set cf.mcp_command "definitely-not-a-command"
-# repeat step 2 → is_error result text explains the CF bridge is unavailable; WARNING in logs
-sq config unset cf.mcp_command
+uv run sq config set cf.mcp_command "definitely-not-a-command"
+# repeat step 2
+uv run sq config unset cf.mcp_command
 ```
 
-### 4. End-to-end with a real non-SDK model (standard terminal)
+Actual output of the repeated step 2 — a WARNING plus an error result the model can read:
+
+```
+WARNING:squadron.tools.mcp_bridge:mcp_bridge: could not launch MCP server 'definitely-not-a-command': [Errno 2] No such file or directory: 'definitely-not-a-command'
+is_error: True
+Error: could not launch the MCP server 'definitely-not-a-command': [Errno 2] No such file or directory: 'definitely-not-a-command'. The bridge is unavailable.
+```
+
+`uv run sq config unset cf.mcp_command` then prints `Removed cf.mcp_command from user config`,
+and `sq config get cf.mcp_command` reports the default again. **Do not skip the unset** — a
+lingering override breaks every later CF tool call, including the live contract test (which
+would skip, not fail, and so hide the breakage).
+
+The remaining failure-mode rows (timeout with process-group teardown, server `isError`, empty
+result, protocol error) are covered by `tests/tools/test_mcp_bridge.py` against the fake
+stdio server, each asserting its WARNING via `caplog`.
+
+### 4. End-to-end with a real non-SDK model (standard terminal) — OPEN
+
+- [ ] **Open — requires a standard terminal.** Not run at close-out: `sq run` refuses to
+  execute inside a Claude Code session (CLAUDECODE guard), so this is the one success-criteria
+  item (SC6's dispatch half) carried past slice close. SC6's executor half is evidenced by
+  step 2 above and by `tests/tools/test_cf_contract_live.py`.
 
 Scratch pipeline step with `model: kimi25` and
 `allowed_tools: [cf_workflow_status, cf_build_context]`, prompt instructing the model to
@@ -322,13 +424,32 @@ report current workflow state and build context for the active slice. Run `sq ru
 response contains real CF-derived state (not hallucinated). Tool-call visibility at `-v`
 beyond DEBUG logs arrives with slice 265's observability work.
 
+
 ### 5. Quality gates
+
+- [x] Verified at close-out.
 
 ```bash
 uv run pytest -q          # full suite green
 uv run pyright            # zero errors
 uv run ruff check .
 ```
+
+Actual results:
+
+```
+3189 passed, 2 skipped, 4 warnings in 439.68s (0:07:19)
+0 errors, 0 warnings, 0 informations      # pyright
+All checks passed!                        # ruff check
+```
+
+Caveats:
+
+- The full suite takes ~7.5 minutes. Run it in the background rather than under a short
+  foreground timeout, and do not start a second run alongside the first — two concurrent runs
+  roughly double the wall-clock for both.
+- `ruff format` does **not** sort imports. Run `uv run ruff check .` (or `--fix`) before
+  committing: a format-only pass leaves `I001` import-order findings unreported.
 
 ## Effort
 

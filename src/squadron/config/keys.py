@@ -289,6 +289,24 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "agentic loop's history-budget guard for OpenAI-compatible agents."
         ),
     ),
+    "cf.mcp_command": ConfigKey(
+        name="cf.mcp_command",
+        type_=str,
+        default="npx -y @context-forge/mcp",
+        description=(
+            "Launch command for the context-forge MCP stdio server, split with "
+            "shlex.split. Override for local-dev builds or to pin a version."
+        ),
+    ),
+    "cf.mcp_timeout_s": ConfigKey(
+        name="cf.mcp_timeout_s",
+        type_=int,
+        default=60,
+        description=(
+            "Wall-clock cap in seconds per context-forge MCP bridge call, "
+            "covering spawn, initialize, and the tool call together."
+        ),
+    ),
 }
 
 

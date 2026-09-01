@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `allowed_tools: [read_file, write_file]`. Non-Claude models given tools this way write real
   files during a run instead of only describing what they would write. The shipped `test-p4`
   pipeline uses this on its design step.
+- Pipelines can now give a non-Claude model five context-forge tools: `cf_workflow_status`,
+  `cf_set_phase`, `cf_set_slice`, `cf_build_context`, and `cf_prompt_get`. Declared in
+  `allowed_tools` like any other tool, they let a capable model read the project's workflow
+  state, advance the phase or slice, rebuild its own context prompt, and fetch a prompt
+  template — so it can drive the workflow itself rather than only editing files. The tools
+  always act on the project in the step's working directory; a model cannot point them at
+  another project. Configure the server launch command with `sq config set cf.mcp_command`
+  and the per-call timeout with `cf.mcp_timeout_s`.
 - A misspelled tool name in a pipeline is now caught when the pipeline is validated, before any
   model is called. The error names the bad tool and lists the ones that are registered.
   Previously an unrecognized name meant the step ran silently without tools, and the model
