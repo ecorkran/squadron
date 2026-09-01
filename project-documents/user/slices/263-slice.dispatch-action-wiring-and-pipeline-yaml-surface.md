@@ -7,7 +7,7 @@ dependencies: [262]
 interfaces: [264, 265]
 dateCreated: 20260831
 dateUpdated: 20260831
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Dispatch Action Wiring and Pipeline YAML Surface
