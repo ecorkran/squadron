@@ -384,29 +384,29 @@ review task tried to read fields this task hadn't created yet.
 Must be run from a plain terminal, not inside Claude Code — `sq run` refuses execution in a
 Claude Code session (unconditional `CLAUDECODE` guard, `cli/commands/run.py:148`).
 
-- [ ] **29.1** Pipeline observability demo
-  - [ ] `sq run <pipeline> <slice> -v` against a pipeline with at least one tool-bearing
+- [x] **29.1** Pipeline observability demo
+  - [x] `sq run <pipeline> <slice> -v` against a pipeline with at least one tool-bearing
     dispatch/review/summary step
-  - [ ] Confirm the `-v` output shows `tools=N/M calls` for tool-bearing steps and no `tools=`
+  - [x] Confirm the `-v` output shows `tools=N/M calls` for tool-bearing steps and no `tools=`
     segment for steps without tools
-  - [ ] Construct the zero-calls case deliberately if no natural step produces it (e.g. a step
+  - [x] Construct the zero-calls case deliberately if no natural step produces it (e.g. a step
     offered tools but given a task that doesn't need them), confirming it reads distinctly from
     the no-tools case
-  - [ ] Check the persisted run JSON at `~/.config/squadron/runs/<run>.json` — confirm
+  - [x] Check the persisted run JSON at `~/.config/squadron/runs/<run>.json` — confirm
     `tools_given`/`tool_calls_made` appear in `action_results`. Task 25.3 already gives this
     same claim automated coverage; this step is the live-run confirmation, not the only proof
-- [ ] **29.2** Live non-SDK review (issue #68 closure)
-  - [ ] `sq review code --slice <n> --model kimi27 -v` (or another live non-SDK model
+- [x] **29.2** Live non-SDK review (issue #68 closure)
+  - [x] `sq review code --slice <n> --model kimi27 -v` (or another live non-SDK model
     configured in this environment)
-  - [ ] Confirm a non-zero tool-call count in the `-v` output and in the persisted review JSON
-  - [ ] Record the actual observed numbers in the slice design's Verification Walkthrough
+  - [x] Confirm a non-zero tool-call count in the `-v` output and in the persisted review JSON
+  - [x] Record the actual observed numbers in the slice design's Verification Walkthrough
     section (§6-7), replacing the draft placeholders
-  - [ ] Effort: 2/5
+  - [x] Effort: 2/5
 
-- [ ] **Task 29 success criteria**
-  - [ ] Both demos behave as SC8/SC10 describe, with observed results recorded in the slice
+- [x] **Task 29 success criteria**
+  - [x] Both demos behave as SC8/SC10 describe, with observed results recorded in the slice
     design
-  - [ ] `ruff format` run, then committed: `docs: record slice 265 end-to-end verification results`
+  - [x] `ruff format` run, then committed: `docs: record slice 265 end-to-end verification results`
 
 ## Task 30: Quality gates and close-out
 
