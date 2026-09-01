@@ -1,0 +1,31 @@
+name: cf-tools-demo
+description: >
+  Slice 264 walkthrough step 4 — prove a real non-SDK model calls the context-forge
+  MCP bridge tools and uses what they return. Scratch/verification pipeline, not
+  part of any workflow.
+
+params:
+  slice: required
+  model: kimi27
+
+steps:
+  - dispatch:
+      name: cf-tools-demo
+      model: "{model}"
+      allowed_tools: [cf_workflow_status, cf_build_context]
+      prompt: |
+        You have two tools that talk to this project's context-forge instance.
+        Use them; do not answer from memory or guess.
+
+        1. Call cf_workflow_status to read the current workflow state.
+        2. Call cf_build_context to build the context prompt for the active slice.
+
+        Then report, as plain prose:
+        - the project name, current phase, and active slice, exactly as
+          cf_workflow_status returned them
+        - the task progress numbers it reported (completed / total)
+        - the approximate length in characters of the context cf_build_context
+          returned, and the first line of that context
+
+        If a tool call fails, say so explicitly and quote the error text you got
+        back. Do not substitute a plausible-sounding answer for a failed call.
