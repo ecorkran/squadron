@@ -47,10 +47,24 @@ contaminate concatenated response bodies). `_log_action_result` already renders 
 
 **Two decisions worth flagging at review.** `tools_given` is emitted even when
 `tool_calls_made` is 0 (D5) — that zero is the whole point, distinguishing "offered tools, used
-none" from "never offered." And `code.yaml` loses `Bash` rather than mapping it to `bash` (D6):
-reviews are a read-only subset per the arch, and carrying that pre-existing SDK-path grant into
-canonical vocabulary would hand every non-SDK code review unrestricted shell. That is a
-deliberate narrowing of a working path's permissions, not an oversight.
+none" from "never offered." And `code.yaml` drops `Bash` (D6).
+
+D6 needed correcting after checking the SDK rather than reasoning from the template. My first
+framing called it "a deliberate narrowing of a working SDK path's permissions." It is not: it
+narrows nothing there. `AgentConfig.allowed_tools` becomes `--allowedTools`, a *permission*
+allowlist; tool availability is governed by the separate `tools`/`--tools` field, which
+squadron never sets — so the SDK reviewer gets the CLI default tool set either way. `code.yaml`
+also runs `permission_mode: bypassPermissions`, which approves everything regardless. So that
+`Bash` entry is already inert, and dropping it changes the emitted flag string and nothing else.
+
+The real finding underneath is more useful than the decision it corrects: **`allowed_tools`
+means two different things on the two paths** — a capability gate on non-SDK (the name is what
+materializes an executor, so omitting `bash` genuinely keeps reviews read-only) and a
+largely-inert permission hint on SDK. One canonical vocabulary across both is still right, but
+identical declarations do not produce identical restrictions, and the design now says so
+outright. Closing that gap for real (via `tools`/`--tools` or `disallowed_tools`) would change
+SDK reviewer behavior, so it is explicitly out of scope. SC3 is tightened to assert emitted CLI
+flags rather than only the built options object.
 
 Effort 3/5 — the pieces are small but span tools, both providers, the review client, and the
 pipeline actions, and the template migration modifies a working SDK path whose behavior must be

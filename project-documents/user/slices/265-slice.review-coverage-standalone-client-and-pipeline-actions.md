@@ -292,7 +292,10 @@ names. No `Read`/`Glob`/`Grep`/`Bash` string remains in `data/templates/*.yaml`.
 **SC3 — SDK behavior is unchanged.** An SDK-profile review built from a migrated template
 produces the same `ClaudeAgentOptions.allowed_tools` value it produced before the migration
 (`["Read", "Glob", "Grep"]` for the templates that declared those three). Asserted directly on
-the built config, not inferred.
+the built config, not inferred. `code.yaml` is the one intended difference: `Bash` is absent
+post-migration (D6), which changes the emitted `--allowedTools` string but not the SDK
+reviewer's actual capabilities, since `tools`/`--tools` is unset and `permission_mode` is
+`bypassPermissions`.
 
 **SC4 — Unknown names fail loudly, both directions.** A canonical name with no SDK mapping
 raises at the SDK config edge; a name not in the registry raises in the non-SDK agent. Neither
@@ -353,12 +356,28 @@ ignorable, and works identically for the standalone review client and the pipeli
 Emitting nothing in that case would collapse it with "no tools offered" — the exact
 distinction SC8 requires.
 
-**D6 — `code.yaml` loses `Bash` rather than mapping it to `bash`.** Reviews are a read-only
-tool subset per the arch. `Bash` in that template is a pre-existing grant that predates this
-initiative; carrying it into canonical vocabulary would hand every non-SDK code review
-unrestricted shell in the repo. Mapping the name for other (non-review) uses stays in the
-table; the review template simply stops asking for it. This is a deliberate narrowing of an
-existing SDK-path grant and should be called out at review.
+**D6 — `code.yaml` drops `Bash`; this does not restrict the SDK reviewer.** Reviews are a
+read-only tool subset per the arch, so `bash` is not carried into the canonical declaration.
+The important part is what this does and does not do, because `allowed_tools` means two
+different things on the two paths:
+
+- **Non-SDK: a capability gate.** The name in the list is what materializes an executor from
+  the registry. Omitting `bash` is precisely what keeps a non-SDK review read-only. This is
+  the reason for the decision.
+- **SDK: a permission hint, and here an inert one.** `AgentConfig.allowed_tools` becomes
+  `ClaudeAgentOptions.allowed_tools` → `--allowedTools`
+  ([subprocess_cli.py:195-196](.venv/lib/python3.13/site-packages/claude_agent_sdk/_internal/transport/subprocess_cli.py#L195-L196)),
+  which pre-approves tools that would otherwise prompt. Tool *availability* is governed by the
+  separate `tools` / `--tools` field, which squadron never sets — so the SDK reviewer receives
+  the CLI's default tool set either way. `code.yaml` additionally sets
+  `permission_mode: bypassPermissions` ([code.yaml:54](src/squadron/data/templates/code.yaml#L54)),
+  which approves everything regardless. Dropping `Bash` there removes a redundant
+  pre-approval, under a mode that bypasses approval, for a tool that remains available.
+
+**Net effect on an SDK code review: none.** It could run Bash before this slice and can after.
+The read-only subset is real on the non-SDK path and nominal on the SDK path; closing that gap
+(via `tools`/`--tools` or `disallowed_tools`) is deliberately out of scope here — it would
+change SDK reviewer behavior, which this slice must not do.
 
 **D7 — `grep` is implemented in Python, not by shelling to `rg`.** No dependency on an
 external binary, and the jail check stays in one place rather than being re-expressed as
@@ -370,8 +389,9 @@ argument sanitation for a subprocess.
 ## Risks
 
 - **The vocabulary migration silently changes SDK review behavior.** This is the one change
-  that touches a working path. Mitigated by SC3 asserting the built SDK config directly, and
-  by D6 being the *only* intended behavior change in that path.
+  that touches a working path. Mitigated by SC3 asserting the built SDK config directly. Note
+  that D6 (dropping `Bash` from `code.yaml`) is *not* such a change — it alters the emitted
+  `--allowedTools` string without altering SDK reviewer capability; see D6.
 - **A tool-enabled reviewer under-reads.** Skipping body injection is only an improvement if
   the model actually uses its tools; a lazy model reviews from the diff alone. SC10's live run
   is the check, and the `-v` counts make a zero-call review immediately obvious rather than
