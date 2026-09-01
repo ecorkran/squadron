@@ -55,3 +55,12 @@ def test_two_unknown_names_return_two_errors() -> None:
 def test_error_carries_action_type() -> None:
     errors = validate_allowed_tools(_step({"allowed_tools": ["nope"]}), "design")
     assert errors[0].action_type == "design"
+
+
+def test_non_string_and_unknown_names_accumulate() -> None:
+    """Review finding 4: a bad element must not hide the errors after it."""
+    step = _step({"allowed_tools": [42, "read_fil", "read_file"]})
+    errors = validate_allowed_tools(step, "dispatch")
+    assert len(errors) == 2
+    assert "42" in errors[0].message
+    assert "read_fil" in errors[1].message

@@ -416,44 +416,59 @@ must model the revert as `cwd=None`, not `cwd=""`: the agent's check is `cwd is 
 empty string instead resolves to the process working directory, writing the file somewhere
 unexpected rather than failing.
 
-### 4. End-to-end with a real non-SDK model — NOT VERIFIED
+### 4. End-to-end with a real non-SDK model — PARTIALLY VERIFIED
 
-**Status: deferred. This step could not be executed from the implementing session and remains
-outstanding.**
+Run from a standard terminal (the command exits immediately inside a Claude Code session — an
+unconditional `CLAUDECODE` guard at
+[cli/commands/run.py:148](../../../src/squadron/cli/commands/run.py#L148) fires before any
+pipeline-shape check, so it blocks even this Claude-free pipeline):
 
 ```bash
-uv run sq run test-p4 <unstarted-slice-index> -v
+uv run sq run test-p4 264 -v
 ```
 
-Attempted against slice 264. The run exits immediately:
+Observed 20260901 — the dispatch reached the model and the tools were live:
 
 ```
-Error: SDK pipeline execution cannot run inside a Claude Code session.
-Use --prompt-only mode or run from a standard terminal.
+  action 4/7: dispatch model=kimi27
+    -> ok (model=moonshotai/kimi-k2.7-code)
+dispatch post-condition: no design artifact path registered for slice 264
 ```
 
-This is a pre-existing, unconditional guard in
-[cli/commands/run.py:148](../../../src/squadron/cli/commands/run.py#L148): it triggers on the
-`CLAUDECODE` environment variable before any pipeline-shape classification, so it blocks even
-a Claude-free pipeline. `uv run sq run test-p4 264 --explain` confirms this pipeline needs no
-persistent session and routes every step non-SDK — the guard is simply broader than its
-message suggests. Slice 263 neither introduced nor should change this behavior.
+**What this establishes.** The model's response enumerated specific filesystem paths it had
+probed and found missing (`ai-project-guide/project-guides/guide.ai-project.process`,
+`ai-project-guide/tool-guides/context-forge/introduction.md`, and others). It could only report
+those misses by actually calling `read_file` against the working directory — a tool-less model
+has no way to know a path is absent and would have produced a design from imagination instead.
+The `allowed_tools` -> `AgentConfig` -> registry -> filesystem path therefore works end to end
+against a real non-SDK model.
 
-To complete this step, run the two cases **from a standard terminal**, outside any Claude Code
-session:
+**Two unrelated pre-existing issues surfaced, neither caused by this slice.**
 
-1. **Positive case.** `uv run sq run test-p4 <unstarted-slice-index> -v`. Expect the design
-   step to dispatch to `kimi27` with `tools` in the request, the model to issue a `write_file`
-   call, the slice-design file to exist at
-   `project-documents/user/slices/<nnn>-slice.<name>.md` after the step, and the review step to
-   find it as input rather than reporting a missing artifact. The run pauses at an interactive
-   human checkpoint after review.
-2. **Contrast case.** Remove the `allowed_tools` line from
-   `src/squadron/data/pipelines/test-p4.yaml`, re-run, and confirm the model produces prose
-   describing the design while no file appears. That contrast is the slice's whole point.
+1. **The post-condition cannot pass for an undesigned slice.** `expected_artifact_paths`
+   resolves the target through the slice plan's `design_file` field, which is `None` for a slice
+   that has never been designed (confirmed: 262 and 263 have paths; 264 and 265 are `None`). The
+   check then fails closed at
+   [dispatch_artifact.py:46](../../../src/squadron/events/builtin/dispatch_artifact.py#L46) with
+   "no design artifact path registered" before ever looking at the disk. Since P4's purpose is
+   to *create* that file, the post-condition can only be satisfied for a slice whose design file
+   is already registered — a chicken-and-egg in the slice-909 post-condition, not in tool
+   wiring.
 
-Until both are observed, the end-to-end claim rests on step 3's automated coverage, which
-exercises the same code path against a mocked endpoint rather than a real model.
+2. **The prompt's guide paths do not match the tree.** The model probed
+   `ai-project-guide/project-guides/guide.ai-project.process` and
+   `project-guides/file-naming-conventions.md`; the real files are
+   `project-documents/ai-project-guide/project-guides/guide.ai-project.process.md` (note the
+   `.md`) and `project-documents/ai-project-guide/file-naming-conventions.md` (one level up).
+   The paths originate in the CF prompt templates. A tool-less model never noticed because it
+   never looked; a tool-equipped one checks and correctly refuses to invent a design. Fixing
+   this is prerequisite to a clean positive run.
+
+**Still outstanding:** the contrast case (11.3) — remove the `allowed_tools` line from
+`src/squadron/data/pipelines/test-p4.yaml`, re-run, and confirm the model produces prose and
+probes no paths. Also a positive run that produces a design file on disk, which needs issue 2
+resolved first (and a slice whose design file is already registered, or a post-condition fix,
+for issue 1).
 
 ### 5. Quality gates
 

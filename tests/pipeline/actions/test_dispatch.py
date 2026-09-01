@@ -488,3 +488,61 @@ async def test_malformed_allowed_tools_fails_rather_than_dropping(action: Dispat
     assert result.success is False
     assert "allowed_tools" in (result.error or "")
     mock_registry.spawn.assert_not_called()
+
+
+# --- SDK-path guards (slice 263 review findings 1 and 2) ---
+
+
+@pytest.mark.asyncio
+async def test_sdk_session_path_rejects_allowed_tools(action: DispatchAction) -> None:
+    """Finding 1: the session path carries no tools, so it must fail rather than
+    run tool-less and return success with prose."""
+    session = AsyncMock()
+    resolver = MagicMock()
+    resolver.resolve.return_value = ("claude-sonnet-4-20250514", ProfileName.SDK)
+    ctx = _make_context(
+        params={"prompt": "test", "allowed_tools": ["read_file"]},
+        sdk_session=session,
+        resolver=resolver,
+    )
+
+    result = await action.execute(ctx)
+
+    assert result.success is False
+    assert "allowed_tools" in (result.error or "")
+    session.dispatch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sdk_profile_one_shot_rejects_allowed_tools(action: DispatchAction) -> None:
+    """Finding 1 (one-shot variant): registry tool names are not SDK vocabulary."""
+    ctx = _make_context(params={"prompt": "test", "allowed_tools": ["read_file"]})
+    mock_registry = _make_registry(_make_agent_mock("ok"))
+
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.success is False
+    assert "allowed_tools" in (result.error or "")
+    mock_registry.spawn.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sdk_profile_does_not_receive_cwd(action: DispatchAction) -> None:
+    """Finding 2: the SDK provider forwards a non-None cwd into ClaudeAgentOptions
+    and previously never received the key — this slice must not change that."""
+    ctx = _make_context(params={"prompt": "test"})
+    mock_registry = _make_registry(_make_agent_mock("ok"))
+
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        await action.execute(ctx)
+
+    assert mock_registry.spawn.call_args[0][0].cwd is None

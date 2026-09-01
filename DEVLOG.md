@@ -12,7 +12,53 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
-## 20260831
+## 20260901
+
+### Slice 263: Code Review and Live Verification
+
+**The tool wiring is confirmed working against a real non-SDK model.** `sq run test-p4 264 -v`
+from a standard terminal dispatched to `kimi27` and the model's response enumerated specific
+filesystem paths it had probed and found missing — evidence only a model actually calling
+`read_file` can produce. A tool-less model cannot know a path is absent; it would have invented
+a design. The step nonetheless reported failure, for two reasons unrelated to this slice:
+
+1. **The 909 post-condition cannot pass for an undesigned slice.** `expected_artifact_paths`
+   resolves the target via the slice plan's `design_file`, which is `None` until a design exists
+   (verified: 262/263 have paths, 264/265 are `None`), so the check fails closed before touching
+   the disk. P4 exists to *create* that file — a chicken-and-egg in the post-condition.
+2. **CF prompt-template guide paths do not match the tree** (`guide.ai-project.process` without
+   `.md`; `file-naming-conventions.md` under `project-guides/` rather than one level up). The
+   model correctly refused to invent a design it could not ground.
+
+Both are pre-existing and worth filing separately.
+
+**Code review found four issues; all four fixed.** Two were consequential and both were in code
+this slice wrote:
+
+- **The SDK session path silently dropped `allowed_tools`.** `_dispatch_via_session` never reads
+  the field, so a step declaring tools that routed there ran tool-less and returned
+  `success=True` — precisely the no-op-with-prose failure this slice exists to prevent, and
+  invisible to load-time validation because the routing decision happens at runtime. Now both
+  SDK paths fail loudly: the session path returns a failed `ActionResult`, and `one_shot_dispatch`
+  raises when the resolved profile's provider is the SDK, since registry names
+  (`read_file`) are not SDK vocabulary (`Read`). Slice 265 owns the mapping.
+- **Unconditional `cwd` changed SDK one-shot behavior.** `providers/sdk/provider.py` forwards a
+  non-None `cwd` into `ClaudeAgentOptions`, which previously never received the key. D2's
+  "inert" justification only ever covered the non-SDK agent. Now gated on the resolved provider
+  inside `one_shot_dispatch`, where the provider is actually known.
+
+Two false starts worth recording, both caught by existing tests rather than by inspection: the
+guard was first written against `profile_name == ProfileName.SDK`, which wrongly catches the
+`None`-alias fallback (that case names the SDK profile but still routes through the one-shot
+agent), and the `cwd` suppression was first put at the call site, where the provider is not yet
+resolved. Both belong on `profile.provider`, not the profile name.
+
+The remaining two findings were small: `validate_allowed_tools` returned on the first non-string
+element instead of accumulating, contradicting its own batch-reporting docstring; and
+`test-p4.yaml`'s tools could route to SDK under a `--model` override, which the new guard now
+turns into a loud failure.
+
+Four regression tests added for the guards.
 
 ### Slice 263: Implementation (Phase 6)
 

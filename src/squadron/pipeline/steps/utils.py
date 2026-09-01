@@ -49,15 +49,19 @@ def validate_allowed_tools(config: StepConfig, action_type: str) -> list[Validat
             )
         ]
 
+    errors: list[ValidationError] = []
+    names: list[str] = []
     for entry in value:  # pyright: ignore[reportUnknownVariableType]
-        if not isinstance(entry, str):
-            return [
+        if isinstance(entry, str):
+            names.append(entry)
+        else:
+            errors.append(
                 ValidationError(
                     field="allowed_tools",
                     message=(f"'allowed_tools' entries must be strings; got {entry!r}"),
                     action_type=action_type,
                 )
-            ]
+            )
 
     # Imported locally: registering built-ins is an import side effect of this package,
     # which is otherwise reached only through the lazily loaded openai provider. A
@@ -65,8 +69,7 @@ def validate_allowed_tools(config: StepConfig, action_type: str) -> list[Validat
     from squadron import tools
 
     registered = tools.list_tools()
-    errors: list[ValidationError] = []
-    for name in value:  # pyright: ignore[reportUnknownVariableType]
+    for name in names:
         if name not in registered:
             errors.append(
                 ValidationError(
