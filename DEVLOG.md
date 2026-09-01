@@ -14,6 +14,50 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260901
 
+### Slice 265: Phase 4 Slice Design — Review Coverage
+
+Design written for `265-slice.review-coverage-standalone-client-and-pipeline-actions`. Reading
+the code first turned what the slice plan framed as three loosely related work items into three
+concrete, currently-live defects, which is how the design is now organized.
+
+**Front 1 is worse than "issue #68 is open."** The plan said non-SDK providers silently ignore
+`template.allowed_tools`, and that slice 262 fixes it. 262 did fix the plumbing — but all seven
+shipped review templates declare Claude vocabulary (`[Read, Glob, Grep, Bash]`), and
+`agent.py:126-133` looks those names up in the squadron registry, finds nothing, logs a
+warning, and continues tool-less. So #68 is still open in practice *after* 262, for a different
+reason than the one recorded. The vocabulary migration is not cleanup; it is the actual fix.
+
+**The capability signal question the arch deferred has a third answer.** The arch offered
+`supports_tool_use` on `ProviderCapabilities` or a config-dependent `can_read_files`. Both are
+wrong: the OpenAI-compatible provider *always* supports tool use, so that flag would be a
+constant `True` that does not answer the injection branch's real question — does *this run*
+have a file reader? That is a run property, not a provider property. Computing it in the review
+client from the effective tool set adds no field, encodes no provider identity, and leaves
+`can_read_files` with its correct existing meaning.
+
+**Observability needed a decided route out of the agent.** The agent's only caller-facing
+surface is the `Message` stream, and every caller concatenates `.content`. Decided (D4):
+stamp `tools_given` / `tool_calls_made` on the final message's existing `metadata` field.
+Rejected an agent-level accessor property (pushes state onto the `Agent` protocol all three
+providers implement, and forces callers to hold the concrete type) and mid-stream system
+Messages (reverses 262's "intermediate turns are not surfaced" contract, and tool chatter would
+contaminate concatenated response bodies). `_log_action_result` already renders `verdict=` and
+`model=` from `ActionResult.metadata`, so the `-v` line is a one-extra change, and
+`RunState.action_results` is untyped `list[dict[str, object]]` — no `schema_version` bump.
+
+**Two decisions worth flagging at review.** `tools_given` is emitted even when
+`tool_calls_made` is 0 (D5) — that zero is the whole point, distinguishing "offered tools, used
+none" from "never offered." And `code.yaml` loses `Bash` rather than mapping it to `bash` (D6):
+reviews are a read-only subset per the arch, and carrying that pre-existing SDK-path grant into
+canonical vocabulary would hand every non-SDK code review unrestricted shell. That is a
+deliberate narrowing of a working path's permissions, not an oversight.
+
+Effort 3/5 — the pieces are small but span tools, both providers, the review client, and the
+pipeline actions, and the template migration modifies a working SDK path whose behavior must be
+preserved exactly (SC3 asserts the built `ClaudeAgentOptions` directly rather than inferring).
+
+---
+
 ### Slice 264: Walkthrough Step 4 Verified — SC6 Closed
 
 The one open success-criteria item is closed. `sq run cf-tools-demo 264 -v` was run from a
