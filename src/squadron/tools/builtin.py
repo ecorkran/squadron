@@ -16,7 +16,7 @@ import logging
 import os
 import signal
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 
 import regex
@@ -486,11 +486,19 @@ def _optional_int(args: dict[str, object], key: str) -> int | None:
     return value
 
 
-def _grep_candidates(target: Path, glob: str | None) -> list[Path]:
-    """Return the files *target* expands to, filtered by *glob* when it is a directory."""
+def _grep_candidates(target: Path, glob: str | None) -> Iterator[Path]:
+    """Yield the files *target* expands to, filtered by *glob* when it is a directory.
+
+    Deliberately lazy and unsorted: a sorted list would walk and materialize the entire tree
+    before the caller's first deadline check, so a large enough tree could blow the whole-walk
+    budget during traversal alone — before a single line was ever matched.
+    """
     if target.is_file():
-        return [target]
-    return sorted(entry for entry in target.rglob(glob or "*") if entry.is_file())
+        yield target
+        return
+    for entry in target.rglob(glob or "*"):
+        if entry.is_file():
+            yield entry
 
 
 def _grep_factory(cwd: Path) -> ToolExecutor:
@@ -527,8 +535,16 @@ def _grep_factory(cwd: Path) -> ToolExecutor:
 
                 matches: list[str] = []
                 for candidate in _grep_candidates(target, glob):
+                    # Checked per candidate as well as per line: traversal of a large tree and
+                    # the reads themselves consume wall time the per-line check never sees.
+                    if time.monotonic() >= deadline:
+                        return _grep_timeout(pattern, budget)
                     try:
-                        text = candidate.read_text(errors="replace")
+                        # Bounded like read_file: an enormous file must not consume the whole
+                        # budget (or the process's memory) inside a single unbounded read.
+                        with candidate.open("rb") as handle:
+                            raw = handle.read(limits.MAX_READ_BYTES)
+                        text = raw.decode(errors="replace")
                     except (OSError, UnicodeDecodeError):
                         # An unreadable or undecodable file inside the tree is normal input for
                         # a whole-directory search; skipping it is correct, and the remaining

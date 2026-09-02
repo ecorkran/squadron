@@ -166,8 +166,11 @@ class OpenAICompatibleAgent:
                 messages = translation.build_messages(
                     turn.text, turn.tool_calls, self._name, self._model
                 )
-                # The tool-less fast path never calls a tool, but it is still reached with
-                # tools configured when the model declines to use them — the zero-calls case.
+                # Reached only when no tools were configured at all, so this stamps nothing
+                # (_stamp_tool_telemetry returns early on an empty tools_given). Kept so the
+                # two branches stay symmetrical: if this path ever becomes reachable with
+                # tools configured, it already carries the zero-calls telemetry. The genuine
+                # "offered tools, called none" case runs through _run_agentic_loop below.
                 self._stamp_tool_telemetry(messages, tool_calls_made=0)
             else:
                 messages = await self._run_agentic_loop()

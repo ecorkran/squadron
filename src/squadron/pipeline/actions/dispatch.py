@@ -51,58 +51,23 @@ async def one_shot_dispatch(
     allowed_tools: list[str] | None = None,
     cwd: str | None = None,
 ) -> str:
-    """Spawn a one-shot agent and return the concatenated response text."""
-    profile = get_profile(profile_name)
-    # Registry tool names are not the SDK's vocabulary (Read/Write/Bash), so an
-    # SDK-backed profile would silently receive names it cannot resolve and run
-    # tool-less. Fail instead — a silent drop is the exact no-op-with-prose
-    # failure this path exists to prevent. Slice 265 owns the SDK mapping.
-    if allowed_tools and profile.provider == ProviderType.SDK:
-        raise ValueError(
-            f"Step '{step_name}' declares allowed_tools {allowed_tools!r} but profile "
-            f"'{profile_name}' routes to the Claude Code SDK, whose tool vocabulary differs "
-            "from the squadron tool registry. Use a non-SDK model, or remove 'allowed_tools'."
-        )
-    ensure_provider_loaded(profile.provider)
+    """Spawn a one-shot agent and return the concatenated response text.
 
-    branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
-    config = AgentConfig(
-        name=f"dispatch-{step_name}{branch_suffix}-{run_id[:8]}",
-        agent_type=profile.provider,
-        provider=profile.provider,
-        model=model_id,
-        instructions=system_prompt,
-        base_url=profile.base_url,
-        # The SDK provider forwards a non-None cwd into ClaudeAgentOptions and
-        # previously never received the key; only the non-SDK agent needs it (it
-        # is the jail root for registry tools). Gate on the resolved provider so
-        # this slice does not change SDK one-shot behavior.
-        cwd=None if profile.provider == ProviderType.SDK else cwd,
+    Callers that also need tool-use telemetry use ``one_shot_dispatch_with_telemetry``;
+    this signature is unchanged for the callers that have nowhere to put the extra value.
+    """
+    text, _ = await one_shot_dispatch_with_telemetry(
+        prompt=prompt,
+        model_id=model_id,
+        profile_name=profile_name,
+        system_prompt=system_prompt,
+        step_name=step_name,
+        run_id=run_id,
+        branch_idx=branch_idx,
         allowed_tools=allowed_tools,
-        credentials={
-            "api_key_env": profile.api_key_env,
-            "default_headers": profile.default_headers,
-        },
+        cwd=cwd,
     )
-
-    registry = get_registry()
-    agent = await registry.spawn(config)
-    try:
-        message = Message(
-            sender="pipeline",
-            recipients=[config.name],
-            content=prompt,
-            message_type=MessageType.chat,
-        )
-        response_parts: list[str] = []
-        async for response in agent.handle_message(message):
-            if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
-                continue
-            response_parts.append(response.content)
-    finally:
-        await registry.shutdown_agent(config.name)
-
-    return "".join(response_parts)
+    return text
 
 
 async def one_shot_dispatch_with_telemetry(
@@ -127,6 +92,11 @@ async def one_shot_dispatch_with_telemetry(
     ``ActionResult.metadata`` unconditionally without inventing keys (design D5).
     """
     profile = get_profile(profile_name)
+    # Slice 265 built the canonical -> Claude mapping and wired it for review/summary, but
+    # deliberately left this dispatch path alone: lifting the restriction changes dispatch's
+    # runtime behavior and is out of this slice's scope. Until then a silent drop here would
+    # be the exact no-op-with-prose failure this path exists to prevent, so it still fails
+    # loudly. Tracked for follow-up.
     if allowed_tools and profile.provider == ProviderType.SDK:
         raise ValueError(
             f"Step '{step_name}' declares allowed_tools {allowed_tools!r} but profile "

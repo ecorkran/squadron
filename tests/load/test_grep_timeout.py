@@ -125,3 +125,59 @@ async def test_concurrent_grep_calls_do_not_starve_the_event_loop(
     assert probe_ticks >= minimum_ticks, (
         f"event loop ticked {probe_ticks} times over {elapsed:.2f}s (expected >= {minimum_ticks})"
     )
+
+
+# ---------------------------------------------------------------------------
+# The budget covers traversal and reads, not only line matching
+# ---------------------------------------------------------------------------
+#
+# Added after the slice 265 code review observed that the deadline was consulted only inside
+# the per-line matching loop, leaving two unbounded paths the original load test never
+# exercised: the directory walk itself, and read_text() on a single enormous file.
+
+
+async def test_budget_holds_against_a_very_large_single_file(tmp_path: Path) -> None:
+    """One huge file must not consume the budget inside an unbounded read.
+
+    The read is capped at MAX_READ_BYTES, so a file far larger than that still returns
+    promptly instead of pulling gigabytes into memory first.
+    """
+    big = tmp_path / "huge.txt"
+    line = "some ordinary source line that will not match the pattern\n"
+    # Comfortably larger than MAX_READ_BYTES (256 KB) without making the test slow to write.
+    big.write_text(line * 40_000)
+    grep_tool = registry.materialize(["grep"], tmp_path)["grep"]
+
+    started = time.monotonic()
+    result = await grep_tool({"pattern": r"zzz-no-such-token"})
+    elapsed = time.monotonic() - started
+
+    assert result.is_error is False
+    assert elapsed < limits.GREP_TIMEOUT_S, (
+        f"single large file took {elapsed:.2f}s against a {limits.GREP_TIMEOUT_S}s budget"
+    )
+
+
+async def test_budget_holds_while_walking_a_wide_tree(tmp_path: Path) -> None:
+    """Traversal is inside the budget, not before it.
+
+    A materialized-and-sorted candidate list would walk the entire tree before the first
+    deadline check; lazy iteration plus a per-candidate check keeps the walk itself bounded.
+    """
+    for bucket in range(40):
+        directory = tmp_path / f"pkg_{bucket:03d}"
+        directory.mkdir()
+        for index in range(25):
+            (directory / f"mod_{index:03d}.py").write_text("value = 1\n" * 20)
+    grep_tool = registry.materialize(["grep"], tmp_path)["grep"]
+
+    started = time.monotonic()
+    result = await grep_tool({"pattern": r"value = 1", "max_results": 5})
+    elapsed = time.monotonic() - started
+
+    assert result.is_error is False
+    assert len(result.content.splitlines()) == 5
+    # max_results stops the walk early — it must not traverse all 1000 files first.
+    assert elapsed < limits.GREP_TIMEOUT_S, (
+        f"wide-tree walk took {elapsed:.2f}s against a {limits.GREP_TIMEOUT_S}s budget"
+    )

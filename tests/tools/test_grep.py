@@ -36,7 +36,10 @@ async def test_matches_pattern_across_files(tree: Path, grep: ToolExecutor) -> N
     result = await grep({"pattern": "needle"})
 
     assert result.is_error is False
-    assert _lines(result.content) == [
+    # Sorted for comparison, not asserted as the tool's output order: traversal is lazy
+    # (so the whole-walk deadline applies during the walk), which leaves ordering up to
+    # the filesystem's rglob.
+    assert sorted(_lines(result.content)) == [
         "a.py:2:needle here",
         "b.txt:2:needle also here",
         "sub/c.py:1:needle nested",
