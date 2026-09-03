@@ -62,6 +62,16 @@ findings:
     category: process
     summary: "Review performed without executing the requested `git diff`"
     location: "unverified"
+  - id: F011
+    severity: concern
+    category: error-handling
+    summary: "list_files materializes and sorts the entire recursive walk with no budget"
+    location: "src/squadron/tools/builtin.py#_list_files_factory"
+  - id: F012
+    severity: concern
+    category: project-conventions
+    summary: "builtin.py is now ~2x the project's ~300-line file-size convention"
+    location: "src/squadron/tools/builtin.py"
 ---
 
 # Review: code — slice 265
@@ -110,3 +120,17 @@ Both actions call `resolve_allowed_tools`, pass the result into the provider dis
 ### [NOTE] Review performed without executing the requested `git diff`
 
 The environment did not provide a shell execution tool, so the exact changed-file set could not be produced by `git diff`. The files reviewed were inferred from the branch reflog and commit messages, and the assessment is based on the current contents of those files in the branch.
+
+### [CONCERN] list_files materializes and sorts the entire recursive walk with no budget
+
+`lines = sorted(_format_entry(entry, cwd) for entry in matches)` walks, materializes, and sorts the full tree before `_truncate` is applied. This is the pattern the grep code's own comment rejects — "a sorted list would walk and materialize the entire tree before the caller's first deadline check" — yet `list_files` has no deadline at all. A model passing `recursive=True` against a tree containing `node_modules` or a build directory produces an unbounded walk and an in-memory list of every entry; output truncation caps bytes *returned*, not work *performed*. It runs in a worker thread so the event loop is safe, but the "what if the tree is huge" question deserves an explicit answer: stream + cap entry count (like `grep`'s `max_results`), or document why the asymmetry with `grep` is intentional.
+
+### [CONCERN] builtin.py is now ~2x the project's ~300-line file-size convention
+
+The file grows from ~348 to ~614 lines with five tool implementations plus shared helpers. CLAUDE.md's "keep source files to ~300 lines where practical" was already marginally exceeded; this slice doubles it. The new tools are self-contained, so a split is cheap — e.g. `builtin/file_tools.py` (`read_file`, `write_file`, `list_files`) and `builtin/search_tools.py` (`grep`) re-registered from `builtin/__init__.py`. The registry pattern makes this a pure move with no behavior change; doing it now is cheaper than after the next tool lands.
+
+---
+
+## Provenance
+
+F001–F010 are from the `moonshotai/kimi-k2.7-code` run against `eb0fc75` (tool-enabled, 2026-09-03). F011–F012 are carried forward from an earlier `moonshotai/kimi-k3` run against the same SHA, whose artifact this one replaced; both findings remain unaddressed and are tracked in slice 266's scope. The k3 run's three other findings are not carried forward: its telemetry-duplication, unused-`cast`, and line-length findings were addressed in `eb0fc75`. The prior artifact is retained under `archive/`.
