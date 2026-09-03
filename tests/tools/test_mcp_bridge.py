@@ -14,11 +14,22 @@ from pathlib import Path
 
 import pytest
 from mcp import ClientSession, StdioServerParameters
-from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult, ErrorData
 
-from squadron.tools.mcp_bridge import call_mcp_tool
+from squadron.tools.mcp_bridge import MCPProtocolError, call_mcp_tool
 from tests.tools.conftest import fake_server_params
+
+
+def _protocol_error(code: int, message: str) -> MCPProtocolError:
+    """Build a protocol error across both mcp major versions.
+
+    mcp 1.x takes an ``ErrorData``; 2.x renamed the class and takes ``(code, message, data)``.
+    """
+    try:
+        return MCPProtocolError(ErrorData(code=code, message=message))  # type: ignore[arg-type,call-arg]
+    except TypeError:
+        return MCPProtocolError(code, message)  # type: ignore[arg-type,call-arg]
+
 
 # Generous enough that a cold interpreter start never trips it, short enough to keep the
 # suite quick.
@@ -151,7 +162,7 @@ async def test_protocol_error_maps_to_error_result(
     """
 
     async def raise_mcp_error(self: ClientSession, *args: object, **kwargs: object) -> CallToolResult:
-        raise McpError(ErrorData(code=-32601, message="method not found"))
+        raise _protocol_error(-32601, "method not found")
 
     monkeypatch.setattr(ClientSession, "call_tool", raise_mcp_error)
 

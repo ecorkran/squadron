@@ -18,8 +18,12 @@ from typing import cast
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult, TextContent
+
+try:  # mcp < 2.0
+    from mcp.shared.exceptions import McpError as MCPProtocolError
+except ImportError:  # mcp >= 2.0 renamed the class
+    from mcp.shared.exceptions import MCPError as MCPProtocolError
 
 from squadron.tools.models import ToolResult
 
@@ -111,7 +115,7 @@ def _classify_failure(server: StdioServerParameters, tool: str, exc: BaseExcepti
             is_error=True,
         )
 
-    protocol_errors = [leaf for leaf in leaves if isinstance(leaf, McpError)]
+    protocol_errors = [leaf for leaf in leaves if isinstance(leaf, MCPProtocolError)]
     if protocol_errors:
         cause = protocol_errors[0]
         _logger.warning("mcp_bridge: protocol error calling tool '%s': %s", tool, cause)
@@ -159,7 +163,7 @@ async def call_mcp_tool(
     except Exception as exc:  # noqa: BLE001
         # Single classifying handler at the process boundary for the model loop. It is one
         # `except` rather than a chain because the SDK's internal anyio task groups re-raise
-        # in-band failures wrapped in a BaseExceptionGroup: a bare `except McpError` never
+        # in-band failures wrapped in a BaseExceptionGroup: a bare `except MCPProtocolError` never
         # matches a real protocol error, and the group's own message ("unhandled errors in a
         # TaskGroup") names nothing the model or an operator could act on. Classification
         # therefore runs over the flattened leaves.
