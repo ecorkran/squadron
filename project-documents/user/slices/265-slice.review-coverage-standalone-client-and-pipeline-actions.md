@@ -439,10 +439,10 @@ tool with an unbounded hang on model-supplied input.
 
 ## Verification Walkthrough
 
-Recorded at Phase 6 completion. Every command below was run from the repository root on the
-implementation branch; the stated output is what it actually produced. Steps 1-5 and 8-9 are
-automated and reproducible by any agent (human or AI); steps 6-7 require a plain terminal and
-a live model, and are marked accordingly.
+Every command below was run from the repository root; the stated output is what it actually
+produced. Steps 1-5 and 8-9 are automated and reproducible by any agent (human or AI) and were
+recorded at Phase 6 completion. Steps 6-7 require a plain terminal and a live model, so they
+were run after implementation and their observed output recorded then.
 
 ### 1. Search tools honor the jail
 
@@ -532,27 +532,41 @@ Claude vocabulary against a non-SDK provider still injects exactly as before.
 
 **Run from a plain terminal, not inside Claude Code.** `sq run` refuses to execute in a Claude
 Code session (unconditional `CLAUDECODE` guard,
-[run.py:148](src/squadron/cli/commands/run.py#L148)). This step was **not** executed during
-Phase 6 implementation for that reason; its automated equivalent is step 8 below.
+[run.py:148](src/squadron/cli/commands/run.py#L148)). Executed post-implementation from a plain
+terminal; its automated equivalent is step 8 below.
 
 ```bash
 cd /Users/manta/source/repos/manta/squadron
-sq run <pipeline> <slice> -v
+uv run sq run cf-tools-demo 265 -v
 ```
 
-Expect on the step result lines: a dispatch/review/summary step given tools prints
-`tools=N/M calls`; a step given tools that called none prints `tools=N/0 calls`; a step given
-no tools prints neither segment. Construct the zero case deliberately if no natural step
-produces it.
+Observed on the step result line:
+
+```
+    -> ok (model=moonshotai/kimi-k2.7-code, tools=2/2 calls)
+```
+
+`cf-tools-demo` is a single dispatch step whose prompt forces `cf_workflow_status` and
+`cf_build_context`, so a non-zero count is guaranteed. The model returned real CF data
+(299/299 tasks, 5 of 6 slices), which is what distinguishes tools actually executing from a
+model narrating that it called them.
 
 Then confirm persistence:
 
 ```bash
 python -c "import json,sys; d=json.load(open(sys.argv[1])); [print(s['step_name'], [a.get('metadata') for a in s['action_results']]) for s in d['completed_steps']]" \
-  ~/.config/squadron/runs/<run>.json
+  "$(ls -t ~/.config/squadron/runs/*.json | head -1)"
 ```
 
-Expect `tools_given` and `tool_calls_made` in the metadata of tool-bearing steps.
+Observed: the dispatch step's metadata carried
+`tools_given: ['cf_workflow_status', 'cf_build_context']` and `tool_calls_made: 2`.
+
+The `tools=N/0` case (offered, never used) has no natural producer among the shipped
+pipelines; it is covered automatically by step 8, which asserts that rendering directly.
+
+**Prefix `uv run`.** A bare `sq` may resolve to a stale uv tool install — during this slice one
+predating the agentic loop entirely, which produced apparent telemetry failures that were not
+defects in this work.
 
 **Correction from the draft:** the draft's one-liner read `d['action_results']` at the top
 level. `RunState` has no such key — action results live per step under
@@ -561,13 +575,20 @@ level. `RunState` has no such key — action results live per step under
 ### 7. Live review calls a tool — issue #68 (manual, live model)
 
 ```bash
-sq review code --slice <n> --model kimi27 -v
+uv run sq review code 265 --model kimi27 -v
 ```
 
-Expect a non-zero tool-call count in the `-v` output and `tools_given` / `tool_calls_made` in
-the persisted review JSON. Not executed during Phase 6 implementation — it requires a live
-non-SDK model. Its automated equivalent is step 9 below, which drives the same code path end
-to end against a mocked endpoint and asserts the tool actually ran.
+Observed: a substantive 10-finding review, demonstrably built from reading the codebase rather
+than from the diff alone — the closing evidence for issue #68, since a non-SDK model that could
+not call a tool could not have produced findings anchored in unchanged files. Executed
+post-implementation against a live non-SDK model (`kimi27` resolved to
+`moonshotai/kimi-k2.7-code`). Its automated equivalent is step 9 below, which drives the same
+code path end to end against a mocked endpoint and asserts the tool actually ran.
+
+**Caveat on repeat runs.** A review whose model fails to obtain the diff is still persisted as
+a valid verdict and overwrites the existing review of the same SHA, and the archive is
+single-slot — so a second bad run destroys the good copy (issue #73). Commit a review worth
+keeping before re-running this step.
 
 ### 8. Telemetry observability and persistence — automated (SC8, SC9)
 
