@@ -121,6 +121,9 @@ class ReviewResult:
             "provenance": self.provenance,
             "tools_given": self.tools_given,
             "tool_calls_made": self.tool_calls_made,
+            # A degraded parse must be visible to JSON consumers too, or an
+            # empty findings list reads as "the model found nothing" (issue #72).
+            "fallback_used": self.fallback_used,
         }
 
     @property

@@ -588,3 +588,77 @@ class TestArchiveOnOverwrite:
             save_review_result(_make_result(), "code", _make_slice_info())
 
         assert path.read_text() == edited
+
+
+class TestDegradedParseIsVisible:
+    """A degraded parse must never render as a clean review (issue #72)."""
+
+    @staticmethod
+    def _degraded(verdict: Verdict = Verdict.CONCERNS) -> ReviewResult:
+        """A verdict that parsed while every finding failed to."""
+        return ReviewResult(
+            verdict=verdict,
+            findings=[],
+            raw_output="1. The retry loop never terminates.\n2. The jail check is bypassable.",
+            template_name="code",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 4, 1, 12, 0, 0),
+            model="claude-sonnet-5",
+            fallback_used=True,
+        )
+
+    def test_degraded_review_does_not_claim_no_findings(self) -> None:
+        md = format_review_markdown(self._degraded(), "code", _make_slice_info())
+        assert "No specific findings." not in md
+        assert "degraded" in md.lower()
+
+    def test_degraded_review_points_at_the_raw_response(self) -> None:
+        md = format_review_markdown(self._degraded(), "code", _make_slice_info())
+        assert "Raw Response" in md
+
+    def test_genuinely_clean_review_is_unchanged(self) -> None:
+        """A real no-findings review must not be mislabeled as degraded."""
+        clean = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="Looks good.",
+            template_name="code",
+            input_files={"input": "file.md"},
+            timestamp=datetime(2026, 4, 1, 12, 0, 0),
+            model="claude-sonnet-5",
+            fallback_used=False,
+        )
+        md = format_review_markdown(clean, "code", _make_slice_info())
+        assert "No specific findings." in md
+        assert "degraded" not in md.lower()
+
+    def test_json_output_carries_the_degraded_flag(self) -> None:
+        assert self._degraded().to_dict()["fallback_used"] is True
+
+    def test_json_output_of_clean_review_is_not_degraded(self) -> None:
+        assert _make_result().to_dict()["fallback_used"] is False
+
+
+class TestArchiveIsNonDestructive:
+    """A run of bad reviews must not walk a good one out of existence (#73)."""
+
+    def test_second_overwrite_preserves_the_first_archived_copy(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        path = save_review_result(_make_result(), "code", _make_slice_info())
+        good = path.read_text() + "\n## the good review\n"
+        path.write_text(good)
+
+        # First overwrite: the good copy lands in the stable archive slot.
+        save_review_result(_make_result(verdict=Verdict.PASS), "code", _make_slice_info())
+        archived = path.parent / "archive" / path.name
+        assert "the good review" in archived.read_text()
+
+        # Second overwrite: the stable slot is reused, but the good copy must
+        # survive under a timestamped generation rather than being destroyed.
+        save_review_result(_make_result(verdict=Verdict.FAIL), "code", _make_slice_info())
+
+        generations = list((path.parent / "archive").glob(f"{path.stem}.*{path.suffix}"))
+        surviving = [p for p in generations if "the good review" in p.read_text()]
+        assert surviving, "the good review was destroyed by a second overwrite"

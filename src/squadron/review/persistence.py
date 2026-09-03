@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
@@ -251,6 +252,26 @@ def format_review_markdown(
             if finding.file_ref:
                 lines.append(f"\n-> {finding.file_ref}")
             lines.append("")
+    elif result.fallback_used:
+        # A degraded parse must never render as a clean review. The findings
+        # exist in the model's output; squadron could not parse them into the
+        # required '### [SEVERITY] Title' form, and saying "No specific
+        # findings." here asserts the opposite of what happened (issue #72).
+        lines.append("## Findings Not Parsed")
+        lines.append("")
+        lines.append(
+            f"**This review is degraded.** A verdict of {resolved_verdict} was parsed, "
+            "but no findings could be extracted from the model's response — most often "
+            "because it did not follow the required `### [SEVERITY] Title` format. "
+            "Findings are left empty rather than fabricated from unstructured text."
+        )
+        lines.append("")
+        lines.append(
+            "**The model's actual findings are not lost:** read the `### Raw Response` "
+            "section below (present when the review ran at `-vv` or higher). Do not read "
+            "this review as clean."
+        )
+        lines.append("")
     else:
         lines.append("No specific findings.")
         lines.append("")
@@ -305,6 +326,17 @@ def archive_existing_review(path: Path) -> bool:
     try:
         original = path.read_bytes()
         archived.parent.mkdir(parents=True, exist_ok=True)
+        # The stable slot holds the most recent prior copy. It is also
+        # single-slot: before overwriting it, its current occupant is moved
+        # aside under a timestamped name, so a run of bad reviews cannot
+        # walk a good review out of existence one overwrite at a time
+        # (issue #73). Retention is unbounded by design — these are small
+        # text files and losing one is the failure being prevented.
+        if archived.exists():
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+            generation = archived.with_name(f"{archived.stem}.{stamp}{archived.suffix}")
+            if not generation.exists():
+                generation.write_bytes(archived.read_bytes())
         archived.write_bytes(original)
         read_back = archived.read_bytes()
     except OSError:
