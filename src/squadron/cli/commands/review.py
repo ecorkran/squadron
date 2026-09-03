@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 
 import typer
@@ -221,14 +222,43 @@ def _exit_on(verdict: Verdict, saved: bool) -> None:
         raise typer.Exit(code=1)
 
 
+# Loggers whose records answer "what did the reviewing agent actually do": each tool call
+# with its arguments and a result preview, and the agentic loop's guard warnings.
+_AGENT_LOG_NAMES = ("squadron.providers", "squadron.tools", "squadron.review")
+
+
+def _configure_agent_logging(verbosity: int) -> None:
+    """Route agent/tool logs to stderr at -v (INFO) and -vv (DEBUG).
+
+    Mirrors ``sq run``'s verbosity wiring. At the default verbosity nothing is attached,
+    so a plain review's output is unchanged. Without this, the per-tool-call DEBUG records
+    the agentic loop already emits are unreachable from the review CLI.
+    """
+    if verbosity <= 0:
+        return
+    level = logging.DEBUG if verbosity >= 2 else logging.INFO
+    for name in _AGENT_LOG_NAMES:
+        agent_logger = logging.getLogger(name)
+        agent_logger.setLevel(level)
+        if not agent_logger.handlers:
+            handler = logging.StreamHandler(sys.stderr)
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            agent_logger.addHandler(handler)
+
+
 def _resolve_verbosity(verbose: int) -> int:
-    """Resolve verbosity: CLI flag overrides config default."""
+    """Resolve verbosity: CLI flag overrides config default.
+
+    Also attaches agent/tool log handlers for the resolved level — every review subcommand
+    routes through here, so the wiring cannot drift between them.
+    """
     if verbose > 0:
-        return verbose
-    config_val = get_config("verbosity")
-    if isinstance(config_val, int):
-        return config_val
-    return 0
+        resolved = verbose
+    else:
+        config_val = get_config("verbosity")
+        resolved = config_val if isinstance(config_val, int) else 0
+    _configure_agent_logging(resolved)
+    return resolved
 
 
 def _aggregate_verdicts(results: list[object]) -> Verdict:

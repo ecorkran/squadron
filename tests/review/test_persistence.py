@@ -262,6 +262,35 @@ class TestFormatReviewMarkdownRevisionNumber:
         assert data["revision_number"] == 2
 
 
+class TestFormatReviewMarkdownToolTelemetry:
+    """Slice 265: tool use must be visible in the artifact people actually read."""
+
+    def test_tool_bearing_review_emits_telemetry(self) -> None:
+        result = _make_result()
+        result.tools_given = ["read_file", "grep"]
+        result.tool_calls_made = 4
+        md = format_review_markdown(result, "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["toolsGiven"] == ["read_file", "grep"]
+        assert data["toolCallsMade"] == 4
+
+    def test_offered_but_unused_is_distinct_from_never_offered(self) -> None:
+        """tool_calls_made: 0 with a populated list is a real state, not an absent one."""
+        result = _make_result()
+        result.tools_given = ["read_file"]
+        result.tool_calls_made = 0
+        md = format_review_markdown(result, "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+        assert data["toolsGiven"] == ["read_file"]
+        assert data["toolCallsMade"] == 0
+
+    def test_tool_less_review_omits_the_keys_entirely(self) -> None:
+        result = _make_result()
+        md = format_review_markdown(result, "code", _make_slice_info())
+        assert re.search(r"^toolsGiven:", md, re.MULTILINE) is None
+        assert re.search(r"^toolCallsMade:", md, re.MULTILINE) is None
+
+
 class TestFormatReviewMarkdownScore:
     """Numeric scoring foundation (slice 300): frontmatter score/criteria."""
 

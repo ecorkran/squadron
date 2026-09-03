@@ -205,6 +205,14 @@ def format_review_markdown(
     # Numeric scoring foundation (slice 300): emit score/criteria as top-level
     # frontmatter only when present. A score-less result is byte-for-byte
     # unchanged. provenance is never emitted here (reserved — slice 301).
+    # Tool-use telemetry (slice 265): emitted only when the run was offered tools, so an
+    # absent key means "never offered" while `tool_calls_made: 0` means "offered, used
+    # none" (design D5). Without this the markdown artifact — the copy people actually
+    # read — carries no evidence of tool use at all, only the JSON form does.
+    if result.tools_given is not None:
+        lines.append(f"toolsGiven: [{', '.join(result.tools_given)}]")
+        lines.append(f"toolCallsMade: {result.tool_calls_made or 0}")
+
     if result.score is not None:
         lines.append(f"score: {result.score}")
     if result.criteria is not None:
