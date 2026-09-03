@@ -11,6 +11,7 @@ import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.providers.base import ProviderCapabilities
+from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import ReviewResult
 from squadron.review.review_client import _write_prompt_log, run_review_with_profile
 from squadron.review.templates import ReviewTemplate
@@ -684,3 +685,71 @@ class TestReviewResultToolTelemetry:
 
         assert result.tools_given is None
         assert result.tool_calls_made is None
+
+
+class TestEmptyDiffRefusesToRun:
+    """A diff-based review with no changed files must not reach the model (#73)."""
+
+    @staticmethod
+    def _profile() -> object:
+        from squadron.providers.profiles import ProviderProfile
+
+        return ProviderProfile(name="openai", provider="openai", api_key_env="OPENAI_API_KEY")
+
+    @pytest.mark.asyncio
+    async def test_empty_diff_raises_before_the_model_is_called(self) -> None:
+        mock_provider = _make_mock_provider()
+
+        with (
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+            patch(f"{_P}._run_git_diff_filenames", return_value=set()),
+            pytest.raises(EmptyDiffError, match="nothing to review"),
+        ):
+            await run_review_with_profile(
+                _make_template(),
+                {"diff": "abc123...HEAD"},
+                profile="openai",
+            )
+
+        # The point of failing early: no agent was ever constructed, so no
+        # non-review can reach persistence and overwrite a real one.
+        mock_provider.create_agent.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_non_empty_diff_still_runs(self) -> None:
+        mock_provider = _make_mock_provider()
+
+        with (
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+            patch(f"{_P}._run_git_diff_filenames", return_value={"src/foo.py"}),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"diff": "abc123...HEAD", "input": "file.md"},
+                profile="openai",
+            )
+
+        assert isinstance(result, ReviewResult)
+        mock_provider.create_agent.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_template_without_a_diff_input_is_unaffected(self) -> None:
+        """Non-code templates resolve no diff and must not be gated on one."""
+        mock_provider = _make_mock_provider()
+
+        with (
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"input": "file.md"},
+                profile="openai",
+            )
+
+        assert isinstance(result, ReviewResult)

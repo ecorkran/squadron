@@ -47,6 +47,19 @@ class DiffRangeUnresolvedError(Exception):
     """
 
 
+class EmptyDiffError(Exception):
+    """Raised when a diff-based review resolves to no changed files.
+
+    The range resolved fine — it simply contains nothing. Running the review
+    anyway produces a review *about the missing diff* (every finding tagged
+    ``category: tooling``, locations ``unverified``) which is then persisted
+    as a genuine verdict and overwrites the existing review of the same SHA.
+    Because the archive is single-slot, a second such run destroys the
+    surviving copy permanently — so this refuses before the model is called
+    (issue #73).
+    """
+
+
 def _find_slice_branch(slice_number: int, cwd: str) -> str | None:
     """Find a local branch matching '{slice_number}-slice.*'.
 

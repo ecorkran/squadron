@@ -20,6 +20,7 @@ from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageT
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
 from squadron.providers.registry import get_provider
+from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import ReviewResult
 from squadron.review.parsers import parse_review_output
 from squadron.review.template_inputs import FILE_INPUT_KEYS
@@ -80,6 +81,24 @@ async def run_review_with_profile(
     provider_profile = get_profile(profile)
     ensure_provider_loaded(provider_profile.provider)
     provider = get_provider(provider_profile.provider)
+
+    # A diff-based review with no changed files has nothing to review. Calling the
+    # model anyway yields a review *about the missing diff* that is nonetheless
+    # persisted as a real verdict and overwrites the existing review of the same
+    # SHA (issue #73) — so this fails before the model is reached rather than
+    # letting a non-review reach persistence.
+    # Kept for the parser's diff-membership location check (slice 904) further down.
+    diff_files: set[str] | None = None
+    diff_ref = inputs.get("diff")
+    if diff_ref is not None:
+        diff_files = _run_git_diff_filenames(
+            diff_ref, inputs.get("cwd", "."), template.diff_exclude_patterns
+        )
+        if not diff_files:
+            raise EmptyDiffError(
+                f"{template.name} review resolved diff '{diff_ref}' to no changed files; "
+                "refusing to run a review with nothing to review"
+            )
 
     # Build prompts
     prompt = template.build_prompt(inputs)
@@ -180,12 +199,6 @@ async def run_review_with_profile(
     # Resolve diff-file set (code-template path-membership check, slice 904)
     # and cwd (path-existence check, all template types).
     cwd_for_checks = Path(inputs.get("cwd", "."))
-    diff_files: set[str] | None = None
-    diff_ref = inputs.get("diff")
-    if diff_ref is not None:
-        diff_files = _run_git_diff_filenames(
-            diff_ref, str(cwd_for_checks), template.diff_exclude_patterns
-        )
 
     result = parse_review_output(
         raw_output=raw_output,

@@ -124,7 +124,19 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
     console.print(Panel(header, expand=False))
 
     if not result.findings:
-        console.print("  No specific findings.", style="dim")
+        if result.fallback_used:
+            # Same defect as the rendered artifact: a degraded parse must not
+            # be reported as a clean review (issue #72).
+            console.print(
+                "  Review degraded: verdict parsed, findings did not.",
+                style="bold yellow",
+            )
+            console.print(
+                "  The model's findings are in its raw response; re-run with -vv to capture it.",
+                style="dim",
+            )
+        else:
+            console.print("  No specific findings.", style="dim")
         return
 
     for finding in result.findings:
