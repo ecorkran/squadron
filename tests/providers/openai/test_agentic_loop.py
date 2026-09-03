@@ -177,6 +177,40 @@ class TestExecuteToolCall:
         assert "read_file" in warnings[0].getMessage()
 
     @pytest.mark.asyncio
+    async def test_oversized_malformed_args_are_truncated_in_the_log(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A degenerate model can emit a huge argument string; the log must not carry it whole.
+
+        Observed in practice: a repetition loop produced a ~400KB argument that was logged
+        verbatim, flooding the terminal and the log file.
+        """
+        caplog.set_level(logging.WARNING)
+        agent = _make_agent()
+        oversized = '{"pattern": "' + ("x" * 400_000)
+        tc = _tool_call("c1", "grep", oversized)
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert "not valid JSON" in content
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert "grep" in message
+        assert len(message) < 1000, f"log message not truncated: {len(message)} chars"
+
+    @pytest.mark.asyncio
+    async def test_non_object_args_are_truncated_in_the_log(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        caplog.set_level(logging.WARNING)
+        agent = _make_agent()
+        tc = _tool_call("c1", "grep", '"' + ("y" * 400_000) + '"')
+        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        assert "must be a JSON object" in content
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert len(warnings[0].getMessage()) < 1000
+
+    @pytest.mark.asyncio
     async def test_unknown_tool_name_returns_error_and_logs_warning(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:

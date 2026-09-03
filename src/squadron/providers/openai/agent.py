@@ -258,8 +258,11 @@ class OpenAICompatibleAgent:
         try:
             parsed: object = json.loads(raw_arguments) if raw_arguments else {}
         except json.JSONDecodeError as exc:
+            # Truncated: a model can emit an arbitrarily large argument string (a
+            # degenerate repetition loop produced ~400KB in practice), and logging it
+            # whole floods the operator's terminal and the log file.
             _log.warning(
-                "Tool call %r has malformed JSON arguments (%s): %r",
+                "Tool call %r has malformed JSON arguments (%s): %.200r",
                 tool_name,
                 exc,
                 raw_arguments,
@@ -270,7 +273,7 @@ class OpenAICompatibleAgent:
         # a bare scalar) is still an unusable argument set.
         if not isinstance(parsed, dict):
             _log.warning(
-                "Tool call %r arguments are %s, not a JSON object: %r",
+                "Tool call %r arguments are %s, not a JSON object: %.200r",
                 tool_name,
                 type(parsed).__name__,
                 raw_arguments,
