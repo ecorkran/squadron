@@ -32,6 +32,7 @@ from squadron.pipeline.classification import (
 )
 from squadron.pipeline.loader import PipelineInfo
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.state import CheckpointState, RunState
 
 runner = CliRunner()
@@ -869,6 +870,90 @@ class TestPromptOnly:
         assert result.exit_code == 0
         parsed = _extract_json(result.output)
         assert parsed["status"] == "completed"
+
+    @patch("squadron.cli.commands.run.ModelResolver")
+    @patch("squadron.cli.commands.run.validate_pipeline", return_value=[])
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_init_unresolvable_model_exits_cleanly(
+        self,
+        mock_cls: MagicMock,
+        mock_load: MagicMock,
+        mock_validate: MagicMock,
+        mock_resolver_cls: MagicMock,
+    ) -> None:
+        """A misconfigured model/pool reference in a prompt-only step must
+        surface as ``Error: ...`` + exit 1, not a traceback.
+
+        Regression guard for the CLI boundary around render_step_instructions:
+        the renderer deliberately propagates resolver failures (see
+        test_render_dispatch_unresolvable_pool_propagates), so the prompt-only
+        entry points must catch them the way dispatch_run/spawn/summary_run do.
+        """
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="dispatch",
+                    name="dispatch-0",
+                    config={"model": "pool:review", "prompt": "x"},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.init_run.return_value = "run-test-123"
+        mock_cls.return_value = mock_mgr
+        mock_resolver_cls.return_value.resolve.side_effect = ModelPoolNotImplemented("pool:review")
+
+        result = runner.invoke(app, ["run", "slice", "152", "--prompt-only"])
+
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "model resolution failed" in result.output
+        assert "Traceback" not in result.output
+
+    @patch("squadron.cli.commands.run.ModelResolver")
+    @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_next_unresolvable_model_exits_cleanly(
+        self, mock_cls: MagicMock, mock_load: MagicMock, mock_resolver_cls: MagicMock
+    ) -> None:
+        """Same boundary guard for the ``--next --resume`` entry point."""
+        defn = PipelineDefinition(
+            name="slice",
+            description="Test",
+            params={"slice": "required"},
+            steps=[
+                StepConfig(
+                    step_type="dispatch",
+                    name="dispatch-0",
+                    config={"model": "pool:review", "prompt": "x"},
+                ),
+            ],
+        )
+        mock_load.return_value = defn
+        mock_mgr = MagicMock()
+        mock_mgr.first_unfinished_step.return_value = "dispatch-0"
+        mock_mgr.load.return_value = RunState(
+            run_id="run-123",
+            pipeline="slice",
+            params={"slice": "152"},
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            status="running",
+        )
+        mock_cls.return_value = mock_mgr
+        mock_resolver_cls.return_value.resolve.side_effect = ModelResolutionError("no model")
+
+        result = runner.invoke(app, ["run", "--prompt-only", "--next", "--resume", "run-123"])
+
+        assert result.exit_code == 1
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        assert "model resolution failed" in result.output
+        assert "Traceback" not in result.output
 
     @patch("squadron.cli.commands.run._run_post_action_bindings_for_step_done")
     @patch("squadron.cli.commands.run.load_pipeline")
