@@ -128,12 +128,14 @@ class MetrologyStore:
         """Write *data* to *path* atomically via a sibling ``.tmp`` file.
 
         On failure no partial record is left at the final path — the write
-        lands on the ``.tmp`` sibling and only an atomic rename publishes it.
+        lands on the ``.tmp`` sibling and only an atomic replace publishes it.
+        ``Path.replace`` overwrites on every platform; ``Path.rename`` raises
+        ``FileExistsError`` on Windows when the target already exists.
         """
         tmp = path.with_suffix(".tmp")
         try:
             tmp.write_text(data, encoding="utf-8")
-            tmp.rename(path)
+            tmp.replace(path)
         except OSError as exc:
             raise MetrologyStoreError(f"Failed to write metrology record {path}: {exc}") from exc
 
