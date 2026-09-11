@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from squadron.core.models import AgentConfig
+from squadron.providers.errors import ProviderError
 from squadron.providers.sdk.provider import ClaudeSDKProvider
 from squadron.review.templates import get_template, load_all_templates
 
@@ -33,8 +34,8 @@ _UNCHANGED_TEMPLATES = [
 _EXPECTED_CLAUDE_NAMES = ["Read", "Glob", "Grep"]
 
 
-async def _built_allowed_tools(template_name: str) -> list[str]:
-    """Load a shipped template and return the allowed_tools on its built SDK options."""
+async def _built_options(template_name: str):
+    """Load a shipped template and return the ClaudeAgentOptions built from it."""
     load_all_templates()
     template = get_template(template_name)
     assert template is not None, f"shipped template {template_name!r} not found"
@@ -50,8 +51,12 @@ async def _built_allowed_tools(template_name: str) -> list[str]:
     with patch(_AGENT_PATCH, create=True) as mock_cls:
         mock_cls.return_value = MagicMock()
         await ClaudeSDKProvider().create_agent(config)
-        options = mock_cls.call_args.kwargs["options"]
-    return list(options.allowed_tools)
+        return mock_cls.call_args.kwargs["options"]
+
+
+async def _built_allowed_tools(template_name: str) -> list[str]:
+    """Load a shipped template and return the allowed_tools on its built SDK options."""
+    return list((await _built_options(template_name)).allowed_tools)
 
 
 @pytest.mark.asyncio
@@ -82,3 +87,50 @@ async def test_every_shipped_template_uses_canonical_names_only() -> None:
         template = get_template(name)
         assert template is not None
         assert template.allowed_tools == ["read_file", "list_files", "grep"], name
+
+
+class TestDeclaredToolsAreTheWholeToolSet:
+    """``tools`` is set from the declared list, not only ``allowed_tools`` (issue #69).
+
+    Setting only ``allowed_tools`` left the CLI's full default tool set reachable,
+    so a review declaring three read-only tools could still run ``Bash``. The two
+    fields answer different questions — what exists, and what is pre-approved — so
+    both are set, from the same declared list.
+    """
+
+    @pytest.mark.asyncio
+    async def test_tools_equals_translated_declared_list(self) -> None:
+        options = await _built_options("code")
+        assert list(options.tools) == _EXPECTED_CLAUDE_NAMES
+
+    @pytest.mark.asyncio
+    async def test_bash_is_not_available_to_a_read_only_review(self) -> None:
+        """The actual exposure #69 reported: a declared-read-only review reaching Bash."""
+        options = await _built_options("code")
+        assert "Bash" not in list(options.tools)
+
+    @pytest.mark.asyncio
+    async def test_allowed_tools_is_still_set(self) -> None:
+        """Both, deliberately — this is not a replacement for allowed_tools."""
+        options = await _built_options("code")
+        assert list(options.allowed_tools) == _EXPECTED_CLAUDE_NAMES
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("template_name", _UNCHANGED_TEMPLATES)
+    async def test_every_shipped_template_constrains_tools(self, template_name: str) -> None:
+        options = await _built_options(template_name)
+        assert list(options.tools) == _EXPECTED_CLAUDE_NAMES
+
+    @pytest.mark.asyncio
+    async def test_unmapped_tool_name_raises_rather_than_widening(self) -> None:
+        """A template typo must fail loudly, never silently fall back to the defaults."""
+        config = AgentConfig(
+            name="review-typo",
+            agent_type="sdk",
+            provider="sdk",
+            allowed_tools=["read_file", "no_such_tool"],
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            with pytest.raises(ProviderError):
+                await ClaudeSDKProvider().create_agent(config)
