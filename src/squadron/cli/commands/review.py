@@ -235,6 +235,23 @@ def _resolve_cwd(cwd: str | None) -> str:
     return "."
 
 
+def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[str, Path | None]:
+    """Resolve the reviewing agent's working directory and its rules directory.
+
+    The agent's ``cwd`` is its tool jail root, so a config ``cwd`` pointing at a
+    subdirectory of the repo makes every repo-relative path in a prompt
+    unreadable. Anchoring at the git root keeps those paths openable while the
+    prompt's own inputs stay relative to the repo. Falls back to the resolved
+    cwd when there is no git work tree (issue #86).
+
+    Rules live in the repo root (``.claude/rules/``), so they resolve from the
+    same root rather than from the configured subdirectory.
+    """
+    resolved_cwd = _resolve_cwd(cwd)
+    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+    return review_cwd, resolve_rules_dir(review_cwd, None, rules_dir_flag)
+
+
 def _save_and_report(
     result: ReviewResult,
     review_type: str,
@@ -594,12 +611,11 @@ def review_slice(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    resolved_cwd = _resolve_cwd(cwd)
-    resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
+    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "against": against,
-        "cwd": resolved_cwd,
+        "cwd": review_cwd,
     }
     result = _run_review_command(
         "slice",
@@ -652,11 +668,10 @@ def review_arch(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    resolved_cwd = _resolve_cwd(cwd)
-    resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
+    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
-        "cwd": resolved_cwd,
+        "cwd": review_cwd,
     }
     result = _run_review_command(
         "arch",
@@ -753,8 +768,7 @@ def review_tasks(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    resolved_cwd = _resolve_cwd(cwd)
-    resolved_rules_dir = resolve_rules_dir(resolved_cwd, None, rules_dir_flag)
+    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
     saved = True
@@ -767,7 +781,7 @@ def review_tasks(
         inputs = {
             "input": task_path,
             "against": against,
-            "cwd": resolved_cwd,
+            "cwd": review_cwd,
         }
         result = _run_review_command(
             "tasks",
@@ -868,10 +882,7 @@ def review_code(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    resolved_cwd = _resolve_cwd(cwd)
-    # Code review runs git commands — use the git root so diff and rules work
-    # correctly even when config cwd points to a subdirectory.
-    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+    review_cwd, code_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
 
     rules_content: str | None = None
     resolved_rules_dir: Path | None = None
@@ -885,9 +896,8 @@ def review_code(
                 rules_path = config_rules
         manual_content = _resolve_rules_content(rules_path)
 
-        # Resolve rules dir and changed-file paths for language auto-detection.
-        # Rules live in the repo root (.claude/rules/), not the config cwd.
-        resolved_rules_dir = resolve_rules_dir(review_cwd, None, rules_dir_flag)
+        # Changed-file paths drive language auto-detection for the rules load.
+        resolved_rules_dir = code_rules_dir
         file_paths: list[str] = []
         if resolved_rules_dir is not None:
             file_paths = extract_diff_paths(diff, review_cwd, exclude_patterns) if diff else []
@@ -1029,10 +1039,7 @@ def review_resolve(
     and UNKNOWN both exit 1 — an answer that could not be reached is not a pass.
     """
     verbosity = _resolve_verbosity(verbose)
-    resolved_cwd = _resolve_cwd(cwd)
-    # The resolve path runs git commands — use the git root so the diff resolves
-    # even when the config cwd points at a subdirectory (mirrors review code).
-    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+    review_cwd, _ = _resolve_review_cwd(cwd, None)
 
     model_id, resolved_profile = _resolve_judge_model(model, profile)
 
