@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/916-slice.review-scope-correctness.m
 parent: project-documents/user/slices/900-slices.maintenance-and-refactoring.md
 dependencies: []
 interfaces: [917]
-status: not_started
+status: complete
 dateCreated: 20260911
 dateUpdated: 20260911
 ---
@@ -340,9 +340,9 @@ part boundary.
 
 ### Task B.1 — Implement `assert_reviewable_scope` in `git_utils`
 
-- [ ] Add `assert_reviewable_scope(diff, cwd, exclude_patterns)` to
+- [x] Add `assert_reviewable_scope(diff, cwd, exclude_patterns)` to
       `src/squadron/review/git_utils.py`.
-- [ ] It computes the **unfiltered** and **filtered** path lists itself. Do not
+- [x] It computes the **unfiltered** and **filtered** path lists itself. Do not
       hang it off either existing `extract_diff_paths` call site
       ([review.py:893](src/squadron/cli/commands/review.py#L893),
       [actions/review.py:195](src/squadron/pipeline/actions/review.py#L195)) —
@@ -350,95 +350,95 @@ part boundary.
       detection, discarding `file_paths` afterward. A guard hung off them would
       silently not run whenever no rules directory resolves (design B1, from slice
       review F001).
-- [ ] Raise a typed error carrying **which of B.2's two cases occurred** plus the
+- [x] Raise a typed error carrying **which of B.2's two cases occurred** plus the
       matched exclusion patterns and the excluded file count, as structured fields.
-- [ ] Log at WARNING or above before raising, at both call sites. A typed exception
+- [x] Log at WARNING or above before raising, at both call sites. A typed exception
       raised pre-flight surfaces at WARNING+ only if each entry point's handler
       happens to log it — B is the part that exists to convert a silent PASS into a
       loud failure, so the log level cannot be left to the handler.
-- [ ] Leave the existing rules-loading calls untouched — they do a different job.
-- [ ] Effort: 3
+- [x] Leave the existing rules-loading calls untouched — they do a different job.
+- [x] Effort: 3
 
 ### Task B.2 — Distinguish the two empty cases
 
-- [ ] **All excluded**: the range resolved and had changed files, but every one
+- [x] **All excluded**: the range resolved and had changed files, but every one
       matched an exclusion pattern. The error carries the matched patterns and the
       excluded count. The operator likely wants the review omitted, or a different
       range.
-- [ ] **No changed files at all**: the range itself is the problem — wrong base,
+- [x] **No changed files at all**: the range itself is the problem — wrong base,
       already-merged branch, or typo.
-- [ ] Both exit non-zero; both must be distinguishable **by structured field**, not
+- [x] Both exit non-zero; both must be distinguishable **by structured field**, not
       by message text. Conflating them is how
       [#71](https://github.com/ecorkran/squadron/issues/71) stayed unexplained.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task B.3 — Call the guard from both entry points, unconditionally
 
-- [ ] Call `assert_reviewable_scope` in `review_code` before any provider work and
+- [x] Call `assert_reviewable_scope` in `review_code` before any provider work and
       **outside** any `if rules_dir is not None:` guard.
-- [ ] Call it identically in the pipeline review action
+- [x] Call it identically in the pipeline review action
       ([actions/review.py](src/squadron/pipeline/actions/review.py)) — `sq run` is
       the path that clears review gates, and is the harm B exists to fix.
-- [ ] Both call sites refuse to persist and exit non-zero. No artifact is written;
+- [x] Both call sites refuse to persist and exit non-zero. No artifact is written;
       no `Verdict` member is added.
-- [ ] Pre-flight placement means no model call is spent to be told what git already
+- [x] Pre-flight placement means no model call is spent to be told what git already
       knew.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task B.4 — Test: empty scope, both cases, both entry points, rules-absent
 
-- [ ] In `tests/review/test_git_utils.py`, unit-test `assert_reviewable_scope`
+- [x] In `tests/review/test_git_utils.py`, unit-test `assert_reviewable_scope`
       across: all-excluded, no-changes-at-all, and the healthy pass-through case.
-- [ ] CLI test: an all-excluded range exits non-zero and writes **no** artifact
+- [x] CLI test: an all-excluded range exits non-zero and writes **no** artifact
       (assert the reviews directory is unchanged).
-- [ ] CLI test: a no-changed-files range exits non-zero with a **different**
+- [x] CLI test: a no-changed-files range exits non-zero with a **different**
       structured case than all-excluded.
-- [ ] Pipeline test: both cases hold identically via the review action, not only
+- [x] Pipeline test: both cases hold identically via the review action, not only
       via the CLI (design criterion 6).
-- [ ] Assert a WARNING-or-above log record is emitted for **both** cases at **both**
+- [x] Assert a WARNING-or-above log record is emitted for **both** cases at **both**
       entry points. Exit code and structured field alone do not satisfy the standing
       Failure-Mode Enumeration constraint.
-- [ ] **Rules-absent test**: with `resolve_rules_dir` returning `None`, the
+- [x] **Rules-absent test**: with `resolve_rules_dir` returning `None`, the
       empty-scope refusal must still fire. This is the exact regression the
       original B1 would have shipped — it is the most important test in this part.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task B.5 — Verify the pipeline escape hatch (no code change)
 
-- [ ] Confirm that omitting a phase's `review:` key suppresses both the review and
+- [x] Confirm that omitting a phase's `review:` key suppresses both the review and
       its checkpoint — [phase.py:76](src/squadron/pipeline/steps/phase.py#L76)
       (`if review is not None`) and [:163](src/squadron/pipeline/steps/phase.py#L163).
-- [ ] Verify with `uv run sq run <pipeline> <slice> --dry-run` on a phase with no
+- [x] Verify with `uv run sq run <pipeline> <slice> --dry-run` on a phase with no
       `review:` key: neither a review action nor a checkpoint appears.
-- [ ] **No pipeline-surface work is required by this part.** This task exists so
+- [x] **No pipeline-surface work is required by this part.** This task exists so
       implementation does not go looking for a feature that does not need building.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task B.6 — Pre-landing behavior-change check
 
-- [ ] Per the design's Risk Assessment: B turns a passing outcome into a failing
+- [x] Per the design's Risk Assessment: B turns a passing outcome into a failing
       one. Before landing, check whether any repo's active pipeline has a
       docs-shaped phase carrying a `review:` key.
-- [ ] Where found, remove the `review:` key per B3 rather than weakening the guard.
-- [ ] If a case is found that cannot be resolved by removing the key, stop and
+- [x] Where found, remove the `review:` key per B3 rather than weakening the guard.
+- [x] If a case is found that cannot be resolved by removing the key, stop and
       raise it with the Project Manager.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task B.7 — Verify and commit Part B
 
-- [ ] Run `uv run pytest tests/review tests/cli tests/pipeline -q`. All green.
-- [ ] Run `uv run ruff format` then `uv run ruff check`.
-- [ ] Manual walkthrough on a branch whose only changes are markdown:
+- [x] Run `uv run pytest tests/review tests/cli tests/pipeline -q`. All green.
+- [x] Run `uv run ruff format` then `uv run ruff check`.
+- [x] Manual walkthrough on a branch whose only changes are markdown:
       ```bash
       uv run sq review code --diff origin/main -v; echo "exit=$?"
       git status --short project-documents/user/reviews/
       ```
       Expect non-zero, a message naming the `*.md` exclusion, and no new file.
-- [ ] Re-run with `--rules-dir` pointing somewhere with no rules, so
+- [x] Re-run with `--rules-dir` pointing somewhere with no rules, so
       `resolve_rules_dir` returns `None`. The refusal must still fire.
-- [ ] Run the same range through the pipeline; it must fail identically, not pass.
-- [ ] Commit: `fix(review): refuse to persist a review with empty scope`
-- [ ] Effort: 1
+- [x] Run the same range through the pipeline; it must fail identically, not pass.
+- [x] Commit: `fix(review): refuse to persist a review with empty scope`
+- [x] Effort: 1
 
 ### Task B.8 — #71 follow-up (not a deliverable)
 
@@ -455,70 +455,70 @@ part boundary.
 
 ### Task E.1 — Scope check on `allowed_tools` producers
 
-- [ ] Before implementing, enumerate every producer of `AgentConfig.allowed_tools`
+- [x] Before implementing, enumerate every producer of `AgentConfig.allowed_tools`
       in the codebase — it feeds non-review dispatch too (design E5).
-- [ ] For each producer, determine whether it relied on receiving the CLI's
+- [x] For each producer, determine whether it relied on receiving the CLI's
       **default** tool set while declaring a narrower `allowed_tools` list.
-- [ ] If no non-review producer depends on the current behavior, proceed with E.2
+- [x] If no non-review producer depends on the current behavior, proceed with E.2
       at the provider edge.
-- [ ] If one does, narrow the change to the review client's config construction
+- [x] If one does, narrow the change to the review client's config construction
       instead of the provider edge, and record which producer forced the narrowing.
-- [ ] This task gates E.2. Do not implement before it resolves.
-- [ ] Effort: 2
+- [x] This task gates E.2. Do not implement before it resolves.
+- [x] Effort: 2
 
 ### Task E.2 — Set `tools` from the declared list
 
-- [ ] In the SDK provider kwargs build
+- [x] In the SDK provider kwargs build
       ([provider.py:64-66](src/squadron/providers/sdk/provider.py#L64-L66)), set
       `tools` alongside the existing `allowed_tools` translation, from the same
       declared list:
       ```python
       kwargs["tools"] = translate_tool_names(config.allowed_tools)
       ```
-- [ ] Both `tools` and `allowed_tools` are set deliberately (design E2) — they
+- [x] Both `tools` and `allowed_tools` are set deliberately (design E2) — they
       answer different questions (what exists vs. what is pre-approved).
-- [ ] Do **not** use `disallowed_tools`. A denylist must be re-audited each time
+- [x] Do **not** use `disallowed_tools`. A denylist must be re-audited each time
       the CLI's default tool set grows; an allowlist cannot drift that way
       (design E1).
-- [ ] `translate_tool_names` ([tool_names.py:26](src/squadron/providers/sdk/tool_names.py#L26))
+- [x] `translate_tool_names` ([tool_names.py:26](src/squadron/providers/sdk/tool_names.py#L26))
       already raises `ProviderError` on unmapped names — a template typo fails
       loudly rather than silently widening the set. Do not add a fallback.
-- [ ] Leave `permission_mode: bypassPermissions` in the four templates unchanged
+- [x] Leave `permission_mode: bypassPermissions` in the four templates unchanged
       (design E3): a review is unattended and a prompt would hang it; the tool set
       was the actual exposure. **Re-examine only if a future template declares a
       mutating tool.**
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.3 — Test: emitted SDK kwargs
 
-- [ ] In `tests/review/test_template_sdk_regression.py` or
+- [x] In `tests/review/test_template_sdk_regression.py` or
       `tests/test_providers.py`, assert the constructed `ClaudeAgentOptions`
       carries `tools` equal to the translated declared list.
-- [ ] Assert `Bash` is **not** present for a review config declaring
+- [x] Assert `Bash` is **not** present for a review config declaring
       `[read_file, list_files, grep]`.
-- [ ] Assert `allowed_tools` is still set (E2 — both, deliberately).
-- [ ] Assert an unmapped tool name in a config raises `ProviderError`.
-- [ ] Effort: 2
+- [x] Assert `allowed_tools` is still set (E2 — both, deliberately).
+- [x] Assert an unmapped tool name in a config raises `ProviderError`.
+- [x] Effort: 2
 
 ### Task E.4 — Live SDK review verification
 
-- [ ] A kwargs assertion is necessary but **not sufficient** (design E4). Run a live
+- [x] A kwargs assertion is necessary but **not sufficient** (design E4). Run a live
       SDK-profile code review at `-vv`.
-- [ ] From the per-tool-call DEBUG records, confirm only `read_file`, `list_files`,
+- [x] From the per-tool-call DEBUG records, confirm only `read_file`, `list_files`,
       and `grep` are used.
-- [ ] Confirm the review is still **usable** — a reviewer restricted to three tools
+- [x] Confirm the review is still **usable** — a reviewer restricted to three tools
       must still produce a review with grounded findings, not a degraded artifact.
-- [ ] Confirm `--tools` reaches the CLI as declared.
-- [ ] If the review is materially degraded, stop and raise it with the Project
+- [x] Confirm `--tools` reaches the CLI as declared.
+- [x] If the review is materially degraded, stop and raise it with the Project
       Manager rather than widening the tool set unilaterally.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.5 — Verify and commit Part E
 
-- [ ] Run `uv run pytest -q`. Full suite green.
-- [ ] Run `uv run ruff format` then `uv run ruff check`.
-- [ ] Commit: `fix(providers): restrict SDK review agents to declared tools`
-- [ ] Effort: 1
+- [x] Run `uv run pytest -q`. Full suite green.
+- [x] Run `uv run ruff format` then `uv run ruff check`.
+- [x] Commit: `fix(providers): restrict SDK review agents to declared tools`
+- [x] Effort: 1
 
 ---
 

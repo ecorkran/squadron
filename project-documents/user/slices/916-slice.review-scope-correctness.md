@@ -7,7 +7,7 @@ dependencies: []
 interfaces: [917]
 dateCreated: 20260910
 dateUpdated: 20260911
-status: not_started
+status: complete
 ---
 
 # Slice Design: Review Scope Correctness — Diff Resolution, Empty-Scope Verdicts, and Tool Jail Roots
@@ -285,6 +285,11 @@ git diff --name-only origin/main...HEAD
 
 The two file lists must agree. On a real PR, both must agree with `gh pr view <n> --json files --jq '.files[].path'`.
 
+**Verified on implementation** with a constructed probe repo (a branch behind a base that moved
+on): the old bare-ref form reported `app.py` *and* `other.py` — the latter a change only the
+base had — while the fix reports `['app.py']`, matching `git diff --name-only main...HEAD`
+exactly. `gh` is not required; the git form is the authoritative oracle.
+
 **B — empty scope.** On a branch whose only changes are markdown:
 
 ```bash
@@ -292,6 +297,11 @@ uv run sq review code --diff origin/main -v; echo "exit=$?"
 ```
 
 Expect non-zero, a message naming the `*.md` exclusion, and **no new file** under `project-documents/user/reviews/`. Confirm with `git status --short project-documents/user/reviews/`.
+
+**Verified on implementation** against a markdown-only branch: CLI exits 1, CLI with
+`resolve_rules_dir` returning None exits 1, and the pipeline action returns `success=False` —
+all three with a WARNING naming the `*.md` exclusion and the excluded count, no model call, and
+no artifact written.
 
 Then the same range through the pipeline, which is the path that trips gates (B1) — this must fail identically, not pass:
 
@@ -324,6 +334,17 @@ uv run sq review code --diff main --files "src/**/*.py"          # README:292
 
 Repeat the bare form for `sq review slice`/`arch`/`tasks`. Then confirm `--no-save` exits 0 with **no** warning, and that a save which genuinely fails (point the reviews directory at a read-only path) exits 1.
 
+**Caveat discovered on implementation:** the not-persistable warning must go to **stderr**, not
+stdout. `COMMANDS.md:96` documents `sq review code --diff main --output json > review.json`, and
+a warning on stdout corrupts that JSON. The `--output json` check above is only meaningful if it
+parses *stdout alone* — piping through `jq` does test this; asserting on combined output does
+not.
+
+**Verified on implementation:** not-persistable exits 0 with a stderr warning and no artifact,
+`--no-save` exits 0 silently, and a save raising `OSError` exits 1 — each across all four
+subcommands. All ten documented invocations continue to work, so **no documentation changes were
+needed**, which is what C3's reversal was for.
+
 **D — jail root.** With `cwd = "./project-documents/user"` in `~/.config/squadron/config.toml`:
 
 ```bash
@@ -332,9 +353,72 @@ uv run sq review slice 267 -v --model kimi3
 
 Expect no `read_file: file not found` lines with a doubled `project-documents/user/project-documents/user/` prefix — the exact symptom in #86.
 
-**E — tool availability.** Run an SDK-profile code review at `-vv` and confirm from the per-tool-call DEBUG records that only `read_file`/`list_files`/`grep` are used, and that the review is still usable. Then confirm `--tools` reaches the CLI as declared.
+**Verified on implementation** without spending a model call, by resolving the pair directly:
 
-**#71 follow-up (not a deliverable).** After B, re-run #71's reproduction script in the reporting repo and close or re-file per B4.
+```bash
+uv run python -c "
+from unittest.mock import patch
+from squadron.cli.commands.review import _resolve_review_cwd
+with patch('squadron.cli.commands.review.get_config',
+           side_effect=lambda k, cwd='.': './project-documents/user' if k == 'cwd' else None):
+    print(_resolve_review_cwd(None, None))
+"
+```
+
+Observed: the repository root and `<root>/.claude/rules` — so no repo-relative path in the
+prompt can produce the doubled prefix.
+
+**E — tool availability.** Run an SDK-profile code review at `-vv` and confirm the review is
+still usable. **Correction (implementation):** the per-tool-call DEBUG records this step asks
+for are *not obtainable on the SDK path*. That logging exists only on the OpenAI agentic-loop
+path (`providers/openai/agent.py`); the SDK delegates tool execution to the Claude Code CLI,
+which does not report individual calls back through squadron's loggers. This is a pre-existing
+observability gap, not one Part E introduced. Verify the restriction at the options boundary
+the SDK actually enforces instead:
+
+```bash
+uv run python -c "
+import asyncio
+from unittest.mock import MagicMock, patch
+from squadron.core.models import AgentConfig
+from squadron.providers.sdk.provider import ClaudeSDKProvider
+from squadron.review.templates import get_template, load_all_templates
+load_all_templates(); t = get_template('code')
+cfg = AgentConfig(name='review-code', agent_type='sdk', provider='sdk',
+                  allowed_tools=t.allowed_tools, permission_mode=t.permission_mode,
+                  setting_sources=t.setting_sources)
+with patch('squadron.providers.sdk.agent.ClaudeSDKAgent', create=True) as m:
+    m.return_value = MagicMock()
+    asyncio.run(ClaudeSDKProvider().create_agent(cfg))
+    o = m.call_args.kwargs['options']
+print(list(o.tools), list(o.allowed_tools), o.permission_mode)
+"
+```
+
+Observed: `['Read', 'Glob', 'Grep'] ['Read', 'Glob', 'Grep'] bypassPermissions` — `Bash` absent,
+`allowed_tools` still set (both, per E2), permission mode unchanged (E3).
+
+For the usability half, a live run is required. **Caveat:** `sq review` cannot launch the SDK
+provider from inside a Claude Code session; prefix with `env -u CLAUDECODE
+-u CLAUDE_CODE_ENTRYPOINT`, and pass `--model` explicitly, since the `sdk` profile's configured
+default may not be a Claude model:
+
+```bash
+env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT \
+  uv run sq review code --diff main --profile sdk --model sonnet -vv --no-save
+```
+
+Observed on implementation: exit 0, verdict CONCERNS, grounded file-level findings — a
+three-tool reviewer is **not** degraded. This run also surfaced four real defects in the slice's
+own work (see DEVLOG 20260911), all fixed before landing.
+
+**#71 follow-up (not a deliverable).** **Result: #71 stays open.** Ran the issue's own
+diagnostic against the reporting repo. Resolution is correct — `resolve_slice_diff_range(267)`
+returns `bd0b169^1..bd0b169^2`, the same range the reporter got a real review from — and
+**candidate 3 (all-excluded scope) is ruled out**: 45 files survive the code template's
+`diff_exclude_patterns`, so the scope was never empty and Part B's guard does not fire on it.
+Part B's message therefore does not explain #71; the cause lies elsewhere. Re-file with this
+evidence rather than closing.
 
 ## Risk Assessment
 

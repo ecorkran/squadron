@@ -14,6 +14,78 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260911
 
+### Slice 916 implementation (Phase 6)
+
+Implemented all five parts of `916-slice.review-scope-correctness` on branch
+`916-slice.review-scope-correctness`, sequenced **D → A → C → B → E** as designed. Each part
+committed at its own boundary and left the CLI working.
+
+**D (#86)** — `_resolve_review_cwd` now resolves the reviewing agent's cwd (its tool jail root)
+at the git root for all five subcommands. `slice`/`arch`/`tasks` previously used the raw
+configured cwd, so a `cwd` pointing at a subdirectory made every repo-relative path in the
+prompt unopenable. `find_git_root` now appears exactly twice in the module: the import and the
+helper.
+
+**A (#89)** — `normalize_diff_spec` rewrites a bare `--diff main` to `main...HEAD`; explicit
+`a..b` / `a...b` pass through. Three-dot is tested before two-dot, since every three-dot spec
+contains a two-dot substring. Unresolvable bare refs exit non-zero before any model call, with
+`NotAGitRepositoryError` and `RefNotFoundError` distinguishable by type. `run_git` gained a
+bounded timeout that logs at WARNING, hardening all its callers.
+
+**C (#70)** — `SaveOutcome` replaces the `saved = True` optimism that reported success for a
+write never attempted. A not-persistable review warns (naming the remedy) and exits on verdict;
+only an attempted-and-failed write exits 1. All ten documented `--diff` invocations still work,
+which is what C3's reversal was for. **Found a real bug doing this**: the warning first printed
+to stdout, corrupting `--output json` — `COMMANDS.md:96` redirects stdout to a file. It now goes
+to stderr, and the json test asserts on `result.stdout` rather than combined output.
+
+**B (#62)** — `assert_reviewable_scope` refuses an empty filtered scope pre-flight at both the
+CLI and the pipeline, distinguishing all-excluded from no-changes by structured field and
+logging at WARNING before raising. It computes its own path lists rather than hanging off
+either `extract_diff_paths` call site: both are nested under a rules-directory check, so a guard
+hung there would silently not run for the review most in need of it. The rules-absent test is
+the one that pins this, and it fails if the guard is moved inside that branch.
+
+**E (#69)** — the SDK provider now sets `tools` alongside `allowed_tools` from the same
+translated declared list, so a review declaring three read-only tools can no longer reach
+`Bash`. E.1's producer survey resolved in favor of the provider edge: the only non-review
+producer declaring a broad list (the metrology audit) uses Claude-vocabulary names that
+`translate_tool_names` already raises on today, so nothing depends on the old behavior here.
+
+**The live E.4 review earned its keep.** Run against this slice's own diff on a real Claude
+model, it returned a grounded CONCERNS verdict — confirming a three-tool reviewer is not
+degraded — and found four genuine defects in the work above, all since fixed:
+
+1. `--diff` was normalized only via an `elif`, so `sq review code 118 --diff main` (slice number
+   *and* explicit ref) kept the exact two-dot bug #89 fixed everywhere else.
+2. The pipeline never normalized `--diff` at all — an interface-parity gap on the less-watched
+   entry point.
+3. `extract_diff_paths` called `subprocess.run` directly, bypassing `run_git` and its new
+   timeout, so the hang A.1 set out to remove stayed reachable through the one path that always
+   runs.
+4. A rejected exclusion pathspec reused `EmptyScopeCase.ALL_EXCLUDED`, defeating the enum's
+   stated purpose; it now has its own `INVALID_EXCLUDE_PATTERN`.
+
+**B.8 / #71 — stays open, with new evidence.** Ran the issue's own diagnostic against the
+reporting repo. Resolution is correct (`bd0b169^1..bd0b169^2`, the same range the reporter got a
+real review from), and **candidate 3 is ruled out**: 45 files survive the code template's
+exclusion patterns, so the scope was never empty and B's guard does not fire. Part B's message
+does not explain #71; the cause lies elsewhere.
+
+**Verification note.** The per-tool-call DEBUG records E.4 asks for are not obtainable on the
+SDK path — that logging lives only on the OpenAI agentic-loop path, and the SDK delegates tool
+execution to the Claude Code CLI, which does not report individual calls back through squadron's
+loggers. A pre-existing observability gap, not one Part E introduced. Tool restriction was
+verified instead at the options boundary the SDK enforces.
+
+**Carried forward.** `git_utils.py` grew from 320 to ~570 lines and `review.py` sits at ~1200
+(already 1058 before this slice) — both past the ~300 guideline. Splitting either would touch
+every part landed here, so it is left for a follow-up rather than absorbed into this slice.
+
+---
+
+## 20260911
+
 ### Slice 916 task breakdown (Phase 5)
 
 Converted the 916 design into `916-tasks.review-scope-correctness.md` — 545 lines, 31 tasks
