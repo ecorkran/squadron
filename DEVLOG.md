@@ -2,13 +2,51 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260910
+dateUpdated: 20260911
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260911
+
+### Slice 916 task breakdown (Phase 5)
+
+Converted the 916 design into `916-tasks.review-scope-correctness.md` — 545 lines, 31 tasks
+across the five parts plus a completion sweep, sequenced **D → A → C → B → E** per the design's
+load-bearing order. Each part ends in its own verify-and-commit task, since the design requires
+each to be independently committable and leave the CLI working.
+
+Re-traced every code anchor against `08df0c5` before writing rather than trusting the design's
+line numbers: the four `saved = True` initializers, the three subcommands missing `find_git_root`,
+both `extract_diff_paths` call sites under their `if rules_dir is not None:` guards, and
+`run_git`'s absent timeout all confirm as described. The anchor table at the top of the task file
+records the traced sha so implementation can tell a stale reference from a moved one.
+
+Three places where the breakdown adds constraints the design implied but did not state:
+
+- **A.3** pins the check order in `normalize_diff_spec` — `...` must be tested before `..`, since
+  a three-dot spec contains a two-dot substring and testing `..` first misclassifies every
+  explicit merge-base range the design means to pass through untouched.
+- **A.1** makes the `run_git` timeout log at WARNING. The design added the timeout for the
+  hang case (F002); returning `None` silently on timeout would have swapped one silent failure
+  for another, against the Failure-Mode Enumeration rule the slice's own Technical criteria cite.
+- **E.1** is written as a gate on E.2 rather than a note: the `allowed_tools` producer survey
+  decides whether E lands at the provider edge or narrows to the review client, so implementing
+  first and surveying after would mean choosing the blast radius by accident.
+
+**B.4's rules-absent test is flagged as the most important test in the slice.** It is the exact
+regression the pre-review B1 would have shipped — a scope guard that silently does not run
+whenever no rules directory resolves.
+
+Left deliberately out of the tasks: any artifact naming scheme for slice-less reviews (#90), any
+documentation rewrite (the C3 reversal is what removes that work — C.6 verifies the ten
+documented examples still hold rather than editing them), and any code written *for* #71, which
+stays a post-B verification step.
 
 ---
 
