@@ -130,30 +130,30 @@ part boundary.
 
 ### Task A.1 — Add a bounded timeout to `run_git`
 
-- [ ] `run_git` ([git_utils.py:21](src/squadron/review/git_utils.py#L21)) passes no
+- [x] `run_git` ([git_utils.py:21](src/squadron/review/git_utils.py#L21)) passes no
       `timeout`, so `subprocess.run` blocks indefinitely against an unreachable
       remote-tracking ref.
-- [ ] Add a module-level timeout constant and pass it to `subprocess.run`. Define
+- [x] Add a module-level timeout constant and pass it to `subprocess.run`. Define
       the value once; do not inline a literal at the call site.
-- [ ] Catch `subprocess.TimeoutExpired` alongside the existing `OSError` and
+- [x] Catch `subprocess.TimeoutExpired` alongside the existing `OSError` and
       return `None` — every caller already treats `None` as "git could not be
       invoked", so no call-site changes are needed.
-- [ ] Log at WARNING on timeout, naming the git args. A timeout that returns
+- [x] Log at WARNING on timeout, naming the git args. A timeout that returns
       `None` silently is the failure mode this task exists to remove.
-- [ ] This hardens all seven existing `run_git` callers, not only Part A's new one.
-- [ ] Effort: 2
+- [x] This hardens all seven existing `run_git` callers, not only Part A's new one.
+- [x] Effort: 2
 
 ### Task A.2 — Test: `run_git` timeout path
 
-- [ ] In `tests/review/test_git_utils.py`, assert that a `subprocess.TimeoutExpired`
+- [x] In `tests/review/test_git_utils.py`, assert that a `subprocess.TimeoutExpired`
       raised by the underlying call yields `None` and emits a WARNING-level record.
-- [ ] Assert the existing `OSError` path is unchanged.
-- [ ] Effort: 1
+- [x] Assert the existing `OSError` path is unchanged.
+- [x] Effort: 1
 
 ### Task A.3 — Implement `normalize_diff_spec`
 
-- [ ] Add `normalize_diff_spec(spec, cwd)` to `src/squadron/review/git_utils.py`.
-- [ ] Shape table — this is the whole rule, and only the third row changes behavior:
+- [x] Add `normalize_diff_spec(spec, cwd)` to `src/squadron/review/git_utils.py`.
+- [x] Shape table — this is the whole rule, and only the third row changes behavior:
 
   | Input shape | Treatment |
   |---|---|
@@ -161,60 +161,60 @@ part boundary.
   | contains `..` | pass through unchanged |
   | bare ref (no range operator) | rewrite to `<ref>...HEAD` |
 
-- [ ] Check for `...` **before** `..` — a three-dot spec contains a two-dot
+- [x] Check for `...` **before** `..` — a three-dot spec contains a two-dot
       substring, so testing `..` first misclassifies every three-dot range.
-- [ ] Hand the three-dot string to git; do **not** pre-resolve the merge-base
+- [x] Hand the three-dot string to git; do **not** pre-resolve the merge-base
       ourselves (design A3). The string stays legible in the prompt and in
       `reviewedSha` provenance.
-- [ ] Do not call `resolve_slice_diff_range` — it is slice-number-shaped. A needs
+- [x] Do not call `resolve_slice_diff_range` — it is slice-number-shaped. A needs
       the same semantics applied to a user-supplied ref.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.4 — Guard the bare-ref case with a resolution check
 
-- [ ] Before rewriting a bare ref, resolve it via the existing `_resolve_rev`-style
+- [x] Before rewriting a bare ref, resolve it via the existing `_resolve_rev`-style
       helper in `git_utils` (through `run_git`).
-- [ ] Unresolvable bare ref → raise a typed error carrying the offending ref value.
-- [ ] The error must distinguish **"not a git repository"** from **"ref not
+- [x] Unresolvable bare ref → raise a typed error carrying the offending ref value.
+- [x] The error must distinguish **"not a git repository"** from **"ref not
       found"** — different operator errors with different fixes. `run_git`
       returning `None` is the former; a non-zero `returncode` is the latter.
-- [ ] Explicit `a..b` / `a...b` endpoints are deliberately **not** validated
+- [x] Explicit `a..b` / `a...b` endpoints are deliberately **not** validated
       (design A5). Do not add endpoint validation; B2's guard catches the outcome.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.5 — Wire normalization in at the CLI edge
 
-- [ ] In `review_code`, call `normalize_diff_spec` immediately after the `--diff`
+- [x] In `review_code`, call `normalize_diff_spec` immediately after the `--diff`
       value is read, **before** either consumer sees it — the normalized string is
       what flows onward (design A1).
-- [ ] Confirm both consumers receive the same normalized string: `extract_diff_paths`
+- [x] Confirm both consumers receive the same normalized string: `extract_diff_paths`
       ([review.py:893](src/squadron/cli/commands/review.py#L893)) and the prompt
       builder input `inputs["diff"]`.
-- [ ] The slice-number path ([:850-852](src/squadron/cli/commands/review.py#L850-L852))
+- [x] The slice-number path ([:850-852](src/squadron/cli/commands/review.py#L850-L852))
       already produces merge-base semantics via `resolve_slice_diff_range` — leave
       it alone; do not double-normalize.
-- [ ] A typed error from A.4 exits non-zero **before any model call**, logging at
+- [x] A typed error from A.4 exits non-zero **before any model call**, logging at
       ERROR with the offending ref.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.6 — Test: normalization shape table and failure paths
 
-- [ ] In `tests/review/test_git_utils.py`, table-test `normalize_diff_spec` across
+- [x] In `tests/review/test_git_utils.py`, table-test `normalize_diff_spec` across
       all three shapes, **including both pass-through cases** — the pass-throughs
       are what protect `--diff a..b` from A.3's rewrite rule.
-- [ ] Cover a three-dot spec explicitly, to pin the check-order requirement in A.3.
-- [ ] Assert an unresolvable bare ref raises, and that not-a-git-repo and
+- [x] Cover a three-dot spec explicitly, to pin the check-order requirement in A.3.
+- [x] Assert an unresolvable bare ref raises, and that not-a-git-repo and
       ref-not-found are distinguishable **by error type or a structured field**,
       not by message text.
-- [ ] Add a CLI-level test asserting `--diff <nonexistent>` exits non-zero with no
+- [x] Add a CLI-level test asserting `--diff <nonexistent>` exits non-zero with no
       provider invocation (assert the review client was never called).
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task A.7 — Verify and commit Part A
 
-- [ ] Run `uv run pytest tests/review tests/cli -q`. All green.
-- [ ] Run `uv run ruff format` then `uv run ruff check`.
-- [ ] Manual walkthrough, in any repo with a branch behind its base:
+- [x] Run `uv run pytest tests/review tests/cli -q`. All green.
+- [x] Run `uv run ruff format` then `uv run ruff check`.
+- [x] Manual walkthrough, in any repo with a branch behind its base:
       ```bash
       git checkout -b probe origin/main~3
       echo x >> README.md && git commit -am "probe change"
@@ -222,12 +222,12 @@ part boundary.
       git diff --name-only origin/main...HEAD
       ```
       The two file lists must agree — only the branch's own changes.
-- [ ] Success criterion 1 also names `gh pr view --json files` as an oracle. `git
+- [x] Success criterion 1 also names `gh pr view --json files` as an oracle. `git
       diff --name-only <base>...HEAD` is the authoritative merge-base computation
       and `gh` is not always available, so the git form is the required check and
       the `gh` cross-check is optional — run it when reviewing a real PR.
-- [ ] Commit: `fix(review): normalize bare --diff refs to merge-base range`
-- [ ] Effort: 1
+- [x] Commit: `fix(review): normalize bare --diff refs to merge-base range`
+- [x] Effort: 1
 
 ---
 

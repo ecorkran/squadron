@@ -6,6 +6,8 @@ import asyncio
 import json
 import logging
 import sys
+from collections.abc import Callable
+from enum import StrEnum
 from pathlib import Path
 
 import typer
@@ -254,6 +256,81 @@ def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[st
     return review_cwd, resolve_rules_dir(review_cwd, None, rules_dir_flag)
 
 
+class SaveOutcome(StrEnum):
+    """What actually happened to the review artifact.
+
+    The prior model was a bare ``saved`` boolean initialized to ``True``,
+    which reported success for a write that was never attempted (issue #70).
+    These four members are the whole space, and every branch that decides exit
+    behavior reads this enum rather than reconstructing intent from flags.
+    """
+
+    #: Written to disk.
+    SAVED = "saved"
+    #: ``--no-save``: the operator asked for no artifact. Not a problem.
+    SUPPRESSED = "suppressed"
+    #: No slice identifier, so there is no name to save under. The review is
+    #: real and displayed, but nothing downstream can see it.
+    NOT_PERSISTABLE = "not_persistable"
+    #: A write was attempted and failed. The only outcome that is an error.
+    UNSAVED = "unsaved"
+
+
+#: Precedence for combining per-part outcomes in a multi-part tasks review:
+#: the worst outcome across parts is the one the run earned. Higher wins.
+_OUTCOME_SEVERITY: dict[SaveOutcome, int] = {
+    SaveOutcome.SUPPRESSED: 0,
+    SaveOutcome.SAVED: 1,
+    SaveOutcome.NOT_PERSISTABLE: 2,
+    SaveOutcome.UNSAVED: 3,
+}
+
+
+def _worst_outcome(left: SaveOutcome, right: SaveOutcome) -> SaveOutcome:
+    """Combine two save outcomes, keeping the more serious one."""
+    return left if _OUTCOME_SEVERITY[left] >= _OUTCOME_SEVERITY[right] else right
+
+
+def _warn_not_persistable(review_type: str) -> None:
+    """Report that no artifact was written, and how to get one.
+
+    A warning that only reports absence leaves the operator where they
+    started, so this names the remedy alongside the fact.
+    """
+    _logger.warning(
+        "%s review was not saved: no slice identifier, so there is no artifact "
+        "name to write under. Supply a slice number, or use --output file with "
+        "--output-path to choose a destination.",
+        review_type,
+    )
+    # stderr, not stdout: --output json must stay machine-parseable, and this
+    # warning is operator-facing rather than part of the review payload.
+    Console(stderr=True).print(
+        "[yellow]Review not saved: no slice identifier to name an artifact.[/yellow]\n"
+        "[yellow]Supply a slice number, or use --output file with --output-path.[/yellow]"
+    )
+
+
+def _resolve_save_outcome(
+    *,
+    no_save: bool,
+    persistable: bool,
+    save: Callable[[], bool],
+    review_type: str,
+) -> SaveOutcome:
+    """Decide and perform the save, returning what actually happened.
+
+    Centralizing this keeps the four subcommands from each re-deriving the
+    outcome from their own flag combination (design C5, interface parity).
+    """
+    if no_save:
+        return SaveOutcome.SUPPRESSED
+    if not persistable:
+        _warn_not_persistable(review_type)
+        return SaveOutcome.NOT_PERSISTABLE
+    return SaveOutcome.SAVED if save() else SaveOutcome.UNSAVED
+
+
 def _save_and_report(
     result: ReviewResult,
     review_type: str,
@@ -289,16 +366,22 @@ def _save_and_report(
     return True
 
 
-def _exit_on(verdict: Verdict, saved: bool) -> None:
-    """Exit with the code the run earned: 2 for a FAIL verdict, 1 for an unsaved review.
+def _exit_on(verdict: Verdict, outcome: SaveOutcome) -> None:
+    """Exit with the code the run earned: 2 for a FAIL verdict, 1 for a failed save.
 
     A FAIL verdict keeps precedence — it is the more specific signal, and both
-    codes are non-zero — but a review that could not be written must never exit
-    0. Downstream readers gate on the file, not on the terminal output.
+    codes are non-zero — but a review whose write was attempted and failed must
+    never exit 0. Downstream readers gate on the file, not on the terminal
+    output.
+
+    A review that was never persistable exits on its verdict: the review itself
+    is sound and was displayed, and the operator was warned. Failing the command
+    would break every documented ``--diff``-only invocation for a condition the
+    operator may have chosen (issue #70, revised).
     """
     if verdict == Verdict.FAIL:
         raise typer.Exit(code=2)
-    if not saved:
+    if outcome == SaveOutcome.UNSAVED:
         raise typer.Exit(code=1)
 
 
@@ -631,11 +714,16 @@ def review_slice(
         rules_dir=resolved_rules_dir,
     )
 
-    saved = True
-    if slice_info and not no_save:
-        saved = _save_and_report(result, "slice", slice_info, as_json=use_json, input_file=input_file)
+    outcome = _resolve_save_outcome(
+        no_save=no_save,
+        persistable=slice_info is not None,
+        save=lambda: _save_and_report(
+            result, "slice", slice_info, as_json=use_json, input_file=input_file
+        ),
+        review_type="slice",
+    )
 
-    _exit_on(result.verdict, saved)
+    _exit_on(result.verdict, outcome)
 
 
 @review_app.command("arch")
@@ -687,8 +775,7 @@ def review_arch(
         rules_dir=resolved_rules_dir,
     )
 
-    saved = True
-    if arch_index is not None and not no_save:
+    def _save_arch() -> bool:
         # Build a minimal SliceInfo for save — arch reviews use initiative index
         arch_name = (
             Path(input_file).stem.split(".", 1)[1]
@@ -709,11 +796,18 @@ def review_arch(
             arch_file=input_file,
             project=project_name,
         )
-        saved = _save_and_report(
+        return _save_and_report(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
         )
 
-    _exit_on(result.verdict, saved)
+    outcome = _resolve_save_outcome(
+        no_save=no_save,
+        persistable=arch_index is not None,
+        save=_save_arch,
+        review_type="arch",
+    )
+
+    _exit_on(result.verdict, outcome)
 
 
 @review_app.command("tasks")
@@ -773,7 +867,9 @@ def review_tasks(
     review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
-    saved = True
+    # Seeded with the least-serious outcome; each part's own outcome is folded
+    # in, so the run reports the worst thing that happened to any part.
+    outcome = SaveOutcome.SUPPRESSED
     multi_part = len(task_file_paths) > 1
     for part_idx, task_path in enumerate(task_file_paths, start=1):
         if multi_part:
@@ -798,23 +894,35 @@ def review_tasks(
         )
         results.append((task_path, result))
 
-        if slice_info and not no_save:
-            suffix = f"part-{part_idx}" if multi_part else None
-            # Every part is saved before exiting: the reviews have already been
-            # paid for, so one unwritable part must not cost the others.
-            saved = (
-                _save_and_report(
-                    result,
-                    "tasks",
-                    slice_info,
-                    as_json=use_json,
-                    input_file=task_path,
-                    name_suffix=suffix,
-                )
-                and saved
+        suffix = f"part-{part_idx}" if multi_part else None
+
+        # Every part is saved before exiting: the reviews have already been
+        # paid for, so one unwritable part must not cost the others.
+        def _save_part(
+            part_result: ReviewResult = result,
+            path: str = task_path,
+            suf: str | None = suffix,
+        ) -> bool:
+            # Defaults bind this part's values: the closure outlives the
+            # iteration that created it only if something later calls it.
+            return _save_and_report(
+                part_result,
+                "tasks",
+                slice_info,
+                as_json=use_json,
+                input_file=path,
+                name_suffix=suf,
             )
 
-    _exit_on(_aggregate_verdicts([r for _, r in results]), saved)
+        part_outcome = _resolve_save_outcome(
+            no_save=no_save,
+            persistable=slice_info is not None,
+            save=_save_part,
+            review_type="tasks",
+        )
+        outcome = _worst_outcome(outcome, part_outcome)
+
+    _exit_on(_aggregate_verdicts([r for _, r in results]), outcome)
 
 
 @review_app.command("code")
@@ -950,11 +1058,14 @@ def review_code(
         rules_dir=None,
     )
 
-    saved = True
-    if slice_info and not no_save:
-        saved = _save_and_report(result, "code", slice_info, as_json=use_json)
+    outcome = _resolve_save_outcome(
+        no_save=no_save,
+        persistable=slice_info is not None,
+        save=lambda: _save_and_report(result, "code", slice_info, as_json=use_json),
+        review_type="code",
+    )
 
-    _exit_on(result.verdict, saved)
+    _exit_on(result.verdict, outcome)
 
 
 @review_app.command("list")

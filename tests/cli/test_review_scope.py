@@ -8,6 +8,7 @@ already knew is pure cost.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -128,3 +129,94 @@ class TestDiffSpecNormalizationAtCLI:
         assert result.exit_code == 0, result.output
         _, inputs = mock_run_review.call_args.args
         assert inputs["diff"] == "main..HEAD"
+
+
+class TestDocumentedInvocations:
+    """The shipped docs' ``--diff``-only forms must keep working (issue #70, C3).
+
+    All ten documented examples in README.md and docs/COMMANDS.md pass --diff
+    without a slice number, which is the not-persistable case. Exiting non-zero
+    for that condition would break every one of them, so C3's revision has them
+    exit on verdict instead. These tests are the guard on that decision.
+    """
+
+    def _invoke(self, cli_runner: CliRunner, git_repo: Path, argv: list[str]):
+        with patch(
+            "squadron.cli.commands.review.get_config",
+            side_effect=_config_reader(str(git_repo)),
+        ):
+            return cli_runner.invoke(app, argv)
+
+    def test_diff_with_json_output_is_parseable_on_stdout(
+        self, cli_runner: CliRunner, mock_run_review: AsyncMock, git_repo: Path
+    ) -> None:
+        """README:344 — and COMMANDS.md:96 redirects stdout to a file.
+
+        The not-persistable warning must therefore go to stderr, or the
+        redirected JSON is corrupted.
+        """
+        result = self._invoke(
+            cli_runner,
+            git_repo,
+            ["review", "code", "--diff", "main", "--output", "json"],
+        )
+        assert result.exit_code == 0, result.output
+        payload = json.loads(result.stdout)
+        assert payload["verdict"] == "PASS"
+
+    def test_diff_with_files_glob(
+        self, cli_runner: CliRunner, mock_run_review: AsyncMock, git_repo: Path
+    ) -> None:
+        """README:292."""
+        result = self._invoke(
+            cli_runner,
+            git_repo,
+            ["review", "code", "--diff", "main", "--files", "src/**/*.py"],
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_plain_diff_form(
+        self, cli_runner: CliRunner, mock_run_review: AsyncMock, git_repo: Path
+    ) -> None:
+        """README:154, 286, 341 and COMMANDS.md:90."""
+        result = self._invoke(cli_runner, git_repo, ["review", "code", "--diff", "main", "-v"])
+        assert result.exit_code == 0, result.output
+
+    def test_diff_to_output_file(
+        self, cli_runner: CliRunner, mock_run_review: AsyncMock, git_repo: Path, tmp_path: Path
+    ) -> None:
+        """README:347 — --output file is the documented remedy for no slice number."""
+        out = tmp_path / "result.json"
+        result = self._invoke(
+            cli_runner,
+            git_repo,
+            [
+                "review",
+                "code",
+                "--diff",
+                "main",
+                "--output",
+                "file",
+                "--output-path",
+                str(out),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        assert out.exists()
+
+    @pytest.mark.parametrize("subcommand", ["slice", "arch", "tasks"])
+    def test_bare_forms_for_other_subcommands(
+        self,
+        subcommand: str,
+        cli_runner: CliRunner,
+        mock_run_review: AsyncMock,
+        git_repo: Path,
+        tmp_path: Path,
+    ) -> None:
+        doc = tmp_path / "doc.md"
+        doc.write_text("# doc\n")
+        argv = ["review", subcommand, str(doc)]
+        if subcommand in ("slice", "tasks"):
+            argv += ["--against", str(doc)]
+        result = self._invoke(cli_runner, git_repo, argv)
+        assert result.exit_code == 0, result.output

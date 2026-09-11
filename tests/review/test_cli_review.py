@@ -186,7 +186,9 @@ class TestOutputModes:
             ["review", "slice", input_doc, "--against", against_doc, "--output", "json"],
         )
         assert result.exit_code == 0
-        data = json.loads(result.output)
+        # stdout, not output: operator warnings go to stderr precisely so that
+        # --output json stays machine-parseable.
+        data = json.loads(result.stdout)
         assert data["verdict"] == "CONCERNS"
         assert len(data["findings"]) == 2
         assert "template_name" in data
