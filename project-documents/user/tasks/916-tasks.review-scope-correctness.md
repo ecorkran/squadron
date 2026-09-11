@@ -74,55 +74,55 @@ part boundary.
 
 ### Task D.1 — Extract the shared cwd/rules-dir resolution helper
 
-- [ ] Read [review.py:871-890](src/squadron/cli/commands/review.py#L871-L890) to
+- [x] Read [review.py:871-890](src/squadron/cli/commands/review.py#L871-L890) to
       capture the correct pattern: `_resolve_cwd(cwd)` → `find_git_root(...) or
       resolved_cwd` → `resolve_rules_dir(review_cwd, None, rules_dir_flag)`.
-- [ ] Add one private helper in `src/squadron/cli/commands/review.py` that takes
+- [x] Add one private helper in `src/squadron/cli/commands/review.py` that takes
       the raw `cwd` and `rules_dir_flag` and returns the pair
       `(review_cwd, resolved_rules_dir)`.
-- [ ] The helper is the only place the git-root resolution appears. Do not leave a
+- [x] The helper is the only place the git-root resolution appears. Do not leave a
       second copy anywhere in the module.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task D.2 — Route all five subcommands through the helper
 
-- [ ] Replace the resolution block in `review_slice`
+- [x] Replace the resolution block in `review_slice`
       ([:597-598](src/squadron/cli/commands/review.py#L597-L598)) with a call to
       the D.1 helper; pass the returned `review_cwd` as the `cwd` in the config
       dict at [:602](src/squadron/cli/commands/review.py#L602).
-- [ ] Same for `review_arch` ([:655-659](src/squadron/cli/commands/review.py#L655-L659)).
-- [ ] Same for `review_tasks` ([:756-770](src/squadron/cli/commands/review.py#L756-L770)).
-- [ ] Same for `review_code` ([:871-890](src/squadron/cli/commands/review.py#L871-L890)) —
+- [x] Same for `review_arch` ([:655-659](src/squadron/cli/commands/review.py#L655-L659)).
+- [x] Same for `review_tasks` ([:756-770](src/squadron/cli/commands/review.py#L756-L770)).
+- [x] Same for `review_code` ([:871-890](src/squadron/cli/commands/review.py#L871-L890)) —
       this one already has the correct behavior; the edit removes the duplicate,
       it must not change behavior.
-- [ ] Same for `review_resolve` ([:1032-1035](src/squadron/cli/commands/review.py#L1032-L1035)).
-- [ ] Success: `grep -c "find_git_root" src/squadron/cli/commands/review.py`
+- [x] Same for `review_resolve` ([:1032-1035](src/squadron/cli/commands/review.py#L1032-L1035)).
+- [x] Success: `grep -c "find_git_root" src/squadron/cli/commands/review.py`
       returns 1 (the import) plus 1 (the helper) — no per-subcommand copies.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task D.3 — Test: jail root is the git root under a subdirectory `cwd`
 
-- [ ] Add a test in `tests/review/test_config_cwd.py` (existing home for cwd
+- [x] Add a test in `tests/review/test_config_cwd.py` (existing home for cwd
       behavior) that configures `cwd` as a subdirectory of a git repo fixture and
       asserts the `AgentConfig.cwd` the review client receives is the **git root**,
       not the configured subdirectory.
-- [ ] Cover `slice`, `arch`, and `tasks` — the three subcommands that were wrong.
-- [ ] Add one case where `cwd` is **not** inside a git work tree: the helper must
+- [x] Cover `slice`, `arch`, and `tasks` — the three subcommands that were wrong.
+- [x] Add one case where `cwd` is **not** inside a git work tree: the helper must
       fall back to `resolved_cwd` (the `or resolved_cwd` branch), not raise.
-- [ ] This is the test [#86](https://github.com/ecorkran/squadron/issues/86) asks
+- [x] This is the test [#86](https://github.com/ecorkran/squadron/issues/86) asks
       for.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task D.4 — Verify and commit Part D
 
-- [ ] Run `uv run pytest tests/review tests/cli -q`. All green.
-- [ ] Run `uv run ruff format` then `uv run ruff check`.
-- [ ] Manual walkthrough: with `cwd = "./project-documents/user"` configured, run
+- [x] Run `uv run pytest tests/review tests/cli -q`. All green.
+- [x] Run `uv run ruff format` then `uv run ruff check`.
+- [x] Manual walkthrough: with `cwd = "./project-documents/user"` configured, run
       `uv run sq review slice 267 -v` and confirm there are no
       `read_file: file not found` lines carrying a doubled
       `project-documents/user/project-documents/user/` prefix.
-- [ ] Commit: `refactor(review): extract shared jail-root and rules-dir resolution`
-- [ ] Effort: 1
+- [x] Commit: `refactor(review): extract shared jail-root and rules-dir resolution`
+- [x] Effort: 1
 
 ---
 

@@ -14,13 +14,18 @@ from squadron.integrations.context_forge import (
 )
 from squadron.review.git_utils import (
     DEFAULT_DIFF_BASE,
+    GIT_COMMAND_TIMEOUT_SECONDS,
     INTEGRATION_BRANCH_KEY,
     DiffRangeUnresolvedError,
+    NotAGitRepositoryError,
+    RefNotFoundError,
     _find_merge_commit,
     _find_slice_branch,
     _resolve_fork_point,
+    normalize_diff_spec,
     resolve_diff_base,
     resolve_slice_diff_range,
+    run_git,
 )
 
 _GIT_UTILS_SUBPROCESS = "squadron.review.git_utils.subprocess.run"
@@ -486,3 +491,83 @@ class TestFindMergeCommitFallback:
 
         assert result is None
         search.assert_called_once_with(145, ".", DEFAULT_DIFF_BASE)
+
+
+class TestRunGitTimeout:
+    """``run_git`` is bounded and reports a timeout rather than swallowing it.
+
+    Without a timeout, a command touching an unreachable remote-tracking ref
+    blocks the review indefinitely with no output.
+    """
+
+    def test_timeout_returns_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        with patch(
+            _GIT_UTILS_SUBPROCESS,
+            side_effect=subprocess.TimeoutExpired(cmd=["git", "fetch"], timeout=1),
+        ):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                assert run_git(["fetch", "origin"], cwd=".") is None
+
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+
+    def test_timeout_is_passed_to_subprocess(self) -> None:
+        """The bound comes from the module constant, not an inline literal."""
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+            run_git(["status"], cwd=".")
+
+        assert mock_run.call_args.kwargs["timeout"] == GIT_COMMAND_TIMEOUT_SECONDS
+
+    def test_oserror_path_unchanged(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An OSError still returns None, and stays distinct from the timeout path."""
+        with patch(_GIT_UTILS_SUBPROCESS, side_effect=OSError("no git binary")):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                assert run_git(["status"], cwd=".") is None
+
+        assert [r for r in caplog.records if r.levelname == "WARNING"] == []
+
+
+class TestNormalizeDiffSpec:
+    """``--diff`` specs become explicit ranges; bare refs gain merge-base semantics."""
+
+    @pytest.mark.parametrize(
+        ("spec", "expected"),
+        [
+            # Explicit ranges pass through — this is what protects a deliberate
+            # two-dot comparison from the bare-ref rewrite.
+            ("a..b", "a..b"),
+            ("a...b", "a...b"),
+            ("origin/main..HEAD", "origin/main..HEAD"),
+            # A three-dot spec contains a two-dot substring; checking two-dot
+            # first would misclassify it. This case pins the check order.
+            ("origin/main...HEAD", "origin/main...HEAD"),
+        ],
+    )
+    def test_explicit_ranges_pass_through(self, spec: str, expected: str) -> None:
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            assert normalize_diff_spec(spec, cwd=".") == expected
+        # A pass-through consults git at all only if the rewrite branch ran.
+        mock_run.assert_not_called()
+
+    def test_bare_ref_rewrites_to_merge_base_range(self) -> None:
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="abc123\n")
+            assert normalize_diff_spec("origin/main", cwd=".") == "origin/main...HEAD"
+
+    def test_not_a_git_repository_is_distinguishable(self) -> None:
+        """git could not run at all — the spec is not at fault."""
+        with patch(_GIT_UTILS_SUBPROCESS, side_effect=OSError("no git")):
+            with pytest.raises(NotAGitRepositoryError) as exc_info:
+                normalize_diff_spec("origin/main", cwd=".")
+        assert exc_info.value.ref == "origin/main"
+        assert not isinstance(exc_info.value, RefNotFoundError)
+
+    def test_ref_not_found_is_distinguishable(self) -> None:
+        """git ran and refused — the ref itself is the problem."""
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=128, stdout="")
+            with pytest.raises(RefNotFoundError) as exc_info:
+                normalize_diff_spec("no-such-ref", cwd=".")
+        assert exc_info.value.ref == "no-such-ref"
+        assert not isinstance(exc_info.value, NotAGitRepositoryError)

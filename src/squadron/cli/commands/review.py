@@ -26,7 +26,9 @@ from squadron.models.aliases import model_allows_tools, resolve_model_alias
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
+    DiffSpecError,
     find_git_root,
+    normalize_diff_spec,
     resolve_slice_diff_range,
 )
 from squadron.review.models import ReviewResult, Severity, Verdict
@@ -857,16 +859,28 @@ def review_code(
     code_template = get_template("code")
     exclude_patterns = code_template.diff_exclude_patterns if code_template else None
 
+    review_cwd, code_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+
     slice_info: SliceInfo | None = None
     if slice_number is not None and slice_number.isdigit():
         slice_info = _resolve_slice_number(slice_number)
         if not diff:
-            resolved_cwd_for_diff = _resolve_cwd(cwd)
             try:
-                diff = resolve_slice_diff_range(int(slice_number), resolved_cwd_for_diff)
+                diff = resolve_slice_diff_range(int(slice_number), review_cwd)
             except DiffRangeUnresolvedError as exc:
                 rprint(f"[red]Error: {exc}[/red]")
                 raise typer.Exit(code=1) from exc
+    elif diff:
+        # A bare ref means merge-base semantics (issue #89). Normalize before
+        # either consumer sees it, so the path extraction and the prompt are
+        # given the same range. The slice path above already produced an
+        # explicit range — do not normalize it twice.
+        try:
+            diff = normalize_diff_spec(diff, review_cwd)
+        except DiffSpecError as exc:
+            _logger.error("review code: %s", exc)
+            rprint(f"[red]Error: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
 
     if not slice_info and not diff and not files:
         if slice_number is not None:
@@ -882,7 +896,6 @@ def review_code(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, code_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
 
     rules_content: str | None = None
     resolved_rules_dir: Path | None = None
