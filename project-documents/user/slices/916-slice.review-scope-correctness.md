@@ -6,7 +6,7 @@ parent: 900-slices.maintenance-and-refactoring.md
 dependencies: []
 interfaces: [917]
 dateCreated: 20260910
-dateUpdated: 20260910
+dateUpdated: 20260911
 status: not_started
 ---
 
@@ -108,6 +108,12 @@ Only the third row changes behavior. `--diff origin/main` becomes `origin/main..
 
 **A4 — a bare ref that does not resolve fails loudly.** Guard with `_resolve_rev(ref, cwd)` before rewriting. `git diff` against a nonexistent ref currently yields an empty path list ([rules.py:218-220](src/squadron/review/rules.py#L218-L220) swallows the failure and returns `[]`) — which under Part B would present as "nothing in scope" rather than "you typed a ref that does not exist." Distinguish the two: a `--diff` value naming an unresolvable ref exits non-zero with the offending value, before any model call.
 
+**A6 — low-level failure modes for the new git call (added after slice review, F002).** `normalize_diff_spec` shells out, so the hang/timeout/no-repo family needs an explicit answer rather than the blanket assurance in Technical criteria:
+
+- **Hang or timeout.** The new call inherits `git_utils`' existing subprocess policy by going through `run_git` ([git_utils.py:21](src/squadron/review/git_utils.py#L21)) rather than calling `subprocess` directly — the same helper the six inline git calls were consolidated into for #63. If that helper carries no timeout today, adding one is in scope for this part: a `git rev-parse` that hangs blocks the CLI before any review begins, with no output explaining why.
+- **`cwd` outside a git work tree.** `run_git` returns None and `_resolve_rev` yields None, which A4 already routes to the loud non-zero exit. The message must distinguish "not a git repository" from "ref not found" — they are different operator errors and the fix differs.
+- **Asymmetry, stated deliberately.** A4's guard covers the bare-ref shape only. An unresolvable ref inside an explicit `a..b`/`a...b` range still reaches the swallow at [rules.py:218-220](src/squadron/review/rules.py#L218-L220) and surfaces as B2's no-changed-files message. That is handled (non-zero, not silent) but less precise. Validating both endpoints of an explicit range is deliberately **not** done here: the shapes A2 passes through are the ones where the caller was explicit, and B2's guard already catches the outcome. Recorded so the gap is a decision rather than an oversight.
+
 **A5 — the two-dot form stays reachable, unchanged, and undocumented as a feature.** Someone who writes `--diff a..b` gets exactly that. No new flag is added: the shape already expresses the distinction, and a flag would be a second way to say something the argument already says.
 
 ### Part C — Save gating (#70)
@@ -124,7 +130,28 @@ All four subcommands initialize `saved = True` and overwrite it only inside a br
 
 A small enum, per the project rule against user-visible labels and scattered comparison values.
 
-**C3 — a `--diff`-only run is "unsaved," not "suppressed."** This is the decision that fixes the issue. Today no artifact path can be derived without a slice identifier, so the run genuinely cannot persist. Rather than inventing a naming scheme for slice-less reviews (out of scope, and a naming decision that deserves its own thought), the run **fails with an actionable message**: it names why no artifact could be written and what to supply. This is Part B's shape and #17's shape — an input problem reported as an input problem.
+**C3 — a `--diff`-only run warns and exits 0; only an *attempted and failed* save exits non-zero.** Revised after the slice review (F003). The original C3 made a slice-less `--diff` run exit 1. That is wrong, and the review caught it.
+
+The evidence: `sq review code --diff main` with no slice number is not an edge case, it is **the primary documented workflow**. It appears in 10 shipped examples — [README.md:154](README.md#L154), [:176](README.md#L176), [:286](README.md#L286), [:292](README.md#L292), [:322](README.md#L322), [:341](README.md#L341), [:344](README.md#L344), [:347](README.md#L347) and [docs/COMMANDS.md:90](docs/COMMANDS.md#L90), [:96](docs/COMMANDS.md#L96) — including the `--output json` examples whose entire purpose is terminal/piped output with no artifact. Slice 118's `/sq:review-code` carries an explicit compatibility guarantee for the same form. Failing it would break the tool's most-advertised invocation to fix a bug about *silent* failure, and would turn every one of those examples into an instruction to run a failing command.
+
+The correction: #70's defect is that the run reports success for a save it never attempted and never mentions it. The fix for that is **saying so**, not failing. Terminal output is a legitimate destination — `--output json` proves it was designed to be.
+
+So the outcome model from C2 resolves as:
+
+| Invocation | Outcome | Exit |
+|---|---|---|
+| slice identifier present, write succeeds | saved | on verdict |
+| `--no-save` given | suppressed | on verdict |
+| no slice identifier (`--diff`/`--files` only) | **not-persistable** | on verdict, **plus a WARNING** naming that no artifact was written and how to get one |
+| save attempted and failed (I/O, permissions) | unsaved | **1**, per `_exit_on` |
+
+The fourth row is what `_exit_on`'s existing contract ([review.py:190-193](src/squadron/cli/commands/review.py#L190-L193)) is actually about — "an unwritten review is a review Context Forge cannot see" applies to a review that was *supposed* to be written. The third row was never supposed to be written, and the bug is only that it stayed quiet about it.
+
+This still closes #70's reported harm: the trading-data operator lost 7 findings because nothing said the run had not persisted and a stale artifact remained in place. A WARNING naming the absent artifact prevents exactly that, without breaking the documented surface.
+
+**C5 — the warning must name the remedy, not just the fact.** It states that no artifact was written, and that supplying a slice number (or `--output file --output-path`) will produce one. A warning that only reports absence leaves the operator where they started.
+
+*Deliberately not done:* inventing an artifact naming scheme for slice-less reviews. That is a real gap — there is no way to persist a `--diff`-only review under `project-documents/user/reviews/` — but naming is a design decision of its own and #70 does not require it. Filed as [issue #90](https://github.com/ecorkran/squadron/issues/90) rather than settled here.
 
 **C4 — all four subcommands, one mechanism.** #70 was filed against `code`; the reading above confirms all four carry it. Interface parity is a standing project rule.
 
@@ -149,7 +176,16 @@ Two further consumers assume the closed set: `_LEG_VERDICT_TO_RESOLUTION` ([reso
 
 Refusing to persist fixes the reported harm directly: no artifact clears no gate, in either repo, with no coordination.
 
-**B1 — detect before the model call, not after.** `extract_diff_paths` already runs at [review.py:893](src/squadron/cli/commands/review.py#L893), before any provider work. An empty result there is the signal. Detecting pre-flight also avoids spending a model call to be told what git already said, and means the failure message can name the exclusion patterns responsible.
+**B1 — detect in shared code below both entry points, pre-flight.** Revised after the slice review (F001), which was right that B was pinned to the CLI, and right that the pipeline is the path that trips gates.
+
+The original B1 proposed reusing the `extract_diff_paths` call at [review.py:893](src/squadron/cli/commands/review.py#L893). Checking the source shows that would have been wrong twice over:
+
+1. **There are two independent call sites, not one.** The pipeline review action has its own at [actions/review.py:195](src/squadron/pipeline/actions/review.py#L195). Building B on the CLI's site leaves `sq run` — the path that clears review gates — exactly as broken as it is today, which is the harm B exists to fix.
+2. **Neither call site is a scope check.** Both are nested inside `if rules_dir is not None:` ([review.py:891](src/squadron/cli/commands/review.py#L891), [actions/review.py:187](src/squadron/pipeline/actions/review.py#L187)) and exist to feed language auto-detection into `load_review_rules`; `file_paths` is discarded afterward. A check hung off them would **silently not run** whenever no rules directory resolves — a configuration-dependent gap in a guard whose whole purpose is to be unconditional.
+
+**Design:** a single `assert_reviewable_scope(diff, cwd, exclude_patterns)` in `review/git_utils.py`, called unconditionally by both entry points before any provider work and independent of rules resolution. It computes the filtered and unfiltered path lists itself and raises a typed error carrying which of B2's two cases occurred plus the matched patterns. The existing rules-loading calls are left alone — they are doing a different job, and folding scope detection into them is what created this trap.
+
+Placing it in `git_utils` rather than in either caller is the same interface-parity rule that makes C4 cover all four subcommands: a gate that holds on one entry point and not the other is not a gate. Pre-flight placement also avoids spending a model call to be told what git already knew, and lets the message name the responsible patterns.
 
 **B2 — distinguish empty-after-filtering from empty-before-filtering.** Two different operator errors deserving two different messages:
 
@@ -216,10 +252,12 @@ Both consumers receive the *same normalized string* — A1's requirement, and wh
 3. **A** — `--diff <nonexistent>` exits non-zero naming the ref, with no model call.
 4. **B** — an all-excluded range writes no artifact and exits non-zero, naming the matched exclusion patterns.
 5. **B** — a range with no changed files at all exits non-zero with a *different*, range-focused message.
-6. **C** — a `--diff`-only run in any of the four subcommands exits non-zero rather than 0.
-7. **C** — `--no-save` still exits on verdict alone.
-8. **D** — with `cwd = "./project-documents/user"` configured, a tool-enabled `slice`/`arch`/`tasks` review opens its input documents; the `AgentConfig.cwd` the client receives is the git root.
-9. **E** — an SDK review agent is constructed with `tools` set to the template's declared list; `Bash` is not available.
+6. **B** — criteria 4 and 5 hold identically via `sq run` (the pipeline review action), not only via the CLI, and hold when **no rules directory resolves** — the guard is unconditional (B1).
+7. **C** — a `--diff`-only run still exits on verdict (0 on PASS) and emits a WARNING naming the absent artifact and how to obtain one. The 10 documented `--diff`-without-slice examples in README/COMMANDS.md continue to work.
+8. **C** — a save that is attempted and *fails* exits 1.
+9. **C** — `--no-save` still exits on verdict alone, with no warning.
+10. **D** — with `cwd = "./project-documents/user"` configured, a tool-enabled `slice`/`arch`/`tasks` review opens its input documents; the `AgentConfig.cwd` the client receives is the git root.
+11. **E** — an SDK review agent is constructed with `tools` set to the template's declared list; `Bash` is not available.
 
 ### Technical
 
@@ -255,6 +293,14 @@ uv run sq review code --diff origin/main -v; echo "exit=$?"
 
 Expect non-zero, a message naming the `*.md` exclusion, and **no new file** under `project-documents/user/reviews/`. Confirm with `git status --short project-documents/user/reviews/`.
 
+Then the same range through the pipeline, which is the path that trips gates (B1) — this must fail identically, not pass:
+
+```bash
+uv run sq run <pipeline> <docs-only-slice>; echo "exit=$?"
+```
+
+And confirm the guard is unconditional: re-run the CLI case with `--rules-dir` pointing somewhere with no rules, so `resolve_rules_dir` returns None. The empty-scope refusal must still fire — this is the regression the original B1 would have shipped.
+
 Then confirm the escape hatch: a pipeline phase with no `review:` key emits neither review nor checkpoint —
 
 ```bash
@@ -267,7 +313,16 @@ uv run sq run <pipeline> <slice> --dry-run
 uv run sq review code --diff origin/main -v; echo "exit=$?"
 ```
 
-Expect non-zero with a message saying why no artifact could be written. Repeat for `sq review slice`/`arch`/`tasks` with `--diff`/`--files`-only invocations. Then confirm `--no-save` still exits 0 on a PASS.
+Expect **exit 0 on a PASS**, findings on the terminal, and a WARNING naming that no artifact was written and how to get one. Confirm no file appeared: `git status --short project-documents/user/reviews/`.
+
+Then confirm the documented surface still works — every one of these must behave as its documentation says:
+
+```bash
+uv run sq review code --diff main --output json | jq .verdict   # README:344
+uv run sq review code --diff main --files "src/**/*.py"          # README:292
+```
+
+Repeat the bare form for `sq review slice`/`arch`/`tasks`. Then confirm `--no-save` exits 0 with **no** warning, and that a save which genuinely fails (point the reviews directory at a read-only path) exits 1.
 
 **D — jail root.** With `cwd = "./project-documents/user"` in `~/.config/squadron/config.toml`:
 
@@ -287,7 +342,21 @@ Expect no `read_file: file not found` lines with a doubled `project-documents/us
 
 **Part E changes what a working reviewer can do.** Mitigated by sequencing it last, by E5's scope check on non-review `allowed_tools` producers, and by requiring a live SDK review in verification rather than only a kwargs assertion.
 
+**Part C touches the most-documented invocation on the tool.** Surfaced by the slice review (F003). The revised C3 keeps `sq review code --diff main` exiting 0, so the 10 README/COMMANDS.md examples and slice 118's `/sq:review-code` compatibility guarantee all continue to hold — the change is an added WARNING, not a failure. **No documentation updates are required, and that is the point of the revision**; the original C3 would have required rewriting every one of those examples. If implementation finds a case where exiting 0 is untenable, the doc updates come back into scope and must be scoped explicitly rather than absorbed.
+
 **Part A's rewrite rule is shape-based and could surprise.** A bare ref is the only shape that changes, and it changes toward what GitHub shows — but anyone scripting `--diff <ref>` expecting two-dot semantics gets different output. Acceptable: that expectation is the bug, and A5 keeps the explicit form available.
+
+## Slice Review Disposition
+
+Slice review (`916-review.slice.review-scope-correctness.md`, glm-5.3, CONCERNS, 20260911). All three concerns accepted; two changed the design materially.
+
+- **F001 (concern) — accepted, design changed.** B was pinned to the CLI path. Verification against source found it worse than the finding could confirm: there are **two** independent `extract_diff_paths` call sites (CLI [review.py:893](src/squadron/cli/commands/review.py#L893), pipeline [actions/review.py:195](src/squadron/pipeline/actions/review.py#L195)), and *neither is a scope check* — both are nested under `if rules_dir is not None:` and feed language detection, discarding `file_paths` afterward. B1 now specifies a shared unconditional guard in `git_utils` called by both entry points. Criteria 6 and the walkthrough test the rules-absent case explicitly, since that is the regression the original B1 would have shipped.
+- **F002 (concern) — accepted, A6 added.** The hang/timeout/no-repo family is now answered: the new call goes through `run_git` rather than raw `subprocess`, adding a timeout there if absent; "not a git repository" is distinguished from "ref not found"; and the unvalidated-endpoint asymmetry in explicit ranges is recorded as a decision with its rationale rather than left as a gap.
+- **F003 (concern) — accepted, design reversed.** The strongest finding. The original C3 would have made `sq review code --diff main` exit non-zero — the tool's most-documented invocation, appearing in 10 README/COMMANDS.md examples plus slice 118's compatibility guarantee, including `--output json` examples whose purpose is terminal output with no artifact. C3 now warns and exits on verdict; only an *attempted and failed* save exits 1. This still closes #70's reported harm (the operator lost findings because nothing said the run had not persisted) without breaking the documented surface, and it removes the doc-update work the finding correctly noted was unscoped.
+- **F004 (note) — acknowledged, no change.** Five parts at 4/5 sits at the edge of 900's "prefer many small slices." The finding requests no change and notes the bundle is plan-authorized with a load-bearing part sequence, each part independently committable.
+- **F005, F006 (pass)** — no action.
+
+Follow-up filed as [issue #90](https://github.com/ecorkran/squadron/issues/90): there is no artifact naming scheme for slice-less reviews, so a `--diff`-only review cannot be persisted at all. Real gap, but a naming decision of its own and not required by #70.
 
 ## Implementation Notes
 
