@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -75,3 +77,26 @@ def isolate_review_debug_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     real file (8,600+ of them had accumulated).
     """
     monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", tmp_path / "review-debug.jsonl")
+
+
+@pytest.fixture(autouse=True)
+def restore_agent_logger_state() -> Iterator[None]:
+    """Undo the global logger mutation ``sq review -v`` performs.
+
+    ``_configure_agent_logging`` raises the level on ``squadron.providers`` (and
+    siblings) and attaches a stderr handler, process-wide and permanently. In a
+    test run that leaks: any later test asserting on captured records from those
+    loggers sees a level that an earlier CLI invocation set, and fails for a
+    reason that has nothing to do with the code under test.
+    """
+    names = ("squadron.providers", "squadron.tools", "squadron.review")
+    saved = [
+        (logging.getLogger(n), logging.getLogger(n).level, list(logging.getLogger(n).handlers))
+        for n in names
+    ]
+    try:
+        yield
+    finally:
+        for logger, level, handlers in saved:
+            logger.setLevel(level)
+            logger.handlers[:] = handlers

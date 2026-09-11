@@ -442,12 +442,12 @@ part boundary.
 
 ### Task B.8 — #71 follow-up (not a deliverable)
 
-- [ ] After B lands, re-run [#71](https://github.com/ecorkran/squadron/issues/71)'s
+- [x] After B lands, re-run [#71](https://github.com/ecorkran/squadron/issues/71)'s
       reproduction script in the reporting repo.
-- [ ] If B's new message explains the observed behavior, close #71 citing this
+- [x] If B's new message explains the observed behavior, close #71 citing this
       slice. If not, re-file with the new evidence.
-- [ ] No code in this slice is written *for* #71 (design B4).
-- [ ] Effort: 1
+- [x] No code in this slice is written *for* #71 (design B4).
+- [x] Effort: 1
 
 ---
 
@@ -526,34 +526,34 @@ part boundary.
 
 ### Task Z.1 — Success criteria sweep
 
-- [ ] Walk the design's eleven Functional criteria and confirm each is demonstrated
+- [x] Walk the design's eleven Functional criteria and confirm each is demonstrated
       by a test or a recorded manual walkthrough:
-  - [ ] 1, 2, 3 — A: merge-base file list matches `git diff --name-only
+  - [x] 1, 2, 3 — A: merge-base file list matches `git diff --name-only
         <base>...HEAD`; both range forms pass through; nonexistent ref exits
         non-zero with no model call.
-  - [ ] 4, 5, 6 — B: all-excluded and no-changes exit non-zero with distinct
+  - [x] 4, 5, 6 — B: all-excluded and no-changes exit non-zero with distinct
         cases; both hold via `sq run` and with no rules directory.
-  - [ ] 7, 8, 9 — C: `--diff`-only exits on verdict with a WARNING and the 10
+  - [x] 7, 8, 9 — C: `--diff`-only exits on verdict with a WARNING and the 10
         documented examples still work; failed save exits 1; `--no-save` is quiet.
-  - [ ] 10 — D: subdirectory `cwd` yields a git-root jail; inputs open.
-  - [ ] 11 — E: `tools` set to the declared list; `Bash` unavailable.
-- [ ] Confirm the Technical criteria: no new `Verdict` member; one shared helper
+  - [x] 10 — D: subdirectory `cwd` yields a git-root jail; inputs open.
+  - [x] 11 — E: `tools` set to the declared list; `Bash` unavailable.
+- [x] Confirm the Technical criteria: no new `Verdict` member; one shared helper
       for D, not five copies; every new failure path exits non-zero **and** logs at
       WARNING or above; no test asserts on message text as logical structure.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task Z.2 — DEVLOG and status
 
-- [ ] Write a DEVLOG entry per `prompt.ai-project.system.md`, section "Session
+- [x] Write a DEVLOG entry per `prompt.ai-project.system.md`, section "Session
       State Summary".
-- [ ] Mark this task file `status: complete` and set `dateUpdated`.
-- [ ] Mark the slice complete in
+- [x] Mark this task file `status: complete` and set `dateUpdated`.
+- [x] Mark the slice complete in
       [916-slice.review-scope-correctness.md](project-documents/user/slices/916-slice.review-scope-correctness.md)
-      and in the parent slice plan.
-- [ ] Close issues #86, #89, #70, #62, #69 citing this slice. Handle #71 per B.8.
-- [ ] Confirm [#90](https://github.com/ecorkran/squadron/issues/90) remains open —
+      and in the parent slice plan (note: parent plan file does not exist; 9xx slices are standalone).
+- [x] Close issues #86, #89, #70, #62, #69 citing this slice. Handle #71 per B.8.
+- [x] Confirm [#90](https://github.com/ecorkran/squadron/issues/90) remains open —
       slice-less review artifact naming is deliberately not addressed here.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ---
 
