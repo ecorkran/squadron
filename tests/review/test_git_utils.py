@@ -21,6 +21,7 @@ from squadron.review.git_utils import (
     EmptyScopeError,
     NotAGitRepositoryError,
     RefNotFoundError,
+    _changed_paths,
     _find_merge_commit,
     _find_slice_branch,
     _resolve_fork_point,
@@ -639,6 +640,30 @@ class TestAssertReviewableScope:
         assert error.case != EmptyScopeCase.ALL_EXCLUDED
         assert [r for r in caplog.records if r.levelname == "WARNING"]
 
+    def test_rejected_pathspec_is_its_own_case(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """git refusing the patterns is not the same as the patterns excluding everything.
+
+        The remedy differs — fix the patterns vs. pick a different range — so
+        overloading ALL_EXCLUDED would defeat the point of the enum.
+        """
+        self._branch_with(repo, "app.py", "x = 2\n")
+
+        real = _changed_paths
+
+        def fail_only_filtered(diff, cwd, patterns):
+            return None if patterns else real(diff, cwd, patterns)
+
+        with patch("squadron.review.git_utils._changed_paths", side_effect=fail_only_filtered):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                with pytest.raises(EmptyScopeError) as exc_info:
+                    assert_reviewable_scope("main...HEAD", str(repo), ["[bad"])
+
+        assert exc_info.value.case == EmptyScopeCase.INVALID_EXCLUDE_PATTERN
+        assert exc_info.value.case != EmptyScopeCase.ALL_EXCLUDED
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
     def test_unusable_range_reports_no_changes(
         self, repo: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -649,3 +674,33 @@ class TestAssertReviewableScope:
 
         assert exc_info.value.case == EmptyScopeCase.NO_CHANGES
         assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+class TestExtractDiffPathsIsBounded:
+    """``extract_diff_paths`` runs through ``run_git``, so it inherits the timeout.
+
+    It previously called ``subprocess.run`` directly, leaving the unreachable-remote
+    hang reachable through the one path that always runs — the language-detection
+    extraction on both the CLI and pipeline review routes.
+    """
+
+    def test_timeout_yields_empty_list_not_a_hang(self, caplog: pytest.LogCaptureFixture) -> None:
+        from squadron.review.rules import extract_diff_paths
+
+        with patch(
+            _GIT_UTILS_SUBPROCESS,
+            side_effect=subprocess.TimeoutExpired(cmd=["git", "diff"], timeout=1),
+        ):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                assert extract_diff_paths("main...HEAD", ".", None) == []
+
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_passes_the_timeout_through(self) -> None:
+        from squadron.review.rules import extract_diff_paths
+
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="app.py\n")
+            assert extract_diff_paths("main...HEAD", ".", None) == ["app.py"]
+
+        assert mock_run.call_args.kwargs["timeout"] == GIT_COMMAND_TIMEOUT_SECONDS

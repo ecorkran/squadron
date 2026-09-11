@@ -971,26 +971,31 @@ def review_code(
 
     review_cwd, code_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
 
-    slice_info: SliceInfo | None = None
-    if slice_number is not None and slice_number.isdigit():
-        slice_info = _resolve_slice_number(slice_number)
-        if not diff:
-            try:
-                diff = resolve_slice_diff_range(int(slice_number), review_cwd)
-            except DiffRangeUnresolvedError as exc:
-                rprint(f"[red]Error: {exc}[/red]")
-                raise typer.Exit(code=1) from exc
-    elif diff:
-        # A bare ref means merge-base semantics (issue #89). Normalize before
-        # either consumer sees it, so the path extraction and the prompt are
-        # given the same range. The slice path above already produced an
-        # explicit range — do not normalize it twice.
+    # A user-supplied --diff is normalized whether or not a slice number came
+    # with it: `sq review code 118 --diff main` overrides the range but keeps
+    # the slice's metadata for saving, and that ref needs merge-base semantics
+    # exactly as much as the slice-less form (issue #89).
+    if diff:
+        # Normalize before either consumer sees it, so the path extraction and
+        # the prompt are given the same range.
         try:
             diff = normalize_diff_spec(diff, review_cwd)
         except DiffSpecError as exc:
             _logger.error("review code: %s", exc)
             rprint(f"[red]Error: {exc}[/red]")
             raise typer.Exit(code=1) from exc
+
+    slice_info: SliceInfo | None = None
+    if slice_number is not None and slice_number.isdigit():
+        slice_info = _resolve_slice_number(slice_number)
+        if not diff:
+            # resolve_slice_diff_range already yields an explicit range — it
+            # must not be normalized again.
+            try:
+                diff = resolve_slice_diff_range(int(slice_number), review_cwd)
+            except DiffRangeUnresolvedError as exc:
+                rprint(f"[red]Error: {exc}[/red]")
+                raise typer.Exit(code=1) from exc
 
     if not slice_info and not diff and not files:
         if slice_number is not None:

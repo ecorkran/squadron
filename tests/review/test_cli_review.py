@@ -525,7 +525,10 @@ class TestScopedDiff:
         inputs = call_kwargs[0][1] if call_kwargs[0] else call_kwargs[1].get("inputs")
         if inputs is None:
             inputs = call_kwargs[0][1]
-        assert inputs.get("diff") == "HEAD~3"
+        # Normalized: a bare ref supplied alongside a slice number still needs
+        # merge-base semantics (issue #89). resolve_slice_diff_range is still
+        # not called — the explicit --diff wins, it is just normalized first.
+        assert inputs.get("diff") == "HEAD~3...HEAD"
 
     def test_no_slice_number_no_resolution(
         self,

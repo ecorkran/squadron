@@ -58,6 +58,11 @@ def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | 
         )
         return None
     except OSError:
+        # git is missing, not executable, or cwd does not exist. Every caller
+        # already treats None as "git could not answer" and reports accordingly,
+        # so this is handled rather than swallowed; it stays unlogged because it
+        # is the expected signal on machines with no git, which several callers
+        # (resolve_diff_base especially) must degrade past quietly.
         return None
 
 
@@ -114,6 +119,10 @@ class EmptyScopeCase(StrEnum):
     #: The range itself contains no changed files — wrong base, an
     #: already-merged branch, or a typo.
     NO_CHANGES = "no_changes"
+    #: git refused the exclusion pathspec itself. Distinct from ALL_EXCLUDED:
+    #: the patterns are malformed rather than over-broad, so the remedy is to
+    #: fix the patterns, not to pick a different range.
+    INVALID_EXCLUDE_PATTERN = "invalid_exclude_pattern"
 
 
 class EmptyScopeError(Exception):
@@ -439,8 +448,9 @@ def assert_reviewable_scope(
             exclude_patterns,
         )
         raise EmptyScopeError(
-            f"Cannot review {diff!r}: git rejected the exclusion patterns {exclude_patterns!r}.",
-            case=EmptyScopeCase.ALL_EXCLUDED,
+            f"Cannot review {diff!r}: git rejected the exclusion patterns "
+            f"{exclude_patterns!r}. Check the pattern syntax.",
+            case=EmptyScopeCase.INVALID_EXCLUDE_PATTERN,
             exclude_patterns=exclude_patterns,
             excluded_count=len(unfiltered),
         )

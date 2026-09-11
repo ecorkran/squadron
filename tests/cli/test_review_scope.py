@@ -232,3 +232,76 @@ class TestDocumentedInvocations:
             argv += ["--against", str(doc)]
         result = self._invoke(cli_runner, git_repo, argv)
         assert result.exit_code == 0, result.output
+
+
+class TestNormalizationAppliesWithSliceNumber:
+    """A --diff supplied alongside a slice number is still normalized.
+
+    `sq review code 118 --diff main` overrides the range but keeps the slice's
+    metadata for saving. That ref needs merge-base semantics exactly as much as
+    the slice-less form — an earlier structure reached normalization only via an
+    `elif`, so this combination silently kept the two-dot bug.
+    """
+
+    def test_slice_number_plus_bare_diff_is_normalized(
+        self, cli_runner: CliRunner, mock_run_review: AsyncMock, git_repo: Path
+    ) -> None:
+        slice_info = {
+            "index": 118,
+            "name": "probe",
+            "slice_name": "probe",
+            "design_file": None,
+            "task_files": [],
+            "arch_file": None,
+            "project": "squadron",
+        }
+        with (
+            patch(
+                "squadron.cli.commands.review.get_config",
+                side_effect=_config_reader(str(git_repo)),
+            ),
+            patch(
+                "squadron.cli.commands.review._resolve_slice_number",
+                return_value=slice_info,
+            ),
+            patch("squadron.cli.commands.review.save_review_result", return_value="r.md"),
+        ):
+            result = cli_runner.invoke(app, ["review", "code", "118", "--diff", "main"])
+
+        assert result.exit_code == 0, result.output
+        _, inputs = mock_run_review.call_args.args
+        assert inputs["diff"] == "main...HEAD"
+
+    def test_slice_derived_range_is_not_double_normalized(
+        self, cli_runner: CliRunner, mock_run_review: AsyncMock, git_repo: Path
+    ) -> None:
+        """resolve_slice_diff_range already yields an explicit range."""
+        slice_info = {
+            "index": 118,
+            "name": "probe",
+            "slice_name": "probe",
+            "design_file": None,
+            "task_files": [],
+            "arch_file": None,
+            "project": "squadron",
+        }
+        with (
+            patch(
+                "squadron.cli.commands.review.get_config",
+                side_effect=_config_reader(str(git_repo)),
+            ),
+            patch(
+                "squadron.cli.commands.review._resolve_slice_number",
+                return_value=slice_info,
+            ),
+            patch(
+                "squadron.cli.commands.review.resolve_slice_diff_range",
+                return_value="main...HEAD",
+            ),
+            patch("squadron.cli.commands.review.save_review_result", return_value="r.md"),
+        ):
+            result = cli_runner.invoke(app, ["review", "code", "118"])
+
+        assert result.exit_code == 0, result.output
+        _, inputs = mock_run_review.call_args.args
+        assert inputs["diff"] == "main...HEAD"

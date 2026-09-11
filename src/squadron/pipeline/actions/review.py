@@ -13,8 +13,10 @@ from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionE
 from squadron.providers.base import ProfileName
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
+    DiffSpecError,
     EmptyScopeError,
     assert_reviewable_scope,
+    normalize_diff_spec,
 )
 from squadron.review.persistence import (
     CfClientProtocol,
@@ -78,6 +80,7 @@ class ReviewAction:
             ModelPoolNotImplemented,
             KeyError,
             DiffRangeUnresolvedError,
+            DiffSpecError,
             EmptyScopeError,
         ) as exc:
             _logger.warning(
@@ -150,6 +153,14 @@ class ReviewAction:
         for key in _INPUT_PASSTHROUGH_KEYS:
             if key in context.params:
                 inputs[key] = str(context.params[key])
+
+        # A step-supplied bare ref needs merge-base semantics exactly as the
+        # CLI's --diff does (issue #89). Interface parity is the point: `sq run`
+        # is the less-watched entry point, so a range bug here is the harder one
+        # to notice. Slice-derived ranges are resolved below and arrive explicit,
+        # so only the step-supplied value passes through here.
+        if inputs.get("diff"):
+            inputs["diff"] = normalize_diff_spec(inputs["diff"], cwd)
 
         # Auto-resolve template inputs from slice number when not explicit.
         # Mirrors CLI behavior: `sq review slice 154` resolves input/against

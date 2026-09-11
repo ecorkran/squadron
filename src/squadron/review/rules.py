@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import fnmatch
 import re
-import subprocess
 from pathlib import Path
 
 from squadron.config.manager import get_config
-from squadron.core.subprocess_text import TEXT_DECODING
+from squadron.review.git_utils import run_git
 
 # Frontmatter YAML block at start of file
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
@@ -199,24 +198,17 @@ def extract_diff_paths(
     When *exclude_patterns* is provided, matching files are filtered out
     via git pathspec exclusions. Returns an empty list on git failure.
     """
-    cmd = ["git", "diff", "--name-only", diff_ref]
+    args = ["diff", "--name-only", diff_ref]
     if exclude_patterns:
-        cmd.append("--")
-        cmd.append(".")
-        cmd.extend(f":!{p}" for p in exclude_patterns)
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            **TEXT_DECODING,
-            cwd=cwd,
-            check=False,
-        )
-        if result.returncode == 0:
-            return [line.strip() for line in result.stdout.splitlines() if line.strip()]
-    except (FileNotFoundError, OSError):
-        pass
+        args.append("--")
+        args.append(".")
+        args.extend(f":!{p}" for p in exclude_patterns)
+    # Through run_git rather than subprocess directly, so this call is bounded by
+    # the same timeout as every other git invocation. A direct call here left the
+    # unreachable-remote hang reachable through the one path that always runs.
+    result = run_git(args, cwd=cwd)
+    if result is not None and result.returncode == 0:
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()]
     return []
 
 

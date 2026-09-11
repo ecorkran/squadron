@@ -65,6 +65,20 @@ def unchanged_repo(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def healthy_repo(tmp_path: Path) -> Path:
+    """A feature branch with a real code change — a scope the guard permits."""
+    repo = tmp_path / "healthy-repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "--initial-branch=main"], cwd=repo, check=True, capture_output=True)
+    (repo / "app.py").write_text("x = 1\n")
+    _commit(repo, "init")
+    subprocess.run(["git", "checkout", "-qb", "feature"], cwd=repo, check=True, capture_output=True)
+    (repo / "app.py").write_text("x = 2\n")
+    _commit(repo, "feature work")
+    return repo
+
+
+@pytest.fixture
 def mock_run_review():
     result = ReviewResult(
         verdict=Verdict.PASS,
@@ -234,3 +248,46 @@ class TestPipelineRefusesEmptyScope:
         assert result.success is False
         mock_review.assert_not_called()
         assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+
+class TestPipelineNormalizesDiff:
+    """The pipeline normalizes a step-supplied bare ref, exactly as the CLI does.
+
+    Interface parity: `sq run` is the less-watched entry point, so an
+    un-normalized range here is the harder bug to notice (issue #89).
+    """
+
+    @pytest.mark.asyncio
+    async def test_bare_ref_is_normalized(self, healthy_repo: Path) -> None:
+        repo = healthy_repo
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("claude-sonnet-4-20250514", None)
+        ctx = ActionContext(
+            pipeline_name="p",
+            run_id="run-1",
+            params={"template": "code", "diff": "main"},
+            step_name="code-review",
+            step_index=1,
+            prior_outputs={},
+            resolver=resolver,
+            cf_client=MagicMock(),
+            cwd=str(repo),
+        )
+
+        with (
+            patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
+            patch(f"{_PIPELINE}.save_review_file", return_value=None),
+            patch(f"{_PIPELINE}.format_review_markdown", return_value="# Review"),
+        ):
+            mock_review.return_value = ReviewResult(
+                verdict=Verdict.PASS,
+                findings=[],
+                raw_output="PASS",
+                template_name="code",
+                input_files={"cwd": str(repo)},
+            )
+            await ReviewAction().execute(ctx)
+
+        assert mock_review.called, "the review should have run on a healthy scope"
+        call_inputs = mock_review.call_args[0][1]
+        assert call_inputs["diff"] == "main...HEAD"
