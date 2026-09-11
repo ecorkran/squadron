@@ -2,13 +2,71 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260909
+dateUpdated: 20260910
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260910
+
+### Review-issue triage; slices 916 and 917; 916 design
+
+Swept the 39 open issues for review-system defects ahead of PR-centric review work, and grouped
+nine of them into two maintenance slices. The organizing question separates them cleanly: 916
+asks whether the review examined the change set the operator meant, 917 asks whether the
+persisted artifact can be trusted.
+
+**916 — Review Scope Correctness** (#89, #62, #70, #86, #69; likely closes #71). Three of the
+five fail *silently*, which is what makes them worth bundling: each produces a confident artifact
+with no signal anything went wrong. Verified three claims against the code rather than taking the
+issues at face value — #89 is exactly as filed (`resolve_slice_diff_range` runs only when `--diff`
+is absent, `review.py:849-852`); #70 is worse than filed, since all four subcommands carry the
+`saved = True` initializer, not just `code`; and #86's fix already exists twice in the same file,
+so it is three call sites rather than new logic.
+
+**917 — Review Artifact Integrity** (#77, #28, #84, #26, #87). Sequenced after 916 so the two do
+not contend for the same review-path files. #25 and #27 were deliberately left out — #25 is
+unsymptomatic prompt hardening, and #27 has no reproduction, so 917 Part C's telemetry is what
+would catch a recurrence.
+
+Two decisions settled before design, both recorded in the plan entries.
+
+**#62 — refuse to persist an empty-scope review; no new `Verdict` member.** The deciding evidence
+was that squadron's three verdict gates are *allowlists of named verdicts*, not exhaustive
+switches: a new member would fail to trip `ON_CONCERNS`, never satisfy
+`REVIEW_CONCERNS_OR_BETTER`, and raise `KeyError` in `_aggregate_verdicts`' bare dict subscript —
+three silent mishandlings in three different directions. `workflow.review_threshold` also turns
+out to have no squadron-side consumer at all (gating lives in Context Forge), making a new member
+a cross-repo contract change on top. Refusing to persist fixes the reported harm directly: the
+slice 362 artifact that cleared a gate carried `verdict: PASS`, and no artifact clears no gate.
+
+**#26 — `location_verified: bool | None`, not `bool`.** A plain boolean collapses "checked and
+bad" together with "never checked," and the second is the common case: both existing location
+checks are conditional on inputs most templates do not supply. A gate reading `False` as
+"hallucinated" would reject most legitimate findings on non-code templates. Field is written but
+not read this slice, following the `ReviewResult.provenance` precedent from slice 300.
+
+**916 design** (Phase 4, `916-slice.review-scope-correctness.md`). Sequence D → A → C → B → E,
+ordered so each part lands on code the previous one already consolidated. Notable decisions: A2
+normalizes `--diff` by *shape* — a bare ref becomes `<ref>...HEAD`, explicit `..`/`...` pass
+through — so only the buggy case changes and no new flag is needed; A4 makes an unresolvable ref
+fail before any model call, so it cannot masquerade as Part B's empty scope; E1/E3 set the SDK
+`tools` field from the declared list while keeping `bypassPermissions`, because the tool set was
+the real exposure and removing the mode alone would trade silent over-permission for a silent
+hang.
+
+Two facts checked during design rather than assumed. The Part B escape hatch exists: omitting a
+phase's `review:` key suppresses both review and checkpoint (`phase.py:76`), so nothing needs
+building. And `ClaudeAgentOptions.tools` is present on the pinned SDK 0.1.38 and emits `--tools`,
+so Part E does not depend on the #30 upgrade.
+
+Also unchecked the 900 initiative-plan entry, which was marked complete while carrying
+`status: not_started` and two incomplete slices.
 
 ---
 
