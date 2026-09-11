@@ -201,7 +201,7 @@ part boundary.
 
 - [ ] In `tests/review/test_git_utils.py`, table-test `normalize_diff_spec` across
       all three shapes, **including both pass-through cases** — the pass-throughs
-      are what protect `--diff a..b` from A6's rewrite.
+      are what protect `--diff a..b` from A.3's rewrite rule.
 - [ ] Cover a three-dot spec explicitly, to pin the check-order requirement in A.3.
 - [ ] Assert an unresolvable bare ref raises, and that not-a-git-repo and
       ref-not-found are distinguishable **by error type or a structured field**,
@@ -222,6 +222,10 @@ part boundary.
       git diff --name-only origin/main...HEAD
       ```
       The two file lists must agree — only the branch's own changes.
+- [ ] Success criterion 1 also names `gh pr view --json files` as an oracle. `git
+      diff --name-only <base>...HEAD` is the authoritative merge-base computation
+      and `gh` is not always available, so the git form is the required check and
+      the `gh` cross-check is optional — run it when reviewing a real PR.
 - [ ] Commit: `fix(review): normalize bare --diff refs to merge-base range`
 - [ ] Effort: 1
 
@@ -348,6 +352,10 @@ part boundary.
       review F001).
 - [ ] Raise a typed error carrying **which of B.2's two cases occurred** plus the
       matched exclusion patterns and the excluded file count, as structured fields.
+- [ ] Log at WARNING or above before raising, at both call sites. A typed exception
+      raised pre-flight surfaces at WARNING+ only if each entry point's handler
+      happens to log it — B is the part that exists to convert a silent PASS into a
+      loud failure, so the log level cannot be left to the handler.
 - [ ] Leave the existing rules-loading calls untouched — they do a different job.
 - [ ] Effort: 3
 
@@ -387,6 +395,9 @@ part boundary.
       structured case than all-excluded.
 - [ ] Pipeline test: both cases hold identically via the review action, not only
       via the CLI (design criterion 6).
+- [ ] Assert a WARNING-or-above log record is emitted for **both** cases at **both**
+      entry points. Exit code and structured field alone do not satisfy the standing
+      Failure-Mode Enumeration constraint.
 - [ ] **Rules-absent test**: with `resolve_rules_dir` returning `None`, the
       empty-scope refusal must still fire. This is the exact regression the
       original B1 would have shipped — it is the most important test in this part.
@@ -543,3 +554,35 @@ part boundary.
 - [ ] Confirm [#90](https://github.com/ecorkran/squadron/issues/90) remains open —
       slice-less review artifact naming is deliberately not addressed here.
 - [ ] Effort: 1
+
+---
+
+## Task Review Disposition
+
+Task review (`916-review.tasks.review-scope-correctness.md`, glm-5.3, CONCERNS,
+20260911, sha `c5fc4e1`). Four findings actioned; one rejected on verification.
+
+- **F005 (concern) — rejected, verified false.** The finding reasoned that
+  `tests/review/test_config_cwd.py` is attested in only one place in the documents
+  tree while D.3's three sibling test homes are multiply-attested, and inferred the
+  path was misremembered. The reviewer states it could not inspect `tests/`
+  directly. Checked: the file exists (3439 bytes), and its module docstring reads
+  *"Tests for config-based --cwd resolution in review commands"* — exactly the home
+  D.3 names. The attestation asymmetry is real but reflects the documents tree, not
+  the source tree. D.3 unchanged.
+- **F006 (concern) — accepted, the strongest finding.** Part B specified exit codes
+  and structured error fields but never a log level, making it the only part whose
+  new failure paths did not enforce the file's own standing Failure-Mode
+  Enumeration constraint — in the one part that exists to convert a silent PASS
+  into a loud failure. B.1 now requires a WARNING+ log before raising at both call
+  sites; B.4 now asserts the record for both cases at both entry points.
+- **F007 (note) — accepted.** A.6's "A6's rewrite" corrected to "A.3's rewrite
+  rule." The file leans on precise part references for navigation.
+- **F008 (note) — accepted.** A.7 now states explicitly that `git diff --name-only`
+  is the required oracle and the design's `gh pr view --json files` cross-check is
+  optional, rather than silently narrowing criterion 1.
+- **F009 (note) — acknowledged, no change.** C.4 is mechanically redundant with
+  C.2's enumeration, but interface parity across all four subcommands is a standing
+  project rule and design C5 calls it out specifically. Kept as an explicit
+  checkpoint.
+- **F001–F004 (pass)** — no action.
