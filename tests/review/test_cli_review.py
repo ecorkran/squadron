@@ -484,6 +484,10 @@ class TestScopedDiff:
                 "squadron.cli.commands.review.resolve_slice_diff_range",
                 return_value="abc123...122-slice.foo",
             ) as mock_resolve,
+            # This test is about range resolution, not scope: the fabricated
+            # range has no real commits behind it, so the empty-scope guard
+            # would refuse it before the assertion could run.
+            patch("squadron.cli.commands.review.assert_reviewable_scope"),
         ):
             result = cli_runner.invoke(app, ["review", "code", "122", "--no-save"])
         assert result.exit_code == 0

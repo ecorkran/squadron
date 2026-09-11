@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from enum import StrEnum
 
 from squadron.core.subprocess_text import TEXT_DECODING
 
@@ -97,6 +98,47 @@ class NotAGitRepositoryError(DiffSpecError):
 
 class RefNotFoundError(DiffSpecError):
     """Git ran and could not resolve the ref. The spec itself is the problem."""
+
+
+class EmptyScopeCase(StrEnum):
+    """Why a diff range yielded nothing to review.
+
+    Two different operator errors with two different fixes. Conflating them is
+    how issue #71 stayed unexplained, so callers branch on this field rather
+    than on message text.
+    """
+
+    #: The range had changed files, but every one matched an exclusion pattern.
+    #: The operator likely wants the review omitted, or a different range.
+    ALL_EXCLUDED = "all_excluded"
+    #: The range itself contains no changed files — wrong base, an
+    #: already-merged branch, or a typo.
+    NO_CHANGES = "no_changes"
+
+
+class EmptyScopeError(Exception):
+    """Raised when a review's filtered scope contains no files.
+
+    A review of nothing produces findings about the missing diff, which is then
+    persisted as a genuine verdict and clears review gates (issue #62). Refusing
+    pre-flight costs nothing and says why.
+
+    Carries the case, the matched exclusion patterns and the excluded file count
+    as structured fields so consumers never parse the message.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        case: EmptyScopeCase,
+        exclude_patterns: list[str] | None = None,
+        excluded_count: int = 0,
+    ) -> None:
+        super().__init__(message)
+        self.case = case
+        self.exclude_patterns = exclude_patterns or []
+        self.excluded_count = excluded_count
 
 
 class EmptyDiffError(Exception):
@@ -330,6 +372,98 @@ def normalize_diff_spec(spec: str, cwd: str) -> str:
         )
 
     return f"{spec}{THREE_DOT}HEAD"
+
+
+def _changed_paths(diff: str, cwd: str, exclude_patterns: list[str] | None) -> list[str] | None:
+    """Return changed paths for *diff*, or None if git could not answer.
+
+    ``None`` is distinct from ``[]``: the former means the range could not be
+    computed at all, the latter that it computed to nothing. Collapsing them is
+    what let an unreadable range look like an empty one.
+    """
+    args = ["diff", "--name-only", diff]
+    if exclude_patterns:
+        args += ["--", ".", *(f":!{pattern}" for pattern in exclude_patterns)]
+    result = run_git(args, cwd=cwd)
+    if result is None or result.returncode != 0:
+        return None
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def assert_reviewable_scope(
+    diff: str,
+    cwd: str,
+    exclude_patterns: list[str] | None = None,
+) -> list[str]:
+    """Refuse a review whose filtered scope contains no files. Returns those files.
+
+    Computes the unfiltered and filtered path lists itself rather than reusing
+    either caller's ``extract_diff_paths`` call: both are nested under a rules
+    directory check, so a guard hung off them would silently not run whenever no
+    rules directory resolves — which is the review most in need of the guard.
+
+    Logs at WARNING before raising. A typed exception surfaces at WARNING+ only
+    if each entry point's handler happens to log it, and this function exists to
+    turn a silent pass into a loud failure, so the level is not left to the
+    caller.
+
+    Raises ``EmptyScopeError`` carrying an ``EmptyScopeCase``.
+    """
+    unfiltered = _changed_paths(diff, cwd, None)
+    if unfiltered is None:
+        # git could not compute the range at all. Reported as NO_CHANGES: from
+        # the operator's side the range is equally unusable, and the remedy —
+        # check the range — is the same.
+        _logger.warning("Refusing review of %r in %r: git could not compute the range.", diff, cwd)
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: git could not compute that range. "
+            "Check the range and that this is a git repository.",
+            case=EmptyScopeCase.NO_CHANGES,
+        )
+
+    if not unfiltered:
+        _logger.warning("Refusing review of %r in %r: the range has no changed files.", diff, cwd)
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: that range contains no changed files. "
+            "The base may be wrong, or the branch may already be merged.",
+            case=EmptyScopeCase.NO_CHANGES,
+        )
+
+    filtered = _changed_paths(diff, cwd, exclude_patterns)
+    if filtered is None:
+        # The unfiltered form worked, so the pathspec is what git refused.
+        _logger.warning(
+            "Refusing review of %r in %r: git rejected the exclusion pathspec %r.",
+            diff,
+            cwd,
+            exclude_patterns,
+        )
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: git rejected the exclusion patterns {exclude_patterns!r}.",
+            case=EmptyScopeCase.ALL_EXCLUDED,
+            exclude_patterns=exclude_patterns,
+            excluded_count=len(unfiltered),
+        )
+
+    if not filtered:
+        excluded_count = len(unfiltered)
+        _logger.warning(
+            "Refusing review of %r in %r: all %d changed file(s) matched the exclusion patterns %r.",
+            diff,
+            cwd,
+            excluded_count,
+            exclude_patterns,
+        )
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: all {excluded_count} changed file(s) matched "
+            f"the exclusion patterns {exclude_patterns!r}. Review a range that "
+            "contains reviewable code, or omit the review for this change.",
+            case=EmptyScopeCase.ALL_EXCLUDED,
+            exclude_patterns=exclude_patterns,
+            excluded_count=excluded_count,
+        )
+
+    return filtered
 
 
 def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = None) -> str:

@@ -25,20 +25,32 @@ def cli_runner() -> CliRunner:
     return CliRunner()
 
 
-@pytest.fixture
-def git_repo(tmp_path: Path) -> Path:
-    """A real git work tree with one commit on a known branch."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "--initial-branch=main"], cwd=repo, check=True, capture_output=True)
-    (repo / "app.py").write_text("x = 1\n")
+def _commit(repo: Path, message: str) -> None:
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
     subprocess.run(
-        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "init"],
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", message],
         cwd=repo,
         check=True,
         capture_output=True,
     )
+
+
+@pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    """A git work tree on a feature branch with a real code change vs. main.
+
+    The branch must actually contain reviewable changes: the empty-scope guard
+    refuses a range with nothing in it, so a single-commit fixture would be
+    refused before any of these assertions could run.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "--initial-branch=main"], cwd=repo, check=True, capture_output=True)
+    (repo / "app.py").write_text("x = 1\n")
+    _commit(repo, "init")
+    subprocess.run(["git", "checkout", "-qb", "feature"], cwd=repo, check=True, capture_output=True)
+    (repo / "app.py").write_text("x = 2\n")
+    _commit(repo, "feature work")
     return repo
 
 

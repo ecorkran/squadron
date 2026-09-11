@@ -235,35 +235,35 @@ part boundary.
 
 ### Task C.1 — Define the save-outcome enum
 
-- [ ] Add a small enum to `src/squadron/cli/commands/review.py` (or the nearest
+- [x] Add a small enum to `src/squadron/cli/commands/review.py` (or the nearest
       shared review module) with four members covering the design's outcome table:
       **saved**, **suppressed** (`--no-save`), **not-persistable** (no slice
       identifier), **unsaved** (attempted and failed).
-- [ ] Per the project rule against scattered comparison values, every branch that
+- [x] Per the project rule against scattered comparison values, every branch that
       decides exit behavior references this enum — no boolean history, no string
       labels.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task C.2 — Invert the initializer and thread the outcome through
 
-- [ ] Replace each `saved = True` initializer
+- [x] Replace each `saved = True` initializer
       ([:616](src/squadron/cli/commands/review.py#L616),
       [:673](src/squadron/cli/commands/review.py#L673),
       [:760](src/squadron/cli/commands/review.py#L760),
       [:930](src/squadron/cli/commands/review.py#L930)) with the enum, defaulting
       to the not-persistable / unsaved side. Optimism about an unperformed write is
       the whole defect (design C1).
-- [ ] `_save_and_report` already returns `False` on `OSError`
+- [x] `_save_and_report` already returns `False` on `OSError`
       ([:266-268](src/squadron/cli/commands/review.py#L266-L268)) — map its return
       onto **saved** vs **unsaved**. No new failure machinery is needed.
-- [ ] `--no-save` maps to **suppressed**.
-- [ ] Update `_exit_on` ([:273](src/squadron/cli/commands/review.py#L273)) to take
+- [x] `--no-save` maps to **suppressed**.
+- [x] Update `_exit_on` ([:273](src/squadron/cli/commands/review.py#L273)) to take
       the outcome rather than a bare bool, preserving its existing precedence.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task C.3 — Exit behavior per the outcome table
 
-- [ ] Implement exactly this mapping — note that a slice-less `--diff` run
+- [x] Implement exactly this mapping — note that a slice-less `--diff` run
       **exits on verdict, not 1** (design C3, reversed after slice review F003):
 
   | Outcome | Exit |
@@ -273,66 +273,66 @@ part boundary.
   | not-persistable (no slice identifier) | on verdict, **plus a WARNING** |
   | unsaved (attempted and failed) | **1**, per `_exit_on` precedence |
 
-- [ ] The not-persistable WARNING must name **both** the fact (no artifact was
+- [x] The not-persistable WARNING must name **both** the fact (no artifact was
       written) and the remedy (supply a slice number, or `--output file` with
       `--output-path`). A warning that only reports absence leaves the operator
       where they started (design C4).
-- [ ] Do **not** invent an artifact naming scheme for slice-less reviews — that gap
+- [x] Do **not** invent an artifact naming scheme for slice-less reviews — that gap
       is [issue #90](https://github.com/ecorkran/squadron/issues/90), deliberately
       out of scope.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task C.4 — Apply to all four subcommands
 
-- [ ] `review_slice`, `review_arch`, `review_tasks`, and `review_code` all carry
+- [x] `review_slice`, `review_arch`, `review_tasks`, and `review_code` all carry
       the defect; all four get the same mechanism (design C5, interface parity).
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task C.5 — Test: save-outcome enum across all four subcommands
 
-- [ ] In `tests/cli/test_review_save.py` (existing home for save behavior), assert
+- [x] In `tests/cli/test_review_save.py` (existing home for save behavior), assert
       each of the four outcomes for each of the four subcommands.
-- [ ] Assert on **exit codes and the enum**, never on warning text.
-- [ ] The attempted-and-failed case: force `save_review_result` to raise `OSError`
+- [x] Assert on **exit codes and the enum**, never on warning text.
+- [x] The attempted-and-failed case: force `save_review_result` to raise `OSError`
       and assert exit 1 regardless of a PASS verdict.
-- [ ] The not-persistable case: assert exit 0 on PASS **and** that a WARNING-level
+- [x] The not-persistable case: assert exit 0 on PASS **and** that a WARNING-level
       record was emitted. Both halves — exit 0 alone was the bug's symptom.
-- [ ] Assert `--no-save` emits **no** warning.
-- [ ] Effort: 3
+- [x] Assert `--no-save` emits **no** warning.
+- [x] Effort: 3
 
 ### Task C.6 — Regression-guard the documented invocations
 
-- [ ] The design's Risk Assessment names this as the part touching the tool's
+- [x] The design's Risk Assessment names this as the part touching the tool's
       most-documented invocation. Add CLI tests pinning the forms that appear in
       shipped docs:
       - `sq review code --diff main --output json` (README:344) — exits on verdict,
         emits parseable JSON on stdout.
       - `sq review code --diff main --files "src/**/*.py"` (README:292).
       - The bare `--diff` form for `slice`, `arch`, and `tasks`.
-- [ ] Confirm by reading [README.md](README.md) lines 154, 176, 286, 292, 322, 341,
+- [x] Confirm by reading [README.md](README.md) lines 154, 176, 286, 292, 322, 341,
       344, 347 and [docs/COMMANDS.md](docs/COMMANDS.md) lines 90, 96 that each
       still describes working behavior. **No documentation updates are expected** —
       that is the point of the C3 revision. If implementation finds a case where
       exiting 0 is untenable, stop and raise it with the Project Manager rather
       than absorbing doc rewrites into this slice.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task C.7 — Verify and commit Part C
 
-- [ ] Run `uv run pytest tests/review tests/cli -q`. All green.
-- [ ] Run `uv run ruff format` then `uv run ruff check`.
-- [ ] Manual walkthrough against a range that does contain code:
+- [x] Run `uv run pytest tests/review tests/cli -q`. All green.
+- [x] Run `uv run ruff format` then `uv run ruff check`.
+- [x] Manual walkthrough against a range that does contain code:
       ```bash
       uv run sq review code --diff origin/main -v; echo "exit=$?"
       git status --short project-documents/user/reviews/
       ```
       Expect exit 0 on a PASS, findings on the terminal, a WARNING naming the
       absent artifact and the remedy, and no new file under `reviews/`.
-- [ ] Confirm `--no-save` exits on verdict with no warning.
-- [ ] Confirm a genuinely failing save (reviews directory pointed at a read-only
+- [x] Confirm `--no-save` exits on verdict with no warning.
+- [x] Confirm a genuinely failing save (reviews directory pointed at a read-only
       path) exits 1.
-- [ ] Commit: `fix(review): report unsaved reviews instead of assuming success`
-- [ ] Effort: 1
+- [x] Commit: `fix(review): report unsaved reviews instead of assuming success`
+- [x] Effort: 1
 
 ---
 

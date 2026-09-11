@@ -17,11 +17,14 @@ from squadron.review.git_utils import (
     GIT_COMMAND_TIMEOUT_SECONDS,
     INTEGRATION_BRANCH_KEY,
     DiffRangeUnresolvedError,
+    EmptyScopeCase,
+    EmptyScopeError,
     NotAGitRepositoryError,
     RefNotFoundError,
     _find_merge_commit,
     _find_slice_branch,
     _resolve_fork_point,
+    assert_reviewable_scope,
     normalize_diff_spec,
     resolve_diff_base,
     resolve_slice_diff_range,
@@ -571,3 +574,78 @@ class TestNormalizeDiffSpec:
                 normalize_diff_spec("no-such-ref", cwd=".")
         assert exc_info.value.ref == "no-such-ref"
         assert not isinstance(exc_info.value, NotAGitRepositoryError)
+
+
+class TestAssertReviewableScope:
+    """A review of nothing must be refused, and must say which kind of nothing."""
+
+    @pytest.fixture
+    def repo(self, tmp_path: Path) -> Path:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main"], cwd=repo, check=True, capture_output=True
+        )
+        (repo / "app.py").write_text("x = 1\n")
+        self._commit(repo, "init")
+        return repo
+
+    @staticmethod
+    def _commit(repo: Path, message: str) -> None:
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", message],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+
+    def _branch_with(self, repo: Path, filename: str, content: str) -> None:
+        subprocess.run(["git", "checkout", "-qb", "feature"], cwd=repo, check=True, capture_output=True)
+        (repo / filename).write_text(content)
+        self._commit(repo, "feature work")
+
+    def test_healthy_scope_passes_through(self, repo: Path) -> None:
+        self._branch_with(repo, "app.py", "x = 2\n")
+        assert assert_reviewable_scope("main...HEAD", str(repo), ["*.md"]) == ["app.py"]
+
+    def test_all_excluded_carries_patterns_and_count(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The range had changes, but every one matched an exclusion."""
+        self._branch_with(repo, "notes.md", "# notes\n")
+
+        with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+            with pytest.raises(EmptyScopeError) as exc_info:
+                assert_reviewable_scope("main...HEAD", str(repo), ["*.md"])
+
+        error = exc_info.value
+        assert error.case == EmptyScopeCase.ALL_EXCLUDED
+        assert error.exclude_patterns == ["*.md"]
+        assert error.excluded_count == 1
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_no_changes_at_all_is_a_distinct_case(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The range itself is the problem — wrong base, or already merged."""
+        with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+            with pytest.raises(EmptyScopeError) as exc_info:
+                assert_reviewable_scope("main...HEAD", str(repo), ["*.md"])
+
+        error = exc_info.value
+        assert error.case == EmptyScopeCase.NO_CHANGES
+        # Distinguishable by structured field, not by message text.
+        assert error.case != EmptyScopeCase.ALL_EXCLUDED
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_unusable_range_reports_no_changes(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """git could not compute the range at all."""
+        with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+            with pytest.raises(EmptyScopeError) as exc_info:
+                assert_reviewable_scope("no-such-ref...HEAD", str(repo), None)
+
+        assert exc_info.value.case == EmptyScopeCase.NO_CHANGES
+        assert [r for r in caplog.records if r.levelname == "WARNING"]

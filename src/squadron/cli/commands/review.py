@@ -29,6 +29,8 @@ from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     DiffSpecError,
+    EmptyScopeError,
+    assert_reviewable_scope,
     find_git_root,
     normalize_diff_spec,
     resolve_slice_diff_range,
@@ -1002,6 +1004,16 @@ def review_code(
 
     if use_json:
         output = "json"
+
+    # Pre-flight: a range with nothing reviewable in it must not reach the
+    # model. Deliberately outside the rules-dir branch below — a review with no
+    # rules directory needs this guard just as much (issue #62).
+    if diff:
+        try:
+            assert_reviewable_scope(diff, review_cwd, exclude_patterns)
+        except EmptyScopeError as exc:
+            rprint(f"[red]Error: {exc}[/red]")
+            raise typer.Exit(code=1) from exc
 
     verbosity = _resolve_verbosity(verbose)
 
