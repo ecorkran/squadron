@@ -14,6 +14,28 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Slice 381 design (Phase 4)
+
+Wrote `user/slices/381-slice.code-host-adapter-and-pr-target-resolution.md`. Layout: a
+`core/process_runner.py` seam (protocol, real runner, fake runner with `write_calls()`, distinct
+not-found and timeout errors) and a new `codehost/` package (models, errors, protocol, targets,
+remotes, refs, `github_cli.py`, `github_config.py`) with `cli → codehost → core` as the only
+import direction and a test walking both graphs. Two facts checked live shaped it: `gh api`
+failures are classifiable structurally (REST `status`, GraphQL `errors[].type`, exit 4 for auth
+per `gh help exit-codes`), so classification never matches message text; and
+`refs/pull/<n>/head` fetches for merged and cross-repository PRs on `ecorkran/squadron`, so a
+fork head needs no second remote. Pinned: the protocol gains one local read-only operation,
+`serves_host(hostname)`, because bare-form resolution must know which remotes belong to the host
+an implementation serves (fork-with-`upstream` refuses; GitHub plus a GitLab mirror resolves);
+`baseRefOid` makes "base moved since resolution" an exact post-fetch check, one error with a
+base/head role; branch-exists returns `False`, never raises; local refs are
+`refs/squadron/pr/<remote>/<n>/{base,head}`, force-updated and never cleaned; comment and PR
+bodies go over stdin; write operations are implemented and argv-pinned here but no 381 command
+calls them. `sq pr show [TARGET] [--cwd] [--json]` is the proving consumer; two doctor rows
+(`gh` on PATH, hosts file readable) are WARN-level presence checks. Live evidence target is PR
+83 (merged, cross-repository). Next: Phase 5 task breakdown for 381; announce the `app.py`
+registration edit to `sq-base` before making it.
+
 ### Initiative 380 slice plan (Phase 3)
 
 PM accepted the architecture at CONCERNS and advanced to Phase 3. Wrote
