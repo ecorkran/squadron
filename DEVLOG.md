@@ -14,6 +14,21 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Initiative 380 architecture review, rounds three and four
+
+Round three (minimax-m3) returned FAIL, but quoted phrases removed from the document two
+revisions earlier and re-raised findings the current file states explicitly; the run also cited
+`942-analysis.tech-debt-audit.md`, so it was reading around the tree, and the archived prior
+reviews beside the live artifact are the plausible source. Filed as issue #94. Two genuinely
+new items were pinned: "alive" for the orphan sweep means the worktree's lock file names a
+process that still exists, and every host write first requires the adapter's identify-operator
+call to return a login. `--model sonnet` cannot run here (SDK profile refuses to launch inside a
+Claude Code session); `gpt54` returned 429 quota exhausted. Round four (kimi27) was grounded,
+no stale quotes, CONCERNS: every finding asks for a config key name, default path, or interface
+signature that the Phase 2 prompt tells the architect to leave to slice design. Stopping at four
+rounds. Gate stands at CONCERNS pending PM decision on whether to accept the doc as
+architecture-level and proceed to the 380 slice plan.
+
 ### Initiative 380 architecture review, second round
 
 Re-review after the first disposition returned CONCERNS again: 10 concerns, 1 note, all new.
