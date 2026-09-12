@@ -586,3 +586,60 @@ Task review (`916-review.tasks.review-scope-correctness.md`, glm-5.3, CONCERNS,
   project rule and design C5 calls it out specifically. Kept as an explicit
   checkpoint.
 - **F001–F004 (pass)** — no action.
+
+---
+
+## Code Review Disposition
+
+Code review (`916-review.code.review-scope-correctness.md`, glm-5.3, CONCERNS,
+20260911, sha `0aae0c8`, 31 tool calls). Eight actionable findings, **all
+accepted and fixed** in `bc7dcad`; five PASS findings needed no action.
+
+- **F003 (concern) — accepted, the most serious.** Four strict-pyright errors,
+  every one introduced by this slice against a clean baseline. The save closures
+  captured `slice_info: SliceInfo | None` and passed it un-narrowed into a
+  non-optional parameter; `persistable=... is not None` gives a checker nothing
+  it can carry across a closure boundary. `review_arch` also passed
+  `arch_index: int | None` as a non-optional index — an error the review did not
+  catch. `_resolve_save_outcome` is now generic over the save target and passes
+  the narrowed value *into* the closure. **Process failure on my part: the
+  project rule makes zero pyright errors a merge blocker, and I did not run it
+  before reporting the slice complete.** `uv run pyright` now reports 0.
+- **F001 (concern) — accepted, verified exactly as described.** The parametrized
+  failed-save test passed for the wrong reason on `slice` and `tasks`: the
+  fixture's `design_file: None` tripped an earlier guard, so the review never
+  ran and no save was attempted — but every path exits 1, so the assertion
+  passed regardless. The fixture now supplies real design/arch/task files, the
+  code case stubs the scope guard, and the test asserts `mock_run_review.called`.
+  Confirmed the new assertion fails on exactly the two subcommands named.
+- **F002 (concern) — accepted.** `_changed_paths` returning `None` (bad ref,
+  refused range, no git) was reported as `NO_CHANGES`, whose documented meaning
+  is a well-formed but empty range. The enum's own contract is that callers
+  branch on the field, so a future consumer doing "already merged → skip the
+  review" would silently skip on a broken git invocation. Split out as
+  `UNCOMPUTABLE`, with a test asserting no two diagnoses share a member.
+- **F005 (note) — accepted despite being pre-existing.** `resolve_template_inputs`
+  overwrote a step-supplied `diff` with the slice-derived range, while the CLI
+  gives an explicit `--diff` precedence. Pre-existing, but it discarded a value
+  Part A had just normalized, and the asymmetry sat in the very function whose
+  comment claims interface parity. Explicit inputs now win in both places.
+- **F004 (note) — accepted.** The scope guard spawned the identical
+  `git diff --name-only` twice whenever no exclusion patterns applied. Reuses
+  the first answer; a test pins the single call.
+- **F006 (note) — accepted.** Docstring said "two" cases with three (now four)
+  members; `excluded_count` was populated in the `INVALID_EXCLUDE_PATTERN`
+  branch where nothing had been excluded.
+- **F008 (note) — accepted.** An assertion wrapped in `if ... is not None:` ran
+  only on machines with a user rules directory. The rules dir is now pinned to a
+  tmp path and the assertion is unconditional.
+- **F007 (note) — accepted as documentation.** Setting `tools` changes what
+  `allowed_tools` means for *every* SDK agent, not only reviews. The direction is
+  the security-correct one and shipped templates are pinned by tests, so the
+  change stands; CHANGELOG now carries a **Changed** entry describing the
+  migration.
+- **F009–F013 (pass)** — no action. F010 is worth noting: the reviewer verified
+  against the vendored `claude_agent_sdk` 0.1.38 that `options.tools` maps to
+  `--tools` while `allowed_tools` maps only to `--allowedTools`, confirming Part E
+  constrains the tool universe rather than merely pre-approving.
+
+Post-fix: 3506 tests pass, `ruff check` clean, `pyright` 0 errors.

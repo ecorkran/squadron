@@ -78,6 +78,29 @@ execution to the Claude Code CLI, which does not report individual calls back th
 loggers. A pre-existing observability gap, not one Part E introduced. Tool restriction was
 verified instead at the options boundary the SDK enforces.
 
+**Code review (glm-5.3, CONCERNS, sha `0aae0c8`) — all eight actionable findings fixed** in
+`bc7dcad`. The one that matters most: **four strict-pyright errors, every one introduced by this
+slice against a clean baseline.** The save closures captured `SliceInfo | None` and passed it
+un-narrowed into a non-optional parameter — `persistable=... is not None` gives a checker nothing
+it can carry across a closure boundary — and `review_arch` passed `int | None` as an index, which
+the review itself did not catch. `_resolve_save_outcome` is now generic over the save target and
+passes the narrowed value into the closure. **Process note: zero pyright errors is a merge
+blocker in this project and I did not run it before reporting the slice complete.** Running
+`uv run pyright` belongs in the per-part verification step alongside ruff and pytest, not at the
+end.
+
+Two other findings were real defects rather than polish. A parametrized failed-save test passed
+for the *wrong reason* on `slice` and `tasks`: the fixture's `design_file: None` tripped an
+earlier guard, so no save was attempted — but every path exits 1, so the assertion held anyway.
+It now asserts the review actually ran. And `EmptyScopeCase.NO_CHANGES` covered both "the range
+is genuinely empty" and "git could not compute the range", which defeats the enum's own stated
+contract: a consumer acting on "already merged → skip the review" would silently skip on a broken
+git invocation. Split out as `UNCOMPUTABLE`.
+
+Also accepted: a pre-existing parity gap where the pipeline overwrote a step-supplied `diff` with
+the slice-derived range (the CLI gives the explicit value precedence) — pre-existing, but it
+discarded a value Part A had just normalized, in the very function whose comment claims parity.
+
 **Carried forward.** `git_utils.py` grew from 320 to ~570 lines and `review.py` sits at ~1200
 (already 1058 before this slice) — both past the ~300 guideline. Splitting either would touch
 every part landed here, so it is left for a follow-up rather than absorbed into this slice.
