@@ -60,6 +60,20 @@ def patch_run_review(mock_review_result: ReviewResult):  # type: ignore[no-untyp
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def allow_any_scope():  # type: ignore[no-untyped-def]
+    """Neutralize the empty-scope guard for tests that are not about scope.
+
+    These tests invoke the CLI with no cwd isolation, so ``--diff main`` runs
+    against whatever the working checkout happens to contain — and once this
+    slice merged, ``main...HEAD`` there is legitimately empty. Scope refusal has
+    dedicated coverage in ``tests/cli/test_review_empty_scope.py``; here it is
+    ambient state that would otherwise make results depend on the checkout.
+    """
+    with patch("squadron.cli.commands.review.assert_reviewable_scope"):
+        yield
+
+
 class TestReviewSlice:
     """Test review slice command."""
 

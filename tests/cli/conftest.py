@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -108,3 +109,21 @@ def make_message_dict(
         "timestamp": "2026-02-28T00:00:00",
         "metadata": {},
     }
+
+
+@pytest.fixture(autouse=True)
+def isolate_reviews_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep saved review artifacts out of the working checkout.
+
+    ``REVIEWS_DIR`` is a repo-relative constant, so a CLI test whose save path
+    is not mocked writes a real review into ``project-documents/user/reviews/``
+    — and archives any prior file of the same name on the way. Two such files
+    reached a commit before this fixture existed.
+
+    Scoped to ``tests/cli`` rather than the root conftest: several tests under
+    ``tests/review`` build their own reviews directories and pass them
+    explicitly, and a blanket override would fight them.
+    """
+    reviews = tmp_path / "cli-reviews"
+    reviews.mkdir()
+    monkeypatch.setattr("squadron.review.persistence.REVIEWS_DIR", reviews)
