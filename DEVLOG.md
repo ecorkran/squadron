@@ -14,6 +14,25 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Initiative 380 architecture review disposition
+
+`sq review arch 380` (minimax-m3) returned CONCERNS: 11 concerns, 1 note. All addressed in the
+doc except one factual miss. Pinned as architecture: a save-target contract on the persistence
+side with the arch review migrated off its minimal-`SliceInfo` fabrication in the same slice;
+PR metadata enters through one optional input on the existing code template, rendered by the
+code prompt builder as a single labeled fenced block with a shared truncation limit; PR review
+frontmatter keeps `docType: review` with `sourceDocument` as the PR URL and a `pr` record, no
+slice fields, PR-keyed filename; scratch-worktree invariants (one per invocation, per-run id,
+registered, removed on success/failure/timeout, git-timeout bounded); PR base order is
+`--base`, then integration branch, then host default; tasks feed "how it was verified" and
+"known gaps"; composition uses the existing non-review one-shot path in
+`pipeline/summary_oneshot`; `gh` failure tests are unit-level through an injected
+process-runner seam. The "one implementation" over-engineering concern is answered by naming
+the concrete second: GitHub over its API for CI runs without `gh`. Rules degradation is now
+"reported, not suppressed" since `resolve_rules_dir` silently falls back to
+`~/.config/squadron/rules/`. The finding's claim that metrology keys on `slice:` in
+`capture.py`/`discovery.py` is unsupported by the code and was not acted on.
+
 ### Initiative 380 architecture (Phase 2)
 
 Wrote `user/architecture/380-arch.pull-request-workflow.md` for **Pull Request Workflow**,
