@@ -14,6 +14,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Initiative 380 slice plan (Phase 3)
+
+PM accepted the architecture at CONCERNS and advanced to Phase 3. Wrote
+`user/architecture/380-slices.pull-request-workflow.md`: six slices, 381-386. Foundation is
+the code-host adapter (381) with `sq pr show <target>` as its read-only proving consumer, so
+the boundary is verifiable before any model runs. 382 (`sq review pr`) ships before persistence
+and uses the existing not-persistable warning as the stated bridge; 383 (PR-keyed persistence,
+save-target contract absorbing arch and pipeline step-keyed saves) waits for 916 and 917 on
+`main` and for any context-forge schema change `cf validate frontmatter` demands; 384 (post)
+depends on 383; 385 (`sq pr create`) depends only on 381 and is placed after 384 for coherence;
+386 is parity, docs, and a recorded live run on this initiative's own PR. Future work holds the
+direct-API implementation, pipeline PR input, inline comments, other hosts, and cross-repo
+targets. Next: Phase 3 review of the slice plan, then Phase 4 design of 381.
+
 ### Initiative 380 architecture review, glm-5.3 rounds
 
 PM ran `--model glm53`: 20 tool calls, read slices 905 and 916 and the persistence and review
