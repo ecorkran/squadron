@@ -313,24 +313,30 @@ def _warn_not_persistable(review_type: str) -> None:
     )
 
 
-def _resolve_save_outcome(
+def _resolve_save_outcome[SaveTargetT](
     *,
     no_save: bool,
-    persistable: bool,
-    save: Callable[[], bool],
+    target: SaveTargetT | None,
+    save: Callable[[SaveTargetT], bool],
     review_type: str,
 ) -> SaveOutcome:
     """Decide and perform the save, returning what actually happened.
 
     Centralizing this keeps the four subcommands from each re-deriving the
     outcome from their own flag combination (design C5, interface parity).
+
+    ``target`` is what the review would be saved under — a ``SliceInfo``, or an
+    initiative index. ``None`` means there is nothing to name an artifact with.
+    It is passed *into* ``save`` rather than captured by it so the non-None
+    narrowing reaches the callee: a checker cannot carry a
+    ``target is not None`` test across a closure boundary.
     """
     if no_save:
         return SaveOutcome.SUPPRESSED
-    if not persistable:
+    if target is None:
         _warn_not_persistable(review_type)
         return SaveOutcome.NOT_PERSISTABLE
-    return SaveOutcome.SAVED if save() else SaveOutcome.UNSAVED
+    return SaveOutcome.SAVED if save(target) else SaveOutcome.UNSAVED
 
 
 def _save_and_report(
@@ -718,9 +724,11 @@ def review_slice(
 
     outcome = _resolve_save_outcome(
         no_save=no_save,
-        persistable=slice_info is not None,
-        save=lambda: _save_and_report(
-            result, "slice", slice_info, as_json=use_json, input_file=input_file
+        # Bound before the closure so the narrowing survives into it: a checker
+        # cannot carry `persistable=... is not None` across the lambda boundary.
+        target=slice_info,
+        save=lambda info: _save_and_report(
+            result, "slice", info, as_json=use_json, input_file=input_file
         ),
         review_type="slice",
     )
@@ -777,7 +785,7 @@ def review_arch(
         rules_dir=resolved_rules_dir,
     )
 
-    def _save_arch() -> bool:
+    def _save_arch(index: int) -> bool:
         # Build a minimal SliceInfo for save — arch reviews use initiative index
         arch_name = (
             Path(input_file).stem.split(".", 1)[1]
@@ -790,7 +798,7 @@ def review_arch(
             _logger.warning("Could not resolve project name from ContextForge: %s", exc)
             project_name = "unknown"
         arch_slice_info = SliceInfo(
-            index=arch_index,
+            index=index,
             name=arch_name,
             slice_name=arch_name,
             design_file=None,
@@ -804,7 +812,7 @@ def review_arch(
 
     outcome = _resolve_save_outcome(
         no_save=no_save,
-        persistable=arch_index is not None,
+        target=arch_index,
         save=_save_arch,
         review_type="arch",
     )
@@ -901,6 +909,7 @@ def review_tasks(
         # Every part is saved before exiting: the reviews have already been
         # paid for, so one unwritable part must not cost the others.
         def _save_part(
+            info: SliceInfo,
             part_result: ReviewResult = result,
             path: str = task_path,
             suf: str | None = suffix,
@@ -910,7 +919,7 @@ def review_tasks(
             return _save_and_report(
                 part_result,
                 "tasks",
-                slice_info,
+                info,
                 as_json=use_json,
                 input_file=path,
                 name_suffix=suf,
@@ -918,7 +927,7 @@ def review_tasks(
 
         part_outcome = _resolve_save_outcome(
             no_save=no_save,
-            persistable=slice_info is not None,
+            target=slice_info,
             save=_save_part,
             review_type="tasks",
         )
@@ -1077,8 +1086,8 @@ def review_code(
 
     outcome = _resolve_save_outcome(
         no_save=no_save,
-        persistable=slice_info is not None,
-        save=lambda: _save_and_report(result, "code", slice_info, as_json=use_json),
+        target=slice_info,
+        save=lambda info: _save_and_report(result, "code", info, as_json=use_json),
         review_type="code",
     )
 

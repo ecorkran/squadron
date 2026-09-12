@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SDK-backed reviews are limited to the tools their template declares, so a read-only review can no longer run shell commands (#69)
 - An unresolvable `--diff` ref now fails immediately, naming the ref, instead of spending a model call to find out (#89)
 
+### Changed
+- **`allowed_tools` now limits which tools an SDK agent has at all, not just which are pre-approved.** This affects every SDK agent — spawn and pipeline dispatch as well as reviews. A config that previously listed a few tools in `allowed_tools` and relied on the rest staying available (permission-gated) will now find the rest absent. List every tool an agent needs. Tool names must be squadron's canonical ones (`read_file`, `list_files`, `grep`, `write_file`, `bash`); an unrecognized name fails loudly rather than being ignored
+
 ## [0.12.2] - 20260909
 
 ### Changed

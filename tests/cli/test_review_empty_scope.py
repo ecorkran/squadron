@@ -291,3 +291,61 @@ class TestPipelineNormalizesDiff:
         assert mock_review.called, "the review should have run on a healthy scope"
         call_inputs = mock_review.call_args[0][1]
         assert call_inputs["diff"] == "main...HEAD"
+
+
+class TestPipelineExplicitDiffWins:
+    """A step-supplied `diff` survives slice resolution, as the CLI's --diff does.
+
+    `sq review code 118 --diff main` keeps the explicit range; a pipeline step
+    carrying both `slice` and `diff` must mean the same thing (issue #89 parity).
+    """
+
+    @pytest.mark.asyncio
+    async def test_step_diff_is_not_overwritten_by_slice_range(self, healthy_repo: Path) -> None:
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("claude-sonnet-4-20250514", None)
+        ctx = ActionContext(
+            pipeline_name="p",
+            run_id="run-1",
+            params={"template": "code", "slice": 916, "diff": "main"},
+            step_name="code-review",
+            step_index=1,
+            prior_outputs={},
+            resolver=resolver,
+            cf_client=MagicMock(),
+            cwd=str(healthy_repo),
+        )
+
+        slice_info = {
+            "index": 916,
+            "name": "probe",
+            "slice_name": "probe",
+            "design_file": None,
+            "task_files": [],
+            "arch_file": None,
+            "project": "squadron",
+        }
+
+        with (
+            patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
+            patch(f"{_PIPELINE}.save_review_file", return_value=None),
+            patch(f"{_PIPELINE}.format_review_markdown", return_value="# Review"),
+            patch(f"{_PIPELINE}.resolve_slice_info", return_value=slice_info),
+            # Would otherwise replace the step's value with a slice-derived range.
+            patch(
+                "squadron.review.template_inputs.resolve_slice_diff_range",
+                return_value="deadbeef...HEAD",
+            ),
+        ):
+            mock_review.return_value = ReviewResult(
+                verdict=Verdict.PASS,
+                findings=[],
+                raw_output="PASS",
+                template_name="code",
+                input_files={"cwd": str(healthy_repo)},
+            )
+            await ReviewAction().execute(ctx)
+
+        assert mock_review.called
+        call_inputs = mock_review.call_args[0][1]
+        assert call_inputs["diff"] == "main...HEAD"

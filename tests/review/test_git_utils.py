@@ -664,16 +664,46 @@ class TestAssertReviewableScope:
         assert exc_info.value.case != EmptyScopeCase.ALL_EXCLUDED
         assert [r for r in caplog.records if r.levelname == "WARNING"]
 
-    def test_unusable_range_reports_no_changes(
+    def test_unusable_range_is_distinct_from_an_empty_one(
         self, repo: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """git could not compute the range at all."""
+        """git could not compute the range at all — nothing is known about emptiness.
+
+        This must not report NO_CHANGES: a consumer acting on that case
+        ("already merged, skip the review") would then silently skip on a
+        broken git invocation.
+        """
         with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
             with pytest.raises(EmptyScopeError) as exc_info:
                 assert_reviewable_scope("no-such-ref...HEAD", str(repo), None)
 
-        assert exc_info.value.case == EmptyScopeCase.NO_CHANGES
+        assert exc_info.value.case == EmptyScopeCase.UNCOMPUTABLE
+        assert exc_info.value.case != EmptyScopeCase.NO_CHANGES
         assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_no_patterns_does_not_run_the_same_diff_twice(self, repo: Path) -> None:
+        """With no exclusions the filtered command is identical — reuse, don't respawn."""
+        self._branch_with(repo, "app.py", "x = 2\n")
+
+        with patch("squadron.review.git_utils._changed_paths", return_value=["app.py"]) as mock_changed:
+            assert assert_reviewable_scope("main...HEAD", str(repo), None) == ["app.py"]
+
+        assert mock_changed.call_count == 1
+
+    def test_every_case_is_reachable_and_distinct(self, repo: Path) -> None:
+        """No two diagnoses may share a member — the whole point of the taxonomy."""
+        self._branch_with(repo, "notes.md", "# notes\n")
+        seen: list[EmptyScopeCase] = []
+
+        with pytest.raises(EmptyScopeError) as excluded:
+            assert_reviewable_scope("main...HEAD", str(repo), ["*.md"])
+        seen.append(excluded.value.case)
+
+        with pytest.raises(EmptyScopeError) as uncomputable:
+            assert_reviewable_scope("no-such-ref...HEAD", str(repo), None)
+        seen.append(uncomputable.value.case)
+
+        assert len(set(seen)) == len(seen)
 
 
 class TestExtractDiffPathsIsBounded:

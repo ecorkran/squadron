@@ -105,8 +105,16 @@ def resolve_template_inputs(
     Iterates each ``TemplateInputSpec`` for the template.  When ``source``
     returns a non-None value, ``inputs[spec.key]`` is set.  Unknown template
     names produce no changes and no error.
+
+    A key already present in ``inputs`` was supplied explicitly by the caller
+    and wins over the slice-derived value. This mirrors the CLI, where an
+    explicit ``--diff`` takes precedence over ``resolve_slice_diff_range``:
+    ``sq review code 118 --diff main`` and a pipeline step carrying both
+    ``slice`` and ``diff`` must mean the same thing.
     """
     for spec in TEMPLATE_INPUTS.get(template_name, []):
+        if spec.key in inputs:
+            continue
         value = spec.source(info, cwd)
         if value is not None:
             inputs[spec.key] = value

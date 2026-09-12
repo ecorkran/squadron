@@ -108,21 +108,28 @@ class RefNotFoundError(DiffSpecError):
 class EmptyScopeCase(StrEnum):
     """Why a diff range yielded nothing to review.
 
-    Two different operator errors with two different fixes. Conflating them is
-    how issue #71 stayed unexplained, so callers branch on this field rather
-    than on message text.
+    Each member is a distinct operator error with a distinct remedy. Conflating
+    them is how issue #71 stayed unexplained, so callers branch on this field
+    rather than on message text — and no member may cover two diagnoses, or a
+    consumer acting on one ("already merged, skip the review") silently acts on
+    the other too.
     """
 
     #: The range had changed files, but every one matched an exclusion pattern.
     #: The operator likely wants the review omitted, or a different range.
     ALL_EXCLUDED = "all_excluded"
     #: The range itself contains no changed files — wrong base, an
-    #: already-merged branch, or a typo.
+    #: already-merged branch, or a typo. The range is well-formed; it is empty.
     NO_CHANGES = "no_changes"
     #: git refused the exclusion pathspec itself. Distinct from ALL_EXCLUDED:
     #: the patterns are malformed rather than over-broad, so the remedy is to
     #: fix the patterns, not to pick a different range.
     INVALID_EXCLUDE_PATTERN = "invalid_exclude_pattern"
+    #: git could not compute the range at all — a bad ref, a refused range, or
+    #: no usable git. Nothing is known about whether the range is empty, so this
+    #: must not be folded into NO_CHANGES: "skip, already merged" is a valid
+    #: response to that one and a wrong response to this.
+    UNCOMPUTABLE = "uncomputable"
 
 
 class EmptyScopeError(Exception):
@@ -420,14 +427,11 @@ def assert_reviewable_scope(
     """
     unfiltered = _changed_paths(diff, cwd, None)
     if unfiltered is None:
-        # git could not compute the range at all. Reported as NO_CHANGES: from
-        # the operator's side the range is equally unusable, and the remedy —
-        # check the range — is the same.
         _logger.warning("Refusing review of %r in %r: git could not compute the range.", diff, cwd)
         raise EmptyScopeError(
             f"Cannot review {diff!r}: git could not compute that range. "
             "Check the range and that this is a git repository.",
-            case=EmptyScopeCase.NO_CHANGES,
+            case=EmptyScopeCase.UNCOMPUTABLE,
         )
 
     if not unfiltered:
@@ -438,7 +442,9 @@ def assert_reviewable_scope(
             case=EmptyScopeCase.NO_CHANGES,
         )
 
-    filtered = _changed_paths(diff, cwd, exclude_patterns)
+    # With no exclusion patterns the filtered form is the same git command with
+    # the same arguments, so reuse the answer rather than spawning it twice.
+    filtered = _changed_paths(diff, cwd, exclude_patterns) if exclude_patterns else unfiltered
     if filtered is None:
         # The unfiltered form worked, so the pathspec is what git refused.
         _logger.warning(
@@ -452,7 +458,8 @@ def assert_reviewable_scope(
             f"{exclude_patterns!r}. Check the pattern syntax.",
             case=EmptyScopeCase.INVALID_EXCLUDE_PATTERN,
             exclude_patterns=exclude_patterns,
-            excluded_count=len(unfiltered),
+            # Not excluded_count: nothing was excluded — git refused the
+            # pathspec before filtering anything.
         )
 
     if not filtered:

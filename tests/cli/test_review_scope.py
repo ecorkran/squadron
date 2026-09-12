@@ -108,10 +108,21 @@ class TestDiffSpecNormalizationAtCLI:
         git_repo: Path,
     ) -> None:
         """The prompt input and the path extraction get the same normalized range."""
+        rules_dir = git_repo / ".claude" / "rules"
+        rules_dir.mkdir(parents=True)
+        (rules_dir / "python.md").write_text("---\npaths: [**/*.py]\n---\nrules.\n")
+
         with (
             patch(
                 "squadron.cli.commands.review.get_config",
                 side_effect=_config_reader(str(git_repo)),
+            ),
+            # Pinned rather than left to machine state: resolve_rules_dir falls
+            # back to ~/.config/squadron/rules, so without this the extraction
+            # assertion below runs only on machines that happen to have one.
+            patch(
+                "squadron.cli.commands.review.resolve_rules_dir",
+                return_value=rules_dir,
             ),
             patch(
                 "squadron.cli.commands.review.extract_diff_paths",
@@ -123,8 +134,9 @@ class TestDiffSpecNormalizationAtCLI:
         assert result.exit_code == 0, result.output
         _, inputs = mock_run_review.call_args.args
         assert inputs["diff"] == "main...HEAD"
-        if mock_extract.call_args is not None:
-            assert mock_extract.call_args.args[0] == "main...HEAD"
+        # Unconditional: both consumers must see the same normalized range.
+        assert mock_extract.call_args is not None, "path extraction never ran"
+        assert mock_extract.call_args.args[0] == "main...HEAD"
 
     def test_explicit_range_is_not_rewritten(
         self,

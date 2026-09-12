@@ -76,8 +76,8 @@ class TestSaveOutcomeResolution:
         calls: list[int] = []
         outcome = _resolve_save_outcome(
             no_save=True,
-            persistable=True,
-            save=lambda: calls.append(1) or True,
+            target="slice",
+            save=lambda _info: calls.append(1) or True,
             review_type="code",
         )
         assert outcome == SaveOutcome.SUPPRESSED
@@ -87,8 +87,8 @@ class TestSaveOutcomeResolution:
         calls: list[int] = []
         outcome = _resolve_save_outcome(
             no_save=False,
-            persistable=False,
-            save=lambda: calls.append(1) or True,
+            target=None,
+            save=lambda _info: calls.append(1) or True,
             review_type="code",
         )
         assert outcome == SaveOutcome.NOT_PERSISTABLE
@@ -96,13 +96,13 @@ class TestSaveOutcomeResolution:
 
     def test_successful_write_is_saved(self) -> None:
         outcome = _resolve_save_outcome(
-            no_save=False, persistable=True, save=lambda: True, review_type="code"
+            no_save=False, target="slice", save=lambda _info: True, review_type="code"
         )
         assert outcome == SaveOutcome.SAVED
 
     def test_failed_write_is_unsaved(self) -> None:
         outcome = _resolve_save_outcome(
-            no_save=False, persistable=True, save=lambda: False, review_type="code"
+            no_save=False, target="slice", save=lambda _info: False, review_type="code"
         )
         assert outcome == SaveOutcome.UNSAVED
 
@@ -179,16 +179,24 @@ class TestFailedSaveExitsOne:
         docs: tuple[str, str],
         tmp_path: Path,
     ) -> None:
+        # A real design_file and arch_file: review_slice and review_tasks both
+        # exit 1 at their own "no design file" guard, so a None here would make
+        # this test pass without the save ever being attempted.
+        design = tmp_path / "916-slice.probe.md"
+        design.write_text("# design\n")
+        arch = tmp_path / "100-arch.probe.md"
+        arch.write_text("# arch\n")
+        tasks = tmp_path / "916-tasks.probe.md"
+        tasks.write_text("# tasks\n")
         slice_info = {
             "index": 916,
             "name": "Probe",
             "slice_name": "probe",
-            "design_file": None,
-            "task_files": [str(tmp_path / "916-tasks.probe.md")],
-            "arch_file": None,
+            "design_file": str(design),
+            "task_files": [tasks.name],
+            "arch_file": str(arch),
             "project": "squadron",
         }
-        Path(slice_info["task_files"][0]).write_text("# tasks\n")
 
         if subcommand == "arch":
             argv = ["review", "arch", "916"]
@@ -222,7 +230,21 @@ class TestFailedSaveExitsOne:
                 "squadron.cli.commands.review._resolve_arch_file",
                 return_value=docs[0],
             ),
+            # The code path would otherwise run a real git diff against the host
+            # repo, so its exit 1 could come from the scope guard rather than
+            # from the failed save.
+            patch("squadron.cli.commands.review.assert_reviewable_scope"),
+            patch(
+                "squadron.cli.commands.review.TASKS_DIR",
+                tmp_path,
+            ),
         ):
             result = cli_runner.invoke(app, argv)
 
         assert result.exit_code == 1, result.output
+        # The exit must come from the failed write, not from an earlier guard:
+        # without this the test passes for the wrong reason on every subcommand
+        # whose preconditions happen to fail first.
+        assert mock_run_review.called, (
+            f"{subcommand}: review never ran, so exit 1 did not come from the save"
+        )
