@@ -4,111 +4,102 @@ layer: project
 reviewType: arch
 slice: pull-request-workflow
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 sourceDocument: project-documents/user/architecture/380-arch.pull-request-workflow.md
-aiModel: minimax/minimax-m3
+aiModel: moonshotai/kimi-k2.7-code
 status: complete
 dateCreated: 20260912
 dateUpdated: 20260912
-reviewedSha: bd306bc808e9f85f4045ae4ca790bbd98ba685c8
+reviewedSha: b2da5532ca2731051ca04403caf9f7a546eb6009
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 37
+toolCallsMade: 22
 findings:
   - id: F001
-    severity: fail
-    category: consistency
-    summary: "PR-base selection contradicts the documented integration-branch hard rule"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
-  - id: F002
-    severity: fail
+    severity: concern
     category: completeness
-    summary: "Save-target contract surface is load-bearing but undefined"
+    summary: "Save-target contract is undefined"
     location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  - id: F002
+    severity: concern
+    category: consistency
+    summary: "PR base selection conflates local integration branch with host PR target"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F003
     severity: concern
-    category: abstraction
-    summary: "Adapter protocol operations carry GitHub vocabulary despite the stated design rule"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    category: feasibility
+    summary: "PR description fixed-section contract relies on unvalidated model output"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F004
     severity: concern
-    category: completeness
-    summary: "Base ref for merge-base computation is missing from the fetching invariants"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: abstraction
+    summary: "Adapter protocol operation names still carry host vocabulary"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
   - id: F005
     severity: concern
     category: completeness
-    summary: "Idempotency mechanism for posted comments is unspecified; \"must not stack\" but no contract on races"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    summary: "Doctor check for host adapter is not detailed"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
   - id: F006
     severity: concern
-    category: feasibility
-    summary: "Direct GitHub API implementation is \"designed for, not scheduled\" but is what justifies the adapter protocol"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+    category: completeness
+    summary: "Unplanned-repository persistence location is unspecified"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F007
     severity: concern
-    category: completeness
-    summary: "Scratch-worktree orphan sweep is asserted but \"alive\" is undefined"
+    category: consistency
+    summary: "Reviewed SHA semantics for PR reviews are unclear"
     location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F008
     severity: concern
     category: feasibility
-    summary: "PR description section structure is delegated to the model but enforcement is asserted, not specified"
+    summary: "PR metadata injection into code template is unspecified"
     location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F009
     severity: note
     category: extension-points
-    summary: "Frontmatter gains two new fields without coordination note with initiative 360"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
-  - id: F010
-    severity: note
-    category: completeness
-    summary: "Identity refusal policy stated without a mechanism"
-    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    summary: "No slice allocated for direct GitHub API implementation"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
 ---
 
 # Review: arch — slice 380
 
-**Verdict:** FAIL
-**Model:** minimax/minimax-m3
+**Verdict:** CONCERNS
+**Model:** moonshotai/kimi-k2.7-code
 
 ## Findings
 
-### [FAIL] PR-base selection contradicts the documented integration-branch hard rule
+### [CONCERN] Save-target contract is undefined
 
-The "PR base selection" paragraph names "the configured integration branch when `cf` reports one" as the second-preference PR target, falling through to "the host's default branch." This contradicts `CLAUDE.md`'s git rules, which define `git.integration_branch` as the local ref slice branches **fork from and merge into**, and state the hard rule: "never merge to `main` when `integration_branch` is set." `project-documents/user/analysis/942-analysis.tech-debt-audit.md:26` and `:89` (F052) already document `git_utils.py:71,149` as hardcoding `"main"` because `git.integration_branch` is a *local* concept that doesn't belong in reviewed-branch resolution. Repurposing it as a PR base (a) reverses its semantic direction — what you PR *against* vs. what you merge *into* — and (b) silently re-purposes an existing config key for a user who already set it for slice workflow. The document must either name a different key (e.g., a new `pr.base` setting) or drop this preference. As written, a user who configured `git.integration_branch=dev/erik` would have their `sq pr create` target `dev/erik` on the host, which is the opposite of how the rule is documented and the opposite of what most operators want.
+The document states "This initiative introduces a save-target contract on the persistence side that a slice target and a PR target both satisfy" but never enumerates the contract's methods, attributes, or filename-stem rules. Current `save_review_result` in `src/squadron/review/persistence.py:454` requires a concrete `SliceInfo` and builds filenames from `slice_info['index']` and `slice_info['slice_name']`. The `_resolve_save_outcome` helper in `src/squadron/cli/commands/review.py:316` is generic but only as `Callable[[SaveTargetT], bool]`, with no protocol. The PR-keyed persistence slice cannot be planned or sized without defining what a target must provide.
 
-### [FAIL] Save-target contract surface is load-bearing but undefined
+### [CONCERN] PR base selection conflates local integration branch with host PR target
 
-The Architectural Principles section states the contract "is small: a target yields the filename stem, the target-specific frontmatter fields, and the reviews directory" — but does not enumerate the contract surface. Anticipated slice 3 ("PR-keyed review persistence") is explicitly tasked with *introducing* this contract, and the document says the same slice migrates the existing arch review (which today fabricates a minimal `SliceInfo` at `src/squadron/cli/commands/review.py:556-577`) onto it. Without enumerating the contract's required methods (filename stem? frontmatter extras dict? persistence directory callable? reviewers directory? integration with archiving/digest/integrity from the 900-band?), slice 3 cannot be sized, and the "migrate arch review onto it in the same slice" claim is unprovable. Additionally, the document says PR reviews persist into "the project's reviews directory when one exists or into a configured squadron-owned location when the repository has none," without naming where that configured location comes from (CLI flag? `cf` config key? home-dir default? `XDG_DATA_HOME`-style resolution?). This is precisely the kind of decision `CLAUDE.md` flags under "Never use silent fallback values." Slice 3 is not plannable from this document.
+The document says `sq pr create` targets "an explicit `--base`, the configured integration branch when `cf` reports one (never `main` in that case), else the host's default branch." But `git.integration_branch` is documented in `CLAUDE.md` and `src/squadron/review/git_utils.py:17` as the *local* ref that slice branches fork from and merge into. Using it as the host-side PR base changes the meaning of an existing config key for operators who already set it for slice reviews, and it contradicts the integration-branch rule's intent. The document does not acknowledge this semantic shift or explain why the same key should now name a PR target.
 
-### [CONCERN] Adapter protocol operations carry GitHub vocabulary despite the stated design rule
+### [CONCERN] PR description fixed-section contract relies on unvalidated model output
 
-The Host-Adapter Boundary principle states operations are "named by what squadron needs, not by any host's feature vocabulary," then the very next sentence lists "list unresolved review discussions" — GitHub's term. GitLab calls these "unresolved threads"; Gerrit has "open patch sets" / "draft comments." If the protocol is genuinely host-neutral, the operations should be named by intent (`list_unresolved_review_threads`, `post_review`, `open_pull_request`, `current_operator_identity`). As written, the principle and the example list disagree, and a second host implementation will either rename everything or carry the GitHub-isms forward. This is a load-bearing abstraction choice — pick names that describe intent and write them down.
+The body section structure is produced by a one-shot model call through `capture_summary_via_profile` (`src/squadron/pipeline/summary_oneshot.py`). The document says "squadron writes the headings and asks the model only for the prose under each, then checks that every required section is present," but does not specify how the model is constrained to emit only prose under fixed headings or how squadron recovers when the model emits different headings, drops a section, or emits unstructured text. The prior review in `project-documents/user/reviews/archive/380-review.arch.pull-request-workflow.md` raised the same issue; the current text still does not choose between template-based enforcement and a structured intermediate.
 
-### [CONCERN] Base ref for merge-base computation is missing from the fetching invariants
+### [CONCERN] Adapter protocol operation names still carry host vocabulary
 
-The document states the reviewed range is "merge-base to head" and that "the adapter fetches into a namespaced local ref" — but `git merge-base` requires *both* refs to exist locally. The invariants list describes fetching the head and namespacing it; they do not name the base ref's fetch (e.g., `refs/pull/N/base` on GitHub, or the host's `refs/heads/<base-branch>`). A shallow clone, a freshly-cloned repo with no `origin/main` fetch, or a PR whose base branch was never fetched locally will produce an `EmptyScopeError` (per slice 916) that the operator reads as "wrong base" rather than "fetch failed." The fix is small (fetch the base under the same namespacing discipline, or document the failure mode as a distinct error) but the document doesn't list it.
+The document states operations are "named by intent, not by any host's feature vocabulary," but lists "read its open review comments, post a comment, create a PR, identify the operator." "Open review comments" is GitHub-specific terminology (GitLab uses "unresolved threads," etc.). A protocol cannot be host-neutral if its operation names embed one host's feature names.
 
-### [CONCERN] Idempotency mechanism for posted comments is unspecified; "must not stack" but no contract on races
+### [CONCERN] Doctor check for host adapter is not detailed
 
-The document says the comment "is marked so squadron can find and update its own prior comment" but does not choose between the two viable mechanisms: (a) hidden marker in the comment body discoverable via the host on every post, or (b) a local index mapping `(host, owner, repo, PR)` to the comment id. The trade-offs differ — (a) survives machine moves and CI but the marker format must not leak through the protocol and must survive body edits; (b) is faster but breaks when `sq review pr --post` is run from a fresh checkout or CI runner. The document also asserts "must not stack" but acknowledges a race between lookup and post without saying whether concurrent posts are out of contract (then "best effort" should replace "must not") or whether they are serialized somewhere. This is a load-bearing decision deferred to slice design without a clear resolution path.
+The document states "`sq doctor` gains checks for the host adapter (`gh` present, authenticated, host reachable)" but `src/squadron/cli/commands/doctor_checks.py` currently has no such check, and the document does not specify the check function, section, or how "host reachable" is determined without violating the `doctor_checks.py` module docstring ("no network, no subprocesses"). This is load-bearing functionality described as if designed but left to implementation.
 
-### [CONCERN] Direct GitHub API implementation is "designed for, not scheduled" but is what justifies the adapter protocol
+### [CONCERN] Unplanned-repository persistence location is unspecified
 
-The Design Goals state the protocol is shaped "so that GitHub over its API directly ... is a second implementation with no protocol change; that implementation is designed for, not scheduled." This second implementation is the *only* thing that justifies "host behind a protocol" rather than "gh wrapper" — it is what pressure-tests the boundary and forces host-neutral naming. Without a scheduled slice, `gh`-specific shapes will inevitably leak into the protocol because nothing else exercises it. Either allocate a slice (even if deferred) in Anticipated Slices, or drop the claim and re-frame the architecture as "gh-first, with the protocol boundary maintained as a soft constraint." The auth source for this second impl is also unaddressed (`GITHUB_TOKEN` env var? `gh auth token`? app installation token? PAT?) — directly flagged by `CLAUDE.md` as the kind of decision that must be made, not hand-waved.
+The document says when the repository has no `project-documents/`, reviews save to "a configured squadron data directory keyed by host, owner, and repository." It does not name the config key, environment variable, or default path, nor how the operator discovers or overrides it. `CLAUDE.md` explicitly forbids silent fallback values and magic defaults, so this gap is a concrete design risk.
 
-### [CONCERN] Scratch-worktree orphan sweep is asserted but "alive" is undefined
+### [CONCERN] Reviewed SHA semantics for PR reviews are unclear
 
-The invariants list cleanup on success, failure, and timeout, and add that "each invocation also sweeps: it prunes squadron-owned worktrees whose run is no longer alive before creating its own." The definition of "alive" is missing. PID file? Process group? PID namespace? `os.kill(pid, 0)`? A `SIGKILL`ed process leaves no cleanup hook; an OOM kill or machine reboot leaves no cleanup at all. The per-run id avoids *collisions* (because it is fresh per invocation), but not *accumulation* — orphans from crashed invocations sit under squadron's data directory with `git worktree` still tracking them. The document mentions no startup prune ("on `sq doctor`, list orphans") and no age-based retention. For a heavy PR-review workload, this leaks worktrees silently. Specify how "alive" is determined and add at least one startup-time sweep (e.g., prune orphans older than N days or older than the last `sq doctor` run).
+The document says "the reviewed head sha is recorded as it is for slice reviews." For slice reviews, `resolve_reviewed_sha` in `src/squadron/review/persistence.py:115` resolves local `HEAD`. For PR reviews, the relevant SHA is the PR head fetched into a namespaced ref, not the operator's local HEAD. The document does not state whether `resolve_reviewed_sha` is adapted, replaced, or supplied by the adapter, risking a mismatch between the recorded SHA and the actual reviewed tree.
 
-### [CONCERN] PR description section structure is delegated to the model but enforcement is asserted, not specified
+### [CONCERN] PR metadata injection into code template is unspecified
 
-The document says "squadron writes the headings and asks the model only for the prose under each, then checks that every required section is present and non-empty before creating the PR." The wording is right, but the mechanism is not specified: how is the prompt structured so the model fills *under* each heading rather than rewriting the body? The section structure is also called a contract that `sq review pr` itself will parse — but the doc does not name who checks it on the read side, what schema the parser expects, or what happens when the parser sees a section it doesn't recognize. If the structure is a contract for both human and AI readers, both ends need to be specified; "ask the model" plus "check that every required section is present" is the enforcement story only at a coarse level.
+The document says PR metadata (title, body, linked issues, open review comments) reaches the model through the code template "as one additional optional input rendered by the code prompt builder." But `src/squadron/review/builders/code.py:6` only handles `cwd`, `diff`, `files`, and `diff_exclude_patterns`. The document does not describe the new input key, how the builder truncates the metadata, or how it is labeled so the reviewer treats it as untrusted data. The "same size discipline file injection uses" is mentioned, but no size limit or key name is given.
 
-### [NOTE] Frontmatter gains two new fields without coordination note with initiative 360
+### [NOTE] No slice allocated for direct GitHub API implementation
 
-The Technical Considerations section adds (a) a `pr` field carrying the typed PR record, replacing slice fields, and (b) a "rules-source" provenance field for PR reviews. Initiative 360 (Document Intelligence) appears to own review-frontmatter schema (`project-documents/user/architecture/360-arch.document-intelligence.md`). The document says "The field is added in the persistence slice; existing artifacts are unaffected" — which is true for the new field — but does not record a coordination task in Anticipated Slices dependencies. Worth a coordination entry in slice 3's deps, not a blocker.
-
-### [NOTE] Identity refusal policy stated without a mechanism
-
-The "reads before writes, and writes are explicit" principle says "a write operation that cannot confirm the operator's identity refuses rather than posting anonymously." This is correct policy, but the *confirmation mechanism* is not named. For `gh`, the obvious answer is `gh auth status` — but the architecture should specify it (and what fields it inspects: `gh auth status` returns active account, protocol, scopes; `gh api user` is another probe). As-is, the policy is firm but the implementation is left for slice 4 to discover.
+The document says the protocol is shaped for a direct-API GitHub implementation "designed for, not scheduled," and the Anticipated Slices list does not allocate a slice for it. This is acceptable if the protocol is pressure-tested by unit tests with a fake runner, but the document's claim that the protocol stays host-neutral depends on that future work actually being done.
