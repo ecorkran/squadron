@@ -50,8 +50,9 @@ now.
   scope assertion, and tool wiring, and inherits every fix that lands on the code path. There is
   no second reviewer.
 - **Host behind a protocol.** Every hosting interaction (resolve a PR, report its base branch
-  and the host's default branch, fetch base and head, list unresolved review discussions, find and
-  update squadron's own prior comment, post a review comment, open a PR, identify the operator)
+  and the host's default branch, check that a named branch exists on the host, fetch base and
+  head, list unresolved review discussions, find and update the operator's own prior squadron
+  comment, post a review comment, open a PR, identify the operator)
   goes through one adapter protocol. That list is the protocol; a slice that needs another
   operation adds it to the protocol, never as an extra method on the `gh` implementation. It whose operations are named by intent, not by any host's
   feature vocabulary. GitHub via the operator's authenticated `gh` is the only implementation
@@ -88,10 +89,14 @@ now.
   everything beneath it is hardwired to `SliceInfo`, and arch reviews save by fabricating a
   minimal `SliceInfo` from the initiative index. This initiative introduces a save-target contract
   on the persistence side that a slice target and a PR target both satisfy, and migrates the arch
-  review onto it in the same slice, so there is one persistence shape for "this review is not
+  review and the pipeline action's step-keyed save onto it in the same slice, so there is one
+  persistence shape for "this review is not
   about a slice" rather than two. The contract is small: a target yields the filename stem, the
-  target-specific frontmatter fields, and the reviews directory. Everything else in formatting,
-  archiving, and digest stays target-agnostic.
+  target-specific frontmatter fields, and the reviews directory. It is structural (a `Protocol`,
+  as persistence already does for its `cf` client), so the adapter package never imports the
+  review package; the conversion from PR record to save target lives in the CLI layer that
+  already imports both. Everything else in formatting, archiving, and digest stays
+  target-agnostic.
 - **Reads before writes, and writes are explicit.** Resolution and review are read-only against
   the host. Posting and creating are separate operations behind separate flags or commands, each
   with a dry-run form that prints what would be sent. Before any write the adapter's
@@ -105,8 +110,9 @@ now.
   later pipeline input accept identically, producing the same artifact. The CLI is the contract;
   the others are transports.
 - **Failure modes are enumerated and observable.** Host unreachable, `gh` missing or
-  unauthenticated, PR not found, head ref not fetchable, base moved since resolution, post
-  rejected, host call exceeded its timeout: each is a named error with a WARNING-or-higher log
+  unauthenticated, PR not found, head or base ref not fetchable, base moved since resolution,
+  head branch not on the host, post rejected, creation rejected, host call exceeded its
+  timeout: each is a named error with a WARNING-or-higher log
   line and a non-zero exit, and each has a test asserting that signal. The adapter reaches `gh`
   through one injected process-runner seam whose every call is bounded by a timeout constant, as
   git calls already are, so a wedged host is the timeout error rather than a hang. Those tests are unit-level against a fake runner returning each failure shape, plus one
@@ -120,8 +126,9 @@ now.
   language auto-detection from the changed paths, injects the diff, and saves under
   `{index}-review.code.{slice-name}.md`.
 - Persistence is `SliceInfo`-keyed. Reviews with no slice either warn that they are not
-  persistable or, for arch reviews, build a minimal `SliceInfo` from the initiative index. There is
-  no target type for "this review is about something that is not a slice."
+  persistable or, for arch reviews, build a minimal `SliceInfo` from the initiative index, and the
+  pipeline review action saves slice-less reviews under a step index. Three filename shapes, no
+  target type for "this review is about something that is not a slice."
 - The review path assumes it runs inside a squadron-planned project: rules directories, the
   reviews directory, and `cf` slice lookups are resolved relative to the project. Outside such a
   project, rules loading silently falls back to a per-user directory under the home config path,
@@ -175,10 +182,12 @@ only after the CLI has proven the shape.
 ## Technical Considerations
 
 - **Target grammar.** A target may be a number, a full URL, `owner/repo#n`, a branch name, or
-  absent (the PR for the current branch). Resolution must be unambiguous and must fail loudly when
-  the repository has no host remote, has more than one, or the branch has no open PR. A target
-  that names a repository other than one of the current repository's remotes is refused with the
-  mismatch named; cross-repository review is not supported. The grammar is fixed at the adapter
+  absent (the PR for the current branch). Resolution must be unambiguous. The explicit forms
+  (URL, `owner/repo#n`) name their repository and resolve against whichever local remote points
+  at it; the bare forms (number, branch, absent) need exactly one host remote and fail loudly
+  when there are none or several, as they do when the branch has no open PR. A target that names
+  a repository none of the current repository's remotes points at is refused with the mismatch
+  named; cross-repository review is not supported. The grammar is fixed at the adapter
   boundary and nowhere else.
 - **Base semantics.** A PR's base branch routinely moves after the PR is opened. The reviewed range
   must be merge-base to head, as 916 established for `--diff`, so the review matches what the host
@@ -194,8 +203,11 @@ only after the CLI has proven the shape.
   `git worktree` so the repository knows about it; removed on success, on failure, and on
   timeout; every git call in its lifecycle bounded by the existing git timeout. Process death
   bypasses all of that, so each invocation also sweeps: every scratch worktree carries a lock
-  file naming its owning process, a run is alive while that process exists, and worktrees whose
-  owner is gone are pruned before the new one is created. The per-run id means an orphan never
+  file naming its owning process and that process's start time (so a reused pid does not look
+  alive), a run is alive while that process exists, and worktrees whose owner is gone are pruned
+  before the new one is created. The worktree is complete: when the repository has submodules
+  they are initialized in it, and a submodule that cannot be fetched fails the review by name
+  rather than leaving paths the reviewer will cite as missing. The per-run id means an orphan never
   blocks a new review. A review that cannot remove its worktree says so and names the path. The
   operator's checkout is never touched.
 - **Persistence shape and location.** The reviews directory, naming convention, and frontmatter
@@ -204,18 +216,27 @@ only after the CLI has proven the shape.
   fields: `sourceDocument` is the PR URL, a `pr` field carries the typed PR record, and the
   reviewed head sha is taken from that record, never resolved from HEAD of the working directory,
   which on this path is the operator's branch and not the reviewed tree; no slice fields are
-  written. The
-  filename is prefixed by the PR key rather than an index, and the naming-conventions guide gains
-  that form in the same slice. When the repository has no `project-documents/`, the location is
+  written. Frontmatter validity is `cf`'s to decide and its commit gate enforces it, so the
+  persistence slice verifies the PR shape against `cf validate frontmatter` and the existing
+  schema-drift test; a `cf` schema change, if the `review` schema rejects the shape, is a named
+  dependency on context-forge and lands before that slice. The
+  filename is prefixed by a non-numeric PR key rather than an index, so every consumer that
+  globs `{index}-review.*` (resolution, metrology capture) never matches a PR review, and the
+  consumers that glob `*-review.*` are taught to read the target kind from the prefix in the same
+  slice; the naming-conventions guide gains the form there too. When the repository has no `project-documents/`, the location is
   the `review.external_reviews_dir` config key, defaulting to a `reviews/<host>/<owner>/<repo>/`
-  tree under squadron's per-user data directory, overridden per invocation by the existing
-  `--output-path`; never an invented directory in someone else's repository. The chosen location
+  tree under squadron's per-user data directory, overridden per invocation by a new
+  `--reviews-dir` flag (the existing `--output-path` is a JSON dump destination and keeps that
+  meaning); never an invented directory in someone else's repository. The chosen location
   and its source are printed with the result.
 - **Which tree rules load from.** Slice 916 unified the reviewer's tool jail root and the rules
   directory under one review root. A tool-enabled PR review deliberately splits them: the jail
   root is the scratch worktree, so the reviewer reads the PR's files, while rules resolve from the
   operator's checkout root, so a PR that edits the rules cannot review itself against its own
-  edits. The artifact records both roots, and the rules-source provenance names the checkout.
+  edits. The rule is general: every convention input the review injects (rules directory,
+  project instructions file, anything else read for "how this project works") comes from the
+  checkout, and only the code under review comes from the worktree. The artifact records both
+  roots, and the rules-source provenance names the checkout.
 - **Rules outside a planned project.** The rules loader resolves the project's rules directory
   and, when none exists, silently falls back to a per-user directory under the home config path.
   For a PR review "explicit degradation" means the resolved rules source (project, user
@@ -235,9 +256,12 @@ only after the CLI has proven the shape.
   optional key and ignores it when absent; nothing supplies it until the later pipeline decision.
 - **Posting idempotency and attribution.** A repeated `--post` on the same PR updates rather than
   stacks. The mechanism is a hidden marker in the comment body carrying the PR key, so the prior
-  comment is discovered through the host on every post and no local state is kept. Lookup and
-  post are not atomic, so two concurrent posts can both land; the next post updates the earliest
-  marked comment and reports any others rather than pretending the race cannot happen. The
+  comment is discovered through the host on every post and no local state is kept. A host lets
+  a login edit only its own comments, so the unit of idempotency is one squadron comment per
+  operator: the update targets the marked comment authored by the authenticated login, and
+  marked comments from other operators are reported, never edited. Lookup and post are not
+  atomic, so two concurrent posts by one operator can both land; the next post updates the
+  earliest and reports the rest rather than pretending the race cannot happen. The
   comment is attributed to the operator's login because it is posted with their credentials; the
   body states it was generated by squadron and names the model.
 - **`gh` as the transport.** Delegating to `gh` avoids token handling, honors enterprise hosts the
@@ -248,15 +272,18 @@ only after the CLI has proven the shape.
 - **Description composition.** Turning commits, slice documents, and a review into prose is a
   one-shot model call through the existing non-review one-shot path (`pipeline/summary_oneshot`,
   which already runs a prompt through a provider profile with telemetry), with the same model and
-  profile flags reviews use. Deterministic parts (commit list, linked slice, review provenance,
+  profile flags reviews use. That module's docstring scopes it to non-SDK profiles while the
+  review default is `sdk`; the slice verifies the `sdk` profile through it and corrects whichever
+  of the docstring or the routing is wrong. Deterministic parts (commit list, linked slice, review provenance,
   reviewed sha) are assembled without a model so they are exact. Tasks feed two sections:
   checked items inform "how it was verified" and unchecked items populate "known gaps"; the
   slice design informs "why". "What changed" and "why" always have an input (commits, with the
   slice design when present); "how it was verified", "known gaps", and "review provenance" are
   written from their inputs when those exist and otherwise carry an explicit no-input line, never
-  a guess and never a silent omission. "The latest saved review" is scoped to this branch: the
-  most recent review artifact whose reviewed sha is in the branch's history at or before its
-  head, else none. The section structure is not left to the model: squadron writes the headings
+  a guess and never a silent omission. "The latest saved review" is scoped to this branch's own
+  commits: the most recent review artifact whose reviewed sha lies in the base-to-head range,
+  so a review of an earlier merged branch that is an ancestor of this one never qualifies, else
+  none. The section structure is not left to the model: squadron writes the headings
   and asks the model only for the prose under each, then checks that every section is present
   and either filled or explicitly marked before creating the PR. A body that fails that check is
   an error, not a degraded PR.
@@ -265,7 +292,10 @@ only after the CLI has proven the shape.
   adapter. The integration branch is a local fork-and-merge target, so it qualifies as a PR base
   only when the adapter confirms the same branch exists on the host; if it does not, creation
   fails and says so rather than falling through to `main`. In an unplanned repository only the
-  first and last apply. The chosen base and its source are printed before creation. The branch-name convention
+  first and last apply. The chosen base and its source are printed before creation. The head
+  branch must already be on the host and match the local branch; `sq pr create` never pushes,
+  and when the branch is missing or behind it fails naming the push the operator should run,
+  so the initiative's host writes stay exactly two: a comment and a PR. The branch-name convention
   `{index}-slice.{name}` is how a slice is detected; a branch that does not match gets a
   commits-only description, not a guessed slice.
 - **Doctor and setup.** Slice 905 fixed doctor's contract as pure checks with no subprocess and no

@@ -10,75 +10,80 @@ aiModel: z-ai/glm-5.3
 status: complete
 dateCreated: 20260912
 dateUpdated: 20260912
-reviewedSha: 1c176acd8d4c05defa2b854f856b1ece3f3e56a2
+reviewedSha: b49cca4e91ebd0ca5aa3c688720f3e7f4c221ad5
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 20
+toolCallsMade: 32
 findings:
   - id: F001
     severity: concern
-    category: extension-points
-    summary: "Adapter protocol operation set cannot implement the posting and base-selection behaviors the document specifies"
-    location: "architecture/380-arch.pull-request-workflow.md#design-goals"
+    category: completeness
+    summary: "The cf-owned frontmatter schema and commit gate are never addressed for the new PR frontmatter shape"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F002
     severity: concern
-    category: consistency
-    summary: "Current State and Technical Considerations contradict each other on what the rules loader does outside a planned project"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: technology
+    summary: "`--output-path` does not mean what the document says it means"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F003
     severity: concern
-    category: technology
-    summary: "`sq doctor` adapter checks contradict the shipped doctor contract (no network, no subprocess)"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: consistency
+    summary: "CLAUDE.md injection contradicts the two-root design in both directions"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F004
     severity: concern
-    category: consistency
-    summary: "Reviewed-head-sha provenance source is unspecified, and the slice-review mechanism records the wrong commit in the no-tools path"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: feasibility
+    summary: "\"Latest saved review\" ancestor-scoping cites unrelated reviews as this PR's provenance"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F005
     severity: concern
-    category: completeness
-    summary: "Unplanned-repository persistence location has no named config key, default, or override"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: feasibility
+    summary: "Comment-update idempotency assumes the poster can edit the prior comment, which gh-as-operator cannot do across identities"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F006
     severity: concern
-    category: consistency
-    summary: "Tool-enabled PR review leaves the rules-resolution cwd ambiguous; \"project rules\" can silently become the PR head's own rules"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: feasibility
+    summary: "PR-keyed filenames collide with existing index-keyed glob consumers"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
   - id: F007
     severity: concern
     category: consistency
-    summary: "`sq pr create`'s required-section check makes the document's own supported scenario uncreatable, and the review-provenance input is unscoped"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    summary: "Unconditional multi-remote failure contradicts the explicit-target forms two sentences later"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F008
     severity: concern
-    category: feasibility
-    summary: "Single-fenced \"treat as data\" block is escapable by the untrusted content it exists to contain"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: consistency
+    summary: "The protocol list omits an operation the design itself requires: arbitrary branch-existence-on-host"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
   - id: F009
     severity: concern
-    category: consistency
-    summary: "Traceability guarantee for model-authored prose has no enforcement mechanism"
-    location: "architecture/380-arch.pull-request-workflow.md#design-goals"
+    category: completeness
+    summary: "`sq pr create` is silent on the pushed-branch precondition, and the failure enumeration omits create/base-fetch failures"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
   - id: F010
     severity: concern
-    category: completeness
-    summary: "`gh` process calls have no timeout; hang is missing from the failure-mode enumeration"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: technology
+    summary: "Composition reuses `pipeline/summary_oneshot` while requiring the flags reviews use — but that module declares itself non-SDK-only, and reviews default to `sdk`"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F011
-    severity: note
-    category: dependencies
-    summary: "Typed PR record's home module is unspecified, and it sets the reviewâ† adapter dependency direction"
-    location: "architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    severity: concern
+    category: feasibility
+    summary: "Scratch worktree invariants omit content completeness — submodules are missing from the reviewed tree"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F012
     severity: note
-    category: consistency
-    summary: "\"The pipeline `review` action... gains the same optional input for free\" overstates the scope"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: feasibility
+    summary: "Orphan sweep's PID-liveness check has no PID-reuse or cross-platform story"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
   - id: F013
     severity: note
-    category: completeness
-    summary: "Target grammar admits cross-repository targets that every downstream mechanism assumes away"
-    location: "architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    category: consistency
+    summary: "\"One persistence shape\" arithmetic ignores the pipeline's existing step-keyed shape"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  - id: F014
+    severity: note
+    category: dependencies
+    summary: "Ownership of the PR-record → save-target conversion is unspecified, and the naive split creates an import cycle"
+    location: "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
 ---
 
 # Review: arch — slice 380
@@ -88,83 +93,58 @@ findings:
 
 ## Findings
 
-### [CONCERN] Adapter protocol operation set cannot implement the posting and base-selection behaviors the document specifies
+### [CONCERN] The cf-owned frontmatter schema and commit gate are never addressed for the new PR frontmatter shape
 
-Design Goals enumerates the protocol's operations as exhaustive: "Every hosting interaction (resolve a PR, fetch its base and head, list unresolved review discussions, post a review comment, open a PR, identify the operator) goes through one adapter protocol." Three behaviors specified elsewhere in the document require operations not in that set:
+The "Persistence shape and location" bullet specifies `sourceDocument` as the PR URL, a new `pr` field carrying the typed record, and "no slice fields are written." But frontmatter validity is not squadron's to decide: `cf validate frontmatter` runs as a pre-commit gate (`src/squadron/events/builtin/frontmatter_gate.py`), cf owns the schema, and `tests/documents/test_schema_drift.py` exists precisely because squadron-emitted values can drift — it deliberately fails rather than skips when cf is absent. In a planned repository, PR-keyed reviews land in `project-documents/user/reviews/` and will hit that gate on commit; if cf's `review` schema rejects an unknown `pr:` key, requires `slice:`/`project:`, or type-checks `sourceDocument` as a path, every PR review commit is blocked. The 360 architecture called out exactly this constraint ("the frontmatter gate validates docType and status against fixed enums, so a new type could not be committed until the gate was changed first"); this document never mentions the gate, the drift test, or cf schema acceptance. Also note `format_review_markdown` (`src/squadron/review/persistence.py`) writes `slice:` and `project:` unconditionally with `"unknown"` fallbacks — "no slice fields are written" is a rewrite of that function, which the persistence slice must own explicitly.
 
-1. Posting idempotency (Technical Considerations, "Posting idempotency and attribution"): "the prior comment is discovered through the host on every post and no local state is kept" and "the next post updates the earliest marked comment" require (a) an operation that lists the PR's comments — the hidden marker lives in squadron's own summary comment, which is not an "unresolved review discussion" (and would not be found by that operation once resolved) — and (b) an update/edit-comment operation. "Post a review comment" only creates.
-2. Base selection (Technical Considerations, "PR base selection"): "else the host's default branch as reported by the adapter" requires a default-branch operation.
-3. Staleness detection ("a review posted against a PR whose head has since moved must say so") requires re-resolving the PR at post time — arguably covered by "resolve a PR," but the doc never says posting re-resolves.
+### [CONCERN] `--output-path` does not mean what the document says it means
 
-The keystone slice is explicitly "the protocol, its GitHub implementation over `gh`... the enumerated failure modes." As enumerated, slice 1 builds a protocol that slices 4 and 5 must then extend — or the `gh` implementation grows these as extra methods outside the protocol, which is exactly the leak the "host behind a protocol" goal exists to prevent. Complete the enumeration (list-own-prior-comment, update-comment, default-branch) or state the list is a subset.
+The unplanned-repository location is described as "overridden per invocation by the existing `--output-path`." In the current CLI, `--output-path` is consumed only by `display_result` in `--output file` mode, where `_write_file` writes `json.dumps(result.to_dict())` — a JSON dump, not the frontmatter artifact (`src/squadron/cli/commands/review.py`). It never redirects where the review artifact is saved; `save_review_result` always writes to `REVIEWS_DIR`. `_warn_not_persistable` reinforces the JSON-dump semantics ("use --output file with --output-path to choose a destination"). Either the document intends to change an existing flag's semantics (a breaking change to documented behavior that is nowhere flagged as such, contrary to the document's own "Existing flows do not change" constraint) or the claim is wrong. The persistence slice needs a new, separate override for the artifact location.
 
-### [CONCERN] Current State and Technical Considerations contradict each other on what the rules loader does outside a planned project
+### [CONCERN] CLAUDE.md injection contradicts the two-root design in both directions
 
-Current State states: "Outside such a project the rules and persistence steps have no defined behavior." Technical Considerations ("Rules outside a planned project") states the opposite as established fact: "The rules loader resolves the project's rules directory and, when none exists, silently falls back to a per-user directory under the home config path."
+The "Which tree rules load from" bullet carefully splits the jail root (scratch worktree) from the rules root (operator checkout) so "a PR that edits the rules cannot review itself against its own edits." But `_inject_file_contents` (`src/squadron/review/review_client.py`) injects CLAUDE.md from `inputs["cwd"]` — the jail root — **unconditionally**, outside the `include_bodies` gate that controls file bodies and glob files. With the jail root set to the scratch worktree, a PR that edits CLAUDE.md has its own edits injected as the review's conventions — the exact contamination the document excludes for rules, unaddressed for CLAUDE.md. Conversely, on the no-tools path ("A review without tools needs only the fetched ref"), cwd remains the operator's checkout, so CLAUDE.md comes from the operator's tree rather than the PR head. The document never states which tree CLAUDE.md is taken from on either path, and the recorded rules-source provenance ("names the checkout") covers only rules.
 
-One of these is wrong about the codebase, and which one changes the persistence slice's scope: if the fallback exists, the slice only adds the INFO log and the provenance frontmatter field; if it does not, the slice must build the fallback (and decide its content — an empty per-user directory behaves identically to template-only, which the provenance field's three-way "project, user fallback, or template-only" classification assumes is already distinguishable). The design goal "degrade explicitly, not silently" is premised on the silent fallback being real. Reconcile the two sections before slice 3 is planned.
+### [CONCERN] "Latest saved review" ancestor-scoping cites unrelated reviews as this PR's provenance
 
-### [CONCERN] `sq doctor` adapter checks contradict the shipped doctor contract (no network, no subprocess)
+"Description composition" defines the input as "the most recent review artifact whose reviewed sha is in the branch's history at or before its head, else none." Every merged slice's review has a reviewedSha that is an ancestor of every later branch forked from the same base. So for any new branch that has not itself been reviewed — the common first-run case for `sq pr create` — the most recent qualifying artifact is the *previous, already-merged slice's* review, and "review provenance" is then written from it instead of carrying the explicit no-input line. That violates the same bullet's own rule ("never a guess and never a silent omission") and the Design Goal that deterministic parts are "exact by construction": the section would assert a review relationship that does not exist. The scope must be the branch's own commits (fork-point..head), not mere ancestry.
 
-"Doctor and setup" says: "`sq doctor` gains checks for the host adapter (`gh` present, authenticated, host reachable)." Slice 905 — complete and shipped — defines the opposite contract: "No network calls to provider endpoints — auth file presence and env-var presence are sufficient"; check functions are "synchronous and pure (no I/O beyond `Path.exists()`, `os.environ.get`, `shutil.which`, and `tomllib.load`)," no subprocesses, with an explicit design rationale of keeping doctor fast and never promising "will work" ("authenticated locally," not "will work").
+### [CONCERN] Comment-update idempotency assumes the poster can edit the prior comment, which gh-as-operator cannot do across identities
 
-Only "gh present" (`shutil.which`) survives that contract. "Authenticated" requires either a subprocess (`gh auth status`) or parsing `~/.config/gh/hosts.yml`, which is fragile across enterprise host configurations; "host reachable" is a network probe, squarely outside it. The document neither amends 905's contract nor acknowledges the conflict. Either the checks degrade to presence-only (`gh` on PATH, hosts.yml readable — with 905's contract explicitly extended in this document), or the doctor contract change must be scoped as its own deliverable. Note the prior arch review raised this and the current text is unchanged.
+"Posting idempotency and attribution" combines two facts: discovery of the prior comment is by a hidden marker (author-agnostic), and the comment is posted "under the operator's identity... with their credentials." A post run by operator B will therefore discover operator A's marked comment as "squadron's own prior comment," and "the next post updates the earliest marked comment" will fail — the GitHub API only permits editing comments authored by the authenticated user. The race paragraph covers two concurrent posts, not two different operators, which on enterprise PRs is the normal state (author plus reviewers running squadron). Either the update must be scoped to the authenticated login (accepting stacking across operators as a stated consequence) or the mechanism needs supersede-then-post semantics; as written, the named-error discipline ("post rejected") catches it only accidentally.
 
-### [CONCERN] Reviewed-head-sha provenance source is unspecified, and the slice-review mechanism records the wrong commit in the no-tools path
+### [CONCERN] PR-keyed filenames collide with existing index-keyed glob consumers
 
-"Persistence shape and location" says "the reviewed head sha is recorded as it is for slice reviews." But the reviewed tree for a PR review is a fetched namespaced ref (no-tools) or a scratch worktree (tools); in the no-tools case there is no checkout at the PR head at all, so any cwd/HEAD-derived resolution — which is what the slice-review mechanism is, per the prior arch review's reading of `resolve_reviewed_sha` in `src/squadron/review/persistence.py` (source not present in this working tree; unverified directly) — would record the operator's current branch, not the PR head.
+The envisioned state asserts "Archiving, digest, and integrity checks from the 900-band review work apply unchanged" for PR-keyed persistence, but does not analyze the consumers that key on the numeric filename prefix: `metrology/capture.py` globs `{index}-review.*` and parses the index and review type out of the filename; `sq review resolve` → `locate_review` globs `{index}-review.*` (`src/squadron/review/resolution.py`); `metrology/discovery.py` globs `*-review.*`. If the "PR key" filename prefix begins with the PR number (any bare-numeric form), a PR review of PR 123 is indistinguishable from a slice-123 review to all of these: `sq review resolve 123` can locate a PR review and attempt findings-resolution against it, and metrology capture will treat PR 123 as slice 123. The PR key's filename grammar must be specified — and constrained to be non-numeric-colliding — before "apply unchanged" is true.
 
-The document already resolved the correct value at the boundary: the typed PR record carries "head sha" ("PR identity is a value"). It never says persistence takes the sha from that record rather than re-deriving it. This field is load-bearing three ways: "The head sha recorded in the artifact is what was reviewed"; "a review posted against a PR whose head has since moved must say so" compares against it; and the posted comment "carries the verdict, findings, model, and the reviewed head sha, so a reader can tell what was reviewed." A silently wrong sha defeats all three. State that the artifact sha is sourced from the PR record, not from HEAD resolution.
+### [CONCERN] Unconditional multi-remote failure contradicts the explicit-target forms two sentences later
 
-### [CONCERN] Unplanned-repository persistence location has no named config key, default, or override
+"Target grammar" states resolution "must fail loudly when the repository has no host remote, has more than one, or the branch has no open PR." Read as written, a repository with `origin` plus `upstream` — the standard fork-setup configuration, and likely the *dominant* configuration for the enterprise repositories this initiative targets — always fails, including when the operator supplied a full URL or `owner/repo#n`, which names the repository unambiguously. The next sentence ("A target that names a repository other than one of the current repository's remotes is refused with the mismatch named") implies explicit targets are checked against the remote set and otherwise permitted. The failure rule must be scoped to the repo-inference cases (bare number, absent target, branch name); as written the two sentences cannot both hold.
 
-"When the repository has no `project-documents/`, the location is a configured squadron data directory keyed by host, owner, and repository... and the chosen location is printed with the result." The prior review flagged the unspecified location; this revision added the printing but not the decision: no config key, no default path, no CLI override, no precedence rule against `--output-path`. The project's standing rules are "Never use silent fallback values. Fail explicitly" and "Do not hard-code magic defaults... they should be centralized at the config level."
+### [CONCERN] The protocol list omits an operation the design itself requires: arbitrary branch-existence-on-host
 
-This is not an edge case — the Motivation section makes the unplanned repository the primary scenario ("the repository was often never planned in squadron at all"), which makes the unplanned persistence path the main path for slice 3, and it is the one part of persistence with no specified surface. Printing the chosen location addresses discoverability after the fact, not the unspecified decision. Name the config key, the default, and the override in this document.
+Design Goals declares the enumerated operation list to be *the* protocol ("That list is the protocol; a slice that needs another operation adds it to the protocol"). But "PR base selection" requires the adapter to "confirm the same branch exists on the host" when qualifying the configured integration branch as a PR base — none of the listed operations does that. "Report its base branch and the host's default branch" is about a resolved PR's base and the default branch, not arbitrary branch existence. The architecture's own rule says additions happen at the protocol level; this one is needed by the architecture itself and is missing from its own enumeration, so the keystone adapter slice would either under-build the protocol or quietly stretch an existing operation's meaning.
 
-### [CONCERN] Tool-enabled PR review leaves the rules-resolution cwd ambiguous; "project rules" can silently become the PR head's own rules
+### [CONCERN] `sq pr create` is silent on the pushed-branch precondition, and the failure enumeration omits create/base-fetch failures
 
-Slice 916 (complete) just unified the reviewer's jail root and the rules directory under one `review_cwd = find_git_root(resolved_cwd)`, passing that root to `resolve_rules_dir`. This document introduces a second tree: the PR head "materialized in a scratch worktree owned by squadron," with "range, working directory, and PR metadata" handed to the existing code review. It never says which tree rules resolve from:
+`gh pr create` requires the head branch to exist on the host. The document never says whether `sq pr create` pushes the branch (a host write of a third kind — a ref push — entirely outside the "reads before writes" framing, which covers PR and comment writes only), requires it to be pushed, or verifies it. "PR base selection" says the chosen base is printed before creation, but nothing covers the branch-not-on-host outcome. Relatedly, the Architectural Principles' enumerated failure modes list "head ref not fetchable" and "post rejected" but omit PR-creation rejection and base-ref-not-fetchable — a PR whose base branch was deleted after opening (routine in stacked-PR workflows; GitHub exposes `refs/pull/N/head` but the base must be fetched as a branch) has no named error. "Base moved since resolution" does not cover deletion.
 
-- If rules resolve from the operator's checkout while the reviewer reads the worktree, one review now has two roots — the exact inconsistency 916 Part D was written to eliminate, reintroduced on the new path.
-- If rules resolve from the worktree (the natural reading of "working directory" being handed to the existing review), then in a planned repository the "project" rules are the PR head's own `.claude/rules` — a PR that edits the rules reviews itself against its own edits — and the new rules-source provenance field records "project" for content that came from the PR's tree, misreporting exactly what the field exists to disclose.
+### [CONCERN] Composition reuses `pipeline/summary_oneshot` while requiring the flags reviews use — but that module declares itself non-SDK-only, and reviews default to `sdk`
 
-The "Rules outside a planned project" bullet frames the rules question entirely as planned-vs-unplanned and does not consider the worktree wrinkle its own "Fetching without checkout" bullet creates. State which tree rules load from and what the provenance field records in the tool-enabled case.
+"Description composition" pins the one-shot call to "the existing non-review one-shot path (`pipeline/summary_oneshot`...), with the same model and profile flags reviews use." Reviews' default profile is `sdk` (`_resolve_profile` falls back to `"sdk"`), but `src/squadron/pipeline/summary_oneshot.py`'s module docstring scopes it to "non-SDK provider profiles." The implementation looks registry-generic, so this may be a stale docstring — but the document asserts reuse of a path whose own contract excludes the default review profile without noting the discrepancy. Slice design must verify the `sdk` profile works through `capture_summary_via_profile` (its `instructions=""` + message-carries-content shape) or the default `sq pr create` invocation fails.
 
-### [CONCERN] `sq pr create`'s required-section check makes the document's own supported scenario uncreatable, and the review-provenance input is unscoped
+### [CONCERN] Scratch worktree invariants omit content completeness — submodules are missing from the reviewed tree
 
-"Description composition" fixes five sections — "(what changed, why, how it was verified, known gaps, review provenance)" — and enforces: "checks that every required section is present and non-empty before creating the PR. A body that fails that check is an error, not a degraded PR." It also states the degradation path: "a branch that does not match gets a commits-only description, not a guessed slice," and "Tasks feed two sections: checked items inform 'how it was verified' and unchecked items populate 'known gaps'."
+"Fetching without checkout" enumerates careful worktree lifecycle invariants (naming, registration, removal, timeouts, orphan sweep) but no content invariant. `git worktree add` checks out the superproject only; submodule working trees are not created. This repository itself carries `.gitmodules`, and the enterprise repositories this initiative targets commonly do too. A tool-enabled PR review in a scratch worktree would see absent submodule paths, producing findings against files that do not exist in the reviewed tree — and the parser's path-existence check (`src/squadron/review/parsers.py`) would emit a WARNING per submodule citation, inverting its purpose. The design needs either a submodule-init step in the worktree lifecycle or a stated, tested exclusion.
 
-On a non-slice branch — and a fortiori in an unplanned repository, this initiative's stated motivation — there are no tasks, no slice design, and (before the first PR-keyed review exists) no review artifact. Four of the five sections then have no named input. Either the check fails and PR creation is impossible in exactly the scenario the "commits-only description" sentence says is supported, or sections are conditional on input availability — which the document never says. Which sections are conditional on which inputs must be stated; the current text makes the two rules collide.
+### [NOTE] Orphan sweep's PID-liveness check has no PID-reuse or cross-platform story
 
-Separately, the input is never scoped: "the latest saved review" (Envisioned State, and Overview capability 3) — latest review of the slice? of the branch? of the repository? In a planned repo with arch, tasks, and code reviews of several slices on disk, an unscoped "latest" can attach an unrelated review's verdict and findings to this PR's provenance section — precisely the misassertion the traceability goal ("Nothing is asserted that no input supports") forbids, and exactly the artifact-identity confusion initiative 320's reference document warns about (grouping on the wrong key).
+"a run is alive while that process exists" — PID liveness is platform-specific and subject to PID reuse: a recycled PID makes a dead owner's worktree look alive indefinitely. The per-run-id naming keeps orphans non-blocking (as stated), so the failure mode is unbounded accumulation rather than a hang, but the sweep's correctness claim ("worktrees whose owner is gone are pruned") does not hold under PID reuse. Minor, but the invariant is stated as absolute.
 
-### [CONCERN] Single-fenced "treat as data" block is escapable by the untrusted content it exists to contain
+### [NOTE] "One persistence shape" arithmetic ignores the pipeline's existing step-keyed shape
 
-"Prompt inputs from the PR" correctly identifies the hazard — "untrusted text written by third parties" — and then specifies a containment mechanism: "the builder emits a single fenced block labeled as PR-proveded text that the reviewer must treat as data, with the label and fence defined in one constant."
+Current State says "There is no target type for 'this review is about something that is not a slice,'" and the principles promise "one persistence shape for 'this review is not about a slice' rather than two." But a third shape already exists: the pipeline review action persists slice-less reviews as `{step_index}-review.{template}.{step_name}.md` via `save_review_file` (`src/squadron/pipeline/actions/review.py`), keyed by step index. Unless the save-target contract also migrates that path, the end state is three shapes, not one — and the Current State claim is inaccurate as written.
 
-PR bodies and review comments routinely contain triple-backtick fences. The first inner ``` closes the outer block, and everything after it exits the "PR-provided text" region and re-enters the trusted-instruction region — the exact prompt-injection path the block exists to close. A third-party author can also reproduce the label constant inside the body to forge a second "PR-provided text" region or a fake terminator. Having specified the mechanism at fence level, the document owns the escape case: state the mitigation (four-backtick or `~~~` outer fence, stripping/escaping inner fences, or a content-defined sentinel) rather than leaving "single fenced block" as the whole design. The truncation discipline is imported but containment is not.
+### [NOTE] Ownership of the PR-record → save-target conversion is unspecified, and the naive split creates an import cycle
 
-### [CONCERN] Traceability guarantee for model-authored prose has no enforcement mechanism
-
-The design goal states: "Everything `sq pr create` writes is derived from a named input... Nothing is asserted that no input supports," and Related Work says initiative 360's "traceability rule for generated documents (assert nothing not supported by an input) is adopted for PR descriptions." The specified enforcement is only "every required section is present and non-empty."
-
-Presence and non-emptiness cannot detect an unsupported assertion in model-written prose — "reduces latency by 40%," "fixes CVE-2026-1234," "verified against the staging cluster" are all non-empty and all unsupported by a commit message, a slice document, or a review artifact. Initiative 360 enforces its traceability rule mechanically (translation rules over input artifacts); nothing analogous is specified here. Either scope the guarantee to the deterministic parts — which the document already isolates ("commit list, linked slice, review provenance, reviewed sha) are assembled without a model so they are exact") — and state that prose is prompt-constrained only, or specify a check. As written, a design goal asserts a property the specified mechanism cannot deliver.
-
-### [CONCERN] `gh` process calls have no timeout; hang is missing from the failure-mode enumeration
-
-The failure-mode principle enumerates: "Host unreachable, `gh` missing or unauthenticated, PR not found, head ref not fetchable, base moved since resolution, post rejected" — every mode is an error return. None is a hang, and "host unreachable" as a named error presumes the call returns. A slow or wedged enterprise host makes `gh` block indefinitely, and the document says nothing about bounding it: the worktree lifecycle gets "every git call in its lifecycle bounded by the existing git timeout," but the `gh` calls — the network-facing ones — get no bound, and the "one injected process-runner seam" is named without a timeout contract.
-
-This project already treats unbounded subprocess as a defect class: 916's slice review forced a timeout into `run_git` precisely because "a `git rev-parse` or merge-base against an unreachable remote-tracking ref currently hangs the CLI before any review begins." The same failure, one layer out, is unenumerated here. Specify the timeout on the injected process-runner seam and add the hang/timeout mode to the enumerated set.
-
-### [NOTE] Typed PR record's home module is unspecified, and it sets the reviewâ† adapter dependency direction
-
-"PR identity is a value, not a string" makes the typed record the shared currency of the adapter, the CLI, persistence, and posting. Persistence is in the review package; if the record type lives in the host-adapter package, `review/persistence.py` imports from it — a reviewâ†adapter dependency the "no hosting call lives in the review package" principle does not address for types. Not a cycle (the adapter needs nothing from review), but the boundary the document calls "one new boundary" should name where its shared type lives.
-
-### [NOTE] "The pipeline `review` action... gains the same optional input for free" overstates the scope
-
-Scope states "No pipeline actions, no new agent providers, no executor changes," and Interface parity defers pipeline PR input to "a later decision." Under that scope the pipeline action can only *tolerate* the new optional key (absent â†’ ignored); nothing can supply it until the later decision adds wiring. "Gains... for free" reads as capability; slice 6 should not discover mid-task whether pipeline supply is in or out.
-
-### [NOTE] Target grammar admits cross-repository targets that every downstream mechanism assumes away
-
-"A target may be a number, a full URL, `owner/repo#n`, a branch name, or absent." Full URLs and `owner/repo#n` invite resolving a PR for a repository that is not the current one, while every downstream mechanism — "fetches both... into namespaced local refs" (into the local repository), the scratch worktree of that repository, "fails loudly when the repository has no host remote" — assumes the current repository. Whether a target naming a repository other than the current one's remotes is refused loudly, resolved cross-repo, or unspecified should be stated in the grammar paragraph, since it determines whether the adapter needs a clone/fetch strategy for foreign repositories at all.
+"PR identity is a value" places the record type in the adapter package with the review package importing it; "Persistence takes a target" places the save-target contract "on the persistence side." Something must convert the adapter's PR record into a save target. If that conversion lives in the adapter package and references the persistence contract by inheritance, adapter→review plus review→adapter (record type) is a package cycle. Structural `Protocol` typing (the pattern `persistence.py` already uses for `CfClientProtocol`) avoids it with no adapter-side import, but the document does not say who owns the conversion or that the contract must be structural. Worth one sentence in slice design.

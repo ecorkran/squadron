@@ -14,6 +14,28 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Initiative 380 architecture review, glm-5.3 rounds
+
+PM ran `--model glm53`: 20 tool calls, read slices 905 and 916 and the persistence and review
+client code, and every finding was grounded. Round five (13 findings) and round six (14, all
+new) dispositioned into the doc. Pinned: the protocol list is exhaustive and now includes
+default branch, branch-exists-on-host, and find-and-update own comment; doctor stays within
+905's pure-check contract (presence only; auth and reachability checked at invocation); the
+artifact sha comes from the PR record, not HEAD; every convention input (rules, project
+instructions) loads from the operator's checkout and only reviewed code from the worktree;
+"latest saved review" is scoped to the base-to-head range; sections without an input carry an
+explicit no-input line; the outer fence is longer than any inner fence run and the label is
+neutralized; traceability is guaranteed for the deterministic parts only; the process-runner
+seam has a timeout and hang is an enumerated mode; foreign-repo targets are refused while
+explicit forms resolve against any matching remote; the unplanned-repo location is
+`review.external_reviews_dir` with a new `--reviews-dir` override (`--output-path` keeps its
+JSON-dump meaning); PR filenames use a non-numeric prefix so `{index}-review.*` consumers never
+match; `cf validate frontmatter` and the schema-drift test gate the PR frontmatter shape;
+comment idempotency is per authenticated login; `sq pr create` never pushes; worktrees
+initialize submodules; the save-target contract is structural and also absorbs the pipeline
+action's step-keyed shape. Current State corrected (rules fallback is real; three filename
+shapes exist today). Not re-run after round six; gate decision to the PM.
+
 ### Initiative 380 architecture review, rounds three and four
 
 Round three (minimax-m3) returned FAIL, but quoted phrases removed from the document two
