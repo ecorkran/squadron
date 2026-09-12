@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260911
+dateUpdated: 20260912
 status: in_progress
 ---
 
@@ -268,7 +268,17 @@ Sequence E → A → F → B → C → D → G. E and A are contained. F moves e
 
 **Effort raised 4/5 → 5/5** with Parts F and G added (20260911).
 
-**Status:** not started · **Risk:** Medium (Part A adds a commit-path gate; Part D may add a `ReviewFinding` field; Part F changes what every review parses) · **Effort:** 5/5 · **Dependencies:** [916 — sequencing only, to avoid contending for the same review-path files]
+**Corrections at design time (20260912) — two premises above did not survive verification against `main` at `ca40196`; the slice design supersedes this entry on both.**
+
+- **Part B (#28) is already fixed and is dropped from scope.** `_verdict_from_findings` ([parsers.py:122](src/squadron/review/parsers.py#L122)) derives a lost verdict most-severe-wins and both UNKNOWN branches log at WARNING; shipped in `6d296aa`, issue closed 20260730 as COMPLETED. Note that what shipped is the *opposite* of the approach prescribed above — re-opening that on the #5 precedent is a separate decision, not a task inside 917.
+- **Part C (#84) is narrowed to its artifact half.** The uncommitted fix this entry directs the implementer to recover from `266-slice.tool-use-configuration-and-limits` is already on `main` (branch is fully merged, zero commits ahead): `TurnResult.finish_reason`/`reasoning_chars`, `_require_final_content` raising on both loop exits, and `TestEmptyFinalTurn` all present. The prior-artifact overwrite is already prevented by `archive_existing_review` (#73). What remains is the CLI: `run_review`'s catch-all ([review.py:627](src/squadron/cli/commands/review.py#L627)) discards the error's `finish_reason`/`reasoning_chars` into one terminal line and writes no artifact.
+- Also corrected: this entry's `_location_path` is `location_path` and `_parse_findings` is `_extract_findings`; cited line numbers have shifted.
+
+Sequence becomes **E → A → F → C → D → G**. Effort **5/5 → 4/5**.
+
+**Slice design:** `user/slices/917-slice.review-artifact-integrity.md`
+
+**Status:** not started · **Risk:** Medium (Part A adds a commit-path gate; Part D adds a `ReviewFinding` field; Part F changes what every review parses) · **Effort:** 4/5 · **Dependencies:** [916 — sequencing only, to avoid contending for the same review-path files]
 ---
 
 ## Future Slices

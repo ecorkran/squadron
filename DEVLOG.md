@@ -2,13 +2,74 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260911
+dateUpdated: 20260912
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260912
+
+### Slice 917 design (Phase 4)
+
+Wrote `user/slices/917-slice.review-artifact-integrity.md` for **Review Artifact Integrity —
+Verdict Validity and Legible Degradation**, slice plan entry 15.
+
+The plan entry was unusually detailed — written across 20260910–11 as issues accumulated — and
+carried most design decisions already. The design work was therefore mostly verification, and
+**two of its seven parts did not survive contact with `main` at `ca40196`**:
+
+**Part B (#28) was already fixed.** `_verdict_from_findings` (`parsers.py:122`) derives a lost
+verdict most-severe-wins and both UNKNOWN branches log at WARNING — shipped in `6d296aa`, issue
+closed 20260730 as COMPLETED. Worth recording: what shipped is the *opposite* of what the plan
+entry prescribes. The entry says the fix "does **not** upgrade or downgrade verdicts from
+finding severities; it makes the disagreement explicit," citing the #5 precedent. Main derives
+the verdict. That divergence is documented in the design rather than silently reconciled — if
+the #5 precedent is to be honored here, re-opening it is a decision on its own evidence, not a
+task smuggled into this slice. Part B dropped.
+
+**Part C (#84) was half-done.** The entry directs the implementer to "recover and verify" an
+uncommitted fix on the `266-slice.tool-use-configuration-and-limits` branch. That branch is
+fully merged with zero commits ahead; `TurnResult.finish_reason`/`reasoning_chars`,
+`_require_final_content` raising `ProviderError` on both loop exits, and `TestEmptyFinalTurn`
+are all on main. Separately, the prior-artifact overwrite the entry worries about is already
+prevented by `archive_existing_review` (#73).
+
+What that leaves is the half nobody had looked at: `run_review`'s catch-all
+(`review.py:627`) converts *any* exception into one red line and `typer.Exit(1)`. So the
+`finish_reason` and `reasoning_chars` the provider fix went to the trouble of collecting are
+discarded one layer up — no artifact, no telemetry, no durable record. For a review running
+inside a pipeline that is the entire record. Part C narrowed to that.
+
+Also corrected in the entry: `_location_path` is actually the public `location_path`,
+`_parse_findings` is `_extract_findings`, and the cited line numbers have shifted.
+
+**#92 does not fold into C.** The entry leaves this open ("fold into Part C if the cause proves
+shared"). It is not shared: #92 is a full turn with correct telemetry and 3302 characters of
+substantive review, so it never reaches `_require_final_content` and never raises. It is a
+parse-side outcome, and Part F's "no `## Findings` section found" path is what makes it present
+legibly. Verifying that is a success criterion under C; #92 stays open otherwise.
+
+Sequence **E → A → F → C → D → G**; effort **5/5 → 4/5**. Part F (#91) is the center of
+gravity — the unbounded `_FINDING_RE.finditer` over the whole response is a live correctness
+bug with a reproduction, and all four templates share the `## Findings` contract, so the
+bounding is uniform. Its consequential sub-decision is that a response with *no* `## Findings`
+section parses nothing and renders as degraded, rather than falling back to a whole-document
+scan — the fallback would reintroduce the bug on exactly the malformed responses where it does
+the most damage.
+
+Part A's insertion point is clean: `squadron.review-verdict-gate` as a COMMIT event action
+beside `FrontmatterGateAction`, reading `Verdict` directly so there is no parallel literal list
+and no cross-repo coupling (issue #77's own recommendation). It keys on `docType: review`
+rather than on the reviews path — a path is a convention, the docType is the document's own
+declaration.
+
+Slice plan entry 15 updated with the corrections, the design link, and the revised
+sequence/effort.
 
 ---
 
