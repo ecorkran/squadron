@@ -88,8 +88,9 @@ now.
   archiving, and digest stays target-agnostic.
 - **Reads before writes, and writes are explicit.** Resolution and review are read-only against
   the host. Posting and creating are separate operations behind separate flags or commands, each
-  with a dry-run form that prints what would be sent. A write operation that cannot confirm the
-  operator's identity refuses rather than posting anonymously.
+  with a dry-run form that prints what would be sent. Before any write the adapter's
+  identify-operator operation must return a login; if it cannot (no auth, no host), the write is
+  refused with that reason rather than attempted.
 - **Isolated checkout for tool-enabled reviews.** A tool-enabled review reads files from a
   working tree. The PR's head is materialized in a scratch worktree owned by squadron, so the
   reviewer reads the PR's files and the operator's checkout is untouched. A review without tools
@@ -182,8 +183,9 @@ only after the CLI has proven the shape.
   the PR record plus a per-run id so two reviews of the same PR never collide; registered with
   `git worktree` so the repository knows about it; removed on success, on failure, and on
   timeout; every git call in its lifecycle bounded by the existing git timeout. Process death
-  bypasses all of that, so each invocation also sweeps: it prunes squadron-owned worktrees whose
-  run is no longer alive before creating its own, and the per-run id means an orphan never
+  bypasses all of that, so each invocation also sweeps: every scratch worktree carries a lock
+  file naming its owning process, a run is alive while that process exists, and worktrees whose
+  owner is gone are pruned before the new one is created. The per-run id means an orphan never
   blocks a new review. A review that cannot remove its worktree says so and names the path. The
   operator's checkout is never touched.
 - **Persistence shape and location.** The reviews directory, naming convention, and frontmatter
