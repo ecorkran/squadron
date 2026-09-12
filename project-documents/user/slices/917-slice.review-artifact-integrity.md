@@ -24,7 +24,7 @@ Plan entry 15 lists seven parts, A–G. Two of its premises were stale at `main`
 
 | Plan part | Issue | Finding | Disposition |
 |---|---|---|---|
-| B | #28 | Already shipped in `6d296aa` (`_verdict_from_findings`, [parsers.py:122](src/squadron/review/parsers.py#L122)); issue closed 20260730. What shipped *derives* the verdict from finding severities — the opposite of what the entry prescribes on the #5 precedent. | Dropped. The divergence is a separate decision, not a task here. |
+| B | #28 | Already shipped in `6d296aa` (`_verdict_from_findings`, [parsers.py:122](src/squadron/review/parsers.py#L122)); issue closed 20260730. It derives a missing verdict from finding severities; the plan entry had said to flag the mismatch instead. Derivation accepted (PM, 20260912). | Dropped. |
 | C | #84 | The "uncommitted fix on the 266 branch" is fully merged: `finish_reason`, `reasoning_chars`, `_require_final_content`, `TestEmptyFinalTurn` all on main. Prior-artifact overwrite already prevented by `archive_existing_review` (#73). | Narrowed to what remains: neither the CLI nor the pipeline writes an artifact when the provider raises. |
 
 Also: the entry's `_location_path` is the public `location_path`; `_parse_findings` is `_extract_findings`. Effort 5/5 → **4/5**.
@@ -35,7 +35,7 @@ Also: the entry's `_location_path` is the public `location_path`; `_parse_findin
 |---|---|---|---|---|
 | 1 | Rename the debug-log field | E | #87 | 1 |
 | 2 | Reject invalid verdicts at commit | A | #77 | 2 |
-| 3 | Bound the finding scan to `## Findings` | F | #91, #25 | 2 |
+| 3 | Stop parsing finding-shaped text that is not a finding | F | #91, #25 | 2 |
 | 4 | Persist a failure artifact when the provider fails | C | #84 | 2 |
 | 5 | Bounds-check cited line numbers | D | #26 | 2 |
 | 6 | Run digest on every artifact | G | #93 | 2 |
@@ -79,19 +79,21 @@ Nothing checks an artifact's `verdict:` frontmatter against `Verdict` ([models.p
 
 ---
 
-## Part 3 — Bound the finding scan to `## Findings` (#91, #25)
+## Part 3 — Stop parsing finding-shaped text that is not a finding (#91, #25)
 
-`_extract_findings` runs `_FINDING_RE.finditer` over the entire response ([parsers.py:356](src/squadron/review/parsers.py#L356)). The regex deliberately accepts five shapes to tolerate formatting variance, so any finding-shaped text anywhere — a restated format, the template specimen `### [PASS|CONCERN|FAIL] Finding title` echoed back — parses as a real finding. All four templates place the specimen under a `## Findings` heading at the same relative position ([code.yaml:47](src/squadron/data/templates/code.yaml#L47), [slice.yaml:50](src/squadron/data/templates/slice.yaml#L50), [arch.yaml:103](src/squadron/data/templates/arch.yaml#L103), [tasks.yaml:50](src/squadron/data/templates/tasks.yaml#L50)), so the bounding contract is uniform.
+`_extract_findings` runs `_FINDING_RE.finditer` over the entire response ([parsers.py:356](src/squadron/review/parsers.py#L356)). The regex deliberately accepts five shapes to tolerate formatting variance, so anything finding-shaped anywhere in the response parses as a finding — including the template's own specimen `### [PASS|CONCERN|FAIL] Finding title` when the model restates the format before using it. That is where `summary: "Finding title"` citing `src/module.py` came from, and the `concern` under a `PASS`.
 
-**Decision.** Locate the `## Findings` heading, take the span to the next `##` heading or end of document, and run the existing regex over that span only. The permissive shape matching inside the span is not the bug and stays.
+**What the evidence says (20260912).** Checked every real captured response on disk (14 artifacts with a raw response; the debug log is polluted by test fixtures and contributed nothing real). Two of ~13 real responses — both slice 267 reviews, 2026-09-08 — are good reviews with 6 well-formed findings each and **no `## Findings` heading at all**; the findings start at line 2. So "no heading → discard" would throw away real reviews, and is rejected. Where the #91 phantoms sit relative to the heading is not recorded anywhere (the 35-finding artifact was never archived) and a live rerun of #91's own command came back clean — it is non-deterministic. The design therefore has to be right regardless of where the echo lands.
 
-- Heading location is lenient: case-insensitive, leading whitespace, bold, trailing punctuation. Bounding *where* findings live must not become a strict-outer/lenient-inner parse — that is the #28 shape one level up.
-- **No `## Findings` heading → zero findings, rendered as degraded.** This is the consequential choice. Falling back to a whole-document scan would reintroduce the bug on exactly the responses least likely to be well-formed. A model that omitted the section did not follow the format; that is a degraded parse and presents as one (WARNING, debug-log entry, the existing "findings not parsed" section instead of "No specific findings"). Precedent: the parser already refuses to fabricate findings from prose.
-- **This trades recall for precision**, deliberately. A weaker model that writes `### [CONCERN]` blocks without the heading loses them. What makes that acceptable is Part 6: the digest records how many finding-shaped matches the whole document had versus how many were inside the section, so the discard is visible in the artifact rather than silent. Parts 3 and 6 are one change in two files.
-- The whole-document count and the bounded count are computed here and carried on `ReviewResult` for Part 6.
-- **#25 folded in** as the prompt-side complement: delimit substituted document content in the templates with XML tags so reviewed content cannot be mistaken for the model's own output. Parser bounding is the fix; this is defense in depth.
+**Decision.** Three mechanical changes, each correct independently of the others:
 
-**Done when:** finding-shaped text outside `## Findings` yields nothing; the captured #91 response (real fixture, not synthesized) yields no phantoms; all five shapes still parse inside the section; the 8-and-35 responses re-parse to consistent counts; a response with no heading renders as degraded; heading variants are located; templates carry the #25 delimiters. Existing tests encoding the unbounded scan will break — each is examined individually, not bulk-updated, because a break here is evidence.
+1. **Skip fenced code blocks.** A model restating the format almost always fences it. Finding-shaped text inside ` ``` ` fences is never a finding. This is position-independent and is the change most likely to be the actual #91 fix.
+2. **Bound to `## Findings` when the heading exists.** Take the span from the heading to the next `##` heading or end of document. Heading location is lenient (case, whitespace, bold, trailing punctuation). **When the heading is absent, scan the whole response as today** — the 267 reviews stay intact — and mark the parse degraded so the artifact says the format was not followed.
+3. **Fence the specimen in the templates (#25).** The four templates show the required format as bare text; wrap it so the model is less likely to echo it as output and so change 1 skips it if it does. Delimit substituted document content with XML tags while there.
+
+The permissive five-shape matching inside the parsed region is not the bug and stays. Counts — finding-shaped matches in the whole response, inside fences, inside the bounded span, and surviving — are computed here and carried on `ReviewResult` for Part 6. Part 5's `location_verified` is the backstop for any phantom that gets through all three.
+
+**Done when:** finding-shaped text inside a fence yields nothing; text outside `## Findings` yields nothing when the heading exists; the two slice-267 raw responses (real fixtures, headingless) still parse to 6 findings each and are flagged degraded; all five shapes still parse inside the region; heading variants are located; templates carry the fenced specimen and the #25 delimiters; a synthetic response echoing the specimen then writing real findings yields only the real ones. Existing tests encoding the unbounded scan are examined individually, not bulk-updated.
 
 ---
 
@@ -149,7 +151,7 @@ The counts come from the parser via `ReviewResult` (Part 3 computes them). The f
 ## Risks
 
 - **Part 2 is a commit-path gate.** A misfire blocks commits repo-wide. Mitigated by keying on `docType`, skipping frontmatter-less files, `--no-verify` remaining available, and running against the existing corpus before enabling.
-- **Part 3 changes what every review parses.** Finding counts on real artifacts will change. That is the intent, but the recall loss on models that skip the heading is real, and Part 6 is what makes it observable rather than silent. Land 3 and 6 in the same branch.
+- **Part 3 changes what every review parses.** Finding counts on real artifacts will change; that is the intent. Headingless responses keep today's behavior, so no known real review loses findings. Land 3 and 6 in the same branch so the counts are visible from the first run.
 - **Part 5's model field** is defaulted and write-only. Low.
 
 ## Verification walkthrough
@@ -158,7 +160,7 @@ Draft; refined at Phase 6 with commands actually run.
 
 1. **Debug-log field.** Run a review that degrades; `tail -1 ~/.config/squadron/logs/review-debug.jsonl | jq keys` shows `degraded`, not `fallback_used`. `--output json` still shows `fallback_used` on the result.
 2. **Verdict gate.** Stage a `docType: review` file with `verdict: BANANA`; commit is rejected naming `BANANA` and the four values. Change to `CONCERNS`; commit proceeds. Repeat with `RESOLVED`; rejected. Stage a slice design with `verdict: BANANA`; not rejected. Remove the probe.
-3. **Bounded scan.** Re-parse the captured 35-finding response; the `"Finding title"` / `src/module.py` phantoms are gone and the count agrees with the 8-finding run. Run a live review twice against the same sha (`env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT uv run sq review code --diff main -vv --no-save`); counts are stable. A response with no `## Findings` heading renders the "findings not parsed" section.
+3. **Finding scan.** Re-parse the two slice-267 archived raw responses (headingless); still 6 findings each, artifact flagged degraded. Parse a response with the specimen in a fence followed by real findings; only the real ones survive. Run `sq review slice 916 -vv --model kimi27` several times; no `"Finding title"` / `src/module.py` phantoms and no path-existence warnings on any run.
 4. **Failure artifact.** Stub an empty final turn on the CLI path and on a pipeline review step. Each writes an artifact naming the provider failure with `finish_reason`/`reasoning_chars`; the prior artifact is in `reviews/archive/`; CLI exits 1, pipeline step fails.
 5. **Line bounds.** Parse a response citing `src/squadron/review/parsers.py:999999` with `cwd`; `location_verified=False`. A real line → `True`. No `cwd` → `None`. Artifact output is unchanged.
 6. **Digest.** Open a clean PASS artifact; the digest block is present. Re-run on the #91 fixture; whole-document and bounded counts differ.

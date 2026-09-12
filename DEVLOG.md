@@ -56,11 +56,25 @@ legibly. Verifying that is a success criterion under C; #92 stays open otherwise
 
 Sequence **E → A → F → C → D → G**; effort **5/5 → 4/5**. Part F (#91) is the center of
 gravity — the unbounded `_FINDING_RE.finditer` over the whole response is a live correctness
-bug with a reproduction, and all four templates share the `## Findings` contract, so the
-bounding is uniform. Its consequential sub-decision is that a response with *no* `## Findings`
-section parses nothing and renders as degraded, rather than falling back to a whole-document
-scan — the fallback would reintroduce the bug on exactly the malformed responses where it does
-the most damage.
+bug with a reproduction.
+
+**Design revised the same day on evidence.** The first draft had a response with no
+`## Findings` heading parse *nothing*. On the PM's challenge ("how often does that happen?"),
+checked every real captured response on disk: 2 of ~13 — both slice 267 reviews from
+20260908 — are good reviews with 6 well-formed findings each and no heading at all. That
+decision would have discarded real reviews and was reversed: bound to the section when the
+heading exists, scan the whole response as today when it does not, and flag the parse
+degraded. The debug log (8,665 entries) turned out to be almost entirely test fixtures —
+`model=None`, six distinct strings — and contributed no real evidence; worth knowing before
+anyone mines it again. Where #91's phantoms sit relative to the heading is not recorded
+anywhere (the 35-finding artifact was never archived) and a live rerun of `sq review slice
+916 -vv --model kimi27` came back clean, so the fix is built to be right regardless of
+position: skip fenced code blocks (a restated format is almost always fenced), bound to the
+heading when present, and fence the specimen in the templates (#25). Part D's
+`location_verified` is the backstop.
+
+Also on PM decision: the shipped #28 derivation (verdict from finding severities) is accepted
+as-is; the plan entry's "flag, don't derive" instruction is superseded, not a pending question.
 
 Part A's insertion point is clean: `squadron.review-verdict-gate` as a COMMIT event action
 beside `FrontmatterGateAction`, reading `Verdict` directly so there is no parallel literal list
