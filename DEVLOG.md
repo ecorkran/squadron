@@ -14,6 +14,22 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Initiative 380 architecture review, second round
+
+Re-review after the first disposition returned CONCERNS again: 10 concerns, 1 note, all new.
+Pinned: base and head are both fetched into namespaced refs before merge-base; comment
+idempotency is a hidden marker carrying the PR key, discovered through the host, with the
+lookup-then-post race acknowledged (next post updates the earliest marked comment and reports
+extras); each invocation sweeps orphaned squadron worktrees whose run is dead; the direct-API
+GitHub implementation is designed for, not scheduled, token from the environment when built;
+the integration branch is a PR base only if the adapter confirms it exists on the host, else
+creation fails rather than falling to `main`; `sq pr create` writes the section headings itself
+and validates them after the model fills prose; the save-target contract is filename stem,
+target frontmatter fields, and reviews directory; rules-source provenance is one additive
+optional frontmatter field. Protocol operations renamed by intent ("list unresolved review
+discussions"). The note's claim that initiative 360 owns review frontmatter is unsupported;
+917 is the live owner of persistence and the field is sequenced after it.
+
 ### Initiative 380 architecture review disposition
 
 `sq review arch 380` (minimax-m3) returned CONCERNS: 11 concerns, 1 note. All addressed in the

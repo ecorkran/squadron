@@ -49,13 +49,15 @@ now.
   inputs. It produces the same `ReviewResult`, passes through the same parser, rules loading,
   scope assertion, and tool wiring, and inherits every fix that lands on the code path. There is
   no second reviewer.
-- **Host behind a protocol.** Every hosting interaction (resolve a PR, fetch its head, read its
-  open review comments, post a comment, create a PR, identify the operator) goes through one
-  adapter protocol whose operations are named by what squadron needs, not by any host's feature
-  vocabulary. GitHub via the operator's authenticated `gh` is the first implementation. The
-  concrete second is GitHub over its API directly, for CI and hosted runs where `gh` is not
-  installed; that is what keeps `gh`-specific shapes out of the protocol. Other hosts are
-  possible but not designed for.
+- **Host behind a protocol.** Every hosting interaction (resolve a PR, fetch its base and head,
+  list unresolved review discussions, post a review comment, open a PR, identify the operator)
+  goes through one adapter protocol whose operations are named by intent, not by any host's
+  feature vocabulary. GitHub via the operator's authenticated `gh` is the only implementation
+  this initiative builds. The protocol is shaped so that GitHub over its API directly (for CI and
+  hosted runs without `gh`, authenticated by a token read from the environment and never stored)
+  is a second implementation with no protocol change; that implementation is designed for, not
+  scheduled, and gets a slice when a CI consumer exists. Other hosts are possible but not
+  designed for.
 - **Never surprise the operator.** Squadron never writes to a PR unless asked on that invocation,
   never checks out or mutates the operator's working tree to review something, and never holds a
   token of its own. What it posts is attributed to the operator, who asked for it.
@@ -81,7 +83,9 @@ now.
   minimal `SliceInfo` from the initiative index. This initiative introduces a save-target contract
   on the persistence side that a slice target and a PR target both satisfy, and migrates the arch
   review onto it in the same slice, so there is one persistence shape for "this review is not
-  about a slice" rather than two.
+  about a slice" rather than two. The contract is small: a target yields the filename stem, the
+  target-specific frontmatter fields, and the reviews directory. Everything else in formatting,
+  archiving, and digest stays target-agnostic.
 - **Reads before writes, and writes are explicit.** Resolution and review are read-only against
   the host. Posting and creating are separate operations behind separate flags or commands, each
   with a dry-run form that prints what would be sent. A write operation that cannot confirm the
@@ -129,12 +133,12 @@ authentication and transport to the operator's `gh`. Squadron's doctor reports w
 implementation is usable.
 
 The **review path gains a PR target.** `sq review pr <target>` asks the adapter to resolve the
-target into a PR record, fetches the head ref into the local repository, materializes it in a
-scratch worktree when tools are enabled, computes the base-to-head range with the same merge-base
-semantics `--diff` uses, and hands range, working directory, and PR metadata to the existing code
+target into a PR record, fetches the base and head refs into the local repository, materializes
+the head in a scratch worktree when tools are enabled, computes the base-to-head range with the
+same merge-base semantics `--diff` uses, and hands range, working directory, and PR metadata to the existing code
 review. PR metadata (title, body, linked issues, open review comments) is available to the
 prompt as one additional input so the reviewer knows what the PR claims to do and what previous
-reviewers already raised. The result is the ordinary `ReviewResult`, displayed and gated exactly as
+reviewers already raised and not yet resolved. The result is the ordinary `ReviewResult`, displayed and gated exactly as
 today.
 
 **Persistence accepts a PR target.** A PR review saves under a PR-keyed name that satisfies the
@@ -149,8 +153,9 @@ and by what. A later invocation on the same PR updates or supersedes rather than
 
 **`sq pr create` is a composition step.** It gathers the branch's commits against the target, the
 slice design and tasks when the branch name and `cf` identify a slice, and the latest saved
-review; produces a title and a body with fixed sections (what changed, why, how it was verified,
-known gaps, review provenance); shows it; and creates the PR through the adapter. The body is
+review; produces a title and a body whose fixed sections (what changed, why, how it was
+verified, known gaps, review provenance) squadron writes and the model fills; shows it; and
+creates the PR through the adapter. The body is
 written for two readers at once: prose for humans, and a stable section structure that an AI
 reviewer, including `sq review pr` itself, can parse for intent and claimed verification.
 
@@ -168,15 +173,19 @@ only after the CLI has proven the shape.
   must be merge-base to head, as 916 established for `--diff`, so the review matches what the host
   displays. The head sha recorded in the artifact is what was reviewed; a review posted against a
   PR whose head has since moved must say so.
-- **Fetching without checkout.** Hosts expose PR heads as fetchable refs. The adapter fetches into a
-  namespaced local ref so the operator's branches and working tree are untouched. Tool-enabled
+- **Fetching without checkout.** Hosts expose PR heads as fetchable refs. The adapter fetches both
+  the PR's base branch and its head into namespaced local refs, so the merge-base is computed
+  between two refs squadron just fetched rather than whatever the operator's clone last saw, and
+  the operator's branches and working tree are untouched. Tool-enabled
   reviews need a real tree; a squadron-owned scratch worktree provides one. Invariants: one
   scratch worktree per review invocation, created under squadron's data directory and named by
   the PR record plus a per-run id so two reviews of the same PR never collide; registered with
   `git worktree` so the repository knows about it; removed on success, on failure, and on
-  timeout; every git call in its lifecycle bounded by the existing git timeout. A review that
-  cannot remove its worktree says so and names the path. The operator's checkout is never
-  touched.
+  timeout; every git call in its lifecycle bounded by the existing git timeout. Process death
+  bypasses all of that, so each invocation also sweeps: it prunes squadron-owned worktrees whose
+  run is no longer alive before creating its own, and the per-run id means an orphan never
+  blocks a new review. A review that cannot remove its worktree says so and names the path. The
+  operator's checkout is never touched.
 - **Persistence shape and location.** The reviews directory, naming convention, and frontmatter
   contract assume `project-documents/user/reviews/` and a numeric index. A PR review keeps the
   `docType: review` contract (`reviewType`, `aiModel`, dates, status) and replaces the slice
@@ -189,9 +198,10 @@ only after the CLI has proven the shape.
 - **Rules outside a planned project.** The rules loader resolves the project's rules directory
   and, when none exists, silently falls back to a per-user directory under the home config path.
   For a PR review "explicit degradation" means the resolved rules source (project, user
-  fallback, or template-only) is logged at INFO and recorded in the artifact alongside the rules
-  content already persisted, so a reviewer can see which conventions were applied. The fallback is
-  not suppressed; it is reported.
+  fallback, or template-only) is logged at INFO and recorded in the artifact as one additive,
+  optional frontmatter field alongside the rules content already persisted, so a reviewer can see
+  which conventions were applied. The field is added in the persistence slice; existing artifacts
+  are unaffected. The fallback is not suppressed; it is reported.
 - **Prompt inputs from the PR.** Title, body, linked issues, and open review comments are useful
   context and also untrusted text written by third parties. They reach the model through the code
   template as one additional optional input rendered by the code prompt builder, not through a
@@ -199,8 +209,11 @@ only after the CLI has proven the shape.
   reviewer must treat as data, with the label and fence defined in one constant and truncated by
   the same size discipline file injection uses. The pipeline `review` action, which shares that
   template, gains the same optional input for free and ignores it when absent.
-- **Posting idempotency and attribution.** A repeated `--post` on the same PR must not stack
-  comments. The comment is marked so squadron can find and update its own prior comment. The
+- **Posting idempotency and attribution.** A repeated `--post` on the same PR updates rather than
+  stacks. The mechanism is a hidden marker in the comment body carrying the PR key, so the prior
+  comment is discovered through the host on every post and no local state is kept. Lookup and
+  post are not atomic, so two concurrent posts can both land; the next post updates the earliest
+  marked comment and reports any others rather than pretending the race cannot happen. The
   comment is attributed to the operator's login because it is posted with their credentials; the
   body states it was generated by squadron and names the model.
 - **`gh` as the transport.** Delegating to `gh` avoids token handling, honors enterprise hosts the
@@ -214,12 +227,16 @@ only after the CLI has proven the shape.
   profile flags reviews use. Deterministic parts (commit list, linked slice, review provenance,
   reviewed sha) are assembled without a model so they are exact. Tasks feed two sections:
   checked items inform "how it was verified" and unchecked items populate "known gaps"; the
-  slice design informs "why". The body's section structure is a contract other tooling can rely
-  on.
+  slice design informs "why". The section structure is not left to the model: squadron writes
+  the headings and asks the model only for the prose under each, then checks that every required
+  section is present and non-empty before creating the PR. A body that fails that check is an
+  error, not a degraded PR.
 - **PR base selection.** `sq pr create` targets, in order: an explicit `--base`, the configured
-  integration branch when `cf` reports one (never `main` in that case), else the host's default
-  branch as reported by the adapter. In an unplanned repository only the first and last apply. The
-  chosen base and its source are printed before creation. The branch-name convention
+  integration branch when `cf` reports one, else the host's default branch as reported by the
+  adapter. The integration branch is a local fork-and-merge target, so it qualifies as a PR base
+  only when the adapter confirms the same branch exists on the host; if it does not, creation
+  fails and says so rather than falling through to `main`. In an unplanned repository only the
+  first and last apply. The chosen base and its source are printed before creation. The branch-name convention
   `{index}-slice.{name}` is how a slice is detected; a branch that does not match gets a
   commits-only description, not a guessed slice.
 - **Doctor and setup.** `sq doctor` gains checks for the host adapter (`gh` present, authenticated,
@@ -228,17 +245,17 @@ only after the CLI has proven the shape.
 ## Anticipated Slices
 
 - **Code-host adapter and PR target resolution.** The protocol, its GitHub implementation over
-  `gh`, the typed PR record, target grammar, head fetch into a namespaced ref, doctor checks, and
+  `gh`, the typed PR record, target grammar, base and head fetch into namespaced refs, doctor checks, and
   the enumerated failure modes with their tests. Read-only. The keystone.
 - **`sq review pr`.** The review command on top of the adapter: range resolution with merge-base
-  semantics, scratch worktree for tool-enabled reviews, PR metadata as prompt inputs, and full
+  semantics, scratch worktree with orphan sweep for tool-enabled reviews, PR metadata as one prompt input, and full
   parity with the existing review flags.
 - **PR-keyed review persistence.** The save-target contract on the persistence side, migration
   of the arch review off the minimal-`SliceInfo` pattern, the PR naming and frontmatter, the
   unplanned-repository location, and rules-source provenance in the artifact. Sequenced after 916
   and 917 land on `main`.
-- **Post findings to the PR.** The opt-in write, comment rendering with provenance, idempotent
-  update of squadron's prior comment, dry-run, and identity refusal.
+- **Post findings to the PR.** The opt-in write, comment rendering with provenance and hidden
+  marker, update of squadron's prior comment, dry-run, and identity refusal.
 - **`sq pr create`.** Input gathering (commits, slice artifacts, latest review), deterministic
   assembly plus one-shot composition, the fixed body section contract, integration-branch
   targeting, dry-run, and creation through the adapter.
