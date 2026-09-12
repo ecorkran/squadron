@@ -99,6 +99,19 @@ the fact is now `ReviewResult.findings_section_located`, rendered by Part 6 only
 its 173 deliverables (`EVENTS.md` row, 140 listing, CHANGELOG). Citation corrected to 265 D5 in
 the design and plan entry 15. #25 folded at its filed scope: six templates plus `builders/code.py`.
 
+### Slice 917 task breakdown (Phase 5)
+
+Wrote `user/tasks/917-tasks.review-artifact-integrity-1.md` (Parts 1–3, with the anchor
+table and standing constraints) and `-2.md` (Parts 4–6); the single file ran 559 lines, over
+the split threshold. Anchors traced on `e6e7a86`. Two corrections surfaced while tracing:
+the CLI catch-all lives in `_run_review_command` (there is no separate `run_review`), so
+Part 4's persistence context is threaded into that one function; and Part 5's "path does
+not resolve" case is `False`, not `None` — a nonexistent file is verifiably absent, which is
+the hallucination signature the check exists for, so the design bullet added on F006 was
+wrong and is corrected. Corpus dry run for Part 2 is pre-answered: two hand-edited
+`verdict: RESOLVED` artifacts (live 343, archived 266) are the only violations and stay as
+history. Next: Phase 6 on branch `917-slice.review-artifact-integrity` from `main`.
+
 ## 20260911
 
 ### Slice 916 implementation (Phase 6)

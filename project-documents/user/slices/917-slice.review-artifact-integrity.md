@@ -131,8 +131,8 @@ The evidence the provider fix collects is discarded one layer up, on both paths.
 - `:42` and `:42-50` parse; a location with no line suffix is a whole-file citation and stays `None`, matching the existing checks.
 - Line count is read relative to the same `cwd` the existence check uses, through `_path_exists_under`'s resolution so bare-filename citations resolve the same way.
 - Diff membership does **not** feed `location_verified`. A code review citing a file outside the diff may be legitimate context; it stays a WARNING.
-- **Failure modes of the read.** This is a new I/O path on the parse path, driven by a model-supplied path, once per finding. `False` means exactly one thing: the file resolved and the cited line exceeds its line count. Every case where the check cannot run yields `None` with a WARNING naming the finding and the reason — no fourth state, and no `False` for a real citation whose file merely could not be read:
-  - path does not resolve under `cwd` (existing check already warns) → `None`;
+- **Failure modes of the read.** This is a new I/O path on the parse path, driven by a model-supplied path, once per finding. `False` means the citation was checked and is wrong: the file does not exist, or it exists and the cited line exceeds its line count. Every case where the check cannot run yields `None` with a WARNING naming the finding and the reason — no fourth state, and no `False` for a real citation whose file merely could not be read:
+  - path does not resolve under `cwd` → `False` (the existing WARNING fires; the file is verifiably absent, which is the hallucination signature this check exists for);
   - resolved path is not inside `cwd` after `resolve()` (a `../` citation) → `None`, and the file is never opened;
   - resolved path is a directory, unreadable (`OSError`), or larger than a single module-level byte cap → `None`;
   - lines are counted by streaming newline bytes in binary mode; no decode, so encoding cannot fail.
