@@ -103,7 +103,11 @@ class TestCodeReviewDiffInjectionIntegration:
         mock_diff.return_value = _DIFF_RANGE
 
         ctx = _make_context({"template": "code", "slice": 194})
-        result = await ReviewAction().execute(ctx)
+        # Scope-agnostic test: _DIFF_RANGE is a fabricated range with no
+        # commits behind it, so the empty-scope guard is stubbed out here.
+        # Scope refusal has its own tests.
+        with patch(f"{_P}.assert_reviewable_scope"):
+            result = await ReviewAction().execute(ctx)
 
         assert result.success is True
         assert result.verdict == "CONCERNS"

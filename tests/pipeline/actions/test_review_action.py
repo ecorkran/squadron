@@ -430,7 +430,14 @@ class TestReviewInputPassthrough:
                 "against": str(against_doc),
             }
         )
-        await ReviewAction().execute(ctx)
+        # Scope-agnostic test: the fixture's nominal range has no commits
+        # behind it, so the empty-scope guard is stubbed out here. Scope
+        # refusal has its own tests.
+        with (
+            patch(f"{_P}.assert_reviewable_scope"),
+            patch(f"{_P}.normalize_diff_spec", side_effect=lambda spec, _cwd: spec),
+        ):
+            await ReviewAction().execute(ctx)
 
         call_args = mock_run_review.call_args
         inputs = call_args[0][1]
@@ -1045,7 +1052,14 @@ class TestReviewActionRulesWiring:
             cwd=str(tmp_path),
             params={"template": "code", "diff": "main"},
         )
-        await ReviewAction().execute(ctx)
+        # Scope-agnostic test: the fixture's nominal range has no commits
+        # behind it, so the empty-scope guard is stubbed out here. Scope
+        # refusal has its own tests.
+        with (
+            patch(f"{_P}.assert_reviewable_scope"),
+            patch(f"{_P}.normalize_diff_spec", side_effect=lambda spec, _cwd: spec),
+        ):
+            await ReviewAction().execute(ctx)
 
         kwargs = mock_run_review.call_args.kwargs
         rc = kwargs["rules_content"]

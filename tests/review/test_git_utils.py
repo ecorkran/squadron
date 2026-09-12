@@ -14,13 +14,22 @@ from squadron.integrations.context_forge import (
 )
 from squadron.review.git_utils import (
     DEFAULT_DIFF_BASE,
+    GIT_COMMAND_TIMEOUT_SECONDS,
     INTEGRATION_BRANCH_KEY,
     DiffRangeUnresolvedError,
+    EmptyScopeCase,
+    EmptyScopeError,
+    NotAGitRepositoryError,
+    RefNotFoundError,
+    _changed_paths,
     _find_merge_commit,
     _find_slice_branch,
     _resolve_fork_point,
+    assert_reviewable_scope,
+    normalize_diff_spec,
     resolve_diff_base,
     resolve_slice_diff_range,
+    run_git,
 )
 
 _GIT_UTILS_SUBPROCESS = "squadron.review.git_utils.subprocess.run"
@@ -486,3 +495,242 @@ class TestFindMergeCommitFallback:
 
         assert result is None
         search.assert_called_once_with(145, ".", DEFAULT_DIFF_BASE)
+
+
+class TestRunGitTimeout:
+    """``run_git`` is bounded and reports a timeout rather than swallowing it.
+
+    Without a timeout, a command touching an unreachable remote-tracking ref
+    blocks the review indefinitely with no output.
+    """
+
+    def test_timeout_returns_none_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        with patch(
+            _GIT_UTILS_SUBPROCESS,
+            side_effect=subprocess.TimeoutExpired(cmd=["git", "fetch"], timeout=1),
+        ):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                assert run_git(["fetch", "origin"], cwd=".") is None
+
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+
+    def test_timeout_is_passed_to_subprocess(self) -> None:
+        """The bound comes from the module constant, not an inline literal."""
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
+            run_git(["status"], cwd=".")
+
+        assert mock_run.call_args.kwargs["timeout"] == GIT_COMMAND_TIMEOUT_SECONDS
+
+    def test_oserror_path_unchanged(self, caplog: pytest.LogCaptureFixture) -> None:
+        """An OSError still returns None, and stays distinct from the timeout path."""
+        with patch(_GIT_UTILS_SUBPROCESS, side_effect=OSError("no git binary")):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                assert run_git(["status"], cwd=".") is None
+
+        assert [r for r in caplog.records if r.levelname == "WARNING"] == []
+
+
+class TestNormalizeDiffSpec:
+    """``--diff`` specs become explicit ranges; bare refs gain merge-base semantics."""
+
+    @pytest.mark.parametrize(
+        ("spec", "expected"),
+        [
+            # Explicit ranges pass through — this is what protects a deliberate
+            # two-dot comparison from the bare-ref rewrite.
+            ("a..b", "a..b"),
+            ("a...b", "a...b"),
+            ("origin/main..HEAD", "origin/main..HEAD"),
+            # A three-dot spec contains a two-dot substring; checking two-dot
+            # first would misclassify it. This case pins the check order.
+            ("origin/main...HEAD", "origin/main...HEAD"),
+        ],
+    )
+    def test_explicit_ranges_pass_through(self, spec: str, expected: str) -> None:
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            assert normalize_diff_spec(spec, cwd=".") == expected
+        # A pass-through consults git at all only if the rewrite branch ran.
+        mock_run.assert_not_called()
+
+    def test_bare_ref_rewrites_to_merge_base_range(self) -> None:
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="abc123\n")
+            assert normalize_diff_spec("origin/main", cwd=".") == "origin/main...HEAD"
+
+    def test_not_a_git_repository_is_distinguishable(self) -> None:
+        """git could not run at all — the spec is not at fault."""
+        with patch(_GIT_UTILS_SUBPROCESS, side_effect=OSError("no git")):
+            with pytest.raises(NotAGitRepositoryError) as exc_info:
+                normalize_diff_spec("origin/main", cwd=".")
+        assert exc_info.value.ref == "origin/main"
+        assert not isinstance(exc_info.value, RefNotFoundError)
+
+    def test_ref_not_found_is_distinguishable(self) -> None:
+        """git ran and refused — the ref itself is the problem."""
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=128, stdout="")
+            with pytest.raises(RefNotFoundError) as exc_info:
+                normalize_diff_spec("no-such-ref", cwd=".")
+        assert exc_info.value.ref == "no-such-ref"
+        assert not isinstance(exc_info.value, NotAGitRepositoryError)
+
+
+class TestAssertReviewableScope:
+    """A review of nothing must be refused, and must say which kind of nothing."""
+
+    @pytest.fixture
+    def repo(self, tmp_path: Path) -> Path:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main"], cwd=repo, check=True, capture_output=True
+        )
+        (repo / "app.py").write_text("x = 1\n")
+        self._commit(repo, "init")
+        return repo
+
+    @staticmethod
+    def _commit(repo: Path, message: str) -> None:
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", message],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+        )
+
+    def _branch_with(self, repo: Path, filename: str, content: str) -> None:
+        subprocess.run(["git", "checkout", "-qb", "feature"], cwd=repo, check=True, capture_output=True)
+        (repo / filename).write_text(content)
+        self._commit(repo, "feature work")
+
+    def test_healthy_scope_passes_through(self, repo: Path) -> None:
+        self._branch_with(repo, "app.py", "x = 2\n")
+        assert assert_reviewable_scope("main...HEAD", str(repo), ["*.md"]) == ["app.py"]
+
+    def test_all_excluded_carries_patterns_and_count(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The range had changes, but every one matched an exclusion."""
+        self._branch_with(repo, "notes.md", "# notes\n")
+
+        with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+            with pytest.raises(EmptyScopeError) as exc_info:
+                assert_reviewable_scope("main...HEAD", str(repo), ["*.md"])
+
+        error = exc_info.value
+        assert error.case == EmptyScopeCase.ALL_EXCLUDED
+        assert error.exclude_patterns == ["*.md"]
+        assert error.excluded_count == 1
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_no_changes_at_all_is_a_distinct_case(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The range itself is the problem — wrong base, or already merged."""
+        with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+            with pytest.raises(EmptyScopeError) as exc_info:
+                assert_reviewable_scope("main...HEAD", str(repo), ["*.md"])
+
+        error = exc_info.value
+        assert error.case == EmptyScopeCase.NO_CHANGES
+        # Distinguishable by structured field, not by message text.
+        assert error.case != EmptyScopeCase.ALL_EXCLUDED
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_rejected_pathspec_is_its_own_case(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """git refusing the patterns is not the same as the patterns excluding everything.
+
+        The remedy differs — fix the patterns vs. pick a different range — so
+        overloading ALL_EXCLUDED would defeat the point of the enum.
+        """
+        self._branch_with(repo, "app.py", "x = 2\n")
+
+        real = _changed_paths
+
+        def fail_only_filtered(diff, cwd, patterns):
+            return None if patterns else real(diff, cwd, patterns)
+
+        with patch("squadron.review.git_utils._changed_paths", side_effect=fail_only_filtered):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                with pytest.raises(EmptyScopeError) as exc_info:
+                    assert_reviewable_scope("main...HEAD", str(repo), ["[bad"])
+
+        assert exc_info.value.case == EmptyScopeCase.INVALID_EXCLUDE_PATTERN
+        assert exc_info.value.case != EmptyScopeCase.ALL_EXCLUDED
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_unusable_range_is_distinct_from_an_empty_one(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """git could not compute the range at all — nothing is known about emptiness.
+
+        This must not report NO_CHANGES: a consumer acting on that case
+        ("already merged, skip the review") would then silently skip on a
+        broken git invocation.
+        """
+        with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+            with pytest.raises(EmptyScopeError) as exc_info:
+                assert_reviewable_scope("no-such-ref...HEAD", str(repo), None)
+
+        assert exc_info.value.case == EmptyScopeCase.UNCOMPUTABLE
+        assert exc_info.value.case != EmptyScopeCase.NO_CHANGES
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_no_patterns_does_not_run_the_same_diff_twice(self, repo: Path) -> None:
+        """With no exclusions the filtered command is identical — reuse, don't respawn."""
+        self._branch_with(repo, "app.py", "x = 2\n")
+
+        with patch("squadron.review.git_utils._changed_paths", return_value=["app.py"]) as mock_changed:
+            assert assert_reviewable_scope("main...HEAD", str(repo), None) == ["app.py"]
+
+        assert mock_changed.call_count == 1
+
+    def test_every_case_is_reachable_and_distinct(self, repo: Path) -> None:
+        """No two diagnoses may share a member — the whole point of the taxonomy."""
+        self._branch_with(repo, "notes.md", "# notes\n")
+        seen: list[EmptyScopeCase] = []
+
+        with pytest.raises(EmptyScopeError) as excluded:
+            assert_reviewable_scope("main...HEAD", str(repo), ["*.md"])
+        seen.append(excluded.value.case)
+
+        with pytest.raises(EmptyScopeError) as uncomputable:
+            assert_reviewable_scope("no-such-ref...HEAD", str(repo), None)
+        seen.append(uncomputable.value.case)
+
+        assert len(set(seen)) == len(seen)
+
+
+class TestExtractDiffPathsIsBounded:
+    """``extract_diff_paths`` runs through ``run_git``, so it inherits the timeout.
+
+    It previously called ``subprocess.run`` directly, leaving the unreachable-remote
+    hang reachable through the one path that always runs — the language-detection
+    extraction on both the CLI and pipeline review routes.
+    """
+
+    def test_timeout_yields_empty_list_not_a_hang(self, caplog: pytest.LogCaptureFixture) -> None:
+        from squadron.review.rules import extract_diff_paths
+
+        with patch(
+            _GIT_UTILS_SUBPROCESS,
+            side_effect=subprocess.TimeoutExpired(cmd=["git", "diff"], timeout=1),
+        ):
+            with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
+                assert extract_diff_paths("main...HEAD", ".", None) == []
+
+        assert [r for r in caplog.records if r.levelname == "WARNING"]
+
+    def test_passes_the_timeout_through(self) -> None:
+        from squadron.review.rules import extract_diff_paths
+
+        with patch(_GIT_UTILS_SUBPROCESS) as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="app.py\n")
+            assert extract_diff_paths("main...HEAD", ".", None) == ["app.py"]
+
+        assert mock_run.call_args.kwargs["timeout"] == GIT_COMMAND_TIMEOUT_SECONDS

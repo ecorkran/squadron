@@ -186,7 +186,9 @@ class TestOutputModes:
             ["review", "slice", input_doc, "--against", against_doc, "--output", "json"],
         )
         assert result.exit_code == 0
-        data = json.loads(result.output)
+        # stdout, not output: operator warnings go to stderr precisely so that
+        # --output json stays machine-parseable.
+        data = json.loads(result.stdout)
         assert data["verdict"] == "CONCERNS"
         assert len(data["findings"]) == 2
         assert "template_name" in data
@@ -482,6 +484,10 @@ class TestScopedDiff:
                 "squadron.cli.commands.review.resolve_slice_diff_range",
                 return_value="abc123...122-slice.foo",
             ) as mock_resolve,
+            # This test is about range resolution, not scope: the fabricated
+            # range has no real commits behind it, so the empty-scope guard
+            # would refuse it before the assertion could run.
+            patch("squadron.cli.commands.review.assert_reviewable_scope"),
         ):
             result = cli_runner.invoke(app, ["review", "code", "122", "--no-save"])
         assert result.exit_code == 0
@@ -519,7 +525,10 @@ class TestScopedDiff:
         inputs = call_kwargs[0][1] if call_kwargs[0] else call_kwargs[1].get("inputs")
         if inputs is None:
             inputs = call_kwargs[0][1]
-        assert inputs.get("diff") == "HEAD~3"
+        # Normalized: a bare ref supplied alongside a slice number still needs
+        # merge-base semantics (issue #89). resolve_slice_diff_range is still
+        # not called — the explicit --diff wins, it is just normalized first.
+        assert inputs.get("diff") == "HEAD~3...HEAD"
 
     def test_no_slice_number_no_resolution(
         self,

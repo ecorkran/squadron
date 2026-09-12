@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from enum import StrEnum
 
 from squadron.core.subprocess_text import TEXT_DECODING
 
@@ -17,16 +18,23 @@ DEFAULT_DIFF_BASE = "main"
 #: branches fork from and merge into instead of ``main``.
 INTEGRATION_BRANCH_KEY = "git.integration_branch"
 
+#: Wall-clock bound on any single git invocation. Without it, a command
+#: touching an unreachable remote-tracking ref blocks the review forever with
+#: no output. Generous enough that a slow local repository never trips it.
+GIT_COMMAND_TIMEOUT_SECONDS = 30
+
 
 def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
-    """Run a git command, returning the CompletedProcess or None on OSError.
+    """Run a git command, returning the CompletedProcess or None if it could not answer.
 
-    ``None`` means git could not be invoked at all (missing binary, bad cwd);
+    ``None`` means git could not be invoked at all (missing binary, bad cwd)
+    or did not finish within the timeout;
     a non-zero ``returncode`` on the returned process means git ran and
     refused. Callers must distinguish the two — they are different failures.
 
     Every git call in this module goes through here so the UTF-8 decoding
-    pin (issue #63) is applied once.
+    pin (issue #63) is applied once, and so every call is bounded by
+    ``GIT_COMMAND_TIMEOUT_SECONDS``.
     """
     try:
         return subprocess.run(
@@ -36,8 +44,25 @@ def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | 
             **TEXT_DECODING,
             cwd=cwd,
             check=False,
+            timeout=GIT_COMMAND_TIMEOUT_SECONDS,
         )
+    except subprocess.TimeoutExpired:
+        # Same "git could not answer" signal as OSError for every caller, but
+        # a timeout is a distinct operational fault (usually an unreachable
+        # remote) and must not vanish into a silent None.
+        _logger.warning(
+            "git %s timed out after %ds in %r; treating as unavailable",
+            " ".join(args),
+            GIT_COMMAND_TIMEOUT_SECONDS,
+            cwd,
+        )
+        return None
     except OSError:
+        # git is missing, not executable, or cwd does not exist. Every caller
+        # already treats None as "git could not answer" and reports accordingly,
+        # so this is handled rather than swallowed; it stays unlogged because it
+        # is the expected signal on machines with no git, which several callers
+        # (resolve_diff_base especially) must degrade past quietly.
         return None
 
 
@@ -52,6 +77,84 @@ class DiffRangeUnresolvedError(Exception):
     code into the reviewed diff (issue #14). Failing loudly here is safer
     than guessing.
     """
+
+
+class DiffSpecError(Exception):
+    """Base for ``--diff`` specs that cannot be turned into a reviewable range.
+
+    Carries the offending ref so callers can report it without parsing a
+    message. The two subclasses are different operator errors with different
+    fixes, so consumers branch on type, never on message text.
+    """
+
+    def __init__(self, message: str, *, ref: str) -> None:
+        super().__init__(message)
+        self.ref = ref
+
+
+class NotAGitRepositoryError(DiffSpecError):
+    """Git could not be invoked here at all — wrong cwd, or no git binary.
+
+    Distinct from a ref that simply does not exist: nothing about the spec is
+    at fault, so telling the operator to check their ref would send them the
+    wrong way.
+    """
+
+
+class RefNotFoundError(DiffSpecError):
+    """Git ran and could not resolve the ref. The spec itself is the problem."""
+
+
+class EmptyScopeCase(StrEnum):
+    """Why a diff range yielded nothing to review.
+
+    Each member is a distinct operator error with a distinct remedy. Conflating
+    them is how issue #71 stayed unexplained, so callers branch on this field
+    rather than on message text — and no member may cover two diagnoses, or a
+    consumer acting on one ("already merged, skip the review") silently acts on
+    the other too.
+    """
+
+    #: The range had changed files, but every one matched an exclusion pattern.
+    #: The operator likely wants the review omitted, or a different range.
+    ALL_EXCLUDED = "all_excluded"
+    #: The range itself contains no changed files — wrong base, an
+    #: already-merged branch, or a typo. The range is well-formed; it is empty.
+    NO_CHANGES = "no_changes"
+    #: git refused the exclusion pathspec itself. Distinct from ALL_EXCLUDED:
+    #: the patterns are malformed rather than over-broad, so the remedy is to
+    #: fix the patterns, not to pick a different range.
+    INVALID_EXCLUDE_PATTERN = "invalid_exclude_pattern"
+    #: git could not compute the range at all — a bad ref, a refused range, or
+    #: no usable git. Nothing is known about whether the range is empty, so this
+    #: must not be folded into NO_CHANGES: "skip, already merged" is a valid
+    #: response to that one and a wrong response to this.
+    UNCOMPUTABLE = "uncomputable"
+
+
+class EmptyScopeError(Exception):
+    """Raised when a review's filtered scope contains no files.
+
+    A review of nothing produces findings about the missing diff, which is then
+    persisted as a genuine verdict and clears review gates (issue #62). Refusing
+    pre-flight costs nothing and says why.
+
+    Carries the case, the matched exclusion patterns and the excluded file count
+    as structured fields so consumers never parse the message.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        case: EmptyScopeCase,
+        exclude_patterns: list[str] | None = None,
+        excluded_count: int = 0,
+    ) -> None:
+        super().__init__(message)
+        self.case = case
+        self.exclude_patterns = exclude_patterns or []
+        self.excluded_count = excluded_count
 
 
 class EmptyDiffError(Exception):
@@ -239,6 +342,145 @@ def _resolve_rev(ref: str, cwd: str) -> str | None:
     if result is not None and result.returncode == 0 and result.stdout.strip():
         return result.stdout.strip()
     return None
+
+
+#: Git's three-dot range operator: ``a...b`` diffs b against the merge-base of
+#: a and b — the change set b introduced, excluding what a gained meanwhile.
+THREE_DOT = "..."
+
+#: Git's two-dot range operator: ``a..b`` diffs the two endpoints directly.
+TWO_DOT = ".."
+
+
+def normalize_diff_spec(spec: str, cwd: str) -> str:
+    """Return *spec* as an explicit diff range, rewriting a bare ref to merge-base form.
+
+    A bare ``--diff main`` reaches ``git diff`` as a two-dot comparison against
+    the current worktree, so every commit the base gained since the branch
+    forked is reported as part of the branch's change set (issue #89). The
+    merge-base form ``<ref>...HEAD`` is what the operator means.
+
+    Ranges the operator wrote explicitly pass through untouched — including
+    ``a..b``, whose two-dot semantics are then deliberate. Endpoints of an
+    explicit range are **not** validated here: an unreachable endpoint surfaces
+    as an empty scope, which the scope guard reports with better context.
+
+    Raises ``NotAGitRepositoryError`` or ``RefNotFoundError`` when a bare ref
+    does not resolve — before any model call is spent on it.
+    """
+    # Three-dot must be tested first: every three-dot spec contains a two-dot
+    # substring, so the reverse order misclassifies explicit merge-base ranges.
+    if THREE_DOT in spec or TWO_DOT in spec:
+        return spec
+
+    result = run_git(["rev-parse", "--verify", f"{spec}^{{commit}}"], cwd=cwd)
+    if result is None:
+        raise NotAGitRepositoryError(
+            f"Cannot resolve --diff {spec!r}: git could not be run in {cwd!r}. "
+            "Check that this is a git repository and that git is installed.",
+            ref=spec,
+        )
+    if result.returncode != 0:
+        raise RefNotFoundError(
+            f"Cannot resolve --diff {spec!r}: no such ref in this repository. "
+            "Check the ref name, or fetch it first.",
+            ref=spec,
+        )
+
+    return f"{spec}{THREE_DOT}HEAD"
+
+
+def _changed_paths(diff: str, cwd: str, exclude_patterns: list[str] | None) -> list[str] | None:
+    """Return changed paths for *diff*, or None if git could not answer.
+
+    ``None`` is distinct from ``[]``: the former means the range could not be
+    computed at all, the latter that it computed to nothing. Collapsing them is
+    what let an unreadable range look like an empty one.
+    """
+    args = ["diff", "--name-only", diff]
+    if exclude_patterns:
+        args += ["--", ".", *(f":!{pattern}" for pattern in exclude_patterns)]
+    result = run_git(args, cwd=cwd)
+    if result is None or result.returncode != 0:
+        return None
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def assert_reviewable_scope(
+    diff: str,
+    cwd: str,
+    exclude_patterns: list[str] | None = None,
+) -> list[str]:
+    """Refuse a review whose filtered scope contains no files. Returns those files.
+
+    Computes the unfiltered and filtered path lists itself rather than reusing
+    either caller's ``extract_diff_paths`` call: both are nested under a rules
+    directory check, so a guard hung off them would silently not run whenever no
+    rules directory resolves — which is the review most in need of the guard.
+
+    Logs at WARNING before raising. A typed exception surfaces at WARNING+ only
+    if each entry point's handler happens to log it, and this function exists to
+    turn a silent pass into a loud failure, so the level is not left to the
+    caller.
+
+    Raises ``EmptyScopeError`` carrying an ``EmptyScopeCase``.
+    """
+    unfiltered = _changed_paths(diff, cwd, None)
+    if unfiltered is None:
+        _logger.warning("Refusing review of %r in %r: git could not compute the range.", diff, cwd)
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: git could not compute that range. "
+            "Check the range and that this is a git repository.",
+            case=EmptyScopeCase.UNCOMPUTABLE,
+        )
+
+    if not unfiltered:
+        _logger.warning("Refusing review of %r in %r: the range has no changed files.", diff, cwd)
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: that range contains no changed files. "
+            "The base may be wrong, or the branch may already be merged.",
+            case=EmptyScopeCase.NO_CHANGES,
+        )
+
+    # With no exclusion patterns the filtered form is the same git command with
+    # the same arguments, so reuse the answer rather than spawning it twice.
+    filtered = _changed_paths(diff, cwd, exclude_patterns) if exclude_patterns else unfiltered
+    if filtered is None:
+        # The unfiltered form worked, so the pathspec is what git refused.
+        _logger.warning(
+            "Refusing review of %r in %r: git rejected the exclusion pathspec %r.",
+            diff,
+            cwd,
+            exclude_patterns,
+        )
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: git rejected the exclusion patterns "
+            f"{exclude_patterns!r}. Check the pattern syntax.",
+            case=EmptyScopeCase.INVALID_EXCLUDE_PATTERN,
+            exclude_patterns=exclude_patterns,
+            # Not excluded_count: nothing was excluded — git refused the
+            # pathspec before filtering anything.
+        )
+
+    if not filtered:
+        excluded_count = len(unfiltered)
+        _logger.warning(
+            "Refusing review of %r in %r: all %d changed file(s) matched the exclusion patterns %r.",
+            diff,
+            cwd,
+            excluded_count,
+            exclude_patterns,
+        )
+        raise EmptyScopeError(
+            f"Cannot review {diff!r}: all {excluded_count} changed file(s) matched "
+            f"the exclusion patterns {exclude_patterns!r}. Review a range that "
+            "contains reviewable code, or omit the review for this change.",
+            case=EmptyScopeCase.ALL_EXCLUDED,
+            exclude_patterns=exclude_patterns,
+            excluded_count=excluded_count,
+        )
+
+    return filtered
 
 
 def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = None) -> str:

@@ -11,7 +11,13 @@ from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
-from squadron.review.git_utils import DiffRangeUnresolvedError
+from squadron.review.git_utils import (
+    DiffRangeUnresolvedError,
+    DiffSpecError,
+    EmptyScopeError,
+    assert_reviewable_scope,
+    normalize_diff_spec,
+)
 from squadron.review.persistence import (
     CfClientProtocol,
     SliceInfo,
@@ -74,6 +80,8 @@ class ReviewAction:
             ModelPoolNotImplemented,
             KeyError,
             DiffRangeUnresolvedError,
+            DiffSpecError,
+            EmptyScopeError,
         ) as exc:
             _logger.warning(
                 "review: step %s failed before/during template resolution: %s",
@@ -146,6 +154,14 @@ class ReviewAction:
             if key in context.params:
                 inputs[key] = str(context.params[key])
 
+        # A step-supplied bare ref needs merge-base semantics exactly as the
+        # CLI's --diff does (issue #89). Interface parity is the point: `sq run`
+        # is the less-watched entry point, so a range bug here is the harder one
+        # to notice. Slice-derived ranges are resolved below and arrive explicit,
+        # so only the step-supplied value passes through here.
+        if inputs.get("diff"):
+            inputs["diff"] = normalize_diff_spec(inputs["diff"], cwd)
+
         # Auto-resolve template inputs from slice number when not explicit.
         # Mirrors CLI behavior: `sq review slice 154` resolves input/against
         # automatically — pipelines should do the same.
@@ -183,15 +199,24 @@ class ReviewAction:
         manual_rules = (
             str(context.params["rules_content"]) if "rules_content" in context.params else None
         )
+        diff_ref = inputs.get("diff")
+        exclude_raw = inputs.get("diff_exclude_patterns")
+        exclude_patterns = (
+            [p.strip() for p in exclude_raw.split(",") if p.strip()] if exclude_raw else None
+        )
+
+        # Pre-flight: refuse a range with nothing reviewable in it before the
+        # model is called. `sq run` is the path that clears review gates, so a
+        # review of nothing passing here is the harm this guard exists to stop
+        # (issue #62). Outside the rules-dir branch by design — a review with no
+        # rules directory needs the guard just as much.
+        if diff_ref:
+            assert_reviewable_scope(diff_ref, cwd, exclude_patterns)
+
         rules_dir = resolve_rules_dir(cwd, None, None)
         file_paths: list[str] = []
         if rules_dir is not None:
-            diff_ref = inputs.get("diff")
             if diff_ref:
-                exclude_raw = inputs.get("diff_exclude_patterns")
-                exclude_patterns = (
-                    [p.strip() for p in exclude_raw.split(",") if p.strip()] if exclude_raw else None
-                )
                 file_paths = extract_diff_paths(diff_ref, cwd, exclude_patterns)
             if not file_paths and inputs.get("files"):
                 import glob as _glob

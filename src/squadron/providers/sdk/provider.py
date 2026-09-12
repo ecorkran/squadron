@@ -63,7 +63,16 @@ class ClaudeSDKProvider:
             kwargs["model"] = config.model
         if config.allowed_tools is not None:
             # Canonical -> Claude vocabulary happens here and only here; see tool_names.
-            kwargs["allowed_tools"] = translate_tool_names(config.allowed_tools)
+            translated = translate_tool_names(config.allowed_tools)
+            # Both are set deliberately: they answer different questions. `tools`
+            # is what exists at all, `allowed_tools` what is pre-approved. Setting
+            # only the latter left the CLI's full default set reachable, so a
+            # review declaring three read-only tools could still run Bash
+            # (issue #69). An allowlist is used rather than `disallowed_tools`
+            # because a denylist must be re-audited every time the CLI's defaults
+            # grow, and drifts silently when nobody does.
+            kwargs["tools"] = translated
+            kwargs["allowed_tools"] = translated
         if config.cwd is not None:
             kwargs["cwd"] = config.cwd
         if config.setting_sources is not None:
