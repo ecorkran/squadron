@@ -14,6 +14,29 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260912
 
+### Initiative 380 architecture (Phase 2)
+
+Wrote `user/architecture/380-arch.pull-request-workflow.md` for **Pull Request Workflow**,
+initiative plan entry 13, added the same day. Three capabilities on one new boundary: a
+code-host adapter protocol (GitHub over the operator's `gh` first), `sq review pr <target>` as
+the existing code review with adapter-resolved inputs, and `sq pr create` composing a title and
+body from commits, slice artifacts, and the latest saved review. Existing flows are untouched
+and no PR is ever required.
+
+Grounding from the tree: nothing under `src/squadron` calls `gh` or a hosting API; persistence
+is `SliceInfo`-keyed, and arch reviews already fabricate a minimal `SliceInfo` to save, a
+pattern the design refuses to extend to PRs. Slice 916's own motivation names PR-centric
+enterprise use, and its merge-base `--diff` semantics are the range rule a PR review adopts.
+Decisions recorded as principles: the adapter resolves and the engine reviews; PR identity is
+a typed record produced once; tool-enabled reviews read a squadron-owned scratch worktree,
+never the operator's checkout; host writes are separate explicit operations with dry-run and
+identity refusal; PR-keyed persistence is sequenced after 916 and 917.
+
+Worktree setup: `git.integration_branch=squadron-pr` set in the per-checkout personal config
+(now gitignored), branch pushed; 380 work merges into `squadron-pr`, not `main`. PM ruled the
+cf worktree index range (960-999) does not constrain 380's numbering. Next: Phase 2 review,
+then the 380 slice plan.
+
 ### Slice 917 design (Phase 4)
 
 Wrote `user/slices/917-slice.review-artifact-integrity.md` for **Review Artifact Integrity —
