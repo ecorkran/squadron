@@ -87,6 +87,18 @@ sequence/effort.
 
 ---
 
+### Slice 917 design review disposition
+
+Slice review (glm-5.3) returned CONCERNS with four concerns and two notes; all accepted, design
+updated in place. Part 4 now states the failure artifact's frontmatter (`verdict: UNKNOWN` through
+the same writer, marker in the body, must pass Part 2's gate). Part 5 enumerates the read's
+failure modes: `False` means only "resolved and out of bounds"; everything else is `None` plus a
+WARNING, with containment, a byte cap, and binary newline counting. Part 3's "mark degraded" is
+retracted — headingless good reviews would have embedded their raw response for ~15% of clean runs;
+the fact is now `ReviewResult.findings_section_located`, rendered by Part 6 only. Part 2 gains
+its 173 deliverables (`EVENTS.md` row, 140 listing, CHANGELOG). Citation corrected to 265 D5 in
+the design and plan entry 15. #25 folded at its filed scope: six templates plus `builders/code.py`.
+
 ## 20260911
 
 ### Slice 916 implementation (Phase 6)

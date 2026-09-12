@@ -74,8 +74,9 @@ Nothing checks an artifact's `verdict:` frontmatter against `Verdict` ([models.p
 - Violations: `docType: review` with no `verdict:` key; `verdict:` value not a `Verdict` member. Message names the file, the value, and the allowed set derived from the enum at runtime. No coercion.
 - Unreadable or unparseable frontmatter on a file it was asked to check: WARNING and do not pass — the same "a gate that cannot determine validity must not pass" posture the frontmatter gate holds. A file with no frontmatter is not a review and is skipped.
 - Enabled by default like the frontmatter gate; disableable in `events.yaml`.
+- **Deliverables that ship with the gate (slice 173's obligations for a built-in binding):** a row in the built-in bindings table in `docs/EVENTS.md`; a `builtin/review_verdict_gate.py` line in the `events/` listing of `architecture/140-arch.pipeline-foundation.md`; a CHANGELOG entry, since a default-on commit gate is a user-visible behavior change. (`interfaces:` in this frontmatter lists slices, not identifiers; the gate name is documented in `EVENTS.md`.)
 
-**Done when:** `BANANA` and `RESOLVED` are rejected with the value and allowed set in the message; each real member passes; a review with no `verdict:` is rejected; a non-review doc with a bad `verdict:` is ignored; a test pins that the allowed set comes from the enum; the gate passes against the existing review corpus before it is enabled.
+**Done when:** `BANANA` and `RESOLVED` are rejected with the value and allowed set in the message; each real member passes; a review with no `verdict:` is rejected; a non-review doc with a bad `verdict:` is ignored; a test pins that the allowed set comes from the enum; the gate passes against the existing review corpus before it is enabled; `EVENTS.md`, the 140 listing, and CHANGELOG carry the gate.
 
 ---
 
@@ -88,12 +89,12 @@ Nothing checks an artifact's `verdict:` frontmatter against `Verdict` ([models.p
 **Decision.** Three mechanical changes, each correct independently of the others:
 
 1. **Skip fenced code blocks.** A model restating the format almost always fences it. Finding-shaped text inside ` ``` ` fences is never a finding. This is position-independent and is the change most likely to be the actual #91 fix.
-2. **Bound to `## Findings` when the heading exists.** Take the span from the heading to the next `##` heading or end of document. Heading location is lenient (case, whitespace, bold, trailing punctuation). **When the heading is absent, scan the whole response as today** — the 267 reviews stay intact — and mark the parse degraded so the artifact says the format was not followed.
-3. **Fence the specimen in the templates (#25).** The four templates show the required format as bare text; wrap it so the model is less likely to echo it as output and so change 1 skips it if it does. Delimit substituted document content with XML tags while there.
+2. **Bound to `## Findings` when the heading exists.** Take the span from the heading to the next `##` heading or end of document. Heading location is lenient (case, whitespace, bold, trailing punctuation). **When the heading is absent, scan the whole response as today** — the 267 reviews stay intact — and record `findings_section_located=False` on `ReviewResult`. That field does not feed `fallback_used` and does not extend the degraded-render computation at [persistence.py:198](src/squadron/review/persistence.py#L198): the slice-267 reviews are good reviews and stay clean artifacts without an embedded raw response. Part 6's digest is what surfaces the missing heading.
+3. **Fence the specimen and delimit substituted content (#25).** All six templates (four review, two judge) show the required format as bare text; wrap it so the model is less likely to echo it as output and so change 1 skips it if it does. #25 is folded in whole, at its filed scope: descriptive XML tags around substituted document content in the six `prompt_template`s and in `builders/code.py`, per the issue's proposed fix.
 
 The permissive five-shape matching inside the parsed region is not the bug and stays. Counts — finding-shaped matches in the whole response, inside fences, inside the bounded span, and surviving — are computed here and carried on `ReviewResult` for Part 6. Part 5's `location_verified` is the backstop for any phantom that gets through all three.
 
-**Done when:** finding-shaped text inside a fence yields nothing; text outside `## Findings` yields nothing when the heading exists; the two slice-267 raw responses (real fixtures, headingless) still parse to 6 findings each and are flagged degraded; all five shapes still parse inside the region; heading variants are located; templates carry the fenced specimen and the #25 delimiters; a synthetic response echoing the specimen then writing real findings yields only the real ones. Existing tests encoding the unbounded scan are examined individually, not bulk-updated.
+**Done when:** finding-shaped text inside a fence yields nothing; text outside `## Findings` yields nothing when the heading exists; the two slice-267 raw responses (real fixtures, headingless) still parse to 6 findings each with `findings_section_located=False` and no degraded rendering; all five shapes still parse inside the region; heading variants are located; all six templates and `builders/code.py` carry the fenced specimen and the #25 delimiters; a synthetic response echoing the specimen then writing real findings yields only the real ones. Existing tests encoding the unbounded scan are examined individually, not bulk-updated.
 
 ---
 
@@ -106,15 +107,17 @@ The provider half is done: an empty final turn raises `ProviderError` carrying `
 
 The evidence the provider fix collects is discarded one layer up, on both paths. For a pipeline run, the artifact is the whole durable record.
 
-**Decision.** A provider failure on either path writes a failure artifact. The artifact states that the provider failed (not that the review found nothing), carries the error text including `finish_reason` and `reasoning_chars`, and carries whatever tool telemetry exists — so "given tools, said nothing" is distinguishable from "ran without tools", which slice 266 D5 requires. Exit code / `success=False` are unchanged: this changes what is recorded, not whether the run fails.
+**Decision.** A provider failure on either path writes a failure artifact. The artifact states that the provider failed (not that the review found nothing), carries the error text including `finish_reason` and `reasoning_chars`, and carries whatever tool telemetry exists — so "given tools, said nothing" is distinguishable from "ran without tools", which slice 265 D5 requires. Exit code / `success=False` are unchanged: this changes what is recorded, not whether the run fails.
 
 **Why overwrite the live slot.** The plan entry's instinct ran the other way ("the prior FAIL artifact was overwritten"). But leaving the prior artifact in place means a pipeline gate reads a stale verdict from a previous run and waves the step through — the silent pass-through 901 exists to prevent. Fail-closed requires the slot to hold the failure. The prior content is preserved by `archive_existing_review` (#73), and a test pins that the failure path goes through it.
 
 **Shape.** One failure-artifact writer shared by both paths, in `persistence.py`, taking the exception and the context the paths already have (template, model, slice info, telemetry). Not a fabricated `ReviewResult` with empty `raw_output` — that is the 487-byte artifact #84 complained about. `ProviderError` gets an explicit handler on each path; the catch-alls remain as process-boundary handlers.
 
-**On #92.** Not the same failure. #92 is a full turn, correct telemetry, 3302 characters of prose review, no formatted block — it never reaches `_require_final_content`. It is a parse outcome, and Part 3's no-heading path is what renders it legibly. A test here confirms that, and records which half of #92 this slice addresses (the artifact is honest) and which it does not (the content is not recovered).
+**Frontmatter.** The failure artifact is emitted through the same frontmatter block `format_review_markdown` writes (extracted into a shared helper, not duplicated): `docType: review`, `verdict: UNKNOWN`, `status: complete`, and the slice-265 telemetry keys when tools were offered. `UNKNOWN` is a `Verdict` member, so Part 2's gate passes it by construction, and gates already treat UNKNOWN fail-closed (901). `status` names the document's lifecycle, not the run's outcome; `DocumentStatus` has no failure value and none is added. The distinguishing marker is in the body: a `## Provider Failure` section carrying the error text, in place of `## Summary`/`## Findings`. "Given tools, said nothing" vs "ran without tools" is the existing `toolsGiven`/`toolCallsMade` frontmatter, present or absent. No diagnostic key is added to frontmatter, for Part 6's reason.
 
-**Done when:** a `ProviderError` on the CLI path and on the pipeline path each produce an artifact naming the provider failure with `finish_reason` and `reasoning_chars`; the artifact is distinguishable from a clean UNKNOWN and from a no-tools run; the prior artifact lands in `archive/`; CLI exit code stays 1 and pipeline `success` stays `False`; the #92 shape renders as degraded via Part 3.
+**On #92.** Not the same failure. #92 is a full turn, correct telemetry, 3302 characters of prose review, no formatted block — it never reaches `_require_final_content`. It is a parse outcome: its verdict parses UNKNOWN, so the existing degraded path already embeds the raw response, and Part 6's digest adds `## Findings` not located with zero finding-shaped matches. A test here confirms that, and records which half of #92 this slice addresses (the artifact is honest) and which it does not (the content is not recovered).
+
+**Done when:** a `ProviderError` on the CLI path and on the pipeline path each produce an artifact naming the provider failure with `finish_reason` and `reasoning_chars`; the artifact carries `## Provider Failure` and passes Part 2's gate; it is distinguishable from a clean UNKNOWN by that section and from a no-tools run by the telemetry keys; the prior artifact lands in `archive/`; CLI exit code stays 1 and pipeline `success` stays `False`; the #92 shape renders as degraded through the existing UNKNOWN path and its digest shows no `## Findings`.
 
 ---
 
@@ -128,9 +131,14 @@ The evidence the provider fix collects is discarded one layer up, on both paths.
 - `:42` and `:42-50` parse; a location with no line suffix is a whole-file citation and stays `None`, matching the existing checks.
 - Line count is read relative to the same `cwd` the existence check uses, through `_path_exists_under`'s resolution so bare-filename citations resolve the same way.
 - Diff membership does **not** feed `location_verified`. A code review citing a file outside the diff may be legitimate context; it stays a WARNING.
+- **Failure modes of the read.** This is a new I/O path on the parse path, driven by a model-supplied path, once per finding. `False` means exactly one thing: the file resolved and the cited line exceeds its line count. Every case where the check cannot run yields `None` with a WARNING naming the finding and the reason — no fourth state, and no `False` for a real citation whose file merely could not be read:
+  - path does not resolve under `cwd` (existing check already warns) → `None`;
+  - resolved path is not inside `cwd` after `resolve()` (a `../` citation) → `None`, and the file is never opened;
+  - resolved path is a directory, unreadable (`OSError`), or larger than a single module-level byte cap → `None`;
+  - lines are counted by streaming newline bytes in binary mode; no decode, so encoding cannot fail.
 - **Written, not read.** Nothing consumes the field in this slice; it is not added to `StructuredFinding` or frontmatter, because that would imply a contract this slice is not making. Precedent: `ReviewResult.provenance`, added the same way in slice 300.
 
-**Done when:** `None` everywhere when neither `cwd` nor `diff_files` is supplied; `parsers.py:999999` → `False`; a real in-bounds line → `True`; whole-file and `UNVERIFIED_LOCATION` → `None`; the range form parses; `location_path()` tests pass untouched; the #91 phantoms re-parse with `False`.
+**Done when:** `None` everywhere when neither `cwd` nor `diff_files` is supplied; `parsers.py:999999` → `False`; a real in-bounds line → `True`; whole-file and `UNVERIFIED_LOCATION` → `None`; the range form parses; `location_path()` tests pass untouched; the #91 phantoms re-parse with `False`; a directory, an unreadable file, an over-cap file, and a `../` citation each yield `None` with a WARNING, and the file is not opened for the last.
 
 ---
 
@@ -153,6 +161,18 @@ The counts come from the parser via `ReviewResult` (Part 3 computes them). The f
 - **Part 2 is a commit-path gate.** A misfire blocks commits repo-wide. Mitigated by keying on `docType`, skipping frontmatter-less files, `--no-verify` remaining available, and running against the existing corpus before enabling.
 - **Part 3 changes what every review parses.** Finding counts on real artifacts will change; that is the intent. Headingless responses keep today's behavior, so no known real review loses findings. Land 3 and 6 in the same branch so the counts are visible from the first run.
 - **Part 5's model field** is defaulted and write-only. Low.
+
+## Slice Review Disposition
+
+Slice review (`917-review.slice.review-artifact-integrity.md`, glm-5.3, CONCERNS, 20260912). All four concerns and both notes accepted.
+
+- **F005 (concern) — accepted, Part 4 gains a Frontmatter paragraph.** `verdict: UNKNOWN`, same frontmatter writer as a normal artifact, marker in the body; passing Part 2's gate is a done-when.
+- **F006 (concern) — accepted, Part 5 gains a failure-mode list.** `False` means only "resolved and out of bounds"; every could-not-check case is `None` plus WARNING; containment, size cap, binary line count.
+- **F007 (concern) — accepted, wording retracted.** "Mark degraded" is now `ReviewResult.findings_section_located`, rendered by Part 6 only. Headingless good reviews stay clean artifacts. Part 4's #92 sentence corrected to match.
+- **F008 (concern) — accepted, Part 2 gains deliverables.** `EVENTS.md` row, 140 listing, CHANGELOG. `interfaces:` is a slice list, not an identifier list; unchanged.
+- **F009 (note) — accepted.** 265 D5, here and in plan entry 15.
+- **F010 (note) — accepted.** #25 folded at its filed scope: six templates plus `builders/code.py`.
+- **F001–F004 (pass)** — no action.
 
 ## Verification walkthrough
 
