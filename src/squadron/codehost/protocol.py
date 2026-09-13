@@ -25,10 +25,22 @@ if TYPE_CHECKING:
     # annotation resolves for type checkers without a runtime import cycle:
     # selection passes a parsed target in, and targets.py imports nothing here.
     from squadron.codehost.targets import PullRequestTarget
+    from squadron.core.process_runner import ProcessRunner
 
 
 class CodeHost(Protocol):
     """A read-and-write interface to one code-hosting service."""
+
+    @property
+    def runner(self) -> ProcessRunner:
+        """The process runner every call from this host goes through.
+
+        On the protocol so a caller's *git* work travels the same seam as the
+        host calls. A caller that builds its own runner alongside the host
+        splits the seam in two: substituting the host then redirects only part
+        of what the command actually runs.
+        """
+        ...
 
     def serves_host(self, hostname: str) -> bool:
         """Whether this implementation handles ``hostname``.

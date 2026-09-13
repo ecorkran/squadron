@@ -97,13 +97,21 @@ def _locator(remote: LocalRemote) -> RepositoryLocator:
 
 
 def _describe(remotes: Sequence[LocalRemote]) -> str:
-    """Name every remote and what it points at, unparseable ones included."""
+    """Name every remote and what it points at, unparseable ones included.
+
+    The host is part of what a remote points at. Without it, a refusal caused
+    by a host mismatch reads as a contradiction: the owner and repository match
+    on the face of it, and only the invisible host explains the refusal.
+    """
     parts: list[str] = []
     for remote in remotes:
         if remote.owner is None or remote.repository is None:
             parts.append(f"{remote.name} (unrecognized URL: {remote.url})")
         else:
-            parts.append(f"{remote.name} -> {remote.owner}/{remote.repository}")
+            where = f"{remote.owner}/{remote.repository}"
+            if remote.host is not None:
+                where = f"{where} on {remote.host}"
+            parts.append(f"{remote.name} -> {where}")
     return ", ".join(parts)
 
 
@@ -140,9 +148,15 @@ def _select_explicit(target: PullRequestTarget, remotes: Sequence[LocalRemote]) 
         and (target.host is None or _matches(remote.host, target.host))
     ]
     if not candidates:
+        # Name the host when the target carried one: a repository that matches
+        # on owner and name but sits on a different host produces a refusal
+        # whose message would otherwise contradict itself ("no remote points at
+        # ecorkran/squadron; remotes are: origin -> ecorkran/squadron").
+        named = f"{target.owner}/{target.repository}"
+        if target.host is not None:
+            named = f"{named} on {target.host}"
         raise ForeignRepositoryError(
-            f"no remote points at {target.owner}/{target.repository}; "
-            f"remotes are: {_describe(remotes)}",
+            f"no remote points at {named}; remotes are: {_describe(remotes)}",
             fix_hint="Add a remote for that repository, or review it from a checkout that has one.",
         )
     if len(candidates) > 1:

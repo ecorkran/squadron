@@ -20,6 +20,7 @@ from squadron.cli.commands.message import message
 from squadron.cli.commands.metrology import metrology_app
 from squadron.cli.commands.models import models_app
 from squadron.cli.commands.pools import pools_app
+from squadron.cli.commands.pr import pr_app
 from squadron.cli.commands.review import review_app
 from squadron.cli.commands.run import run as run_command
 from squadron.cli.commands.serve import serve
@@ -54,6 +55,7 @@ app.add_typer(metrology_app, name="metrology")
 app.add_typer(auth_app, name="auth")
 app.add_typer(skills_app, name="skills")
 app.add_typer(events_app, name="events")
+app.add_typer(pr_app, name="pr")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
 app.command("setup")(setup)

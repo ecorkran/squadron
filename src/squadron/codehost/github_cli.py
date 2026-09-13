@@ -25,6 +25,7 @@ from squadron.codehost.errors import (
     HostUnreachableError,
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
+    PullRequestCreationRejectedError,
     PullRequestNotFoundError,
     TargetUnresolvableError,
 )
@@ -32,6 +33,7 @@ from squadron.codehost.github_config import read_gh_hosts
 from squadron.codehost.github_parse import (
     dig,
     dig_list,
+    require,
     require_int,
     require_str,
     to_discussions,
@@ -44,6 +46,7 @@ from squadron.codehost.github_queries import (
 )
 from squadron.codehost.models import (
     FetchedRange,
+    HostComment,
     OperatorIdentity,
     PullRequestRecord,
     RepositoryLocator,
@@ -84,6 +87,40 @@ _GH_ENV: Mapping[str, str] = {
 }
 
 
+def _nested_login(comment: Mapping[str, Any]) -> str:
+    """The login of a comment's author, or empty when absent."""
+    user = comment.get("user")
+    if not isinstance(user, dict):
+        return ""
+    return str(cast(Mapping[str, Any], user).get("login", ""))
+
+
+def _nested_sha(payload: Mapping[str, Any]) -> str:
+    """The head sha from a pull-request payload's ``head`` object."""
+    head = payload.get("head")
+    if not isinstance(head, dict):
+        return ""
+    return str(cast(Mapping[str, Any], head).get("sha", ""))
+
+
+def _to_comment(payload: Mapping[str, Any], argv: Sequence[str]) -> HostComment:
+    """Build a comment record from a REST comment payload."""
+    return HostComment(
+        id=str(require(payload, "id", argv)),
+        author_login=_nested_login(payload),
+        body=str(payload.get("body") or ""),
+        url=str(payload.get("html_url") or ""),
+    )
+
+
+def _require_object(result: ProcessResult, argv: Sequence[str]) -> Mapping[str, Any]:
+    """Parse stdout as a JSON object, or report drift."""
+    parsed = _try_parse_json(result.stdout)
+    if not isinstance(parsed, dict):
+        raise HostResponseMalformedError(tuple(argv), "expected a JSON object on stdout")
+    return cast(dict[str, Any], parsed)
+
+
 def _log_and_raise(error: CodeHostError) -> NoReturn:
     """Log a classified failure once, then raise it.
 
@@ -103,6 +140,18 @@ class GitHubCli:
     def __init__(self, runner: ProcessRunner, hosts: frozenset[str]) -> None:
         self._runner = runner
         self._hosts = hosts
+
+    @property
+    def runner(self) -> ProcessRunner:
+        """The process runner every call from this host goes through.
+
+        Exposed so a caller's *git* work — remote enumeration, fetching —
+        travels the same seam as the host calls. Without it the factory is only
+        half a seam: substituting the host redirects ``gh`` while git still
+        shells out for real, which is precisely the gap that let a test assert
+        against a host it never exercised.
+        """
+        return self._runner
 
     def serves_host(self, hostname: str) -> bool:
         """Whether this implementation answers for ``hostname``."""
@@ -223,6 +272,100 @@ class GitHubCli:
             expected_head_sha=record.head_sha,
         )
 
+    def find_own_comment(self, record: PullRequestRecord, *, marker: str) -> HostComment | None:
+        """The operator's own earliest comment carrying ``marker``.
+
+        ``marker`` is supplied by the caller: its format is 384's to define,
+        and inventing one here would fix a convention this slice has no
+        business fixing. Matching requires both the operator's login and the
+        marker, so a marker quoted by someone else is not mistaken for ours.
+        """
+        operator = self.identify_operator(record.host).login
+        path = f"repos/{record.owner}/{record.repository}/issues/{record.number}/comments"
+        comments = self._json_list(["api", "--paginate", path], host=record.host)
+
+        mine = [
+            comment
+            for comment in comments
+            if _nested_login(comment) == operator and marker in str(comment.get("body") or "")
+        ]
+        if not mine:
+            return None
+        # Earliest by created_at: the first one we posted is the one we update,
+        # so a duplicate posted later never becomes the canonical comment.
+        earliest = min(mine, key=lambda comment: str(comment.get("created_at") or ""))
+        return HostComment(
+            id=str(require(earliest, "id", ("gh", "api", path))),
+            author_login=operator,
+            body=str(earliest.get("body") or ""),
+            url=str(earliest.get("html_url") or ""),
+        )
+
+    def post_comment(self, record: PullRequestRecord, body: str) -> HostComment:
+        """Add a comment to the pull request."""
+        path = f"repos/{record.owner}/{record.repository}/issues/{record.number}/comments"
+        payload = self._json(["api", "-X", "POST", path, "-f", "body=@-"], host=record.host, stdin=body)
+        return _to_comment(payload, ("gh", "api", path))
+
+    def update_comment(self, record: PullRequestRecord, comment_id: str, body: str) -> HostComment:
+        """Replace the body of a comment we previously posted."""
+        path = f"repos/{record.owner}/{record.repository}/issues/comments/{comment_id}"
+        payload = self._json(
+            ["api", "-X", "PATCH", path, "-f", "body=@-"], host=record.host, stdin=body
+        )
+        return _to_comment(payload, ("gh", "api", path))
+
+    def open_pull_request(
+        self,
+        locator: RepositoryLocator,
+        *,
+        base: str,
+        head: str,
+        title: str,
+        body: str,
+    ) -> PullRequestRecord:
+        """Open a pull request, with the body over stdin."""
+        path = f"repos/{locator.owner}/{locator.repository}/pulls"
+        args = [
+            "api",
+            "-X",
+            "POST",
+            path,
+            "-f",
+            f"title={title}",
+            "-f",
+            f"head={head}",
+            "-f",
+            f"base={base}",
+            "-f",
+            "body=@-",
+        ]
+        result = self._run_gh(args, host=locator.host, stdin=body)
+        if result.returncode != 0:
+            error = _classify_failure(result, locator.host)
+            if isinstance(error, HostRequestRejectedError) and error.status == 422:
+                # The host's own message names the cause — a head that does not
+                # exist, or a pull request that is already open for this branch.
+                _log_and_raise(
+                    PullRequestCreationRejectedError(
+                        str(error), fix_hint="Check the head branch exists and has no open PR."
+                    )
+                )
+            _log_and_raise(error)
+
+        payload = _require_object(result, ("gh", *args))
+        argv = ("gh", "api", path)
+        return PullRequestRecord(
+            host=locator.host,
+            owner=locator.owner,
+            repository=locator.repository,
+            number=require_int(payload, "number", argv),
+            base_ref=base,
+            head_ref=head,
+            head_sha=_nested_sha(payload),
+            url=require_str(payload, "html_url", argv),
+        )
+
     def identify_operator(self, hostname: str) -> OperatorIdentity:
         """Who the operator is authenticated as on ``hostname``."""
         payload = self._rest(hostname, "user")
@@ -285,26 +428,49 @@ class GitHubCli:
         """Run a REST call, returning the parsed payload."""
         return self._json(["api", path], host=host)
 
-    def _json(self, args: Sequence[str], *, host: str) -> Mapping[str, Any]:
+    def _json(self, args: Sequence[str], *, host: str, stdin: str | None = None) -> Mapping[str, Any]:
         """Invoke gh and parse its stdout as a JSON object."""
-        result = self._run_gh(args, host=host)
+        result = self._run_gh(args, host=host, stdin=stdin)
         if result.returncode != 0:
             _log_and_raise(_classify_failure(result, host))
-        parsed = _try_parse_json(result.stdout)
-        if not isinstance(parsed, dict):
-            raise HostResponseMalformedError(tuple(result.argv), "expected a JSON object on stdout")
-        payload = cast(dict[str, Any], parsed)
+        payload = _require_object(result, ("gh", *args))
         errors = payload.get("errors")
         if isinstance(errors, list) and errors:
             # GraphQL reports failure in-band with exit 0.
             _log_and_raise(_classify_graphql_errors(cast(list[Any], errors), host))
         return payload
 
-    def _run_gh(self, args: Sequence[str], *, host: str, cwd: str | None = None) -> ProcessResult:
+    def _json_list(self, args: Sequence[str], *, host: str) -> list[dict[str, Any]]:
+        """Invoke gh and parse its stdout as a JSON array of objects.
+
+        ``--paginate`` concatenates pages into one array rather than the object
+        ``_json`` expects, so the collection endpoints parse through here.
+        """
+        result = self._run_gh(args, host=host)
+        if result.returncode != 0:
+            _log_and_raise(_classify_failure(result, host))
+        parsed = _try_parse_json(result.stdout)
+        if not isinstance(parsed, list):
+            raise HostResponseMalformedError(("gh", *args), "expected a JSON array on stdout")
+        items = cast(list[Any], parsed)
+        return [item for item in items if isinstance(item, dict)]
+
+    def _run_gh(
+        self,
+        args: Sequence[str],
+        *,
+        host: str,
+        cwd: str | None = None,
+        stdin: str | None = None,
+    ) -> ProcessResult:
         """Invoke ``gh``. The only place in this module that does.
 
         Appends ``--hostname`` so the host always comes from the resolved
         remote or target, never from a default and never from ``GH_HOST``.
+
+        ``stdin`` carries a request body. Bodies never travel through argv:
+        a review of any size would hit the argument-length limit, and its
+        content would be exposed to shell-adjacent handling.
         """
         argv = ["gh", *args, "--hostname", host]
         try:
@@ -313,6 +479,7 @@ class GitHubCli:
                 cwd=cwd,
                 timeout=HOST_COMMAND_TIMEOUT_SECONDS,
                 env=_GH_ENV,
+                stdin=stdin,
             )
         except ProcessNotFoundError as exc:
             _logger.warning("gh is not on PATH")

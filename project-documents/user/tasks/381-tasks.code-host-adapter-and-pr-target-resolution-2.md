@@ -234,118 +234,127 @@ here touches the host or the operator-facing surface.
 
 ### Task H.1 — Write operations
 
-- [ ] Implemented and tested here so 384 and 385 add behavior rather than
+- [x] Implemented and tested here so 384 and 385 add behavior rather than
       transport. **No 381 command calls them.**
-- [ ] `find_own_comment`: `gh api --paginate repos/{owner}/{repo}/issues/{n}/comments`,
+- [x] `find_own_comment`: `gh api --paginate repos/{owner}/{repo}/issues/{n}/comments`,
       filtered to `user.login == operator` **and** the marker in the body; earliest
       by `created_at`. The marker's format is 384's to define — take it as a
       parameter, do not invent one.
-- [ ] `post_comment`: `gh api -X POST repos/{owner}/{repo}/issues/{n}/comments
+- [x] `post_comment`: `gh api -X POST repos/{owner}/{repo}/issues/{n}/comments
       -f body=@-`.
-- [ ] `update_comment`: `gh api -X PATCH repos/{owner}/{repo}/issues/comments/{id}
+- [x] `update_comment`: `gh api -X PATCH repos/{owner}/{repo}/issues/comments/{id}
       -f body=@-`.
-- [ ] `open_pull_request`: `gh api -X POST repos/{owner}/{repo}/pulls -f title
+- [x] `open_pull_request`: `gh api -X POST repos/{owner}/{repo}/pulls -f title
       -f head -f base -f body=@-`; 422 → `PullRequestCreationRejectedError`
       carrying the host's message.
-- [ ] **Every body goes over stdin** (`-f body=@-`), never through argv. A review
+- [x] **Every body goes over stdin** (`-f body=@-`), never through argv. A review
       body of any size or content cannot then hit the argument-length limit or be
       mangled by shell-adjacent handling. This is what the runner's `stdin`
       parameter exists for.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task H.2 — Test: writes and `write_calls()`
 
-- [ ] Pin the exact argv for all four operations.
-- [ ] Assert the body arrives **over stdin**, byte-for-byte, including a body with
+- [x] Pin the exact argv for all four operations.
+- [x] Assert the body arrives **over stdin**, byte-for-byte, including a body with
       newlines, quotes, backticks, and a leading `-`. Assert the body does **not**
       appear anywhere in argv.
-- [ ] Assert `write_calls()` captures each of the four.
-- [ ] Assert it stays **empty across a full scripted adapter pipeline** — parse
+- [x] Assert `write_calls()` captures each of the four.
+- [x] Assert it stays **empty across a full scripted adapter pipeline** — parse
       target, select remote, resolve, fetch and range — which is everything the
       read path does and is all that exists at this point in the sequence. The
       CLI-level counterpart runs in the `sq pr show` test task, once the command
       exists. Together they are 381's proof the slice is read-only, and the
       mechanism 384 reuses; neither half may be dropped.
-- [ ] `find_own_comment`: no match → `None`; several matches → earliest by
+- [x] `find_own_comment`: no match → `None`; several matches → earliest by
       `created_at`; a comment by another author with the marker is **not** matched.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task H.3 — `sq pr show`
 
-- [ ] Create `src/squadron/cli/commands/pr.py`.
+- [x] Create `src/squadron/cli/commands/pr.py`.
       `pr_app = typer.Typer(name="pr", help=..., no_args_is_help=True)`; 385 adds
       `create` here.
-- [ ] `sq pr show [TARGET] [--cwd PATH] [--json]`.
-- [ ] `--cwd` resolves through the **shared cwd helper** extracted in Part A.
-- [ ] Terminal output: one Rich panel with the record (host, owner/repository,
+- [x] `sq pr show [TARGET] [--cwd PATH] [--json]`.
+- [x] `--cwd` resolves through the **shared cwd helper** extracted in Part A.
+- [x] Terminal output: one Rich panel with the record (host, owner/repository,
       number, state, title, author, URL, base ref and sha, head ref and sha,
       cross-repository flag), then the fetched refs with shas, the merge-base, the
       diff range, and the changed paths.
-- [ ] `--json`: one object with `record`, `resolved` (title, body, state, author,
+- [x] `--json`: one object with `record`, `resolved` (title, body, state, author,
       base_sha, linked_issue_numbers), and `fetched` (the `FetchedRange` fields).
       Follow `doctor.py`'s `_render_json` shape
       ([doctor.py:90](src/squadron/cli/commands/doctor.py#L90)). Written for 386's
       parity test.
-- [ ] Any `CodeHostError` → message and fix hint on stderr in red, exit 1, as the
+- [x] Any `CodeHostError` → message and fix hint on stderr in red, exit 1, as the
       review commands do. Exit 0 on success.
-- [ ] **Notify `sq-base` before editing `app.py`.** Then add the import and
+- [x] **Notify `sq-base` before editing `app.py`.** Then add the import and
       `app.add_typer(pr_app, name="pr")` alongside
       [app.py:49-56](src/squadron/cli/app.py#L49-L56).
-- [ ] Effort: 3
+- [x] **Seam correction (PM decision 20260913).** H.4 names `build_github_host`
+      as the single patch point, but `pr.py` as first written built one
+      `SubprocessRunner()` and used it for both the host *and* `list_remotes`.
+      Patching the factory therefore redirected only the `gh` calls; git
+      enumeration still shelled out for real, so the enterprise leg read the
+      developer's own checkout and asserted against a host it never exercised.
+      `CodeHost` gains a read-only `runner` property and `pr.py` takes its git
+      work through `host.runner`, making the factory the whole seam as H.4
+      assumes. Design protocol listing updated to match.
+- [x] Effort: 3
 
 ### Task H.4 — Test: `sq pr show` behavior
 
-- [ ] `tests/cli/test_pr_show.py`, using the `cli_runner` fixture
+- [x] `tests/cli/test_pr_show.py`, using the `cli_runner` fixture
       ([tests/cli/conftest.py:14](tests/cli/conftest.py#L14)).
-- [ ] **The injection seam — name it, do not invent one at execution time.**
+- [x] **The injection seam — name it, do not invent one at execution time.**
       `pr.py` reaches the host through `build_github_host(runner)` (F.2), so that
       factory is the single patch point: monkeypatch it in a module-scoped fixture to
       return `GitHubCli(FakeProcessRunner(script), hosts)`. Do not patch
       `SubprocessRunner`, and do not thread a test-only parameter through the command
       signature. Every other mechanism in this slice is pinned to the call; this one
       is the mechanism the headline criterion depends on, so it is pinned here too.
-- [ ] The enterprise leg needs the CLI's own `read_gh_hosts()` to see both hosts:
+- [x] The enterprise leg needs the CLI's own `read_gh_hosts()` to see both hosts:
       set `GH_CONFIG_DIR` to a two-host `hosts.yml` fixture, as the doctor test task
       already does — not by passing `hosts` past the factory, which would bypass the
       path under test.
-- [ ] **All six target forms resolve to the same `PullRequestRecord`** for the same
+- [x] **All six target forms resolve to the same `PullRequestRecord`** for the same
       PR — one parametrized test with identical scripted host responses, run once
       on `github.com` and once on the enterprise hostname. This is the slice's
       headline functional criterion.
-- [ ] `--json` emits the three-key object and parses.
-- [ ] The **CLI-level `write_calls()` assertion**: empty across a full `sq pr show`
+- [x] `--json` emits the three-key object and parses.
+- [x] The **CLI-level `write_calls()` assertion**: empty across a full `sq pr show`
       run. This is the half deferred from the write-operations test task, which
       could only script the adapter pipeline; together the two are the slice's
       read-only proof. Neither may be dropped.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task H.5 — Test: error observability and import boundaries
 
-- [ ] Every error in the design's error table — **all nineteen classes** — reaches
+- [x] Every error in the design's error table — **all nineteen classes** — reaches
       exit 1 through `sq pr show`, with a WARNING-or-higher record (`caplog`).
       Table-driven; one row per class, and the count is the check.
-- [ ] This is the design's `test_errors_observable.py`. **Placement deviation,
+- [x] This is the design's `test_errors_observable.py`. **Placement deviation,
       deliberate:** it lives in `tests/cli/test_pr_show.py` rather than its own file
       under `tests/codehost/`, because exit codes are only observable through the
       CLI and the design's own criterion couples type, log level, and exit code in
       one assertion. If it outgrows that home, split it out then.
-- [ ] `tests/codehost/test_import_boundaries.py`: walk the import graph of
+- [x] `tests/codehost/test_import_boundaries.py`: walk the import graph of
       `src/squadron/codehost` and `src/squadron/review`. Assert no `codehost`
       module imports `squadron.review`, `squadron.cli`, `squadron.pipeline`, or
       `squadron.providers`, and no `review` module imports `squadron.codehost`.
-- [ ] Separated from the task above because this is the densest test work in the
+- [x] Separated from the task above because this is the densest test work in the
       slice — nineteen error classes times three assertions each, plus a two-package
       graph walk. Buried in a four-deliverable task it is the part most likely to
       be left half-done.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task H.6 — Commit
 
-- [ ] `uv run pytest -q`. **Full suite** — this is the first point where the new
+- [x] `uv run pytest -q`. **Full suite** — this is the first point where the new
       command is registered and could affect unrelated CLI tests.
-- [ ] ruff; pyright.
-- [ ] Commit: `feat(cli): add sq pr show over the code-host adapter`
-- [ ] Effort: 1
+- [x] ruff; pyright.
+- [x] Commit: `feat(cli): add sq pr show over the code-host adapter`
+- [x] Effort: 1
 
 ---
 
