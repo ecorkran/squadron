@@ -14,6 +14,80 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 918 Part 2 — stop-reason evidence on every review (#92)
+
+Instrumentation committed as `45e7b002`. The mechanism fix was **not** implemented; the
+evidence did not select a branch. Filed as #99.
+
+Issue #92's failure mode is a review that returns a substantial, well-reasoned response
+which parses to zero findings. The stop reason and reasoning volume were already captured
+in `TurnResult`, but only `_require_final_content` read them — and that path returns early
+unless the turn is *empty*, so the one case where the stop reason is the whole diagnosis
+recorded nothing. The fix is to stamp unconditionally rather than on degradation.
+
+Three facts now ride the final `Message.metadata`, the same channel tool telemetry uses:
+the stop reason, the reasoning character count, and a failed-tool-call count. They land on
+`ReviewResult`, serialize into `to_dict()`, and render in the Run Digest. `TurnResult`'s
+caller-facing role is unchanged — `_stamp_tool_telemetry` reads the values off the turn it
+is handed rather than returning them upward.
+
+`_execute_tool_call` now returns `(content, failed)` instead of a bare string. The
+alternative was matching an `"Error: "` prefix downstream, which is string-dispatch on a
+human-readable message and forbidden by project rules. The count means "tool calls that
+failed", so the pre-executor rejections — unknown tool name, malformed arguments — count
+too; neither reaches an executor at all.
+
+Per D10 the three stay out of frontmatter (the consumed contract the verdict gate reads)
+and go into JSON (what programmatic consumers read). The two surfaces already differ:
+`fallback_used` is JSON-only. Per D12 the SDK path stamps none of them — `finish_reason`
+is an OpenAI/OpenRouter streaming concept, so an absent key reads as `None` and renders as
+not-computed rather than as a fabricated value.
+
+Also replaced the `x or 0` idiom in the digest and frontmatter renderers with explicit
+`is None` checks, via a shared `_render_optional`. It collapsed a real zero into the
+not-reported sentinel. That matters beyond tidiness: the Amoeba orchestrator routes on
+`tool_calls_made == failed_tool_calls > 0` as a retry predicate, and a zero rendering as
+not-computed would make a healthy instrumented run indistinguishable from an
+uninstrumented one — the exact distinction this part exists to provide.
+
+The digest also carries a newline-free indicator, computed at render time from
+`raw_output` (the text is already in hand; a field would buy nothing). It does not fix
+\#96 — it makes the artifact say *which* of three shapes occurred: never-emitted output
+(#92), all-tools-failed (kimi27), or emitted-but-unparseable (#96). The fixture is the
+real 3076-character `918-review.slice` body, which had zero line breaks and collapsed
+`## Summary` and `PASS` into one token.
+
+#### T2.8 reproduction — did not reproduce
+
+`uv run sq review slice 916 -v --model kimi3`, twice, at sha `45e7b002`. The artifact's
+`aiModel` confirms `moonshotai/kimi-k3` resolved (the `--model` flag wins here, unlike the
+Part 1 profile-resolution caveat).
+
+| Run | Response length | Tool calls made | failed | Stop reason | Reasoning chars | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | 4517 | 5 | 0 | `stop` | 11188 | CONCERNS, 5 findings parsed |
+| 2 | 5860 | 19 | 1 | `stop` | 0 | CONCERNS, findings parsed |
+
+Both emitted well-formed output that parsed cleanly. #92 reproduced at sha `1515cff` with
+17 tool calls; run 2 here made 19 and was fine. **The underlying cause is not fixed** —
+nothing in this part touched the mechanism, and these two runs are not evidence that it
+went away.
+
+The runs do confirm the instrumentation end-to-end, including both zero cases that the
+`or 0` idiom would have destroyed: run 1's `failed: 0` and run 2's `reasoning_chars: 0`
+each rendered as a real zero rather than "not computed".
+
+On T2.9's three candidates: `finish_reason == "length"` was not observed, though
+`max_tokens` is confirmed set on no request anywhere under `providers/openai/`, so it stays
+the most plausible mechanism and overlaps #84's open follow-up. A clean `stop` on a turn
+that parsed to nothing was not observed either — both clean stops parsed fine. Prompt
+adherence is not distinguishable without a reproduction. Choosing among three mechanisms on
+no evidence is what D7 and the project's one-speculative-fix rule forbid, so #99 records
+what to read out of the digest when it recurs, and the branch selects itself then.
+
+Both runs also showed `` `## Summary` located: no `` while findings parsed — adjacent to
+\#28 and #96, untouched here.
+
 ### Slice 918 Part 1 — jail exclusions for document reviews (#94)
 
 Implemented and committed as `50d2f8de` on `918-slice.review-grounding`.
