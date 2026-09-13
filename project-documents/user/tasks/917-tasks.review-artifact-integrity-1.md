@@ -177,11 +177,20 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 - [ ] Run the gate over every `project-documents/user/reviews/**/*.md` (a
       throwaway script or a one-off test invocation, not committed). Expected:
-      exactly two violations, both hand-edited historical artifacts already known
-      — `reviews/343-review.tasks.sq-skills-uninstall-and-sq-doctor-integration.md`
-      and `reviews/archive/266-review.tasks.tool-use-configuration-and-limits.md`,
-      both `verdict: RESOLVED`. Leave them; the gate runs on staged files only and
-      history is not rewritten.
+      exactly **three** violations, all hand-edited historical artifacts
+      (part-1 review F001) —
+      `reviews/343-review.tasks.sq-skills-uninstall-and-sq-doctor-integration.md`
+      and `reviews/archive/266-review.tasks.tool-use-configuration-and-limits.md`
+      (both `verdict: RESOLVED`), and
+      `reviews/305-review.tasks.findings-addressed-gate.part-1.md`
+      (`verdict: CONCERN`, singular).
+- [ ] Disposition of the 305 artifact: its body reads `**Verdict:** FAIL` and it
+      carries a `fail`-severity finding, so its frontmatter is corrupt, not a
+      fifth verdict value. Correct it to `verdict: FAIL` — a data fix to one
+      historical artifact, restoring agreement with its own body. Leave the two
+      `RESOLVED` artifacts alone: `RESOLVED` is a real disposition the enum does
+      not model, and rewriting it would falsify history. The gate runs on staged
+      files only, so they trip nothing until someone stages them.
 - [ ] Any *other* violation is a finding: record it in DEVLOG and fix the artifact
       only if this slice produced it.
 - [ ] Effort: 1
@@ -262,8 +271,8 @@ branch configured). Merge to `main` when Part 6 is verified.
 - [ ] `findings_section_located=False` does **not** change `fallback_used` and
       does not touch the `degraded` computation at
       [persistence.py:198](src/squadron/review/persistence.py#L198).
-- [ ] Success: `_FINDING_RE.finditer` appears in exactly one place
-      (`_count_finding_matches`) plus the bounded scan.
+- [ ] Success: `_FINDING_RE.finditer` appears in exactly two places —
+      `_count_finding_matches` and the bounded scan (part-1 review F007).
 - [ ] Effort: 2
 
 ### Task 3.5 — Test: the bounded scan

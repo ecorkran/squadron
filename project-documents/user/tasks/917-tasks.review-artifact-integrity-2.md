@@ -18,7 +18,21 @@ dateUpdated: 20260912
 Parts 4–6 of six. Context, verified code anchors, standing constraints, and
 Parts 1–3 are in `917-tasks.review-artifact-integrity-1.md`; read its anchor
 table and constraints before starting here. Part 3 must be complete and
-committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
+committed first: Parts 4, 5, and 6 all consume the fields it adds to
+`ReviewResult` — Task 4.7's #92 boundary test asserts on
+`findings_section_located` (part-2 review F005).
+
+### Task-review disposition (20260912)
+
+Both task reviews (`917-review.tasks.…part-1.md`, `…part-2.md`, glm-5.3,
+CONCERNS) are dispositioned in place. Part-1 F001 (a third corpus violation)
+and F007 (ambiguous 3.4 criterion) are fixed in file 1. Part-2 F001
+(`_count_lines` cannot name the finding) is fixed in Task 5.2/5.3, F002
+(`slice_info`-absent pipeline branch) in Tasks 4.2/4.6/4.7, F003 (#92 digest
+end-to-end) in Task 6.2, F005 (this preamble) here. Part-2 F004 is recorded as
+a known limitation in Task 4.2; F006 and part-1 F009 (anchors unverifiable from
+the reviewer's document-only tree) need no action — the anchors were traced in
+the source tree and re-verified during implementation.
 
 ---
 
@@ -49,17 +63,31 @@ committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
       [test_persistence.py:824](tests/review/test_persistence.py#L824) must pass
       byte-for-byte.
 - [ ] Add `format_provider_failure_markdown(exc: ProviderError, review_type,
-      slice_info, *, model, source_document, tools_given, reviewed_sha)`:
-      frontmatter via the helper with `verdict=Verdict.UNKNOWN.value` and
-      `status: complete`; telemetry keys only when `tools_given is not None`,
-      with `toolCallsMade` from `exc.tool_calls_made` (`0` when `None`); body is
-      `# Review: {review_type} — slice {index}`, `**Verdict:** UNKNOWN`,
+      slice_info: SliceInfo | None, *, model, source_document, tools_given,
+      reviewed_sha)`: frontmatter via the helper with
+      `verdict=Verdict.UNKNOWN.value` and `status: complete`; telemetry keys only
+      when `tools_given is not None`, with `toolCallsMade` from
+      `exc.tool_calls_made` (`0` when `None`); then `**Verdict:** UNKNOWN`,
       `**Model:** ...`, then `## Provider Failure` with one sentence stating the
       provider raised before any response was delivered and `str(exc)` verbatim
       (it carries `finish_reason` and `reasoning_chars`). No `## Findings`.
+- [ ] **`slice_info` is optional** (part-2 review F002). `format_review_markdown`
+      already accepts `slice_info=None` and falls back to `unknown`/`0`/`unknown`
+      for the slice, index, and project frontmatter fields; the failure writer
+      takes the same type and reuses that same fallback through the shared
+      helper — no widened union, no second code path, and pyright stays clean.
+- [ ] Title line follows the same conditional: `# Review: {review_type} — slice
+      {index}` when `slice_info` is present, `# Review: {review_type}` when it is
+      not. Never emit the literal `slice 0`.
 - [ ] Add `save_provider_failure(...)` that formats and writes through
       `save_review_file` (so `archive_existing_review` runs). Returns the path or
       `None`; a `None` is logged at WARNING by `save_review_file` already.
+- [ ] Known limitation, not addressed here (part-2 review F004): a failure
+      artifact from a tools-suppressed run renders like a never-offered run,
+      because `tools_given` is the only telemetry input. The design's done-when
+      requires only slice 265's D5 distinction. If slice 266's
+      `toolsSuppressedReason` needs to survive a provider failure, that is a
+      follow-up issue, not this slice.
 - [ ] Effort: 2
 
 ### Task 4.3 — Test: the failure artifact
@@ -109,11 +137,17 @@ committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
 
 - [ ] In `_review` ([actions/review.py:238](src/squadron/pipeline/actions/review.py#L238))
       wrap the `run_review_with_profile` call: `except ProviderError as exc` →
-      call `save_provider_failure` using `slice_info` when present, else the
-      step-name/index naming the existing save branch uses
-      ([:283-300](src/squadron/pipeline/actions/review.py#L283-L300)); log at
-      WARNING with the saved path; **re-raise**. The `execute` catch-all then
-      produces the existing `success=False` result via `_exception_result`.
+      call `save_provider_failure`, passing `slice_info` straight through
+      (it is `SliceInfo | None` at that point and the writer accepts `None`,
+      per Task 4.2); log at WARNING with the saved path; **re-raise**. The
+      `execute` catch-all then produces the existing `success=False` result via
+      `_exception_result`.
+- [ ] Naming mirrors the existing save branch
+      ([:283-300](src/squadron/pipeline/actions/review.py#L283-L300)): with
+      `slice_info`, the slice-derived name; without it, `save_review_file` with
+      `context.step_name` and `context.step_index`. This branch is reachable —
+      a review step with no `slice` param leaves `slice_info` `None` — so it is
+      not dropped, and Task 4.7 covers it.
 - [ ] Effort: 2
 
 ### Task 4.7 — Test: pipeline path and #92 boundary
@@ -122,6 +156,10 @@ committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
       to raise `ProviderError(...)`; `execute` returns `success=False`; the
       failure artifact exists in the temp reviews dir; a pre-seeded prior
       artifact is archived.
+- [ ] Second case, the `slice_info`-absent branch (part-2 review F002): a review
+      step with no `slice` param raises the same error. Assert `success=False`,
+      an artifact named from the step name and index, `verdict: UNKNOWN`, a
+      `## Provider Failure` section, and no literal `slice 0` in the body.
 - [ ] #92 boundary test in `test_parsers.py` + `test_persistence.py`: a
       3,000-character prose-only response (no `## Summary`, no findings block)
       parses to `verdict=UNKNOWN`, 0 findings, `findings_section_located False`,
@@ -164,11 +202,16 @@ committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
       returns the resolved path (direct join, or the single basename hit) and
       `None` when nothing resolves. Behavior of `_path_exists_under` unchanged.
 - [ ] Add module constant `_MAX_LINE_CHECK_BYTES` (one place; pick 4 MiB) and
-      `_count_lines(root, resolved) -> int | None`: return `None` with a WARNING
-      when `resolved.resolve()` is not relative to `root.resolve()` (never open
-      it), when it is a directory, when `stat().st_size` exceeds the cap, or on
-      `OSError`. Otherwise open in binary mode and count `b"\n"` in streamed
-      chunks; a final unterminated line counts.
+      `_count_lines(root, resolved) -> tuple[int | None, str | None]` returning
+      `(count, None)` on success and `(None, reason)` when the count could not be
+      taken: not relative to `root.resolve()` (never open it), a directory,
+      `stat().st_size` over the cap, or `OSError`. Otherwise open in binary mode
+      and count `b"\n"` in streamed chunks; a final unterminated line counts.
+- [ ] **`_count_lines` does not log** (part-2 review F001). It has no finding
+      identifier, and the standing constraint requires every `None` WARNING to
+      name the finding. It returns the reason as a string; `_check_line_bounds`,
+      which iterates findings and holds the index and title, emits the single
+      WARNING. Reason strings are module-level constants, not inline literals.
 - [ ] Effort: 2
 
 ### Task 5.3 — Wire the check
@@ -177,9 +220,13 @@ committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
       same place `_check_path_existence` is (only when `cwd` is supplied). For
       each finding: `location_line` is `None` → leave `None`; path does not
       resolve → `False` (the existing WARNING already fires; the file is
-      verifiably absent); `_count_lines` returns `None` → leave `None`
-      (WARNING already logged there); line > count → `False` with a WARNING
-      naming finding, path, cited line, and actual count; otherwise `True`.
+      verifiably absent); `_count_lines` returns a reason → leave `None` and emit
+      one WARNING naming the finding index, title, template, path, and that
+      reason; line > count → `False` with a WARNING naming finding, path, cited
+      line, and actual count; otherwise `True`.
+- [ ] Every WARNING this function emits follows `_check_path_existence`'s
+      existing shape — `Finding F%03d (%r) in %s review …` — so the finding is
+      named in all cases, per the standing constraint.
 - [ ] Effort: 1
 
 ### Task 5.4 — Test: line bounds
@@ -237,6 +284,10 @@ committed first: Parts 5 and 6 consume the fields it adds to `ReviewResult`.
 - [ ] End-to-end in `test_parsers.py` + `test_persistence.py`: the synthetic
       echo-then-real response from Task 3.5 parsed then formatted shows a
       whole-response count greater than the surviving count.
+- [ ] Extend the same end-to-end case to the #92 prose-only fixture from Task
+      4.7 (part-2 review F003): parsed then formatted, its digest reports
+      `## Findings` not located with zero surviving matches, asserting the
+      design's Part 4 done-when once, end to end.
 - [ ] Effort: 1
 
 ### Task 6.3 — Close out the slice
