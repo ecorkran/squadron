@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Committing a review artifact whose `verdict:` is missing or is not one of the review verdicts is now rejected. An unrecognized verdict used to reach a pipeline gate as `UNKNOWN` and trip a checkpoint indistinguishably from a real one. Disable with `squadron.review-verdict-gate` in `events.yaml` (#77)
 
 ### Fixed
+- A review whose model returns nothing now leaves an artifact naming the provider failure and why the model stopped, instead of no artifact at all. The previous run's verdict is archived rather than left in the live slot, where a pipeline gate would read it as this run's result (#84)
 - `sq review code --diff <ref>` now reviews only your branch's own changes. A bare ref was compared against your working tree, so anything the base gained since you branched was reported as part of your change set (#89)
 - A review whose change set is entirely excluded — a docs-only branch, say — now fails with a message naming the exclusions, instead of passing a review of nothing and clearing pipeline review gates (#62)
 - `sq review` no longer reports success for a review it never saved. A run with no slice number warns and tells you how to get an artifact; a save that actually fails now exits non-zero (#70)

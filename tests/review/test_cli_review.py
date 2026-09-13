@@ -665,3 +665,142 @@ class TestUnsavedReviewExitCode:
 
         assert result.exit_code == 0, result.output
         assert "Saved review to" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 4: a provider failure leaves an artifact (#84)
+# ---------------------------------------------------------------------------
+
+_PROVIDER_FAILURE = (
+    "Model returned an empty final turn (finish_reason='length', "
+    "reasoning_chars=1200); no response to deliver."
+)
+
+
+def _slice_info_for(tmp_path: Path, index: int = 917) -> dict[str, object]:
+    design = tmp_path / "design.md"
+    design.write_text("# Design\n")
+    return {
+        "index": index,
+        "name": "review-artifact-integrity",
+        "slice_name": "review-artifact-integrity",
+        "design_file": str(design),
+        "task_files": [],
+        "arch_file": str(design),
+        "project": "squadron",
+    }
+
+
+class TestProviderFailureArtifact:
+    """A provider that delivers nothing must still leave a record.
+
+    Before this, the CLI printed an error and exited 1 — no artifact, no
+    traceback, no record of why the model stopped.
+    """
+
+    def test_slice_review_writes_a_failure_artifact(
+        self, cli_runner: CliRunner, tmp_path: Path
+    ) -> None:
+        from squadron.providers.errors import ProviderError
+
+        reviews = tmp_path / "project-documents/user/reviews"
+        reviews.mkdir(parents=True)
+        prior = reviews / "917-review.slice.review-artifact-integrity.md"
+        prior.write_text("---\nverdict: PASS\n---\n\nA previous, passing run.\n")
+
+        with (
+            patch(
+                "squadron.cli.commands.review._resolve_slice_number",
+                return_value=_slice_info_for(tmp_path),
+            ),
+            patch(
+                "squadron.cli.commands.review._execute_review",
+                new=AsyncMock(side_effect=ProviderError(_PROVIDER_FAILURE, tool_calls_made=0)),
+            ),
+        ):
+            result = cli_runner.invoke(app, ["review", "slice", "917", "--cwd", str(tmp_path)])
+
+        assert result.exit_code == 1
+        written = prior.read_text()
+        assert "## Provider Failure" in written
+        assert f"verdict: {Verdict.UNKNOWN.value}" in written
+        assert "finish_reason='length'" in written
+        # The prior verdict is preserved, not overwritten in place.
+        archived = list((reviews / "archive").glob("*.md"))
+        assert len(archived) == 1
+        assert "A previous, passing run." in archived[0].read_text()
+
+    def test_no_save_writes_nothing(self, cli_runner: CliRunner, tmp_path: Path) -> None:
+        from squadron.providers.errors import ProviderError
+
+        reviews = tmp_path / "project-documents/user/reviews"
+        reviews.mkdir(parents=True)
+
+        with (
+            patch(
+                "squadron.cli.commands.review._resolve_slice_number",
+                return_value=_slice_info_for(tmp_path),
+            ),
+            patch(
+                "squadron.cli.commands.review._execute_review",
+                new=AsyncMock(side_effect=ProviderError(_PROVIDER_FAILURE)),
+            ),
+        ):
+            result = cli_runner.invoke(
+                app, ["review", "slice", "917", "--cwd", str(tmp_path), "--no-save"]
+            )
+
+        assert result.exit_code == 1
+        assert list(reviews.glob("*.md")) == []
+
+    def test_arch_review_writes_a_failure_artifact(self, cli_runner: CliRunner, tmp_path: Path) -> None:
+        """review arch builds its target before the run, so it has one here."""
+        from squadron.providers.errors import ProviderError
+
+        reviews = tmp_path / "project-documents/user/reviews"
+        reviews.mkdir(parents=True)
+        arch_doc = tmp_path / "900-arch.maintenance.md"
+        arch_doc.write_text("# Architecture\n")
+
+        with (
+            patch(
+                "squadron.cli.commands.review._resolve_arch_file",
+                return_value=str(arch_doc),
+            ),
+            patch(
+                "squadron.cli.commands.review.ContextForgeClient",
+                side_effect=ContextForgeNotAvailable("no cf in tests"),
+            ),
+            patch(
+                "squadron.cli.commands.review._execute_review",
+                new=AsyncMock(side_effect=ProviderError(_PROVIDER_FAILURE)),
+            ),
+        ):
+            result = cli_runner.invoke(app, ["review", "arch", "900", "--cwd", str(tmp_path)])
+
+        assert result.exit_code == 1
+        written = list(reviews.glob("900-review.arch.*.md"))
+        assert len(written) == 1
+        assert "## Provider Failure" in written[0].read_text()
+
+    def test_failure_without_a_target_still_exits_one(
+        self, cli_runner: CliRunner, tmp_path: Path, doc_files: tuple[str, str]
+    ) -> None:
+        """A path-based review has no slice to name an artifact after."""
+        from squadron.providers.errors import ProviderError
+
+        input_doc, against_doc = doc_files
+        reviews = tmp_path / "project-documents/user/reviews"
+        reviews.mkdir(parents=True)
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new=AsyncMock(side_effect=ProviderError(_PROVIDER_FAILURE)),
+        ):
+            result = cli_runner.invoke(
+                app,
+                ["review", "slice", input_doc, "--against", against_doc, "--cwd", str(tmp_path)],
+            )
+
+        assert result.exit_code == 1
+        assert list(reviews.glob("*.md")) == []

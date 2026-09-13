@@ -14,6 +14,8 @@ import pytest
 import yaml
 
 from squadron.documents.frontmatter import read_frontmatter
+from squadron.documents.schema import DocType, DocumentStatus
+from squadron.providers.errors import ProviderError
 from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
@@ -21,8 +23,11 @@ from squadron.review.models import (
     Verdict,
 )
 from squadron.review.persistence import (
+    REVIEWS_DIR,
     SliceInfo,
+    format_provider_failure_markdown,
     format_review_markdown,
+    save_provider_failure,
     save_review_file,
     save_review_result,
     yaml_escape,
@@ -823,3 +828,163 @@ class TestDegradedRawResponse:
 
         snapshot = Path(__file__).parent / "fixtures" / "clean_pass_artifact.md"
         assert md == snapshot.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 4: a provider failure leaves an artifact (#84)
+# ---------------------------------------------------------------------------
+
+_FAILURE_MESSAGE = (
+    "Model returned an empty final turn (finish_reason='length', "
+    "reasoning_chars=1200); no response to deliver."
+)
+
+
+def _failure_slice_info() -> SliceInfo:
+    return {
+        "slice_name": "review-artifact-integrity",
+        "index": 917,
+        "project": "squadron",
+        "design_file": "project-documents/user/slices/917-slice.md",
+    }
+
+
+class TestProviderFailureArtifact:
+    def test_states_the_failure_and_claims_no_findings(self) -> None:
+        """The artifact must not read as a review that found nothing."""
+        exc = ProviderError(_FAILURE_MESSAGE, tool_calls_made=0)
+
+        markdown = format_provider_failure_markdown(exc, "slice", _failure_slice_info(), model="glm53")
+
+        assert f"docType: {DocType.REVIEW}" in markdown
+        assert f"verdict: {Verdict.UNKNOWN.value}" in markdown
+        assert f"status: {DocumentStatus.COMPLETE}" in markdown
+        assert "## Provider Failure" in markdown
+        assert "## Findings" not in markdown
+        # The provider's own evidence survives to the artifact.
+        assert "finish_reason='length'" in markdown
+        assert "reasoning_chars=1200" in markdown
+
+    def test_tool_telemetry_distinguishes_offered_from_never_offered(self) -> None:
+        exc = ProviderError(_FAILURE_MESSAGE, tool_calls_made=2)
+
+        offered = format_provider_failure_markdown(
+            exc, "slice", _failure_slice_info(), tools_given=["read_file"]
+        )
+        never_offered = format_provider_failure_markdown(
+            exc, "slice", _failure_slice_info(), tools_given=None
+        )
+
+        assert "toolsGiven: [read_file]" in offered
+        assert "toolCallsMade: 2" in offered
+        assert "toolsGiven" not in never_offered
+        assert "toolCallsMade" not in never_offered
+
+    def test_offered_but_unused_is_its_own_state(self) -> None:
+        """'Given tools, said nothing' is the case slice 265 D5 exists for."""
+        exc = ProviderError(_FAILURE_MESSAGE, tool_calls_made=0)
+
+        markdown = format_provider_failure_markdown(
+            exc, "slice", _failure_slice_info(), tools_given=["read_file", "grep"]
+        )
+
+        assert "toolsGiven: [read_file, grep]" in markdown
+        assert "toolCallsMade: 0" in markdown
+
+    def test_missing_count_renders_as_zero_not_absent(self) -> None:
+        exc = ProviderError(_FAILURE_MESSAGE)
+
+        markdown = format_provider_failure_markdown(
+            exc, "slice", _failure_slice_info(), tools_given=["read_file"]
+        )
+
+        assert "toolCallsMade: 0" in markdown
+
+    def test_no_slice_info_does_not_fabricate_a_slice_index(self) -> None:
+        exc = ProviderError(_FAILURE_MESSAGE)
+
+        markdown = format_provider_failure_markdown(exc, "code", None)
+
+        assert "slice 0" not in markdown
+        assert "# Review: code" in markdown
+        assert "slice: unknown" in markdown
+
+    def test_saved_failure_archives_the_prior_artifact(self, tmp_path: Path) -> None:
+        """Fail-closed: the live slot holds the failure, not a stale verdict.
+
+        Leaving the previous artifact in place would let the next gate read a
+        passing verdict from a run that never happened.
+        """
+        reviews = tmp_path / REVIEWS_DIR
+        reviews.mkdir(parents=True)
+        live = reviews / "917-review.slice.review-artifact-integrity.md"
+        live.write_text("---\nverdict: PASS\n---\n\nEarlier, happier run.\n")
+
+        saved = save_provider_failure(
+            ProviderError(_FAILURE_MESSAGE, tool_calls_made=0),
+            "slice",
+            _failure_slice_info(),
+            model="glm53",
+            cwd=str(tmp_path),
+        )
+
+        assert saved is not None
+        assert "## Provider Failure" in saved.read_text()
+        archived = list((reviews / "archive").glob("*.md"))
+        assert len(archived) == 1
+        assert "Earlier, happier run." in archived[0].read_text()
+
+    def test_saved_failure_passes_the_verdict_gate(self, tmp_path: Path) -> None:
+        """UNKNOWN is a real Verdict member, so Part 2's gate accepts it."""
+        import asyncio
+
+        from squadron.events import EventType
+        from squadron.events.builtin.review_verdict_gate import ReviewVerdictGateAction
+        from squadron.events.contexts import CommitContext
+
+        (tmp_path / REVIEWS_DIR).mkdir(parents=True)
+        saved = save_provider_failure(
+            ProviderError(_FAILURE_MESSAGE),
+            "slice",
+            _failure_slice_info(),
+            cwd=str(tmp_path),
+        )
+        assert saved is not None
+
+        staged = str(saved.relative_to(tmp_path))
+        result = asyncio.run(
+            ReviewVerdictGateAction().execute(
+                CommitContext(
+                    event=EventType.COMMIT, cwd=str(tmp_path), params={}, staged_paths=(staged,)
+                )
+            )
+        )
+
+        assert result.success is True
+
+    def test_slice_less_save_names_the_file_from_the_fallback(self, tmp_path: Path) -> None:
+        (tmp_path / REVIEWS_DIR).mkdir(parents=True)
+
+        saved = save_provider_failure(
+            ProviderError(_FAILURE_MESSAGE),
+            "code",
+            None,
+            cwd=str(tmp_path),
+            slice_name="nightly-audit",
+            slice_index=3,
+        )
+
+        assert saved is not None
+        assert saved.name == "3-review.code.nightly-audit.md"
+
+    def test_slice_less_save_without_a_fallback_returns_none(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """No silent no-op: an unnameable artifact says so at WARNING."""
+        caplog.set_level(logging.WARNING)
+        (tmp_path / REVIEWS_DIR).mkdir(parents=True)
+
+        saved = save_provider_failure(ProviderError(_FAILURE_MESSAGE), "code", None, cwd=str(tmp_path))
+
+        assert saved is None
+        assert any("provider-failure artifact" in r.getMessage() for r in caplog.records)

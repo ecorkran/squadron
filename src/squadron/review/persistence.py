@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol, TypedDict
 
 from squadron.documents.schema import DocType, DocumentStatus
+from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict
 
@@ -154,6 +155,61 @@ def _findings_not_parsed_section(reason: str) -> list[str]:
     ]
 
 
+def _review_frontmatter_lines(
+    *,
+    review_type: str,
+    slice_name: str,
+    project_name: str,
+    verdict: str,
+    source_doc: str,
+    model: str,
+    today: str,
+    reviewed_sha: str | None,
+    revision_number: int | None,
+    tools_given: list[str] | None,
+    tool_calls_made: int | None,
+    tools_suppressed_reason: str | None,
+) -> list[str]:
+    """The frontmatter block every review artifact opens with.
+
+    Takes resolved values rather than a ``ReviewResult`` so a provider failure
+    — which has no result to render — emits the same keys through the same
+    code rather than a second, drifting copy.
+
+    Optional keys are emitted only when supplied, which is what keeps an
+    artifact byte-for-byte unchanged when a feature does not apply:
+    ``reviewedSha`` (slice 306), ``revision_number`` (slice 911), the tool
+    telemetry pair (slice 265 D5 — an absent ``toolsGiven`` means "never
+    offered", while ``toolCallsMade: 0`` means "offered, used none"), and
+    ``toolsSuppressedReason`` (slice 266, present only when a declared set was
+    emptied).
+    """
+    lines = [
+        "---",
+        f"docType: {DocType.REVIEW}",
+        "layer: project",
+        f"reviewType: {review_type}",
+        f"slice: {slice_name}",
+        f"project: {project_name}",
+        f"verdict: {verdict}",
+        f"sourceDocument: {source_doc}",
+        f"aiModel: {model}",
+        f"status: {DocumentStatus.COMPLETE}",
+        f"dateCreated: {today}",
+        f"dateUpdated: {today}",
+    ]
+    if reviewed_sha is not None:
+        lines.append(f"reviewedSha: {reviewed_sha}")
+    if revision_number is not None:
+        lines.append(f"revision_number: {revision_number}")
+    if tools_given is not None:
+        lines.append(f"toolsGiven: [{', '.join(tools_given)}]")
+        lines.append(f"toolCallsMade: {tool_calls_made or 0}")
+    if tools_suppressed_reason is not None:
+        lines.append(f"toolsSuppressedReason: {tools_suppressed_reason}")
+    return lines
+
+
 def format_review_markdown(
     result: ReviewResult,
     review_type: str,
@@ -207,40 +263,20 @@ def format_review_markdown(
     slice_index = slice_info["index"] if slice_info else 0
     project_name = slice_info["project"] if slice_info else "unknown"
 
-    lines = [
-        "---",
-        f"docType: {DocType.REVIEW}",
-        "layer: project",
-        f"reviewType: {review_type}",
-        f"slice: {slice_name}",
-        f"project: {project_name}",
-        f"verdict: {resolved_verdict}",
-        f"sourceDocument: {source_doc}",
-        f"aiModel: {resolved_model}",
-        f"status: {DocumentStatus.COMPLETE}",
-        f"dateCreated: {today}",
-        f"dateUpdated: {today}",
-    ]
-    if reviewed_sha is not None:
-        lines.append(f"reviewedSha: {reviewed_sha}")
-    if revision_number is not None:
-        lines.append(f"revision_number: {revision_number}")
-
-    # Numeric scoring foundation (slice 300): emit score/criteria as top-level
-    # frontmatter only when present. A score-less result is byte-for-byte
-    # unchanged. provenance is never emitted here (reserved — slice 301).
-    # Tool-use telemetry (slice 265): emitted only when the run was offered tools, so an
-    # absent key means "never offered" while `tool_calls_made: 0` means "offered, used
-    # none" (design D5). Without this the markdown artifact — the copy people actually
-    # read — carries no evidence of tool use at all, only the JSON form does.
-    if result.tools_given is not None:
-        lines.append(f"toolsGiven: [{', '.join(result.tools_given)}]")
-        lines.append(f"toolCallsMade: {result.tool_calls_made or 0}")
-    # Slice 266: present only when the gate emptied a declared set, so a run that never
-    # declared tools stays byte-for-byte unchanged. This is what makes suppression
-    # readable in the markdown artifact rather than only inferable from model prose.
-    if result.tools_suppressed_reason is not None:
-        lines.append(f"toolsSuppressedReason: {result.tools_suppressed_reason}")
+    lines = _review_frontmatter_lines(
+        review_type=review_type,
+        slice_name=slice_name,
+        project_name=project_name,
+        verdict=resolved_verdict,
+        source_doc=source_doc,
+        model=resolved_model,
+        today=today,
+        reviewed_sha=reviewed_sha,
+        revision_number=revision_number,
+        tools_given=result.tools_given,
+        tool_calls_made=result.tool_calls_made,
+        tools_suppressed_reason=result.tools_suppressed_reason,
+    )
 
     if result.score is not None:
         lines.append(f"score: {result.score}")
@@ -523,3 +559,123 @@ def save_review_result(
     path.write_text(content)
 
     return path
+
+
+def format_provider_failure_markdown(
+    exc: ProviderError,
+    review_type: str,
+    slice_info: SliceInfo | None,
+    *,
+    model: str | None = None,
+    source_document: str | None = None,
+    tools_given: list[str] | None = None,
+    reviewed_sha: str | None = None,
+) -> str:
+    """Render an artifact recording that the provider failed to deliver a review.
+
+    A provider failure used to leave nothing on disk: the CLI printed an error
+    and exited, the pipeline logged and returned ``success=False``. For a
+    pipeline run the artifact is the whole durable record, so the evidence the
+    provider collected — why the model stopped, how much of its budget went to
+    reasoning, whether it touched its tools — was discarded one layer above
+    where it was gathered (#84).
+
+    The artifact says the provider failed. It does not say the review found
+    nothing: an empty findings list is a claim about the code, and this run
+    made no such claim. ``verdict: UNKNOWN`` is a real ``Verdict`` member, so
+    the commit gate accepts it and existing pipeline gates treat it fail-closed.
+    The distinguishing marker is the ``## Provider Failure`` body section.
+    """
+    today = datetime.now(tz=UTC).strftime("%Y%m%d")
+    slice_name = slice_info["slice_name"] if slice_info else "unknown"
+    slice_index = slice_info["index"] if slice_info else 0
+    project_name = slice_info["project"] if slice_info else "unknown"
+    source_doc = source_document or (slice_info.get("design_file") or "" if slice_info else "")
+
+    lines = _review_frontmatter_lines(
+        review_type=review_type,
+        slice_name=slice_name,
+        project_name=project_name,
+        verdict=Verdict.UNKNOWN.value,
+        source_doc=source_doc,
+        model=model or "unknown",
+        today=today,
+        reviewed_sha=reviewed_sha,
+        revision_number=None,
+        tools_given=tools_given,
+        tool_calls_made=exc.tool_calls_made,
+        tools_suppressed_reason=None,
+    )
+    lines.append("---")
+    lines.append("")
+
+    # No "— slice 0" for a run with no slice: a fabricated index reads as real.
+    title = (
+        f"# Review: {review_type} — slice {slice_index}" if slice_info else f"# Review: {review_type}"
+    )
+    lines.append(title)
+    lines.append("")
+    lines.append(f"**Verdict:** {Verdict.UNKNOWN.value}")
+    lines.append(f"**Model:** {model or 'unknown'}")
+    lines.append("")
+    lines.append("## Provider Failure")
+    lines.append("")
+    lines.append(
+        "The provider raised before delivering a response, so no review was "
+        "produced. This artifact records the failure; it is not a review "
+        "finding nothing."
+    )
+    lines.append("")
+    lines.append("```")
+    lines.append(str(exc))
+    lines.append("```")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def save_provider_failure(
+    exc: ProviderError,
+    review_type: str,
+    slice_info: SliceInfo | None,
+    *,
+    model: str | None = None,
+    source_document: str | None = None,
+    tools_given: list[str] | None = None,
+    reviewed_sha: str | None = None,
+    cwd: str | None = None,
+    slice_name: str | None = None,
+    slice_index: int | None = None,
+) -> Path | None:
+    """Write a provider-failure artifact into the review's own slot.
+
+    The live slot deliberately receives the failure rather than keeping the
+    previous run's artifact. A stale PASS left in place is read by the next
+    pipeline gate as this run's verdict and waves the step through, which is
+    the silent pass-through the review gates exist to prevent. The prior
+    content is preserved by ``archive_existing_review`` on the way.
+
+    ``slice_name`` and ``slice_index`` name the file when there is no
+    ``slice_info`` — the pipeline's step name and index, matching how the
+    success path names a slice-less review.
+
+    Returns the saved path, or ``None`` when the write failed (already logged).
+    """
+    content = format_provider_failure_markdown(
+        exc,
+        review_type,
+        slice_info,
+        model=model,
+        source_document=source_document,
+        tools_given=tools_given,
+        reviewed_sha=reviewed_sha,
+    )
+    resolved_name = slice_info["slice_name"] if slice_info else slice_name
+    resolved_index = slice_info["index"] if slice_info else slice_index
+    if resolved_name is None or resolved_index is None:
+        _logger.warning(
+            "Cannot save provider-failure artifact for %s review: no slice info "
+            "and no fallback name/index supplied.",
+            review_type,
+        )
+        return None
+    return save_review_file(content, review_type, resolved_name, resolved_index, cwd=cwd)

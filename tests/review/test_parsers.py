@@ -1212,3 +1212,52 @@ class TestSectionBounding:
 
         assert with_summary.summary_section_located is True
         assert without_summary.summary_section_located is False
+
+
+class TestIssue92ProseOnlyResponse:
+    """#92: a full turn of prose review that never emits the required block.
+
+    Not the same failure as #84. The model answered — correct telemetry, a few
+    thousand characters of real review — it just answered in prose. Nothing
+    raises, so no failure artifact is involved; this is a parse outcome, and
+    the existing degraded path already keeps the model's words.
+
+    This slice makes that artifact honest, not recovered: the prose is still
+    not turned into findings, because inventing structure from unstructured
+    text is how a wrong-but-plausible finding gets manufactured.
+    """
+
+    @staticmethod
+    def _prose_response() -> str:
+        paragraph = (
+            "Looking at the task file, the sequencing is sound and every "
+            "success criterion traces to at least one task. I would note that "
+            "the third part carries more risk than its effort rating suggests. "
+        )
+        return paragraph * 18
+
+    def test_prose_only_response_parses_to_unknown_with_no_findings(self) -> None:
+        response = self._prose_response()
+        assert len(response) > 3000
+
+        result = parse_review_output(response, "tasks", {})
+
+        assert result.verdict is Verdict.UNKNOWN
+        assert result.findings == []
+        assert result.findings_section_located is False
+        assert result.summary_section_located is False
+        assert result.finding_scan is not None
+        assert result.finding_scan.total == 0
+
+    def test_prose_only_artifact_keeps_the_raw_response(self) -> None:
+        """The existing degraded path, unchanged — no ProviderError involved."""
+        from squadron.review.persistence import format_review_markdown
+
+        result = parse_review_output(self._prose_response(), "tasks", {})
+
+        markdown = format_review_markdown(result, "tasks")
+
+        assert re.search(r"^### Raw Response\s*$", markdown, re.MULTILINE)
+        assert "the sequencing is sound" in markdown
+        # The artifact says UNKNOWN rather than claiming a clean review.
+        assert f"verdict: {Verdict.UNKNOWN.value}" in markdown

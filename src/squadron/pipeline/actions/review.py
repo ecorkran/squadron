@@ -11,6 +11,7 @@ from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName
+from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
     DiffSpecError,
@@ -24,6 +25,7 @@ from squadron.review.persistence import (
     format_review_markdown,
     resolve_reviewed_sha,
     resolve_slice_info,
+    save_provider_failure,
     save_review_file,
     save_review_result,
 )
@@ -232,14 +234,40 @@ class ReviewAction:
         # Execute review
         # A step-level allowed_tools overrides the template's default; None leaves the
         # template authoritative (slice 265).
-        result = await run_review_with_profile(
-            template,
-            inputs,
-            profile=profile_name,
-            model=model_id,
-            rules_content=rules_content,
-            allowed_tools=resolve_allowed_tools(context, self.action_type),
-        )
+        allowed_tools = resolve_allowed_tools(context, self.action_type)
+        try:
+            result = await run_review_with_profile(
+                template,
+                inputs,
+                profile=profile_name,
+                model=model_id,
+                rules_content=rules_content,
+                allowed_tools=allowed_tools,
+            )
+        except ProviderError as exc:
+            # For a pipeline run the artifact is the whole durable record, so a
+            # provider failure that leaves nothing on disk erases the only
+            # evidence of why the step failed (#84). The step still fails: the
+            # re-raise reaches execute's catch-all, which builds the existing
+            # success=False result.
+            saved = save_provider_failure(
+                exc,
+                template_name,
+                slice_info,
+                model=model_id,
+                source_document=inputs.get("input"),
+                tools_given=list(allowed_tools) if allowed_tools else None,
+                reviewed_sha=resolve_reviewed_sha(cwd),
+                cwd=cwd,
+                slice_name=context.step_name,
+                slice_index=context.step_index,
+            )
+            _logger.warning(
+                "review: provider failed in step %s; failure artifact: %s",
+                context.step_name,
+                saved if saved is not None else "not written",
+            )
+            raise
 
         # Judge enforcement runs before persistence: judge templates instruct
         # the model to omit a verdict line (score is the source of truth), so
