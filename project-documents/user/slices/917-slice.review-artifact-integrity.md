@@ -6,8 +6,8 @@ parent: 900-slices.maintenance-and-refactoring.md
 dependencies: [916]
 interfaces: []
 dateCreated: 20260912
-dateUpdated: 20260912
-status: not_started
+dateUpdated: 20260913
+status: complete
 ---
 
 # Slice Design: Review Artifact Integrity
@@ -176,11 +176,91 @@ Slice review (`917-review.slice.review-artifact-integrity.md`, glm-5.3, CONCERNS
 
 ## Verification walkthrough
 
-Draft; refined at Phase 6 with commands actually run.
+Verified at Phase 6 (20260913). Commands below were run; caveats are recorded where the
+draft's expectation did not survive contact with the code.
 
-1. **Debug-log field.** Run a review that degrades; `tail -1 ~/.config/squadron/logs/review-debug.jsonl | jq keys` shows `degraded`, not `fallback_used`. `--output json` still shows `fallback_used` on the result.
-2. **Verdict gate.** Stage a `docType: review` file with `verdict: BANANA`; commit is rejected naming `BANANA` and the four values. Change to `CONCERNS`; commit proceeds. Repeat with `RESOLVED`; rejected. Stage a slice design with `verdict: BANANA`; not rejected. Remove the probe.
-3. **Finding scan.** Re-parse the two slice-267 archived raw responses (headingless); still 6 findings each, artifact flagged degraded. Parse a response with the specimen in a fence followed by real findings; only the real ones survive. Run `sq review slice 916 -vv --model kimi27` several times; no `"Finding title"` / `src/module.py` phantoms and no path-existence warnings on any run.
-4. **Failure artifact.** Stub an empty final turn on the CLI path and on a pipeline review step. Each writes an artifact naming the provider failure with `finish_reason`/`reasoning_chars`; the prior artifact is in `reviews/archive/`; CLI exits 1, pipeline step fails.
-5. **Line bounds.** Parse a response citing `src/squadron/review/parsers.py:999999` with `cwd`; `location_verified=False`. A real line → `True`. No `cwd` → `None`. Artifact output is unchanged.
-6. **Digest.** Open a clean PASS artifact; the digest block is present. Re-run on the #91 fixture; whole-document and bounded counts differ.
+1. **Debug-log field.** Parse any response with no `## Summary` and no findings:
+
+   ```
+   uv run pytest tests/review/test_parsers.py -k degraded_not_fallback -q
+   ```
+
+   The test reads the last line of the monkeypatched log and asserts `degraded` is present
+   and `fallback_used` is absent, plus that `ReviewResult.fallback_used` is still `False` and
+   `to_dict()` still carries the key. Checking a real `review-debug.jsonl` by hand works too,
+   but the log is append-only and already holds old-format lines, so the test is the reliable
+   check.
+
+2. **Verdict gate.** Stage a `docType: review` probe with `verdict: BANANA`:
+
+   ```
+   uv run sq events fire commit -- <probe>.md
+   ```
+
+   Exits 1 naming `BANANA` and `PASS, CONCERNS, FAIL, UNKNOWN`. Change to `CONCERNS` and it
+   exits 0. A `docType: slice-design` file with `verdict: BANANA` is ignored. Committing
+   through the hook shows the same, with the hook's own guidance appended.
+
+   **Caveat:** registering the action is not enough to make it fire — it must also appear in
+   `DEFAULT_BINDINGS` (`events/manifest.py`). Without that the probe commits clean and the
+   gate looks like it passed.
+
+   Corpus dry run over all 265 review artifacts now reports exactly the two historical
+   `RESOLVED` artifacts (343 and archived 266), which are left as found. The 305 artifact's
+   `CONCERN` and the 916 artifact's unparseable frontmatter were both repaired in this slice.
+
+3. **Finding scan.**
+
+   ```
+   uv run pytest tests/review/test_parsers.py tests/review/test_templates.py -q
+   uv run sq review slice 916 -v --model glm53 --no-save
+   ```
+
+   The two headingless slice-267 fixtures parse to 6 findings each with
+   `findings_section_located False`. A fenced specimen yields nothing; an unfenced echo before
+   `## Findings` is excluded by the bound. Live: three runs across kimi27 and glm53 produced
+   zero `Finding title` / `src/module.py` phantoms and zero path-existence warnings.
+
+   **Caveats.** The draft said these artifacts would be "flagged degraded" — they are, but for
+   a reason predating this slice (no `## Summary`, so the verdict is derived, #28), not for
+   the missing heading. Add a summary and they render clean. Separately, `### findings:` is
+   **not** a usable heading variant: a `###` heading cannot bound `###` findings, so that case
+   falls back to the unbounded scan.
+
+4. **Failure artifact.**
+
+   ```
+   uv run pytest tests/review/test_cli_review.py tests/pipeline/actions/test_review_action.py -q
+   ```
+
+   `_execute_review` and `run_review_with_profile` are patched to raise `ProviderError`. Each
+   path writes an artifact carrying `## Provider Failure`, `verdict: UNKNOWN`, and the error's
+   `finish_reason`/`reasoning_chars`; the prior artifact lands in `reviews/archive/`; the CLI
+   exits 1 and the pipeline step returns `success=False`. The saved artifact is run through
+   `ReviewVerdictGateAction` and passes. The pipeline's slice-less branch is covered too and
+   never emits a literal `slice 0`.
+
+5. **Line bounds.**
+
+   ```
+   uv run pytest tests/review/test_parsers.py -k LineBounds -q
+   ```
+
+   Full tri-state through `parse_review_output` against a ten-line file: `:999999` and `:11`
+   → `False`, `:7` and `:3-10` → `True`, whole-file and `UNVERIFIED_LOCATION` → `None`, no
+   `cwd` → `None`. A directory, an over-cap file, an unreadable file, and a `../` citation
+   each yield `None` with a WARNING naming the finding; the `../` case asserts the file is
+   never opened. Artifact output is unchanged — the field is write-only.
+
+6. **Digest.**
+
+   ```
+   uv run pytest tests/review/test_persistence.py -k Digest -q
+   ```
+
+   A clean PASS artifact carries `### Run Digest`. A result built with
+   `FindingScanCounts(total=35, in_fences=30, in_section=5, surviving=5)` renders those four
+   numbers over a `raw_output` containing no findings at all — which is what proves the
+   formatter reports the parse that happened rather than re-parsing. Present at every
+   verbosity. `tests/review/fixtures/clean_pass_artifact.md` was regenerated; the diff is the
+   appended digest and nothing else.

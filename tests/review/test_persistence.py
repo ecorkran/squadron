@@ -17,6 +17,7 @@ from squadron.documents.frontmatter import read_frontmatter
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.models import (
+    FindingScanCounts,
     ReviewFinding,
     ReviewResult,
     Severity,
@@ -988,3 +989,127 @@ class TestProviderFailureArtifact:
 
         assert saved is None
         assert any("provider-failure artifact" in r.getMessage() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 6: every artifact carries a run digest (#93)
+# ---------------------------------------------------------------------------
+
+
+class TestRunDigest:
+    """The artifacts least likely to be questioned were the least auditable.
+
+    A confident PASS kept nothing; only a degraded review embedded its raw
+    response. So the runs most likely to be wrong were the ones with no
+    evidence on disk.
+    """
+
+    @staticmethod
+    def _pass_result(**overrides: object) -> ReviewResult:
+        defaults: dict[str, object] = {
+            "verdict": Verdict.PASS,
+            "findings": [],
+            "raw_output": "## Summary\nPASS\n",
+            "template_name": "code",
+            "input_files": {},
+            "model": "glm53",
+        }
+        defaults.update(overrides)
+        return ReviewResult(**defaults)  # type: ignore[arg-type]
+
+    def test_clean_pass_carries_the_digest(self) -> None:
+        markdown = format_review_markdown(self._pass_result(), "code")
+
+        assert "### Run Digest" in markdown
+
+    def test_counts_are_rendered_from_the_result_not_a_reparse(self) -> None:
+        """Proves the formatter reports the parse that happened.
+
+        The raw_output here contains no findings at all, so a formatter that
+        re-parsed would report zeros. A second parse would drift from the
+        first and describe a document nobody acted on.
+        """
+        result = self._pass_result(
+            finding_scan=FindingScanCounts(total=35, in_fences=30, in_section=5, surviving=5)
+        )
+
+        markdown = format_review_markdown(result, "code")
+
+        assert "whole response: 35" in markdown
+        assert "inside fences: 30" in markdown
+        assert "in findings section: 5" in markdown
+        assert "surviving validation: 5" in markdown
+
+    def test_hand_built_result_says_not_computed(self) -> None:
+        """A result the parser did not produce has no counts to report."""
+        markdown = format_review_markdown(self._pass_result(), "code")
+
+        assert "whole response: not computed" in markdown
+        assert "`## Findings` located: not computed" in markdown
+
+    def test_tool_calls_distinguish_unused_from_never_offered(self) -> None:
+        offered = format_review_markdown(
+            self._pass_result(tools_given=["read_file"], tool_calls_made=0), "code"
+        )
+        never = format_review_markdown(self._pass_result(), "code")
+
+        assert "Tool calls made: 0" in offered
+        assert "Tool calls made: not offered" in never
+
+    @pytest.mark.parametrize("verbosity_prompt", [None, "SYSTEM PROMPT TEXT"])
+    def test_digest_is_present_regardless_of_verbosity(self, verbosity_prompt: str | None) -> None:
+        result = self._pass_result(system_prompt=verbosity_prompt)
+
+        markdown = format_review_markdown(result, "code")
+
+        assert "### Run Digest" in markdown
+
+    def test_degraded_raw_response_behavior_is_unchanged(self) -> None:
+        result = self._pass_result(verdict=Verdict.UNKNOWN, raw_output="Prose, no structure.")
+
+        markdown = format_review_markdown(result, "code")
+
+        assert "### Run Digest" in markdown
+        assert re.search(r"^### Raw Response\s*$", markdown, re.MULTILINE)
+
+
+class TestRunDigestEndToEnd:
+    """Parsed, then formatted — the counts a real run would show."""
+
+    def test_echoed_specimen_shows_a_gap_between_seen_and_kept(self) -> None:
+        from squadron.review.parsers import parse_review_output
+
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "### [PASS] Finding title\n"
+            "Description of the finding.\n"
+            "location: src/module.py:12\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] A real problem\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+        markdown = format_review_markdown(result, "slice")
+
+        assert result.finding_scan is not None
+        assert result.finding_scan.total > result.finding_scan.surviving
+        # The #91 signature, visible in the artifact without any raw text.
+        assert "whole response: 2" in markdown
+        assert "surviving validation: 1" in markdown
+
+    def test_issue_92_prose_only_digest_reports_no_findings_section(self) -> None:
+        """Part 4's done-when, asserted once end to end."""
+        from squadron.review.parsers import parse_review_output
+
+        prose = (
+            "The task file sequencing is sound and every success criterion "
+            "traces to at least one task. "
+        ) * 18
+
+        result = parse_review_output(prose, "tasks", {})
+        markdown = format_review_markdown(result, "tasks")
+
+        assert "`## Findings` located: no" in markdown
+        assert "`## Summary` located: no" in markdown
+        assert "surviving validation: 0" in markdown

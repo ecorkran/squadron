@@ -155,6 +155,53 @@ def _findings_not_parsed_section(reason: str) -> list[str]:
     ]
 
 
+_NOT_COMPUTED = "not computed"
+_NOT_OFFERED = "not offered"
+
+
+def _run_digest_lines(result: ReviewResult) -> list[str]:
+    """A small always-on record of what the parse actually saw.
+
+    ``### Raw Response`` is emitted only when a review degrades, so the
+    artifacts least likely to be questioned — a confident PASS — were the
+    least auditable on disk. #91 and #92 were diagnosable only because those
+    particular runs happened to degrade, and the 8-vs-35 finding discrepancy
+    that started #91 is invisible in either artifact (#93).
+
+    The counts come from the parser via ``ReviewResult``; this renders them
+    and never re-parses. A second parse here would drift from the first and
+    report on a document nobody acted on. This is a body section, not
+    frontmatter: frontmatter is a consumed contract that ``cf`` scans and the
+    verdict gate now checks, and diagnostic keys there invite coupling.
+    """
+    scan = result.finding_scan
+    if result.tools_given is None:
+        tool_calls = _NOT_OFFERED
+    else:
+        tool_calls = str(result.tool_calls_made or 0)
+
+    return [
+        "### Run Digest",
+        "",
+        f"- Response length: {len(result.raw_output)} chars",
+        f"- Tool calls made: {tool_calls}",
+        f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
+        f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",
+        f"- Finding-shaped matches — whole response: {scan.total if scan else _NOT_COMPUTED}",
+        f"- Finding-shaped matches — inside fences: {scan.in_fences if scan else _NOT_COMPUTED}",
+        f"- Finding-shaped matches — in findings section: {scan.in_section if scan else _NOT_COMPUTED}",
+        f"- Finding-shaped matches — surviving validation: {scan.surviving if scan else _NOT_COMPUTED}",
+        "",
+    ]
+
+
+def _render_tristate(value: bool | None) -> str:
+    """``None`` means the parser did not produce this fact, not ``false``."""
+    if value is None:
+        return _NOT_COMPUTED
+    return "yes" if value else "no"
+
+
 def _review_frontmatter_lines(
     *,
     review_type: str,
@@ -342,6 +389,8 @@ def format_review_markdown(
     else:
         lines.append("No specific findings.")
         lines.append("")
+
+    lines.extend(_run_digest_lines(result))
 
     # A degraded review's raw response is evidence, not verbosity-gated output (design
     # D3): the artifact is often the only surviving record of what the model said. The
