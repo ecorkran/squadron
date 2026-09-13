@@ -419,7 +419,7 @@ def _write_debug_log(
     model: str | None,
     verdict: Verdict,
     findings_parsed: int,
-    fallback_used: bool,
+    degraded: bool,
     raw_output: str,
 ) -> None:
     """Append a debug entry to the review debug log."""
@@ -431,7 +431,7 @@ def _write_debug_log(
             "model": model,
             "verdict": verdict.value,
             "findings_parsed": findings_parsed,
-            "fallback_used": fallback_used,
+            "degraded": degraded,
             "raw_output": raw_output,
         }
         with _DEBUG_LOG_PATH.open("a") as f:
@@ -495,7 +495,7 @@ def parse_review_output(
             model=model,
             verdict=derived,
             findings_parsed=len(findings),
-            fallback_used=True,
+            degraded=True,
             raw_output=raw_output,
         )
         verdict = derived
@@ -520,7 +520,7 @@ def parse_review_output(
             model=model,
             verdict=verdict,
             findings_parsed=0,
-            fallback_used=True,
+            degraded=True,
             raw_output=raw_output,
         )
 
@@ -542,7 +542,7 @@ def parse_review_output(
             model=model,
             verdict=verdict,
             findings_parsed=0,
-            fallback_used=True,
+            degraded=True,
             raw_output=raw_output,
         )
 

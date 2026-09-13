@@ -375,6 +375,31 @@ class TestDiagnosticLogging:
         assert result.verdict is Verdict.UNKNOWN
         assert result.fallback_used is False
 
+    def test_debug_log_key_is_degraded_not_fallback_used(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The log field is named for what it records (#87).
+
+        ``ReviewResult.fallback_used`` means "findings were derived from a known
+        verdict". The log field meant "some degraded parse happened" — a
+        different fact under the same name. It is now ``degraded``; the result
+        field is a serialized public contract and is unchanged.
+        """
+        log_file = tmp_path / "review-debug.jsonl"
+        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+
+        result = parse_review_output("no summary, no findings\n", "slice", {})
+
+        import json
+
+        entry = json.loads(log_file.read_text().splitlines()[-1])
+        assert entry["degraded"] is True
+        assert "fallback_used" not in entry
+        # Same parse, different fact: nothing was derived, so the result's own
+        # flag stays False and its serialized key keeps its name.
+        assert result.fallback_used is False
+        assert result.to_dict()["fallback_used"] is False
+
     def test_debug_log_not_written_on_clean_pass(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
