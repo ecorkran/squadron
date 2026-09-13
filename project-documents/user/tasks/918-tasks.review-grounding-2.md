@@ -333,5 +333,5 @@ part's own tests; this is the whole-suite pass and the slice-level bookkeeping.
         instrumentation shipped (`45e7b002`) but the reproduction came back clean
         twice, so the cause is unfixed; commented with the evidence, and #99
         tracks the mechanism.
-- [ ] Merge the branch to the target (`cf config get git.integration_branch`, or
-      `main` if empty).
+- [x] Merge the branch to the target (`cf config get git.integration_branch`, or
+      `main` if empty). Unset, so merged to `main`.
