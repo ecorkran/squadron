@@ -31,19 +31,20 @@ Two design statements did not survive verification against the code, and both ar
 the task file rather than passed through. The design's success criteria named an "existing test"
 asserting `run_all_checks` makes no subprocess call; no such test exists, and the invariant is
 also narrower than stated, since `run_all_checks` calls `shutil.which` freely and resolves
-`git_hooks_path` in the caller precisely to keep a subprocess out of the module. Task G.3 now
-writes that test with the invariant stated as it actually holds. Second, the design said `sq pr
-show --cwd` "resolves as `sq review code` does" without saying how: that logic is
+`git_hooks_path` in the caller precisely to keep a subprocess out of the module. The breakdown
+now writes that test, with the invariant stated as it actually holds. Second, the design said
+`sq pr show --cwd` "resolves as `sq review code` does" without saying how: that logic is
 `_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show`
 has no use for. Put to the PM with three options; the call was to extract the cwd half into a
 shared CLI helper and leave `_resolve_review_cwd` a thin wrapper with an unchanged signature.
-That makes the helper extraction task A.5, deliberately early and committed on its own.
+That extraction is sequenced early, in the process-runner part, and committed on its own.
 
 Consequence for coordination: this slice now makes two edits `sq-base` asked to be warned about,
-not one -- the `app.py` registration (H.3) and the `review.py` helper extraction (A.5). Both are
-announced before they are made, and A.5 is behavior-preserving with the existing review suite as
-the check. Next: Phase 5 review of the task breakdown, then Phase 6 implementation on branch
-`381-slice.code-host-adapter-and-pr-target-resolution` forked from `squadron-pr`.
+not one -- registering `pr_app` in `app.py`, and the cwd helper extraction in `review.py`. Both
+are announced before they are made, and the extraction is behavior-preserving with the existing
+review suite as the check. Next: Phase 5 review of the task breakdown, then Phase 6
+implementation on branch `381-slice.code-host-adapter-and-pr-target-resolution` forked from
+`squadron-pr`.
 
 ---
 

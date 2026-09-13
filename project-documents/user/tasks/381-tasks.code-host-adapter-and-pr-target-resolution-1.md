@@ -23,10 +23,10 @@ is `sq pr show <target>`.
 
 Sequenced **A → I** per the design's Implementation Notes. The order is
 load-bearing: every later part is tested *through* the process-runner seam built
-in Part A, so A cannot slip.
+in Part A, so that part cannot slip.
 
 Nothing under `src/squadron/review/` changes except the mechanical helper
-extraction in Part A.5 (see Coordination below).
+cwd helper extraction in Part A (see Coordination below).
 
 ### Verified code anchors (traced on `79986dea`, 20260913)
 
@@ -59,7 +59,7 @@ tasks below; neither changes scope.
 | Design text | Finding | Disposition |
 |---|---|---|
 | "`run_all_checks` still makes no subprocess call (**existing test extended**)" | No such test exists — `grep subprocess tests/cli/test_doctor_checks.py` returns nothing. The invariant is also narrower than stated: `run_all_checks` calls `shutil.which` freely, and its docstring records that `git_hooks_path` is resolved *by the caller* precisely because a subprocess would violate the module's contract. | G.3 **writes** the test rather than extending one, and states the invariant as "no `subprocess.run`/`Popen` from the doctor-checks module", which is the property that actually holds. |
-| "`--cwd` resolves as `sq review code` does" | That logic is `_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show` has no use for. The design does not say how `pr.py` obtains it. | PM decision (20260913): **extract the cwd half** into a shared CLI helper; `_resolve_review_cwd` becomes a thin wrapper. Task A.5. Widens the `sq-base` promise — see Coordination. |
+| "`--cwd` resolves as `sq review code` does" | That logic is `_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show` has no use for. The design does not say how `pr.py` obtains it. | PM decision (20260913): **extract the cwd half** into a shared CLI helper; `_resolve_review_cwd` becomes a thin wrapper. Sequenced early, in Part A. Widens the `sq-base` promise — see Coordination. |
 
 ### Coordination
 
@@ -67,7 +67,7 @@ Session `sq-base` (slice 917) asked to be told before the CLI command registry o
 anything under `src/squadron/review/` is touched. This slice now makes **two**
 such edits, not one:
 
-1. `cli/app.py` — import and `add_typer(pr_app, name="pr")` (Task H.3).
+1. `cli/app.py` — import and `add_typer(pr_app, name="pr")`, in the CLI part.
 2. `review.py` — the A.5 helper extraction (mechanical; behavior-preserving).
 
 Both are announced to `sq-base` **before** they are made. A.5 is deliberately

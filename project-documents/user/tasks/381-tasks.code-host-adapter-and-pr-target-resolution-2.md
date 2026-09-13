@@ -260,7 +260,7 @@ here touches the host or the operator-facing surface.
       `pr_app = typer.Typer(name="pr", help=..., no_args_is_help=True)`; 385 adds
       `create` here.
 - [ ] `sq pr show [TARGET] [--cwd PATH] [--json]`.
-- [ ] `--cwd` resolves through the **Part A.5 shared helper**.
+- [ ] `--cwd` resolves through the **shared cwd helper** extracted in Part A.
 - [ ] Terminal output: one Rich panel with the record (host, owner/repository,
       number, state, title, author, URL, base ref and sha, head ref and sha,
       cross-repository flag), then the fetched refs with shas, the merge-base, the
