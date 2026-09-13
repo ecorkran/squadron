@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import pytest
@@ -991,3 +992,223 @@ class TestVerdictDerivedFromFindings:
         assert result.verdict == Verdict.CONCERNS
         assert len(result.findings) == 1
         assert result.findings[0].severity == Severity.CONCERN
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 3: the finding scan is bounded to real findings (#91, #25)
+# ---------------------------------------------------------------------------
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+# The template's specimen as a model actually echoes it: the severity
+# placeholder resolved to one real value, the placeholder title kept verbatim.
+# The literal "[PASS|CONCERN|FAIL]" form matches nothing — a pipe alternation
+# is not a severity — so only this substituted shape can produce the #91
+# phantom, and only this shape is worth defending against.
+_SPECIMEN = """## Summary
+PASS
+
+## Findings
+
+### [PASS] Finding title
+Description of the finding.
+location: src/module.py:12
+"""
+
+
+class TestHeadinglessRealReviews:
+    """Two real reviews whose responses carried no '## Findings' heading.
+
+    These parsed to six good findings each before this slice, and a
+    heading-required rule would have thrown all twelve away. They are the
+    reason the bounded scan falls back to the whole response.
+    """
+
+    @pytest.mark.parametrize(
+        "fixture_name",
+        ["267-headingless-code-response.md", "267-headingless-tasks-response.md"],
+    )
+    def test_six_findings_survive_without_a_heading(self, fixture_name: str) -> None:
+        response = (_FIXTURES / fixture_name).read_text(encoding="utf-8")
+
+        result = parse_review_output(response, "code", {})
+
+        assert len(result.findings) == 6
+        assert result.findings_section_located is False
+        assert result.finding_scan is not None
+        # Every match is a real finding: nothing echoed, nothing fenced.
+        assert result.finding_scan.surviving == result.finding_scan.total == 6
+        assert result.finding_scan.in_fences == 0
+
+    @pytest.mark.parametrize(
+        "fixture_name",
+        ["267-headingless-code-response.md", "267-headingless-tasks-response.md"],
+    )
+    def test_missing_heading_alone_does_not_degrade_the_artifact(self, fixture_name: str) -> None:
+        """A missing findings heading must not be what degrades a review.
+
+        These two responses *do* render degraded, but for a reason that
+        predates this slice and is unrelated to it: neither carries a
+        '## Summary', so the verdict is derived from finding severities
+        (#28) and ``fallback_used`` is set. Adding the same summary makes the
+        artifact clean while the heading is still absent — which is the fact
+        this slice is responsible for.
+        """
+        from squadron.review.persistence import format_review_markdown
+
+        response = (_FIXTURES / fixture_name).read_text(encoding="utf-8")
+        with_summary = f"## Summary\nCONCERNS\n\n{response}"
+
+        result = parse_review_output(with_summary, "code", {})
+
+        assert result.findings_section_located is False
+        assert len(result.findings) == 6
+        assert result.fallback_used is False
+        markdown = format_review_markdown(result, "code")
+        # Anchored to line start: these reviews discuss "### Raw Response" in
+        # their own finding text, so a bare substring check matches the prose.
+        assert not re.search(r"^### Raw Response\s*$", markdown, re.MULTILINE)
+
+
+class TestFenceMasking:
+    def test_specimen_alone_inside_a_fence_yields_nothing(self) -> None:
+        response = f"## Summary\nPASS\n\nFormat reminder:\n\n```\n{_SPECIMEN}```\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+        assert result.finding_scan is not None
+        assert result.finding_scan.total > 0
+        assert result.finding_scan.in_fences == result.finding_scan.total
+
+    def test_tilde_fences_are_masked(self) -> None:
+        response = f"## Summary\nPASS\n\n~~~markdown\n{_SPECIMEN}~~~\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+
+    def test_unclosed_fence_masks_to_end_of_document(self) -> None:
+        response = f"## Summary\nPASS\n\n```\n{_SPECIMEN}"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+
+    def test_fenced_echo_then_real_findings_yields_only_the_real_ones(self) -> None:
+        """The #91 shape: restate the format, then do the work."""
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            f"I will use this structure:\n\n```\n{_SPECIMEN}```\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Real problem in the loop\n"
+            "The counter is off by one.\n"
+            "location: src/squadron/review/parsers.py:10\n\n"
+            "### [PASS] Tests cover the change\n"
+            "Every branch is exercised.\n"
+            "location: tests/review/test_parsers.py:1\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        titles = [f.title for f in result.findings]
+        assert titles == ["Real problem in the loop", "Tests cover the change"]
+        assert "Finding title" not in titles
+
+
+class TestSectionBounding:
+    def test_unfenced_echo_before_the_heading_is_excluded(self) -> None:
+        """An echo the model did not fence is still excluded by the heading."""
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "### [PASS] Finding title\n"
+            "Description of the finding.\n"
+            "location: src/module.py:12\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Actual first finding\n"
+            "Real body.\n\n"
+            "### [PASS] Actual second finding\n"
+            "Real body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == [
+            "Actual first finding",
+            "Actual second finding",
+        ]
+        assert result.finding_scan is not None
+        assert result.finding_scan.total == 3
+        assert result.finding_scan.in_section == 2
+        assert result.finding_scan.surviving == 2
+
+    def test_a_following_section_terminates_the_scan(self) -> None:
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Inside the section\n"
+            "Body.\n\n"
+            "## Next Steps\n\n"
+            "### [PASS] Not a finding at all\n"
+            "This is advice, not a finding.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["Inside the section"]
+
+    def test_deeper_heading_does_not_terminate_the_section(self) -> None:
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] First\n"
+            "Body.\n\n"
+            "#### Sub-detail\n"
+            "More body.\n\n"
+            "### [PASS] Second\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["First", "Second"]
+
+    @pytest.mark.parametrize(
+        "heading",
+        ["## Findings", "## **Findings**", "## findings:", "## Findings.", "##   Findings   "],
+    )
+    def test_heading_variants_are_located(self, heading: str) -> None:
+        response = (
+            f"## Summary\nCONCERNS\n\n"
+            "### [PASS] Finding title\n"
+            "Echoed specimen.\n\n"
+            f"{heading}\n\n"
+            "### [CONCERN] The only real finding\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings_section_located is True
+        assert [f.title for f in result.findings] == ["The only real finding"]
+
+    def test_heading_at_finding_level_does_not_bound_its_own_findings(self) -> None:
+        """A '### Findings' heading cannot contain '### [SEV]' findings.
+
+        The section ends at the next heading of the same or higher level, so a
+        same-level findings heading closes before its first finding. Falling
+        back to the whole response is the safe outcome — findings are kept,
+        not silently dropped — and the digest reports the heading as located.
+        """
+        response = "## Summary\nCONCERNS\n\n### Findings\n\n### [CONCERN] A real finding\nBody.\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["A real finding"]
+
+    def test_summary_section_located_is_recorded(self) -> None:
+        with_summary = parse_review_output("## Summary\nPASS\n", "slice", {})
+        without_summary = parse_review_output("PASS, all good.\n", "slice", {})
+
+        assert with_summary.summary_section_located is True
+        assert without_summary.summary_section_located is False

@@ -52,6 +52,26 @@ class ReviewFinding:
     location: str | None = None
 
 
+@dataclass(frozen=True)
+class FindingScanCounts:
+    """How many finding-shaped matches the parser saw, and where (slice 917).
+
+    The #91 signature made countable: a response that echoes the template's
+    own specimen produces a large ``total`` and a much smaller ``surviving``.
+    Reported by the artifact's run digest; nothing gates on these.
+    """
+
+    total: int
+    """Finding-shaped matches anywhere in the raw response."""
+    in_fences: int
+    """Of those, how many sat inside a fenced code block."""
+    in_section: int
+    """Matches inside the bounded ``## Findings`` section, fences already
+    masked. Equal to the masked whole-response count when no heading exists."""
+    surviving: int
+    """Matches that became actual findings after severity validation."""
+
+
 @dataclass
 class ReviewResult:
     """Structured output from a review execution."""
@@ -79,6 +99,13 @@ class ReviewResult:
     # two fields above cannot express: an empty tools_given is otherwise identical to a
     # review whose template declared no tools at all.
     tools_suppressed_reason: str | None = None
+    # Parse-scan facts (slice 917 Part 3). None means "not produced by the
+    # parser" — a hand-built result — the same convention provenance uses.
+    # These feed the artifact's run digest (Part 6) and nothing else: no gate
+    # reads them, and they are absent from to_dict() and from frontmatter.
+    summary_section_located: bool | None = None
+    findings_section_located: bool | None = None
+    finding_scan: FindingScanCounts | None = None
     # Prompt capture fields — populated at verbosity >= 2, excluded from to_dict()
     system_prompt: str | None = None
     user_prompt: str | None = None

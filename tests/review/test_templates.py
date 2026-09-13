@@ -433,3 +433,69 @@ def test_judge_template_default_thresholds_differ_by_ground_truth_strength() -> 
         == JUDGE_TEMPLATE_THRESHOLDS["judge.tasks-vs-slice"]["pass_floor"]
     )
     assert slice_vs_arch.judge["pass_floor"] > tasks_vs_slice.judge["pass_floor"]
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 3: the required-format specimen is fenced (#91, #25)
+# ---------------------------------------------------------------------------
+
+_SPECIMEN_TEMPLATES = [
+    "code.yaml",
+    "slice.yaml",
+    "tasks.yaml",
+    "arch.yaml",
+    "judge-slice-vs-arch.yaml",
+    "judge-tasks-vs-slice.yaml",
+]
+
+
+@pytest.mark.parametrize("template_file", _SPECIMEN_TEMPLATES)
+def test_specimen_does_not_parse_as_a_finding(template_file: str) -> None:
+    """A template's own instructions must not read as review findings.
+
+    When a model restates the required format before using it, that echo is
+    parsed like any other text. Fencing the specimen makes it invisible to
+    the scan, so a template whose specimen still parses would reintroduce the
+    phantom findings of #91.
+    """
+    import yaml
+
+    from squadron.review.parsers import parse_review_output
+
+    path = Path(__file__).parents[2] / "src/squadron/data/templates" / template_file
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    system_prompt = str(loaded["system_prompt"])
+
+    result = parse_review_output(system_prompt, "slice", {})
+
+    assert result.findings == []
+    assert result.finding_scan is not None
+    assert result.finding_scan.surviving == 0
+
+
+@pytest.mark.parametrize("template_file", _SPECIMEN_TEMPLATES)
+def test_specimen_is_inside_a_fence(template_file: str) -> None:
+    """Pins the mechanism, not just the outcome.
+
+    The specimen currently uses a severity alternation that the finding regex
+    happens not to match, so the previous test would pass even unfenced. The
+    fence is what holds when a model substitutes a real severity.
+    """
+    import yaml
+
+    from squadron.review.parsers import parse_review_output
+
+    path = Path(__file__).parents[2] / "src/squadron/data/templates" / template_file
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    system_prompt = str(loaded["system_prompt"])
+    assert "Finding title" in system_prompt
+
+    # Substituting a real severity is what a model actually echoes, and it is
+    # what the fence has to stop. Unfenced, this parses as a finding.
+    substituted = system_prompt.replace("### [PASS|CONCERN|FAIL]", "### [CONCERN]")
+    result = parse_review_output(substituted, "slice", {})
+
+    assert result.findings == []
+    assert result.finding_scan is not None
+    assert result.finding_scan.total > 0
+    assert result.finding_scan.in_fences == result.finding_scan.total

@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/917-slice.review-artifact-integrity.
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [916]
 interfaces: []
-status: not_started
+status: in_progress
 dateCreated: 20260912
 dateUpdated: 20260912
 ---
@@ -93,34 +93,34 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 ### Task 1.1 — Rename the parameter and JSON key
 
-- [ ] In `_write_debug_log` ([parsers.py:416](src/squadron/review/parsers.py#L416))
+- [x] In `_write_debug_log` ([parsers.py:416](src/squadron/review/parsers.py#L416))
       rename the `fallback_used` keyword parameter to `degraded` and the emitted
       JSON key `"fallback_used"` to `"degraded"`.
-- [ ] Update the three call sites ([:493](src/squadron/review/parsers.py#L493),
+- [x] Update the three call sites ([:493](src/squadron/review/parsers.py#L493),
       [:518](src/squadron/review/parsers.py#L518),
       [:540](src/squadron/review/parsers.py#L540)) to pass `degraded=True`.
-- [ ] Do not touch `ReviewResult.fallback_used`, its `to_dict` key, or the local
+- [x] Do not touch `ReviewResult.fallback_used`, its `to_dict` key, or the local
       `fallback_used` variable in `parse_review_output`.
-- [ ] Success: `grep -n "fallback_used" src/squadron/review/parsers.py` shows only
+- [x] Success: `grep -n "fallback_used" src/squadron/review/parsers.py` shows only
       the `parse_review_output` local and the `ReviewResult(...)` constructor arg.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 1.2 — Test: the emitted line carries `degraded`
 
-- [ ] In `tests/review/test_parsers.py`, add a test that parses a response with
+- [x] In `tests/review/test_parsers.py`, add a test that parses a response with
       no `## Summary` and no findings (the genuinely-unknown branch), reads the
       last line of the monkeypatched debug log as JSON, and asserts the key
       `degraded` is present and `True` and the key `fallback_used` is absent.
-- [ ] Assert the returned `ReviewResult.fallback_used` is `False` for that same
+- [x] Assert the returned `ReviewResult.fallback_used` is `False` for that same
       parse (the existing semantics), and `to_dict()` still carries
       `"fallback_used"`.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 1.3 — Verify and commit Part 1
 
-- [ ] `uv run pytest tests/review -q` green; format, check, pyright clean.
-- [ ] Commit: `refactor(review): rename debug-log fallback_used field to degraded`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/review -q` green; format, check, pyright clean.
+- [x] Commit: `refactor(review): rename debug-log fallback_used field to degraded`
+- [x] Effort: 1
 
 ---
 
@@ -128,54 +128,55 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 ### Task 2.1 — Create the gate action
 
-- [ ] Read `FrontmatterGateAction` ([frontmatter_gate.py](src/squadron/events/builtin/frontmatter_gate.py))
+- [x] Read `FrontmatterGateAction` ([frontmatter_gate.py](src/squadron/events/builtin/frontmatter_gate.py))
       and `read_frontmatter` ([frontmatter.py:60](src/squadron/documents/frontmatter.py#L60))
       for the return/raise contract before writing code.
-- [ ] Create `src/squadron/events/builtin/review_verdict_gate.py` with class
+- [x] Create `src/squadron/events/builtin/review_verdict_gate.py` with class
       `ReviewVerdictGateAction`: `name = "squadron.review-verdict-gate"`,
       `events = frozenset({EventType.COMMIT})`, `validate` returns `[]`.
-- [ ] `execute` iterates `context.staged_paths` ending in `.md`, resolved under
+- [x] `execute` iterates `context.staged_paths` ending in `.md`, resolved under
       `context.cwd`. For each: `read_frontmatter` returns `None` → skip;
       `docType` != `DocType.REVIEW` → skip; `FrontmatterError` (or any read
       failure) → violation "could not read frontmatter"; no `verdict` key →
       violation; `verdict` value not in `{v.value for v in Verdict}` → violation
       naming the file, the value, and the allowed set computed from the enum.
-- [ ] One `ActionResult`: `success=True` when no violations; otherwise
+- [x] One `ActionResult`: `success=True` when no violations; otherwise
       `success=False`, `error` joining all violations, and one `_logger.warning`
       per violation. Message templates are module-level constants.
-- [ ] No literal list of verdict strings anywhere in the module.
-- [ ] Register with `register_event_action(ReviewVerdictGateAction())` at module
+- [x] No literal list of verdict strings anywhere in the module.
+- [x] Register with `register_event_action(ReviewVerdictGateAction())` at module
       bottom, as the frontmatter gate does.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 2.2 — Wire the built-in import
 
-- [ ] Add the import and the `_ = (...)` reference in
+- [x] Add the import and the `_ = (...)` reference in
       [events/__init__.py:99-102](src/squadron/events/__init__.py#L99-L102)
       next to `_b_frontmatter_gate`.
-- [ ] Success: `uv run sq events list` (or the registry's list function) shows
+- [x] Success: `uv run sq events list` (or the registry's list function) shows
       `squadron.review-verdict-gate` bound to `commit`.
-- [ ] Effort: 1
+- [x] **Note (implementation detail):** Importing the action via builtin import was not sufficient to make it fire. The action also required registration in `DEFAULT_BINDINGS` in `src/squadron/events/manifest.py`. A test now pins that binding.
+- [x] Effort: 1
 
 ### Task 2.3 — Test: the gate
 
-- [ ] Create `tests/events/builtin/test_review_verdict_gate.py` mirroring
+- [x] Create `tests/events/builtin/test_review_verdict_gate.py` mirroring
       `test_frontmatter_gate.py`'s `_commit_context` helper; write probe files
       under `tmp_path`.
-- [ ] Cases: identity (name, events); `verdict: BANANA` → `success=False` and
+- [x] Cases: identity (name, events); `verdict: BANANA` → `success=False` and
       `error` contains `BANANA` and every `Verdict` member (iterate the enum in
       the assertion; do not spell the four values); `verdict: RESOLVED` →
       rejected; each `Verdict` member → `success=True`; `docType: review` with no
       `verdict` → rejected; `docType: slice-design` with `verdict: BANANA` →
       `success=True`; a `.md` with no frontmatter → `success=True`; a file with
       unparseable frontmatter → rejected; a non-`.md` staged path → ignored.
-- [ ] One test with two staged files, one bad, asserts the result names the bad
+- [x] One test with two staged files, one bad, asserts the result names the bad
       file and not the good one.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 2.4 — Corpus dry run
 
-- [ ] Run the gate over every `project-documents/user/reviews/**/*.md` (a
+- [x] Run the gate over every `project-documents/user/reviews/**/*.md` (a
       throwaway script or a one-off test invocation, not committed). Expected:
       exactly **three** violations, all hand-edited historical artifacts
       (part-1 review F001) —
@@ -184,38 +185,39 @@ branch configured). Merge to `main` when Part 6 is verified.
       (both `verdict: RESOLVED`), and
       `reviews/305-review.tasks.findings-addressed-gate.part-1.md`
       (`verdict: CONCERN`, singular).
-- [ ] Disposition of the 305 artifact: its body reads `**Verdict:** FAIL` and it
+- [x] Disposition of the 305 artifact: its body reads `**Verdict:** FAIL` and it
       carries a `fail`-severity finding, so its frontmatter is corrupt, not a
       fifth verdict value. Correct it to `verdict: FAIL` — a data fix to one
       historical artifact, restoring agreement with its own body. Leave the two
       `RESOLVED` artifacts alone: `RESOLVED` is a real disposition the enum does
       not model, and rewriting it would falsify history. The gate runs on staged
       files only, so they trip nothing until someone stages them.
-- [ ] Any *other* violation is a finding: record it in DEVLOG and fix the artifact
+- [x] Any *other* violation is a finding: record it in DEVLOG and fix the artifact
       only if this slice produced it.
-- [ ] Effort: 1
+- [x] **Note (corpus findings):** The dry run found two violations beyond the two expected RESOLVED artifacts: the 305 artifact's frontmatter verdict was corrected from CONCERN to FAIL, and the 916 artifact had mojibake (UTF-8 decoded as Latin-1) putting C1 control characters in its frontmatter, which was repaired.
+- [x] Effort: 1
 
 ### Task 2.5 — Documentation deliverables
 
-- [ ] Add a `commit` / `squadron.review-verdict-gate` row to the built-in
+- [x] Add a `commit` / `squadron.review-verdict-gate` row to the built-in
       bindings table in [docs/EVENTS.md:198](docs/EVENTS.md#L198).
-- [ ] Add `review_verdict_gate.py  # COMMIT — rejects a review whose verdict is
+- [x] Add `review_verdict_gate.py  # COMMIT — rejects a review whose verdict is
       not a Verdict member` to the `builtin/` listing in
       [140-arch.pipeline-foundation.md:589](project-documents/user/architecture/140-arch.pipeline-foundation.md#L589).
-- [ ] Add a CHANGELOG `### Added` bullet under `[Unreleased]`: committing a
+- [x] Add a CHANGELOG `### Added` bullet under `[Unreleased]`: committing a
       review artifact whose `verdict:` is missing or not one of the review
       verdicts is now rejected; disable with `squadron.review-verdict-gate` in
       `events.yaml` (#77).
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 2.6 — Verify and commit Part 2
 
-- [ ] `uv run pytest tests/events -q` green; format, check, pyright clean.
-- [ ] Manual: stage a `docType: review` probe with `verdict: BANANA`; commit is
+- [x] `uv run pytest tests/events -q` green; format, check, pyright clean.
+- [x] Manual: stage a `docType: review` probe with `verdict: BANANA`; commit is
       rejected naming `BANANA`; change to `CONCERNS`, commit proceeds; remove the
       probe commit (`git reset --soft HEAD~1`, unstage, delete the probe).
-- [ ] Commit: `feat(events): add review-verdict-gate commit action`
-- [ ] Effort: 1
+- [x] Commit: `feat(events): add review-verdict-gate commit action`
+- [x] Effort: 1
 
 ---
 
