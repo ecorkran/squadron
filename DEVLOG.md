@@ -14,6 +14,50 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 918 task breakdown (Phase 5)
+
+Design converted to `user/tasks/918-tasks.review-grounding-{1,2}.md`, split at the
+Part 1 / Part 2 boundary (565 lines against a 450-line target, past the ~100-line
+tolerance). File 1 carries the context summary, the verified code-anchor table, and
+Part 1's twelve tasks; file 2 carries Parts 2 and 3 plus closeout.
+
+**Two questions the design left to implementation were answered during breakdown, on
+`42bd0e05`.**
+
+The design flags that a path deny-list cannot constrain `bash` and instructs the
+implementer to determine whether document-review templates grant it, explicitly refusing
+to leave the point implicit. Checked all seven templates: every one declares
+`allowed_tools: [read_file, list_files, grep]`. **No template grants `bash`**, so the
+exclusion is complete for every review that exists today and no withholding logic is
+needed. The gap is real in principle and absent in fact — T1.9 pins it with a test that
+fails if anyone adds `bash` to a template carrying tool exclusions, which is what keeps
+the fact true rather than merely currently-true.
+
+`review.external_reviews_dir` (slice 383, `squadron-pr`) has not landed on `main`. D4
+anticipated this and prescribed resolving against the current default behind a single
+named seam; `REVIEWS_DIR` (`persistence.py:24`) already is that seam, so the templates
+declare the pattern and the default resolves through the constant the writer uses. One
+constant changes when 383 lands.
+
+**Three traps were written into tasks rather than left for review to find.** The digest's
+existing `str(result.tool_calls_made or 0)` idiom would render a failed-call count of `0`
+as not-computed, collapsing "no tools failed" into "we did not measure" — T2.6 says not to
+copy the `or 0`. `_execute_tool_call` returns `str`, so the obvious way to recover
+error-ness downstream is matching an `"Error: "` prefix, which is the string-dispatch this
+project forbids; T2.1 names the prohibition at the point of temptation. And T1.11 asserts
+that `list_files` must not *enumerate* an excluded directory — a refusal that still lists
+names leaks exactly the filenames at issue, since archived reviews carry the reviewed
+document's own name prefix.
+
+**One template omission is deliberate and now documented.**
+`judge-findings-addressed.yaml` does not get the exclusion: it is 305's prior-findings
+*injection* path, which the design names as a non-goal, and it receives findings as an
+input rather than by discovery. T1.8 requires the reason be written next to the omission
+so a later reader does not "fix" it.
+
+Part 2's T2.9 is deliberately unspecified pending T2.8's evidence, per D7. The task lists
+the three candidate branches and their fixes but does not choose one — the evidence does.
+
 ### Slice 918 design (Phase 4)
 
 Design written to `user/slices/918-slice.review-grounding.md`. Groups #94 and #92 as one
