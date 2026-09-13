@@ -18,6 +18,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.config.manager import get_config
 from squadron.integrations.context_forge import (
     ContextForgeClient,
@@ -31,7 +32,6 @@ from squadron.review.git_utils import (
     DiffSpecError,
     EmptyScopeError,
     assert_reviewable_scope,
-    find_git_root,
     normalize_diff_spec,
     resolve_slice_diff_range,
 )
@@ -231,30 +231,17 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_cwd(cwd: str | None) -> str:
-    """Resolve cwd: CLI flag overrides config default."""
-    if cwd is not None:
-        return cwd
-    config_val = get_config("cwd")
-    if isinstance(config_val, str):
-        return config_val
-    return "."
-
-
 def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[str, Path | None]:
     """Resolve the reviewing agent's working directory and its rules directory.
 
-    The agent's ``cwd`` is its tool jail root, so a config ``cwd`` pointing at a
-    subdirectory of the repo makes every repo-relative path in a prompt
-    unreadable. Anchoring at the git root keeps those paths openable while the
-    prompt's own inputs stay relative to the repo. Falls back to the resolved
-    cwd when there is no git work tree (issue #86).
+    The cwd half is shared with ``sq pr show`` — see
+    :func:`squadron.cli.commands.cwd_resolution.resolve_repo_cwd` for why the
+    git root is the anchor (issue #86).
 
     Rules live in the repo root (``.claude/rules/``), so they resolve from the
     same root rather than from the configured subdirectory.
     """
-    resolved_cwd = _resolve_cwd(cwd)
-    review_cwd = find_git_root(resolved_cwd) or resolved_cwd
+    review_cwd = resolve_repo_cwd(cwd)
     return review_cwd, resolve_rules_dir(review_cwd, None, rules_dir_flag)
 
 
