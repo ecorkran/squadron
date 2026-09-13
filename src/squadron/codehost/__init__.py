@@ -42,6 +42,7 @@ from squadron.codehost.models import (
     ReviewDiscussion,
 )
 from squadron.codehost.protocol import CodeHost
+from squadron.codehost.remotes import list_remotes, parse_remote_url, select_remote
 from squadron.codehost.targets import PullRequestTarget, TargetForm, parse_target
 
 __all__ = [
@@ -78,6 +79,9 @@ __all__ = [
     "TargetForm",
     "TargetSyntaxError",
     "TargetUnresolvableError",
-    # Sorted uppercase-first above; the lone function trails by convention.
+    # Sorted uppercase-first above; the functions trail by convention.
+    "list_remotes",
+    "parse_remote_url",
     "parse_target",
+    "select_remote",
 ]
