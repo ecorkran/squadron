@@ -333,11 +333,6 @@ def _resolve_under(root: Path, path: str) -> Path | None:
     return next(iter(root.rglob(path)), None)
 
 
-def _path_exists_under(root: Path, path: str) -> bool:
-    """True if *path* resolves under *root*, directly or by basename search."""
-    return _resolve_under(root, path) is not None
-
-
 #: Largest file the line-bounds check will read. A citation into something
 #: bigger is left unverified rather than streaming an arbitrary blob on the
 #: parse path — the check is a cheap sanity test, not an indexing pass.
@@ -395,17 +390,24 @@ def _count_lines(root: Path, resolved: Path) -> tuple[int | None, str | None]:
     return newlines, None
 
 
-def _check_path_existence(
+def _check_cited_paths(
     findings: list[ReviewFinding],
     cwd: Path,
     *,
     template_name: str,
 ) -> None:
-    """For each finding citing a path, WARN if the path does not exist on disk.
+    """Check each finding's cited path exists, and its cited line is in bounds.
 
-    Cheap defense against hallucinated filenames across all template types.
-    Paths are resolved relative to *cwd*. UNVERIFIED_LOCATION findings and
-    findings whose location cannot be interpreted as a path are skipped.
+    One pass, because resolving a citation is the expensive part: a bare
+    filename — which is how a model cites a document, having been given content
+    rather than paths — falls back to ``rglob`` over the whole review root, and
+    a hallucinated name walks the tree to exhaustion. Two passes meant two full
+    walks per phantom citation, on the parse path the pipeline awaits.
+
+    Existence is a WARNING only, as it has always been. The line check also
+    records its result on the finding (``location_verified``): a line past the
+    end of a file is the deterministic signature of a hallucinated citation,
+    and a WARNING alone was ignored on every #91 phantom.
     """
     for index, finding in enumerate(findings, start=1):
         if finding.location is None:
@@ -413,7 +415,9 @@ def _check_path_existence(
         path = location_path(finding.location)
         if path is None:
             continue
-        if not _path_exists_under(cwd, path):
+
+        resolved = _resolve_under(cwd, path)
+        if resolved is None:
             logger.warning(
                 "Finding F%03d (%r) in %s review cites %r which does not "
                 "exist on disk (relative to %s).",
@@ -423,14 +427,57 @@ def _check_path_existence(
                 path,
                 cwd,
             )
+            # Verifiably absent. Only meaningful for a line-bearing citation:
+            # a whole-file citation of a missing file is already covered by the
+            # WARNING above, and location_verified speaks about the line.
+            if location_line(finding.location) is not None:
+                finding.location_verified = False
+            continue
+
+        line = location_line(finding.location)
+        if line is None:
+            continue  # whole-file citation: nothing to bounds-check
+
+        count, reason = _count_lines(cwd, resolved)
+        if count is None:
+            logger.warning(
+                "Finding F%03d (%r) in %s review cites %r, but its line count "
+                "could not be taken: the file %s. Location left unverified.",
+                index,
+                finding.title,
+                template_name,
+                finding.location,
+                reason,
+            )
+            continue
+
+        if line > count:
+            logger.warning(
+                "Finding F%03d (%r) in %s review cites line %d of %r, which has only %d line(s).",
+                index,
+                finding.title,
+                template_name,
+                line,
+                path,
+                count,
+            )
+            finding.location_verified = False
+        else:
+            finding.location_verified = True
 
 
 # A fenced code block: ``` or ~~~ at line start (leading whitespace tolerated),
 # optional info string, running to a matching closing fence or end of document.
 # A model restating the required format almost always fences it, and
 # finding-shaped text inside a fence is never a finding (#91).
+# The closing fence must be *at least* as long as the opener, per CommonMark —
+# not exactly as long. A backreference would treat a ``` block closed with ````
+# as unclosed, mask to end of document, and silently drop every finding after
+# it. Dropping real findings on valid input is the failure this whole part
+# exists to prevent, so the closer is matched by character and length instead.
 _FENCE_RE = re.compile(
-    r"^[ \t]*(?P<fence>```+|~~~+)[^\n]*\n(?P<body>.*?)(?:^[ \t]*(?P=fence)[ \t]*$|\Z)",
+    r"^[ \t]*(?P<fence>(?P<char>[`~])(?P=char){2,})[^\n]*\n"
+    r"(?P<body>.*?)(?:^[ \t]*(?P=char){3,}[ \t]*$|\Z)",
     re.MULTILINE | re.DOTALL,
 )
 
@@ -496,71 +543,6 @@ def _locate_section(text: str, name: str) -> tuple[int, int] | None:
             return None
         return start, end
     return None
-
-
-def _check_line_bounds(
-    findings: list[ReviewFinding],
-    cwd: Path,
-    *,
-    template_name: str,
-) -> None:
-    """Record on each finding whether its cited line exists in the cited file.
-
-    A line past the end of a file is the deterministic signature of a
-    hallucinated citation — the one thing about a made-up reference that can
-    be checked without judging the claim. ``_check_path_existence`` already
-    warns about a missing file, but it is WARNING-only and was ignored on
-    every #91 phantom; this is what makes the fact survive on the finding.
-
-    Sets ``location_verified``: True when the path resolves and the line is
-    in bounds, False when the citation was checked and is wrong, None when it
-    could not be checked. Every None from a failed check is accompanied by a
-    WARNING naming the finding and the reason, so a silently unverified
-    citation is never indistinguishable from an unchecked one.
-    """
-    for index, finding in enumerate(findings, start=1):
-        if finding.location is None:
-            continue
-        line = location_line(finding.location)
-        if line is None:
-            continue  # whole-file citation: nothing to bounds-check
-        path = location_path(finding.location)
-        if path is None:
-            continue
-
-        resolved = _resolve_under(cwd, path)
-        if resolved is None:
-            # Verifiably absent — the hallucination signature this exists for.
-            # _check_path_existence has already warned about this same finding.
-            finding.location_verified = False
-            continue
-
-        count, reason = _count_lines(cwd, resolved)
-        if count is None:
-            logger.warning(
-                "Finding F%03d (%r) in %s review cites %r, but its line count "
-                "could not be taken: the file %s. Location left unverified.",
-                index,
-                finding.title,
-                template_name,
-                finding.location,
-                reason,
-            )
-            continue
-
-        if line > count:
-            logger.warning(
-                "Finding F%03d (%r) in %s review cites line %d of %r, which has only %d line(s).",
-                index,
-                finding.title,
-                template_name,
-                line,
-                path,
-                count,
-            )
-            finding.location_verified = False
-        else:
-            finding.location_verified = True
 
 
 def _extract_findings(
@@ -823,8 +805,7 @@ def parse_review_output(
     if diff_files is not None:
         _check_diff_membership(findings, diff_files, template_name=template_name)
     if cwd is not None:
-        _check_path_existence(findings, cwd, template_name=template_name)
-        _check_line_bounds(findings, cwd, template_name=template_name)
+        _check_cited_paths(findings, cwd, template_name=template_name)
 
     # Numeric scoring foundation (slice 300): optional, lenient extraction.
     # Absent or malformed → None (silent — a score-less review is the norm).

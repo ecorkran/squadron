@@ -694,6 +694,7 @@ def save_provider_failure(
     cwd: str | None = None,
     slice_name: str | None = None,
     slice_index: int | None = None,
+    name_suffix: str | None = None,
 ) -> Path | None:
     """Write a provider-failure artifact into the review's own slot.
 
@@ -707,6 +708,11 @@ def save_provider_failure(
     ``slice_info`` — the pipeline's step name and index, matching how the
     success path names a slice-less review.
 
+    ``name_suffix`` matches ``save_review_result``'s: a split tasks review
+    writes each part to its own ``.part-N`` slot, so a failure in one part must
+    land in that part's slot rather than a slot no success path ever writes —
+    where consecutive part failures would also overwrite each other.
+
     Returns the saved path, or ``None`` when the write failed (already logged).
     """
     content = format_provider_failure_markdown(
@@ -719,6 +725,8 @@ def save_provider_failure(
         reviewed_sha=reviewed_sha,
     )
     resolved_name = slice_info["slice_name"] if slice_info else slice_name
+    if resolved_name is not None and name_suffix:
+        resolved_name = f"{resolved_name}.{name_suffix}"
     resolved_index = slice_info["index"] if slice_info else slice_index
     if resolved_name is None or resolved_index is None:
         _logger.warning(

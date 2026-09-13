@@ -84,13 +84,21 @@ class ReviewVerdictGateAction:
         A file that is not a review — no frontmatter block, or a docType other
         than ``review`` — passes by not applying.
         """
+        if not path.exists():
+            # A staged path with nothing at it is a staged deletion. Deleting a
+            # review is not committing an invalid verdict, so the gate does not
+            # apply. The repo's pre-commit hook filters these out with
+            # --diff-filter=ACMR before calling, but the gate is also reachable
+            # directly (`sq events fire commit -- <paths>`) with no such filter,
+            # so it cannot rely on the caller having applied one.
+            return None
+
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as exc:
-            # A staged path we cannot open. Not necessarily a review, but we
-            # cannot tell, and a gate that cannot determine validity must not
-            # pass. Deleted-but-staged paths do not reach here: git stages the
-            # deletion, and the reader is only asked for paths still present.
+            # Present but unreadable: a permission problem or a non-UTF-8 file.
+            # We cannot tell whether it is a review, and a gate that cannot
+            # determine validity must not pass.
             return _UNREADABLE_TEMPLATE.format(path=display, reason=exc)
 
         split = split_document(text)

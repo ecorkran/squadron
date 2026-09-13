@@ -963,6 +963,36 @@ class TestProviderFailureArtifact:
 
         assert result.success is True
 
+    def test_part_suffix_lands_in_the_parts_own_slot(self, tmp_path: Path) -> None:
+        """A split tasks review fails into the slot its success path writes.
+
+        Without the suffix every failing part writes the unsuffixed slot — one
+        no success path ever writes, and one where consecutive part failures
+        overwrite each other.
+        """
+        (tmp_path / REVIEWS_DIR).mkdir(parents=True)
+
+        first = save_provider_failure(
+            ProviderError(_FAILURE_MESSAGE),
+            "tasks",
+            _failure_slice_info(),
+            cwd=str(tmp_path),
+            name_suffix="part-1",
+        )
+        second = save_provider_failure(
+            ProviderError(_FAILURE_MESSAGE),
+            "tasks",
+            _failure_slice_info(),
+            cwd=str(tmp_path),
+            name_suffix="part-2",
+        )
+
+        assert first is not None and second is not None
+        assert first.name == "917-review.tasks.review-artifact-integrity.part-1.md"
+        assert second.name == "917-review.tasks.review-artifact-integrity.part-2.md"
+        # Neither overwrote the other, so nothing was archived.
+        assert not (tmp_path / REVIEWS_DIR / "archive").exists()
+
     def test_slice_less_save_names_the_file_from_the_fallback(self, tmp_path: Path) -> None:
         (tmp_path / REVIEWS_DIR).mkdir(parents=True)
 

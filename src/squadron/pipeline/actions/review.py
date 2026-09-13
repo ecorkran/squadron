@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from pathlib import Path
 from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
@@ -47,6 +49,39 @@ _INPUT_PASSTHROUGH_KEYS = (
     "against",
     "input",
 )
+
+
+def _save_failure_artifact(
+    exc: ProviderError,
+    template_name: str,
+    slice_info: SliceInfo | None,
+    *,
+    model: str | None,
+    source_document: str | None,
+    tools_given: list[str] | None,
+    cwd: str,
+    step_name: str,
+    step_index: int,
+) -> Path | None:
+    """Resolve the sha and write the failure artifact — all blocking work.
+
+    Kept as one synchronous callable so the caller hands the whole unit to
+    ``asyncio.to_thread`` rather than straddling the boundary: resolving the
+    sha on the loop and only the write off it would leave the 30-second git
+    subprocess exactly where it must not be.
+    """
+    return save_provider_failure(
+        exc,
+        template_name,
+        slice_info,
+        model=model,
+        source_document=source_document,
+        tools_given=tools_given,
+        reviewed_sha=resolve_reviewed_sha(cwd),
+        cwd=cwd,
+        slice_name=step_name,
+        slice_index=step_index,
+    )
 
 
 class ReviewAction:
@@ -250,17 +285,21 @@ class ReviewAction:
             # evidence of why the step failed (#84). The step still fails: the
             # re-raise reaches execute's catch-all, which builds the existing
             # success=False result.
-            saved = save_provider_failure(
+            # Off-thread: the save runs a git subprocess bounded at 30s plus
+            # file I/O, and no blocking call belongs on the event loop inside
+            # an async def (project async rule; the frontmatter gate states the
+            # same convention).
+            saved = await asyncio.to_thread(
+                _save_failure_artifact,
                 exc,
                 template_name,
                 slice_info,
                 model=model_id,
                 source_document=inputs.get("input"),
                 tools_given=list(allowed_tools) if allowed_tools else None,
-                reviewed_sha=resolve_reviewed_sha(cwd),
                 cwd=cwd,
-                slice_name=context.step_name,
-                slice_index=context.step_index,
+                step_name=context.step_name,
+                step_index=context.step_index,
             )
             _logger.warning(
                 "review: provider failed in step %s; failure artifact: %s",

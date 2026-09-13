@@ -561,6 +561,7 @@ def _run_review_command(
     no_tools: bool = False,
     failure_target: SliceInfo | None = None,
     no_save: bool = False,
+    failure_name_suffix: str | None = None,
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
@@ -653,6 +654,7 @@ def _run_review_command(
                 ),
                 reviewed_sha=resolve_reviewed_sha(inputs.get("cwd") or "."),
                 cwd=inputs.get("cwd"),
+                name_suffix=failure_name_suffix,
             )
             if saved is not None:
                 rprint(f"[yellow]Provider failure recorded: {saved}[/yellow]")
@@ -944,6 +946,9 @@ def review_tasks(
             "against": against,
             "cwd": review_cwd,
         }
+        # Bound before the run so a provider failure lands in this part's own
+        # slot, the same one its success path would write.
+        suffix = f"part-{part_idx}" if multi_part else None
         result = _run_review_command(
             "tasks",
             inputs,
@@ -956,10 +961,9 @@ def review_tasks(
             rules_dir=resolved_rules_dir,
             failure_target=slice_info,
             no_save=no_save,
+            failure_name_suffix=suffix,
         )
         results.append((task_path, result))
-
-        suffix = f"part-{part_idx}" if multi_part else None
 
         # Every part is saved before exiting: the reviews have already been
         # paid for, so one unwritable part must not cost the others.

@@ -147,6 +147,35 @@ class TestValidAndInapplicable:
         assert result.success is True
 
     @pytest.mark.asyncio
+    async def test_staged_deletion_is_not_a_violation(self, tmp_path: Path) -> None:
+        """Deleting a review is not committing an invalid verdict.
+
+        The repo's hook filters deletions out with --diff-filter=ACMR, but the
+        gate is reachable directly with no such filter, so it must handle an
+        absent path itself rather than reporting it as unreadable.
+        """
+        result = await _run(tmp_path, "deleted-review.md")
+
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_present_but_unreadable_still_fails_closed(self, tmp_path: Path) -> None:
+        """An absent path is skipped; an unreadable one is not."""
+        import os
+
+        if os.geteuid() == 0:
+            pytest.skip("root reads regardless of mode bits")
+        staged = _write(tmp_path, "locked.md", "docType: review\nverdict: PASS")
+        target = tmp_path / staged
+        target.chmod(0o000)
+        try:
+            result = await _run(tmp_path, staged)
+        finally:
+            target.chmod(0o644)
+
+        assert result.success is False
+
+    @pytest.mark.asyncio
     async def test_no_staged_paths_passes(self, tmp_path: Path) -> None:
         result = await _run(tmp_path)
 

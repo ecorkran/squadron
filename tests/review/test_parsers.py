@@ -1103,6 +1103,25 @@ class TestFenceMasking:
 
         assert result.findings == []
 
+    def test_longer_closing_fence_still_closes_the_block(self) -> None:
+        """CommonMark allows a closing fence longer than the opener.
+
+        Requiring exact equality treated such a block as unclosed, masked to
+        end of document, and silently dropped every finding after it — the
+        exact failure this part exists to prevent, on valid input.
+        """
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "```\nechoed format\n````\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Real finding\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["Real finding"]
+
     def test_fenced_echo_then_real_findings_yields_only_the_real_ones(self) -> None:
         """The #91 shape: restate the format, then do the work."""
         response = (
