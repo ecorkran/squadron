@@ -1414,3 +1414,91 @@ class TestReviewToolTelemetryMetadata:
 
         assert "tools_given" not in result.metadata
         assert "tool_calls_made" not in result.metadata
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 4: a provider failure leaves an artifact (#84)
+# ---------------------------------------------------------------------------
+
+_PROVIDER_FAILURE = (
+    "Model returned an empty final turn (finish_reason='length', "
+    "reasoning_chars=1200); no response to deliver."
+)
+
+
+class TestProviderFailureArtifact:
+    """For a pipeline run the artifact is the whole durable record.
+
+    The step still fails; what changes is that the failure is written down.
+    """
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_failure_artifact_written_and_step_still_fails(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        from squadron.providers.errors import ProviderError
+
+        reviews = tmp_path / "project-documents/user/reviews"
+        reviews.mkdir(parents=True)
+        prior = reviews / "0-review.code.review-step.md"
+        prior.write_text("---\nverdict: PASS\n---\n\nA previous, passing run.\n")
+
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.side_effect = ProviderError(_PROVIDER_FAILURE, tool_calls_made=0)
+
+        ctx = _make_context(cwd=str(tmp_path))
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        written = prior.read_text()
+        assert "## Provider Failure" in written
+        assert f"verdict: {Verdict.UNKNOWN.value}" in written
+        assert "finish_reason='length'" in written
+        archived = list((reviews / "archive").glob("*.md"))
+        assert len(archived) == 1
+        assert "A previous, passing run." in archived[0].read_text()
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_slice_less_step_names_the_artifact_from_the_step(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """A review step with no slice param is a reachable branch.
+
+        It must not fabricate a slice, and must not silently write nothing.
+        """
+        from squadron.providers.errors import ProviderError
+
+        reviews = tmp_path / "project-documents/user/reviews"
+        reviews.mkdir(parents=True)
+
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.side_effect = ProviderError(_PROVIDER_FAILURE)
+
+        ctx = _make_context(
+            cwd=str(tmp_path),
+            params={"template": "code"},
+            step_name="nightly-audit",
+            step_index=3,
+        )
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        written = reviews / "3-review.code.nightly-audit.md"
+        assert written.exists()
+        body = written.read_text()
+        assert "## Provider Failure" in body
+        assert "slice 0" not in body

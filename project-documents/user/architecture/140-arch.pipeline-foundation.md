@@ -588,6 +588,7 @@ src/squadron/events/         # user-definable actions on supported events (173)
 ├── dispatcher.py               # fire() / run_event() — the one execution path
 └── builtin/
     ├── frontmatter_gate.py    # COMMIT — wraps `cf validate frontmatter`
+    ├── review_verdict_gate.py # COMMIT — rejects a review whose verdict is not a Verdict member
     ├── dispatch_artifact.py   # POST_ACTION — migrated 909 post-condition
     └── revision_stamp.py      # POST_ACTION — migrated 911 stamp
 

@@ -679,3 +679,43 @@ class TestEmptyFinalTurn:
         """A tool call with no prose is the normal shape of an intermediate turn."""
         turn = TurnResult(text="", tool_calls=[{"id": "call_1"}])
         assert not turn.is_empty()
+
+    @pytest.mark.asyncio
+    async def test_error_carries_the_tool_calls_the_loop_made(self, tmp_path: Path) -> None:
+        """The count rides the error so a failure artifact can report it.
+
+        Without it, "given tools, said nothing" and "ran without tools" are
+        indistinguishable downstream — exactly the gap slice 265 D5 closed for
+        successful runs, reopened for failures.
+        """
+        write_call = tool_chunk(
+            0, "call_1", "write_file", json.dumps({"path": "out.txt", "content": "hi"})
+        )
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(write_call),
+                _async_stream(
+                    _openrouter_chunk(reasoning="thinking", content=None, finish_reason="length")
+                ),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["write_file"], cwd=str(tmp_path), client=client)
+
+        with pytest.raises(ProviderError) as exc_info:
+            async for _ in agent.handle_message(_USER_MSG):
+                pass
+
+        assert exc_info.value.tool_calls_made == 1
+
+    @pytest.mark.asyncio
+    async def test_error_reports_zero_calls_on_the_no_tools_path(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("   ")))
+        agent = _make_agent(client=client)
+
+        with pytest.raises(ProviderError) as exc_info:
+            async for _ in agent.handle_message(_USER_MSG):
+                pass
+
+        assert exc_info.value.tool_calls_made == 0

@@ -25,6 +25,7 @@ from squadron.integrations.context_forge import (
     ContextForgeNotAvailable,
 )
 from squadron.models.aliases import model_allows_tools, resolve_model_alias
+from squadron.providers.errors import ProviderError
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
@@ -39,7 +40,9 @@ from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.persistence import (
     TASKS_DIR,
     SliceInfo,
+    resolve_reviewed_sha,
     resolve_slice_info,
+    save_provider_failure,
     save_review_result,
 )
 from squadron.review.resolution import Resolution, ResolutionResult, resolve_review
@@ -556,10 +559,19 @@ def _run_review_command(
     profile_flag: str | None = None,
     rules_dir: Path | None = None,
     no_tools: bool = False,
+    failure_target: SliceInfo | None = None,
+    no_save: bool = False,
+    failure_name_suffix: str | None = None,
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
     Returns the ReviewResult so callers can save it.
+
+    ``failure_target`` and ``no_save`` govern what happens when the provider
+    raises: a failure artifact is written into the review's own slot so the
+    run leaves a durable record of why nothing came back (#84). Passing no
+    ``failure_target`` (or ``no_save``) keeps the previous behavior of
+    printing and exiting.
     """
     load_all_templates()
     template = get_template(template_name)
@@ -623,6 +635,29 @@ def _run_review_command(
         )
     except RateLimitError as exc:
         rprint("[red]Error: Rate limited by the API. Please wait a moment and try again.[/red]")
+        raise typer.Exit(code=1) from exc
+    except ProviderError as exc:
+        # The provider collected the only evidence there is about why the model
+        # stopped. Printing and exiting discards it; the artifact keeps it.
+        rprint(f"[red]Error: Review failed — {exc}[/red]")
+        if failure_target is not None and not no_save:
+            saved = save_provider_failure(
+                exc,
+                template_name,
+                failure_target,
+                model=resolved_model,
+                source_document=inputs.get("input"),
+                tools_given=(
+                    list(template.allowed_tools)
+                    if template.allowed_tools and allows_tools and not no_tools
+                    else None
+                ),
+                reviewed_sha=resolve_reviewed_sha(inputs.get("cwd") or "."),
+                cwd=inputs.get("cwd"),
+                name_suffix=failure_name_suffix,
+            )
+            if saved is not None:
+                rprint(f"[yellow]Provider failure recorded: {saved}[/yellow]")
         raise typer.Exit(code=1) from exc
     except Exception as exc:
         rprint(f"[red]Error: Review failed — {exc}[/red]")
@@ -720,6 +755,8 @@ def review_slice(
         profile_flag=profile,
         no_tools=no_tools,
         rules_dir=resolved_rules_dir,
+        failure_target=slice_info,
+        no_save=no_save,
     )
 
     outcome = _resolve_save_outcome(
@@ -734,6 +771,33 @@ def review_slice(
     )
 
     _exit_on(result.verdict, outcome)
+
+
+def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
+    """The minimal SliceInfo an arch review is named and saved under.
+
+    Arch reviews key on an initiative index rather than a slice, so this
+    synthesizes the shape the save and failure paths both need.
+    """
+    arch_name = (
+        Path(input_file).stem.split(".", 1)[1]
+        if "." in Path(input_file).stem
+        else Path(input_file).stem
+    )
+    try:
+        project_name = ContextForgeClient().get_project().name
+    except (ContextForgeNotAvailable, ContextForgeError) as exc:
+        _logger.warning("Could not resolve project name from ContextForge: %s", exc)
+        project_name = "unknown"
+    return SliceInfo(
+        index=index,
+        name=arch_name,
+        slice_name=arch_name,
+        design_file=None,
+        task_files=[],
+        arch_file=input_file,
+        project=project_name,
+    )
 
 
 @review_app.command("arch")
@@ -773,6 +837,10 @@ def review_arch(
         "input": input_file,
         "cwd": review_cwd,
     }
+    # Built before the run, not inside the save closure: a provider failure
+    # never reaches that closure, and without a target there is nothing to
+    # name the failure artifact after.
+    arch_failure_target = _arch_slice_info(arch_index, input_file) if arch_index is not None else None
     result = _run_review_command(
         "arch",
         inputs,
@@ -783,28 +851,15 @@ def review_arch(
         profile_flag=profile,
         no_tools=no_tools,
         rules_dir=resolved_rules_dir,
+        failure_target=arch_failure_target,
+        no_save=no_save,
     )
 
     def _save_arch(index: int) -> bool:
-        # Build a minimal SliceInfo for save — arch reviews use initiative index
-        arch_name = (
-            Path(input_file).stem.split(".", 1)[1]
-            if "." in Path(input_file).stem
-            else Path(input_file).stem
-        )
-        try:
-            project_name = ContextForgeClient().get_project().name
-        except (ContextForgeNotAvailable, ContextForgeError) as exc:
-            _logger.warning("Could not resolve project name from ContextForge: %s", exc)
-            project_name = "unknown"
-        arch_slice_info = SliceInfo(
-            index=index,
-            name=arch_name,
-            slice_name=arch_name,
-            design_file=None,
-            task_files=[],
-            arch_file=input_file,
-            project=project_name,
+        arch_slice_info = (
+            arch_failure_target
+            if arch_failure_target is not None
+            else _arch_slice_info(index, input_file)
         )
         return _save_and_report(
             result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
@@ -891,6 +946,9 @@ def review_tasks(
             "against": against,
             "cwd": review_cwd,
         }
+        # Bound before the run so a provider failure lands in this part's own
+        # slot, the same one its success path would write.
+        suffix = f"part-{part_idx}" if multi_part else None
         result = _run_review_command(
             "tasks",
             inputs,
@@ -901,10 +959,11 @@ def review_tasks(
             profile_flag=profile,
             no_tools=no_tools,
             rules_dir=resolved_rules_dir,
+            failure_target=slice_info,
+            no_save=no_save,
+            failure_name_suffix=suffix,
         )
         results.append((task_path, result))
-
-        suffix = f"part-{part_idx}" if multi_part else None
 
         # Every part is saved before exiting: the reviews have already been
         # paid for, so one unwritable part must not cost the others.
@@ -1077,6 +1136,8 @@ def review_code(
         model_flag=model,
         profile_flag=profile,
         no_tools=no_tools,
+        failure_target=slice_info,
+        no_save=no_save,
         # rules_content is already fully assembled above (template rules +
         # language auto-detection + manual override) — passing rules_dir here
         # too would make _run_review_command redundantly re-prepend template

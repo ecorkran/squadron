@@ -198,6 +198,7 @@ disable:
 | Event | Action | What it does |
 |---|---|---|
 | `commit` | `squadron.frontmatter-gate` | Runs `cf validate frontmatter` against staged paths |
+| `commit` | `squadron.review-verdict-gate` | Rejects a staged review whose `verdict:` is missing or not a review verdict |
 | `post-action` | `squadron.dispatch-artifact` | Fails a phase-step dispatch that didn't write its expected artifact |
 | `post-action` | `squadron.revision-stamp` | Stamps a monotonic `revision_number` after a loop-iteration dispatch |
 

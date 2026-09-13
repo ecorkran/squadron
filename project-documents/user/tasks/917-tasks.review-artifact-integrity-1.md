@@ -6,9 +6,9 @@ lldReference: project-documents/user/slices/917-slice.review-artifact-integrity.
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [916]
 interfaces: []
-status: not_started
+status: complete
 dateCreated: 20260912
-dateUpdated: 20260912
+dateUpdated: 20260913
 ---
 
 # Tasks: Review Artifact Integrity (1 of 2)
@@ -93,34 +93,34 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 ### Task 1.1 — Rename the parameter and JSON key
 
-- [ ] In `_write_debug_log` ([parsers.py:416](src/squadron/review/parsers.py#L416))
+- [x] In `_write_debug_log` ([parsers.py:416](src/squadron/review/parsers.py#L416))
       rename the `fallback_used` keyword parameter to `degraded` and the emitted
       JSON key `"fallback_used"` to `"degraded"`.
-- [ ] Update the three call sites ([:493](src/squadron/review/parsers.py#L493),
+- [x] Update the three call sites ([:493](src/squadron/review/parsers.py#L493),
       [:518](src/squadron/review/parsers.py#L518),
       [:540](src/squadron/review/parsers.py#L540)) to pass `degraded=True`.
-- [ ] Do not touch `ReviewResult.fallback_used`, its `to_dict` key, or the local
+- [x] Do not touch `ReviewResult.fallback_used`, its `to_dict` key, or the local
       `fallback_used` variable in `parse_review_output`.
-- [ ] Success: `grep -n "fallback_used" src/squadron/review/parsers.py` shows only
+- [x] Success: `grep -n "fallback_used" src/squadron/review/parsers.py` shows only
       the `parse_review_output` local and the `ReviewResult(...)` constructor arg.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 1.2 — Test: the emitted line carries `degraded`
 
-- [ ] In `tests/review/test_parsers.py`, add a test that parses a response with
+- [x] In `tests/review/test_parsers.py`, add a test that parses a response with
       no `## Summary` and no findings (the genuinely-unknown branch), reads the
       last line of the monkeypatched debug log as JSON, and asserts the key
       `degraded` is present and `True` and the key `fallback_used` is absent.
-- [ ] Assert the returned `ReviewResult.fallback_used` is `False` for that same
+- [x] Assert the returned `ReviewResult.fallback_used` is `False` for that same
       parse (the existing semantics), and `to_dict()` still carries
       `"fallback_used"`.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 1.3 — Verify and commit Part 1
 
-- [ ] `uv run pytest tests/review -q` green; format, check, pyright clean.
-- [ ] Commit: `refactor(review): rename debug-log fallback_used field to degraded`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/review -q` green; format, check, pyright clean.
+- [x] Commit: `refactor(review): rename debug-log fallback_used field to degraded`
+- [x] Effort: 1
 
 ---
 
@@ -128,85 +128,96 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 ### Task 2.1 — Create the gate action
 
-- [ ] Read `FrontmatterGateAction` ([frontmatter_gate.py](src/squadron/events/builtin/frontmatter_gate.py))
+- [x] Read `FrontmatterGateAction` ([frontmatter_gate.py](src/squadron/events/builtin/frontmatter_gate.py))
       and `read_frontmatter` ([frontmatter.py:60](src/squadron/documents/frontmatter.py#L60))
       for the return/raise contract before writing code.
-- [ ] Create `src/squadron/events/builtin/review_verdict_gate.py` with class
+- [x] Create `src/squadron/events/builtin/review_verdict_gate.py` with class
       `ReviewVerdictGateAction`: `name = "squadron.review-verdict-gate"`,
       `events = frozenset({EventType.COMMIT})`, `validate` returns `[]`.
-- [ ] `execute` iterates `context.staged_paths` ending in `.md`, resolved under
+- [x] `execute` iterates `context.staged_paths` ending in `.md`, resolved under
       `context.cwd`. For each: `read_frontmatter` returns `None` → skip;
       `docType` != `DocType.REVIEW` → skip; `FrontmatterError` (or any read
       failure) → violation "could not read frontmatter"; no `verdict` key →
       violation; `verdict` value not in `{v.value for v in Verdict}` → violation
       naming the file, the value, and the allowed set computed from the enum.
-- [ ] One `ActionResult`: `success=True` when no violations; otherwise
+- [x] One `ActionResult`: `success=True` when no violations; otherwise
       `success=False`, `error` joining all violations, and one `_logger.warning`
       per violation. Message templates are module-level constants.
-- [ ] No literal list of verdict strings anywhere in the module.
-- [ ] Register with `register_event_action(ReviewVerdictGateAction())` at module
+- [x] No literal list of verdict strings anywhere in the module.
+- [x] Register with `register_event_action(ReviewVerdictGateAction())` at module
       bottom, as the frontmatter gate does.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 2.2 — Wire the built-in import
 
-- [ ] Add the import and the `_ = (...)` reference in
+- [x] Add the import and the `_ = (...)` reference in
       [events/__init__.py:99-102](src/squadron/events/__init__.py#L99-L102)
       next to `_b_frontmatter_gate`.
-- [ ] Success: `uv run sq events list` (or the registry's list function) shows
+- [x] Success: `uv run sq events list` (or the registry's list function) shows
       `squadron.review-verdict-gate` bound to `commit`.
-- [ ] Effort: 1
+- [x] **Note (implementation detail):** Importing the action via builtin import was not sufficient to make it fire. The action also required registration in `DEFAULT_BINDINGS` in `src/squadron/events/manifest.py`. A test now pins that binding.
+- [x] Effort: 1
 
 ### Task 2.3 — Test: the gate
 
-- [ ] Create `tests/events/builtin/test_review_verdict_gate.py` mirroring
+- [x] Create `tests/events/builtin/test_review_verdict_gate.py` mirroring
       `test_frontmatter_gate.py`'s `_commit_context` helper; write probe files
       under `tmp_path`.
-- [ ] Cases: identity (name, events); `verdict: BANANA` → `success=False` and
+- [x] Cases: identity (name, events); `verdict: BANANA` → `success=False` and
       `error` contains `BANANA` and every `Verdict` member (iterate the enum in
       the assertion; do not spell the four values); `verdict: RESOLVED` →
       rejected; each `Verdict` member → `success=True`; `docType: review` with no
       `verdict` → rejected; `docType: slice-design` with `verdict: BANANA` →
       `success=True`; a `.md` with no frontmatter → `success=True`; a file with
       unparseable frontmatter → rejected; a non-`.md` staged path → ignored.
-- [ ] One test with two staged files, one bad, asserts the result names the bad
+- [x] One test with two staged files, one bad, asserts the result names the bad
       file and not the good one.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 2.4 — Corpus dry run
 
-- [ ] Run the gate over every `project-documents/user/reviews/**/*.md` (a
+- [x] Run the gate over every `project-documents/user/reviews/**/*.md` (a
       throwaway script or a one-off test invocation, not committed). Expected:
-      exactly two violations, both hand-edited historical artifacts already known
-      — `reviews/343-review.tasks.sq-skills-uninstall-and-sq-doctor-integration.md`
-      and `reviews/archive/266-review.tasks.tool-use-configuration-and-limits.md`,
-      both `verdict: RESOLVED`. Leave them; the gate runs on staged files only and
-      history is not rewritten.
-- [ ] Any *other* violation is a finding: record it in DEVLOG and fix the artifact
+      exactly **three** violations, all hand-edited historical artifacts
+      (part-1 review F001) —
+      `reviews/343-review.tasks.sq-skills-uninstall-and-sq-doctor-integration.md`
+      and `reviews/archive/266-review.tasks.tool-use-configuration-and-limits.md`
+      (both `verdict: RESOLVED`), and
+      `reviews/305-review.tasks.findings-addressed-gate.part-1.md`
+      (`verdict: CONCERN`, singular).
+- [x] Disposition of the 305 artifact: its body reads `**Verdict:** FAIL` and it
+      carries a `fail`-severity finding, so its frontmatter is corrupt, not a
+      fifth verdict value. Correct it to `verdict: FAIL` — a data fix to one
+      historical artifact, restoring agreement with its own body. Leave the two
+      `RESOLVED` artifacts alone: `RESOLVED` is a real disposition the enum does
+      not model, and rewriting it would falsify history. The gate runs on staged
+      files only, so they trip nothing until someone stages them.
+- [x] Any *other* violation is a finding: record it in DEVLOG and fix the artifact
       only if this slice produced it.
-- [ ] Effort: 1
+- [x] **Note (corpus findings):** The dry run found two violations beyond the two expected RESOLVED artifacts: the 305 artifact's frontmatter verdict was corrected from CONCERN to FAIL, and the 916 artifact had mojibake (UTF-8 decoded as Latin-1) putting C1 control characters in its frontmatter, which was repaired.
+- [x] Effort: 1
 
 ### Task 2.5 — Documentation deliverables
 
-- [ ] Add a `commit` / `squadron.review-verdict-gate` row to the built-in
+- [x] Add a `commit` / `squadron.review-verdict-gate` row to the built-in
       bindings table in [docs/EVENTS.md:198](docs/EVENTS.md#L198).
-- [ ] Add `review_verdict_gate.py  # COMMIT — rejects a review whose verdict is
+- [x] Add `review_verdict_gate.py  # COMMIT — rejects a review whose verdict is
       not a Verdict member` to the `builtin/` listing in
       [140-arch.pipeline-foundation.md:589](project-documents/user/architecture/140-arch.pipeline-foundation.md#L589).
-- [ ] Add a CHANGELOG `### Added` bullet under `[Unreleased]`: committing a
+- [x] Add a CHANGELOG `### Added` bullet under `[Unreleased]`: committing a
       review artifact whose `verdict:` is missing or not one of the review
       verdicts is now rejected; disable with `squadron.review-verdict-gate` in
       `events.yaml` (#77).
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 2.6 — Verify and commit Part 2
 
-- [ ] `uv run pytest tests/events -q` green; format, check, pyright clean.
-- [ ] Manual: stage a `docType: review` probe with `verdict: BANANA`; commit is
+- [x] `uv run pytest tests/events -q` green; format, check, pyright clean.
+- [x] Manual: stage a `docType: review` probe with `verdict: BANANA`; commit is
       rejected naming `BANANA`; change to `CONCERNS`, commit proceeds; remove the
       probe commit (`git reset --soft HEAD~1`, unstage, delete the probe).
-- [ ] Commit: `feat(events): add review-verdict-gate commit action`
-- [ ] Effort: 1
+- [x] Commit: `feat(events): add review-verdict-gate commit action`
+- [x] Effort: 1
 
 ---
 
@@ -214,114 +225,114 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 ### Task 3.1 — Carry the scan facts on `ReviewResult`
 
-- [ ] In [models.py](src/squadron/review/models.py) add a frozen dataclass
+- [x] In [models.py](src/squadron/review/models.py) add a frozen dataclass
       `FindingScanCounts` with `total: int` (matches in the whole response),
       `in_fences: int`, `in_section: int`, `surviving: int`.
-- [ ] Add to `ReviewResult`, defaulted, after `provenance`:
+- [x] Add to `ReviewResult`, defaulted, after `provenance`:
       `summary_section_located: bool | None = None`,
       `findings_section_located: bool | None = None`,
       `finding_scan: FindingScanCounts | None = None`. `None` means "not produced
       by the parser" (e.g. a hand-built result), same convention as `provenance`.
-- [ ] `to_dict()` unchanged. A comment on the fields says they feed the Part 6
+- [x] `to_dict()` unchanged. A comment on the fields says they feed the Part 6
       digest and nothing else.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 3.2 — Mask fenced code blocks
 
-- [ ] In `parsers.py` add `_mask_fences(text) -> str` that replaces the contents
+- [x] In `parsers.py` add `_mask_fences(text) -> str` that replaces the contents
       of every fenced block (``` or ~~~ opener at line start, optional info
       string, lenient leading whitespace, closed by a matching fence or EOF) with
       spaces, preserving every newline so character offsets and line numbers of
       unfenced text are unchanged.
-- [ ] Add `_count_finding_matches(text) -> int` = `len(list(_FINDING_RE.finditer(text)))`.
+- [x] Add `_count_finding_matches(text) -> int` = `len(list(_FINDING_RE.finditer(text)))`.
       `in_fences` = count on raw text minus count on masked text.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.3 — Locate the findings section
 
-- [ ] Add `_locate_findings_section(masked_text) -> tuple[int, int] | None`.
+- [x] Add `_locate_findings_section(masked_text) -> tuple[int, int] | None`.
       Heading match is lenient: any `#`-level heading whose text, after
       stripping `*`, `_`, backticks, trailing `:`/`.`, and whitespace, equals
       `findings` case-insensitively. Span runs from the end of the heading line
       to the next heading of the same or higher level (fewer or equal `#`), or
       EOF. `###` finding headings inside the section must not terminate it.
-- [ ] Add `_locate_summary_section(masked_text) -> bool` using the same heading
+- [x] Add `_locate_summary_section(masked_text) -> bool` using the same heading
       rule for `summary`; feeds `summary_section_located`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.4 — Wire the bounded scan into the parser
 
-- [ ] Change `_extract_findings` to scan the masked text bounded to the section
+- [x] Change `_extract_findings` to scan the masked text bounded to the section
       when one is located, and the whole masked text otherwise. Return the
       findings **and** a `FindingScanCounts`, with `in_section` equal to the
       matches in the bounded region (equal to the masked-whole count when no
       section exists) and `surviving` equal to `len(findings)`.
-- [ ] In `parse_review_output` set `finding_scan`, `findings_section_located`,
+- [x] In `parse_review_output` set `finding_scan`, `findings_section_located`,
       and `summary_section_located` on the returned `ReviewResult`. Log one
       WARNING when the section is not located, naming template and model.
-- [ ] `findings_section_located=False` does **not** change `fallback_used` and
+- [x] `findings_section_located=False` does **not** change `fallback_used` and
       does not touch the `degraded` computation at
       [persistence.py:198](src/squadron/review/persistence.py#L198).
-- [ ] Success: `_FINDING_RE.finditer` appears in exactly one place
-      (`_count_finding_matches`) plus the bounded scan.
-- [ ] Effort: 2
+- [x] Success: `_FINDING_RE.finditer` appears in exactly two places —
+      `_count_finding_matches` and the bounded scan (part-1 review F007).
+- [x] Effort: 2
 
 ### Task 3.5 — Test: the bounded scan
 
-- [ ] In `tests/review/test_parsers.py` add a helper that returns the text after
+- [x] In `tests/review/test_parsers.py` add a helper that returns the text after
       `### Raw Response` from a fixture file, and use it on the two headingless
       fixtures `267-review.code.*T125359.md` and `267-review.tasks.*T194649.md`:
       each parses to 6 findings, `findings_section_located is False`,
       `fallback_used is False`, and `format_review_markdown` of the result does
-      not contain `### Raw Response`.
-- [ ] Fenced specimen (the six-line block from `code.yaml:44-51` inside ```)
+      not contain `### Raw Response`. **Note: The two slice-267 fixtures were created in this slice (reconstructed from archived artifacts by stripping the persisted '## Findings' heading); they were not already in the tree as the task file claimed. Also, those fixtures DO render degraded, but because they lack a '## Summary' (verdict derived, #28), not because of the missing heading.**
+- [x] Fenced specimen (the six-line block from `code.yaml:44-51` inside ```)
       followed by nothing → 0 findings, `in_fences == total`.
-- [ ] Specimen echoed **unfenced** before a `## Findings` heading, then two real
+- [x] Specimen echoed **unfenced** before a `## Findings` heading, then two real
       findings → 2 findings, `total == 3`, `in_section == 2`.
-- [ ] Text after a `## Next Steps` heading that follows `## Findings` is not
+- [x] Text after a `## Next Steps` heading that follows `## Findings` is not
       parsed; text under `### Sub` inside `## Findings` is.
-- [ ] Heading variants each located: `## Findings`, `## **Findings**`,
-      `### findings:`, `## Findings.`, `##   Findings   `.
-- [ ] All five finding shapes still parse inside the section (extend the existing
+- [x] Heading variants each located: `## Findings`, `## **Findings**`,
+      `### findings:`, `## Findings.`, `##   Findings   `. **Note: `### findings:` is not a usable heading variant — a ### heading cannot bound ### findings — so the parametrized variant list uses `## findings:` instead, and a separate test pins the same-level fallback behavior.**
+- [x] All five finding shapes still parse inside the section (extend the existing
       five-shape test, do not duplicate it).
-- [ ] `~~~` fences are masked; an unclosed fence masks to EOF.
-- [ ] Go through every existing `test_parsers.py` test that feeds finding-shaped
+- [x] `~~~` fences are masked; an unclosed fence masks to EOF.
+- [x] Go through every existing `test_parsers.py` test that feeds finding-shaped
       text with no `## Findings` heading and confirm each still passes for the
       right reason (whole-text fallback). Do not bulk-edit fixtures.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.6 — Fence the specimen and delimit substituted content (#25)
 
-- [ ] In each of the six templates, wrap the specimen block (`## Summary` line
+- [x] In each of the six templates, wrap the specimen block (`## Summary` line
       through the `Description ...` line) in a ``` fence inside `system_prompt`.
       Precede it with one sentence: "Use exactly this structure; do not repeat
       this block in your response."
-- [ ] Wrap substituted content in descriptive XML tags in each `prompt_template`:
+- [x] Wrap substituted content in descriptive XML tags in each `prompt_template`:
       `slice.yaml` `<slice_document>`/`<architecture_document>`; `tasks.yaml`
       `<task_file>`/`<slice_design>`; `arch.yaml` `<architecture_document>`;
       `judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml` the same tags
       as their review counterparts. Keep the bold label line above each tag.
-- [ ] In `code_review_prompt` ([builders/code.py:6](src/squadron/review/builders/code.py#L6))
+- [x] In `code_review_prompt` ([builders/code.py:6](src/squadron/review/builders/code.py#L6))
       wrap the scoping paragraph in `<scope>` and the reporting directive in
       `<output_format>`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.7 — Test: templates
 
-- [ ] In `tests/review/test_templates.py` add one parametrized test over the six
+- [x] In `tests/review/test_templates.py` add one parametrized test over the six
       templates: `_extract_findings` on the loaded `system_prompt` yields zero
       findings (the specimen no longer parses as a finding).
-- [ ] In `tests/review/test_template_inputs.py` (or the builder's test) assert
+- [x] In `tests/review/test_template_inputs.py` (or the builder's test) assert
       the rendered user prompt for `slice`, `tasks`, `arch`, and `code` contains
       the opening and closing tag around the substituted content, and that the
       substituted text sits between them.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 3.8 — Verify and commit Part 3
 
-- [ ] `uv run pytest tests/review -q` green; format, check, pyright clean.
-- [ ] Manual: `uv run sq review slice 916 -vv --model kimi27 --no-save` three
+- [x] `uv run pytest tests/review -q` green; format, check, pyright clean.
+- [x] Manual: `uv run sq review slice 916 -vv --model kimi27 --no-save` three
       times; no `Finding title` / `src/module.py` phantom and no path-existence
       WARNING on any run.
-- [ ] Commit: `fix(review): bound finding parse to the findings section and skip fences`
-- [ ] Effort: 1
+- [x] Commit: `fix(review): bound finding parse to the findings section and skip fences`
+- [x] Effort: 1
