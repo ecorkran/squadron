@@ -318,15 +318,20 @@ part's own tests; this is the whole-suite pass and the slice-level bookkeeping.
 - [x] DEVLOG entry per `prompt.ai-project.system.md` § Session State Summary,
       recording: the Part 2 stop-reason evidence and which branch it selected,
       and the Part 1 reproduction outcome.
-- [ ] Refine the design's "Verification walkthrough" section from draft to what
+- [x] Refine the design's "Verification walkthrough" section from draft to what
       was actually run.
-- [ ] Mark the slice complete in `918-slice.review-grounding.md` and in entry 16
+- [x] Mark the slice complete in `918-slice.review-grounding.md` and in entry 16
       of `900-slices.maintenance-and-refactoring.md`.
-- [ ] Close [#94](https://github.com/ecorkran/squadron/issues/94),
+- [x] Close [#94](https://github.com/ecorkran/squadron/issues/94),
       [#92](https://github.com/ecorkran/squadron/issues/92), and the
       install-commands finding of
       [#65](https://github.com/ecorkran/squadron/issues/65), each naming the
       implementing commit. #65's dependency findings stay open — they belong to
       the 907 Optional Dependency Split entry.
+      - #94 closed (`50d2f8de`). #65 finding 1 commented (`9c0d7a37`); findings 2
+        and 3 keep it open for 907. **#92 left open deliberately** — the
+        instrumentation shipped (`45e7b002`) but the reproduction came back clean
+        twice, so the cause is unfixed; commented with the evidence, and #99
+        tracks the mechanism.
 - [ ] Merge the branch to the target (`cf config get git.integration_branch`, or
       `main` if empty).

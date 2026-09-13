@@ -14,6 +14,54 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 918 Part 3 — receipt-based command install (#65 finding 1)
+
+Committed as `9c0d7a37`. Slice 918 is complete.
+
+`install-commands` unlinked every `*.md` it did not recognize from any subdirectory it
+touched, so a user's own `~/.claude/commands/analysis/mine.md` was deleted on install.
+`uninstall-commands` had the mirror bug: it `rmtree`'d `sq/` alone, orphaning `analysis/`
+and anything else squadron had written.
+
+Both follow from one missing fact. Nothing recorded which files squadron wrote, so
+ownership was inferred from presence in a directory squadron *shares* with the user —
+which proves nothing about who put a file there. The receipt supplies the fact, and both
+bugs close together.
+
+Reused the `sq skills` receipt mechanism per D13 rather than inventing a second one.
+`InstallReceipt.surface` became optional: it describes how a skill *pack* exposes its
+commands (a prefix directory or a dispatch file) and has no meaning for the bundled set,
+whose layout is fixed. `None` says the field does not apply, which is the alternative to
+overloading an enum member to mean something it does not; `write_receipt` omits the key
+entirely, since TOML has no null. The uninstall paths compare `surface` with `==`, so a
+`None` surface simply matches no branch.
+
+A file is now removed only when the previous receipt names it *and* the current bundle no
+longer does. Anything else is left alone (D15), and a receipt entry for a file the user
+already deleted is tolerated silently — the desired end state is "absent" and it already
+holds. Legitimate stale removals are still reported: the fix narrows what may be deleted,
+not what is shown.
+
+The old suite never exercised a non-`sq` subdirectory, which is why this shipped green —
+and the bundle has shipped `analysis/` alongside `sq/` throughout, so the bug was live, not
+hypothetical. Tests now cover that path, and pass an isolated `--receipts-dir`; a guard
+test asserts mechanically that the helpers never resolve to the real receipts directory,
+because these tests install and uninstall for real and a receipt written to the user's own
+directory would make their next real uninstall act on files a test invented.
+
+Verified against the real `~/.claude/commands`: a scratch file in `analysis/` survived
+install and re-install (no deletions reported on the second), then `uninstall-commands`
+removed squadron's 11 files from both subdirectories, dropped the emptied `sq/`, kept
+`analysis/` holding only the user's file, and left the unrelated `cf/` directory untouched
+at 9 files. Environment restored afterwards.
+
+Worth noting for anyone repeating it: the `analysis` skill pack's own receipt names the
+same two files the bundled command set ships. Separate receipt keys, so they do not
+corrupt each other, but both consider those files theirs. Pre-existing overlap in the
+bundle, not introduced here.
+
+Full suite: 3698 passed, 4 skipped. `ruff format`, `ruff check`, `pyright` clean.
+
 ### Slice 918 Part 2 — stop-reason evidence on every review (#92)
 
 Instrumentation committed as `45e7b002`. The mechanism fix was **not** implemented; the
