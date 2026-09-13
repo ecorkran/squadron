@@ -235,7 +235,7 @@ class OpenAICompatibleAgent:
                 # two branches stay symmetrical: if this path ever becomes reachable with
                 # tools configured, it already carries the zero-calls telemetry. The genuine
                 # "offered tools, called none" case runs through _run_agentic_loop below.
-                self._stamp_tool_telemetry(messages, tool_calls_made=0)
+                self._stamp_tool_telemetry(messages, tool_calls_made=0, turn=turn, failed_tool_calls=0)
             else:
                 messages = await self._run_agentic_loop()
             for msg in messages:
@@ -320,13 +320,20 @@ class OpenAICompatibleAgent:
             reasoning_chars=reasoning_chars,
         )
 
-    async def _execute_tool_call(self, tool_call: dict[str, Any]) -> str:
-        """Execute one model-issued tool call and return its result content.
+    async def _execute_tool_call(self, tool_call: dict[str, Any]) -> tuple[str, bool]:
+        """Execute one model-issued tool call; return its content and whether it failed.
 
         Never raises: malformed arguments, an unknown tool name, and an executor
         that raises are all converted to an error content string so the loop can
         hand the failure back to the model instead of crashing (arch §Tool
         argument validation).
+
+        The boolean is returned rather than recovered downstream because the only
+        other way to know is to match on the ``"Error: "`` prefix of the content,
+        and dispatching on a human-readable string breaks the moment a message is
+        reworded. Every path that hands the model a failure reports ``True`` — the
+        count means "tool calls that failed", not "calls whose executor returned
+        ``is_error``", so the pre-executor rejections below are counted too.
         """
         function = tool_call.get("function", {})
         tool_name = function.get("name", "")
@@ -344,7 +351,7 @@ class OpenAICompatibleAgent:
                 exc,
                 raw_arguments,
             )
-            return f"Error: arguments for tool '{tool_name}' are not valid JSON: {exc}"
+            return f"Error: arguments for tool '{tool_name}' are not valid JSON: {exc}", True
 
         # Executors take a keyword mapping; valid JSON of any other shape (a list,
         # a bare scalar) is still an unusable argument set.
@@ -355,7 +362,7 @@ class OpenAICompatibleAgent:
                 type(parsed).__name__,
                 raw_arguments,
             )
-            return f"Error: arguments for tool '{tool_name}' must be a JSON object."
+            return f"Error: arguments for tool '{tool_name}' must be a JSON object.", True
         arguments = cast(dict[str, object], parsed)
 
         executor = self._tool_executors.get(tool_name)
@@ -366,7 +373,7 @@ class OpenAICompatibleAgent:
                 tool_name,
                 allowed,
             )
-            return f"Error: tool '{tool_name}' is not available. Allowed tools: {allowed}"
+            return f"Error: tool '{tool_name}' is not available. Allowed tools: {allowed}", True
 
         try:
             result: ToolResult = await executor(arguments)
@@ -374,7 +381,10 @@ class OpenAICompatibleAgent:
             # defense against a future/MCP-bridged tool violating it (design §Error
             # surfacing), converted to a tool-result error rather than crashing the loop.
             _log.exception("Tool %r raised during execution", tool_name)
-            return f"Error: tool '{tool_name}' raised an unexpected exception during execution."
+            return (
+                f"Error: tool '{tool_name}' raised an unexpected exception during execution.",
+                True,
+            )
 
         if result.is_error:
             _log.info("Tool %r returned an error result: %s", tool_name, result.content)
@@ -385,7 +395,7 @@ class OpenAICompatibleAgent:
                 arguments,
                 result.content,
             )
-        return result.content
+        return result.content, result.is_error
 
     async def _run_agentic_loop(self) -> list[Message]:
         """Drive turns until the model stops calling tools, or a guard fires.
@@ -398,6 +408,7 @@ class OpenAICompatibleAgent:
         max_history_chars = self._max_history_chars
         budget_guard_fired = False
         tool_calls_made = 0
+        failed_tool_calls = 0
 
         for _iteration in range(max_iterations):
             # Tools are withdrawn once either budget is spent: each notice asks the
@@ -438,7 +449,12 @@ class OpenAICompatibleAgent:
             if not turn.tool_calls:
                 _require_final_content(turn, tool_calls_made=tool_calls_made)
                 messages = translation.build_messages(turn.text, [], self._name, self._model)
-                self._stamp_tool_telemetry(messages, tool_calls_made=tool_calls_made)
+                self._stamp_tool_telemetry(
+                    messages,
+                    tool_calls_made=tool_calls_made,
+                    turn=turn,
+                    failed_tool_calls=failed_tool_calls,
+                )
                 return messages
 
             for tool_call in turn.tool_calls:
@@ -459,8 +475,10 @@ class OpenAICompatibleAgent:
                         f"Model streamed a tool call for {tool_name!r} with no id; "
                         "its result cannot be matched to the call."
                     )
-                content = await self._execute_tool_call(tool_call)
+                content, tool_call_failed = await self._execute_tool_call(tool_call)
                 tool_calls_made += 1
+                if tool_call_failed:
+                    failed_tool_calls += 1
                 # Capped per result, before the append: the whole-conversation budget guard
                 # below is a backstop for accumulated history, and a single tool result must
                 # not be able to exhaust it on its own (SC9). Read as a module attribute at
@@ -510,20 +528,38 @@ class OpenAICompatibleAgent:
             "without the model producing a final response."
         )
 
-    def _stamp_tool_telemetry(self, messages: list[Message], *, tool_calls_made: int) -> None:
-        """Stamp tool-use telemetry on the final Message of a response.
+    def _stamp_tool_telemetry(
+        self,
+        messages: list[Message],
+        *,
+        tool_calls_made: int,
+        turn: TurnResult,
+        failed_tool_calls: int,
+    ) -> None:
+        """Stamp tool-use telemetry and stop-reason evidence on the final Message.
 
         Only the final Message carries it: intermediate turns are never surfaced to callers
         (slice 262's contract), so anything stamped earlier would be discarded. When no tools
-        were configured the keys are absent entirely — a caller must be able to tell "offered
-        three tools, called none" apart from "never had tools" (design D5).
+        were configured the tool keys are absent entirely — a caller must be able to tell
+        "offered three tools, called none" apart from "never had tools" (design D5).
 
         Slice 266 adds a third state: tools were declared but the capability gate emptied
         them. That case has an empty ``_tools_given``, so it is stamped independently of the
         two keys above — the early return below must not swallow it.
+
+        Slice 918 adds the stop reason, the reasoning volume, and the failed-call count.
+        Those three are stamped *before* the tools early return and unconditionally, on a
+        clean completion as much as a degraded one: the case where the stop reason is the
+        whole diagnosis is a run that produced text nobody could parse, which returns
+        normally and would record nothing if stamping were conditional on failure. The
+        values are read off ``turn`` here rather than returned to the caller, so
+        ``TurnResult`` stays the internal plumbing its docstring promises.
         """
         if not messages:
             return
+        messages[-1].metadata["stop_reason"] = turn.finish_reason
+        messages[-1].metadata["reasoning_chars"] = turn.reasoning_chars
+        messages[-1].metadata["failed_tool_calls"] = failed_tool_calls
         if self._tools_suppressed_reason is not None:
             messages[-1].metadata["tools_suppressed_reason"] = self._tools_suppressed_reason
         if not self._tools_given:

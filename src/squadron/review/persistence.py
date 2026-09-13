@@ -178,13 +178,36 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
     if result.tools_given is None:
         tool_calls = _NOT_OFFERED
     else:
-        tool_calls = str(result.tool_calls_made or 0)
+        # `is None`, never `or 0`: a genuine zero is a real answer here ("offered tools,
+        # called none" — the case slice 265 D5 exists to make visible) and must not render
+        # as the not-reported sentinel.
+        tool_calls = _render_optional(result.tool_calls_made)
+
+    # Newline-free detection (slice 918 D10a). Computed here from raw_output rather than
+    # carried on a field: the text is already in hand at render time, so a field and its
+    # plumbing would buy nothing.
+    #
+    # This does NOT fix issue #96 (the parser's handling of such a response) — it is out of
+    # scope. What it buys is that the artifact says *which* of the three known shapes
+    # occurred, which the response length alone cannot distinguish:
+    #   - never-emitted output (#92): length 0, and a stop reason explaining why;
+    #   - all-tools-failed (kimi27): non-zero length, made == failed > 0;
+    #   - emitted-but-unparseable (#96): non-zero length, tools fine, no line breaks.
+    #
+    # For whoever fixes #96: the leniency that makes a newline-free response parse must not
+    # reopen issue #91. Slice 917 Part F's fence masking and section bounding both assume
+    # line structure, so they need reviewing in the same change, not after it.
+    newline_free = bool(result.raw_output) and "\n" not in result.raw_output
 
     return [
         "### Run Digest",
         "",
         f"- Response length: {len(result.raw_output)} chars",
+        f"- Response is newline-free: {'yes' if newline_free else 'no'}",
         f"- Tool calls made: {tool_calls}",
+        f"- Tool calls failed: {_render_optional(result.failed_tool_calls)}",
+        f"- Stop reason: {_render_optional(result.stop_reason)}",
+        f"- Reasoning characters: {_render_optional(result.reasoning_chars)}",
         f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
         f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",
         f"- Finding-shaped matches — whole response: {scan.total if scan else _NOT_COMPUTED}",
@@ -200,6 +223,20 @@ def _render_tristate(value: bool | None) -> str:
     if value is None:
         return _NOT_COMPUTED
     return "yes" if value else "no"
+
+
+def _render_optional(value: object | None) -> str:
+    """Render a not-reported value as the sentinel, and every reported value as itself.
+
+    The distinction the ``x or 0`` idiom destroys: ``0`` and ``None`` are different
+    answers. Zero failed tool calls is a fact about a healthy run; ``None`` means no
+    provider stamped the fact at all (the SDK path, design D12). Collapsing them makes
+    an instrumented run indistinguishable from an uninstrumented one, which is the
+    distinction slice 918 exists to provide.
+    """
+    if value is None:
+        return _NOT_COMPUTED
+    return str(value)
 
 
 def _review_frontmatter_lines(
@@ -251,7 +288,9 @@ def _review_frontmatter_lines(
         lines.append(f"revision_number: {revision_number}")
     if tools_given is not None:
         lines.append(f"toolsGiven: [{', '.join(tools_given)}]")
-        lines.append(f"toolCallsMade: {tool_calls_made or 0}")
+        # `is None` rather than `or 0`, matching the digest: this branch is only reached
+        # when tools *were* given, so a zero here is the real "offered but unused" count.
+        lines.append(f"toolCallsMade: {0 if tool_calls_made is None else tool_calls_made}")
     if tools_suppressed_reason is not None:
         lines.append(f"toolsSuppressedReason: {tools_suppressed_reason}")
     return lines

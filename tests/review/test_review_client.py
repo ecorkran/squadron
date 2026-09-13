@@ -707,6 +707,68 @@ class TestReviewResultToolTelemetry:
         assert not [r for r in caplog.records if "no tool calls" in r.getMessage()]
 
 
+class TestStopReasonEvidenceReadBack:
+    """Slice 918 T2.5: the three stamped keys reach ``ReviewResult``.
+
+    Asserted here rather than only end-to-end because a read-back typo is a wiring
+    mistake the digest test would surface late and indirectly — as a missing line in
+    rendered markdown, not as a wrong assignment.
+
+    Delegates to the harness above rather than subclassing it: inheritance would make
+    pytest re-collect every parent test under this class's name, reporting five extra
+    passes that assert nothing new.
+    """
+
+    async def _run(self, metadata: dict[str, object] | None) -> ReviewResult:
+        return await TestReviewResultToolTelemetry()._run(metadata)  # pyright: ignore[reportPrivateUsage]
+
+    @pytest.mark.asyncio
+    async def test_stamped_openrouter_run_lands_all_three(self) -> None:
+        result = await self._run(
+            {
+                "tools_given": ["read_file"],
+                "tool_calls_made": 2,
+                "stop_reason": "length",
+                "reasoning_chars": 4096,
+                "failed_tool_calls": 2,
+            }
+        )
+
+        assert result.stop_reason == "length"
+        assert result.reasoning_chars == 4096
+        assert result.failed_tool_calls == 2
+
+    @pytest.mark.asyncio
+    async def test_sdk_path_run_leaves_all_three_none(self) -> None:
+        """The SDK provider stamps none of the three (D12); nothing invents a value."""
+        result = await self._run({"sdk_type": "assistant_text"})
+
+        assert result.stop_reason is None
+        assert result.reasoning_chars is None
+        assert result.failed_tool_calls is None
+
+    @pytest.mark.asyncio
+    async def test_zero_failed_calls_is_preserved_not_collapsed_to_none(self) -> None:
+        """A stamped 0 must survive the read-back as 0.
+
+        The guard is ``is not None``, not truthiness: collapsing a real zero here would
+        make a healthy instrumented run look uninstrumented to the JSON consumer.
+        """
+        result = await self._run(
+            {
+                "tools_given": ["read_file"],
+                "tool_calls_made": 3,
+                "stop_reason": "stop",
+                "reasoning_chars": 0,
+                "failed_tool_calls": 0,
+            }
+        )
+
+        assert result.failed_tool_calls == 0
+        assert result.reasoning_chars == 0
+        assert result.stop_reason == "stop"
+
+
 class TestEmptyDiffRefusesToRun:
     """A diff-based review with no changed files must not reach the model (#73)."""
 

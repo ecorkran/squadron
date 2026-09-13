@@ -220,6 +220,12 @@ async def run_review_with_profile(
     # uniform, but the gate's own result is authoritative: SDK providers do not stamp it,
     # and suppression must be recorded there too.
     suppressed_reason_seen: str | None = None
+    # Slice 918 stop-reason evidence, read back the same way. These are stamped on every
+    # openrouter-path response and on none of the SDK-path ones, so None here survives to
+    # ReviewResult as "not reported" — never fabricated into a plausible-looking value.
+    stop_reason: str | None = None
+    reasoning_chars: int | None = None
+    failed_tool_calls: int | None = None
     try:
         review_message = Message(
             sender="review-system",
@@ -242,6 +248,18 @@ async def run_review_with_profile(
             stamped_reason = response.metadata.get("tools_suppressed_reason")
             if stamped_reason is not None:
                 suppressed_reason_seen = stamped_reason
+            # Guarded per key rather than on one of them: a later response that stamps
+            # nothing must not erase what an earlier one reported. `failed_tool_calls` is
+            # checked against None, not truthiness — a stamped 0 is a real answer.
+            stamped_stop = response.metadata.get("stop_reason")
+            if stamped_stop is not None:
+                stop_reason = stamped_stop
+            stamped_reasoning = response.metadata.get("reasoning_chars")
+            if stamped_reasoning is not None:
+                reasoning_chars = stamped_reasoning
+            stamped_failures = response.metadata.get("failed_tool_calls")
+            if stamped_failures is not None:
+                failed_tool_calls = stamped_failures
             if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
                 continue
             output_parts.append(response.content)
@@ -265,6 +283,9 @@ async def run_review_with_profile(
     result.tools_given = tools_given
     result.tool_calls_made = tool_calls_made
     result.tools_suppressed_reason = tools_suppressed_reason or suppressed_reason_seen
+    result.stop_reason = stop_reason
+    result.reasoning_chars = reasoning_chars
+    result.failed_tool_calls = failed_tool_calls
 
     # A review that was handed tools and called none produces a verdict from a model
     # that read nothing beyond the prompt — indistinguishable from a healthy review in

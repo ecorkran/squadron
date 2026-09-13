@@ -255,3 +255,35 @@ class TestMessageValidity:
         )
         result = translate_sdk_message(sdk_msg, sender=SENDER)
         assert result[0].timestamp is not None
+
+
+class TestStopReasonEvidenceAbsentOnSdkPath:
+    """The SDK path stamps none of slice 918's three keys (design D12).
+
+    ``finish_reason`` is an OpenAI/OpenRouter streaming concept with no SDK equivalent.
+    An absent key reads as ``None`` downstream and renders as not-computed, which is the
+    truth; inventing a plausible-looking value here would make the digest lie about
+    evidence it never had.
+    """
+
+    _EVIDENCE_KEYS = ("stop_reason", "reasoning_chars", "failed_tool_calls")
+
+    def test_assistant_text_carries_no_evidence_keys(self) -> None:
+        msg = AssistantMessage(content=[TextBlock(text="hello")], model="claude-opus-5")
+        result = translate_sdk_message(msg, sender=SENDER)
+        for key in self._EVIDENCE_KEYS:
+            assert key not in result[0].metadata
+
+    def test_result_message_carries_no_evidence_keys(self) -> None:
+        msg = ResultMessage(
+            subtype="success",
+            result="done",
+            duration_ms=1,
+            duration_api_ms=1,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+        )
+        result = translate_sdk_message(msg, sender=SENDER)
+        for key in self._EVIDENCE_KEYS:
+            assert key not in result[0].metadata

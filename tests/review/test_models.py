@@ -481,3 +481,47 @@ def test_to_dict_distinguishes_zero_calls_from_no_tools() -> None:
     assert offered["tool_calls_made"] == 0
     assert never["tools_given"] is None
     assert never["tool_calls_made"] is None
+
+
+def test_stop_reason_evidence_fields_default_to_none() -> None:
+    """Slice 918: None means *not reported*, matching the telemetry fields' convention."""
+    result = _bare_result()
+
+    assert result.stop_reason is None
+    assert result.reasoning_chars is None
+    assert result.failed_tool_calls is None
+
+
+def test_to_dict_carries_stop_reason_evidence_as_null_when_unstamped() -> None:
+    """The SDK path stamps none of the three (D12); the keys are still present.
+
+    Present-and-null rather than absent, so a consumer reads one contract on every
+    run instead of inferring meaning from a missing key.
+    """
+    payload = _bare_result().to_dict()
+
+    assert payload["stop_reason"] is None
+    assert payload["reasoning_chars"] is None
+    assert payload["failed_tool_calls"] is None
+
+
+def test_to_dict_carries_populated_stop_reason_evidence() -> None:
+    payload = _bare_result(stop_reason="length", reasoning_chars=4096, failed_tool_calls=2).to_dict()
+
+    assert payload["stop_reason"] == "length"
+    assert payload["reasoning_chars"] == 4096
+    assert payload["failed_tool_calls"] == 2
+
+
+def test_to_dict_serializes_zero_failed_calls_as_zero_not_null() -> None:
+    """The Amoeba retry predicate is ``tool_calls_made == failed_tool_calls > 0``.
+
+    A real zero collapsed into null would make a healthy instrumented run
+    indistinguishable from an uninstrumented one — the exact distinction this slice
+    exists to provide.
+    """
+    payload = _bare_result(tool_calls_made=3, failed_tool_calls=0).to_dict()
+
+    assert payload["failed_tool_calls"] == 0
+    assert payload["failed_tool_calls"] is not None
+    assert json.loads(json.dumps(payload))["failed_tool_calls"] == 0
