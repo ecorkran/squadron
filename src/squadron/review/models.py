@@ -50,6 +50,39 @@ class ReviewFinding:
     file_ref: str | None = None
     category: str | None = None
     location: str | None = None
+    # Was the cited location checked, and did it hold (slice 917 Part 5)?
+    #   None  — not checked. The common case: no cwd was supplied, the
+    #           citation names no line, or the check could not run.
+    #   True  — the path resolved and the cited line is within the file.
+    #   False — checked and wrong: the path does not resolve, or the cited
+    #           line is past the end of the file. The deterministic signature
+    #           of a hallucinated citation.
+    # Tri-state deliberately: a plain bool would collapse "checked and bad"
+    # with "never checked", and the second is by far the more common. A gate
+    # reading False as "hallucinated" would reject most legitimate findings on
+    # non-code templates. Written, never read — nothing in this slice consumes
+    # it, and it is absent from StructuredFinding, to_dict, and frontmatter.
+    location_verified: bool | None = None
+
+
+@dataclass(frozen=True)
+class FindingScanCounts:
+    """How many finding-shaped matches the parser saw, and where (slice 917).
+
+    The #91 signature made countable: a response that echoes the template's
+    own specimen produces a large ``total`` and a much smaller ``surviving``.
+    Reported by the artifact's run digest; nothing gates on these.
+    """
+
+    total: int
+    """Finding-shaped matches anywhere in the raw response."""
+    in_fences: int
+    """Of those, how many sat inside a fenced code block."""
+    in_section: int
+    """Matches inside the bounded ``## Findings`` section, fences already
+    masked. Equal to the masked whole-response count when no heading exists."""
+    surviving: int
+    """Matches that became actual findings after severity validation."""
 
 
 @dataclass
@@ -79,6 +112,13 @@ class ReviewResult:
     # two fields above cannot express: an empty tools_given is otherwise identical to a
     # review whose template declared no tools at all.
     tools_suppressed_reason: str | None = None
+    # Parse-scan facts (slice 917 Part 3). None means "not produced by the
+    # parser" — a hand-built result — the same convention provenance uses.
+    # These feed the artifact's run digest (Part 6) and nothing else: no gate
+    # reads them, and they are absent from to_dict() and from frontmatter.
+    summary_section_located: bool | None = None
+    findings_section_located: bool | None = None
+    finding_scan: FindingScanCounts | None = None
     # Prompt capture fields — populated at verbosity >= 2, excluded from to_dict()
     system_prompt: str | None = None
     user_prompt: str | None = None

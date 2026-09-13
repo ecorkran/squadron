@@ -50,6 +50,122 @@ implementation on branch `381-slice.code-host-adapter-and-pr-target-resolution` 
 
 ## 20260912
 
+### Slice 917 implementation (Phase 6)
+
+All six parts implemented, tested, and committed on `917-slice.review-artifact-integrity`.
+Full suite green throughout; `ruff format`, `ruff check`, and `pyright` clean on every
+commit.
+
+**Task-review disposition first.** Both task reviews (glm-5.3, CONCERNS) were dispositioned
+in the task files before any code. Three concerns were real and two would have forced
+unguided decisions mid-implementation: `_count_lines`' specified signature could not produce
+the finding-naming WARNING the standing constraint requires (resolved by returning the reason
+and letting `_check_line_bounds` log it), and Task 4.6's `slice_info`-absent pipeline branch
+did not compose with Task 4.2's writer signature (resolved by making `slice_info` optional
+throughout, matching `format_review_markdown`, which already accepted `None`).
+
+**Part 1 — debug-log field renamed.** `fallback_used` → `degraded` in `_write_debug_log`
+only. `ReviewResult.fallback_used` is a serialized public field and is untouched.
+
+**Part 2 — verdict gate, and two corpus repairs.** `squadron.review-verdict-gate` rejects a
+staged review whose `verdict:` is missing or not a `Verdict` member, keyed on `docType` and
+deriving its allowed set from the enum at runtime.
+
+Two findings the task file did not anticipate:
+
+1. **Registration is not binding.** Importing the module registers the action, but
+   `DEFAULT_BINDINGS` in `manifest.py` is what makes it fire. The gate was registered and
+   completely inert, and nothing failed — the manual probe committed clean. A test now pins
+   the binding. Task 2.2 covered only the import.
+2. **The corpus dry run found four violations, not the two the review predicted.** The third
+   was the one the part-1 review caught (305's `verdict: CONCERN`, singular, against a body
+   reading FAIL — corrected to FAIL). The fourth was new: `916-review.tasks.review-scope-
+   correctness.md` carried mojibake — UTF-8 arrows decoded as Latin-1 and re-encoded, putting
+   C1 control characters (U+0086, U+0092) inside its YAML frontmatter, which no reader would
+   parse. Repaired by rewriting only the runs that both fit in Latin-1 and decode as UTF-8,
+   so correct em dashes elsewhere in the file survived. The two historical `RESOLVED`
+   artifacts were left as found: `RESOLVED` was a real disposition the enum does not model.
+
+**Part 3 — the live bug (#91).** Fence masking, section bounding, and fenced specimens in all
+six templates, plus #25's XML delimiters.
+
+Two things worth recording:
+
+- **The literal specimen never matched the finding regex.** `### [PASS|CONCERN|FAIL] Finding
+  title` does not parse as a finding — a pipe alternation is not a severity. Only a
+  *substituted* severity with the placeholder title kept can produce the phantom. The fence
+  test asserts on that substituted shape; asserting on the literal form would have passed
+  even with no fence at all.
+- **A `### Findings` heading bounds to nothing.** It sits at the same level as the `### [SEV]`
+  findings it introduces, so the section closes before its first finding. Discovered by a
+  test written against the design's heading-variants list. `_locate_section` now returns
+  `None` when the located span holds no finding-shaped text while the document does, falling
+  back to the unbounded scan — the same posture as a headingless response, for the same
+  reason: never drop a real finding to exclude a phantom.
+
+The missing-heading notice logs at **INFO, not WARNING**. Eight existing tests asserting "no
+warnings" failed on it, all from one cause. Real reviews legitimately omit the heading, so
+warning there fires on good input. The design already says a missing heading is not a
+degradation; the fact rides `ReviewResult` to the Part 6 digest instead.
+
+The two slice-267 headingless responses are now fixtures, reconstructed from the archived
+artifacts by stripping the `## Findings` heading squadron itself wrote. Both still parse to
+six findings.
+
+**Part 4 — failure artifacts (#84).** Both the CLI and pipeline paths write an artifact on
+`ProviderError`, into the live slot, with the prior content archived. `review arch` now builds
+its `SliceInfo` before the run rather than inside the save closure a failure never reaches.
+`ProviderError` carries `tool_calls_made` so slice 265's D5 distinction survives a failure.
+
+**Part 5 — line bounds (#26).** `location_verified` tri-state on `ReviewFinding`, written and
+never read. Containment is checked before any `open`, and a test asserts the file is never
+opened for a `../` citation. One existing fixture cited line 42 of a one-line file and now
+warns correctly — given a longer file rather than suppressed.
+
+**Part 6 — run digest (#93).** Always-on body section reporting response length, tool calls,
+both section locations, and the four finding-shaped counts. The formatter reads
+`ReviewResult.finding_scan` and never re-parses; the end-to-end test uses a `raw_output` with
+no findings in it, so a re-parsing formatter would report zeros and fail.
+
+**Code review disposition.** `sq review code 917` (glm-5.3) returned three concerns and
+four notes. All three concerns were real and fixed:
+
+- **Blocking I/O on the event loop.** The new pipeline failure handler ran a 30-second git
+  subprocess plus file writes synchronously inside `async def _review`. Moved off-loop with
+  `asyncio.to_thread`, as one synchronous unit so sha resolution does not straddle the
+  boundary. The reviewer correctly noted the success path has the same pre-existing problem;
+  that is untouched here rather than fixed opportunistically.
+- **Duplicate path resolution.** `_check_line_bounds` re-resolved every citation
+  `_check_path_existence` had just resolved — and for a bare filename that is an `rglob` over
+  the whole review root, walked to exhaustion when the name is invented. Merged into one pass.
+  Measured on 30 bare-filename phantoms: **4.14s → 2.05s**, identical results, no test changes
+  required. `_path_exists_under` had no callers left and was removed.
+- **Verdict gate on a staged deletion.** The gate reported an absent path as unreadable
+  frontmatter and failed closed, and my comment credited the wrong mechanism for why that
+  supposedly could not happen. Verified empirically: `--diff-filter=ACMR` in the hook is what
+  excludes deletions, and `git diff --cached --name-only` without it does list them. The gate
+  is reachable directly through `sq events fire`, so it now handles an absent path itself.
+  A present-but-unreadable file still fails closed.
+
+Two notes were also fixed. The fence regex used a backreference requiring an exactly-equal
+closing fence; CommonMark allows longer, so a ``` block closed with ```` read as unclosed,
+masked to end of document, and **silently dropped every finding after it** — dropping real
+findings on valid input, the precise failure Part 3 exists to prevent. And
+`save_provider_failure` gained `name_suffix`, so a failure in part N of a split tasks review
+lands in that part's own slot rather than one no success path writes, where consecutive part
+failures overwrote each other.
+
+The two remaining notes (transient errors overwriting the live slot; failure and success
+artifacts resolving against different roots) are recorded in the review artifact and not acted
+on: the first is the deliberate fail-closed decision the design argues for, and the second is
+a pre-existing property of how `cwd` is threaded, not something this slice introduced.
+
+**Live verification.** `sq review slice 916` run three times across two models (kimi27 ×2,
+glm53). Zero `Finding title` / `src/module.py` phantoms, zero path-existence warnings, zero
+line-bounds warnings on every run. The glm53 run produced 9 real findings and a CONCERNS
+verdict. One kimi27 run returned prose-only output with no formatted block — the #92 shape,
+which this slice makes legible rather than recovers.
+
 ### Slice 381 design (Phase 4)
 
 Wrote `user/slices/381-slice.code-host-adapter-and-pr-target-resolution.md`. Layout: a
