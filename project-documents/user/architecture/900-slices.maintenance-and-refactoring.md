@@ -321,6 +321,8 @@ Fix per the reporter's suggestion: track installed files in a receipt, as `sq sk
 
 Sequence **A → B → C**. A is the highest-severity defect, has a verified mechanism, and its seam is two functions. B's first step is instrumentation whose result determines its second, so it cannot be fully planned up front and should not block A. C is independent of both and can land in any order.
 
+**Slice design:** `user/slices/918-slice.review-grounding.md`
+
 **Status:** not started · **Risk:** Medium (Part A changes what every tool-enabled review can read; Part B may change request parameters affecting all providers; Part C changes a destructive path run during setup) · **Effort:** 3/5 · **Dependencies:** [917 — Part B extends the Run Digest and review result it added; sequencing only for Part A, to avoid contending for review-path files]
 
 ---

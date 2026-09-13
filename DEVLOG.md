@@ -12,6 +12,52 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260913
+
+### Slice 918 design (Phase 4)
+
+Design written to `user/slices/918-slice.review-grounding.md`. Groups #94 and #92 as one
+family — a review whose output does not correspond to the file in front of it — with #65's
+destructive install as an independent third part.
+
+**Three plan-entry premises were corrected against `main` at `19bc4f80`.** The Phase 3 entry
+placed the #94 deny-list in `resolve_in_jail` / `contained_in_jail`. Those are the enforcement
+point, but both take `(cwd, path)` and every tool factory is `Callable[[Path], ToolExecutor]`
+— there is no channel for a second argument. Adding one is a change to the tool-binding
+contract, not a two-line predicate edit, and Part 1's effort reflects that. The entry also
+directed the exclusion to resolve from the `review.external_reviews_dir` config key; that is
+right about where the reviews directory lives but wrong about what declares the exclusion.
+`ReviewTemplate.diff_exclude_patterns` is an existing per-template list-of-strings field that
+already expresses "this review type excludes these paths," so the design adds a sibling field
+for the tool jail instead of a config key — per-review-type scoping comes free and the
+declaration sits next to the review type it describes. Third, #92's evidence needs no new
+return type: tool telemetry already solved the same problem via final-`Message.metadata`
+(design D4), and Part 2 follows that path rather than widening `TurnResult`'s documented role
+as internal plumbing.
+
+**Two facts verified that shaped the design.** No builder and no template injects prior-review
+context anywhere, so #94's stale quotes came exclusively from the model reading
+`reviews/archive/` with tools — which rules out the issue's third suggested check and confirms
+D1's discovered-vs-injected framing. And `max_tokens` is set on no request anywhere under
+`providers/openai/`, making #92's output-budget candidate live and cheaply testable rather
+than speculative; it is the same candidate #84 raised and left open.
+
+**Part 2 is deliberately two steps with the second unspecified.** Three candidate mechanisms
+remain and they call for three different fixes, so the design lands instrumentation first and
+selects the fix from what the reproduction reports. Recorded as a decision (D7) rather than
+left as a gap.
+
+**Called out rather than left implicit:** a path deny-list does not constrain `bash`, which
+runs a subprocess with the jail as its working directory and does not route through either
+predicate. Implementation must either withhold `bash` from document-review templates or state
+that the exclusion is best-effort against it.
+
+`sq install-commands`' destructive delete, the three unimported runtime deps, and the
+undeclared `rich` were all verified still present. The two dependency findings were routed to
+the existing 907 Optional Dependency Split entry rather than split across two slices.
+
+---
+
 ## 20260912
 
 ### Slice 917 implementation (Phase 6)
