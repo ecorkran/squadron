@@ -237,7 +237,7 @@ Sequence D → A → C → B → E. D unbreaks tool-enabled non-code reviews and
 
 **Status:** design complete, review addressed (20260911) · **Risk:** Medium (B's verdict surface, E's SDK behavior change) · **Effort:** 4/5 · **Dependencies:** none
 
-15. [ ] **(917) Review Artifact Integrity — Verdict Validity and Legible Degradation**
+15. [x] **(917) Review Artifact Integrity — Verdict Validity and Legible Degradation**
 Fixes [issue #77](https://github.com/ecorkran/squadron/issues/77), [issue #28](https://github.com/ecorkran/squadron/issues/28), [issue #84](https://github.com/ecorkran/squadron/issues/84), [issue #26](https://github.com/ecorkran/squadron/issues/26), and [issue #87](https://github.com/ecorkran/squadron/issues/87). Where 916 asks whether the review examined the right thing, this asks whether the **persisted artifact can be trusted, and whether its failures are legible**. Every part touches `review/parsers.py`, `review/models.py`, or `review/persistence.py`. Sequenced after 916 so the two do not contend for the same review-path files.
 
 **Part A — verdict frontmatter is unvalidated against the enum (#77, Medium).** Nothing checks a review artifact's `verdict:` key against `Verdict` ([models.py:10-16](src/squadron/review/models.py#L10-L16): PASS, CONCERNS, FAIL, UNKNOWN). Hit for real on slice 266, where both artifacts committed with the invented value `RESOLVED` and the pre-commit frontmatter gate accepted them (corrected in `f07a01c`); a `verdict: BANANA` artifact passes `cf validate frontmatter` today. Invalid values degrade to UNKNOWN downstream, which *trips* `CheckpointTrigger.ON_CONCERNS` indistinguishably from a genuine UNKNOWN. The issue weighs teaching `cf` a per-docType enumerated check against a squadron-side validator registered as its own COMMIT event action, and recommends the latter — it keeps `Verdict` the single source of truth with no cross-repo coupling and no parallel literal list. Must fail explicitly with the offending value and the allowed set; no silent coercion.
@@ -278,7 +278,7 @@ Sequence becomes **E → A → F → C → D → G**. Effort **5/5 → 4/5**.
 
 **Slice design:** `user/slices/917-slice.review-artifact-integrity.md`
 
-**Status:** not started · **Risk:** Medium (Part A adds a commit-path gate; Part D adds a `ReviewFinding` field; Part F changes what every review parses) · **Effort:** 4/5 · **Dependencies:** [916 — sequencing only, to avoid contending for the same review-path files]
+**Status:** complete (20260913) · **Risk:** Medium (Part A adds a commit-path gate; Part D adds a `ReviewFinding` field; Part F changes what every review parses) · **Effort:** 4/5 · **Dependencies:** [916 — sequencing only, to avoid contending for the same review-path files]
 ---
 
 ## Future Slices

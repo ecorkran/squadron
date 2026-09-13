@@ -299,6 +299,6 @@ the source tree and re-verified during implementation.
       corpus dry-run result, the kimi27 rerun observations.
 - [x] Full suite `uv run pytest -q` green; format, check, pyright clean.
 - [x] Commit: `feat(review): add run digest to every review artifact`
-- [ ] Merge `917-slice.review-artifact-integrity` into `main`; set this file and
+- [x] Merge `917-slice.review-artifact-integrity` into `main`; set this file and
       the slice design `status: complete`; update plan entry 15's status.
 - [x] Effort: 1
