@@ -17,9 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Every review artifact now carries a run digest recording what the parse saw: response length, tool calls, whether the summary and findings sections were found, and how many finding-shaped matches were seen versus kept. Previously only a degraded review kept any evidence, so a confident PASS was the least auditable artifact on disk (#93)
+- The run digest now records why the model stopped, how much it spent reasoning, how many tool calls failed, and whether its response arrived with no line breaks. A review that returns a substantial answer but yields no findings used to leave nothing on disk explaining it; the artifact alone now distinguishes output that was never emitted from output that was emitted but unparseable, with no re-run and no `-vv` (#92)
+- `sq review --output json` now carries `stop_reason`, `reasoning_chars`, and `failed_tool_calls` (null when the provider reports none), so a runner can tell a failed review from a healthy one and retry rather than escalating (#92)
 - Committing a review artifact whose `verdict:` is missing or is not one of the review verdicts is now rejected. An unrecognized verdict used to reach a pipeline gate as `UNKNOWN` and trip a checkpoint indistinguishably from a real one. Disable with `squadron.review-verdict-gate` in `events.yaml` (#77)
 
 ### Fixed
+- A review that was offered tools and made none now reports `0` in its digest and frontmatter instead of reading as though nothing was measured (#92)
 - Review artifacts no longer report the template's own example as findings. A model that restated the required format before using it produced findings titled "Finding title" citing `src/module.py`, and the finding count tracked how much the model echoed the format rather than what it found (#91)
 - A review whose model returns nothing now leaves an artifact naming the provider failure and why the model stopped, instead of no artifact at all. The previous run's verdict is archived rather than left in the live slot, where a pipeline gate would read it as this run's result (#84)
 - `sq review code --diff <ref>` now reviews only your branch's own changes. A bare ref was compared against your working tree, so anything the base gained since you branched was reported as part of your change set (#89)

@@ -6,126 +6,79 @@ slice: review-scope-correctness
 project: squadron
 verdict: PASS
 sourceDocument: project-documents/user/slices/916-slice.review-scope-correctness.md
-aiModel: moonshotai/kimi-k2.7-code
+aiModel: moonshotai/kimi-k3
 status: complete
-dateCreated: 20260911
-dateUpdated: 20260911
-reviewedSha: 1515cffa32858004019bdeb111cc28da59d0f6b8
+dateCreated: 20260913
+dateUpdated: 20260913
+reviewedSha: 45e7b0024bb797c6b131eb43580c9591bf8c0625
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 14
+toolCallsMade: 5
 findings:
   - id: F001
     severity: pass
-    category: scope
-    summary: "Slice aligns with maintenance-and-refactoring scope and guidelines"
-    location: "slices/916-slice.review-scope-correctness.md#overview"
+    category: alignment
+    summary: "Scope: five bug fixes align with the architecture's \"Bug fixes\" and \"Operational: error handling\" categories"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md#technical-scope"
   - id: F002
     severity: pass
-    category: scope
-    summary: "Design boundaries and exclusions are clean and well-justified"
-    location: "slices/916-slice.review-scope-correctness.md#technical-scope"
+    category: error-handling
+    summary: "Failure modes for the new git I/O path are explicitly enumerated, with severity-classified handling"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md#part-a-diff-merge-base-normalization-89"
   - id: F003
     severity: pass
     category: dependencies
-    summary: "Dependency direction and integration points respect existing seams"
-    location: "slices/916-slice.review-scope-correctness.md#dependencies"
+    summary: "Dependency direction and integration points verified against actual consumers"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md#part-b-empty-filtered-scope-62"
   - id: F004
-    severity: pass
-    category: error-handling
-    summary: "Failure modes are enumerated for new I/O paths with explicit handling"
-    location: "slices/916-slice.review-scope-correctness.md#part-a--diff-merge-base-normalization-89"
+    severity: note
+    category: scope
+    summary: "Five-part bundle sits at the edge of the \"prefer many small slices\" guideline — acknowledged and plan-authorized"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md#slice-review-disposition"
   - id: F005
     severity: pass
-    category: integration
-    summary: "CLI/pipeline interface parity is maintained for scope gating"
-    location: "slices/916-slice.review-scope-correctness.md#part-b--empty-filtered-scope-62"
-  - id: F006
-    severity: pass
-    category: error-handling
-    summary: "Save-outcome model correctly distinguishes persistence states"
-    location: "slices/916-slice.review-scope-correctness.md#part-c--save-gating-70"
-  - id: F007
-    severity: pass
-    category: architecture
-    summary: "Shared-helper extraction avoids duplicated logic"
-    location: "slices/916-slice.review-scope-correctness.md#part-d--tool-jail-root-86"
-  - id: F008
-    severity: pass
-    category: architecture
-    summary: "SDK tool availability fix correctly reasons about permission vs. capability"
-    location: "slices/916-slice.review-scope-correctness.md#part-e--sdk-tool-availability-69"
+    category: nfr
+    summary: "NFR criterion: the parent architecture states no NFRs, so none require restatement"
+    location: "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
 ---
 
 # Review: slice — slice 916
 
 **Verdict:** PASS
-**Model:** moonshotai/kimi-k2.7-code
+**Model:** moonshotai/kimi-k3
 
 ## Findings
 
-### [PASS] Slice aligns with maintenance-and-refactoring scope and guidelines
+### [PASS] Scope: five bug fixes align with the architecture's "Bug fixes" and "Operational: error handling" categories
 
-The slice is explicitly scoped as five bug/correctness fixes on the `sq review`
-entry path and related git/tool utilities. It matches the architecture's
-definition of work that belongs in maintenance: bug fixes, operational/error-
-handling improvements, and refactoring to consolidate duplicated logic (D1
-extracts a shared helper). The slice plan entry 14 authorized exactly this
-bundle with the same part sequence.
+Every part (D jail root, A merge-base normalization, C save gating, B empty-scope refusal, E SDK tool availability) is a defect fix on the `sq review` path — precisely the "Non-trivial bugs that don't belong to an active feature slice" the parent architecture scopes in. The Excluded list is explicit (no new `Verdict` member, no SDK upgrade #30, no re-include mechanism, no 917-owned parsing/persistence work), and a genuine gap found along the way (slice-less artifact naming) is routed to issue #90 rather than absorbed. No new features or capabilities, so the architecture's exclusion boundary is respected.
 
-### [PASS] Design boundaries and exclusions are clean and well-justified
+### [PASS] Failure modes for the new git I/O path are explicitly enumerated, with severity-classified handling
 
-The document explicitly excludes a new `Verdict` member, findings parsing/
-scoring/persistence changes (deferred to slice 917), re-include mechanisms for
-excluded file types, SDK version upgrades, `max_tokens` sizing, empty-turn
-telemetry, and verdict frontmatter validation. Each exclusion is tied to a
-stated reason or a follow-up artifact (issue #90, slice 917), avoiding scope
-creep.
+Part A adds a new shell-out (`normalize_diff_spec`) and its A5 subsection answers the hang/timeout/no-repo family rather than hand-waving it: routing through the shared `run_git` helper, identifying that `run_git` currently passes no timeout, bounding it there to harden all existing callers, and distinguishing "not a git repository" from "ref not found" as two distinct operator errors. The known asymmetry (unvalidated endpoints inside explicit `..`/`...` ranges) is recorded as a deliberate decision with rationale, not left implicit. Part C's save path distinguishes attempted-and-failed (exit 1) from never-attempted (exit 0 + stderr WARNING, so `--output json` stdout stays parseable). No silent path replaces another silent path.
 
-### [PASS] Dependency direction and integration points respect existing seams
+### [PASS] Dependency direction and integration points verified against actual consumers
 
-The slice declares `dependencies: []` and uses only existing interfaces:
-`resolve_diff_base()` / `find_git_root()` from `review/git_utils.py`, and
-`claude_agent_sdk.ClaudeAgentOptions.tools`. It does not introduce new cross-
-component contracts. Part E's change to set `tools` at the SDK provider edge is
-scoped with a check (E5) for non-review `allowed_tools` producers, preserving
-the provider/review-client seam.
+Part B's rejection of a new `Verdict` member is grounded in an actual enumeration of the five downstream consumers (`CheckpointTrigger`, `LoopCondition`, `_aggregate_verdicts`, `_LEG_VERDICT_TO_RESOLUTION`, the `degraded` computation) — the dependency direction is respected because no consumer needs to change. E5 explicitly scopes the `allowed_tools` producers before editing the SDK provider edge, guarding against a hidden dependency. Interface parity (C5 across all four subcommands; B1 guard below both CLI and pipeline entry points) matches what consuming slices expect. Frontmatter `dependencies: []` matches the plan's "Dependencies: none," and `interfaces: [917]` correctly mirrors the exclusion of 917-owned parsing/persistence work.
 
-### [PASS] Failure modes are enumerated for new I/O paths with explicit handling
+### [NOTE] Five-part bundle sits at the edge of the "prefer many small slices" guideline — acknowledged and plan-authorized
 
-Part A5 explicitly enumerates hang/timeout, cwd-outside-git-worktree, and
-unresolvable-ref failure modes for the new `normalize_diff_spec` git call. It
-specifies using the shared `run_git` helper, adding a bounded timeout there if
-absent, distinguishing "not a git repository" from "ref not found," and
-recording the explicit-range validation asymmetry as a deliberate decision. No
-"TBD" remains.
+The architecture asks for many small slices over few large ones. This slice bundles five parts at effort 4/5. The document itself records this (F004) as a NOTE-level observation: the bundle was authorized by the slice plan entry, the D→A→C→B→E ordering is load-bearing and justified per-part, and each part is independently committable leaving the CLI working. No action required; bundling five related defects on one surface with a per-part landing order is a reasonable reading of the guideline.
 
-### [PASS] CLI/pipeline interface parity is maintained for scope gating
+### [PASS] NFR criterion: the parent architecture states no NFRs, so none require restatement
 
-B1 places `assert_reviewable_scope` in `review/git_utils.py` and calls it
-unconditionally from both CLI and pipeline review entry points, independent of
-rules resolution. This respects the architecture's cross-cutting concern for
-consistent behavior and prevents a configuration-dependent gap. The walkthrough
-explicitly tests the no-rules-dir case.
+The parent architecture is a lightweight maintenance container with no milestone targets or performance NFRs. The one performance-relevant aspect of the slice — bounding `run_git`'s timeout to prevent indefinite CLI hangs — is addressed inside Part A5 and, if anything, improves the operational NFR posture rather than violating one.
 
-### [PASS] Save-outcome model correctly distinguishes persistence states
+### Run Digest
 
-Part C replaces the optimistic `saved = True` initializer with an explicit
-three-state outcome model (saved / suppressed / unsaved), preserving documented
-`--diff`-only terminal workflows while making attempted-and-failed saves exit
-non-zero. The design cites and protects the 10 documented README/COMMANDS.md
-examples plus slice 118's compatibility guarantee.
-
-### [PASS] Shared-helper extraction avoids duplicated logic
-
-Part D extracts one private helper for `(review_cwd, resolved_rules_dir)`
-instead of copying `review_code`'s two-line resolution at three more sites.
-This aligns with the architecture's refactoring goal of consolidating
-duplicated logic and improving module boundaries.
-
-### [PASS] SDK tool availability fix correctly reasons about permission vs. capability
-
-Part E sets `tools` (capability/availability) from the same declared list as
-`allowed_tools` (permission/pre-approval), keeps `bypassPermissions` because
-the exposure was the unbounded tool set, and records that any future mutating
-tool declaration must re-examine that decision. This is a precise, bounded
-change at the SDK provider edge.
+- Response length: 4517 chars
+- Response is newline-free: no
+- Tool calls made: 5
+- Tool calls failed: 0
+- Stop reason: stop
+- Reasoning characters: 11188
+- `## Summary` located: no
+- `## Findings` located: yes
+- Finding-shaped matches — whole response: 5
+- Finding-shaped matches — inside fences: 0
+- Finding-shaped matches — in findings section: 5
+- Finding-shaped matches — surviving validation: 5

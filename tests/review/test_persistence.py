@@ -812,8 +812,9 @@ class TestDegradedRawResponse:
     def test_clean_pass_artifact_is_byte_identical_to_the_pre_change_snapshot(self) -> None:
         """SC4's other half: a non-degraded artifact must not shift by one byte.
 
-        The fixture was generated from the module as it stood before the degraded-path
-        change, so any drift in the clean path fails here.
+        The fixture is regenerated only when a change to the clean path is *intended*;
+        any other drift fails here. Last regenerated for slice 918, which added the four
+        stop-reason evidence lines to the Run Digest.
         """
         result = ReviewResult(
             verdict=Verdict.PASS,
@@ -1101,6 +1102,122 @@ class TestRunDigest:
 
         assert "### Run Digest" in markdown
         assert re.search(r"^### Raw Response\s*$", markdown, re.MULTILINE)
+
+
+class TestStopReasonEvidenceInDigest:
+    """Slice 918 (#92): the artifact alone must say why output was lost.
+
+    The reproduction needed ``-vv`` and a live terminal to see the stop reason. Everything
+    asserted here is readable from the saved artifact with neither.
+    """
+
+    @staticmethod
+    def _result(**overrides: object) -> ReviewResult:
+        defaults: dict[str, object] = {
+            "verdict": Verdict.PASS,
+            "findings": [],
+            "raw_output": "## Summary\nPASS\n",
+            "template_name": "code",
+            "input_files": {},
+            "model": "glm53",
+        }
+        defaults.update(overrides)
+        return ReviewResult(**defaults)  # type: ignore[arg-type]
+
+    def test_nonempty_response_parsing_to_nothing_shows_length_and_stop_reason(self) -> None:
+        """The #92 signature: the model spoke, nothing parsed, and the reason is on disk.
+
+        Response length alone cannot distinguish this from a healthy run; paired with a
+        stop reason it names the cause without a re-run.
+        """
+        result = self._result(
+            verdict=Verdict.UNKNOWN,
+            raw_output="Let me start by reading the slice design so I can evaluate it",
+            stop_reason="length",
+            reasoning_chars=8192,
+        )
+
+        markdown = format_review_markdown(result, "slice")
+
+        assert "- Response length: 61 chars" in markdown
+        assert "- Stop reason: length" in markdown
+        assert "- Reasoning characters: 8192" in markdown
+
+    def test_all_tools_failing_shows_made_equal_to_failed(self) -> None:
+        """The kimi27 shape, named at a glance by the adjacent made/failed pair."""
+        markdown = format_review_markdown(
+            self._result(tools_given=["read_file"], tool_calls_made=2, failed_tool_calls=2),
+            "slice",
+        )
+
+        assert "- Tool calls made: 2" in markdown
+        assert "- Tool calls failed: 2" in markdown
+
+    def test_failed_line_immediately_follows_made_line(self) -> None:
+        """Adjacency is the point: the pair is only readable at a glance if it is a pair."""
+        markdown = format_review_markdown(
+            self._result(tools_given=["read_file"], tool_calls_made=2, failed_tool_calls=2),
+            "slice",
+        )
+        lines = markdown.splitlines()
+        made = next(i for i, line in enumerate(lines) if line.startswith("- Tool calls made:"))
+
+        assert lines[made + 1].startswith("- Tool calls failed:")
+
+    def test_zero_failures_renders_as_zero_not_not_computed(self) -> None:
+        """The ``or 0`` trap, inverted: 0 is a real answer and must render as one."""
+        markdown = format_review_markdown(
+            self._result(tools_given=["read_file"], tool_calls_made=3, failed_tool_calls=0),
+            "slice",
+        )
+
+        assert "- Tool calls failed: 0" in markdown
+        assert "- Tool calls failed: not computed" not in markdown
+
+    def test_zero_reasoning_chars_renders_as_zero(self) -> None:
+        """A non-reasoning model reporting 0 is not the same as nothing reporting."""
+        markdown = format_review_markdown(self._result(reasoning_chars=0), "slice")
+
+        assert "- Reasoning characters: 0" in markdown
+
+    def test_sdk_path_renders_not_computed_never_a_fabricated_value(self) -> None:
+        """Design D12: the SDK path stamps none of the three, and the digest says so."""
+        markdown = format_review_markdown(self._result(), "slice")
+
+        assert "- Stop reason: not computed" in markdown
+        assert "- Reasoning characters: not computed" in markdown
+        assert "- Tool calls failed: not computed" in markdown
+
+    def test_real_newline_free_specimen_is_reported_as_newline_free(self) -> None:
+        """The #96 shape, from the response that actually produced it.
+
+        ``918-review.slice.review-grounding.md`` recorded a 3076-character reply with no
+        line breaks at all, which collapsed ``## Summary`` and ``PASS`` into one token and
+        made every heading unparseable. Fixtured verbatim so the indicator is proved
+        against real input rather than a synthetic string.
+        """
+        specimen = (Path(__file__).parent / "fixtures" / "918-newline-free-response.txt").read_text()
+        assert "\n" not in specimen, "fixture must stay newline-free to be this specimen"
+
+        markdown = format_review_markdown(
+            self._result(verdict=Verdict.UNKNOWN, raw_output=specimen), "slice"
+        )
+
+        assert "- Response is newline-free: yes" in markdown
+        assert f"- Response length: {len(specimen)} chars" in markdown
+
+    def test_ordinary_multiline_response_is_not_reported_as_newline_free(self) -> None:
+        markdown = format_review_markdown(self._result(), "slice")
+
+        assert "- Response is newline-free: no" in markdown
+
+    def test_empty_response_is_not_reported_as_newline_free(self) -> None:
+        """An empty response is the #92 shape, not the #96 one; the indicator must not
+        conflate them just because it found no line breaks."""
+        markdown = format_review_markdown(self._result(verdict=Verdict.UNKNOWN, raw_output=""), "slice")
+
+        assert "- Response is newline-free: no" in markdown
+        assert "- Response length: 0 chars" in markdown
 
 
 class TestRunDigestEndToEnd:

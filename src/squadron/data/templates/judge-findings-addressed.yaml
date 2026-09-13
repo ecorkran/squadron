@@ -84,3 +84,11 @@ prompt_template: |
 
   Emit one `<finding-id>: <status>` line per prior finding listed above and
   nothing else — no summary, no verdict, no findings section.
+
+# Deliberately NO tool_exclude_patterns (slice 918, #94).
+#
+# This judge is slice 305's prior-findings *injection* path: it receives findings
+# as an input rather than discovering them by reading the reviews directory.
+# Excluding that directory would neither help it nor harm it, and 918's stated
+# non-goal is to leave the injection path to 305. Do not "fix" this omission —
+# tests/review/test_tool_exclusions.py asserts the absence.

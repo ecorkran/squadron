@@ -89,3 +89,11 @@ diff_exclude_patterns:
   - "*.ico"
 
 prompt_builder: squadron.review.builders.code.code_review_prompt
+
+# Deliberately NO tool_exclude_patterns (slice 918, #94).
+#
+# Code reviews read the source tree broadly by design (D2): narrowing their tool
+# jail would remove context they legitimately need. The #94 failure is specific
+# to document reviews, whose predecessors share the reviewed document's name
+# prefix. tests/review/test_tool_exclusions.py asserts this absence, so adding
+# the field here is a deliberate act, not a drive-by.

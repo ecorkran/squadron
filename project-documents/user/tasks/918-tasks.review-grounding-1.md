@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/918-slice.review-grounding.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [917]
 interfaces: []
-status: not_started
+status: in_progress
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
@@ -104,17 +104,17 @@ and the default value is that constant. When 383 lands, one constant changes.
 
 ### T1.1 — Introduce the jail specification value object
 
-- [ ] Add a frozen dataclass to `src/squadron/tools/models.py` carrying the
+- [x] Add a frozen dataclass to `src/squadron/tools/models.py` carrying the
       resolved jail root and the resolved exclusion paths (e.g. `JailSpec` with
       `root: Path` and `excluded: tuple[Path, ...]`).
-- [ ] Document in its docstring that both fields are **already resolved** —
+- [x] Document in its docstring that both fields are **already resolved** —
       resolution happens once at bind time, never inside a predicate, matching
       the existing contract that `ToolFactory` receives a resolved `cwd`.
-- [ ] Change `ToolFactory` to `Callable[[JailSpec], ToolExecutor]` and update the
+- [x] Change `ToolFactory` to `Callable[[JailSpec], ToolExecutor]` and update the
       comment above it ([tools/models.py:35-37](src/squadron/tools/models.py#L35-L37)).
-- [ ] Update the `ToolDescriptor.factory` docstring ([tools/models.py:50-51](src/squadron/tools/models.py#L50-L51))
+- [x] Update the `ToolDescriptor.factory` docstring ([tools/models.py:50-51](src/squadron/tools/models.py#L50-L51))
       so "already-resolved `cwd`" becomes the spec.
-- [ ] Provide a convenience constructor or default so a spec with no exclusions
+- [x] Provide a convenience constructor or default so a spec with no exclusions
       is as cheap to build as passing a `Path` was — every non-review caller
       builds one of these.
 
@@ -124,18 +124,18 @@ resolved paths. Effort: 1.
 
 ### T1.2 — Teach the two predicates about exclusions
 
-- [ ] Change `resolve_in_jail` ([_shared.py:26](src/squadron/tools/builtin/_shared.py#L26))
+- [x] Change `resolve_in_jail` ([_shared.py:26](src/squadron/tools/builtin/_shared.py#L26))
       to take the spec and return `None` for a candidate inside an excluded path,
       by the **same return** as a containment failure.
-- [ ] Change `contained_in_jail` ([_shared.py:43](src/squadron/tools/builtin/_shared.py#L43))
+- [x] Change `contained_in_jail` ([_shared.py:43](src/squadron/tools/builtin/_shared.py#L43))
       the same way, returning `False`.
-- [ ] Match by `is_relative_to` against the resolved candidate — **never**
+- [x] Match by `is_relative_to` against the resolved candidate — **never**
       string-prefix comparison. The reasoning is already documented at
       [_shared.py:34-35](src/squadron/tools/builtin/_shared.py#L34-L35)
       (`/tmp/jail_evil` starts with `/tmp/jail`); the same trap applies here.
-- [ ] An excluded path logs exactly one WARNING per refusal, wording it as an
+- [x] An excluded path logs exactly one WARNING per refusal, wording it as an
       exclusion rather than a jail escape so the two are distinguishable in a log.
-- [ ] Extend both docstrings: the D6 silence rationale at
+- [x] Extend both docstrings: the D6 silence rationale at
       [_shared.py:51-53](src/squadron/tools/builtin/_shared.py#L51-L53) now
       covers exclusions too.
 
@@ -146,34 +146,34 @@ Effort: 2.
 
 ### T1.3 — Test the predicates directly
 
-- [ ] Add to `tests/tools/test_jail.py` (or a sibling): a path inside an excluded
+- [x] Add to `tests/tools/test_jail.py` (or a sibling): a path inside an excluded
       directory returns `None` from `resolve_in_jail` and `False` from
       `contained_in_jail`.
-- [ ] A path inside the jail but outside every exclusion still resolves.
-- [ ] An empty exclusion set behaves **identically** to today for both
+- [x] A path inside the jail but outside every exclusion still resolves.
+- [x] An empty exclusion set behaves **identically** to today for both
       predicates — the default-path regression guard named in the design's Risks.
-- [ ] A sibling directory whose name shares a prefix with an excluded one
+- [x] A sibling directory whose name shares a prefix with an excluded one
       (`reviews-archive` vs `reviews`) is **not** excluded. This is the
       `is_relative_to` assertion; a string-prefix implementation fails it.
-- [ ] A refusal emits exactly one WARNING (use `caplog`).
+- [x] A refusal emits exactly one WARNING (use `caplog`).
 
 **Success:** all pass; the prefix test fails if T1.2 is implemented with
 `str.startswith`. Effort: 1.
 
 ### T1.4 — Thread the spec through the five factories
 
-- [ ] Update all five factory signatures from `(cwd: Path)` to the spec:
+- [x] Update all five factory signatures from `(cwd: Path)` to the spec:
       `_read_file_factory` ([file_tools.py:48](src/squadron/tools/builtin/file_tools.py#L48)),
       `_write_file_factory` ([:102](src/squadron/tools/builtin/file_tools.py#L102)),
       `_list_files_factory` ([:171](src/squadron/tools/builtin/file_tools.py#L171)),
       `_grep_factory` ([search_tools.py:101](src/squadron/tools/builtin/search_tools.py#L101)),
       `_bash_factory` ([bash_tool.py:45](src/squadron/tools/builtin/bash_tool.py#L45)).
-- [ ] Where a factory needs the bare root (e.g. `bash`'s subprocess `cwd`,
+- [x] Where a factory needs the bare root (e.g. `bash`'s subprocess `cwd`,
       `format_entry`'s relative rendering), read it off the spec rather than
       changing the downstream call.
-- [ ] Do **not** add exclusion logic to any individual tool — the predicates own
+- [x] Do **not** add exclusion logic to any individual tool — the predicates own
       it. A tool that reaches around them is the defect this task avoids.
-- [ ] Run the existing `tests/tools/` suite — `test_read_file`, `test_write_file`,
+- [x] Run the existing `tests/tools/` suite — `test_read_file`, `test_write_file`,
       `test_list_files`, `test_grep`, `test_bash`, `test_jail`,
       `test_jail_symlinks` — unchanged, against an empty exclusion set. They are
       the regression test for this task: pure signature threading must not alter
@@ -185,16 +185,16 @@ Effort: 2.
 
 ### T1.5 — Resolve root and exclusions together in `materialize`
 
-- [ ] Change `materialize(names, cwd)` ([registry.py:42](src/squadron/tools/registry.py#L42))
+- [x] Change `materialize(names, cwd)` ([registry.py:42](src/squadron/tools/registry.py#L42))
       to accept the exclusion patterns alongside `cwd`, resolve both exactly
       once, build the spec, and hand it to every `descriptor.factory(...)`.
-- [ ] Resolve each pattern against the jail root. A pattern that resolves
+- [x] Resolve each pattern against the jail root. A pattern that resolves
       **outside** the jail is discarded at bind time with a WARNING naming the
       pattern (D6) — it can never match, and silently keeping it invites a false
       sense of coverage.
-- [ ] Keep the exclusion argument optional with an empty default, so every
+- [x] Keep the exclusion argument optional with an empty default, so every
       non-review caller is unchanged at its call site.
-- [ ] Update the docstring: it currently states `cwd` is "resolved exactly once
+- [x] Update the docstring: it currently states `cwd` is "resolved exactly once
       here" — say the same of the exclusions.
 
 **Success:** one resolution point for both. A caller passing no exclusions gets
@@ -202,10 +202,10 @@ today's behavior. Effort: 2.
 
 ### T1.6 — Test `materialize`'s binding
 
-- [ ] In `tests/tools/test_registry.py`: patterns resolve against the jail root
+- [x] In `tests/tools/test_registry.py`: patterns resolve against the jail root
       and reach every materialized executor.
-- [ ] A pattern resolving outside the jail is dropped, with one WARNING.
-- [ ] **Concurrency/isolation:** materialize two executor sets with *different*
+- [x] A pattern resolving outside the jail is dropped, with one WARNING.
+- [x] **Concurrency/isolation:** materialize two executor sets with *different*
       exclusions and assert each honors only its own — the anti-global-state
       criterion from the design. This test fails if the implementation uses a
       module-level set.
@@ -214,15 +214,15 @@ today's behavior. Effort: 2.
 
 ### T1.7 — Add the template field and its loader
 
-- [ ] Add `tool_exclude_patterns: list[str] | None = None` to `ReviewTemplate`,
+- [x] Add `tool_exclude_patterns: list[str] | None = None` to `ReviewTemplate`,
       declared as a sibling of `diff_exclude_patterns`
       ([templates/__init__.py:40](src/squadron/review/templates/__init__.py#L40)).
-- [ ] Name it for the tool jail, not the diff — the two are independent and a
+- [x] Name it for the tool jail, not the diff — the two are independent and a
       reader must not conflate them. Comment the distinction at the field.
-- [ ] Mirror the loader handling exactly
+- [x] Mirror the loader handling exactly
       ([templates/__init__.py:140-144](src/squadron/review/templates/__init__.py#L140-L144)):
       optional, list-of-strings, `None` when absent.
-- [ ] Test the loader beside the existing `diff_exclude_patterns` loader tests: a
+- [x] Test the loader beside the existing `diff_exclude_patterns` loader tests: a
       YAML without the key loads to `None`, one with it loads to a list of
       strings, and the two fields do not bleed into each other — a template
       declaring only `diff_exclude_patterns` must leave `tool_exclude_patterns`
@@ -233,18 +233,18 @@ independent. Effort: 1.
 
 ### T1.8 — Declare the exclusion on the document templates
 
-- [ ] Add `tool_exclude_patterns` to `arch.yaml`, `slice.yaml`, and `tasks.yaml`,
+- [x] Add `tool_exclude_patterns` to `arch.yaml`, `slice.yaml`, and `tasks.yaml`,
       excluding the reviews directory — the value of `REVIEWS_DIR`
       ([persistence.py:24](src/squadron/review/persistence.py#L24)), which is the
       single named seam D4 requires. Do **not** scatter the literal string.
-- [ ] Add it to `judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml` — both
+- [x] Add it to `judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml` — both
       are document reviews and both run with tools
       (`allowed_tools: [read_file, list_files, grep]`, verified).
-- [ ] **`judge-findings-addressed.yaml`: leave it alone and comment why.** It is
+- [x] **`judge-findings-addressed.yaml`: leave it alone and comment why.** It is
       305's deliberate prior-findings injection path — the design's non-goal. It
       receives findings as an input, not by discovery, so the exclusion neither
       helps nor harms it; a future reader must not "fix" the omission.
-- [ ] **`code.yaml`: do not add the field.** Code reviews read the tree broadly
+- [x] **`code.yaml`: do not add the field.** Code reviews read the tree broadly
       by design (D2).
 
 **Success:** five templates declare it, two deliberately do not, and the reason
@@ -252,9 +252,9 @@ is written down next to each omission. Effort: 1.
 
 ### T1.9 — Pin the `bash` boundary
 
-- [ ] Add a test asserting no template whose `tool_exclude_patterns` is non-empty
+- [x] Add a test asserting no template whose `tool_exclude_patterns` is non-empty
       also declares `bash` in `allowed_tools`.
-- [ ] Comment the test with the reason: a path deny-list does not constrain a
+- [x] Comment the test with the reason: a path deny-list does not constrain a
       subprocess, so a document-review template granting `bash` would silently
       defeat the exclusion. No template grants it today (verified on `42bd0e05`);
       this test is what keeps that true.
@@ -264,13 +264,13 @@ document-review template. Effort: 1.
 
 ### T1.10 — Pass template exclusions to the agent
 
-- [ ] In `review_client.py`, pass the template's `tool_exclude_patterns` to the
+- [x] In `review_client.py`, pass the template's `tool_exclude_patterns` to the
       agent alongside `cwd`, on the same path `allowed_tools` already takes.
-- [ ] In the agent, thread them into the `materialize` call
+- [x] In the agent, thread them into the `materialize` call
       ([agent.py:190](src/squadron/providers/openai/agent.py#L190)) as **opaque
       data**. The agent is a generic provider and must not learn what a review
       type is — no template lookup, no review-specific branch (D5).
-- [ ] A template declaring no exclusions passes an empty set, not `None`-handling
+- [x] A template declaring no exclusions passes an empty set, not `None`-handling
       at the agent.
 
 **Success:** `grep -n "template\|review" src/squadron/providers/openai/agent.py`
@@ -278,18 +278,18 @@ shows no new review-awareness. Effort: 2.
 
 ### T1.11 — Integration test: a document review cannot read reviews
 
-- [ ] Build a fixture tree with a document under review and a populated reviews
+- [x] Build a fixture tree with a document under review and a populated reviews
       directory (live plus `archive/`), materialize an arch review's tools, and
       assert **all three** of `read_file`, `list_files`, and `grep` refuse every
       path under the reviews directory.
-- [ ] `list_files` must not *enumerate* the excluded directory — a refusal that
+- [x] `list_files` must not *enumerate* the excluded directory — a refusal that
       still lists names leaks the filenames, which are the document's own name
       prefixed. Assert on the returned content, not just on an error flag.
-- [ ] `grep` must return no match from an excluded file even when the pattern
+- [x] `grep` must return no match from an excluded file even when the pattern
       matches its contents.
-- [ ] The refusals are invisible in tool output (the model cannot distinguish
+- [x] The refusals are invisible in tool output (the model cannot distinguish
       them from a nonexistent path) and produce WARNINGs in the log.
-- [ ] **Code reviews unaffected:** materialize a `code` review's tools against
+- [x] **Code reviews unaffected:** materialize a `code` review's tools against
       the same tree and assert it *can* read a file under the reviews directory.
       Also assert `code.yaml` declares no `tool_exclude_patterns`.
 
@@ -297,26 +297,26 @@ shows no new review-awareness. Effort: 2.
 
 ### T1.12 — Verify the reported reproduction
 
-- [ ] Follow the design's Part 1 walkthrough in the `squadron-pr` worktree, where
+- [x] Follow the design's Part 1 walkthrough in the `squadron-pr` worktree, where
       the 380 document and its five archived reviews live. Confirm the
       predecessors exist, then run three consecutive `sq review arch 380 -v`
       passes with a revision between each.
-- [ ] Confirm no finding quotes a phrase absent from the current
+- [x] Confirm no finding quotes a phrase absent from the current
       `380-arch.pull-request-workflow.md`, and that findings dispositioned in an
       earlier round do not reappear.
-- [ ] Confirm the exclusion **fired** rather than the model simply not looking:
+- [x] Confirm the exclusion **fired** rather than the model simply not looking:
       `sq review arch 380 -vv ... 2>&1 | grep -i 'refus'` shows WARNINGs, and
       nothing in the model-visible transcript names a denial.
-- [ ] Run from the repo root with `uv run sq` — the released `sq` predates
+- [x] Run from the repo root with `uv run sq` — the released `sq` predates
       `_resolve_review_cwd` (issue #86) and will not exercise this path correctly.
-- [ ] Record the outcome in the DEVLOG. If the exclusion does not fire, stop and
+- [x] Record the outcome in the DEVLOG. If the exclusion does not fire, stop and
       diagnose before proceeding — do not tune the patterns speculatively.
 
 **Success:** three convergent runs, WARNINGs present, transcript clean. Effort: 1.
 
 ### T1.13 — Verify and commit Part 1
 
-- [ ] `uv run pytest tests/tools tests/review -q` green; `ruff format`,
+- [x] `uv run pytest tests/tools tests/review -q` green; `ruff format`,
       `ruff check`, `pyright` clean.
-- [ ] Commit: `fix(tools): exclude the reviews directory from document-review tool jails`
-- [ ] Effort: 1
+- [x] Commit: `fix(tools): exclude the reviews directory from document-review tool jails`
+- [x] Effort: 1

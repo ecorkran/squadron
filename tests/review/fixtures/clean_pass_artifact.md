@@ -22,7 +22,11 @@ No specific findings.
 ### Run Digest
 
 - Response length: 33 chars
+- Response is newline-free: yes
 - Tool calls made: not offered
+- Tool calls failed: not computed
+- Stop reason: not computed
+- Reasoning characters: not computed
 - `## Summary` located: not computed
 - `## Findings` located: not computed
 - Finding-shaped matches — whole response: not computed

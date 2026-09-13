@@ -112,6 +112,26 @@ class ReviewResult:
     # two fields above cannot express: an empty tools_given is otherwise identical to a
     # review whose template declared no tools at all.
     tools_suppressed_reason: str | None = None
+    # Stop-reason evidence (slice 918, issue #92). None means *not reported* — the same
+    # tri-state the telemetry fields above use — which is the honest reading for the SDK
+    # path, where finish_reason has no equivalent (D12).
+    #
+    # These live in to_dict() but NOT in frontmatter (D10). The two surfaces are not
+    # required to match and already do not: frontmatter is the consumed contract the
+    # verdict gate reads, while JSON is what programmatic consumers read, and fallback_used
+    # is likewise JSON-only. Promoting a diagnostic into frontmatter would make the gate
+    # depend on it.
+    #
+    # Why the backend stopped, verbatim from the stream; an abnormal value ("length") is a
+    # mechanical signal that output was truncated rather than complete.
+    stop_reason: str | None = None
+    # How many characters the model spent reasoning before answering. Large with an empty
+    # or unparseable response is the #92 signature.
+    reasoning_chars: int | None = None
+    # How many tool calls failed. 0 is a real answer and must render and serialize as 0:
+    # the Amoeba orchestrator routes on ``tool_calls_made == failed_tool_calls > 0`` as a
+    # retry predicate, which a 0 collapsed into "not reported" would silently defeat.
+    failed_tool_calls: int | None = None
     # Parse-scan facts (slice 917 Part 3). None means "not produced by the
     # parser" — a hand-built result — the same convention provenance uses.
     # These feed the artifact's run digest (Part 6) and nothing else: no gate
@@ -169,6 +189,13 @@ class ReviewResult:
             "provenance": self.provenance,
             "tools_given": self.tools_given,
             "tool_calls_made": self.tool_calls_made,
+            # Slice 918: additive and always present, null when the provider stamped
+            # nothing, exactly as the two telemetry keys above behave. Emitted
+            # unconditionally rather than only-when-set so a consumer can tell "reported
+            # zero" from "never reported" without inferring it from a missing key.
+            "stop_reason": self.stop_reason,
+            "reasoning_chars": self.reasoning_chars,
+            "failed_tool_calls": self.failed_tool_calls,
             # A degraded parse must be visible to JSON consumers too, or an
             # empty findings list reads as "the model found nothing" (issue #72).
             "fallback_used": self.fallback_used,

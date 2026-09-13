@@ -27,7 +27,7 @@ from squadron.tools.builtin._shared import (
     truncate,
     walk_tree,
 )
-from squadron.tools.models import ToolDescriptor, ToolExecutor, ToolResult
+from squadron.tools.models import JailSpec, ToolDescriptor, ToolExecutor, ToolResult
 from squadron.tools.registry import register
 
 _logger = logging.getLogger(__name__)
@@ -70,14 +70,14 @@ def _globbed(target: Path, glob: str | None) -> Iterator[Path]:
             yield entry
 
 
-def _grep_candidates(cwd: Path, target: Path, glob: str | None) -> Iterator[Path]:
+def _grep_candidates(spec: JailSpec, target: Path, glob: str | None) -> Iterator[Path]:
     """Yield the files *target* expands to, filtered by *glob* when it is a directory.
 
     Lazy across directories: ``walk_tree`` sorts one level at a time and descends only as
     the caller pulls, so the deadline check between files can stop the walk without the
     whole tree having been listed first.
 
-    Every candidate is re-checked against jail root *cwd*: this is the single point all
+    Every candidate is re-checked against *spec*: this is the single point all
     candidates pass through, so both symlink escape routes close here.
 
     Dependency and VCS directories are pruned during descent (``limits.SKIP_DIRECTORIES``).
@@ -85,20 +85,20 @@ def _grep_candidates(cwd: Path, target: Path, glob: str | None) -> Iterator[Path
     real tree and never the code a model is asking about (issue #79).
     """
     if target.is_file():
-        if contained_in_jail(cwd, target, tool=GREP_NAME):
+        if contained_in_jail(spec, target, tool=GREP_NAME):
             yield target
         return
     for entry in _globbed(target, glob):
         # Containment is checked before is_file(): on Python 3.13+ rglob yields a symlinked
         # directory without descending into it, and is_file() is False for that entry — so
         # testing is_file() first would skip the escape silently instead of logging it.
-        if not contained_in_jail(cwd, entry, tool=GREP_NAME):
+        if not contained_in_jail(spec, entry, tool=GREP_NAME):
             continue
         if entry.is_file():
             yield entry
 
 
-def _grep_factory(cwd: Path) -> ToolExecutor:
+def _grep_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             pattern = require_str(args, "pattern")
@@ -113,9 +113,9 @@ def _grep_factory(cwd: Path) -> ToolExecutor:
             # timeout exists precisely because a model-supplied pattern can backtrack
             # catastrophically), so it must never run on the event loop.
             def _search() -> ToolResult:
-                target = resolve_in_jail(cwd, path)
+                target = resolve_in_jail(spec, path)
                 if target is None:
-                    return jail_violation(GREP_NAME, path)
+                    return jail_violation(GREP_NAME, spec, path)
                 if not target.exists():
                     return error(GREP_NAME, f"path does not exist: {path}")
 
@@ -142,7 +142,7 @@ def _grep_factory(cwd: Path) -> ToolExecutor:
                 # that point is invisible to the scan, so reporting "no match" without
                 # saying so would be a silent failure.
                 truncated_files: list[str] = []
-                for candidate in _grep_candidates(cwd, target, glob):
+                for candidate in _grep_candidates(spec, target, glob):
                     # Checked per candidate as well as per line: traversal of a large tree and
                     # the reads themselves consume wall time the per-line check never sees.
                     if time.monotonic() >= deadline:
@@ -163,7 +163,7 @@ def _grep_factory(cwd: Path) -> ToolExecutor:
                         # files still produce results.
                         continue
 
-                    relative = candidate.relative_to(cwd)
+                    relative = candidate.relative_to(spec.root)
                     if truncated:
                         truncated_files.append(str(relative))
                     for number, line in enumerate(text.splitlines(), start=1):

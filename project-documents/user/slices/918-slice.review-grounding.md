@@ -7,7 +7,7 @@ dependencies: [917]
 interfaces: []
 dateCreated: 20260913
 dateUpdated: 20260913
-status: not_started
+status: complete
 ---
 
 # Slice Design: Review Grounding
@@ -439,69 +439,146 @@ is small and step 2 is unknown-but-bounded; Part 3 is small and self-contained.
 
 ## Verification walkthrough
 
-Draft; refine at Phase 6 completion.
+Refined at Phase 6 completion from what was actually run. Commands are verbatim; where a
+step behaved differently from the draft, the correction is stated rather than the draft
+quietly amended.
 
-**Part 1 — the reported reproduction.** In the `squadron-pr` worktree, where the 380
-document and its five archived reviews live:
+### Part 1 — the reported reproduction (#94)
+
+Run from the main checkout against the `squadron-pr` worktree, where the 380 document and
+its five archived reviews live:
 
 ```bash
 ls project-documents/user/reviews/archive/ | grep 380     # confirm the predecessors exist
-sq review arch 380 -v --model minimax-m3
+uv run sq review arch <path-to-380-document> -v --model minimax-m3 --cwd <worktree>
 ```
 
-Read the saved review. Confirm no finding quotes a phrase absent from the current
-`380-arch.pull-request-workflow.md`, and that findings dispositioned in earlier rounds do
-not reappear. Then confirm the exclusion actually fired rather than the model simply not
-looking:
+**Correction to the draft.** `sq review arch 380 --cwd <elsewhere>` does not work: a bare
+initiative index is resolved against the *process* cwd, not `--cwd`
+([cli/commands/review.py:465](../../../src/squadron/cli/commands/review.py#L465)). Pass an
+explicit document path instead. Pre-existing and unrelated to this slice; not filed.
+
+**Correction to the draft.** The `--model` flag is honored here, but a template's own
+`model:` key is not — profile resolution wins over template. The Part 1 runs therefore
+used `minimax/minimax-m3` rather than `arch.yaml`'s `model: opus`. Pre-existing, and it
+does not weaken the result: a path deny-list is model-independent.
+
+Three runs were made, each after a revision to the 380 document:
+
+| Run | Revision before it | Reviews-dir attempts | Refusals | Verdict |
+|---|---|---|---|---|
+| 1 | none (baseline) | 552 | 552 | CONCERNS |
+| 2 | frontmatter `status` | 0 | 0 | CONCERNS |
+| 3 | 385 independence | 1 | 1 | PASS |
+
+Run 1 is the evidence: 41 tool calls, 12 refusals naming the 380 predecessors and 65 the
+archive, zero review content in the output, and no denial wording anywhere the model could
+see. Run 1's frontmatter finding does not reappear in run 3 after being fixed.
+
+Run 2's model never looked at the directory at all (19 tool calls, none there) — the exact
+ambiguity this step exists to resolve, and why the refusal count must be read rather than
+the verdict. Same binding, different reading choices.
+
+Confirm the exclusion fired rather than the model simply not looking:
 
 ```bash
-sq review arch 380 -vv --model minimax-m3 2>&1 | grep -i 'refus'
+uv run sq review arch <path> -vv --model minimax-m3 2>&1 | grep -i 'refus'
 ```
 
-Expect one WARNING per refused access, and nothing in the model-visible transcript naming
-a denial.
+Expect one WARNING per refused access reading `refusing excluded path`, and nothing in the
+model-visible transcript naming a denial — the model sees `Error: file not found: {path}`,
+identical to a genuine miss, because any divergence would be a distinguisher.
 
-**Part 1 — code reviews unaffected.** `sq review code <slice> -vv` on a change touching a
-file under `project-documents/user/reviews/`; confirm the reviewer reads it and no
-refusal is logged.
+**Code reviews unaffected.** A `code` review against the same tree can still read files
+under `project-documents/user/reviews/`; `code.yaml` deliberately declares no exclusion,
+with the reason written in the YAML. Covered by
+`tests/tools/test_jail_exclusions.py`.
 
-**Part 2 — the digest carries the evidence.** Any review, then read the artifact:
+### Part 2 — the digest carries the evidence (#92)
 
 ```bash
-sq review slice 916 --model <any>
+uv run sq review slice 916 -v --model kimi3
 sed -n '/### Run Digest/,/^$/p' project-documents/user/reviews/916-review.slice.*.md
 ```
 
-Expect a stop reason, a reasoning-character count, and a failed-tool-call count present
-on a clean PASS, not only on a degraded run, with the failed count reading `0`.
+Actual digest from run 1 of two:
 
-Then the kimi27 shape. This one has no clean CLI reproduction: the observed run's cause
-was a jail root predating `_resolve_review_cwd`, and on `main` that function anchors the
-jail at the git root regardless of `--cwd` — verified, `--cwd ./project-documents/user`
-still resolves to the repo root. The all-tools-fail path is therefore covered by the test
-named in the success criteria (a review whose executors all return `is_error`) rather than
-by a command here. If a live instance does recur, the check is that the failure artifact's
-digest shows `Tool calls made` and `Tool calls failed` equal and non-zero, so the artifact
-names the tool layer rather than blaming the model.
-
-Then the #92 reproduction itself:
-
-```bash
-sq review slice 916 -v --model kimi3
+```
+- Response length: 4517 chars
+- Response is newline-free: no
+- Tool calls made: 5
+- Tool calls failed: 0
+- Stop reason: stop
+- Reasoning characters: 11188
 ```
 
-If it reproduces, the digest now names the stop reason; record it in the DEVLOG and
-implement the branch it selects. If it does not reproduce, the instrumentation still
-lands — say so plainly rather than claiming the underlying cause is fixed.
+All four new lines present on a clean CONCERNS verdict, not only on a degraded run, with
+the failed count reading a real `0` rather than "not computed".
 
-**Part 3 — user files survive.**
+**The #92 reproduction did not reproduce.** Two runs at sha `45e7b002`:
+
+| Run | Response length | Tool calls made | failed | Stop reason | Reasoning chars | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | 4517 | 5 | 0 | `stop` | 11188 | CONCERNS, 5 findings parsed |
+| 2 | 5860 | 19 | 1 | `stop` | 0 | CONCERNS, findings parsed |
+
+Both emitted well-formed output that parsed cleanly. #92 originally reproduced at sha
+`1515cff` with 17 tool calls; run 2 here made 19 and was fine. The instrumentation landed;
+**the underlying cause is not fixed**, and these two runs are not evidence that it went
+away. T2.9 is deferred to
+[#99](https://github.com/ecorkran/squadron/issues/99), which records what to read out of
+the digest when it recurs so the branch selects itself then.
+
+The two runs do confirm both zero cases end to end: run 1's `failed: 0` and run 2's
+`reasoning_chars: 0` each rendered as a real zero rather than the not-computed sentinel.
+
+Both runs also showed `` `## Summary` located: no `` while findings parsed — adjacent to
+\#28 and #96, untouched here.
+
+**The kimi27 shape** has no clean CLI reproduction, for the reason the draft gives: the
+observed run's cause was a jail root predating `_resolve_review_cwd`. It is covered by
+test rather than by a command — `test_all_tools_failing_stamps_made_equal_to_failed` in
+`tests/providers/openai/test_agentic_loop.py`, and
+`test_all_tools_failing_shows_made_equal_to_failed` in `tests/review/test_persistence.py`
+for the rendered digest.
+
+**The #96 shape** is pinned against the real specimen: the 3076-character newline-free
+body of `918-review.slice.review-grounding.md`, fixtured verbatim at
+`tests/review/fixtures/918-newline-free-response.txt`. It collapsed `## Summary` and
+`PASS` into one token, which is what made every heading unparseable.
+
+### Part 3 — user files survive (#65 finding 1)
 
 ```bash
 echo '# mine' > ~/.claude/commands/analysis/zz-scratch.md
-sq install-commands
+uv run sq install-commands
 test -f ~/.claude/commands/analysis/zz-scratch.md && echo SURVIVED || echo DELETED
 ```
 
-Expect `SURVIVED`. Then `sq install-commands` a second time and confirm no deletions, and
-`sq uninstall-commands` and confirm squadron's files go and `zz-scratch.md` stays. Remove
-the scratch file afterward.
+Actual result: `SURVIVED`, with 11 files installed across `analysis/` and `sq/`.
+
+```bash
+uv run sq install-commands        # second run
+```
+
+Reports no deletions — idempotent, scratch file still present.
+
+```bash
+uv run sq uninstall-commands
+ls ~/.claude/commands/analysis/ ~/.claude/commands/cf/
+```
+
+Actual result: `Removed 11 command(s)`. `sq/` gone entirely (emptied, so the directory was
+dropped); `analysis/` kept, holding only `zz-scratch.md`; the unrelated `cf/` directory
+untouched at 9 files. The environment was restored afterwards by reinstalling and deleting
+the scratch file.
+
+**Note for a repeat run.** The `analysis` skill pack's own receipt
+(`~/.config/squadron/receipts/analysis.toml`) names the same two files the bundled command
+set ships. The two receipts are separate keys and do not corrupt each other, but both
+consider those files theirs. Pre-existing overlap in the bundle, not introduced here.
+
+### Gates
+
+`ruff format`, `ruff check`, and `pyright` (0 errors) clean. Full suite: **3698 passed, 4
+skipped**.

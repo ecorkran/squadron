@@ -14,6 +14,214 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 918 Part 3 — receipt-based command install (#65 finding 1)
+
+Committed as `9c0d7a37`. Slice 918 is complete.
+
+`install-commands` unlinked every `*.md` it did not recognize from any subdirectory it
+touched, so a user's own `~/.claude/commands/analysis/mine.md` was deleted on install.
+`uninstall-commands` had the mirror bug: it `rmtree`'d `sq/` alone, orphaning `analysis/`
+and anything else squadron had written.
+
+Both follow from one missing fact. Nothing recorded which files squadron wrote, so
+ownership was inferred from presence in a directory squadron *shares* with the user —
+which proves nothing about who put a file there. The receipt supplies the fact, and both
+bugs close together.
+
+Reused the `sq skills` receipt mechanism per D13 rather than inventing a second one.
+`InstallReceipt.surface` became optional: it describes how a skill *pack* exposes its
+commands (a prefix directory or a dispatch file) and has no meaning for the bundled set,
+whose layout is fixed. `None` says the field does not apply, which is the alternative to
+overloading an enum member to mean something it does not; `write_receipt` omits the key
+entirely, since TOML has no null. The uninstall paths compare `surface` with `==`, so a
+`None` surface simply matches no branch.
+
+A file is now removed only when the previous receipt names it *and* the current bundle no
+longer does. Anything else is left alone (D15), and a receipt entry for a file the user
+already deleted is tolerated silently — the desired end state is "absent" and it already
+holds. Legitimate stale removals are still reported: the fix narrows what may be deleted,
+not what is shown.
+
+The old suite never exercised a non-`sq` subdirectory, which is why this shipped green —
+and the bundle has shipped `analysis/` alongside `sq/` throughout, so the bug was live, not
+hypothetical. Tests now cover that path, and pass an isolated `--receipts-dir`; a guard
+test asserts mechanically that the helpers never resolve to the real receipts directory,
+because these tests install and uninstall for real and a receipt written to the user's own
+directory would make their next real uninstall act on files a test invented.
+
+Verified against the real `~/.claude/commands`: a scratch file in `analysis/` survived
+install and re-install (no deletions reported on the second), then `uninstall-commands`
+removed squadron's 11 files from both subdirectories, dropped the emptied `sq/`, kept
+`analysis/` holding only the user's file, and left the unrelated `cf/` directory untouched
+at 9 files. Environment restored afterwards.
+
+Worth noting for anyone repeating it: the `analysis` skill pack's own receipt names the
+same two files the bundled command set ships. Separate receipt keys, so they do not
+corrupt each other, but both consider those files theirs. Pre-existing overlap in the
+bundle, not introduced here.
+
+Full suite: 3698 passed, 4 skipped. `ruff format`, `ruff check`, `pyright` clean.
+
+### Slice 918 Part 2 — stop-reason evidence on every review (#92)
+
+Instrumentation committed as `45e7b002`. The mechanism fix was **not** implemented; the
+evidence did not select a branch. Filed as #99.
+
+Issue #92's failure mode is a review that returns a substantial, well-reasoned response
+which parses to zero findings. The stop reason and reasoning volume were already captured
+in `TurnResult`, but only `_require_final_content` read them — and that path returns early
+unless the turn is *empty*, so the one case where the stop reason is the whole diagnosis
+recorded nothing. The fix is to stamp unconditionally rather than on degradation.
+
+Three facts now ride the final `Message.metadata`, the same channel tool telemetry uses:
+the stop reason, the reasoning character count, and a failed-tool-call count. They land on
+`ReviewResult`, serialize into `to_dict()`, and render in the Run Digest. `TurnResult`'s
+caller-facing role is unchanged — `_stamp_tool_telemetry` reads the values off the turn it
+is handed rather than returning them upward.
+
+`_execute_tool_call` now returns `(content, failed)` instead of a bare string. The
+alternative was matching an `"Error: "` prefix downstream, which is string-dispatch on a
+human-readable message and forbidden by project rules. The count means "tool calls that
+failed", so the pre-executor rejections — unknown tool name, malformed arguments — count
+too; neither reaches an executor at all.
+
+Per D10 the three stay out of frontmatter (the consumed contract the verdict gate reads)
+and go into JSON (what programmatic consumers read). The two surfaces already differ:
+`fallback_used` is JSON-only. Per D12 the SDK path stamps none of them — `finish_reason`
+is an OpenAI/OpenRouter streaming concept, so an absent key reads as `None` and renders as
+not-computed rather than as a fabricated value.
+
+Also replaced the `x or 0` idiom in the digest and frontmatter renderers with explicit
+`is None` checks, via a shared `_render_optional`. It collapsed a real zero into the
+not-reported sentinel. That matters beyond tidiness: the Amoeba orchestrator routes on
+`tool_calls_made == failed_tool_calls > 0` as a retry predicate, and a zero rendering as
+not-computed would make a healthy instrumented run indistinguishable from an
+uninstrumented one — the exact distinction this part exists to provide.
+
+The digest also carries a newline-free indicator, computed at render time from
+`raw_output` (the text is already in hand; a field would buy nothing). It does not fix
+\#96 — it makes the artifact say *which* of three shapes occurred: never-emitted output
+(#92), all-tools-failed (kimi27), or emitted-but-unparseable (#96). The fixture is the
+real 3076-character `918-review.slice` body, which had zero line breaks and collapsed
+`## Summary` and `PASS` into one token.
+
+#### T2.8 reproduction — did not reproduce
+
+`uv run sq review slice 916 -v --model kimi3`, twice, at sha `45e7b002`. The artifact's
+`aiModel` confirms `moonshotai/kimi-k3` resolved (the `--model` flag wins here, unlike the
+Part 1 profile-resolution caveat).
+
+| Run | Response length | Tool calls made | failed | Stop reason | Reasoning chars | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | 4517 | 5 | 0 | `stop` | 11188 | CONCERNS, 5 findings parsed |
+| 2 | 5860 | 19 | 1 | `stop` | 0 | CONCERNS, findings parsed |
+
+Both emitted well-formed output that parsed cleanly. #92 reproduced at sha `1515cff` with
+17 tool calls; run 2 here made 19 and was fine. **The underlying cause is not fixed** —
+nothing in this part touched the mechanism, and these two runs are not evidence that it
+went away.
+
+The runs do confirm the instrumentation end-to-end, including both zero cases that the
+`or 0` idiom would have destroyed: run 1's `failed: 0` and run 2's `reasoning_chars: 0`
+each rendered as a real zero rather than "not computed".
+
+On T2.9's three candidates: `finish_reason == "length"` was not observed, though
+`max_tokens` is confirmed set on no request anywhere under `providers/openai/`, so it stays
+the most plausible mechanism and overlaps #84's open follow-up. A clean `stop` on a turn
+that parsed to nothing was not observed either — both clean stops parsed fine. Prompt
+adherence is not distinguishable without a reproduction. Choosing among three mechanisms on
+no evidence is what D7 and the project's one-speculative-fix rule forbid, so #99 records
+what to read out of the digest when it recurs, and the branch selects itself then.
+
+Both runs also showed `` `## Summary` located: no `` while findings parsed — adjacent to
+\#28 and #96, untouched here.
+
+### Slice 918 Part 1 — jail exclusions for document reviews (#94)
+
+Implemented and committed as `50d2f8de` on `918-slice.review-grounding`.
+
+Tool binding now carries a `JailSpec` (resolved root + resolved exclusions) where it
+carried a bare `cwd`. `materialize` resolves both exactly once and builds the spec per
+call, so two reviews with different exclusions cannot interfere; a pattern resolving
+outside the jail is discarded at bind time with a WARNING. Both predicates consult the
+exclusions via `is_relative_to` — a test pins that a sibling named `reviews-archive` is
+not swept up by an exclusion of `reviews`, and it fails against a `str.startswith`
+implementation (verified by temporarily introducing one).
+
+Five document templates declare the exclusion; `code.yaml` and
+`judge-findings-addressed.yaml` deliberately do not, with the reason written at each
+omission and a test asserting both the absence and the comment. `REVIEWS_DIR` stays the
+single seam D4 requires: a test asserts every declared pattern equals it, so moving the
+constant fails until the templates follow.
+
+**One design correction found by its own test.** Routing an exclusion through the
+existing `None` return meant it rendered as `jail_violation`'s "resolves outside the
+working directory" — false for a path plainly inside the jail, and distinguishable from
+a genuine miss, which defeats D6. It also double-logged: the predicate called it an
+exclusion while `jail_violation` called it a jail escape. Refusals are now worded and
+logged in exactly one place. An operator sees "refusing excluded path"; the model sees
+the same `file not found` a nonexistent path produces, down to reporting the resolved
+path because `error()` carries `exc.filename`. Any divergence there is a distinguisher.
+
+**Sixth factory.** The breakdown counted five `(cwd: Path)` factories; `cf_tools`
+`_make_factory` is a sixth. Its inner closure could not take the parameter name `spec` —
+the enclosing `spec` is the `CfToolSpec` it closes over, so shadowing would have
+redirected every `spec.name` and `spec.arg_map` to the jail. Named `jail` there, with
+the reason at the site.
+
+### T1.12 — reported reproduction verified
+
+Three consecutive `sq review arch` passes against `380-arch.pull-request-workflow.md` in
+the `squadron-pr` worktree, which holds the document plus its five archived predecessors
+and one live review — the material #94 is about. Coordinated with the `sq-pr` session
+first: slice 381 was already merged (`cdee5518`) and its tree clean, so the runs
+disrupted nothing. Baseline `23769077` noted so its same-day edit was not miscounted as
+one of mine.
+
+Ran from the main checkout (`uv run sq`) with `--cwd` at the worktree. Note
+`_resolve_arch_file` ([review.py:465](src/squadron/cli/commands/review.py#L465))
+resolves an initiative index against the *process* cwd, not `--cwd`, so `sq review arch
+380 --cwd <elsewhere>` fails to find the document; an explicit path works. Pre-existing,
+unrelated to this slice, not filed.
+
+| Run | Revision before it | Reviews-dir attempts | Refusals | Verdict |
+|---|---|---|---|---|
+| 1 | none (baseline) | 552 | 552 | CONCERNS |
+| 2 | frontmatter `status` | 0 | 0 | CONCERNS |
+| 3 | 385 independence | 1 | 1 | PASS |
+
+Run 1 is the evidence the exclusion fires: 41 tool calls, 552 refusals, 12 naming the
+380 predecessors and 65 the archive, and **zero** reference to any review artifact in
+the output. No denial wording reached the model.
+
+Run 2 attempted the directory zero times — the model did not look, so there was nothing
+to refuse. That is the ambiguity T1.12 names, and why run 1's count matters: same binding,
+19 tool calls, different reading choices. Model variance, not a regression.
+
+Findings tracked the current text across revisions. Run 1's frontmatter finding does not
+reappear in run 3 after being fixed. The one run-3 finding quoting a phrase absent from
+the document (`sq pr show`) traces to `pr.py:32` in the source tree, which the review may
+legitimately read — not an archived review. Verdicts moved CONCERNS → CONCERNS → PASS,
+the opposite of #94's escalation-to-FAIL on unchanged text.
+
+The runs used the default `openrouter` profile (`minimax/minimax-m3`), not `arch.yaml`'s
+`model: opus` — profile model resolution wins over the template. Pre-existing behavior;
+it does not weaken the result, since a path deny-list is model-independent and the tool
+calls confirm the model genuinely reached for the directory.
+
+Both test revisions were reverted; the worktree is back at `cdee5518` (doc md5
+`6e89c0f1`), archive still five files, and no artifact from these runs was left behind.
+
+`sq-pr` also reported that the `squadron.frontmatter-gate` is vacuous in that worktree —
+`cf validate frontmatter` with staged paths silently skips out-of-root paths and exits 0
+with `filesChecked: 0` (context-forge#88; squadron#98 covers failing closed). Nothing was
+committed there, so no gate was relied on.
+
+Part 1 is complete except that T1.13's commit landed before this verification; Parts 2
+and 3 remain.
+
+## 20260913
+
 ### Slice 918 task breakdown (Phase 5)
 
 Design converted to `user/tasks/918-tasks.review-grounding-{1,2}.md`, split at the

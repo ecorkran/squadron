@@ -4,222 +4,94 @@ layer: project
 reviewType: slice
 slice: review-scope-correctness
 project: squadron
-verdict: PASS
+verdict: CONCERNS
 sourceDocument: project-documents/user/slices/916-slice.review-scope-correctness.md
-aiModel: moonshotai/kimi-k2.7-code
+aiModel: moonshotai/kimi-k3
 status: complete
-dateCreated: 20260911
-dateUpdated: 20260911
-reviewedSha: 1515cffa32858004019bdeb111cc28da59d0f6b8
+dateCreated: 20260913
+dateUpdated: 20260913
+reviewedSha: 45e7b0024bb797c6b131eb43580c9591bf8c0625
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
+toolCallsMade: 19
 findings:
   - id: F001
     severity: pass
-    category: scope
-    summary: "Scope and parent alignment"
-    location: "slices/916-slice.review-scope-correctness.md:1-15"
+    category: alignment
+    summary: "Slice is maintenance-shaped and plan-authorized"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md"
   - id: F002
     severity: pass
-    category: process
-    summary: "Adherence to maintenance-initiative guidelines"
-    location: "architecture/900-arch.maintenance-and-refactoring.md#Guidelines"
+    category: integration
+    summary: "Integration claims verify against source"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md"
   - id: F003
     severity: pass
-    category: dependencies
-    summary: "Dependency direction and integration points"
-    location: "slices/916-slice.review-scope-correctness.md#Dependencies"
+    category: error-handling
+    summary: "Failure modes on the new I/O path are enumerated and closed"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md"
   - id: F004
     severity: pass
-    category: error-handling
-    summary: "Failure modes enumerated for new I/O paths"
-    location: "slices/916-slice.review-scope-correctness.md#A5"
+    category: scope
+    summary: "Documented surface preserved as a first-class invariant"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md#part-c--save-gating-70"
   - id: F005
-    severity: pass
-    category: nfr
-    summary: "NFR coverage for touched paths"
-    location: "unverified"
+    severity: concern
+    category: documentation
+    summary: "Embedded \"verified on implementation\" evidence invites design-vs-reality drift"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness.md"
   - id: F006
-    severity: pass
-    category: design-quality
-    summary: "Avoids common antipatterns"
-    location: "slices/916-slice.review-scope-correctness.md#B1"
-  - id: F007
-    severity: pass
-    category: boundaries
-    summary: "Boundary and layer responsibility alignment"
-    location: "slices/916-slice.review-scope-correctness.md#D1"
+    severity: note
+    category: testing
+    summary: "\"No message-text assertions\" sits awkwardly beside the differentiation requirement"
+    location: "project-documents/user/slices/916-slice.review-scope-correctness"
 ---
 
 # Review: slice — slice 916
 
-**Verdict:** PASS
-**Model:** moonshotai/kimi-k2.7-code
+**Verdict:** CONCERNS
+**Model:** moonshotai/kimi-k3
 
 ## Findings
 
-### [PASS] Scope and parent alignment
+### [PASS] Slice is maintenance-shaped and plan-authorized
 
-The slice's frontmatter declares `parent: 900-slices.maintenance-and-refactoring.md`, which is the correct slice plan for the 900 architecture. The document addresses five defects (jail root, diff normalization, save gating, empty scope, SDK tool availability) — all maintenance-style bug fixes and small refactorings (e.g., extracting a shared helper for cwd/rules resolution), which is exactly what 900-arch.maintenance-and-refactoring.md#Scope lists as belonging here: "Bug fixes: Non-trivial bugs that don't belong to an active feature slice" and "Refactoring: Extracting abstractions, consolidating duplicated logic."
+- The five bundled defects are bug fixes on the `sq review` entry path — squarely within 900-arch's "bug fixes … that don't belong to an active feature slice" scope. The bundle-vs-split question was raised at slice review (F004) and answered by plan authorization plus a load-bearing D→A→C→B→E sequence; each part lands independently committable. That is the correct home for this work.
+- The parent-field pointing at the slice plan (`900-slices.maintenance-and-refactoring.md`) matches the documented convention and is not an error.
 
-### [PASS] Adherence to maintenance-initiative guidelines
+### [PASS] Integration claims verify against source
 
-The architecture says slices in this initiative should be "small and focused — prefer many small slices over few large ones" and "Each slice should be independently deliverable." The input document bundles five parts but explicitly sequences them D→A→C→B→E, states "Each part is independently committable and leaves the CLI working," and records a prior review note (F004) acknowledging the bundle sits at the edge of the guideline. This is a reasonable maintenance-bundle, not scope creep.
+- Part B's no-new-Verdict-member decision rests on an enumerated consumer set; the cited gate shapes check out — `CheckpointTrigger.ON_CONCERNS` allowlist (`{CONCERNS, FAIL, UNKNOWN}`) at `checkpoint.py:22`, `LoopCondition.REVIEW_CONCERNS_OR_BETTER` (`{PASS, CONCERNS}`) at `executor.py:231/247`. The "no artifact, no gate" argument is sound.
+- B3's escape hatch (omit `review:` key → no review action, no checkpoint) verified at `phase.py:76` and `:163`.
+- E1's mechanism confirmed: the SDK provider now sets both `tools` and `allowed_tools` (`provider.py:64-75`), and the pinned dependency is `claude-agent-sdk>=0.1.38` (`pyproject.toml:30`).
+- The prompt-builder interpolation (`builders/code.py:31/36`) confirms A1's single-normalized-string requirement is meaningful — the model's own `git diff` instruction and the path list derive from the same value.
 
-### [PASS] Dependency direction and integration points
+### [PASS] Failure modes on the new I/O path are enumerated and closed
 
-Dependencies listed are existing in-project interfaces (`resolve_diff_base`/`find_git_root`, `claude_agent_sdk.ClaudeAgentOptions.tools`, the pipeline review action). No external dependencies are introduced. The design correctly places the new `assert_reviewable_scope` guard in `review/git_utils.py` and calls it from both CLI and pipeline review action entry points, satisfying the interface-parity rule and avoiding hidden dependencies on rules-directory resolution.
+- Part A5 names the hang/timeout/no-repo family explicitly, routes the new git call through the shared `run_git` helper, and distinguishes "not a git repository" from "ref not found" via typed errors. Verified in `git_utils.py` — `GIT_COMMAND_TIMEOUT_SECONDS = 30` is applied, with a WARNING rather than a silent None on timeout. The residual gap (unvalidated endpoints inside explicit `a..b`/`a...b` shapes) is recorded as a deliberate decision with rationale, not an oversight. That is the level of rigor the criterion requires.
 
-### [PASS] Failure modes enumerated for new I/O paths
+### [PASS] Documented surface preserved as a first-class invariant
 
-Part A adds a new git shell-out path (`normalize_diff_spec` / `_resolve_rev`). The document enumerates hang/timeout, cwd-outside-git-worktree, and the explicit asymmetry for unvalidated endpoints of explicit ranges, with concrete handling strategies: route through the shared `run_git` helper, add a bounded timeout there, and return non-zero with a distinct message. This satisfies the criterion that failure modes not be "TBD" or implicit.
+- C3's revision (warn-and-exit-on-verdict for slice-less `--diff`, exit 1 only for attempted-and-failed saves) treats the 10 README/COMMANDS.md examples and slice 118's compatibility guarantee as the constraint they are. The recovery is more important than the original mistake: the design now preserves the tool's most-advertised invocation while still closing #70's actual harm (silent non-persistence). Success criteria 7 and the walkthrough pin this down concretely (stderr, not stdout, so `--output json` pipelines stay parseable).
 
-### [PASS] NFR coverage for touched paths
+### [CONCERN] Embedded "verified on implementation" evidence invites design-vs-reality drift
 
-The slice touches CLI review paths but does not introduce new latency, throughput, availability, or correctness NFRs beyond the existing functional guarantees. The architecture document 900 does not state specific NFRs for maintenance work, so no restatement is required. The design does add observable success criteria (matching `gh pr view --json files`, exit codes, warnings) that are verifiable without a parent NFR.
+- At design time this document asserted things it could not yet have observed ("run_git passes no timeout", step-by-step mock probes, live SDK kwargs). The implementation did close those gaps, but the document itself marks the pattern: a future reader cannot tell which claims were pre-implementation hypotheses and which are post-implementation facts, because the doc carries both with identical authority. Much of it has been corrected inline, but the residual risk is recurrence — a design doc that absorbs implementation-time narrative without distinguishing it invites quiet staleness on the next edit. Worth recording as guidance, not as a defect of this slice. All concrete claims spot-checked here (`git_utils.py` timeout, provider kwargs, README example counts, phase.py review-key gate) did resolve correctly — so the concern is about the *practice*, not the *outcome*.
 
-### [PASS] Avoids common antipatterns
+### [NOTE] "No message-text assertions" sits awkwardly beside the differentiation requirement
 
-The design explicitly rejects the antipatterns flagged in the review criteria: over-engineering is avoided by not adding a new `Verdict` enum member and by not inventing a slice-less artifact naming scheme; hidden dependencies are avoided by making the empty-scope guard unconditional rather than piggy-backing on rules-directory resolution; under-specification is avoided through the detailed outcome table for save states (C2/C3), the diff-normalization shape table (A2), and the explicit sequencing rationale.
+- The technical criteria forbid asserting on user-facing message text, yet B2/A4/C4's correctness *is* message differentiation (all-excluded vs no-changes, not-a-repo vs ref-not-found, warning-names-the-remedy). Typed fields on exceptions (e.g. `EmptyScopeCase`, `DiffSpecError.ref`) make this testable on structure rather than text — so the two requirements are compatible — but the criterion as written is one edit away from being read as "test exit codes only," which would defeat the differentiation the design insists on. A one-line clarification ("assert on the exception's structured fields, not its rendered message") would remove the ambiguity.
 
-### [PASS] Boundary and layer responsibility alignment
+### Run Digest
 
-Part D extracts a private helper in `cli/commands/review.py` for `(review_cwd, resolved_rules_dir)` resolution rather than copying the two-line dance a fourth/fifth time. This respects the architecture's refactoring guideline ("consolidating duplicated logic") and does not weaken the jail containment boundary — it moves the root outward to the git root that the prompt's paths were already relative to, which is the correct behavior, not a containment breach.
-
----
-
-## Debug: Prompt & Response
-
-### System Prompt
-
-You are an architectural reviewer. Your task is to evaluate whether a design
-document aligns with a parent architecture document and its stated goals.
-
-Evaluation criteria:
-- Alignment with stated architectural goals and principles
-- Violations of architectural boundaries or layer responsibilities
-- Scope creep beyond what the architecture defines
-- Dependency directions are correct
-- Integration points match what consuming/providing slices expect
-- Common antipatterns: over-engineering, under-specification, hidden dependencies
-- Failure modes enumerated for each new I/O path or message type (hang, timeout, peer disconnect mid-send) with explicit handling strategy, not "TBD" or implicit
-- If the slice touches a path with an NFR stated in the parent architecture document, the NFR is restated in this slice doc with the specific target (latency, throughput, etc.)
-
-
-Important context:
-- The `parent` field in slice frontmatter refers to the slice plan document,
-  not the architecture document. Do not flag this as an error.
-
-CRITICAL: Your verdict and findings MUST be consistent.
-- If verdict is CONCERNS or FAIL, include at least one finding with that severity.
-- If no CONCERN or FAIL findings exist, verdict MUST be PASS.
-- Every finding MUST use the exact format: ### [SEVERITY] Title
-- Every finding MUST include a `location:` tag on its own line immediately
-  after the title. This applies to PASS findings too.
-
-Slice reviews evaluate the slice **design document** (and its parent
-architecture/HLD) — not the implementation. Do not cite code paths.
-Choose the `location:` value (most specific form you can verify) from
-the documents under review:
-1. `path:line` or `path:start-end` in the slice doc — preferred when
-   you can pin the finding to a specific line or range.
-2. `path#section-heading` — when the finding is at a named section but
-   a precise line is awkward.
-3. `path` — when the finding spans the whole document.
-4. `unverified` — the explicit "I don't know" token. Use this when you
-   cannot pin the finding to a slice-doc path you are certain of.
-   **A hallucinated path is worse than `unverified`** because it looks
-   authoritative; the parser will normalize missing/blank/`-`/`global`
-   to `unverified` automatically.
-
-Report your findings using severity levels:
-
-## Summary
-[overall assessment: PASS | CONCERNS | FAIL]
-
-## Findings
-
-### [PASS|CONCERN|FAIL] Finding title
-location: <path:line | path:start-end | path#section-heading | path | unverified>
-Description with specific references.
-
-
-## Output Structure Requirements
-
-For each finding, include a category tag on the line immediately after the heading:
-
-### [CONCERN] Finding title
-category: error-handling
-
-You may also include a location tag:
-
-### [CONCERN] Finding title
-category: error-handling
-location: src/module.py:45
-
-Valid severity levels: PASS, NOTE, CONCERN, FAIL
-
-Use NOTE for informational observations that don't require action.
-Use CONCERN for issues that should be addressed but don't block progress.
-Use FAIL for issues that must be fixed before proceeding.
-
-
-### User Prompt
-
-Review the following document for architectural alignment:
-
-**Input document:** project-documents/user/slices/916-slice.review-scope-correctness.md
-**Architecture document:** project-documents/user/architecture/900-arch.maintenance-and-refactoring.md
-
-Read both documents, then evaluate the input against the architecture.
-Follow referenced files as needed to understand dependencies and integration points.
-Report your findings using the severity format described in your instructions.
-
-
-### Rules Injected
-
-None
-
-### Raw Response
-
- ## Summary
-PASS
-
-The slice design is tightly aligned with the parent 900 architecture document. It is a maintenance/refactoring slice fixing five existing defects on the `sq review` entry path, exactly the kind of cross-cutting bug-fix/refactoring work the architecture defines as in-scope. It follows the maintenance initiative guidelines: small focused parts, independently deliverable, with a deliberate sequencing. No architectural boundaries are violated; dependencies point inward to existing helpers; integration points with the pipeline review action and SDK provider are correctly enumerated.
-
-## Findings
-
-### [PASS] Scope and parent alignment
-category: scope
-location: slices/916-slice.review-scope-correctness.md:1-15
-The slice's frontmatter declares `parent: 900-slices.maintenance-and-refactoring.md`, which is the correct slice plan for the 900 architecture. The document addresses five defects (jail root, diff normalization, save gating, empty scope, SDK tool availability) — all maintenance-style bug fixes and small refactorings (e.g., extracting a shared helper for cwd/rules resolution), which is exactly what 900-arch.maintenance-and-refactoring.md#Scope lists as belonging here: "Bug fixes: Non-trivial bugs that don't belong to an active feature slice" and "Refactoring: Extracting abstractions, consolidating duplicated logic."
-
-### [PASS] Adherence to maintenance-initiative guidelines
-category: process
-location: architecture/900-arch.maintenance-and-refactoring.md#Guidelines
-The architecture says slices in this initiative should be "small and focused — prefer many small slices over few large ones" and "Each slice should be independently deliverable." The input document bundles five parts but explicitly sequences them D→A→C→B→E, states "Each part is independently committable and leaves the CLI working," and records a prior review note (F004) acknowledging the bundle sits at the edge of the guideline. This is a reasonable maintenance-bundle, not scope creep.
-
-### [PASS] Dependency direction and integration points
-category: dependencies
-location: slices/916-slice.review-scope-correctness.md#Dependencies
-Dependencies listed are existing in-project interfaces (`resolve_diff_base`/`find_git_root`, `claude_agent_sdk.ClaudeAgentOptions.tools`, the pipeline review action). No external dependencies are introduced. The design correctly places the new `assert_reviewable_scope` guard in `review/git_utils.py` and calls it from both CLI and pipeline review action entry points, satisfying the interface-parity rule and avoiding hidden dependencies on rules-directory resolution.
-
-### [PASS] Failure modes enumerated for new I/O paths
-category: error-handling
-location: slices/916-slice.review-scope-correctness.md#A5
-Part A adds a new git shell-out path (`normalize_diff_spec` / `_resolve_rev`). The document enumerates hang/timeout, cwd-outside-git-worktree, and the explicit asymmetry for unvalidated endpoints of explicit ranges, with concrete handling strategies: route through the shared `run_git` helper, add a bounded timeout there, and return non-zero with a distinct message. This satisfies the criterion that failure modes not be "TBD" or implicit.
-
-### [PASS] NFR coverage for touched paths
-category: nfr
-location: unverified
-The slice touches CLI review paths but does not introduce new latency, throughput, availability, or correctness NFRs beyond the existing functional guarantees. The architecture document 900 does not state specific NFRs for maintenance work, so no restatement is required. The design does add observable success criteria (matching `gh pr view --json files`, exit codes, warnings) that are verifiable without a parent NFR.
-
-### [PASS] Avoids common antipatterns
-category: design-quality
-location: slices/916-slice.review-scope-correctness.md#B1
-The design explicitly rejects the antipatterns flagged in the review criteria: over-engineering is avoided by not adding a new `Verdict` enum member and by not inventing a slice-less artifact naming scheme; hidden dependencies are avoided by making the empty-scope guard unconditional rather than piggy-backing on rules-directory resolution; under-specification is avoided through the detailed outcome table for save states (C2/C3), the diff-normalization shape table (A2), and the explicit sequencing rationale.
-
-### [PASS] Boundary and layer responsibility alignment
-category: boundaries
-location: slices/916-slice.review-scope-correctness.md#D1
-Part D extracts a private helper in `cli/commands/review.py` for `(review_cwd, resolved_rules_dir)` resolution rather than copying the two-line dance a fourth/fifth time. This respects the architecture's refactoring guideline ("consolidating duplicated logic") and does not weaken the jail containment boundary — it moves the root outward to the git root that the prompt's paths were already relative to, which is the correct behavior, not a containment breach.
+- Response length: 5860 chars
+- Response is newline-free: no
+- Tool calls made: 19
+- Tool calls failed: 1
+- Stop reason: stop
+- Reasoning characters: 0
+- `## Summary` located: no
+- `## Findings` located: yes
+- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — inside fences: 0
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6

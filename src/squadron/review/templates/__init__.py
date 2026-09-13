@@ -37,7 +37,13 @@ class ReviewTemplate:
     hooks: dict[str, object] | None = None
     model: str | None = None
     profile: str | None = None
+    # Two independent exclusion lists, deliberately named for what each one filters. The
+    # diff list narrows the *text handed to the model*; the tool list narrows the *paths the
+    # model may read for itself*. A document can be absent from the diff and still readable
+    # by tool, which is exactly how a review came to grade its own predecessors (#94), so
+    # conflating the two would leave that hole open.
     diff_exclude_patterns: list[str] | None = None
+    tool_exclude_patterns: list[str] | None = None
     judge: dict[str, object] | None = None
 
     # Prompt construction — exactly one of these is set (validated at load time)
@@ -140,6 +146,11 @@ def load_template(path: Path) -> ReviewTemplate:
         diff_exclude_patterns=(
             [str(p) for p in data["diff_exclude_patterns"]]  # type: ignore[union-attr]
             if "diff_exclude_patterns" in data
+            else None
+        ),
+        tool_exclude_patterns=(
+            [str(p) for p in data["tool_exclude_patterns"]]  # type: ignore[union-attr]
+            if "tool_exclude_patterns" in data
             else None
         ),
         judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]

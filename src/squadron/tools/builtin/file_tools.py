@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 
 from squadron.tools import limits
 from squadron.tools.builtin._shared import (
@@ -27,7 +26,7 @@ from squadron.tools.builtin._shared import (
     truncate,
     walk_tree,
 )
-from squadron.tools.models import ToolDescriptor, ToolExecutor, ToolResult
+from squadron.tools.models import JailSpec, ToolDescriptor, ToolExecutor, ToolResult
 from squadron.tools.registry import register
 
 _logger = logging.getLogger(__name__)
@@ -45,7 +44,7 @@ READ_FILE_PARAMETERS: dict[str, object] = {
 }
 
 
-def _read_file_factory(cwd: Path) -> ToolExecutor:
+def _read_file_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             path = require_str(args, "path")
@@ -55,9 +54,9 @@ def _read_file_factory(cwd: Path) -> ToolExecutor:
             # stall it on a slow or network filesystem (rules/python.md: synchronous work
             # inside an async def must complete in under 1ms).
             def _read() -> ToolResult:
-                target = resolve_in_jail(cwd, path)
+                target = resolve_in_jail(spec, path)
                 if target is None:
-                    return jail_violation(READ_FILE_NAME, path)
+                    return jail_violation(READ_FILE_NAME, spec, path)
                 rejection = reject_special_file(READ_FILE_NAME, target)
                 if rejection is not None:
                     return rejection
@@ -99,7 +98,7 @@ WRITE_FILE_PARAMETERS: dict[str, object] = {
 }
 
 
-def _write_file_factory(cwd: Path) -> ToolExecutor:
+def _write_file_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             path = require_str(args, "path")
@@ -113,9 +112,9 @@ def _write_file_factory(cwd: Path) -> ToolExecutor:
             # the jail — a second check cannot reject anything the first accepted, and nothing
             # is created before that check runs.
             def _write() -> ToolResult:
-                target = resolve_in_jail(cwd, path)
+                target = resolve_in_jail(spec, path)
                 if target is None:
-                    return jail_violation(WRITE_FILE_NAME, path)
+                    return jail_violation(WRITE_FILE_NAME, spec, path)
                 if target.is_dir():
                     return error(WRITE_FILE_NAME, f"path is an existing directory: {path}")
                 rejection = reject_special_file(WRITE_FILE_NAME, target)
@@ -168,7 +167,7 @@ LIST_FILES_PARAMETERS: dict[str, object] = {
 }
 
 
-def _list_files_factory(cwd: Path) -> ToolExecutor:
+def _list_files_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             path = optional_str(args, "path", ".")
@@ -178,9 +177,9 @@ def _list_files_factory(cwd: Path) -> ToolExecutor:
             # As in read_file, the whole blocking walk — resolve, stat, iterate — runs in one
             # worker thread rather than on the event loop.
             def _walk() -> ToolResult:
-                target = resolve_in_jail(cwd, path)
+                target = resolve_in_jail(spec, path)
                 if target is None:
-                    return jail_violation(LIST_FILES_NAME, path)
+                    return jail_violation(LIST_FILES_NAME, spec, path)
                 if not target.exists():
                     return error(LIST_FILES_NAME, f"path does not exist: {path}")
                 if not target.is_dir():
@@ -200,8 +199,8 @@ def _list_files_factory(cwd: Path) -> ToolExecutor:
                     if len(collected) >= max_entries:
                         capped = True
                         break
-                    if contained_in_jail(cwd, entry, tool=LIST_FILES_NAME):
-                        collected.append(format_entry(entry, cwd))
+                    if contained_in_jail(spec, entry, tool=LIST_FILES_NAME):
+                        collected.append(format_entry(entry, spec.root))
 
                 lines = sorted(collected)
                 if capped:

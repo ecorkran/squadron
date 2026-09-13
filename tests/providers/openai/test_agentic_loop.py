@@ -170,8 +170,9 @@ class TestExecuteToolCall:
         caplog.set_level(logging.WARNING)
         agent = _make_agent()
         tc = _tool_call("c1", "read_file", "{not json")
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert "not valid JSON" in content
+        assert failed is True
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
         assert "read_file" in warnings[0].getMessage()
@@ -189,8 +190,9 @@ class TestExecuteToolCall:
         agent = _make_agent()
         oversized = '{"pattern": "' + ("x" * 400_000)
         tc = _tool_call("c1", "grep", oversized)
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert "not valid JSON" in content
+        assert failed is True
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
         message = warnings[0].getMessage()
@@ -204,8 +206,9 @@ class TestExecuteToolCall:
         caplog.set_level(logging.WARNING)
         agent = _make_agent()
         tc = _tool_call("c1", "grep", '"' + ("y" * 400_000) + '"')
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert "must be a JSON object" in content
+        assert failed is True
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
         assert len(warnings[0].getMessage()) < 1000
@@ -217,8 +220,9 @@ class TestExecuteToolCall:
         caplog.set_level(logging.WARNING)
         agent = _make_agent()
         tc = _tool_call("c1", "no_such_tool", "{}")
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert "no_such_tool" in content
+        assert failed is True
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warnings) == 1
 
@@ -232,8 +236,9 @@ class TestExecuteToolCall:
             return_value=ToolResult(content="boom", is_error=True)
         )
         tc = _tool_call("c1", "boom_tool", "{}")
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert content == "boom"
+        assert failed is True
         assert any(r.levelno == logging.INFO for r in caplog.records)
         assert not any(r.levelno == logging.WARNING for r in caplog.records)
 
@@ -249,8 +254,9 @@ class TestExecuteToolCall:
         agent = _make_agent()
         agent._tool_executors["raising_tool"] = _raising  # pyright: ignore[reportPrivateUsage]
         tc = _tool_call("c1", "raising_tool", "{}")
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert "raising_tool" in content
+        assert failed is True
         errors = [r for r in caplog.records if r.levelno == logging.ERROR]
         assert len(errors) == 1
 
@@ -264,8 +270,9 @@ class TestExecuteToolCall:
             return_value=ToolResult(content="the answer")
         )
         tc = _tool_call("c1", "ok_tool", "{}")
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
         assert content == "the answer"
+        assert failed is False
         assert any(r.levelno == logging.DEBUG for r in caplog.records)
 
 
@@ -493,7 +500,7 @@ class TestAgenticLoop:
         caplog.set_level(logging.WARNING)
         agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path))
         tc = _tool_call("c1", "read_file", "[1, 2]")
-        content = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
+        content, failed = await agent._execute_tool_call(tc)  # pyright: ignore[reportPrivateUsage]
 
         assert "must be a JSON object" in content
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -719,3 +726,145 @@ class TestEmptyFinalTurn:
                 pass
 
         assert exc_info.value.tool_calls_made == 0
+
+
+class TestStopReasonEvidence:
+    """Stop-reason evidence on the final Message (slice 918, design D7/D8/D12).
+
+    Issue #92: a review returned a non-empty response that parsed to zero findings, and
+    nothing in the artifact said why. The stream's stop reason and reasoning volume are
+    the only evidence available, and the empty-turn error path (TestEmptyFinalTurn) was
+    the one place recording them — the case that needs them most returns *normally*.
+    These three keys are therefore stamped unconditionally, not only on degradation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_normal_completion_stamps_stop_reason_and_reasoning_chars(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(
+                _openrouter_chunk(reasoning="weighing it", content=None, finish_reason=None),
+                _openrouter_chunk(reasoning=None, content="the verdict", finish_reason="stop"),
+            )
+        )
+        agent = _make_agent(client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["stop_reason"] == "stop"
+        assert msgs[-1].metadata["reasoning_chars"] == len("weighing it")
+
+    @pytest.mark.asyncio
+    async def test_truncated_completion_stamps_length_stop_reason(self) -> None:
+        """The #92 shape: real text, a budget-exhausted stop, and no exception raised.
+
+        Nothing here is empty, so ``_require_final_content`` returns early and the
+        error path never runs. The stamp is the only record.
+        """
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(
+                _openrouter_chunk(
+                    reasoning="a long deliberation", content="par", finish_reason="length"
+                )
+            )
+        )
+        agent = _make_agent(client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].content == "par"
+        assert msgs[-1].metadata["stop_reason"] == "length"
+        assert msgs[-1].metadata["reasoning_chars"] == len("a long deliberation")
+
+    @pytest.mark.asyncio
+    async def test_all_tools_failing_stamps_made_equal_to_failed(self, tmp_path: Path) -> None:
+        """The kimi27 shape: every tool call errored, so the model had nothing to work from."""
+        missing_a = tool_chunk(0, "call_a", "read_file", json.dumps({"path": "nope_a.txt"}))
+        missing_b = tool_chunk(1, "call_b", "read_file", json.dumps({"path": "nope_b.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(missing_a, missing_b),
+                _async_stream(text_chunk("could not read anything")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["tool_calls_made"] == 2
+        assert msgs[-1].metadata["failed_tool_calls"] == 2
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_and_bad_arguments_count_as_failures(self, tmp_path: Path) -> None:
+        """Failures rejected before the executor runs still count (T2.1).
+
+        The number must mean "tool calls that failed", not "calls whose executor
+        returned is_error" — neither of these two reaches an executor at all.
+        """
+        unknown = tool_chunk(0, "call_a", "no_such_tool", "{}")
+        malformed = tool_chunk(1, "call_b", "read_file", "{not json")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(unknown, malformed),
+                _async_stream(text_chunk("gave up")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["tool_calls_made"] == 2
+        assert msgs[-1].metadata["failed_tool_calls"] == 2
+
+    @pytest.mark.asyncio
+    async def test_successful_tool_run_stamps_zero_failures_not_absent(self, tmp_path: Path) -> None:
+        """Zero is a real answer. Downstream (T2.6) must not render it as not-computed."""
+        (tmp_path / "a.txt").write_text("A")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(tool_chunk(0, "c1", "read_file", json.dumps({"path": "a.txt"}))),
+                _async_stream(text_chunk("read it")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["failed_tool_calls"] == 0
+        assert msgs[-1].metadata["tool_calls_made"] == 1
+
+    @pytest.mark.asyncio
+    async def test_mixed_success_and_failure_counts_only_the_failures(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        ok = tool_chunk(0, "c1", "read_file", json.dumps({"path": "a.txt"}))
+        bad = tool_chunk(1, "c2", "read_file", json.dumps({"path": "gone.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(ok, bad),
+                _async_stream(text_chunk("partial")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["tool_calls_made"] == 2
+        assert msgs[-1].metadata["failed_tool_calls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_tool_less_path_stamps_the_three_keys(self) -> None:
+        """The no-tools fast path stamps stop-reason evidence even though it stamps no
+        tool telemetry: the evidence is about the stream, not about tools."""
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(
+                _openrouter_chunk(reasoning=None, content="plain answer", finish_reason="stop")
+            )
+        )
+        agent = _make_agent(allowed_tools=None, cwd=None, client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["stop_reason"] == "stop"
+        assert msgs[-1].metadata["reasoning_chars"] == 0
+        assert msgs[-1].metadata["failed_tool_calls"] == 0
+        # Unchanged from slice 265: no tools were configured, so no tool telemetry.
+        assert "tools_given" not in msgs[-1].metadata

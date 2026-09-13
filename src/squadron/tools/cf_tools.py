@@ -27,7 +27,7 @@ from mcp.client.stdio import get_default_environment
 
 from squadron.config.manager import get_config, get_typed_config
 from squadron.tools.mcp_bridge import call_mcp_tool
-from squadron.tools.models import ToolDescriptor, ToolExecutor, ToolFactory, ToolResult
+from squadron.tools.models import JailSpec, ToolDescriptor, ToolExecutor, ToolFactory, ToolResult
 from squadron.tools.registry import register
 
 # Canonical squadron tool names.
@@ -203,7 +203,10 @@ def _make_factory(spec: CfToolSpec) -> ToolFactory:
     between these tools is their mapping-table entry.
     """
 
-    def factory(cwd: Path) -> ToolExecutor:
+    # Named ``jail`` rather than ``spec``: the enclosing ``spec`` is the CfToolSpec this
+    # builder closes over, and shadowing it here would silently redirect every ``spec.name``
+    # and ``spec.arg_map`` below to the jail.
+    def factory(jail: JailSpec) -> ToolExecutor:
         async def execute(args: dict[str, object]) -> ToolResult:
             missing = _missing_required(spec, args)
             if missing is not None:
@@ -215,8 +218,8 @@ def _make_factory(spec: CfToolSpec) -> ToolFactory:
                 )
 
             try:
-                timeout_s = int(get_typed_config(CF_MCP_TIMEOUT_KEY, int, cwd=str(cwd)))
-                server = _server_params(cwd)
+                timeout_s = int(get_typed_config(CF_MCP_TIMEOUT_KEY, int, cwd=str(jail.root)))
+                server = _server_params(jail.root)
             except ValueError as exc:
                 # Misconfiguration, not a model error: the bridge cannot be launched at all.
                 # Surfaced as a value per the 261 contract, and logged because an operator has

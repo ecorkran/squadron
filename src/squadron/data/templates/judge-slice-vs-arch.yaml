@@ -102,3 +102,21 @@ prompt_template: |
   Report a per-criterion rationale, a numeric score, a criteria map, and findings
   using the exact output shape described in your instructions. Do not emit a
   `## Summary` section or a verdict line.
+
+# Tool-jail exclusion: the reviews directory (issue #94).
+#
+# A document review's own predecessors — the live review and everything under
+# archive/ — sit inside the tool jail under the reviewed document's name prefix.
+# Without this the review reads them, quotes phrases deleted revisions ago, and
+# re-raises findings already dispositioned; three consecutive runs escalated to
+# FAIL on unchanged text.
+#
+# This is NOT diff_exclude_patterns: that narrows the text handed to the model,
+# while this narrows the paths the model may read for itself.
+#
+# The value is the single source of truth REVIEWS_DIR
+# (src/squadron/review/persistence.py) — the same constant that writes reviews.
+# tests/review/test_tool_exclusions.py pins the two together, so changing the
+# constant fails until every template here follows.
+tool_exclude_patterns:
+  - project-documents/user/reviews
