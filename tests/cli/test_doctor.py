@@ -189,3 +189,20 @@ def test_doctor_help() -> None:
     result = runner.invoke(app, ["doctor", "--help"])
     assert result.exit_code == 0
     assert "Inspect" in result.output
+
+
+def test_doctor_exits_zero_when_gh_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The gh rows are not required, so a WARN must not fail the command."""
+    import shutil as _shutil
+
+    real_which = _shutil.which
+
+    def _which(name: str, *args: object, **kwargs: object) -> str | None:
+        if name == "gh":
+            return None
+        return real_which(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(_shutil, "which", _which)
+    runner = CliRunner()
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 0

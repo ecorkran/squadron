@@ -14,6 +14,72 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 381 implementation (Phase 6)
+
+All nine parts implemented and committed on `381-slice.code-host-adapter-and-pr-target-resolution`,
+forked from and merging into `squadron-pr`. Full suite 3817 passed; ruff clean across 522 files;
+pyright zero over everything the slice touched. The three `tests/documents/test_schema_drift.py`
+failures are external — see the cf note below.
+
+**Four corrections where the design and the code disagreed.** Each was put to the PM rather than
+resolved silently. (1) `fetch_pull_request_refs` was fixed as taking a `PullRequestRecord`, but the
+post-fetch check needs `base_sha`, which the design deliberately places on `ResolvedPullRequest` as
+"the base tip the host reported at resolution". The method now takes the resolved pull request and
+reads the record from it; nothing is duplicated. (2) H.4 names `build_github_host` the single patch
+point, but `pr.py` first built one `SubprocessRunner` and used it for both the host and
+`list_remotes` — so patching the factory redirected only the `gh` calls while git enumeration
+shelled out for real, which is precisely how the enterprise test read the developer's own checkout
+and asserted against a host it never exercised. `CodeHost` gained a read-only `runner` property and
+`pr.py` takes its git work through it. (3) The cwd extraction from `review.py`, carried over from
+Phase 5. (4) `ForeignRepositoryError` read "no remote points at ecorkran/squadron; remotes are:
+origin -> ecorkran/squadron" when the only mismatch was the host; both sides now name theirs.
+
+**A gate that could not fail.** `squadron.frontmatter-gate` shells out to `cf validate frontmatter`
+with the staged paths. In a registered worktree cf silently skips out-of-root paths, reports
+`filesChecked: 0`, and exits 0 — so the gate reported success having validated nothing, and every
+`frontmatter-gate: ok` in this worktree was vacuous. Filed as context-forge#88 with the mechanism
+and a reproduction; `sq-base` filed squadron#98 for the squadron-side defense (fail closed when
+`filesChecked` is 0 and staged paths were non-empty) and confirmed `review-verdict-gate` is
+unaffected, since it parses frontmatter in-process. The same worktree-root inconsistency is
+context-forge#87's root cause. Bare `cf validate frontmatter` from the worktree checks all 507
+documents with zero findings, so 381's own documents are clean; the walkthrough records running it
+bare before merging rather than trusting the gate.
+
+**Live evidence, and what it could not show.** `ecorkran/squadron` has three pull requests (64, 66,
+83), all merged, all cross-repository from contributor forks — jakez-gh's two Windows fixes and
+mikemikimike's diff-only review hardening. None is open. On a merged pull request the four
+equivalent target forms cannot print a record: its base has necessarily advanced past the
+`baseRefOid` recorded at resolution, so the post-fetch check correctly raises
+`RefMovedSinceResolutionError` naming both shas (`4edf5f17…` expected, `796b23ac…` found — the
+latter being `main` after slice 917's DEVLOG commit). That the four forms fail *identically*, on the
+exactness check rather than on resolution, is itself evidence they resolve to one record, and a live
+demonstration that `baseRefOid` makes the check exact rather than heuristic. Both namespaced refs
+were written (`refs/squadron/pr/origin/83/{base,head}`, head at `b67cf55…` matching the fixture),
+and `git for-each-ref refs/heads` and `git status --porcelain` were byte-identical before and after
+— the no-mutation guarantee holding live, not only under test. The success path stays covered by
+`tests/cli/test_pr_show.py` over both hosts; 386's run against this initiative's own pull request
+closes the live gap.
+
+**No live GitHub Enterprise host was available.** The GHE evidence is the parametrized suite: every
+host-dependent case runs over `github.com` and `ghe.corp.example`, with a two-host `hosts.yml`
+fixture so the CLI's own `read_gh_hosts()` is what the enterprise leg exercises. A recorded GHE run
+closes that gap when a host exists.
+
+**Fixtures came off the wire**, not from memory: PR resolution, repository record, operator
+identity, REST 404 and 422, GraphQL `NOT_FOUND`, and `reviewThreads` both empty and populated, with
+the `gh` version recorded beside them. The populated threads case could not come from this
+repository — no pull request here has a single review thread — so it was captured from a public
+repository and its provenance noted, since the shape being pinned is GitHub's schema rather than
+squadron's data.
+
+**Carried forward.** `github_cli.py` is 578 lines against the ~300 guideline. Queries and response
+parsing were already split out; what remains is the class and its transport, and splitting the
+write operations or the classifier from the class they belong to would trade a line count for a
+worse boundary. Recorded as a judgment rather than forced. Issue #95 (two-token `repo number` form)
+remains open, deliberately unaddressed. Slice 918 will change `materialize()` and the `ToolFactory`
+contract; 381 does no tool binding, so they do not interact today — but 385's tool-enabled review
+paths would inherit that contract.
+
 ### Slice 381 task breakdown (Phase 5)
 
 Wrote `user/tasks/381-tasks.code-host-adapter-and-pr-target-resolution-{1,2}.md` (`cc253771`).

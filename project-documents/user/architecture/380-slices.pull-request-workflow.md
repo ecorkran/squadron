@@ -42,7 +42,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
 
 ## Foundation Work
 
-1. [ ] **(381) Code-Host Adapter and PR Target Resolution** — The adapter protocol with exactly the
+1. [x] **(381) Code-Host Adapter and PR Target Resolution** — The adapter protocol with exactly the
    operation list the parent fixes (resolve a PR, report its base and the host default branch,
    check a branch exists on the host, fetch base and head, list unresolved review discussions,
    find and update the operator's own prior comment, post a review comment, open a PR, identify

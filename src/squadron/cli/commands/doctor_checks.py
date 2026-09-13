@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
 from squadron.providers.profiles import get_all_profiles, providers_toml_path
@@ -37,6 +39,11 @@ _DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
 #: ``context-forge`` on npm is an unrelated third party's project.
 CONTEXT_FORGE_PACKAGE = "@context-forge/cli"
 CONTEXT_FORGE_INSTALL_CMD = f"npm i -g {CONTEXT_FORGE_PACKAGE}"
+
+#: How to install the GitHub CLI. Named rather than inlined at its single use:
+#: the design names this hint, and the PR-workflow tests assert on it, so it
+#: needs one definition both surfaces can reference.
+GITHUB_CLI_INSTALL_HINT = "brew install gh — or see https://cli.github.com"
 
 
 class CheckStatus(StrEnum):
@@ -285,6 +292,68 @@ def check_codex_cli() -> CheckResult:
     )
 
 
+def check_github_cli() -> CheckResult:
+    """Check if the GitHub CLI is on PATH.
+
+    Presence only. Whether the operator is authenticated is a question for the
+    host at invocation, not for a pure check.
+    """
+    path = shutil.which("gh")
+    if path:
+        return CheckResult(
+            name="gh CLI",
+            status=CheckStatus.OK,
+            detail=f"gh at {path}",
+            section=SECTION_INTEGRATIONS,
+            required=False,
+        )
+
+    return CheckResult(
+        name="gh CLI",
+        status=CheckStatus.WARN,
+        detail="not on PATH",
+        fix_hint=GITHUB_CLI_INSTALL_HINT,
+        section=SECTION_INTEGRATIONS,
+        required=False,
+    )
+
+
+def check_github_cli_hosts_file() -> CheckResult:
+    """Check that ``gh``'s hosts file exists and is readable.
+
+    The file is deliberately not parsed here: this layer reports presence, and
+    the adapter reads the hosts it needs at invocation.
+    """
+    path = gh_hosts_file_path()
+    if not path.exists():
+        return CheckResult(
+            name="gh hosts file",
+            status=CheckStatus.WARN,
+            detail="missing",
+            fix_hint="gh auth login",
+            section=SECTION_INTEGRATIONS,
+            required=False,
+        )
+
+    if not os.access(path, os.R_OK):
+        return CheckResult(
+            name="gh hosts file",
+            status=CheckStatus.WARN,
+            detail=f"not readable: {path}",
+            fix_hint="gh auth login",
+            section=SECTION_INTEGRATIONS,
+            required=False,
+        )
+
+    return CheckResult(
+        name="gh hosts file",
+        status=CheckStatus.OK,
+        detail=f"hosts file at {path}",
+        section=SECTION_INTEGRATIONS,
+        required=False,
+    )
+
+
 def check_claude_code_cli() -> CheckResult:
     """Check if the Claude Code CLI is installed (the SDK provider's dependency).
 
@@ -522,6 +591,8 @@ def run_all_checks(*, git_hooks_path: str | None = None) -> list[CheckResult]:
     _run("context-forge", check_context_forge)
     _run("codex CLI", check_codex_cli)
     _run("Claude Code CLI", check_claude_code_cli)
+    _run("gh CLI", check_github_cli)
+    _run("gh hosts file", check_github_cli_hosts_file)
     _run("skill packs", check_skill_packs)
     _run("providers.toml", check_providers_toml)
     _run("models.toml", check_models_toml)

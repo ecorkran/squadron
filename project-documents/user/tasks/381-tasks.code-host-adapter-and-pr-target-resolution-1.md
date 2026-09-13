@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/381-slice.code-host-adapter-and-pr-t
 parent: project-documents/user/architecture/380-slices.pull-request-workflow.md
 dependencies: [905]
 interfaces: [382, 384, 385]
-status: not_started
+status: complete
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
@@ -101,11 +101,11 @@ Everything downstream is tested through this seam. Build it first.
 
 ### Task A.1 — `ProcessResult`, `ProcessRunner`, `SubprocessRunner`
 
-- [ ] Create `src/squadron/core/process_runner.py` beside
+- [x] Create `src/squadron/core/process_runner.py` beside
       [subprocess_text.py](src/squadron/core/subprocess_text.py).
-- [ ] `ProcessResult`: frozen dataclass, fields `argv: tuple[str, ...]`,
+- [x] `ProcessResult`: frozen dataclass, fields `argv: tuple[str, ...]`,
       `returncode: int`, `stdout: str`, `stderr: str`.
-- [ ] `ProcessRunner` protocol, exactly this signature — `stdin` is how write
+- [x] `ProcessRunner` protocol, exactly this signature — `stdin` is how write
       operations pass a body, and it is load-bearing for Part G:
 
   ```python
@@ -113,72 +113,72 @@ Everything downstream is tested through this seam. Build it first.
           env: Mapping[str, str] | None = None, stdin: str | None = None) -> ProcessResult: ...
   ```
 
-- [ ] `SubprocessRunner.run` wraps `subprocess.run` with
+- [x] `SubprocessRunner.run` wraps `subprocess.run` with
       `capture_output=True, text=True, check=False, timeout=timeout` and
       `**TEXT_DECODING` ([subprocess_text.py:25](src/squadron/core/subprocess_text.py#L25)).
       Every text-mode subprocess call in this repo passes it; do not omit it.
-- [ ] `env` is merged **over** `os.environ`, not substituted for it. A `gh` call
+- [x] `env` is merged **over** `os.environ`, not substituted for it. A `gh` call
       with a replaced environment loses `PATH` and `HOME`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.2 — The two runner errors
 
-- [ ] `ProcessNotFoundError(executable)` from `FileNotFoundError`;
+- [x] `ProcessNotFoundError(executable)` from `FileNotFoundError`;
       `ProcessTimedOutError(argv, timeout)` from `subprocess.TimeoutExpired`.
-- [ ] Both are **distinct types**, not a shared `None` return. `run_git`
+- [x] Both are **distinct types**, not a shared `None` return. `run_git`
       ([git_utils.py:27](src/squadron/review/git_utils.py#L27)) returns `None` for
       both; the architecture names "host call exceeded its timeout" as its own
       failure mode, so 381 cannot collapse them.
-- [ ] The runner logs both at WARNING with the argv, and for the timeout the
+- [x] The runner logs both at WARNING with the argv, and for the timeout the
       bound, before raising.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task A.3 — `FakeProcessRunner`
 
-- [ ] Create `tests/codehost/` (with `__init__.py` — every tests subdirectory here
+- [x] Create `tests/codehost/` (with `__init__.py` — every tests subdirectory here
       is a package) and `tests/codehost/fake_runner.py`.
-- [ ] Scripted as an ordered list of `(argv_prefix, ProcessResult | Exception)`.
+- [x] Scripted as an ordered list of `(argv_prefix, ProcessResult | Exception)`.
       A scripted `Exception` is **raised**, which is how a wedged `gh` is produced.
-- [ ] Records every call including `cwd`, `env`, and `stdin`, so a test can assert
+- [x] Records every call including `cwd`, `env`, and `stdin`, so a test can assert
       the exact body sent over stdin.
-- [ ] An **unscripted argv raises immediately**. A fake that returns a benign
+- [x] An **unscripted argv raises immediately**. A fake that returns a benign
       default lets a test pass on a process the implementation should never have
       run — that is the whole reason this is not a `MagicMock`.
-- [ ] `write_calls()` returns the recorded argv subset that would mutate the host:
+- [x] `write_calls()` returns the recorded argv subset that would mutate the host:
       contains `-X POST`, `-X PATCH`, or `pr create`. 384's "zero writes without
       `--post`" assertion must be one call against this.
-- [ ] There is no existing `class Fake` in `tests/` to copy — this establishes the
+- [x] There is no existing `class Fake` in `tests/` to copy — this establishes the
       convention. Keep it a plain class, not a fixture, so `tests/core` can use it
       too.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task A.4 — Test: the real runner
 
-- [ ] Create `tests/core/test_process_runner.py` (`tests/core/` exists and holds
+- [x] Create `tests/core/test_process_runner.py` (`tests/core/` exists and holds
       `test_agent_registry.py`).
-- [ ] Cover, against `python -c` so no external binary is required:
-  - [ ] success — stdout, stderr, and returncode land on `ProcessResult`
-  - [ ] non-zero exit is **returned**, not raised (`check=False`)
-  - [ ] missing executable → `ProcessNotFoundError` naming the executable
-  - [ ] a sleep exceeding a short timeout → `ProcessTimedOutError` naming the bound
-  - [ ] `env` merges over `os.environ` rather than replacing it — assert a
+- [x] Cover, against `python -c` so no external binary is required:
+  - [x] success — stdout, stderr, and returncode land on `ProcessResult`
+  - [x] non-zero exit is **returned**, not raised (`check=False`)
+  - [x] missing executable → `ProcessNotFoundError` naming the executable
+  - [x] a sleep exceeding a short timeout → `ProcessTimedOutError` naming the bound
+  - [x] `env` merges over `os.environ` rather than replacing it — assert a
         pre-existing variable survives alongside the injected one
-  - [ ] non-UTF-8 bytes on stdout do not raise (the `TEXT_DECODING` pin)
-- [ ] Assert a WARNING record for both error paths (`caplog`).
-- [ ] Effort: 2
+  - [x] non-UTF-8 bytes on stdout do not raise (the `TEXT_DECODING` pin)
+- [x] Assert a WARNING record for both error paths (`caplog`).
+- [x] Effort: 2
 
 ### Task A.5 — Extract the shared cwd helper (touches `review.py`)
 
-- [ ] **Notify `sq-base` before making this edit.**
-- [ ] PM decision 20260913: `pr show --cwd` must anchor at the git root exactly as
+- [x] **Notify `sq-base` before making this edit.**
+- [x] PM decision 20260913: `pr show --cwd` must anchor at the git root exactly as
       `sq review code` does, but `_resolve_review_cwd`
       ([review.py:244](src/squadron/cli/commands/review.py#L244)) is private and
       also resolves a rules directory `pr show` does not need.
-- [ ] Create a shared CLI helper module holding the cwd half: the config-vs-flag
+- [x] Create a shared CLI helper module holding the cwd half: the config-vs-flag
       resolution now at [review.py:234-242](src/squadron/cli/commands/review.py#L234-L242)
       and the `find_git_root(...) or resolved_cwd` anchoring at
       [review.py:257](src/squadron/cli/commands/review.py#L257).
-- [ ] `_resolve_review_cwd` becomes a thin wrapper: call the shared helper, then
+- [x] `_resolve_review_cwd` becomes a thin wrapper: call the shared helper, then
       `resolve_rules_dir(review_cwd, None, rules_dir_flag)`
       ([rules.py:18](src/squadron/review/rules.py#L18)). Its signature and return
       tuple **do not change** — all five call sites
@@ -187,28 +187,28 @@ Everything downstream is tested through this seam. Build it first.
       [:877](src/squadron/cli/commands/review.py#L877),
       [:981](src/squadron/cli/commands/review.py#L981),
       [:1192](src/squadron/cli/commands/review.py#L1192)) stay untouched.
-- [ ] **Behavior-preserving.** If this edit changes any review behavior, it is
+- [x] **Behavior-preserving.** If this edit changes any review behavior, it is
       wrong. The existing review test suite is the check.
-- [ ] `find_git_root` currently lives in `review/git_utils.py`. **Accept the
+- [x] `find_git_root` currently lives in `review/git_utils.py`. **Accept the
       `cli → review` import** in the shared helper rather than moving or
       re-exporting the function: `review.py` already imports it
       ([review.py:34](src/squadron/cli/commands/review.py#L34)), `cli → review` is
       an existing and permitted direction, and relocating a function seven other
       callers use would widen a behavior-preserving extraction into a refactor.
       What matters is the prohibition below, not where `find_git_root` sits.
-- [ ] `codehost/` must **not** acquire this import in either direction. The
+- [x] `codehost/` must **not** acquire this import in either direction. The
       `cli → codehost → core` rule is what the import-graph test pins.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.6 — Test and commit Part A
 
-- [ ] Run `uv run pytest tests/core tests/review tests/cli -q`. All green — the
+- [x] Run `uv run pytest tests/core tests/review tests/cli -q`. All green — the
       review suite is what proves A.5 preserved behavior.
-- [ ] Add a test that the shared cwd helper anchors at the git root, and falls back
+- [x] Add a test that the shared cwd helper anchors at the git root, and falls back
       to the resolved cwd outside a work tree.
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
-- [ ] Commit: `feat(core): add injected process-runner seam with bounded timeouts`
-- [ ] Effort: 1
+- [x] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
+- [x] Commit: `feat(core): add injected process-runner seam with bounded timeouts`
+- [x] Effort: 1
 
 ---
 
@@ -219,8 +219,8 @@ exercise every field and every error class.
 
 ### Task B.1 — `codehost/models.py`
 
-- [ ] Create `src/squadron/codehost/` with `__init__.py`.
-- [ ] `__init__.py` **re-exports the package's public surface** — the design's
+- [x] Create `src/squadron/codehost/` with `__init__.py`.
+- [x] `__init__.py` **re-exports the package's public surface** — the design's
       Integration Points → Provides list, which is the contract 382, 384, and 385
       import. An empty `__init__.py` satisfies the "create it" bullet above and
       still breaks those slices into deep-path imports, so the re-exports are their
@@ -229,29 +229,29 @@ exercise every field and every error class.
       `OperatorIdentity`, the error hierarchy, `parse_target`, `list_remotes`,
       `select_remote`, `build_github_host`. Add each name as its part lands; the
       sweep in Part I verifies the full list imports from the package root.
-- [ ] All frozen dataclasses. Field names are the architecture's — do not rename.
-- [ ] `PullRequestRecord(host, owner, repository, number, base_ref, head_ref,
+- [x] All frozen dataclasses. Field names are the architecture's — do not rename.
+- [x] `PullRequestRecord(host, owner, repository, number, base_ref, head_ref,
       head_sha, url)` with a `key` property returning
       `f"{host}/{owner}/{repository}#{number}"`. 383 uses `key` as a filename
       prefix, so it must be stable and filesystem-safe.
-- [ ] `ResolvedPullRequest(record, title, body, state, author_login, base_sha,
+- [x] `ResolvedPullRequest(record, title, body, state, author_login, base_sha,
       is_cross_repository, head_repository, linked_issue_numbers)`.
-- [ ] `PullRequestState` enum `{OPEN, CLOSED, MERGED}`. GraphQL returns these
+- [x] `PullRequestState` enum `{OPEN, CLOSED, MERGED}`. GraphQL returns these
       uppercase; map explicitly rather than relying on case coincidence.
-- [ ] `RepositoryLocator(host, owner, repository, remote_name)`,
+- [x] `RepositoryLocator(host, owner, repository, remote_name)`,
       `LocalRemote(name, host, owner, repository, url)` where `host` is
       `str | None` for an unparseable URL.
-- [ ] `FetchedRange(base_ref, head_ref, base_sha, head_sha, merge_base,
+- [x] `FetchedRange(base_ref, head_ref, base_sha, head_sha, merge_base,
       diff_range, changed_paths)`.
-- [ ] `ReviewDiscussion(path, line, author_login, body, url)`,
+- [x] `ReviewDiscussion(path, line, author_login, body, url)`,
       `HostComment(id, author_login, body, url)`, `OperatorIdentity(host, login)`.
-- [ ] `RefRole` enum `{BASE, HEAD}`.
-- [ ] Effort: 2
+- [x] `RefRole` enum `{BASE, HEAD}`.
+- [x] Effort: 2
 
 ### Task B.2 — `codehost/errors.py`
 
-- [ ] `CodeHostError(Exception)` carrying `fix_hint: str | None`.
-- [ ] One subclass per error named in the design's error table — **nineteen
+- [x] `CodeHostError(Exception)` carrying `fix_hint: str | None`.
+- [x] One subclass per error named in the design's error table — **nineteen
       classes across its fifteen rows**, since three rows group two or three
       classes each. The count is the check; do not stop early:
       `GitHubCliMissingError`, `HostUnauthenticatedError`, `HostUnreachableError`,
@@ -262,29 +262,29 @@ exercise every field and every error class.
       `RefMovedSinceResolutionError`, `NoMergeBaseError`,
       `HostRequestRejectedError`, `PullRequestCreationRejectedError`,
       `HostResponseMalformedError`, `OperatorUnidentifiedError`.
-- [ ] Each carries its structured fields as attributes, not only in the message:
+- [x] Each carries its structured fields as attributes, not only in the message:
       `RefMovedSinceResolutionError(role, expected, actual)`,
       `HostRequestRejectedError(status, message)`,
       `HostCommandTimeoutError(argv, seconds)`,
       `RefNotFetchableError(role)`, `HostResponseMalformedError(argv, detail)`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task B.3 — `codehost/protocol.py`
 
-- [ ] `CodeHost` protocol with the eleven operations exactly as the design's
+- [x] `CodeHost` protocol with the eleven operations exactly as the design's
       listing gives them, including `serves_host(hostname) -> bool`.
-- [ ] `branch_exists` returns `bool` — a missing branch is an answer, not a raise.
+- [x] `branch_exists` returns `bool` — a missing branch is an answer, not a raise.
       Only transport and auth failures raise.
-- [ ] `fetch_pull_request_refs` is on the protocol because the refspec is the
+- [x] `fetch_pull_request_refs` is on the protocol because the refspec is the
       host's convention; the implementation supplies refspecs and delegates the
       git work to `refs.fetch_and_range`.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task B.4 — Commit Part B
 
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
-- [ ] Commit: `feat(codehost): add typed records, error hierarchy, and host protocol`
-- [ ] Effort: 1
+- [x] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
+- [x] Commit: `feat(codehost): add typed records, error hierarchy, and host protocol`
+- [x] Effort: 1
 
 ---
 
@@ -292,9 +292,9 @@ exercise every field and every error class.
 
 ### Task C.1 — `parse_target`
 
-- [ ] Create `src/squadron/codehost/targets.py`. `parse_target(text: str | None)
+- [x] Create `src/squadron/codehost/targets.py`. `parse_target(text: str | None)
       -> PullRequestTarget` with `form: TargetForm`.
-- [ ] Six forms, classified in this order, **each rule exclusive of the ones after
+- [x] Six forms, classified in this order, **each rule exclusive of the ones after
       it**. The order is the specification, not an optimization:
 
   | Order | Form | Rule | Carries |
@@ -306,36 +306,36 @@ exercise every field and every error class.
   | 5 | `NUMBER` | all digits, or `#` followed by digits | number |
   | 6 | `BRANCH` | anything else `git check-ref-format --branch` accepts | branch |
 
-- [ ] Tolerate a trailing `.git`, a trailing slash, and a `?`/`#` fragment on a URL.
-- [ ] A string failing rule 6 is `TargetSyntaxError`.
-- [ ] The grammar lives **here and nowhere else**. `pr.py` passes the raw string
+- [x] Tolerate a trailing `.git`, a trailing slash, and a `?`/`#` fragment on a URL.
+- [x] A string failing rule 6 is `TargetSyntaxError`.
+- [x] The grammar lives **here and nowhere else**. `pr.py` passes the raw string
       through; no pre-parsing at the CLI edge.
-- [ ] Do not implement the two-token form `squadron 7` — deferred as
+- [x] Do not implement the two-token form `squadron 7` — deferred as
       [issue #95](https://github.com/ecorkran/squadron/issues/95) because a second
       positional makes "branch name followed by a number" ambiguous.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task C.2 — Test: the grammar
 
-- [ ] `tests/codehost/test_targets.py`, table-driven over all six forms.
-- [ ] Pin the **exclusivity** of the ordering explicitly — these are the cases a
+- [x] `tests/codehost/test_targets.py`, table-driven over all six forms.
+- [x] Pin the **exclusivity** of the ordering explicitly — these are the cases a
       reordering would silently break:
-  - [ ] `owner/repo#7` is form 3, never form 4 or 6
-  - [ ] `repo#7` is form 4, never form 6
-  - [ ] `#7` and `7` are form 5, never form 6
-  - [ ] a branch literally named `7` is unreachable by design; assert form 5 wins
+  - [x] `owner/repo#7` is form 3, never form 4 or 6
+  - [x] `repo#7` is form 4, never form 6
+  - [x] `#7` and `7` are form 5, never form 6
+  - [x] a branch literally named `7` is unreachable by design; assert form 5 wins
         and record that as intended
-- [ ] Cover the tolerated suffixes: `.git`, trailing slash, URL fragment/query.
-- [ ] Cover `None` and `""` → form 1.
-- [ ] Assert `TargetSyntaxError` for a string valid under no rule (e.g. one
+- [x] Cover the tolerated suffixes: `.git`, trailing slash, URL fragment/query.
+- [x] Cover `None` and `""` → form 1.
+- [x] Assert `TargetSyntaxError` for a string valid under no rule (e.g. one
       containing a space or a control character).
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task C.3 — Commit
 
-- [ ] `uv run pytest tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(codehost): add PR target grammar`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(codehost): add PR target grammar`
+- [x] Effort: 1
 
 ---
 
@@ -343,64 +343,64 @@ exercise every field and every error class.
 
 ### Task D.1 — `list_remotes` and `parse_remote_url`
 
-- [ ] Create `src/squadron/codehost/remotes.py`.
-- [ ] `list_remotes(runner, cwd)` runs `git remote`, then `git remote get-url
+- [x] Create `src/squadron/codehost/remotes.py`.
+- [x] `list_remotes(runner, cwd)` runs `git remote`, then `git remote get-url
       <name>` per remote, both bounded by `GIT_QUERY_TIMEOUT_SECONDS`.
-- [ ] `parse_remote_url` handles three shapes: `https://host/owner/repo(.git)`,
+- [x] `parse_remote_url` handles three shapes: `https://host/owner/repo(.git)`,
       `ssh://git@host/owner/repo`, and the scp-like `git@host:owner/repo(.git)`.
-- [ ] A URL matching none yields `LocalRemote(host=None, ...)`. It is **never a
+- [x] A URL matching none yields `LocalRemote(host=None, ...)`. It is **never a
       candidate**, but it is retained and listed by name in ambiguity messages so
       the operator sees why it was skipped. Dropping it silently is the failure
       mode this guards.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task D.2 — `select_remote`
 
-- [ ] `select_remote(target, remotes, serves_host) -> RepositoryLocator`. Three
+- [x] `select_remote(target, remotes, serves_host) -> RepositoryLocator`. Three
       branches by target form:
-  - [ ] **Explicit** (URL, `owner/repo#n`): candidates match owner **and**
+  - [x] **Explicit** (URL, `owner/repo#n`): candidates match owner **and**
         repository case-insensitively, and host when the form names one. Zero
         candidates → `ForeignRepositoryError` naming the target's repository and
         every remote's repository. Several → take the first in `git remote` order
         and **log the choice at INFO**.
-  - [ ] **Repository-name** (`repo#n`): candidates are remotes where
+  - [x] **Repository-name** (`repo#n`): candidates are remotes where
         `serves_host(host)` and the repository name matches case-insensitively,
         owner ignored. Zero → `ForeignRepositoryError`. More than one owner →
         `AmbiguousHostRemoteError` listing `owner/repo` for each, with the
         `owner/repo#n` form as the remedy.
-  - [ ] **Bare** (number, branch, current branch): candidates are remotes where
+  - [x] **Bare** (number, branch, current branch): candidates are remotes where
         `serves_host(host)`. Exactly one required. Zero → `NoHostRemoteError`.
         More than one → `AmbiguousHostRemoteError` listing the remote names.
-- [ ] `serves_host` is passed in as a callable, not imported from `github_cli` —
+- [x] `serves_host` is passed in as a callable, not imported from `github_cli` —
       selection must stay host-agnostic.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task D.3 — Test: enumeration and selection
 
-- [ ] `tests/codehost/test_remotes.py`, against the fake runner.
-- [ ] URL parsing: all three shapes, with and without `.git`, over **both**
+- [x] `tests/codehost/test_remotes.py`, against the fake runner.
+- [x] URL parsing: all three shapes, with and without `.git`, over **both**
       `github.com` and `ghe.corp.example`.
-- [ ] An unparseable remote URL yields `host=None` and is skipped as a candidate
+- [x] An unparseable remote URL yields `host=None` and is skipped as a candidate
       **and** appears by name in the ambiguity message.
-- [ ] Fork layout (`origin` fork + `upstream` canonical, both GitHub): explicit
+- [x] Fork layout (`origin` fork + `upstream` canonical, both GitHub): explicit
       forms resolve; bare forms raise `AmbiguousHostRemoteError` whose message
       contains **both remote names** (the design names the message content as the
       deliverable here).
-- [ ] One GitHub remote + one non-GitHub mirror: bare forms **resolve**. This is
+- [x] One GitHub remote + one non-GitHub mirror: bare forms **resolve**. This is
       why `serves_host` exists; it is the case a naive "exactly one remote" rule
       gets wrong.
-- [ ] `repo#n` with the same repository name under two owners →
+- [x] `repo#n` with the same repository name under two owners →
       `AmbiguousHostRemoteError`.
-- [ ] A target naming a repository no remote points at → `ForeignRepositoryError`
+- [x] A target naming a repository no remote points at → `ForeignRepositoryError`
       naming both sides.
-- [ ] Two remotes for one repository → first in `git remote` order, INFO logged.
-- [ ] Effort: 3
+- [x] Two remotes for one repository → first in `git remote` order, INFO logged.
+- [x] Effort: 3
 
 ### Task D.4 — Commit
 
-- [ ] `uv run pytest tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(codehost): add remote enumeration and target-to-remote selection`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(codehost): add remote enumeration and target-to-remote selection`
+- [x] Effort: 1
 
 ---
 
@@ -408,50 +408,50 @@ exercise every field and every error class.
 
 ### Task E.1 — `github_config.py`
 
-- [ ] Create `src/squadron/codehost/github_config.py`. **No subprocess** in this
+- [x] Create `src/squadron/codehost/github_config.py`. **No subprocess** in this
       module.
-- [ ] `gh_hosts_file_path()`: `$GH_CONFIG_DIR/hosts.yml` when `GH_CONFIG_DIR` is
+- [x] `gh_hosts_file_path()`: `$GH_CONFIG_DIR/hosts.yml` when `GH_CONFIG_DIR` is
       set, else `~/.config/gh/hosts.yml`.
-- [ ] `read_gh_hosts()`: top-level keys of that YAML file via `pyyaml`
+- [x] `read_gh_hosts()`: top-level keys of that YAML file via `pyyaml`
       (`pyyaml>=6.0`, already a dependency — [pyproject.toml:34](pyproject.toml#L34)).
       Missing file, unreadable file, or malformed YAML yields an empty set, not a
       raise — absence of `gh` config is a normal state, and the adapter reports
       auth failures at invocation instead.
-- [ ] Use `yaml.safe_load`, never `yaml.load`.
-- [ ] Effort: 2
+- [x] Use `yaml.safe_load`, never `yaml.load`.
+- [x] Effort: 2
 
 ### Task E.2 — The two doctor checks
 
-- [ ] Add to [doctor_checks.py](src/squadron/cli/commands/doctor_checks.py),
+- [x] Add to [doctor_checks.py](src/squadron/cli/commands/doctor_checks.py),
       following `check_codex_cli`
       ([:266-285](src/squadron/cli/commands/doctor_checks.py#L266-L285)) exactly —
       same `CheckResult` shape, `section=SECTION_INTEGRATIONS`, `required=False`.
       A squadron install without PR workflows is complete.
-- [ ] `check_github_cli()`: `shutil.which("gh")`. OK with the path; WARN "not on
+- [x] `check_github_cli()`: `shutil.which("gh")`. OK with the path; WARN "not on
       PATH" with a module-level install-hint constant (`brew install gh`, or
       `https://cli.github.com`). Define the hint **once** as a constant, matching
       how the neighbours inline theirs only because they are single-use — this one
       is named in the design, so name it.
-- [ ] `check_github_cli_hosts_file()`: OK when the path from `gh_hosts_file_path()`
+- [x] `check_github_cli_hosts_file()`: OK when the path from `gh_hosts_file_path()`
       exists and `os.access(path, os.R_OK)`; WARN "missing" with hint
       `gh auth login`; WARN "not readable" with the path. **The file is not parsed
       by doctor.**
-- [ ] Register both in `run_all_checks` via `_run`, **after** the existing CLI
+- [x] Register both in `run_all_checks` via `_run`, **after** the existing CLI
       presence checks at
       [:508-509](src/squadron/cli/commands/doctor_checks.py#L508-L509).
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.3 — Test: doctor rows
 
-- [ ] Extend [tests/cli/test_doctor_checks.py](tests/cli/test_doctor_checks.py).
-- [ ] `gh` present → OK row carrying the path; absent → WARN with the install hint;
+- [x] Extend [tests/cli/test_doctor_checks.py](tests/cli/test_doctor_checks.py).
+- [x] `gh` present → OK row carrying the path; absent → WARN with the install hint;
       `sq doctor` still **exits 0** because the check is not required.
-- [ ] Hosts file present and readable → OK; missing → WARN with the `gh auth login`
+- [x] Hosts file present and readable → OK; missing → WARN with the `gh auth login`
       hint; present but unreadable → WARN naming the path. Use `tmp_path` plus
       `GH_CONFIG_DIR` rather than touching the real `~/.config/gh`.
-- [ ] `read_gh_hosts` on a malformed YAML file returns an empty set and does not
+- [x] `read_gh_hosts` on a malformed YAML file returns an empty set and does not
       raise.
-- [ ] **Write the doctor-module subprocess invariant test** (the design named an
+- [x] **Write the doctor-module subprocess invariant test** (the design named an
       "existing test extended"; none exists — see the Corrections table above).
       Assert no `subprocess.run`/`Popen` originates in `doctor_checks.py` during
       `run_all_checks`. `shutil.which` is permitted; the git-hooks path is resolved
@@ -459,13 +459,13 @@ exercise every field and every error class.
       ([doctor_checks.py:465-472](src/squadron/cli/commands/doctor_checks.py#L465-L472)).
       It lives here, with the doctor checks it guards, rather than travelling to a
       later part.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.4 — Commit
 
-- [ ] `uv run pytest tests/cli tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(doctor): add gh CLI and hosts-file presence checks`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/cli tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(doctor): add gh CLI and hosts-file presence checks`
+- [x] Effort: 1
 
 ---
 

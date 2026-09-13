@@ -49,6 +49,13 @@ now.
   inputs. It produces the same `ReviewResult`, passes through the same parser, rules loading,
   scope assertion, and tool wiring, and inherits every fix that lands on the code path. There is
   no second reviewer.
+- **Hosts identify themselves.** The protocol carries one local, read-only operation,
+  `serves_host(hostname)`, answering whether an implementation handles a given host. Bare-form
+  resolution needs it: a checkout may carry remotes on several hosts, and only the ones the
+  implementation serves are candidates — a fork with a GitLab mirror still resolves to its one
+  GitHub remote, where a naive "exactly one remote" rule would refuse. Added at 381 design
+  (`79986dea`); the parent permits additions to the protocol and forbids only extra methods on the
+  `gh` implementation.
 - **Host behind a protocol.** Every hosting interaction (resolve a PR, report its base branch
   and the host's default branch, check that a named branch exists on the host, fetch base and
   head, list unresolved review discussions, find and update the operator's own prior squadron
