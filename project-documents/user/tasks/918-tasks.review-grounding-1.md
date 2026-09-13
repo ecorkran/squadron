@@ -44,7 +44,9 @@ Issues [#94](https://github.com/ecorkran/squadron/issues/94),
 Sequenced **1 → 2 → 3** per the design. Part 1 changes a shared contract
 (`ToolFactory`, `materialize`) that Parts 2 and 3 do not touch; Part 2 touches
 `providers/openai/` and the digest; Part 3 touches neither and may land in any
-order. Each part is independently committable.
+order. Each part is independently committable and ends in a verify-and-commit
+task (T1.13, T2.10, T3.6) — do not batch a part's work into an end-of-slice
+commit.
 
 Branch: `918-slice.review-grounding`. Read `cf config get git.integration_branch`
 first — fork from and merge to its value, or `main` if empty.
@@ -171,9 +173,15 @@ Effort: 2.
       changing the downstream call.
 - [ ] Do **not** add exclusion logic to any individual tool — the predicates own
       it. A tool that reaches around them is the defect this task avoids.
+- [ ] Run the existing `tests/tools/` suite — `test_read_file`, `test_write_file`,
+      `test_list_files`, `test_grep`, `test_bash`, `test_jail`,
+      `test_jail_symlinks` — unchanged, against an empty exclusion set. They are
+      the regression test for this task: pure signature threading must not alter
+      one observable behavior. Fix the code, not the tests, if any fails.
 
-**Success:** `pyright` clean; every tool's behavior with an empty exclusion set
-is byte-identical to before. Effort: 2.
+**Success:** `pyright` clean and the existing tool suite passes untouched; every
+tool's behavior with an empty exclusion set is byte-identical to before.
+Effort: 2.
 
 ### T1.5 — Resolve root and exclusions together in `materialize`
 
@@ -214,9 +222,14 @@ today's behavior. Effort: 2.
 - [ ] Mirror the loader handling exactly
       ([templates/__init__.py:140-144](src/squadron/review/templates/__init__.py#L140-L144)):
       optional, list-of-strings, `None` when absent.
+- [ ] Test the loader beside the existing `diff_exclude_patterns` loader tests: a
+      YAML without the key loads to `None`, one with it loads to a list of
+      strings, and the two fields do not bleed into each other — a template
+      declaring only `diff_exclude_patterns` must leave `tool_exclude_patterns`
+      `None`, and vice versa.
 
-**Success:** a template YAML without the key loads to `None`; one with it loads
-to a list of strings. Effort: 1.
+**Success:** loader tests pass and the two exclusion fields are provably
+independent. Effort: 1.
 
 ### T1.8 — Declare the exclusion on the document templates
 
@@ -300,3 +313,10 @@ shows no new review-awareness. Effort: 2.
       diagnose before proceeding — do not tune the patterns speculatively.
 
 **Success:** three convergent runs, WARNINGs present, transcript clean. Effort: 1.
+
+### T1.13 — Verify and commit Part 1
+
+- [ ] `uv run pytest tests/tools tests/review -q` green; `ruff format`,
+      `ruff check`, `pyright` clean.
+- [ ] Commit: `fix(tools): exclude the reviews directory from document-review tool jails`
+- [ ] Effort: 1

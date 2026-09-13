@@ -71,18 +71,10 @@ Effort: 2.
 
 **Success:** all pass. Effort: 1.
 
-### T2.4 — Read the facts back in `review_client`
+### T2.4 — Add the `ReviewResult` fields
 
-- [ ] Read the three keys where the existing telemetry is read
-      ([review_client.py:234-238](src/squadron/review/review_client.py#L234-L238)),
-      following the same shape.
-- [ ] Carry them onto `ReviewResult` (T2.5). `None` where the provider stamped
-      nothing.
-
-**Success:** the values reach `ReviewResult` on both the openrouter and SDK
-paths, `None` on the latter. Effort: 1.
-
-### T2.5 — Add the `ReviewResult` fields
+Sequenced before the read-back: the read-back assigns to these fields, so they
+must exist first.
 
 - [ ] Add three optional fields alongside `tools_given` / `tool_calls_made`
       ([models.py:105-110](src/squadron/review/models.py#L105-L110)): stop reason
@@ -96,12 +88,32 @@ paths, `None` on the latter. Effort: 1.
 
 **Success:** fields present, frontmatter unchanged. Effort: 1.
 
-### T2.6 — Render the facts in the Run Digest
+### T2.5 — Read the facts back in `review_client`
+
+- [ ] Read the three keys where the existing telemetry is read
+      ([review_client.py:234-238](src/squadron/review/review_client.py#L234-L238)),
+      following the same shape.
+- [ ] Carry them onto the `ReviewResult` fields T2.4 added. `None` where the
+      provider stamped nothing.
+- [ ] Assert the wiring here rather than waiting for T2.8: one test that a
+      stamped openrouter run lands all three values on `ReviewResult`, and one
+      that an SDK-path run leaves all three `None`. A read-back typo is a wiring
+      mistake the end-to-end digest test would surface late and indirectly.
+
+**Success:** the values reach `ReviewResult` on both the openrouter and SDK
+paths, `None` on the latter, with tests proving it. Effort: 1.
+
+### T2.6 — Render the facts in the Run Digest, including the newline check
 
 - [ ] Add four lines to `_run_digest_lines`
       ([persistence.py:175](src/squadron/review/persistence.py#L175)): stop
       reason, reasoning characters, failed tool calls, and the newline-free
-      indicator (T2.7).
+      indicator.
+- [ ] **Compute the newline indicator here**, from `result.raw_output` — a line
+      count, or a boolean for "response contains no line breaks" — beside the
+      existing response-length line. It needs no new field and no new plumbing:
+      the raw output is already in hand at render time. See D10a below for why it
+      earns its place.
 - [ ] Put `Tool calls failed` **immediately after** the existing
       `Tool calls made` line — the pair `made: 2` / `failed: 2` names the kimi27
       shape at a glance.
@@ -115,10 +127,11 @@ paths, `None` on the latter. Effort: 1.
 
 **Success:** every artifact's digest carries all four. Effort: 1.
 
-### T2.7 — Report a newline-free response (D10a)
+### T2.7 — Record what the newline indicator is for (D10a)
 
-- [ ] Add a line count, or a boolean for "response contains no line breaks",
-      beside the existing response-length line.
+Documentation, not code — T2.6 computes the value; this task makes sure the
+reason survives.
+
 - [ ] This does **not** fix [#96](https://github.com/ecorkran/squadron/issues/96)
       — the parser fix is out of scope. It makes the artifact say *which* of the
       three known shapes occurred: never-emitted output (#92), all-tools-failed
@@ -128,8 +141,8 @@ paths, `None` on the latter. Effort: 1.
       masking and section bounding both assume line structure, so they need
       review together.
 
-**Success:** a multi-kilobyte response with zero newlines is named as such.
-Effort: 1.
+**Success:** the digest's newline line carries a comment naming the three shapes
+it discriminates and the #91 caution. Effort: 1.
 
 ### T2.8 — Test the digest, then re-run the reproduction
 
@@ -175,6 +188,17 @@ documented non-reproduction). Effort: 2.
 **Success:** the selected fix is implemented, tested, and verified against
 `sq review slice 916 -v --model kimi3`; the DEVLOG names which branch and why.
 Effort: 2 (bounded; revisit if the evidence points at prompt adherence).
+
+### T2.10 — Verify and commit Part 2
+
+- [ ] `uv run pytest tests/providers tests/review -q` green; `ruff format`,
+      `ruff check`, `pyright` clean.
+- [ ] Two commits, so the instrumentation is separable from the fix it selected:
+      `feat(review): record stop reason, reasoning volume, and failed tool calls`
+      for T2.1–T2.8, then a second naming the T2.9 branch the evidence chose.
+- [ ] If T2.9 was deferred to a follow-up issue rather than implemented, commit
+      the instrumentation alone and say so in the DEVLOG.
+- [ ] Effort: 1
 
 ---
 
@@ -256,13 +280,23 @@ Effort: 2.
 
 **Success:** all three confirmed. Effort: 1.
 
+### T3.6 — Verify and commit Part 3
+
+- [ ] `uv run pytest tests/cli -q` green; `ruff format`, `ruff check`, `pyright`
+      clean.
+- [ ] Commit: `fix(cli): install-commands removes only files it installed`
+- [ ] Effort: 1
+
 ---
 
 ## Closeout
 
+Runs after T3.6. The per-part checkpoints (T1.13, T2.10, T3.6) already gated each
+part's own tests; this is the whole-suite pass and the slice-level bookkeeping.
+
 - [ ] `ruff format`, `ruff check`, and `pyright` are clean — zero pyright errors
       is a merge blocker.
-- [ ] Full test suite passes.
+- [ ] **Full** test suite passes, not only the per-part subsets.
 - [ ] DEVLOG entry per `prompt.ai-project.system.md` § Session State Summary,
       recording: the Part 2 stop-reason evidence and which branch it selected,
       and the Part 1 reproduction outcome.
