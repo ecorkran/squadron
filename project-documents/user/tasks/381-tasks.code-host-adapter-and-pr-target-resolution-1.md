@@ -408,50 +408,50 @@ exercise every field and every error class.
 
 ### Task E.1 — `github_config.py`
 
-- [ ] Create `src/squadron/codehost/github_config.py`. **No subprocess** in this
+- [x] Create `src/squadron/codehost/github_config.py`. **No subprocess** in this
       module.
-- [ ] `gh_hosts_file_path()`: `$GH_CONFIG_DIR/hosts.yml` when `GH_CONFIG_DIR` is
+- [x] `gh_hosts_file_path()`: `$GH_CONFIG_DIR/hosts.yml` when `GH_CONFIG_DIR` is
       set, else `~/.config/gh/hosts.yml`.
-- [ ] `read_gh_hosts()`: top-level keys of that YAML file via `pyyaml`
+- [x] `read_gh_hosts()`: top-level keys of that YAML file via `pyyaml`
       (`pyyaml>=6.0`, already a dependency — [pyproject.toml:34](pyproject.toml#L34)).
       Missing file, unreadable file, or malformed YAML yields an empty set, not a
       raise — absence of `gh` config is a normal state, and the adapter reports
       auth failures at invocation instead.
-- [ ] Use `yaml.safe_load`, never `yaml.load`.
-- [ ] Effort: 2
+- [x] Use `yaml.safe_load`, never `yaml.load`.
+- [x] Effort: 2
 
 ### Task E.2 — The two doctor checks
 
-- [ ] Add to [doctor_checks.py](src/squadron/cli/commands/doctor_checks.py),
+- [x] Add to [doctor_checks.py](src/squadron/cli/commands/doctor_checks.py),
       following `check_codex_cli`
       ([:266-285](src/squadron/cli/commands/doctor_checks.py#L266-L285)) exactly —
       same `CheckResult` shape, `section=SECTION_INTEGRATIONS`, `required=False`.
       A squadron install without PR workflows is complete.
-- [ ] `check_github_cli()`: `shutil.which("gh")`. OK with the path; WARN "not on
+- [x] `check_github_cli()`: `shutil.which("gh")`. OK with the path; WARN "not on
       PATH" with a module-level install-hint constant (`brew install gh`, or
       `https://cli.github.com`). Define the hint **once** as a constant, matching
       how the neighbours inline theirs only because they are single-use — this one
       is named in the design, so name it.
-- [ ] `check_github_cli_hosts_file()`: OK when the path from `gh_hosts_file_path()`
+- [x] `check_github_cli_hosts_file()`: OK when the path from `gh_hosts_file_path()`
       exists and `os.access(path, os.R_OK)`; WARN "missing" with hint
       `gh auth login`; WARN "not readable" with the path. **The file is not parsed
       by doctor.**
-- [ ] Register both in `run_all_checks` via `_run`, **after** the existing CLI
+- [x] Register both in `run_all_checks` via `_run`, **after** the existing CLI
       presence checks at
       [:508-509](src/squadron/cli/commands/doctor_checks.py#L508-L509).
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.3 — Test: doctor rows
 
-- [ ] Extend [tests/cli/test_doctor_checks.py](tests/cli/test_doctor_checks.py).
-- [ ] `gh` present → OK row carrying the path; absent → WARN with the install hint;
+- [x] Extend [tests/cli/test_doctor_checks.py](tests/cli/test_doctor_checks.py).
+- [x] `gh` present → OK row carrying the path; absent → WARN with the install hint;
       `sq doctor` still **exits 0** because the check is not required.
-- [ ] Hosts file present and readable → OK; missing → WARN with the `gh auth login`
+- [x] Hosts file present and readable → OK; missing → WARN with the `gh auth login`
       hint; present but unreadable → WARN naming the path. Use `tmp_path` plus
       `GH_CONFIG_DIR` rather than touching the real `~/.config/gh`.
-- [ ] `read_gh_hosts` on a malformed YAML file returns an empty set and does not
+- [x] `read_gh_hosts` on a malformed YAML file returns an empty set and does not
       raise.
-- [ ] **Write the doctor-module subprocess invariant test** (the design named an
+- [x] **Write the doctor-module subprocess invariant test** (the design named an
       "existing test extended"; none exists — see the Corrections table above).
       Assert no `subprocess.run`/`Popen` originates in `doctor_checks.py` during
       `run_all_checks`. `shutil.which` is permitted; the git-hooks path is resolved
@@ -459,13 +459,13 @@ exercise every field and every error class.
       ([doctor_checks.py:465-472](src/squadron/cli/commands/doctor_checks.py#L465-L472)).
       It lives here, with the doctor checks it guards, rather than travelling to a
       later part.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.4 — Commit
 
-- [ ] `uv run pytest tests/cli tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(doctor): add gh CLI and hosts-file presence checks`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/cli tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(doctor): add gh CLI and hosts-file presence checks`
+- [x] Effort: 1
 
 ---
 
