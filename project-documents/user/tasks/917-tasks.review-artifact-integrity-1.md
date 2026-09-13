@@ -6,9 +6,9 @@ lldReference: project-documents/user/slices/917-slice.review-artifact-integrity.
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [916]
 interfaces: []
-status: in_progress
+status: complete
 dateCreated: 20260912
-dateUpdated: 20260912
+dateUpdated: 20260913
 ---
 
 # Tasks: Review Artifact Integrity (1 of 2)
@@ -225,114 +225,114 @@ branch configured). Merge to `main` when Part 6 is verified.
 
 ### Task 3.1 — Carry the scan facts on `ReviewResult`
 
-- [ ] In [models.py](src/squadron/review/models.py) add a frozen dataclass
+- [x] In [models.py](src/squadron/review/models.py) add a frozen dataclass
       `FindingScanCounts` with `total: int` (matches in the whole response),
       `in_fences: int`, `in_section: int`, `surviving: int`.
-- [ ] Add to `ReviewResult`, defaulted, after `provenance`:
+- [x] Add to `ReviewResult`, defaulted, after `provenance`:
       `summary_section_located: bool | None = None`,
       `findings_section_located: bool | None = None`,
       `finding_scan: FindingScanCounts | None = None`. `None` means "not produced
       by the parser" (e.g. a hand-built result), same convention as `provenance`.
-- [ ] `to_dict()` unchanged. A comment on the fields says they feed the Part 6
+- [x] `to_dict()` unchanged. A comment on the fields says they feed the Part 6
       digest and nothing else.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 3.2 — Mask fenced code blocks
 
-- [ ] In `parsers.py` add `_mask_fences(text) -> str` that replaces the contents
+- [x] In `parsers.py` add `_mask_fences(text) -> str` that replaces the contents
       of every fenced block (``` or ~~~ opener at line start, optional info
       string, lenient leading whitespace, closed by a matching fence or EOF) with
       spaces, preserving every newline so character offsets and line numbers of
       unfenced text are unchanged.
-- [ ] Add `_count_finding_matches(text) -> int` = `len(list(_FINDING_RE.finditer(text)))`.
+- [x] Add `_count_finding_matches(text) -> int` = `len(list(_FINDING_RE.finditer(text)))`.
       `in_fences` = count on raw text minus count on masked text.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.3 — Locate the findings section
 
-- [ ] Add `_locate_findings_section(masked_text) -> tuple[int, int] | None`.
+- [x] Add `_locate_findings_section(masked_text) -> tuple[int, int] | None`.
       Heading match is lenient: any `#`-level heading whose text, after
       stripping `*`, `_`, backticks, trailing `:`/`.`, and whitespace, equals
       `findings` case-insensitively. Span runs from the end of the heading line
       to the next heading of the same or higher level (fewer or equal `#`), or
       EOF. `###` finding headings inside the section must not terminate it.
-- [ ] Add `_locate_summary_section(masked_text) -> bool` using the same heading
+- [x] Add `_locate_summary_section(masked_text) -> bool` using the same heading
       rule for `summary`; feeds `summary_section_located`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.4 — Wire the bounded scan into the parser
 
-- [ ] Change `_extract_findings` to scan the masked text bounded to the section
+- [x] Change `_extract_findings` to scan the masked text bounded to the section
       when one is located, and the whole masked text otherwise. Return the
       findings **and** a `FindingScanCounts`, with `in_section` equal to the
       matches in the bounded region (equal to the masked-whole count when no
       section exists) and `surviving` equal to `len(findings)`.
-- [ ] In `parse_review_output` set `finding_scan`, `findings_section_located`,
+- [x] In `parse_review_output` set `finding_scan`, `findings_section_located`,
       and `summary_section_located` on the returned `ReviewResult`. Log one
       WARNING when the section is not located, naming template and model.
-- [ ] `findings_section_located=False` does **not** change `fallback_used` and
+- [x] `findings_section_located=False` does **not** change `fallback_used` and
       does not touch the `degraded` computation at
       [persistence.py:198](src/squadron/review/persistence.py#L198).
-- [ ] Success: `_FINDING_RE.finditer` appears in exactly two places —
+- [x] Success: `_FINDING_RE.finditer` appears in exactly two places —
       `_count_finding_matches` and the bounded scan (part-1 review F007).
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.5 — Test: the bounded scan
 
-- [ ] In `tests/review/test_parsers.py` add a helper that returns the text after
+- [x] In `tests/review/test_parsers.py` add a helper that returns the text after
       `### Raw Response` from a fixture file, and use it on the two headingless
       fixtures `267-review.code.*T125359.md` and `267-review.tasks.*T194649.md`:
       each parses to 6 findings, `findings_section_located is False`,
       `fallback_used is False`, and `format_review_markdown` of the result does
-      not contain `### Raw Response`.
-- [ ] Fenced specimen (the six-line block from `code.yaml:44-51` inside ```)
+      not contain `### Raw Response`. **Note: The two slice-267 fixtures were created in this slice (reconstructed from archived artifacts by stripping the persisted '## Findings' heading); they were not already in the tree as the task file claimed. Also, those fixtures DO render degraded, but because they lack a '## Summary' (verdict derived, #28), not because of the missing heading.**
+- [x] Fenced specimen (the six-line block from `code.yaml:44-51` inside ```)
       followed by nothing → 0 findings, `in_fences == total`.
-- [ ] Specimen echoed **unfenced** before a `## Findings` heading, then two real
+- [x] Specimen echoed **unfenced** before a `## Findings` heading, then two real
       findings → 2 findings, `total == 3`, `in_section == 2`.
-- [ ] Text after a `## Next Steps` heading that follows `## Findings` is not
+- [x] Text after a `## Next Steps` heading that follows `## Findings` is not
       parsed; text under `### Sub` inside `## Findings` is.
-- [ ] Heading variants each located: `## Findings`, `## **Findings**`,
-      `### findings:`, `## Findings.`, `##   Findings   `.
-- [ ] All five finding shapes still parse inside the section (extend the existing
+- [x] Heading variants each located: `## Findings`, `## **Findings**`,
+      `### findings:`, `## Findings.`, `##   Findings   `. **Note: `### findings:` is not a usable heading variant — a ### heading cannot bound ### findings — so the parametrized variant list uses `## findings:` instead, and a separate test pins the same-level fallback behavior.**
+- [x] All five finding shapes still parse inside the section (extend the existing
       five-shape test, do not duplicate it).
-- [ ] `~~~` fences are masked; an unclosed fence masks to EOF.
-- [ ] Go through every existing `test_parsers.py` test that feeds finding-shaped
+- [x] `~~~` fences are masked; an unclosed fence masks to EOF.
+- [x] Go through every existing `test_parsers.py` test that feeds finding-shaped
       text with no `## Findings` heading and confirm each still passes for the
       right reason (whole-text fallback). Do not bulk-edit fixtures.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.6 — Fence the specimen and delimit substituted content (#25)
 
-- [ ] In each of the six templates, wrap the specimen block (`## Summary` line
+- [x] In each of the six templates, wrap the specimen block (`## Summary` line
       through the `Description ...` line) in a ``` fence inside `system_prompt`.
       Precede it with one sentence: "Use exactly this structure; do not repeat
       this block in your response."
-- [ ] Wrap substituted content in descriptive XML tags in each `prompt_template`:
+- [x] Wrap substituted content in descriptive XML tags in each `prompt_template`:
       `slice.yaml` `<slice_document>`/`<architecture_document>`; `tasks.yaml`
       `<task_file>`/`<slice_design>`; `arch.yaml` `<architecture_document>`;
       `judge-slice-vs-arch.yaml` and `judge-tasks-vs-slice.yaml` the same tags
       as their review counterparts. Keep the bold label line above each tag.
-- [ ] In `code_review_prompt` ([builders/code.py:6](src/squadron/review/builders/code.py#L6))
+- [x] In `code_review_prompt` ([builders/code.py:6](src/squadron/review/builders/code.py#L6))
       wrap the scoping paragraph in `<scope>` and the reporting directive in
       `<output_format>`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task 3.7 — Test: templates
 
-- [ ] In `tests/review/test_templates.py` add one parametrized test over the six
+- [x] In `tests/review/test_templates.py` add one parametrized test over the six
       templates: `_extract_findings` on the loaded `system_prompt` yields zero
       findings (the specimen no longer parses as a finding).
-- [ ] In `tests/review/test_template_inputs.py` (or the builder's test) assert
+- [x] In `tests/review/test_template_inputs.py` (or the builder's test) assert
       the rendered user prompt for `slice`, `tasks`, `arch`, and `code` contains
       the opening and closing tag around the substituted content, and that the
       substituted text sits between them.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task 3.8 — Verify and commit Part 3
 
-- [ ] `uv run pytest tests/review -q` green; format, check, pyright clean.
-- [ ] Manual: `uv run sq review slice 916 -vv --model kimi27 --no-save` three
+- [x] `uv run pytest tests/review -q` green; format, check, pyright clean.
+- [x] Manual: `uv run sq review slice 916 -vv --model kimi27 --no-save` three
       times; no `Finding title` / `src/module.py` phantom and no path-existence
       WARNING on any run.
-- [ ] Commit: `fix(review): bound finding parse to the findings section and skip fences`
-- [ ] Effort: 1
+- [x] Commit: `fix(review): bound finding parse to the findings section and skip fences`
+- [x] Effort: 1
