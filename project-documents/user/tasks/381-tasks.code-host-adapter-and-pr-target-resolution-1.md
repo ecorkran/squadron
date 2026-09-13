@@ -219,8 +219,8 @@ exercise every field and every error class.
 
 ### Task B.1 — `codehost/models.py`
 
-- [ ] Create `src/squadron/codehost/` with `__init__.py`.
-- [ ] `__init__.py` **re-exports the package's public surface** — the design's
+- [x] Create `src/squadron/codehost/` with `__init__.py`.
+- [x] `__init__.py` **re-exports the package's public surface** — the design's
       Integration Points → Provides list, which is the contract 382, 384, and 385
       import. An empty `__init__.py` satisfies the "create it" bullet above and
       still breaks those slices into deep-path imports, so the re-exports are their
@@ -229,29 +229,29 @@ exercise every field and every error class.
       `OperatorIdentity`, the error hierarchy, `parse_target`, `list_remotes`,
       `select_remote`, `build_github_host`. Add each name as its part lands; the
       sweep in Part I verifies the full list imports from the package root.
-- [ ] All frozen dataclasses. Field names are the architecture's — do not rename.
-- [ ] `PullRequestRecord(host, owner, repository, number, base_ref, head_ref,
+- [x] All frozen dataclasses. Field names are the architecture's — do not rename.
+- [x] `PullRequestRecord(host, owner, repository, number, base_ref, head_ref,
       head_sha, url)` with a `key` property returning
       `f"{host}/{owner}/{repository}#{number}"`. 383 uses `key` as a filename
       prefix, so it must be stable and filesystem-safe.
-- [ ] `ResolvedPullRequest(record, title, body, state, author_login, base_sha,
+- [x] `ResolvedPullRequest(record, title, body, state, author_login, base_sha,
       is_cross_repository, head_repository, linked_issue_numbers)`.
-- [ ] `PullRequestState` enum `{OPEN, CLOSED, MERGED}`. GraphQL returns these
+- [x] `PullRequestState` enum `{OPEN, CLOSED, MERGED}`. GraphQL returns these
       uppercase; map explicitly rather than relying on case coincidence.
-- [ ] `RepositoryLocator(host, owner, repository, remote_name)`,
+- [x] `RepositoryLocator(host, owner, repository, remote_name)`,
       `LocalRemote(name, host, owner, repository, url)` where `host` is
       `str | None` for an unparseable URL.
-- [ ] `FetchedRange(base_ref, head_ref, base_sha, head_sha, merge_base,
+- [x] `FetchedRange(base_ref, head_ref, base_sha, head_sha, merge_base,
       diff_range, changed_paths)`.
-- [ ] `ReviewDiscussion(path, line, author_login, body, url)`,
+- [x] `ReviewDiscussion(path, line, author_login, body, url)`,
       `HostComment(id, author_login, body, url)`, `OperatorIdentity(host, login)`.
-- [ ] `RefRole` enum `{BASE, HEAD}`.
-- [ ] Effort: 2
+- [x] `RefRole` enum `{BASE, HEAD}`.
+- [x] Effort: 2
 
 ### Task B.2 — `codehost/errors.py`
 
-- [ ] `CodeHostError(Exception)` carrying `fix_hint: str | None`.
-- [ ] One subclass per error named in the design's error table — **nineteen
+- [x] `CodeHostError(Exception)` carrying `fix_hint: str | None`.
+- [x] One subclass per error named in the design's error table — **nineteen
       classes across its fifteen rows**, since three rows group two or three
       classes each. The count is the check; do not stop early:
       `GitHubCliMissingError`, `HostUnauthenticatedError`, `HostUnreachableError`,
@@ -262,29 +262,29 @@ exercise every field and every error class.
       `RefMovedSinceResolutionError`, `NoMergeBaseError`,
       `HostRequestRejectedError`, `PullRequestCreationRejectedError`,
       `HostResponseMalformedError`, `OperatorUnidentifiedError`.
-- [ ] Each carries its structured fields as attributes, not only in the message:
+- [x] Each carries its structured fields as attributes, not only in the message:
       `RefMovedSinceResolutionError(role, expected, actual)`,
       `HostRequestRejectedError(status, message)`,
       `HostCommandTimeoutError(argv, seconds)`,
       `RefNotFetchableError(role)`, `HostResponseMalformedError(argv, detail)`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task B.3 — `codehost/protocol.py`
 
-- [ ] `CodeHost` protocol with the eleven operations exactly as the design's
+- [x] `CodeHost` protocol with the eleven operations exactly as the design's
       listing gives them, including `serves_host(hostname) -> bool`.
-- [ ] `branch_exists` returns `bool` — a missing branch is an answer, not a raise.
+- [x] `branch_exists` returns `bool` — a missing branch is an answer, not a raise.
       Only transport and auth failures raise.
-- [ ] `fetch_pull_request_refs` is on the protocol because the refspec is the
+- [x] `fetch_pull_request_refs` is on the protocol because the refspec is the
       host's convention; the implementation supplies refspecs and delegates the
       git work to `refs.fetch_and_range`.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task B.4 — Commit Part B
 
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
-- [ ] Commit: `feat(codehost): add typed records, error hierarchy, and host protocol`
-- [ ] Effort: 1
+- [x] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
+- [x] Commit: `feat(codehost): add typed records, error hierarchy, and host protocol`
+- [x] Effort: 1
 
 ---
 
@@ -292,9 +292,9 @@ exercise every field and every error class.
 
 ### Task C.1 — `parse_target`
 
-- [ ] Create `src/squadron/codehost/targets.py`. `parse_target(text: str | None)
+- [x] Create `src/squadron/codehost/targets.py`. `parse_target(text: str | None)
       -> PullRequestTarget` with `form: TargetForm`.
-- [ ] Six forms, classified in this order, **each rule exclusive of the ones after
+- [x] Six forms, classified in this order, **each rule exclusive of the ones after
       it**. The order is the specification, not an optimization:
 
   | Order | Form | Rule | Carries |
@@ -306,36 +306,36 @@ exercise every field and every error class.
   | 5 | `NUMBER` | all digits, or `#` followed by digits | number |
   | 6 | `BRANCH` | anything else `git check-ref-format --branch` accepts | branch |
 
-- [ ] Tolerate a trailing `.git`, a trailing slash, and a `?`/`#` fragment on a URL.
-- [ ] A string failing rule 6 is `TargetSyntaxError`.
-- [ ] The grammar lives **here and nowhere else**. `pr.py` passes the raw string
+- [x] Tolerate a trailing `.git`, a trailing slash, and a `?`/`#` fragment on a URL.
+- [x] A string failing rule 6 is `TargetSyntaxError`.
+- [x] The grammar lives **here and nowhere else**. `pr.py` passes the raw string
       through; no pre-parsing at the CLI edge.
-- [ ] Do not implement the two-token form `squadron 7` — deferred as
+- [x] Do not implement the two-token form `squadron 7` — deferred as
       [issue #95](https://github.com/ecorkran/squadron/issues/95) because a second
       positional makes "branch name followed by a number" ambiguous.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task C.2 — Test: the grammar
 
-- [ ] `tests/codehost/test_targets.py`, table-driven over all six forms.
-- [ ] Pin the **exclusivity** of the ordering explicitly — these are the cases a
+- [x] `tests/codehost/test_targets.py`, table-driven over all six forms.
+- [x] Pin the **exclusivity** of the ordering explicitly — these are the cases a
       reordering would silently break:
-  - [ ] `owner/repo#7` is form 3, never form 4 or 6
-  - [ ] `repo#7` is form 4, never form 6
-  - [ ] `#7` and `7` are form 5, never form 6
-  - [ ] a branch literally named `7` is unreachable by design; assert form 5 wins
+  - [x] `owner/repo#7` is form 3, never form 4 or 6
+  - [x] `repo#7` is form 4, never form 6
+  - [x] `#7` and `7` are form 5, never form 6
+  - [x] a branch literally named `7` is unreachable by design; assert form 5 wins
         and record that as intended
-- [ ] Cover the tolerated suffixes: `.git`, trailing slash, URL fragment/query.
-- [ ] Cover `None` and `""` → form 1.
-- [ ] Assert `TargetSyntaxError` for a string valid under no rule (e.g. one
+- [x] Cover the tolerated suffixes: `.git`, trailing slash, URL fragment/query.
+- [x] Cover `None` and `""` → form 1.
+- [x] Assert `TargetSyntaxError` for a string valid under no rule (e.g. one
       containing a space or a control character).
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task C.3 — Commit
 
-- [ ] `uv run pytest tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(codehost): add PR target grammar`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(codehost): add PR target grammar`
+- [x] Effort: 1
 
 ---
 
@@ -343,64 +343,64 @@ exercise every field and every error class.
 
 ### Task D.1 — `list_remotes` and `parse_remote_url`
 
-- [ ] Create `src/squadron/codehost/remotes.py`.
-- [ ] `list_remotes(runner, cwd)` runs `git remote`, then `git remote get-url
+- [x] Create `src/squadron/codehost/remotes.py`.
+- [x] `list_remotes(runner, cwd)` runs `git remote`, then `git remote get-url
       <name>` per remote, both bounded by `GIT_QUERY_TIMEOUT_SECONDS`.
-- [ ] `parse_remote_url` handles three shapes: `https://host/owner/repo(.git)`,
+- [x] `parse_remote_url` handles three shapes: `https://host/owner/repo(.git)`,
       `ssh://git@host/owner/repo`, and the scp-like `git@host:owner/repo(.git)`.
-- [ ] A URL matching none yields `LocalRemote(host=None, ...)`. It is **never a
+- [x] A URL matching none yields `LocalRemote(host=None, ...)`. It is **never a
       candidate**, but it is retained and listed by name in ambiguity messages so
       the operator sees why it was skipped. Dropping it silently is the failure
       mode this guards.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task D.2 — `select_remote`
 
-- [ ] `select_remote(target, remotes, serves_host) -> RepositoryLocator`. Three
+- [x] `select_remote(target, remotes, serves_host) -> RepositoryLocator`. Three
       branches by target form:
-  - [ ] **Explicit** (URL, `owner/repo#n`): candidates match owner **and**
+  - [x] **Explicit** (URL, `owner/repo#n`): candidates match owner **and**
         repository case-insensitively, and host when the form names one. Zero
         candidates → `ForeignRepositoryError` naming the target's repository and
         every remote's repository. Several → take the first in `git remote` order
         and **log the choice at INFO**.
-  - [ ] **Repository-name** (`repo#n`): candidates are remotes where
+  - [x] **Repository-name** (`repo#n`): candidates are remotes where
         `serves_host(host)` and the repository name matches case-insensitively,
         owner ignored. Zero → `ForeignRepositoryError`. More than one owner →
         `AmbiguousHostRemoteError` listing `owner/repo` for each, with the
         `owner/repo#n` form as the remedy.
-  - [ ] **Bare** (number, branch, current branch): candidates are remotes where
+  - [x] **Bare** (number, branch, current branch): candidates are remotes where
         `serves_host(host)`. Exactly one required. Zero → `NoHostRemoteError`.
         More than one → `AmbiguousHostRemoteError` listing the remote names.
-- [ ] `serves_host` is passed in as a callable, not imported from `github_cli` —
+- [x] `serves_host` is passed in as a callable, not imported from `github_cli` —
       selection must stay host-agnostic.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task D.3 — Test: enumeration and selection
 
-- [ ] `tests/codehost/test_remotes.py`, against the fake runner.
-- [ ] URL parsing: all three shapes, with and without `.git`, over **both**
+- [x] `tests/codehost/test_remotes.py`, against the fake runner.
+- [x] URL parsing: all three shapes, with and without `.git`, over **both**
       `github.com` and `ghe.corp.example`.
-- [ ] An unparseable remote URL yields `host=None` and is skipped as a candidate
+- [x] An unparseable remote URL yields `host=None` and is skipped as a candidate
       **and** appears by name in the ambiguity message.
-- [ ] Fork layout (`origin` fork + `upstream` canonical, both GitHub): explicit
+- [x] Fork layout (`origin` fork + `upstream` canonical, both GitHub): explicit
       forms resolve; bare forms raise `AmbiguousHostRemoteError` whose message
       contains **both remote names** (the design names the message content as the
       deliverable here).
-- [ ] One GitHub remote + one non-GitHub mirror: bare forms **resolve**. This is
+- [x] One GitHub remote + one non-GitHub mirror: bare forms **resolve**. This is
       why `serves_host` exists; it is the case a naive "exactly one remote" rule
       gets wrong.
-- [ ] `repo#n` with the same repository name under two owners →
+- [x] `repo#n` with the same repository name under two owners →
       `AmbiguousHostRemoteError`.
-- [ ] A target naming a repository no remote points at → `ForeignRepositoryError`
+- [x] A target naming a repository no remote points at → `ForeignRepositoryError`
       naming both sides.
-- [ ] Two remotes for one repository → first in `git remote` order, INFO logged.
-- [ ] Effort: 3
+- [x] Two remotes for one repository → first in `git remote` order, INFO logged.
+- [x] Effort: 3
 
 ### Task D.4 — Commit
 
-- [ ] `uv run pytest tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(codehost): add remote enumeration and target-to-remote selection`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(codehost): add remote enumeration and target-to-remote selection`
+- [x] Effort: 1
 
 ---
 
