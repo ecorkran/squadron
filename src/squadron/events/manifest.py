@@ -58,6 +58,9 @@ class ManifestError(ValueError):
 DEFAULT_BINDINGS: tuple[Binding, ...] = (
     Binding(event=EventType.COMMIT, action="squadron.frontmatter-gate", params={}, source="built-in"),
     Binding(
+        event=EventType.COMMIT, action="squadron.review-verdict-gate", params={}, source="built-in"
+    ),
+    Binding(
         event=EventType.POST_ACTION, action="squadron.dispatch-artifact", params={}, source="built-in"
     ),
     Binding(
