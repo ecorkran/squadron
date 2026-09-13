@@ -237,7 +237,18 @@ cause was the tool layer failing twice first. (That run's own cause was a jail r
 predating `_resolve_review_cwd` — issue #86, fixed on `main` but not in any release. The
 misattribution is the durable defect, not the stale binary.)
 
-917 made both shapes **more visible without fixing either**. The always-on Run Digest
+A third shape landed 20260913, on this very slice's own review
+(`918-review.slice.review-grounding.md`, `moonshotai/kimi-k2.7-code`, sha `4b04eece`).
+The model emitted a complete, well-formed review — `## Summary`, verdict `PASS`, four
+findings each with `category:` and `location:` tags — with **zero newlines in 3076
+characters**. `_SUMMARY_RE` requires `##\s+Summary\s*\n+`, so the verdict never parsed;
+every `_FINDING_RE` terminator lookahead is `\n`-anchored, so finding #1 absorbed the
+other three; and `_CATEGORY_RE`/`_LOCATION_RE` are `^…$` under `MULTILINE`, so all eight
+tags were dropped. Restoring newlines takes finding matches from 1 to 4. Filed as
+[#96](https://github.com/ecorkran/squadron/issues/96), with
+[#97](https://github.com/ecorkran/squadron/issues/97) for the derived-verdict consequence.
+
+917 made all three shapes **more visible without fixing any of them**. The always-on Run Digest
 ([persistence.py:184](src/squadron/review/persistence.py#L184)) shows a long response with
 no located sections and zero surviving matches. What it does not show is *why* — and in
 the kimi27 shape it does not show that tools failed at all, so a reader cannot tell "the
@@ -302,6 +313,15 @@ count of `0` is a real answer and must not render as not-computed.
 The failed-call line earns its place next to the existing `Tool calls made` line: the pair
 `Tool calls made: 2` / `Tool calls failed: 2` names the kimi27 shape at a glance.
 
+**D10a — Report a newline-free response as its own digest fact.** #96's fix belongs to the
+parser, not here, but the *condition* is a one-line check and it is the cheapest possible
+discriminator: a multi-kilobyte response containing no line breaks is never a real review,
+and it explains an UNKNOWN verdict and a collapsed finding list at a glance. Add a line
+count (or a boolean for "response contains no line breaks") beside the response length.
+This part does not fix #96; it makes the artifact say which of the three shapes occurred.
+Note for whoever fixes #96: the same leniency must not reopen #91 — 917 Part F's fence
+masking and section bounding both assume line structure, so they need review together.
+
 **D11 — Add the corresponding `ReviewResult` fields as optional.** Three nullable
 fields alongside `tool_calls_made` and the 917 digest fields. `None` means not reported,
 exactly as the existing tri-state fields use it. Not serialized into frontmatter (D10).
@@ -339,6 +359,9 @@ Record which branch the evidence selected in the DEVLOG before implementing it.
   equal and non-zero — the kimi27 shape, distinguishable from a model that simply produced
   nothing. A test drives a review whose tools all error and asserts both counts.
 - A run with no failed tool calls reports `0`, not not-computed.
+- A newline-free response is named as such in the digest, so the #96 shape is
+  distinguishable from #92's never-emitted output and from the kimi27 all-tools-fail shape.
+  A test parses a known newline-free response and asserts the digest says so.
 - An SDK-path review renders the stop reason and reasoning count as not-computed rather
   than as fabricated values.
 - The #92 reproduction is re-run, its stop reason recorded in the DEVLOG, and the
