@@ -67,7 +67,7 @@ changed-file list a review would examine, without a model in the loop.
 
 | Plan text | Finding at design | Disposition |
 |---|---|---|
-| "exactly the operation list the parent fixes" | Bare-form resolution needs to know which remotes belong to the host an implementation serves (a fork layout with a GitLab mirror must still count one GitHub remote). That is a question to the implementation, not a git question. | The protocol gains one local, read-only operation, `serves_host(hostname)`. The parent permits additions to the protocol; it forbids extra methods on the `gh` implementation. Recorded in the parent under Design Goals when this slice merges. |
+| "exactly the operation list the parent fixes" | Bare-form resolution needs to know which remotes belong to the host an implementation serves (a fork layout with a GitLab mirror must still count one GitHub remote). That is a question to the implementation, not a git question. | The protocol gains one local, read-only operation, `serves_host(hostname)`. The parent permits additions to the protocol; it forbids extra methods on the `gh` implementation. Recorded in the parent under Design Goals, alongside the `repo#n` grammar form. |
 | "base moved since resolution" as a failure mode | `gh` exposes `baseRefOid`, so the base tip at resolution time is known and the post-fetch check is exact, not heuristic. The same check applies to the head. | One error class with a role field (base or head). |
 | "check a branch exists on the host" | A missing branch is an answer, not a failure. | Returns `False`; only transport and auth failures raise. |
 
@@ -157,8 +157,11 @@ class ProcessResult:
 
 class ProcessRunner(Protocol):
     def run(self, argv: Sequence[str], *, cwd: str | None, timeout: float,
-            env: Mapping[str, str] | None = None) -> ProcessResult: ...
+            env: Mapping[str, str] | None = None, stdin: str | None = None) -> ProcessResult: ...
 ```
+
+`stdin` is how write operations pass a comment or PR body (see the GitHub implementation); the
+fake runner records it alongside the argv so a test can assert the exact body sent.
 
 - `SubprocessRunner.run` wraps `subprocess.run(capture_output=True, text=True, **TEXT_DECODING,
   check=False, timeout=timeout)`. `FileNotFoundError` becomes `ProcessNotFoundError(executable)`;
@@ -303,7 +306,7 @@ Nothing in this slice assumes `github.com`:
 | `resolve_pull_request` by branch | `gh api graphql ... pullRequests(headRefName:$branch, states:OPEN, first:2)` | zero nodes → `NoOpenPullRequestForBranchError`; two → `AmbiguousBranchPullRequestsError` |
 | `default_branch` | `gh api repos/{owner}/{repo}` → `default_branch` | `status` |
 | `branch_exists` | `gh api repos/{owner}/{repo}/branches/{branch}` | 200 → True, 404 → False |
-| `list_unresolved_discussions` | `gh api graphql` `reviewThreads(first:100, after:$cursor)` filtered `isResolved == false`, paged until `hasNextPage` is false or `MAX_DISCUSSION_PAGES` | GraphQL errors |
+| `list_unresolved_discussions` | `gh api graphql` `reviewThreads(first:100, after:$cursor)` filtered `isResolved == false`, paged until `hasNextPage` is false or `MAX_DISCUSSION_PAGES = 10` (1000 threads; a PR past that is logged at WARNING with the count truncated) | GraphQL errors |
 | `find_own_comment` | `gh api --paginate repos/{owner}/{repo}/issues/{n}/comments`, filter `user.login == operator` and marker in body; earliest by `created_at` | `status` |
 | `post_comment` | `gh api -X POST repos/{owner}/{repo}/issues/{n}/comments -f body=@-` (body on stdin) | `status` |
 | `update_comment` | `gh api -X PATCH repos/{owner}/{repo}/issues/comments/{id} -f body=@-` | `status` |
@@ -317,7 +320,7 @@ exact argv, which is the contract 384 and 385 rely on.
 
 Body text for writes goes over stdin (`-f body=@-`), never through argv, so a review body of any
 size or content cannot hit the argument-length limit or be mangled by shell-adjacent handling.
-The runner gains an optional `stdin: str | None` parameter for this.
+This is what the runner's `stdin` parameter exists for.
 
 **Failure classification**, applied in one function `_classify_failure(result) -> CodeHostError`
 that every operation calls on a non-zero exit:

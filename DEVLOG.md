@@ -37,7 +37,11 @@ calls them. PM edits after review: a sixth target form `repo#n` (owner taken fro
 `github.com` and an enterprise host, no live GHE available). `sq pr show [TARGET] [--cwd]
 [--json]` is the proving consumer; two doctor rows
 (`gh` on PATH, hosts file readable) are WARN-level presence checks. Live evidence target is PR
-83 (merged, cross-repository). Next: Phase 5 task breakdown for 381; announce the `app.py`
+83 (merged, cross-repository). Design review: glm-5.3 was too slow to finish; kimi and glm-5.2
+returned quickly, glm-5.2 PASS with one concern and two notes, all dispositioned (`stdin` on the
+runner protocol signature, `MAX_DISCUSSION_PAGES = 10`, and the `repo#n` form plus the
+`serves_host` operation recorded in the architecture document). Next: Phase 5 task breakdown
+for 381; announce the `app.py`
 registration edit to `sq-base` before making it.
 
 ### Initiative 380 slice plan (Phase 3)

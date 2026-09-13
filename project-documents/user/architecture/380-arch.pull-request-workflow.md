@@ -53,7 +53,9 @@ now.
   and the host's default branch, check that a named branch exists on the host, fetch base and
   head, list unresolved review discussions, find and update the operator's own prior squadron
   comment, post a review comment, open a PR, identify the operator)
-  goes through one adapter protocol. That list is the protocol; a slice that needs another
+  goes through one adapter protocol, plus one local, read-only question added by slice 381:
+  whether the implementation serves a given hostname, which bare-form target resolution needs
+  to tell a host remote from any other. That list is the protocol; a slice that needs another
   operation adds it to the protocol, never as an extra method on the `gh` implementation. It whose operations are named by intent, not by any host's
   feature vocabulary. GitHub via the operator's authenticated `gh` is the only implementation
   this initiative builds. The protocol is shaped so that GitHub over its API directly (for CI and
@@ -181,11 +183,13 @@ only after the CLI has proven the shape.
 
 ## Technical Considerations
 
-- **Target grammar.** A target may be a number, a full URL, `owner/repo#n`, a branch name, or
-  absent (the PR for the current branch). Resolution must be unambiguous. The explicit forms
-  (URL, `owner/repo#n`) name their repository and resolve against whichever local remote points
-  at it; the bare forms (number, branch, absent) need exactly one host remote and fail loudly
-  when there are none or several, as they do when the branch has no open PR. A target that names
+- **Target grammar.** A target may be a number, a full URL, `owner/repo#n`, `repo#n`, a branch
+  name, or absent (the PR for the current branch). Resolution must be unambiguous. The explicit
+  forms (URL, `owner/repo#n`) name their repository and resolve against whichever local remote
+  points at it; `repo#n` names only the repository and resolves against the host remotes with
+  that repository name, failing when more than one owner has it; the bare forms (number, branch,
+  absent) need exactly one host remote and fail loudly when there are none or several, as they
+  do when the branch has no open PR. A target that names
   a repository none of the current repository's remotes points at is refused with the mismatch
   named; cross-repository review is not supported. The grammar is fixed at the adapter
   boundary and nowhere else.
