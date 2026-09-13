@@ -203,6 +203,13 @@ here touches the host or the operator-facing surface.
       histories (`NoMergeBaseError`).
 - [ ] Cross-repository: the head fetches from `refs/pull/<n>/head` with only one
       remote configured.
+- [ ] **No enterprise-hostname leg here, deliberately.** The design's GHE bullet
+      lists "fetch refspecs" among the paths to parametrize over both hosts, but the
+      fetch path is host-independent by construction: `refs.py` takes refspec sources
+      from its caller and names the *remote*, never the host, so no git argv on this
+      path carries a hostname. Parsing and selection are parametrized in D.3,
+      resolution and identity in F.5. Record this rather than adding a vacuous leg,
+      so the I.2 sweep has a definite answer instead of an apparent gap.
 - [ ] (The doctor-module subprocess invariant test lives with the doctor checks in
       Part E, not here — it guards Part E's work and belongs in its test task.)
 - [ ] Effort: 3
@@ -282,6 +289,17 @@ here touches the host or the operator-facing surface.
 
 - [ ] `tests/cli/test_pr_show.py`, using the `cli_runner` fixture
       ([tests/cli/conftest.py:14](tests/cli/conftest.py#L14)).
+- [ ] **The injection seam — name it, do not invent one at execution time.**
+      `pr.py` reaches the host through `build_github_host(runner)` (F.2), so that
+      factory is the single patch point: monkeypatch it in a module-scoped fixture to
+      return `GitHubCli(FakeProcessRunner(script), hosts)`. Do not patch
+      `SubprocessRunner`, and do not thread a test-only parameter through the command
+      signature. Every other mechanism in this slice is pinned to the call; this one
+      is the mechanism the headline criterion depends on, so it is pinned here too.
+- [ ] The enterprise leg needs the CLI's own `read_gh_hosts()` to see both hosts:
+      set `GH_CONFIG_DIR` to a two-host `hosts.yml` fixture, as the doctor test task
+      already does — not by passing `hosts` past the factory, which would bypass the
+      path under test.
 - [ ] **All six target forms resolve to the same `PullRequestRecord`** for the same
       PR — one parametrized test with identical scripted host responses, run once
       on `github.com` and once on the enterprise hostname. This is the slice's
@@ -416,3 +434,44 @@ here touches the host or the operator-facing surface.
 - [ ] Merge the slice branch into `squadron-pr` (the configured
       `git.integration_branch`). **Never to `main`.**
 - [ ] Effort: 2
+
+---
+
+## Task Review Disposition (part 2)
+
+Task review (`381-review.tasks.code-host-adapter-and-pr-target-resolution.part-2.md`,
+z-ai/glm-5.3-flash, CONCERNS, 20260913, sha `ea0fca58`, 34 tool calls) — the
+companion to the part-1 disposition in file 1, reviewing this file against the
+post-disposition state. Two concerns and one note actioned.
+
+- **F007 (concern) — accepted, the substantive one.** H.4 and H.5 require
+  `sq pr show` to run against the fake runner through `cli_runner`, and H.4 requires
+  the two-host enterprise leg, but no task said how a CLI-level test routes the
+  command onto the fake or how the CLI's `read_gh_hosts()` sees the fixture. Verified:
+  the design names the construction pattern and F.2 supplies `build_github_host` as
+  the entry point, but neither is connected to the CLI tests. This was the one
+  mechanism left for the implementer to invent, and it is the one the slice's
+  headline criterion rests on. H.4 now names the seam — monkeypatch
+  `build_github_host` in a fixture — and names `GH_CONFIG_DIR` for the hosts fixture,
+  with the two wrong ways to do it ruled out explicitly.
+- **F008 (concern) — accepted.** Two design statements superseded at task breakdown
+  were never synced back into the design: the seventh functional criterion still said
+  the subprocess-invariant test was an "existing test extended", and the Testing
+  listing still placed `test_errors_observable.py` under `tests/codehost/`. Verified
+  both still read that way. This is the same procedural defect part-1's F007 raised
+  about the cwd extraction — which *was* synced, leaving these two as the stragglers.
+  Both design lines are amended and two rows added to the design's Scope corrections
+  table, so a reader auditing tasks against design finds no stale text. No scope
+  change: the task files already carried the corrected work.
+- **F006 (note) — accepted.** The design's GHE bullet lists "fetch refspecs" among the
+  paths to parametrize over both hosts, but G.3 had no enterprise leg. The review
+  reasons the leg is vacuous; that is right — `refs.py` names the remote, never the
+  host, so no git argv on the fetch path carries a hostname. G.3 now records why the
+  path is host-independent rather than adding an empty parametrization, giving the
+  I.2 sweep a definite answer instead of an apparent gap.
+- **F005 (note) — acknowledged, no change.** F.5 is flagged as the densest remaining
+  task and a candidate for the same split H.4/H.5 received. It is one cohesive
+  subject with a table-driven structure specified; carried as an execution watch-item,
+  to be split then if it balloons.
+- **F004 (note)** — confirms no load/performance NFR exists to cover; no action.
+- **F001–F003 (pass)** — no action.

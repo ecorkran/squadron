@@ -523,8 +523,12 @@ concerns and two notes actioned; one finding corrected in both directions.
 - **F001–F003 (pass)** — no action.
 
 Note on scope: the review's `sourceDocument` names file 1 and its filename says
-`part-1`, but its findings cover both files. No part 2 had arrived when this
-disposition was written; if one lands, it is dispositioned on top of this section.
+`part-1`, but its findings cover both files. A part-2 review has since arrived
+(sha `ea0fca58`, reviewing the post-disposition state); it is dispositioned in the
+**Task Review Disposition (part 2)** section at the end of
+[file 2](project-documents/user/tasks/381-tasks.code-host-adapter-and-pr-target-resolution-2.md),
+whose `sourceDocument` it names. Its F008 synced two superseded statements back into
+the design; nothing in this file's dispositions was reversed.
 
 ---
 

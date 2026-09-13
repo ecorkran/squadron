@@ -6,7 +6,7 @@ parent: user/architecture/380-slices.pull-request-workflow.md
 dependencies: [905]
 interfaces: [382, 384, 385]
 dateCreated: 20260912
-dateUpdated: 20260912
+dateUpdated: 20260913
 status: not_started
 ---
 
@@ -72,6 +72,8 @@ changed-file list a review would examine, without a model in the loop.
 | "base moved since resolution" as a failure mode | `gh` exposes `baseRefOid`, so the base tip at resolution time is known and the post-fetch check is exact, not heuristic. The same check applies to the head. | One error class with a role field (base or head). |
 | "check a branch exists on the host" | A missing branch is an answer, not a failure. | Returns `False`; only transport and auth failures raise. |
 | "Nothing under `src/squadron/review/` changes" (Excluded, Coordination) | Found at task breakdown, not at design: `sq pr show --cwd` must anchor at the git root exactly as `sq review code` does, but that logic is `_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show` has no use for. Duplicating it violates DRY; importing a private helper across command modules is worse. | PM decision 20260913: extract the cwd half into a shared CLI helper; `_resolve_review_cwd` becomes a thin wrapper with an unchanged signature and all five call sites untouched. Behavior-preserving, committed on its own, and announced to `sq-base` as a second coordinated edit. |
+| "`run_all_checks` still makes no subprocess call (**existing test extended**)" (Success Criteria → Functional) | Found at task breakdown: no such test exists — `grep subprocess tests/cli/test_doctor_checks.py` returns nothing. The invariant is also narrower than stated: `run_all_checks` calls `shutil.which` freely, and `git_hooks_path` is resolved by the caller precisely because a subprocess would violate the module's contract. | The criterion is amended to say the test is **written** by this slice, and to state the invariant as it actually holds. The doctor test task in Part E writes it. |
+| "`test_errors_observable.py`" under `tests/codehost/` (Testing) | Found at task breakdown: exit codes are observable only through the CLI, and the design's own criterion couples type, log level, and exit code in a single assertion — which a test under `tests/codehost/` cannot make. | Placement deviation, deliberate: the table-driven type/log/exit test lives in `tests/cli/test_pr_show.py`. The Testing listing is amended. If it outgrows that home, split it out then. |
 
 Effort stays 4/5.
 
@@ -472,7 +474,9 @@ sq pr show [TARGET] [--cwd PATH] [--json]
 - Closed and merged PRs resolve and fetch; `state` is reported. Cross-repository PRs fetch from
   the base repository's `refs/pull/<n>/head` without a second remote.
 - `sq doctor` shows the two new rows; with `gh` absent it reports and does not install;
-  `run_all_checks` still makes no subprocess call (existing test extended).
+  `run_all_checks` makes no subprocess call from the doctor-checks module (test written by this
+  slice; no such test existed — see Scope corrections). `shutil.which` is permitted, and the
+  git-hooks path is resolved by the caller.
 
 ### Technical
 
@@ -581,8 +585,11 @@ The output of steps 3 and 5 for one run is recorded in the DEVLOG entry that clo
 ### Testing
 
 - `tests/codehost/`: `fake_runner.py`, `fixtures/gh/*.json`, `test_targets.py`, `test_remotes.py`,
-  `test_github_cli.py`, `test_refs.py`, `test_errors_observable.py` (the table-driven
-  type/log/exit test), `test_import_boundaries.py`.
+  `test_github_cli.py`, `test_refs.py`, `test_import_boundaries.py`.
+- The table-driven type/log/exit test (originally listed here as `test_errors_observable.py`)
+  lives in `tests/cli/test_pr_show.py` instead: exit codes are observable only through the CLI,
+  and this criterion couples type, log level, and exit code in one assertion. See Scope
+  corrections.
 - `tests/core/test_process_runner.py`: the real runner against `python -c` for success, missing
   executable, and a sleep that exceeds a short timeout.
 - `tests/cli/test_pr_show.py` and additions to `tests/cli/test_doctor_checks.py`.
