@@ -43,23 +43,23 @@ here touches the host or the operator-facing surface.
 
 ### Task F.2 — `GitHubCli` construction and `serves_host`
 
-- [ ] Create `src/squadron/codehost/github_cli.py`.
+- [x] Create `src/squadron/codehost/github_cli.py`.
       `GitHubCli(runner: ProcessRunner, hosts: frozenset[str])`.
-- [ ] `hosts` is built once by the CLI from `read_gh_hosts()` plus `github.com`.
+- [x] `hosts` is built once by the CLI from `read_gh_hosts()` plus `github.com`.
       `serves_host` is a set-membership test — `github.com` is the one host
       recognized without a `hosts.yml` entry.
-- [ ] Module constants: `HOST_COMMAND_TIMEOUT_SECONDS = 30`,
+- [x] Module constants: `HOST_COMMAND_TIMEOUT_SECONDS = 30`,
       `MAX_DISCUSSION_PAGES = 10`. Values, not literals at call sites.
-- [ ] A private `_run_gh` helper is the **only** place `gh` is invoked. It appends
+- [x] A private `_run_gh` helper is the **only** place `gh` is invoked. It appends
       `--hostname <host>`, sets env `GH_PROMPT_DISABLED=1`,
       `GH_NO_UPDATE_NOTIFIER=1`, `NO_COLOR=1`, and applies the timeout. A wedged
       prompt or an update banner in parsed output is what this prevents.
-- [ ] `build_github_host(runner)` factory — the one entry point the CLI uses.
-- [ ] Effort: 3
+- [x] `build_github_host(runner)` factory — the one entry point the CLI uses.
+- [x] Effort: 3
 
 ### Task F.3 — `_classify_failure`
 
-- [ ] One function every operation calls on a non-zero exit. **Structural signals
+- [x] One function every operation calls on a non-zero exit. **Structural signals
       only — never message-text matching.** Applied in this order:
   1. [ ] `returncode == 4` → `HostUnauthenticatedError(host)`, fix hint
          `gh auth login --hostname <host>`.
@@ -72,75 +72,75 @@ here touches the host or the operator-facing surface.
          This is the residual "ran but got no HTTP response" bucket; the verbatim
          stderr is what tells the operator the real cause, including for a
          squadron-side argv bug.
-- [ ] `ProcessNotFoundError` → `GitHubCliMissingError`; `ProcessTimedOutError` →
+- [x] `ProcessNotFoundError` → `GitHubCliMissingError`; `ProcessTimedOutError` →
       `HostCommandTimeoutError(argv, seconds)`.
-- [ ] JSON that should parse and does not, or JSON missing a required field →
+- [x] JSON that should parse and does not, or JSON missing a required field →
       `HostResponseMalformedError(argv, detail)`. This is how `gh` drift is
       reported instead of a `KeyError`.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task F.4 — Read operations
 
-- [ ] `resolve_pull_request` **by number**: `gh api graphql -F owner -F name
+- [x] `resolve_pull_request` **by number**: `gh api graphql -F owner -F name
       -F number -f query=<PR_QUERY>`. `PR_QUERY` is a module constant requesting
       `number url title body state author{login} baseRefName baseRefOid
       headRefName headRefOid isCrossRepository headRepository{nameWithOwner}
       closingIssuesReferences(first:20){nodes{number}}`.
-- [ ] `resolve_pull_request` **by branch**: `pullRequests(headRefName:$branch,
+- [x] `resolve_pull_request` **by branch**: `pullRequests(headRefName:$branch,
       states:OPEN, first:2)`. Zero nodes → `NoOpenPullRequestForBranchError`; two →
       `AmbiguousBranchPullRequestsError`. `first:2` is deliberate — it distinguishes
       one from many without paging.
-- [ ] `resolve_pull_request` under form 1 (current branch) reads the branch via
+- [x] `resolve_pull_request` under form 1 (current branch) reads the branch via
       `git rev-parse --abbrev-ref HEAD`; a detached HEAD is
       `TargetUnresolvableError` naming the state.
-- [ ] `default_branch`: `gh api repos/{owner}/{repo}` → `default_branch`.
-- [ ] `branch_exists`: `gh api repos/{owner}/{repo}/branches/{branch}` — 200 →
+- [x] `default_branch`: `gh api repos/{owner}/{repo}` → `default_branch`.
+- [x] `branch_exists`: `gh api repos/{owner}/{repo}/branches/{branch}` — 200 →
       `True`, 404 → `False`, everything else raises.
-- [ ] `identify_operator`: `gh api --hostname {host} user` → `login`; a response
+- [x] `identify_operator`: `gh api --hostname {host} user` → `login`; a response
       with no login is `OperatorUnidentifiedError`.
-- [ ] `list_unresolved_discussions`: GraphQL `reviewThreads(first:100,
+- [x] `list_unresolved_discussions`: GraphQL `reviewThreads(first:100,
       after:$cursor)` filtered to `isResolved == false`, paged until `hasNextPage`
       is false or `MAX_DISCUSSION_PAGES`. Hitting the cap **logs at WARNING with
       the truncated count** — a silently truncated list is a review that quietly
       misses comments.
-- [ ] `base_sha` on `ResolvedPullRequest` comes from `baseRefOid`. This is what
+- [x] `base_sha` on `ResolvedPullRequest` comes from `baseRefOid`. This is what
       makes Part G's post-fetch check exact rather than heuristic.
-- [ ] Split the GraphQL constants into `github_queries.py` if `github_cli.py`
+- [x] Split the GraphQL constants into `github_queries.py` if `github_cli.py`
       exceeds ~300 lines.
-- [ ] Effort: 4
+- [x] Effort: 4
 
 ### Task F.5 — Test: reads, argv pinning, and classification
 
-- [ ] `tests/codehost/test_github_cli.py` against the fake runner and F.1's
+- [x] `tests/codehost/test_github_cli.py` against the fake runner and F.1's
       fixtures.
-- [ ] **Pin the exact argv** for every operation. This is the contract 384 and 385
+- [x] **Pin the exact argv** for every operation. This is the contract 384 and 385
       build on, and the only defense against the `HostUnreachableError` residual
       bucket absorbing a squadron-side argv bug.
-- [ ] Assert **every** `gh` argv carries `--hostname` and the three env vars.
-- [ ] Parametrize every host-dependent case over `github.com` **and**
+- [x] Assert **every** `gh` argv carries `--hostname` and the three env vars.
+- [x] Parametrize every host-dependent case over `github.com` **and**
       `ghe.corp.example`, with a hosts-file fixture listing both. Assert the
       enterprise run's argv carries the enterprise hostname. GitHub Enterprise is a
       stated requirement; no live GHE is available, so this parametrization is the
       whole of the evidence.
-- [ ] Classification table, one case each: exit 4; REST 401; REST 404; REST 422;
+- [x] Classification table, one case each: exit 4; REST 401; REST 404; REST 422;
       GraphQL `NOT_FOUND`; GraphQL other; no-JSON-no-HTTP → `HostUnreachableError`
       **with `gh`'s stderr present in the error**; `ProcessNotFoundError` →
       `GitHubCliMissingError`; `ProcessTimedOutError` → `HostCommandTimeoutError`
       naming the bound; malformed JSON and a missing required field →
       `HostResponseMalformedError`.
-- [ ] `branch_exists` returns `False` on 404 and **does not raise**; it raises on
+- [x] `branch_exists` returns `False` on 404 and **does not raise**; it raises on
       500.
-- [ ] Branch resolution: zero, one, and two open PRs.
-- [ ] Discussion paging: a populated page, an empty page, and a scripted run
+- [x] Branch resolution: zero, one, and two open PRs.
+- [x] Discussion paging: a populated page, an empty page, and a scripted run
       exceeding `MAX_DISCUSSION_PAGES` asserting the WARNING and the truncation.
-- [ ] Closed and merged PRs resolve, with `state` reported correctly.
-- [ ] Effort: 4
+- [x] Closed and merged PRs resolve, with `state` reported correctly.
+- [x] Effort: 4
 
 ### Task F.6 — Commit
 
-- [ ] `uv run pytest tests/codehost -q`; ruff; pyright.
-- [ ] Commit: `feat(codehost): add GitHub host reads over gh with structural failure classification`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/codehost -q`; ruff; pyright.
+- [x] Commit: `feat(codehost): add GitHub host reads over gh with structural failure classification`
+- [x] Effort: 1
 
 ---
 

@@ -29,6 +29,7 @@ from squadron.codehost.errors import (
     TargetSyntaxError,
     TargetUnresolvableError,
 )
+from squadron.codehost.github_cli import GitHubCli, build_github_host
 from squadron.codehost.models import (
     FetchedRange,
     HostComment,
@@ -52,6 +53,7 @@ __all__ = [
     "CodeHostError",
     "FetchedRange",
     "ForeignRepositoryError",
+    "GitHubCli",
     "GitHubCliMissingError",
     "HostComment",
     "HostCommandTimeoutError",
@@ -80,6 +82,7 @@ __all__ = [
     "TargetSyntaxError",
     "TargetUnresolvableError",
     # Sorted uppercase-first above; the functions trail by convention.
+    "build_github_host",
     "list_remotes",
     "parse_remote_url",
     "parse_target",
