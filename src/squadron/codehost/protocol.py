@@ -1,0 +1,85 @@
+"""The code-host contract.
+
+Eleven operations, exactly as the design's listing gives them. An implementation
+serves one or more hosts and answers questions about repositories on them; it
+never decides *which* repository — that is the job of the target grammar and
+remote selection, which stay host-agnostic.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol
+
+from squadron.codehost.models import (
+    FetchedRange,
+    HostComment,
+    OperatorIdentity,
+    PullRequestRecord,
+    RepositoryLocator,
+    ResolvedPullRequest,
+    ReviewDiscussion,
+)
+
+if TYPE_CHECKING:
+    # Defined in targets.py (Part C). Imported under TYPE_CHECKING so the
+    # annotation resolves for type checkers without a runtime import cycle:
+    # selection passes a parsed target in, and targets.py imports nothing here.
+    from squadron.codehost.targets import PullRequestTarget
+
+
+class CodeHost(Protocol):
+    """A read-and-write interface to one code-hosting service."""
+
+    def serves_host(self, hostname: str) -> bool:
+        """Whether this implementation handles ``hostname``.
+
+        Bare-form resolution needs it: a checkout may carry remotes on several
+        hosts, and only the ones this implementation serves are candidates.
+        Local and read-only — it asks the implementation, not the network.
+        """
+        ...
+
+    def resolve_pull_request(
+        self, locator: RepositoryLocator, target: PullRequestTarget
+    ) -> ResolvedPullRequest: ...
+
+    def default_branch(self, locator: RepositoryLocator) -> str: ...
+
+    def branch_exists(self, locator: RepositoryLocator, branch: str) -> bool:
+        """Whether ``branch`` exists on the host.
+
+        A missing branch is an answer, so this returns ``False``. Only
+        transport and auth failures raise.
+        """
+        ...
+
+    def fetch_pull_request_refs(
+        self, record: PullRequestRecord, *, remote_name: str, cwd: str
+    ) -> FetchedRange:
+        """Fetch base and head into local refs and describe the range.
+
+        On the protocol because the refspec is the host's convention; the
+        implementation supplies refspecs and delegates the git work to
+        ``refs.fetch_and_range``.
+        """
+        ...
+
+    def list_unresolved_discussions(self, record: PullRequestRecord) -> list[ReviewDiscussion]: ...
+
+    def find_own_comment(self, record: PullRequestRecord, *, marker: str) -> HostComment | None: ...
+
+    def update_comment(self, record: PullRequestRecord, comment_id: str, body: str) -> HostComment: ...
+
+    def post_comment(self, record: PullRequestRecord, body: str) -> HostComment: ...
+
+    def open_pull_request(
+        self,
+        locator: RepositoryLocator,
+        *,
+        base: str,
+        head: str,
+        title: str,
+        body: str,
+    ) -> PullRequestRecord: ...
+
+    def identify_operator(self, hostname: str) -> OperatorIdentity: ...
