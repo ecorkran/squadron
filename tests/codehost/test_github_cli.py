@@ -26,6 +26,7 @@ from squadron.codehost.errors import (
     HostUnreachableError,
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
+    PullRequestCreationRejectedError,
 )
 from squadron.codehost.github_cli import (
     HOST_COMMAND_TIMEOUT_SECONDS,
@@ -33,6 +34,7 @@ from squadron.codehost.github_cli import (
     GitHubCli,
 )
 from squadron.codehost.models import (
+    HostComment,
     PullRequestRecord,
     PullRequestState,
     RepositoryLocator,
@@ -56,7 +58,7 @@ def _fixture(name: str) -> str:
     return (_FIXTURES / name).read_text(encoding="utf-8")
 
 
-def _ok(stdout: str) -> ProcessResult:
+def _ok(stdout: str = "") -> ProcessResult:
     return ProcessResult(argv=(), returncode=0, stdout=stdout, stderr="")
 
 
@@ -363,3 +365,210 @@ def test_paging_stops_at_the_cap_and_warns_with_the_count(
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert warnings, "hitting the page cap must be observable"
     assert str(MAX_DISCUSSION_PAGES) in warnings[0].getMessage()
+
+
+# --- Write operations: argv pinned, bodies over stdin ----------------------
+
+_BODY_WITH_EVERYTHING = (
+    "-leading dash\n"
+    "line two with \"double quotes\" and 'single'\n"
+    "```\nfenced block\n```\n"
+    "backticks `inline` and a trailing newline\n"
+)
+
+
+def _comment_payload(comment_id: int = 555, login: str = "ecorkran") -> str:
+    return json.dumps(
+        {
+            "id": comment_id,
+            "body": "posted",
+            "html_url": f"https://github.com/ecorkran/squadron/issues/83#issuecomment-{comment_id}",
+            "user": {"login": login},
+        }
+    )
+
+
+def test_post_comment_argv_and_body_over_stdin() -> None:
+    cli, runner = _host([(["gh", "api", "-X", "POST"], _ok(_comment_payload()))])
+    comment = cli.post_comment(_record(), _BODY_WITH_EVERYTHING)
+
+    call = runner.calls[0]
+    assert call.argv == (
+        "gh",
+        "api",
+        "-X",
+        "POST",
+        "repos/ecorkran/squadron/issues/83/comments",
+        "-f",
+        "body=@-",
+        "--hostname",
+        GITHUB,
+    )
+    # Byte-for-byte over stdin, and nowhere in argv.
+    assert call.stdin == _BODY_WITH_EVERYTHING
+    assert not any(_BODY_WITH_EVERYTHING in arg for arg in call.argv)
+    assert comment.id == "555"
+
+
+def test_update_comment_argv_and_body_over_stdin() -> None:
+    cli, runner = _host([(["gh", "api", "-X", "PATCH"], _ok(_comment_payload()))])
+    cli.update_comment(_record(), "555", _BODY_WITH_EVERYTHING)
+
+    call = runner.calls[0]
+    assert call.argv == (
+        "gh",
+        "api",
+        "-X",
+        "PATCH",
+        "repos/ecorkran/squadron/issues/comments/555",
+        "-f",
+        "body=@-",
+        "--hostname",
+        GITHUB,
+    )
+    assert call.stdin == _BODY_WITH_EVERYTHING
+    assert not any(_BODY_WITH_EVERYTHING in arg for arg in call.argv)
+
+
+def test_open_pull_request_argv_and_body_over_stdin() -> None:
+    payload = json.dumps(
+        {
+            "number": 90,
+            "html_url": "https://github.com/ecorkran/squadron/pull/90",
+            "head": {"sha": "abc123"},
+        }
+    )
+    cli, runner = _host([(["gh", "api", "-X", "POST"], _ok(payload))])
+    record = cli.open_pull_request(
+        _locator(), base="main", head="feat", title="A title", body=_BODY_WITH_EVERYTHING
+    )
+
+    call = runner.calls[0]
+    assert call.argv[:5] == ("gh", "api", "-X", "POST", "repos/ecorkran/squadron/pulls")
+    assert "title=A title" in call.argv
+    assert "head=feat" in call.argv
+    assert "base=main" in call.argv
+    assert "body=@-" in call.argv
+    assert call.stdin == _BODY_WITH_EVERYTHING
+    assert not any(_BODY_WITH_EVERYTHING in arg for arg in call.argv)
+    assert record.number == 90
+    assert record.head_sha == "abc123"
+
+
+def test_open_pull_request_422_is_creation_rejected() -> None:
+    cli, _ = _host([(["gh", "api", "-X", "POST"], _fail(1, stdout=_fixture("rest-422.json")))])
+    with pytest.raises(PullRequestCreationRejectedError):
+        cli.open_pull_request(_locator(), base="main", head="nope", title="t", body="b")
+
+
+# --- write_calls() captures every mutation ---------------------------------
+
+
+def test_write_calls_captures_each_write_operation() -> None:
+    cli, runner = _host(
+        [
+            (["gh", "api", "-X", "POST"], _ok(_comment_payload())),
+            (["gh", "api", "-X", "PATCH"], _ok(_comment_payload())),
+            (
+                ["gh", "api", "-X", "POST"],
+                _ok(json.dumps({"number": 90, "html_url": "u", "head": {"sha": "s"}})),
+            ),
+        ]
+    )
+    cli.post_comment(_record(), "one")
+    cli.update_comment(_record(), "555", "two")
+    cli.open_pull_request(_locator(), base="main", head="feat", title="t", body="b")
+
+    assert len(runner.write_calls()) == 3
+
+
+def test_write_calls_is_empty_across_the_whole_read_pipeline() -> None:
+    """Half of 381's read-only proof; the CLI-level half is in the pr show tests.
+
+    Parse target, select remote, resolve, fetch and range — everything the read
+    path does at this point in the sequence. Neither half may be dropped.
+    """
+    from squadron.codehost.remotes import list_remotes, select_remote
+
+    runner = FakeProcessRunner(
+        [
+            (["git", "remote"], _ok("origin\n")),
+            (["git", "remote", "get-url"], _ok(f"https://{GITHUB}/ecorkran/squadron.git\n")),
+            (["gh", "api", "graphql"], _ok(_fixture("pr83-resolve.json"))),
+            (["git", "fetch"], _ok()),
+            (["git", "rev-parse", "--verify"], _ok("4edf5f1709489da9494906b2178e27dea6a9ae10")),
+            (["git", "rev-parse", "--verify"], _ok("b67cf55495f01bc2da843d8f96c767a11770e330")),
+            (["git", "merge-base"], _ok("1111111111111111111111111111111111111111")),
+            (["git", "diff", "--name-only"], _ok("src/a.py\n")),
+        ]
+    )
+    cli = GitHubCli(runner, HOSTS)
+
+    target = parse_target("83")
+    remotes = list_remotes(runner, cwd="/repo")
+    locator = select_remote(target, remotes, cli.serves_host)
+    resolved = cli.resolve_pull_request(locator, target)
+    cli.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd="/repo")
+
+    assert runner.write_calls() == [], "the read path must not mutate the host"
+
+
+# --- find_own_comment -------------------------------------------------------
+
+_MARKER = "<!-- squadron-review -->"
+
+
+def _comments_page(*comments: dict[str, Any]) -> str:
+    return json.dumps(list(comments))
+
+
+def _comment(comment_id: int, login: str, body: str, created_at: str) -> dict[str, Any]:
+    return {
+        "id": comment_id,
+        "user": {"login": login},
+        "body": body,
+        "created_at": created_at,
+        "html_url": f"https://example/{comment_id}",
+    }
+
+
+def _find_own(script_comments: str) -> HostComment | None:
+    cli, _ = _host(
+        [
+            (["gh", "api", "user"], _ok(_fixture("user.json"))),
+            (["gh", "api", "--paginate"], _ok(script_comments)),
+        ]
+    )
+    return cli.find_own_comment(_record(), marker=_MARKER)
+
+
+def test_find_own_comment_returns_none_when_no_match() -> None:
+    page = _comments_page(_comment(1, "ecorkran", "no marker here", "2026-01-01T00:00:00Z"))
+    assert _find_own(page) is None
+
+
+def test_find_own_comment_takes_the_earliest_by_created_at() -> None:
+    page = _comments_page(
+        _comment(2, "ecorkran", f"later {_MARKER}", "2026-03-01T00:00:00Z"),
+        _comment(1, "ecorkran", f"earlier {_MARKER}", "2026-01-01T00:00:00Z"),
+    )
+    found = _find_own(page)
+    assert found is not None
+    assert found.id == "1"
+
+
+def test_find_own_comment_ignores_another_authors_marker() -> None:
+    """A marker quoted by someone else is not ours."""
+    page = _comments_page(_comment(9, "someone-else", f"quoting {_MARKER}", "2026-01-01T00:00:00Z"))
+    assert _find_own(page) is None
+
+
+def test_find_own_comment_uses_paginate() -> None:
+    cli, runner = _host(
+        [
+            (["gh", "api", "user"], _ok(_fixture("user.json"))),
+            (["gh", "api", "--paginate"], _ok(_comments_page())),
+        ]
+    )
+    cli.find_own_comment(_record(), marker=_MARKER)
+    assert "--paginate" in runner.calls[1].argv
