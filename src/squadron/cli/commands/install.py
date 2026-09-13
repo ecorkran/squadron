@@ -8,6 +8,14 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from squadron.skills.models import InstallReceipt
+from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, read_receipt, write_receipt
+
+# Receipt identity for the bundled command set. One receipt spans every subdirectory the
+# install touched, so uninstall can reach them all without guessing which are squadron's.
+# Named once here because it is the key both the write and the read address (#65).
+COMMANDS_RECEIPT_NAME = "squadron-commands"
+
 
 def _get_commands_source() -> Path:
     """Locate the bundled commands directory.
@@ -38,38 +46,71 @@ def install_commands(
         "--target",
         help="Target directory for command files",
     ),
+    receipts_dir: Path = typer.Option(
+        DEFAULT_RECEIPTS_DIR,
+        "--receipts-dir",
+        help="Directory holding the install receipt",
+    ),
 ) -> None:
     """Install squadron slash commands for Claude Code."""
     source = _get_commands_source()
     target_dir = Path(target).expanduser()
 
+    # What the *previous* install wrote, or None on a first install (or one predating
+    # receipts). This is the only authority for what squadron owns: the target
+    # subdirectories are shared with the user's own commands, so presence in one proves
+    # nothing about who put it there.
+    try:
+        previous = read_receipt(COMMANDS_RECEIPT_NAME, receipts_dir)
+    except ValueError as exc:
+        rprint(f"[red]Error reading install receipt: {exc}[/red]")
+        raise typer.Exit(code=1) from None
+    previously_written: set[str] = set(previous.files_written) if previous else set()
+
     installed: list[str] = []
-    removed: list[str] = []
     for sub in sorted(source.iterdir()):
         if not sub.is_dir():
             continue
         dest_sub = target_dir / sub.name
         dest_sub.mkdir(parents=True, exist_ok=True)
-        source_files = {md_file.name for md_file in sub.glob("*.md")}
         for md_file in sorted(sub.glob("*.md")):
             shutil.copy2(md_file, dest_sub / md_file.name)
             installed.append(f"{sub.name}/{md_file.name}")
-        for existing in sorted(dest_sub.glob("*.md")):
-            if existing.name not in source_files:
-                existing.unlink()
-                removed.append(f"{sub.name}/{existing.name}")
+
+    # A file is stale only if the previous receipt names it and this bundle no longer
+    # does. Anything else in these directories is the user's (issue #65: the old code
+    # unlinked every *.md it did not recognize, destroying files like
+    # ~/.claude/commands/analysis/mine.md).
+    removed: list[str] = []
+    for stale in sorted(previously_written - set(installed)):
+        stale_path = target_dir / stale
+        # A receipt entry for a file the user already deleted is not an error — the
+        # desired end state is "absent", and it already holds.
+        if stale_path.exists():
+            stale_path.unlink()
+        removed.append(stale)
 
     if not installed:
         rprint("[yellow]No command files found to install.[/yellow]")
-    else:
-        rprint(f"[green]Installed {len(installed)} command(s) to {target_dir}:[/green]")
-        for name in installed:
-            rprint(f"  {name}")
+        return
 
-        if removed:
-            rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
-            for name in removed:
-                rprint(f"  {name}")
+    write_receipt(
+        InstallReceipt(
+            pack_name=COMMANDS_RECEIPT_NAME,
+            destination=target_dir,
+            files_written=installed,
+        ),
+        receipts_dir,
+    )
+
+    rprint(f"[green]Installed {len(installed)} command(s) to {target_dir}:[/green]")
+    for name in installed:
+        rprint(f"  {name}")
+
+    if removed:
+        rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
+        for name in removed:
+            rprint(f"  {name}")
 
 
 def uninstall_commands(
@@ -78,14 +119,47 @@ def uninstall_commands(
         "--target",
         help="Target directory to remove commands from",
     ),
+    receipts_dir: Path = typer.Option(
+        DEFAULT_RECEIPTS_DIR,
+        "--receipts-dir",
+        help="Directory holding the install receipt",
+    ),
 ) -> None:
     """Remove squadron slash commands from Claude Code."""
     target_dir = Path(target).expanduser()
-    sq_dir = target_dir / "sq"
 
-    if not sq_dir.is_dir():
-        rprint(f"[yellow]Nothing to remove — {sq_dir} does not exist.[/yellow]")
-    else:
-        files_removed = list(sq_dir.glob("*.md"))
-        shutil.rmtree(sq_dir)
-        rprint(f"[green]Removed {sq_dir} ({len(files_removed)} file(s)).[/green]")
+    try:
+        receipt = read_receipt(COMMANDS_RECEIPT_NAME, receipts_dir)
+    except ValueError as exc:
+        rprint(f"[red]Error reading install receipt: {exc}[/red]")
+        raise typer.Exit(code=1) from None
+
+    if receipt is None:
+        # A pre-receipt installation. Its files are indistinguishable from the user's own,
+        # so removing anything would be guessing — say so rather than guess.
+        rprint(
+            "[yellow]Nothing to remove — no install receipt found. "
+            "Re-run 'sq install-commands' to record one, then uninstall.[/yellow]"
+        )
+        return
+
+    # Every subdirectory the install touched, not just sq/ (issue #65 finding 1: the old
+    # rmtree of sq/ left analysis/ and any other subdirectory behind).
+    removed = 0
+    touched_dirs: set[Path] = set()
+    for relative in receipt.files_written:
+        path = target_dir / relative
+        touched_dirs.add(path.parent)
+        if path.exists():
+            path.unlink()
+            removed += 1
+
+    # Never rmtree: these directories are shared with the user's own commands. Remove one
+    # only once it holds nothing.
+    for directory in sorted(touched_dirs, reverse=True):
+        if directory.is_dir() and directory != target_dir and not any(directory.iterdir()):
+            directory.rmdir()
+
+    (receipts_dir / f"{COMMANDS_RECEIPT_NAME}.toml").unlink(missing_ok=True)
+
+    rprint(f"[green]Removed {removed} command(s) from {target_dir}.[/green]")

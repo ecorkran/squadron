@@ -40,10 +40,22 @@ class InstallResult:
 
 
 class InstallReceipt(BaseModel):
-    """Persisted record of an install, consulted by uninstall to remove exact files."""
+    """Persisted record of an install, consulted by uninstall to remove exact files.
+
+    Shared by skill packs and by the bundled slash commands (``sq install-commands``),
+    which is why ``surface`` is optional: it describes how a *pack* exposes its commands
+    (a prefix directory or a dispatch file) and has no meaning for the bundled set, whose
+    layout is fixed. ``None`` says the field does not apply rather than overloading an
+    enum member to mean something it does not — the uninstall paths compare it with
+    ``==``, so a ``None`` surface simply matches no branch.
+
+    ``files_written`` entries are relative to ``destination``. The bundled-commands
+    installer writes ``<subdir>/<name>.md``, so one receipt spans every subdirectory it
+    touched.
+    """
 
     pack_name: str
-    surface: SurfaceType
+    surface: SurfaceType | None = None
     destination: Path
     files_written: list[str]
 

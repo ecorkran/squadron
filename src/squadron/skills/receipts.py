@@ -23,12 +23,16 @@ def write_receipt(receipt: InstallReceipt, receipts_dir: Path) -> None:
     pack (reinstall is idempotent).
     """
     receipts_dir.mkdir(parents=True, exist_ok=True)
-    payload = {
+    payload: dict[str, object] = {
         "pack_name": receipt.pack_name,
-        "surface": str(receipt.surface),
         "destination": str(receipt.destination),
         "files_written": receipt.files_written,
     }
+    # Omitted entirely when it does not apply (the bundled-commands installer). TOML has
+    # no null, and writing str(None) would round-trip as the literal string "None" and
+    # fail validation on read.
+    if receipt.surface is not None:
+        payload["surface"] = str(receipt.surface)
     target = receipts_dir / f"{receipt.pack_name}.toml"
     with open(target, "wb") as fh:
         tomli_w.dump(payload, fh)

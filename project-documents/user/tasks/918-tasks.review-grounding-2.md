@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/918-slice.review-grounding.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [917]
 interfaces: []
-status: not_started
+status: in_progress
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
@@ -24,36 +24,36 @@ and sequencing are in `918-tasks.review-grounding-1.md`.
 
 ### T2.1 — Count failed tool calls in the agent
 
-- [ ] Widen `_execute_tool_call` ([agent.py:355](src/squadron/providers/openai/agent.py#L355))
+- [x] Widen `_execute_tool_call` ([agent.py:355](src/squadron/providers/openai/agent.py#L355))
       to return the error-ness alongside the content — it currently returns
       `str`, discarding `ToolResult.is_error` at the return.
-- [ ] **Do not** match on an `"Error: "` prefix downstream. String-dispatch on
+- [x] **Do not** match on an `"Error: "` prefix downstream. String-dispatch on
       content is forbidden by project rules and would break the moment a tool's
       message wording changes.
-- [ ] Count the executor-raised path ([agent.py:367](src/squadron/providers/openai/agent.py#L367))
+- [x] Count the executor-raised path ([agent.py:367](src/squadron/providers/openai/agent.py#L367))
       and the unknown-tool path ([agent.py:362](src/squadron/providers/openai/agent.py#L362))
       as failures too — the number must mean "tool calls that failed", not
       "tool calls whose executor returned `is_error`".
-- [ ] Add the counter beside `tool_calls_made` ([agent.py:457](src/squadron/providers/openai/agent.py#L457)).
+- [x] Add the counter beside `tool_calls_made` ([agent.py:457](src/squadron/providers/openai/agent.py#L457)).
 
 **Success:** a run in which every tool errors reports made == failed, non-zero.
 Effort: 2.
 
 ### T2.2 — Stamp the three facts on final-`Message.metadata`
 
-- [ ] At the existing stamp site ([agent.py:522-526](src/squadron/providers/openai/agent.py#L522-L526)),
+- [x] At the existing stamp site ([agent.py:522-526](src/squadron/providers/openai/agent.py#L522-L526)),
       add the stop reason, the reasoning character count, and the failed-call
       count — the same channel tool telemetry already uses (D8).
-- [ ] Take the stop reason and reasoning count from the final `TurnResult`.
+- [x] Take the stop reason and reasoning count from the final `TurnResult`.
       **Do not widen `TurnResult`'s caller-facing role** — it is documented as
       internal plumbing ([agent.py:91-93](src/squadron/providers/openai/agent.py#L91-L93))
       and must stay that way.
-- [ ] Stamp unconditionally, on success and on degradation alike. The failure
+- [x] Stamp unconditionally, on success and on degradation alike. The failure
       today is precisely that `_require_final_content`
       ([agent.py:67](src/squadron/providers/openai/agent.py#L67)) returns early
       unless the turn `is_empty()`, so the one case where the stop reason *is*
       the diagnosis records neither.
-- [ ] Do **not** stamp anything on the SDK provider path (D12). `finish_reason`
+- [x] Do **not** stamp anything on the SDK provider path (D12). `finish_reason`
       is an OpenAI/OpenRouter streaming concept; an absent key reads as `None`
       and renders as not-computed. Do not fabricate a value.
 
@@ -61,13 +61,13 @@ Effort: 2.
 
 ### T2.3 — Test the agent stamping
 
-- [ ] With a fake stream: a normal completion stamps a stop reason and a
+- [x] With a fake stream: a normal completion stamps a stop reason and a
       reasoning count.
-- [ ] A run whose executors all return `is_error` stamps made == failed,
+- [x] A run whose executors all return `is_error` stamps made == failed,
       non-zero — the kimi27 shape.
-- [ ] A run with no failed calls stamps `0`, not absent. The distinction matters
+- [x] A run with no failed calls stamps `0`, not absent. The distinction matters
       downstream (T2.6).
-- [ ] An SDK-path review stamps none of the three.
+- [x] An SDK-path review stamps none of the three.
 
 **Success:** all pass. Effort: 1.
 
@@ -76,16 +76,16 @@ Effort: 2.
 Sequenced before the read-back: the read-back assigns to these fields, so they
 must exist first.
 
-- [ ] Add three optional fields alongside `tools_given` / `tool_calls_made`
+- [x] Add three optional fields alongside `tools_given` / `tool_calls_made`
       ([models.py:105-110](src/squadron/review/models.py#L105-L110)): stop reason
       (`str | None`), reasoning characters (`int | None`), failed tool calls
       (`int | None`).
-- [ ] `None` means **not reported**, exactly as the existing tri-state fields use
+- [x] `None` means **not reported**, exactly as the existing tri-state fields use
       it. Document that at each field.
-- [ ] **Not serialized into frontmatter** (D10) — frontmatter is a consumed
+- [x] **Not serialized into frontmatter** (D10) — frontmatter is a consumed
       contract the verdict gate checks; these are diagnostic. Confirm they are
       absent from any frontmatter builder.
-- [ ] **Do serialize them into `to_dict()`** ([models.py:131](src/squadron/review/models.py#L131))
+- [x] **Do serialize them into `to_dict()`** ([models.py:131](src/squadron/review/models.py#L131))
       as additive optional keys, null when unstamped — exactly how the sibling
       telemetry `tools_given` / `tool_calls_made` already appears there. Requested
       by the Amoeba orchestrator (20260913), which consumes
@@ -94,11 +94,11 @@ must exist first.
       predicates that let a runner retry instead of escalating to a human.
       Scraping the digest body for them would make a diagnostic section into a
       contract, which D10 exists to prevent.
-- [ ] Note the split in a comment: frontmatter is what the verdict gate reads,
+- [x] Note the split in a comment: frontmatter is what the verdict gate reads,
       JSON is what programmatic consumers read, and these belong in the second
       but not the first. The two surfaces are not required to match — the
       existing `fallback_used` is already in JSON and absent from frontmatter.
-- [ ] Test the JSON keys: present and null on an unstamped (SDK-path) run,
+- [x] Test the JSON keys: present and null on an unstamped (SDK-path) run,
       populated on a stamped one.
 
 **Success:** fields present on the model, in `to_dict()`, absent from
@@ -106,12 +106,12 @@ frontmatter, with tests covering the null and populated cases. Effort: 1.
 
 ### T2.5 — Read the facts back in `review_client`
 
-- [ ] Read the three keys where the existing telemetry is read
+- [x] Read the three keys where the existing telemetry is read
       ([review_client.py:234-238](src/squadron/review/review_client.py#L234-L238)),
       following the same shape.
-- [ ] Carry them onto the `ReviewResult` fields T2.4 added. `None` where the
+- [x] Carry them onto the `ReviewResult` fields T2.4 added. `None` where the
       provider stamped nothing.
-- [ ] Assert the wiring here rather than waiting for T2.8: one test that a
+- [x] Assert the wiring here rather than waiting for T2.8: one test that a
       stamped openrouter run lands all three values on `ReviewResult`, and one
       that an SDK-path run leaves all three `None`. A read-back typo is a wiring
       mistake the end-to-end digest test would surface late and indirectly.
@@ -121,25 +121,25 @@ paths, `None` on the latter, with tests proving it. Effort: 1.
 
 ### T2.6 — Render the facts in the Run Digest, including the newline check
 
-- [ ] Add four lines to `_run_digest_lines`
+- [x] Add four lines to `_run_digest_lines`
       ([persistence.py:175](src/squadron/review/persistence.py#L175)): stop
       reason, reasoning characters, failed tool calls, and the newline-free
       indicator.
-- [ ] **Compute the newline indicator here**, from `result.raw_output` — a line
+- [x] **Compute the newline indicator here**, from `result.raw_output` — a line
       count, or a boolean for "response contains no line breaks" — beside the
       existing response-length line. It needs no new field and no new plumbing:
       the raw output is already in hand at render time. See D10a below for why it
       earns its place.
-- [ ] Put `Tool calls failed` **immediately after** the existing
+- [x] Put `Tool calls failed` **immediately after** the existing
       `Tool calls made` line — the pair `made: 2` / `failed: 2` names the kimi27
       shape at a glance.
-- [ ] Render an absent value with the existing `_NOT_COMPUTED` treatment. **A
+- [x] Render an absent value with the existing `_NOT_COMPUTED` treatment. **A
       failed-call count of `0` is a real answer and must not render as
       not-computed** — this is the trap in the existing
       `str(result.tool_calls_made or 0)` idiom at
       [persistence.py:183](src/squadron/review/persistence.py#L183); do not copy
       the `or 0`.
-- [ ] Nothing gates on these. They are evidence for a human or a future issue.
+- [x] Nothing gates on these. They are evidence for a human or a future issue.
 
 **Success:** every artifact's digest carries all four. Effort: 1.
 
@@ -148,11 +148,11 @@ paths, `None` on the latter, with tests proving it. Effort: 1.
 Documentation, not code — T2.6 computes the value; this task makes sure the
 reason survives.
 
-- [ ] This does **not** fix [#96](https://github.com/ecorkran/squadron/issues/96)
+- [x] This does **not** fix [#96](https://github.com/ecorkran/squadron/issues/96)
       — the parser fix is out of scope. It makes the artifact say *which* of the
       three known shapes occurred: never-emitted output (#92), all-tools-failed
       (kimi27), or emitted-but-unparseable (#96).
-- [ ] Leave a comment for whoever fixes #96: the same leniency must not reopen
+- [x] Leave a comment for whoever fixes #96: the same leniency must not reopen
       [#91](https://github.com/ecorkran/squadron/issues/91) — 917 Part F's fence
       masking and section bounding both assume line structure, so they need
       review together.
@@ -162,20 +162,20 @@ it discriminates and the #91 caution. Effort: 1.
 
 ### T2.8 — Test the digest, then re-run the reproduction
 
-- [ ] Test: a review whose response parses to zero findings shows a **non-empty**
+- [x] Test: a review whose response parses to zero findings shows a **non-empty**
       response length *and* a stop reason in the same digest — the #92 signature,
       readable from the artifact with no `-vv` and no live terminal.
-- [ ] Test: a review whose tool executors all error shows made and failed equal
+- [x] Test: a review whose tool executors all error shows made and failed equal
       and non-zero.
-- [ ] Test: a run with no failed calls reports `0`, not not-computed.
-- [ ] Test: a known newline-free response (the 3076-character `918-review.slice`
+- [x] Test: a run with no failed calls reports `0`, not not-computed.
+- [x] Test: a known newline-free response (the 3076-character `918-review.slice`
       body is a real specimen) is reported as newline-free.
-- [ ] Test: an SDK-path review renders stop reason and reasoning count as
+- [x] Test: an SDK-path review renders stop reason and reasoning count as
       not-computed, not as fabricated values.
-- [ ] Then re-run the reproduction: `uv run sq review slice 916 -v --model kimi3`.
+- [x] Then re-run the reproduction: `uv run sq review slice 916 -v --model kimi3`.
       Read the stop reason out of the artifact's digest and **record it in the
       DEVLOG** before writing any fix.
-- [ ] If it does not reproduce, say so plainly in the DEVLOG. The instrumentation
+- [x] If it does not reproduce, say so plainly in the DEVLOG. The instrumentation
       still lands; do not claim the underlying cause is fixed.
 
 **Success:** tests pass and the DEVLOG records an observed stop reason (or a
@@ -186,20 +186,22 @@ documented non-reproduction). Effort: 2.
 > Specify this task's body only after T2.8. Three candidates, three different
 > fixes; the design's "Step 2, contingent" section names them.
 
-- [ ] **`finish_reason == "length"`** → the output budget was consumed. Verified:
+- [x] **`finish_reason == "length"`** → the output budget was consumed. Verified:
       `max_tokens` is set on **no** request anywhere under `providers/openai/`.
       Size it against reasoning models; this also closes
       [#84](https://github.com/ecorkran/squadron/issues/84)'s open follow-up.
       Most likely given the symptom.
-- [ ] **Clean `stop` with a non-empty turn that parsed to nothing** → the model
+- [x] **Clean `stop` with a non-empty turn that parsed to nothing** → the model
       ended its turn believing more were available and the loop treated it as
       final. A turn-boundary bug in the agentic loop.
-- [ ] **Neither** → prompt adherence: the model narrated its plan instead of
+- [x] **Neither** → prompt adherence: the model narrated its plan instead of
       emitting the format. Check whether 917 Part F's fenced specimens changed
       adherence. If this is the branch, consider filing a follow-up rather than
       expanding this slice — that call is the Project Manager's.
-- [ ] Add a test for whichever branch is implemented, and verify against the
+- [x] Add a test for whichever branch is implemented, and verify against the
       same command that produced the evidence.
+
+**Deferred to [#99](https://github.com/ecorkran/squadron/issues/99):** the reproduction re-run at sha 45e7b002 (twice, with kimi3) produced a clean `stop` finish_reason on both runs and parsed correctly. Non-reproduction verified in DEVLOG. Evidence did not select a branch per design D7, so no speculative fix was applied.
 
 **Success:** the selected fix is implemented, tested, and verified against
 `sq review slice 916 -v --model kimi3`; the DEVLOG names which branch and why.
@@ -207,14 +209,14 @@ Effort: 2 (bounded; revisit if the evidence points at prompt adherence).
 
 ### T2.10 — Verify and commit Part 2
 
-- [ ] `uv run pytest tests/providers tests/review -q` green; `ruff format`,
+- [x] `uv run pytest tests/providers tests/review -q` green; `ruff format`,
       `ruff check`, `pyright` clean.
-- [ ] Two commits, so the instrumentation is separable from the fix it selected:
+- [x] Two commits, so the instrumentation is separable from the fix it selected:
       `feat(review): record stop reason, reasoning volume, and failed tool calls`
       for T2.1–T2.8, then a second naming the T2.9 branch the evidence chose.
-- [ ] If T2.9 was deferred to a follow-up issue rather than implemented, commit
+- [x] If T2.9 was deferred to a follow-up issue rather than implemented, commit
       the instrumentation alone and say so in the DEVLOG.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ---
 
