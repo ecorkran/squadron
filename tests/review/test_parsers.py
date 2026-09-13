@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from pathlib import Path
 
 import pytest
 
 from squadron.review.models import Severity, Verdict
-from squadron.review.parsers import parse_review_output
+from squadron.review.parsers import (
+    UNVERIFIED_LOCATION,
+    location_line,
+    location_path,
+    parse_review_output,
+)
 
 WELL_FORMED_PASS = """\
 ## Summary
@@ -677,8 +683,10 @@ class TestLocationDiffMembershipAndPathExistence:
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         # File exists in tmp_path AND is in the diff set: no warnings.
+        # The file is long enough to contain the cited line — since slice 917
+        # a citation past the end of its file warns, which is the point.
         (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "foo.py").write_text("# foo\n")
+        (tmp_path / "src" / "foo.py").write_text("# foo\n" * 50)
         text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:42\nDetail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             parse_review_output(text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path)
@@ -1261,3 +1269,158 @@ class TestIssue92ProseOnlyResponse:
         assert "the sequencing is sound" in markdown
         # The artifact says UNKNOWN rather than claiming a clean review.
         assert f"verdict: {Verdict.UNKNOWN.value}" in markdown
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 5: cited line numbers are bounds-checked (#26)
+# ---------------------------------------------------------------------------
+
+
+def _finding_with(location: str) -> str:
+    return f"## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: {location}\nDetail.\n"
+
+
+class TestLocationLineExtraction:
+    @pytest.mark.parametrize(
+        ("location", "expected"),
+        [
+            ("src/foo.py:42", 42),
+            # The last line of a range is the one that must exist.
+            ("src/foo.py:42-50", 50),
+            ("src/foo.py#symbol", None),
+            ("src/foo.py", None),
+            (UNVERIFIED_LOCATION, None),
+        ],
+    )
+    def test_line_extraction(self, location: str, expected: int | None) -> None:
+        assert location_line(location) == expected
+
+    def test_location_path_is_unchanged_by_line_extraction(self) -> None:
+        """location_path keeps its contract — the findings gate depends on it."""
+        assert location_path("src/foo.py:42-50") == "src/foo.py"
+        assert location_path("src/foo.py#symbol") == "src/foo.py"
+
+
+class TestLineBoundsVerification:
+    """The tri-state, end to end through parse_review_output."""
+
+    @staticmethod
+    def _ten_line_file(tmp_path: Path) -> None:
+        (tmp_path / "file.py").write_text("line\n" * 10)
+
+    def test_without_cwd_nothing_is_checked(self, tmp_path: Path) -> None:
+        self._ten_line_file(tmp_path)
+
+        result = parse_review_output(_finding_with("file.py:3"), "code", {})
+
+        assert result.findings[0].location_verified is None
+
+    @pytest.mark.parametrize(
+        ("location", "expected"),
+        [
+            ("file.py:7", True),
+            ("file.py:10", True),
+            ("file.py:3-10", True),
+            ("file.py:999999", False),
+            ("file.py:11", False),
+            ("file.py:3-11", False),
+            # Whole-file citations name no line to check.
+            ("file.py", None),
+            ("file.py#symbol", None),
+            (UNVERIFIED_LOCATION, None),
+        ],
+    )
+    def test_tri_state(self, tmp_path: Path, location: str, expected: bool | None) -> None:
+        self._ten_line_file(tmp_path)
+
+        result = parse_review_output(_finding_with(location), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is expected
+
+    def test_nonexistent_file_is_false(self, tmp_path: Path) -> None:
+        """Verifiably absent — the signature this check exists for."""
+        result = parse_review_output(_finding_with("ghost.py:3"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is False
+
+    def test_issue_91_phantom_citation_is_false(self, tmp_path: Path) -> None:
+        """The specimen's own citation, as the #91 phantoms carried it."""
+        result = parse_review_output(_finding_with("src/module.py:12"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is False
+
+    def test_final_line_without_trailing_newline_counts(self, tmp_path: Path) -> None:
+        (tmp_path / "file.py").write_text("one\ntwo\nthree")
+
+        result = parse_review_output(_finding_with("file.py:3"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is True
+
+
+class TestLineBoundsUncheckableCases:
+    """Every case the check cannot run yields None *and* says why.
+
+    A silently unverified citation would be indistinguishable from one that
+    was never checked, so each of these must leave an observable signal.
+    """
+
+    def test_directory_citation(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        (tmp_path / "pkg").mkdir()
+
+        with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+            result = parse_review_output(_finding_with("pkg:1"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)
+
+    def test_file_over_the_size_cap(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / "file.py").write_text("line\n" * 10)
+        monkeypatch.setattr("squadron.review.parsers._MAX_LINE_CHECK_BYTES", 10)
+
+        with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+            result = parse_review_output(_finding_with("file.py:3"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)
+
+    def test_unreadable_file(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        if os.geteuid() == 0:
+            pytest.skip("root reads regardless of mode bits")
+        target = tmp_path / "file.py"
+        target.write_text("line\n" * 10)
+        target.chmod(0o000)
+        try:
+            with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+                result = parse_review_output(_finding_with("file.py:3"), "code", {}, cwd=tmp_path)
+        finally:
+            target.chmod(0o644)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)
+
+    def test_escaping_citation_is_never_opened(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Containment is checked before any open, not after.
+
+        A model-supplied path drives this read. A '../' citation must not
+        make the parser read outside the review root even once.
+        """
+        outside = tmp_path / "outside.py"
+        outside.write_text("line\n" * 10)
+        root = tmp_path / "root"
+        root.mkdir()
+
+        # Patched only after the fixture files exist, so this catches reads by
+        # the parser and nothing else.
+        def _refuse(*args: object, **kwargs: object) -> None:
+            raise AssertionError("the parser opened a file outside the review root")
+
+        monkeypatch.setattr(Path, "open", _refuse)
+        with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+            result = parse_review_output(_finding_with("../outside.py:1"), "code", {}, cwd=root)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)

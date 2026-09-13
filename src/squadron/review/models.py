@@ -50,6 +50,19 @@ class ReviewFinding:
     file_ref: str | None = None
     category: str | None = None
     location: str | None = None
+    # Was the cited location checked, and did it hold (slice 917 Part 5)?
+    #   None  — not checked. The common case: no cwd was supplied, the
+    #           citation names no line, or the check could not run.
+    #   True  — the path resolved and the cited line is within the file.
+    #   False — checked and wrong: the path does not resolve, or the cited
+    #           line is past the end of the file. The deterministic signature
+    #           of a hallucinated citation.
+    # Tri-state deliberately: a plain bool would collapse "checked and bad"
+    # with "never checked", and the second is by far the more common. A gate
+    # reading False as "hallucinated" would reject most legitimate findings on
+    # non-code templates. Written, never read — nothing in this slice consumes
+    # it, and it is absent from StructuredFinding, to_dict, and frontmatter.
+    location_verified: bool | None = None
 
 
 @dataclass(frozen=True)
