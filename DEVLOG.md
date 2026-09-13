@@ -31,7 +31,11 @@ an implementation serves (fork-with-`upstream` refuses; GitHub plus a GitLab mir
 base/head role; branch-exists returns `False`, never raises; local refs are
 `refs/squadron/pr/<remote>/<n>/{base,head}`, force-updated and never cleaned; comment and PR
 bodies go over stdin; write operations are implemented and argv-pinned here but no 381 command
-calls them. `sq pr show [TARGET] [--cwd] [--json]` is the proving consumer; two doctor rows
+calls them. PM edits after review: a sixth target form `repo#n` (owner taken from the remotes),
+`repo n` deferred as issue #95, and an explicit GitHub Enterprise section (hosts come from
+`hosts.yml` keys and remote URLs, `--hostname` on every call, tests parametrized over
+`github.com` and an enterprise host, no live GHE available). `sq pr show [TARGET] [--cwd]
+[--json]` is the proving consumer; two doctor rows
 (`gh` on PATH, hosts file readable) are WARN-level presence checks. Live evidence target is PR
 83 (merged, cross-repository). Next: Phase 5 task breakdown for 381; announce the `app.py`
 registration edit to `sq-base` before making it.

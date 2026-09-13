@@ -238,12 +238,18 @@ form carries. Classification order, each rule exclusive of the ones after it:
 | 1 | `CURRENT_BRANCH` | `text` is `None` or empty | nothing; branch read from `git rev-parse --abbrev-ref HEAD` at resolution |
 | 2 | `URL` | has a scheme (`https://`, `http://`) and a path matching `/{owner}/{repo}/pull/{n}` | host, owner, repository, number |
 | 3 | `OWNER_REPO_NUMBER` | exactly one `/` before a `#`, digits after it, no whitespace | owner, repository, number |
-| 4 | `NUMBER` | all digits, or `#` followed by digits | number |
-| 5 | `BRANCH` | anything else that `git check-ref-format --branch` accepts | branch name |
+| 4 | `REPO_NUMBER` | no `/`, a `#`, digits after it, a non-empty name before it | repository, number |
+| 5 | `NUMBER` | all digits, or `#` followed by digits | number |
+| 6 | `BRANCH` | anything else that `git check-ref-format --branch` accepts | branch name |
 
 A detached HEAD under form 1 is `TargetUnresolvableError` naming the state. A string that fails
-rule 5 is `TargetSyntaxError`. Trailing `.git`, a trailing slash, and a `?`/`#` fragment on a URL
+rule 6 is `TargetSyntaxError`. Trailing `.git`, a trailing slash, and a `?`/`#` fragment on a URL
 are tolerated. The grammar lives here and nowhere else; `pr.py` passes the raw string through.
+
+Form 4 (`squadron#7`) is the human form: the operator knows the repository name and should not
+have to type the owner, which the remotes already know. The two-token form `squadron 7` is
+deferred as issue #95: a second positional argument makes a branch name followed by a number
+ambiguous, and the grammar should see real use before it grows.
 
 ### Remote enumeration and selection (`codehost/remotes.py`)
 
@@ -258,6 +264,11 @@ are tolerated. The grammar lives here and nowhere else; `pr.py` passes the raw s
     `ForeignRepositoryError` naming the target's repository and every remote's repository.
     Several candidates (two remote names for one repository) take the first in `git remote`
     order and log the choice at INFO.
+  - Repository-name form (`repo#n`): candidates are remotes where `serves_host(host)` is true and
+    the repository name matches case-insensitively, owner ignored. Zero is
+    `ForeignRepositoryError`; more than one owner for that name (fork plus upstream) is
+    `AmbiguousHostRemoteError` listing `owner/repo` for each, with the `owner/repo#n` form as the
+    remedy.
   - Bare forms (number, branch, current branch): candidates are remotes where
     `serves_host(host)` is true. Exactly one is required. Zero is `NoHostRemoteError`; more than
     one is `AmbiguousHostRemoteError` listing the names, which is the fork-with-`upstream` case
@@ -269,6 +280,22 @@ are tolerated. The grammar lives here and nowhere else; `pr.py` passes the raw s
 from `read_gh_hosts()` (top-level keys of `hosts.yml`) plus `github.com`. `serves_host` is a set
 membership test. Every command carries `--hostname <host>` (for `gh api`) so `gh` never guesses
 from the current directory's remotes, which the operator may have configured differently.
+
+**GitHub Enterprise.** A stated requirement: enterprise hosts (GHE Server on a private
+hostname, GHE Cloud with data residency on `*.ghe.com`) must work, and more work there follows.
+Nothing in this slice assumes `github.com`:
+
+- The operator runs `gh auth login --hostname ghe.corp.example`; `gh` records the host in
+  `hosts.yml`, and that key is what makes a remote at that host a GitHub remote for
+  `serves_host`. `github.com` is the one host recognized without an entry.
+- The host on every record, locator, and `gh api --hostname` call comes from the matched remote's
+  URL (or from the URL form of the target), never from a default or from `GH_HOST`.
+- The GraphQL and REST endpoints used are identical across `github.com` and GHE; `gh api`
+  routes them per host.
+- Unit tests parametrize every host-dependent case (remote parsing, selection, resolution,
+  identity, fetch refspecs) over `github.com` and `ghe.corp.example`, with a hosts-file fixture
+  listing both. No live GHE is available at design time; that gap is stated here and closed by
+  a recorded run when one is.
 
 | Operation | `gh` invocation | Classification source |
 |---|---|---|
@@ -415,8 +442,10 @@ sq pr show [TARGET] [--cwd PATH] [--json]
 
 ### Functional
 
-- Each of the five target forms resolves to the same `PullRequestRecord` for the same PR, shown by
-  one parametrized test over the fake runner with identical scripted host responses.
+- Each of the six target forms resolves to the same `PullRequestRecord` for the same PR, shown by
+  one parametrized test over the fake runner with identical scripted host responses, run once
+  with the remote on `github.com` and once on an enterprise hostname listed in the hosts-file
+  fixture. The enterprise run's `gh api` argv carries that hostname.
 - Fork layout (`origin` fork, `upstream` canonical, both GitHub): explicit forms resolve; bare forms
   raise `AmbiguousHostRemoteError` whose message contains both remote names. A layout with one
   GitHub remote and one non-GitHub mirror resolves bare forms.
@@ -473,6 +502,7 @@ cross-repository, which exercises the fork-head fetch.
    sq pr show 83
    sq pr show https://github.com/ecorkran/squadron/pull/83
    sq pr show ecorkran/squadron#83
+   sq pr show squadron#83
    sq pr show codex/issue-82-diff-review-context
    ```
 
