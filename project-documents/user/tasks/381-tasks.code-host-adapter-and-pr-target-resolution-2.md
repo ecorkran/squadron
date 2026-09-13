@@ -61,14 +61,14 @@ here touches the host or the operator-facing surface.
 
 - [x] One function every operation calls on a non-zero exit. **Structural signals
       only — never message-text matching.** Applied in this order:
-  1. [ ] `returncode == 4` → `HostUnauthenticatedError(host)`, fix hint
+  1. [x] `returncode == 4` → `HostUnauthenticatedError(host)`, fix hint
          `gh auth login --hostname <host>`.
-  2. [ ] stdout parses as JSON with a `status` field → `401` unauthenticated,
+  2. [x] stdout parses as JSON with a `status` field → `401` unauthenticated,
          `404` not-found (the caller turns it into the operation-specific error),
          anything else `HostRequestRejectedError(status, message)`.
-  3. [ ] stdout parses as JSON with `errors` (GraphQL) → `NOT_FOUND` type as
+  3. [x] stdout parses as JSON with `errors` (GraphQL) → `NOT_FOUND` type as
          above; other types `HostRequestRejectedError`.
-  4. [ ] otherwise → `HostUnreachableError` carrying `gh`'s **stderr verbatim**.
+  4. [x] otherwise → `HostUnreachableError` carrying `gh`'s **stderr verbatim**.
          This is the residual "ran but got no HTTP response" bucket; the verbatim
          stderr is what tells the operator the real cause, including for a
          squadron-side argv bug.
@@ -148,77 +148,85 @@ here touches the host or the operator-facing surface.
 
 ### Task G.1 — `fetch_and_range`
 
-- [ ] Create `src/squadron/codehost/refs.py`. Host-agnostic git over the runner —
+- [x] Create `src/squadron/codehost/refs.py`. Host-agnostic git over the runner —
       the caller supplies the refspec sources.
-- [ ] Signature: `fetch_and_range(runner, *, cwd, remote_name, namespace,
+- [x] Signature: `fetch_and_range(runner, *, cwd, remote_name, namespace,
       base_refspec_source, head_refspec_source, expected_base_sha,
       expected_head_sha) -> FetchedRange`.
-- [ ] Module constants `GIT_QUERY_TIMEOUT_SECONDS = 30`,
+- [x] Module constants `GIT_QUERY_TIMEOUT_SECONDS = 30`,
       `GIT_FETCH_TIMEOUT_SECONDS = 300`. Fetch moves data; the query bound is far
       too tight for it.
-- [ ] Local refs: `refs/squadron/pr/<remote_name>/<number>/base` and `.../head`.
+- [x] Local refs: `refs/squadron/pr/<remote_name>/<number>/base` and `.../head`.
       Namespacing by remote keeps PR 12 on `origin` distinct from PR 12 on
       `upstream`.
-- [ ] One `git fetch --no-tags <remote> +<base_source>:<base_local>
+- [x] One `git fetch --no-tags <remote> +<base_source>:<base_local>
       +<head_source>:<head_local>`. The `+` force-updates on every resolution.
-- [ ] Refs under `refs/squadron/` are **not branches** — `git branch`,
+- [x] Refs under `refs/squadron/` are **not branches** — `git branch`,
       `git status`, and the working tree stay untouched. No cleanup in this slice.
-- [ ] A non-zero fetch exit is `RefNotFetchableError(role)`; determine the role by
+- [x] A non-zero fetch exit is `RefNotFetchableError(role)`; determine the role by
       a follow-up `git rev-parse --verify` of each local ref so the message names
       the one actually missing rather than guessing.
-- [ ] Verification: `git rev-parse` of each local ref must equal the sha the host
+- [x] Verification: `git rev-parse` of each local ref must equal the sha the host
       reported at resolution. A mismatch is
       `RefMovedSinceResolutionError(role, expected, actual)` — the operator reruns.
-- [ ] `git merge-base <base_local> <head_local>`; no merge-base (unrelated
+- [x] `git merge-base <base_local> <head_local>`; no merge-base (unrelated
       histories) is `NoMergeBaseError`.
-- [ ] `diff_range` is `<base_local>...<head_local>` — the three-dot form the
+- [x] `diff_range` is `<base_local>...<head_local>` — the three-dot form the
       existing review path already accepts via `normalize_diff_spec`.
-- [ ] `changed_paths` is `git diff --name-only <diff_range>` with **no exclusion
+- [x] `changed_paths` is `git diff --name-only <diff_range>` with **no exclusion
       patterns**; 382 applies the template's patterns through the existing scope
       assertion.
-- [ ] Effort: 4
+- [x] Effort: 4
 
 ### Task G.2 — Wire `fetch_pull_request_refs`
 
-- [ ] In `github_cli.py`, supply GitHub's refspec sources — `refs/heads/<base_ref>`
+- [x] In `github_cli.py`, supply GitHub's refspec sources — `refs/heads/<base_ref>`
       and `refs/pull/<number>/head` — and delegate to `refs.fetch_and_range`.
-- [ ] `refs/pull/<n>/head` is fetchable for merged and cross-repository PRs alike
+- [x] **Signature correction (PM decision 20260913).** The design fixed the
+      protocol method as `fetch_pull_request_refs(record: PullRequestRecord, ...)`
+      but `fetch_and_range` needs `expected_base_sha`, and `base_sha` lives on
+      `ResolvedPullRequest` — deliberately, per the design's own note that it is
+      "the base tip the host reported at resolution". The two shapes disagreed.
+      The method takes `resolved: ResolvedPullRequest` instead; the record is read
+      from `resolved.record`. Nothing is duplicated across the dataclasses, and
+      the exactness `baseRefOid` buys is preserved. Design updated to match.
+- [x] `refs/pull/<n>/head` is fetchable for merged and cross-repository PRs alike
       (confirmed on PRs 64, 66, 83), so a fork head needs **no second remote**.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task G.3 — Test: fetch, verification, and the no-mutation guarantee
 
-- [ ] `tests/codehost/test_refs.py` against the fake runner.
-- [ ] Happy path: both refs resolve, `merge_base` is a 40-hex sha, `diff_range` is
+- [x] `tests/codehost/test_refs.py` against the fake runner.
+- [x] Happy path: both refs resolve, `merge_base` is a 40-hex sha, `diff_range` is
       the three-dot form, `changed_paths` parses.
-- [ ] **The no-mutation assertion**: the recorded argv contains no `checkout`,
+- [x] **The no-mutation assertion**: the recorded argv contains no `checkout`,
       `switch`, `reset`, `branch`, or `worktree` invocation. This is the guarantee
       that lets `sq pr show` run against a dirty working tree.
-- [ ] Assert the fetch carries `--no-tags` and both `+`-prefixed refspecs, and that
+- [x] Assert the fetch carries `--no-tags` and both `+`-prefixed refspecs, and that
       the fetch call uses `GIT_FETCH_TIMEOUT_SECONDS` while the queries use
       `GIT_QUERY_TIMEOUT_SECONDS`.
-- [ ] Failure cases, each asserting type, structured fields, and log level:
+- [x] Failure cases, each asserting type, structured fields, and log level:
       fetch fails for base only; for head only; a moved base
       (`RefMovedSinceResolutionError(BASE, ...)`); a moved head; unrelated
       histories (`NoMergeBaseError`).
-- [ ] Cross-repository: the head fetches from `refs/pull/<n>/head` with only one
+- [x] Cross-repository: the head fetches from `refs/pull/<n>/head` with only one
       remote configured.
-- [ ] **No enterprise-hostname leg here, deliberately.** The design's GHE bullet
+- [x] **No enterprise-hostname leg here, deliberately.** The design's GHE bullet
       lists "fetch refspecs" among the paths to parametrize over both hosts, but the
       fetch path is host-independent by construction: `refs.py` takes refspec sources
       from its caller and names the *remote*, never the host, so no git argv on this
       path carries a hostname. Parsing and selection are parametrized in D.3,
       resolution and identity in F.5. Record this rather than adding a vacuous leg,
       so the I.2 sweep has a definite answer instead of an apparent gap.
-- [ ] (The doctor-module subprocess invariant test lives with the doctor checks in
+- [x] (The doctor-module subprocess invariant test lives with the doctor checks in
       Part E, not here — it guards Part E's work and belongs in its test task.)
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task G.4 — Commit
 
-- [ ] `uv run pytest tests/codehost tests/cli -q`; ruff; pyright.
-- [ ] Commit: `feat(codehost): fetch PR refs into namespaced refs with merge-base range`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/codehost tests/cli -q`; ruff; pyright.
+- [x] Commit: `feat(codehost): fetch PR refs into namespaced refs with merge-base range`
+- [x] Effort: 1
 
 ---
 

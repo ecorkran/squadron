@@ -54,13 +54,19 @@ class CodeHost(Protocol):
         ...
 
     def fetch_pull_request_refs(
-        self, record: PullRequestRecord, *, remote_name: str, cwd: str
+        self, resolved: ResolvedPullRequest, *, remote_name: str, cwd: str
     ) -> FetchedRange:
         """Fetch base and head into local refs and describe the range.
 
         On the protocol because the refspec is the host's convention; the
         implementation supplies refspecs and delegates the git work to
         ``refs.fetch_and_range``.
+
+        Takes the resolved pull request rather than the bare record: the
+        post-fetch "base moved since resolution" check compares against
+        ``base_sha``, the base tip the host reported at resolution, and that
+        field lives on ``ResolvedPullRequest`` by design (PM decision
+        20260913 — the design fixed both shapes and they disagreed).
         """
         ...
 

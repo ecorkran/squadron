@@ -43,12 +43,14 @@ from squadron.codehost.github_queries import (
     REVIEW_THREADS_QUERY,
 )
 from squadron.codehost.models import (
+    FetchedRange,
     OperatorIdentity,
     PullRequestRecord,
     RepositoryLocator,
     ResolvedPullRequest,
     ReviewDiscussion,
 )
+from squadron.codehost.refs import fetch_and_range
 from squadron.codehost.targets import PullRequestTarget
 from squadron.core.process_runner import (
     ProcessNotFoundError,
@@ -195,6 +197,31 @@ class GitHubCli:
         if isinstance(error, HostRequestRejectedError) and error.status == 404:
             return False
         _log_and_raise(error)
+
+    def fetch_pull_request_refs(
+        self, resolved: ResolvedPullRequest, *, remote_name: str, cwd: str
+    ) -> FetchedRange:
+        """Fetch this pull request's base and head, and describe the range.
+
+        GitHub's refspec conventions live here; the git work is delegated.
+        ``refs/pull/<n>/head`` is fetchable for merged and cross-repository
+        pull requests alike, so a fork head needs no second remote.
+
+        Takes the resolved pull request because ``base_sha`` — the base tip at
+        resolution, which makes the post-fetch check exact — is carried there
+        rather than on the record.
+        """
+        record = resolved.record
+        return fetch_and_range(
+            self._runner,
+            cwd=cwd,
+            remote_name=remote_name,
+            namespace=record.number,
+            base_refspec_source=f"refs/heads/{record.base_ref}",
+            head_refspec_source=f"refs/pull/{record.number}/head",
+            expected_base_sha=resolved.base_sha,
+            expected_head_sha=record.head_sha,
+        )
 
     def identify_operator(self, hostname: str) -> OperatorIdentity:
         """Who the operator is authenticated as on ``hostname``."""
