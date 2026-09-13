@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/918-slice.review-grounding.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [917]
 interfaces: []
-status: in_progress
+status: complete
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
@@ -224,86 +224,86 @@ Effort: 2 (bounded; revisit if the evidence points at prompt adherence).
 
 ### T3.1 — Write an install receipt
 
-- [ ] Reuse the `sq skills` receipt mechanism rather than inventing a second one
+- [x] Reuse the `sq skills` receipt mechanism rather than inventing a second one
       (D13): `write_receipt` / `read_receipt` at
       [skills/receipts.py:19](src/squadron/skills/receipts.py#L19) and
       [:37](src/squadron/skills/receipts.py#L37), `DEFAULT_RECEIPTS_DIR` at
       [:16](src/squadron/skills/receipts.py#L16), `InstallReceipt` at
       [skills/models.py:42](src/squadron/skills/models.py#L42).
-- [ ] Decide whether `InstallReceipt` fits as-is or needs a sibling. It carries
+- [x] Decide whether `InstallReceipt` fits as-is or needs a sibling. It carries
       `pack_name`, `surface`, `destination`, `files_written` — `files_written`
       must hold the `<subdir>/<name>.md` paths `install_commands` already builds
       ([install.py:56](src/squadron/cli/commands/install.py#L56)). If the
       `surface` field does not apply, prefer a sibling model over a misused enum
       value; do not overload a field to mean something it does not.
-- [ ] Write the receipt after a successful install, recording every file written.
+- [x] Write the receipt after a successful install, recording every file written.
 
 **Success:** `sq install-commands` leaves a receipt naming exactly what it wrote.
 Effort: 2.
 
 ### T3.2 — Remove only what the receipt records
 
-- [ ] Replace the unlink loop ([install.py:57-60](src/squadron/cli/commands/install.py#L57-L60)):
+- [x] Replace the unlink loop ([install.py:57-60](src/squadron/cli/commands/install.py#L57-L60)):
       a stale file is removed only if the **previous** receipt names it and the
       current bundle does not.
-- [ ] A file present but absent from the receipt is **left alone** (D15).
+- [x] A file present but absent from the receipt is **left alone** (D15).
       Deleting unknown files is the bug being fixed.
-- [ ] A receipt entry naming a file the user already deleted is **not an error** —
+- [x] A receipt entry naming a file the user already deleted is **not an error** —
       tolerate it silently.
-- [ ] Keep reporting removals in the existing output, so a legitimate stale
+- [x] Keep reporting removals in the existing output, so a legitimate stale
       removal is still visible.
 
 **Success:** `~/.claude/commands/analysis/mine.md` survives. Effort: 2.
 
 ### T3.3 — Make uninstall symmetric
 
-- [ ] `uninstall_commands` ([install.py:75](src/squadron/cli/commands/install.py#L75))
+- [x] `uninstall_commands` ([install.py:75](src/squadron/cli/commands/install.py#L75))
       currently removes only `sq/` by `rmtree`. Change it to remove every file the
       receipt records, across every subdirectory (D14).
-- [ ] Do not `rmtree` a shared subdirectory — remove the recorded files, then the
+- [x] Do not `rmtree` a shared subdirectory — remove the recorded files, then the
       directory only if it is empty.
-- [ ] Delete the receipt after a successful uninstall, mirroring
+- [x] Delete the receipt after a successful uninstall, mirroring
       [skills.py:118](src/squadron/cli/commands/skills.py#L118).
-- [ ] With no receipt (a pre-receipt installation), remove nothing and say so.
+- [x] With no receipt (a pre-receipt installation), remove nothing and say so.
 
 **Success:** squadron's files go from every subdirectory; user files stay.
 Effort: 2.
 
 ### T3.4 — Test the install/uninstall lifecycle
 
-- [ ] `tests/cli/test_install_commands.py` does not cover the non-`sq` subdir
+- [x] `tests/cli/test_install_commands.py` does not cover the non-`sq` subdir
       path today. Add coverage for it — that gap is why #65 shipped.
-- [ ] A user file in a shared subdirectory survives `sq install-commands`.
-- [ ] Squadron's own bundled files are installed and refreshed on re-run.
-- [ ] Two consecutive installs are idempotent, and the second reports no
+- [x] A user file in a shared subdirectory survives `sq install-commands`.
+- [x] Squadron's own bundled files are installed and refreshed on re-run.
+- [x] Two consecutive installs are idempotent, and the second reports no
       deletions.
-- [ ] An install over a pre-receipt installation (files present, no receipt)
+- [x] An install over a pre-receipt installation (files present, no receipt)
       deletes nothing.
-- [ ] `sq uninstall-commands` removes every subdirectory squadron installed and
+- [x] `sq uninstall-commands` removes every subdirectory squadron installed and
       leaves user files.
-- [ ] Use `--target` / `--receipts-dir` pointed at `tmp_path`. **No test touches
+- [x] Use `--target` / `--receipts-dir` pointed at `tmp_path`. **No test touches
       the real `~/.claude/commands` or `~/.config/squadron/receipts`.**
 
 **Success:** all pass. Effort: 2.
 
 ### T3.5 — Verify against a real install
 
-- [ ] Run the design's Part 3 walkthrough: create
+- [x] Run the design's Part 3 walkthrough: create
       `~/.claude/commands/analysis/zz-scratch.md`, run `sq install-commands`,
       confirm `SURVIVED`.
-- [ ] Run it a second time and confirm no deletions.
-- [ ] Run `sq uninstall-commands` and confirm squadron's files go and
+- [x] Run it a second time and confirm no deletions.
+- [x] Run `sq uninstall-commands` and confirm squadron's files go and
       `zz-scratch.md` stays.
-- [ ] Remove the scratch file afterward.
+- [x] Remove the scratch file afterward.
 
 **Success:** all three confirmed. Effort: 1.
 
 ### T3.6 — Verify and commit Part 3
 
-- [ ] `uv run pytest tests/cli -q` green; `ruff format`, `ruff check`, `pyright`
+- [x] `uv run pytest tests/cli -q` green; `ruff format`, `ruff check`, `pyright`
       clean.
-- [ ] Commit: `fix(cli): install-commands removes only files it installed`
-- [ ] Effort: 1
+- [x] Commit: `fix(cli): install-commands removes only files it installed`
+- [x] Effort: 1
 
 ---
 
@@ -312,10 +312,10 @@ Effort: 2.
 Runs after T3.6. The per-part checkpoints (T1.13, T2.10, T3.6) already gated each
 part's own tests; this is the whole-suite pass and the slice-level bookkeeping.
 
-- [ ] `ruff format`, `ruff check`, and `pyright` are clean — zero pyright errors
+- [x] `ruff format`, `ruff check`, and `pyright` are clean — zero pyright errors
       is a merge blocker.
-- [ ] **Full** test suite passes, not only the per-part subsets.
-- [ ] DEVLOG entry per `prompt.ai-project.system.md` § Session State Summary,
+- [x] **Full** test suite passes, not only the per-part subsets.
+- [x] DEVLOG entry per `prompt.ai-project.system.md` § Session State Summary,
       recording: the Part 2 stop-reason evidence and which branch it selected,
       and the Part 1 reproduction outcome.
 - [ ] Refine the design's "Verification walkthrough" section from draft to what
