@@ -97,6 +97,9 @@ system_prompt: |
 
   Report format:
 
+  Use exactly this structure; do not repeat this block in your response.
+
+  ```markdown
   ## Summary
   [overall assessment: PASS | CONCERNS | FAIL]
 
@@ -106,6 +109,7 @@ system_prompt: |
   category: {category-tag}
   location: <path | path#section-heading | path:line | path:start-end | unverified>
   Description with specific references to document sections.
+  ```
 
 allowed_tools: [read_file, list_files, grep]
 permission_mode: bypassPermissions
@@ -124,7 +128,10 @@ inputs:
 prompt_template: |
   Review the following architecture document on its own merits:
 
-  **Architecture document:** {input}
+  **Architecture document:**
+  <architecture_document>
+  {input}
+  </architecture_document>
 
   Read the document thoroughly. Follow any referenced files if they help you
   understand the design. Then evaluate for internal consistency, completeness,

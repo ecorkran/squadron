@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.review.models import (
+    FindingScanCounts,
     ReviewFinding,
     ReviewResult,
     Severity,
@@ -255,6 +256,30 @@ def location_path(location: str) -> str | None:
     return match.group(1).strip() or None
 
 
+# The line portion of a location: ':42' or ':42-50' immediately after the path.
+# A '#symbol' anchor names no line, and neither does a bare path.
+_LOCATION_LINE_RE = re.compile(r"^[^:#<>\s][^:#\s]*:(\d+)(?:-(\d+))?(?:\s|$)")
+
+
+def location_line(location: str) -> int | None:
+    """The last line number a location cites, or None when it cites none.
+
+    ``path:42`` yields 42 and ``path:42-50`` yields 50 — the last cited line
+    is the one that must exist for the range to be real. A ``path#symbol``
+    anchor, a bare ``path``, and the UNVERIFIED_LOCATION sentinel are
+    whole-file citations and yield None.
+
+    A sibling of :func:`location_path`, which is unchanged: the
+    findings-addressed gate depends on its exact contract.
+    """
+    if location == UNVERIFIED_LOCATION:
+        return None
+    match = _LOCATION_LINE_RE.match(location)
+    if match is None:
+        return None
+    return int(match.group(2) or match.group(1))
+
+
 def _check_diff_membership(
     findings: list[ReviewFinding],
     diff_files: set[str],
@@ -284,8 +309,8 @@ def _check_diff_membership(
             )
 
 
-def _path_exists_under(root: Path, path: str) -> bool:
-    """True if *path* resolves under *root*, directly or by basename search.
+def _resolve_under(root: Path, path: str) -> Path | None:
+    """The resolved path *path* names under *root*, or None if nothing does.
 
     A review model is given document *content*, not repository paths, so it
     cites documents the only way it can — by bare filename (e.g.
@@ -299,12 +324,75 @@ def _path_exists_under(root: Path, path: str) -> bool:
     invented filename still resolves nowhere, so the hallucination defense
     this check exists for is preserved.
     """
-    if (root / path).exists():
-        return True
+    direct = root / path
+    if direct.exists():
+        return direct
     # Only bare filenames get the search; a cited directory is honored as given.
     if "/" in path or "\\" in path:
-        return False
-    return any(root.rglob(path))
+        return None
+    return next(iter(root.rglob(path)), None)
+
+
+def _path_exists_under(root: Path, path: str) -> bool:
+    """True if *path* resolves under *root*, directly or by basename search."""
+    return _resolve_under(root, path) is not None
+
+
+#: Largest file the line-bounds check will read. A citation into something
+#: bigger is left unverified rather than streaming an arbitrary blob on the
+#: parse path — the check is a cheap sanity test, not an indexing pass.
+_MAX_LINE_CHECK_BYTES = 4 * 1024 * 1024
+
+_OUTSIDE_ROOT_REASON = "resolves outside the review root"
+_IS_DIRECTORY_REASON = "is a directory, not a file"
+_TOO_LARGE_REASON = f"is larger than the {_MAX_LINE_CHECK_BYTES}-byte line-check limit"
+_UNREADABLE_REASON = "could not be read"
+
+
+def _count_lines(root: Path, resolved: Path) -> tuple[int | None, str | None]:
+    """Count the lines in *resolved*, or say why the count could not be taken.
+
+    Returns ``(count, None)`` on success and ``(None, reason)`` otherwise.
+    Deliberately does not log: it has no finding identifier, and every WARNING
+    on this path must name the finding it concerns. The caller iterating
+    findings owns the message.
+
+    Containment is checked before the file is ever opened, so a ``../``
+    citation cannot make the parser read outside the review root. Lines are
+    counted from raw bytes, so no decode can fail on a file that happens not
+    to be UTF-8; a final unterminated line still counts.
+    """
+    try:
+        real_root = root.resolve()
+        real_path = resolved.resolve()
+    except OSError:
+        return None, _UNREADABLE_REASON
+
+    if not real_path.is_relative_to(real_root):
+        return None, _OUTSIDE_ROOT_REASON
+
+    try:
+        stat = real_path.stat()
+    except OSError:
+        return None, _UNREADABLE_REASON
+    if real_path.is_dir():
+        return None, _IS_DIRECTORY_REASON
+    if stat.st_size > _MAX_LINE_CHECK_BYTES:
+        return None, _TOO_LARGE_REASON
+
+    newlines = 0
+    last_byte = b""
+    try:
+        with real_path.open("rb") as handle:
+            while chunk := handle.read(65536):
+                newlines += chunk.count(b"\n")
+                last_byte = chunk[-1:]
+    except OSError:
+        return None, _UNREADABLE_REASON
+
+    if last_byte and last_byte != b"\n":
+        newlines += 1  # a final line with no trailing newline still exists
+    return newlines, None
 
 
 def _check_path_existence(
@@ -337,23 +425,183 @@ def _check_path_existence(
             )
 
 
+# A fenced code block: ``` or ~~~ at line start (leading whitespace tolerated),
+# optional info string, running to a matching closing fence or end of document.
+# A model restating the required format almost always fences it, and
+# finding-shaped text inside a fence is never a finding (#91).
+_FENCE_RE = re.compile(
+    r"^[ \t]*(?P<fence>```+|~~~+)[^\n]*\n(?P<body>.*?)(?:^[ \t]*(?P=fence)[ \t]*$|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+
+# A markdown heading whose text is a single word, used to locate the sections
+# the parse is bounded to. Lenient by project rule: any level, bold or code
+# emphasis, trailing ':' or '.', and surrounding whitespace all tolerated.
+_HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})[ \t]*(?P<text>[^\n]*?)[ \t]*$", re.MULTILINE)
+
+
+def _mask_fences(text: str) -> str:
+    """Blank out the interior of every fenced code block, preserving offsets.
+
+    Every character inside a fence becomes a space except newlines, so line
+    numbers and character offsets of unfenced text are unchanged and the
+    masked text can be scanned in place of the original.
+    """
+
+    def blank(match: re.Match[str]) -> str:
+        body = match.group("body")
+        masked_body = "".join("\n" if ch == "\n" else " " for ch in body)
+        return match.group(0).replace(body, masked_body, 1) if body else match.group(0)
+
+    return _FENCE_RE.sub(blank, text)
+
+
+def _count_finding_matches(text: str) -> int:
+    """Finding-shaped matches in *text*, counted without interpreting them."""
+    return len(list(_FINDING_RE.finditer(text)))
+
+
+def _normalize_heading_text(text: str) -> str:
+    """Reduce a heading's text to a bare comparable word."""
+    return text.strip().strip("*_`").strip().rstrip(":.").strip().lower()
+
+
+def _locate_section(text: str, name: str) -> tuple[int, int] | None:
+    """Span of the ``name`` section's body, or None when it has no heading.
+
+    Runs from the end of the heading line to the next heading of the same or
+    higher level, or to the end of the document. A deeper heading (the ``###``
+    of an individual finding) does not terminate the section.
+
+    Returns ``None`` when the located span holds no finding-shaped text while
+    the document does. A ``### Findings`` heading is the case: it sits at the
+    same level as the ``### [SEV]`` findings it introduces, so it closes
+    before its own first finding. Bounding to that empty span would discard
+    every real finding in the document, so the caller falls back to the
+    unbounded scan instead — the same posture taken for a headingless
+    response, and for the same reason: never drop a real finding to exclude a
+    phantom.
+    """
+    for match in _HEADING_RE.finditer(text):
+        if _normalize_heading_text(match.group("text")) != name:
+            continue
+        level = len(match.group("hashes"))
+        start = match.end()
+        end = len(text)
+        for following in _HEADING_RE.finditer(text, start):
+            if len(following.group("hashes")) <= level:
+                end = following.start()
+                break
+        if _count_finding_matches(text[start:end]) == 0 < _count_finding_matches(text):
+            return None
+        return start, end
+    return None
+
+
+def _check_line_bounds(
+    findings: list[ReviewFinding],
+    cwd: Path,
+    *,
+    template_name: str,
+) -> None:
+    """Record on each finding whether its cited line exists in the cited file.
+
+    A line past the end of a file is the deterministic signature of a
+    hallucinated citation — the one thing about a made-up reference that can
+    be checked without judging the claim. ``_check_path_existence`` already
+    warns about a missing file, but it is WARNING-only and was ignored on
+    every #91 phantom; this is what makes the fact survive on the finding.
+
+    Sets ``location_verified``: True when the path resolves and the line is
+    in bounds, False when the citation was checked and is wrong, None when it
+    could not be checked. Every None from a failed check is accompanied by a
+    WARNING naming the finding and the reason, so a silently unverified
+    citation is never indistinguishable from an unchecked one.
+    """
+    for index, finding in enumerate(findings, start=1):
+        if finding.location is None:
+            continue
+        line = location_line(finding.location)
+        if line is None:
+            continue  # whole-file citation: nothing to bounds-check
+        path = location_path(finding.location)
+        if path is None:
+            continue
+
+        resolved = _resolve_under(cwd, path)
+        if resolved is None:
+            # Verifiably absent — the hallucination signature this exists for.
+            # _check_path_existence has already warned about this same finding.
+            finding.location_verified = False
+            continue
+
+        count, reason = _count_lines(cwd, resolved)
+        if count is None:
+            logger.warning(
+                "Finding F%03d (%r) in %s review cites %r, but its line count "
+                "could not be taken: the file %s. Location left unverified.",
+                index,
+                finding.title,
+                template_name,
+                finding.location,
+                reason,
+            )
+            continue
+
+        if line > count:
+            logger.warning(
+                "Finding F%03d (%r) in %s review cites line %d of %r, which has only %d line(s).",
+                index,
+                finding.title,
+                template_name,
+                line,
+                path,
+                count,
+            )
+            finding.location_verified = False
+        else:
+            finding.location_verified = True
+
+
 def _extract_findings(
     text: str,
     *,
     verdict: Verdict = Verdict.UNKNOWN,
     template_name: str = "",
-) -> list[ReviewFinding]:
-    """Parse finding blocks into ReviewFinding list.
+) -> tuple[list[ReviewFinding], FindingScanCounts, bool]:
+    """Parse finding blocks into a ReviewFinding list, bounded to the findings.
 
     Supports five formats: ### [SEV] Title, ### SEV Title, ### SEV: Title,
     **[SEV]** Title, and - [SEV] Title.
 
+    The scan is bounded twice (slice 917 Part 3, #91). Fenced code blocks are
+    masked, because a model restating the required format almost always fences
+    it and finding-shaped text inside a fence is never a finding. Then, when a
+    ``## Findings`` heading exists, only that section is scanned. When it does
+    not, the whole response is scanned exactly as before — real reviews exist
+    that omit the heading and start their findings at line 2, and discarding
+    those would lose genuine findings to fix a phantom.
+
+    The permissive five-shape matching inside the scanned region is not the
+    bug and is unchanged.
+
     Soft-fails on missing/placeholder ``location:`` values: the field is
     normalized to ``"unverified"`` and a WARNING is logged. ``verdict`` and
     ``template_name`` are included in the warning for triage context.
+
+    Returns the findings, the scan counts feeding the run digest, and whether
+    a findings heading was located.
     """
+    total = _count_finding_matches(text)
+    masked = _mask_fences(text)
+    in_fences = total - _count_finding_matches(masked)
+
+    span = _locate_section(masked, "findings")
+    scanned = masked[span[0] : span[1]] if span is not None else masked
+    in_section = _count_finding_matches(scanned)
+
     findings: list[ReviewFinding] = []
-    for index, match in enumerate(_FINDING_RE.finditer(text), start=1):
+    for index, match in enumerate(_FINDING_RE.finditer(scanned), start=1):
         # Groups: (g1,g2) heading, (g3,g4) bold, (g5,g6) bullet
         sev_raw = match.group(1) or match.group(3) or match.group(5) or ""
         severity_str = sev_raw.upper()
@@ -410,7 +658,13 @@ def _extract_findings(
                 location=location,
             )
         )
-    return findings
+    counts = FindingScanCounts(
+        total=total,
+        in_fences=in_fences,
+        in_section=in_section,
+        surviving=len(findings),
+    )
+    return findings, counts, span is not None
 
 
 def _write_debug_log(
@@ -419,7 +673,7 @@ def _write_debug_log(
     model: str | None,
     verdict: Verdict,
     findings_parsed: int,
-    fallback_used: bool,
+    degraded: bool,
     raw_output: str,
 ) -> None:
     """Append a debug entry to the review debug log."""
@@ -431,7 +685,7 @@ def _write_debug_log(
             "model": model,
             "verdict": verdict.value,
             "findings_parsed": findings_parsed,
-            "fallback_used": fallback_used,
+            "degraded": degraded,
             "raw_output": raw_output,
         }
         with _DEBUG_LOG_PATH.open("a") as f:
@@ -469,7 +723,22 @@ def parse_review_output(
     skipped by both checks.
     """
     verdict = _extract_verdict(raw_output)
-    findings = _extract_findings(raw_output, verdict=verdict, template_name=template_name)
+    findings, finding_scan, findings_section_located = _extract_findings(
+        raw_output, verdict=verdict, template_name=template_name
+    )
+    summary_section_located = _locate_section(_mask_fences(raw_output), "summary") is not None
+    if not findings_section_located:
+        # INFO, not WARNING: a missing heading is not a degradation. Real
+        # reviews omit it and parse correctly, so warning here would fire on
+        # good input and train readers to ignore the channel. The fact is
+        # carried on the result and rendered in the artifact's run digest,
+        # which is where a surprising finding count gets explained.
+        logger.info(
+            "No '## Findings' heading located in %s review (model %s); "
+            "scanned the whole response for findings.",
+            template_name,
+            model,
+        )
     fallback_used = False
 
     # Reconcile a lost verdict against the findings that did parse (#28).
@@ -495,7 +764,7 @@ def parse_review_output(
             model=model,
             verdict=derived,
             findings_parsed=len(findings),
-            fallback_used=True,
+            degraded=True,
             raw_output=raw_output,
         )
         verdict = derived
@@ -520,7 +789,7 @@ def parse_review_output(
             model=model,
             verdict=verdict,
             findings_parsed=0,
-            fallback_used=True,
+            degraded=True,
             raw_output=raw_output,
         )
 
@@ -542,7 +811,7 @@ def parse_review_output(
             model=model,
             verdict=verdict,
             findings_parsed=0,
-            fallback_used=True,
+            degraded=True,
             raw_output=raw_output,
         )
 
@@ -555,6 +824,7 @@ def parse_review_output(
         _check_diff_membership(findings, diff_files, template_name=template_name)
     if cwd is not None:
         _check_path_existence(findings, cwd, template_name=template_name)
+        _check_line_bounds(findings, cwd, template_name=template_name)
 
     # Numeric scoring foundation (slice 300): optional, lenient extraction.
     # Absent or malformed → None (silent — a score-less review is the norm).
@@ -572,4 +842,7 @@ def parse_review_output(
         fallback_used=fallback_used,
         score=score,
         criteria=criteria,
+        summary_section_located=summary_section_located,
+        findings_section_located=findings_section_located,
+        finding_scan=finding_scan,
     )

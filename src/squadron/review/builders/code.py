@@ -15,9 +15,12 @@ def code_review_prompt(inputs: dict[str, str]) -> str:
     diff = inputs.get("diff")
     files = inputs.get("files")
 
+    # Substituted content is delimited with descriptive tags (#25) so the
+    # model can tell the instructions from the material they are about.
     sections: list[str] = [
         f"Review code in the project at: {cwd}",
         "",
+        "<scope>",
     ]
 
     if diff:
@@ -47,11 +50,14 @@ def code_review_prompt(inputs: dict[str, str]) -> str:
             "or core source files."
         )
 
+    sections.append("</scope>")
     sections.append("")
+    sections.append("<output_format>")
     sections.append(
         "Apply the project conventions from CLAUDE.md and language-specific "
         "best practices. Report your findings using the severity format "
         "described in your instructions."
     )
+    sections.append("</output_format>")
 
     return "\n".join(sections)

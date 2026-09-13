@@ -39,11 +39,15 @@ system_prompt: |
     <criterion name>: <0-100>
     <criterion name>: <0-100>
 
+  Use exactly this structure; do not repeat this block in your response.
+
+  ```markdown
   ## Findings
 
   ### [PASS|CONCERN|FAIL] Finding title
   location: <path:line | path:start-end | path#section-heading | path | unverified>
   Description with specific references.
+  ```
 
   Judge reviews evaluate the slice **design document** (and its parent
   architecture/HLD) — not the implementation. Do not cite code paths.
@@ -83,8 +87,14 @@ inputs:
 prompt_template: |
   Score the following document for architectural alignment:
 
-  **Input document:** {input}
-  **Architecture document:** {against}
+  **Input document:**
+  <slice_document>
+  {input}
+  </slice_document>
+  **Architecture document:**
+  <architecture_document>
+  {against}
+  </architecture_document>
 
   Read both documents, then evaluate the input against the architecture.
   Follow referenced files as needed to understand dependencies and integration points.

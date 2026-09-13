@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 from pathlib import Path
 
 import pytest
 
 from squadron.review.models import Severity, Verdict
-from squadron.review.parsers import parse_review_output
+from squadron.review.parsers import (
+    UNVERIFIED_LOCATION,
+    location_line,
+    location_path,
+    parse_review_output,
+)
 
 WELL_FORMED_PASS = """\
 ## Summary
@@ -375,6 +382,31 @@ class TestDiagnosticLogging:
         assert result.verdict is Verdict.UNKNOWN
         assert result.fallback_used is False
 
+    def test_debug_log_key_is_degraded_not_fallback_used(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The log field is named for what it records (#87).
+
+        ``ReviewResult.fallback_used`` means "findings were derived from a known
+        verdict". The log field meant "some degraded parse happened" — a
+        different fact under the same name. It is now ``degraded``; the result
+        field is a serialized public contract and is unchanged.
+        """
+        log_file = tmp_path / "review-debug.jsonl"
+        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+
+        result = parse_review_output("no summary, no findings\n", "slice", {})
+
+        import json
+
+        entry = json.loads(log_file.read_text().splitlines()[-1])
+        assert entry["degraded"] is True
+        assert "fallback_used" not in entry
+        # Same parse, different fact: nothing was derived, so the result's own
+        # flag stays False and its serialized key keeps its name.
+        assert result.fallback_used is False
+        assert result.to_dict()["fallback_used"] is False
+
     def test_debug_log_not_written_on_clean_pass(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -651,8 +683,10 @@ class TestLocationDiffMembershipAndPathExistence:
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         # File exists in tmp_path AND is in the diff set: no warnings.
+        # The file is long enough to contain the cited line — since slice 917
+        # a citation past the end of its file warns, which is the point.
         (tmp_path / "src").mkdir()
-        (tmp_path / "src" / "foo.py").write_text("# foo\n")
+        (tmp_path / "src" / "foo.py").write_text("# foo\n" * 50)
         text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:42\nDetail.\n"
         with caplog.at_level("WARNING", logger="squadron.review.parsers"):
             parse_review_output(text, "code", {}, diff_files={"src/foo.py"}, cwd=tmp_path)
@@ -966,3 +1000,427 @@ class TestVerdictDerivedFromFindings:
         assert result.verdict == Verdict.CONCERNS
         assert len(result.findings) == 1
         assert result.findings[0].severity == Severity.CONCERN
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 3: the finding scan is bounded to real findings (#91, #25)
+# ---------------------------------------------------------------------------
+
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+# The template's specimen as a model actually echoes it: the severity
+# placeholder resolved to one real value, the placeholder title kept verbatim.
+# The literal "[PASS|CONCERN|FAIL]" form matches nothing — a pipe alternation
+# is not a severity — so only this substituted shape can produce the #91
+# phantom, and only this shape is worth defending against.
+_SPECIMEN = """## Summary
+PASS
+
+## Findings
+
+### [PASS] Finding title
+Description of the finding.
+location: src/module.py:12
+"""
+
+
+class TestHeadinglessRealReviews:
+    """Two real reviews whose responses carried no '## Findings' heading.
+
+    These parsed to six good findings each before this slice, and a
+    heading-required rule would have thrown all twelve away. They are the
+    reason the bounded scan falls back to the whole response.
+    """
+
+    @pytest.mark.parametrize(
+        "fixture_name",
+        ["267-headingless-code-response.md", "267-headingless-tasks-response.md"],
+    )
+    def test_six_findings_survive_without_a_heading(self, fixture_name: str) -> None:
+        response = (_FIXTURES / fixture_name).read_text(encoding="utf-8")
+
+        result = parse_review_output(response, "code", {})
+
+        assert len(result.findings) == 6
+        assert result.findings_section_located is False
+        assert result.finding_scan is not None
+        # Every match is a real finding: nothing echoed, nothing fenced.
+        assert result.finding_scan.surviving == result.finding_scan.total == 6
+        assert result.finding_scan.in_fences == 0
+
+    @pytest.mark.parametrize(
+        "fixture_name",
+        ["267-headingless-code-response.md", "267-headingless-tasks-response.md"],
+    )
+    def test_missing_heading_alone_does_not_degrade_the_artifact(self, fixture_name: str) -> None:
+        """A missing findings heading must not be what degrades a review.
+
+        These two responses *do* render degraded, but for a reason that
+        predates this slice and is unrelated to it: neither carries a
+        '## Summary', so the verdict is derived from finding severities
+        (#28) and ``fallback_used`` is set. Adding the same summary makes the
+        artifact clean while the heading is still absent — which is the fact
+        this slice is responsible for.
+        """
+        from squadron.review.persistence import format_review_markdown
+
+        response = (_FIXTURES / fixture_name).read_text(encoding="utf-8")
+        with_summary = f"## Summary\nCONCERNS\n\n{response}"
+
+        result = parse_review_output(with_summary, "code", {})
+
+        assert result.findings_section_located is False
+        assert len(result.findings) == 6
+        assert result.fallback_used is False
+        markdown = format_review_markdown(result, "code")
+        # Anchored to line start: these reviews discuss "### Raw Response" in
+        # their own finding text, so a bare substring check matches the prose.
+        assert not re.search(r"^### Raw Response\s*$", markdown, re.MULTILINE)
+
+
+class TestFenceMasking:
+    def test_specimen_alone_inside_a_fence_yields_nothing(self) -> None:
+        response = f"## Summary\nPASS\n\nFormat reminder:\n\n```\n{_SPECIMEN}```\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+        assert result.finding_scan is not None
+        assert result.finding_scan.total > 0
+        assert result.finding_scan.in_fences == result.finding_scan.total
+
+    def test_tilde_fences_are_masked(self) -> None:
+        response = f"## Summary\nPASS\n\n~~~markdown\n{_SPECIMEN}~~~\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+
+    def test_unclosed_fence_masks_to_end_of_document(self) -> None:
+        response = f"## Summary\nPASS\n\n```\n{_SPECIMEN}"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+
+    def test_fenced_echo_then_real_findings_yields_only_the_real_ones(self) -> None:
+        """The #91 shape: restate the format, then do the work."""
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            f"I will use this structure:\n\n```\n{_SPECIMEN}```\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Real problem in the loop\n"
+            "The counter is off by one.\n"
+            "location: src/squadron/review/parsers.py:10\n\n"
+            "### [PASS] Tests cover the change\n"
+            "Every branch is exercised.\n"
+            "location: tests/review/test_parsers.py:1\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        titles = [f.title for f in result.findings]
+        assert titles == ["Real problem in the loop", "Tests cover the change"]
+        assert "Finding title" not in titles
+
+
+class TestSectionBounding:
+    def test_unfenced_echo_before_the_heading_is_excluded(self) -> None:
+        """An echo the model did not fence is still excluded by the heading."""
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "### [PASS] Finding title\n"
+            "Description of the finding.\n"
+            "location: src/module.py:12\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Actual first finding\n"
+            "Real body.\n\n"
+            "### [PASS] Actual second finding\n"
+            "Real body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == [
+            "Actual first finding",
+            "Actual second finding",
+        ]
+        assert result.finding_scan is not None
+        assert result.finding_scan.total == 3
+        assert result.finding_scan.in_section == 2
+        assert result.finding_scan.surviving == 2
+
+    def test_a_following_section_terminates_the_scan(self) -> None:
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Inside the section\n"
+            "Body.\n\n"
+            "## Next Steps\n\n"
+            "### [PASS] Not a finding at all\n"
+            "This is advice, not a finding.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["Inside the section"]
+
+    def test_deeper_heading_does_not_terminate_the_section(self) -> None:
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] First\n"
+            "Body.\n\n"
+            "#### Sub-detail\n"
+            "More body.\n\n"
+            "### [PASS] Second\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["First", "Second"]
+
+    @pytest.mark.parametrize(
+        "heading",
+        ["## Findings", "## **Findings**", "## findings:", "## Findings.", "##   Findings   "],
+    )
+    def test_heading_variants_are_located(self, heading: str) -> None:
+        response = (
+            f"## Summary\nCONCERNS\n\n"
+            "### [PASS] Finding title\n"
+            "Echoed specimen.\n\n"
+            f"{heading}\n\n"
+            "### [CONCERN] The only real finding\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings_section_located is True
+        assert [f.title for f in result.findings] == ["The only real finding"]
+
+    def test_heading_at_finding_level_does_not_bound_its_own_findings(self) -> None:
+        """A '### Findings' heading cannot contain '### [SEV]' findings.
+
+        The section ends at the next heading of the same or higher level, so a
+        same-level findings heading closes before its first finding. Falling
+        back to the whole response is the safe outcome — findings are kept,
+        not silently dropped — and the digest reports the heading as located.
+        """
+        response = "## Summary\nCONCERNS\n\n### Findings\n\n### [CONCERN] A real finding\nBody.\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["A real finding"]
+
+    def test_summary_section_located_is_recorded(self) -> None:
+        with_summary = parse_review_output("## Summary\nPASS\n", "slice", {})
+        without_summary = parse_review_output("PASS, all good.\n", "slice", {})
+
+        assert with_summary.summary_section_located is True
+        assert without_summary.summary_section_located is False
+
+
+class TestIssue92ProseOnlyResponse:
+    """#92: a full turn of prose review that never emits the required block.
+
+    Not the same failure as #84. The model answered — correct telemetry, a few
+    thousand characters of real review — it just answered in prose. Nothing
+    raises, so no failure artifact is involved; this is a parse outcome, and
+    the existing degraded path already keeps the model's words.
+
+    This slice makes that artifact honest, not recovered: the prose is still
+    not turned into findings, because inventing structure from unstructured
+    text is how a wrong-but-plausible finding gets manufactured.
+    """
+
+    @staticmethod
+    def _prose_response() -> str:
+        paragraph = (
+            "Looking at the task file, the sequencing is sound and every "
+            "success criterion traces to at least one task. I would note that "
+            "the third part carries more risk than its effort rating suggests. "
+        )
+        return paragraph * 18
+
+    def test_prose_only_response_parses_to_unknown_with_no_findings(self) -> None:
+        response = self._prose_response()
+        assert len(response) > 3000
+
+        result = parse_review_output(response, "tasks", {})
+
+        assert result.verdict is Verdict.UNKNOWN
+        assert result.findings == []
+        assert result.findings_section_located is False
+        assert result.summary_section_located is False
+        assert result.finding_scan is not None
+        assert result.finding_scan.total == 0
+
+    def test_prose_only_artifact_keeps_the_raw_response(self) -> None:
+        """The existing degraded path, unchanged — no ProviderError involved."""
+        from squadron.review.persistence import format_review_markdown
+
+        result = parse_review_output(self._prose_response(), "tasks", {})
+
+        markdown = format_review_markdown(result, "tasks")
+
+        assert re.search(r"^### Raw Response\s*$", markdown, re.MULTILINE)
+        assert "the sequencing is sound" in markdown
+        # The artifact says UNKNOWN rather than claiming a clean review.
+        assert f"verdict: {Verdict.UNKNOWN.value}" in markdown
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 5: cited line numbers are bounds-checked (#26)
+# ---------------------------------------------------------------------------
+
+
+def _finding_with(location: str) -> str:
+    return f"## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: {location}\nDetail.\n"
+
+
+class TestLocationLineExtraction:
+    @pytest.mark.parametrize(
+        ("location", "expected"),
+        [
+            ("src/foo.py:42", 42),
+            # The last line of a range is the one that must exist.
+            ("src/foo.py:42-50", 50),
+            ("src/foo.py#symbol", None),
+            ("src/foo.py", None),
+            (UNVERIFIED_LOCATION, None),
+        ],
+    )
+    def test_line_extraction(self, location: str, expected: int | None) -> None:
+        assert location_line(location) == expected
+
+    def test_location_path_is_unchanged_by_line_extraction(self) -> None:
+        """location_path keeps its contract — the findings gate depends on it."""
+        assert location_path("src/foo.py:42-50") == "src/foo.py"
+        assert location_path("src/foo.py#symbol") == "src/foo.py"
+
+
+class TestLineBoundsVerification:
+    """The tri-state, end to end through parse_review_output."""
+
+    @staticmethod
+    def _ten_line_file(tmp_path: Path) -> None:
+        (tmp_path / "file.py").write_text("line\n" * 10)
+
+    def test_without_cwd_nothing_is_checked(self, tmp_path: Path) -> None:
+        self._ten_line_file(tmp_path)
+
+        result = parse_review_output(_finding_with("file.py:3"), "code", {})
+
+        assert result.findings[0].location_verified is None
+
+    @pytest.mark.parametrize(
+        ("location", "expected"),
+        [
+            ("file.py:7", True),
+            ("file.py:10", True),
+            ("file.py:3-10", True),
+            ("file.py:999999", False),
+            ("file.py:11", False),
+            ("file.py:3-11", False),
+            # Whole-file citations name no line to check.
+            ("file.py", None),
+            ("file.py#symbol", None),
+            (UNVERIFIED_LOCATION, None),
+        ],
+    )
+    def test_tri_state(self, tmp_path: Path, location: str, expected: bool | None) -> None:
+        self._ten_line_file(tmp_path)
+
+        result = parse_review_output(_finding_with(location), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is expected
+
+    def test_nonexistent_file_is_false(self, tmp_path: Path) -> None:
+        """Verifiably absent — the signature this check exists for."""
+        result = parse_review_output(_finding_with("ghost.py:3"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is False
+
+    def test_issue_91_phantom_citation_is_false(self, tmp_path: Path) -> None:
+        """The specimen's own citation, as the #91 phantoms carried it."""
+        result = parse_review_output(_finding_with("src/module.py:12"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is False
+
+    def test_final_line_without_trailing_newline_counts(self, tmp_path: Path) -> None:
+        (tmp_path / "file.py").write_text("one\ntwo\nthree")
+
+        result = parse_review_output(_finding_with("file.py:3"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is True
+
+
+class TestLineBoundsUncheckableCases:
+    """Every case the check cannot run yields None *and* says why.
+
+    A silently unverified citation would be indistinguishable from one that
+    was never checked, so each of these must leave an observable signal.
+    """
+
+    def test_directory_citation(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        (tmp_path / "pkg").mkdir()
+
+        with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+            result = parse_review_output(_finding_with("pkg:1"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)
+
+    def test_file_over_the_size_cap(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        (tmp_path / "file.py").write_text("line\n" * 10)
+        monkeypatch.setattr("squadron.review.parsers._MAX_LINE_CHECK_BYTES", 10)
+
+        with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+            result = parse_review_output(_finding_with("file.py:3"), "code", {}, cwd=tmp_path)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)
+
+    def test_unreadable_file(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+        if os.geteuid() == 0:
+            pytest.skip("root reads regardless of mode bits")
+        target = tmp_path / "file.py"
+        target.write_text("line\n" * 10)
+        target.chmod(0o000)
+        try:
+            with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+                result = parse_review_output(_finding_with("file.py:3"), "code", {}, cwd=tmp_path)
+        finally:
+            target.chmod(0o644)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)
+
+    def test_escaping_citation_is_never_opened(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Containment is checked before any open, not after.
+
+        A model-supplied path drives this read. A '../' citation must not
+        make the parser read outside the review root even once.
+        """
+        outside = tmp_path / "outside.py"
+        outside.write_text("line\n" * 10)
+        root = tmp_path / "root"
+        root.mkdir()
+
+        # Patched only after the fixture files exist, so this catches reads by
+        # the parser and nothing else.
+        def _refuse(*args: object, **kwargs: object) -> None:
+            raise AssertionError("the parser opened a file outside the review root")
+
+        monkeypatch.setattr(Path, "open", _refuse)
+        with caplog.at_level(logging.WARNING, logger="squadron.review.parsers"):
+            result = parse_review_output(_finding_with("../outside.py:1"), "code", {}, cwd=root)
+
+        assert result.findings[0].location_verified is None
+        assert any("Bug" in r.getMessage() for r in caplog.records)

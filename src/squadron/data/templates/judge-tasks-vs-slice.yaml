@@ -38,11 +38,15 @@ system_prompt: |
     <criterion name>: <0-100>
     <criterion name>: <0-100>
 
+  Use exactly this structure; do not repeat this block in your response.
+
+  ```markdown
   ## Findings
 
   ### [PASS|CONCERN|FAIL] Finding title
   location: <path:line | path:start-end | path#symbol | path | unverified>
   Description with specific references.
+  ```
 
   Choose the `location:` value (most specific form you can verify):
   1. Code `path:line` or `path:start-end` — preferred when the issue
@@ -83,8 +87,14 @@ inputs:
 prompt_template: |
   Score the following task breakdown for completeness and quality:
 
-  **Task file:** {input}
-  **Slice design:** {against}
+  **Task file:**
+  <task_file>
+  {input}
+  </task_file>
+  **Slice design:**
+  <slice_design>
+  {against}
+  </slice_design>
 
   Read both documents, then cross-reference success criteria from the slice design
   against the tasks. Identify gaps, scope creep, sequencing issues, and tasks that

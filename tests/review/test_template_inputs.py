@@ -231,3 +231,55 @@ def test_missing_input_files_flags_both(tmp_path: Path) -> None:
         "against": str(tmp_path / "b.md"),
     }
     assert [key for key, _ in missing_input_files(inputs)] == ["input", "against"]
+
+
+# ---------------------------------------------------------------------------
+# Slice 917 Part 3: substituted content is delimited (#25)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("template_name", "tags"),
+    [
+        ("slice", ("slice_document", "architecture_document")),
+        ("tasks", ("task_file", "slice_design")),
+        ("arch", ("architecture_document",)),
+        ("judge.slice-vs-arch", ("slice_document", "architecture_document")),
+        ("judge.tasks-vs-slice", ("task_file", "slice_design")),
+    ],
+)
+def test_substituted_content_sits_between_its_tags(template_name: str, tags: tuple[str, ...]) -> None:
+    """Descriptive tags must bracket the substituted values, not merely appear.
+
+    Without a delimiter a model cannot reliably tell the instructions from the
+    material they are about, which is how a template's own example text ends
+    up quoted back as output (#25).
+    """
+    from squadron.review.templates import get_template, load_all_templates
+
+    load_all_templates()
+    template = get_template(template_name)
+    assert template is not None
+
+    inputs = {"input": "INPUT-SENTINEL", "against": "AGAINST-SENTINEL"}
+    rendered = template.build_prompt(inputs)
+
+    sentinels = ["INPUT-SENTINEL", "AGAINST-SENTINEL"][: len(tags)]
+    for tag, sentinel in zip(tags, sentinels, strict=True):
+        open_tag, close_tag = f"<{tag}>", f"</{tag}>"
+        assert open_tag in rendered
+        assert close_tag in rendered
+        assert rendered.index(open_tag) < rendered.index(sentinel) < rendered.index(close_tag)
+
+
+def test_code_prompt_delimits_scope_and_output_format() -> None:
+    from squadron.review.builders.code import code_review_prompt
+
+    rendered = code_review_prompt({"cwd": "/tmp/project", "diff": "main"})
+
+    assert rendered.index("<scope>") < rendered.index("git diff main") < rendered.index("</scope>")
+    assert (
+        rendered.index("<output_format>")
+        < rendered.index("severity format")
+        < rendered.index("</output_format>")
+    )

@@ -18,3 +18,14 @@ dateUpdated: 20260401
 **Model:** claude-opus-4-5
 
 No specific findings.
+
+### Run Digest
+
+- Response length: 33 chars
+- Tool calls made: not offered
+- `## Summary` located: not computed
+- `## Findings` located: not computed
+- Finding-shaped matches — whole response: not computed
+- Finding-shaped matches — inside fences: not computed
+- Finding-shaped matches — in findings section: not computed
+- Finding-shaped matches — surviving validation: not computed
