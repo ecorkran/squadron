@@ -1109,6 +1109,10 @@ class TestFenceMasking:
         Requiring exact equality treated such a block as unclosed, masked to
         end of document, and silently dropped every finding after it — the
         exact failure this part exists to prevent, on valid input.
+
+        The other direction is pinned by the test below: the rule is one rule,
+        and testing only the side that drops findings leaves the side that
+        leaks them free to regress.
         """
         response = (
             "## Summary\nCONCERNS\n\n"
@@ -1121,6 +1125,40 @@ class TestFenceMasking:
         result = parse_review_output(response, "slice", {})
 
         assert [f.title for f in result.findings] == ["Real finding"]
+
+    def test_shorter_inner_fence_does_not_close_a_longer_block(self) -> None:
+        """The inverse of the case above, and the same single rule.
+
+        A four-backtick fence is how a model safely quotes a bare three-tick
+        fence. A closer of any 3+ run ends the block at that inner fence and
+        unmasks the rest of the echo, so the specimen's own finding heading
+        parses as a real finding. The inner fence is bare: an info string
+        (```markdown) can only open a block, never close one, so a fixture
+        that quotes one exercises neither direction of the rule.
+        """
+        response = (
+            "## Summary\nCONCERNS\n\n"
+            "I will use this structure:\n\n"
+            f"````\n{_SPECIMEN}```\nstill the echo\n````\n\n"
+            "## Findings\n\n"
+            "### [CONCERN] Real finding\n"
+            "Body.\n"
+        )
+
+        result = parse_review_output(response, "slice", {})
+
+        assert [f.title for f in result.findings] == ["Real finding"]
+
+    def test_specimen_stays_masked_when_quoted_in_a_longer_fence(self) -> None:
+        """The leak the case above guards, asserted on the scan counters."""
+        response = f"## Summary\nPASS\n\n````\n{_SPECIMEN}```\nstill the echo\n````\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.findings == []
+        assert result.finding_scan is not None
+        assert result.finding_scan.total > 0
+        assert result.finding_scan.in_fences == result.finding_scan.total
 
     def test_fenced_echo_then_real_findings_yields_only_the_real_ones(self) -> None:
         """The #91 shape: restate the format, then do the work."""

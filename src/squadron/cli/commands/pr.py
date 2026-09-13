@@ -53,7 +53,7 @@ def show(
         parsed = parse_target(target)
         remotes = list_remotes(runner, repo_cwd)
         locator = select_remote(parsed, remotes, host.serves_host)
-        resolved = host.resolve_pull_request(locator, parsed)
+        resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
         fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
     except CodeHostError as exc:
         # Every adapter failure has already been logged once at WARNING or

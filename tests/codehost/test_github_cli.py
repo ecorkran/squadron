@@ -128,7 +128,7 @@ def test_default_branch_argv_and_value(host: str) -> None:
 @pytest.mark.parametrize("host", [GITHUB, ENTERPRISE])
 def test_resolve_by_number_argv_and_record(host: str) -> None:
     cli, runner = _host([(["gh", "api", "graphql"], _ok(_fixture("pr83-resolve.json")))])
-    resolved = cli.resolve_pull_request(_locator(host), parse_target("83"))
+    resolved = cli.resolve_pull_request(_locator(host), parse_target("83"), cwd="/repo")
 
     assert resolved.record.number == 83
     assert resolved.record.host == host
@@ -191,13 +191,13 @@ def _branch_payload(numbers: list[int]) -> str:
 def test_branch_with_no_open_pr_raises() -> None:
     cli, _ = _host([(["gh", "api", "graphql"], _ok(_branch_payload([])))])
     with pytest.raises(NoOpenPullRequestForBranchError):
-        cli.resolve_pull_request(_locator(), parse_target("some-branch"))
+        cli.resolve_pull_request(_locator(), parse_target("some-branch"), cwd="/repo")
 
 
 def test_branch_with_two_open_prs_is_ambiguous_and_names_them() -> None:
     cli, _ = _host([(["gh", "api", "graphql"], _ok(_branch_payload([7, 9])))])
     with pytest.raises(AmbiguousBranchPullRequestsError) as excinfo:
-        cli.resolve_pull_request(_locator(), parse_target("some-branch"))
+        cli.resolve_pull_request(_locator(), parse_target("some-branch"), cwd="/repo")
     message = str(excinfo.value)
     assert "7" in message and "9" in message
 
@@ -209,7 +209,7 @@ def test_branch_with_one_open_pr_resolves_through_to_the_record() -> None:
             (["gh", "api", "graphql"], _ok(_fixture("pr83-resolve.json"))),
         ]
     )
-    resolved = cli.resolve_pull_request(_locator(), parse_target("some-branch"))
+    resolved = cli.resolve_pull_request(_locator(), parse_target("some-branch"), cwd="/repo")
     assert resolved.record.number == 83
     assert len(runner.calls) == 2
 
@@ -249,7 +249,7 @@ def test_rest_422_is_rejected_with_status() -> None:
 def test_graphql_not_found_is_rejected_as_404() -> None:
     cli, _ = _host([(["gh", "api", "graphql"], _fail(1, stdout=_fixture("graphql-notfound.json")))])
     with pytest.raises(HostRequestRejectedError) as excinfo:
-        cli.resolve_pull_request(_locator(), parse_target("83"))
+        cli.resolve_pull_request(_locator(), parse_target("83"), cwd="/repo")
     assert excinfo.value.status == 404
 
 
@@ -257,7 +257,7 @@ def test_graphql_other_error_type_is_rejected() -> None:
     body = json.dumps({"errors": [{"type": "RATE_LIMITED", "message": "slow down"}]})
     cli, _ = _host([(["gh", "api", "graphql"], _fail(1, stdout=body))])
     with pytest.raises(HostRequestRejectedError):
-        cli.resolve_pull_request(_locator(), parse_target("83"))
+        cli.resolve_pull_request(_locator(), parse_target("83"), cwd="/repo")
 
 
 def test_no_json_no_http_is_unreachable_carrying_stderr_verbatim() -> None:
@@ -399,13 +399,13 @@ def test_post_comment_argv_and_body_over_stdin() -> None:
         "-X",
         "POST",
         "repos/ecorkran/squadron/issues/83/comments",
-        "-f",
-        "body=@-",
+        "--input",
+        "-",
         "--hostname",
         GITHUB,
     )
     # Byte-for-byte over stdin, and nowhere in argv.
-    assert call.stdin == _BODY_WITH_EVERYTHING
+    assert json.loads(call.stdin or "") == {"body": _BODY_WITH_EVERYTHING}
     assert not any(_BODY_WITH_EVERYTHING in arg for arg in call.argv)
     assert comment.id == "555"
 
@@ -421,12 +421,12 @@ def test_update_comment_argv_and_body_over_stdin() -> None:
         "-X",
         "PATCH",
         "repos/ecorkran/squadron/issues/comments/555",
-        "-f",
-        "body=@-",
+        "--input",
+        "-",
         "--hostname",
         GITHUB,
     )
-    assert call.stdin == _BODY_WITH_EVERYTHING
+    assert json.loads(call.stdin or "") == {"body": _BODY_WITH_EVERYTHING}
     assert not any(_BODY_WITH_EVERYTHING in arg for arg in call.argv)
 
 
@@ -445,14 +445,93 @@ def test_open_pull_request_argv_and_body_over_stdin() -> None:
 
     call = runner.calls[0]
     assert call.argv[:5] == ("gh", "api", "-X", "POST", "repos/ecorkran/squadron/pulls")
-    assert "title=A title" in call.argv
-    assert "head=feat" in call.argv
-    assert "base=main" in call.argv
-    assert "body=@-" in call.argv
-    assert call.stdin == _BODY_WITH_EVERYTHING
+    # The whole payload travels as JSON on stdin: no field flag carries a
+    # value gh would reinterpret, and nothing operator-supplied is on argv.
+    assert "--input" in call.argv
+    assert not any(arg in ("-f", "-F") for arg in call.argv)
+    assert json.loads(call.stdin or "") == {
+        "title": "A title",
+        "head": "feat",
+        "base": "main",
+        "body": _BODY_WITH_EVERYTHING,
+    }
     assert not any(_BODY_WITH_EVERYTHING in arg for arg in call.argv)
     assert record.number == 90
     assert record.head_sha == "abc123"
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("title", "@release-notes.md"),
+        ("head", "@odd-branch"),
+        ("base", "@main"),
+        ("body", "@everyone please look"),
+    ],
+)
+def test_open_pull_request_keeps_at_prefixed_values_literal(field: str, value: str) -> None:
+    """gh reads a field value beginning with "@" from a file.
+
+    A title is free-form operator text, so "@release-notes.md" would be read
+    off disk — a missing-file failure, or silently the wrong content if a file
+    by that name exists. Every field is asserted, not only the likely one:
+    they share one code path, and pinning a single field lets the others
+    regress independently.
+    """
+    payload = json.dumps({"number": 91, "html_url": "u", "head": {"sha": "s"}})
+    cli, runner = _host([(["gh", "api", "-X", "POST"], _ok(payload))])
+    fields = {"base": "main", "head": "feat", "title": "A title", "body": "A body"}
+    fields[field] = value
+
+    cli.open_pull_request(_locator(), **fields)  # type: ignore[arg-type]
+
+    call = runner.calls[0]
+    assert json.loads(call.stdin or "")[field] == value
+    assert not any(value in arg for arg in call.argv)
+
+
+@pytest.mark.parametrize("body", ["@everyone heads up", "A plain body"])
+def test_comment_bodies_travel_as_json_not_as_a_field(body: str) -> None:
+    """Comment bodies carry the same "@" exposure as a pull-request title."""
+    cli, runner = _host(
+        [
+            (["gh", "api", "-X", "POST"], _ok(_comment_payload())),
+            (["gh", "api", "-X", "PATCH"], _ok(_comment_payload())),
+        ]
+    )
+    cli.post_comment(_record(), body)
+    cli.update_comment(_record(), "555", body)
+
+    for call in runner.calls:
+        assert "--input" in call.argv
+        assert not any(arg in ("-f", "-F") for arg in call.argv)
+        assert json.loads(call.stdin or "") == {"body": body}
+
+
+def test_current_branch_reads_head_from_the_given_cwd() -> None:
+    """The bare form reads HEAD from the resolved repository root.
+
+    Passing cwd=None ran git against the process's own working directory,
+    which names another repository's branch — or reports a detached HEAD when
+    the real answer is "no repository here".
+    """
+    cli, runner = _host(
+        [
+            (["git", "rev-parse", "--abbrev-ref"], _ok("feat\n")),
+            (["gh", "api", "graphql"], _ok(json.dumps(_branch_nodes(83)))),
+            (["gh", "api", "graphql"], _ok(_fixture("pr83-resolve.json"))),
+        ]
+    )
+
+    cli.resolve_pull_request(_locator(), parse_target(None), cwd="/repo/root")
+
+    head_call = runner.calls[0]
+    assert head_call.argv[:2] == ("git", "rev-parse")
+    assert head_call.cwd == "/repo/root"
+
+
+def _branch_nodes(number: int) -> dict[str, object]:
+    return {"data": {"repository": {"pullRequests": {"nodes": [{"number": number}]}}}}
 
 
 def test_open_pull_request_422_is_creation_rejected() -> None:
@@ -507,7 +586,7 @@ def test_write_calls_is_empty_across_the_whole_read_pipeline() -> None:
     target = parse_target("83")
     remotes = list_remotes(runner, cwd="/repo")
     locator = select_remote(target, remotes, cli.serves_host)
-    resolved = cli.resolve_pull_request(locator, target)
+    resolved = cli.resolve_pull_request(locator, target, cwd="/repo")
     cli.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd="/repo")
 
     assert runner.write_calls() == [], "the read path must not mutate the host"

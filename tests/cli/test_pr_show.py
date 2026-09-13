@@ -182,6 +182,37 @@ def _branch_payload(number: int) -> dict[str, object]:
     return {"data": {"repository": {"pullRequests": {"nodes": [{"number": number}]}}}}
 
 
+def test_current_branch_reads_head_from_the_resolved_repo(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    tmp_path: Path,
+) -> None:
+    """The bare form must read HEAD from --cwd, not the process's own cwd.
+
+    Reading it from the process cwd names the branch of whatever repository
+    happens to sit there: a wrong pull request if that is another checkout,
+    and a bogus "detached HEAD" if it is not a repository at all. The fake
+    runner records cwd on every call, so this asserts it rather than trusting
+    argv order — the gap that let the original defect pass unnoticed.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    script = [
+        (["git", "rev-parse", "--abbrev-ref"], _ok("feat\n")),
+        (["gh", "api", "graphql"], _ok(json.dumps(_branch_payload(83)))),
+        *_read_script(GITHUB),
+    ]
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "--cwd", str(elsewhere), "--json"], script)
+
+    assert result.exit_code == 0, result.output
+    runner = patched_host["runner"]
+    assert isinstance(runner, FakeProcessRunner)
+    head_calls = [call for call in runner.calls if call.argv[:2] == ("git", "rev-parse")]
+    assert head_calls, "the current-branch form must read HEAD"
+    assert head_calls[0].cwd == str(elsewhere)
+
+
 # --- --json shape -----------------------------------------------------------
 
 

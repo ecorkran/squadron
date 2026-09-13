@@ -158,23 +158,29 @@ class GitHubCli:
         return hostname in self._hosts
 
     def resolve_pull_request(
-        self, locator: RepositoryLocator, target: PullRequestTarget
+        self, locator: RepositoryLocator, target: PullRequestTarget, *, cwd: str
     ) -> ResolvedPullRequest:
         """Resolve a target to a full pull-request record."""
         number = target.number
         if number is None:
-            number = self._number_for_branch(locator, self._branch_for(target))
+            number = self._number_for_branch(locator, self._branch_for(target, cwd=cwd))
         node = self._pull_request_node(locator, number)
         return to_resolved(node, locator)
 
-    def _branch_for(self, target: PullRequestTarget) -> str:
-        """The branch a non-numeric target refers to."""
+    def _branch_for(self, target: PullRequestTarget, *, cwd: str) -> str:
+        """The branch a non-numeric target refers to.
+
+        ``cwd`` is the resolved repository root, not the process's working
+        directory: reading HEAD from the latter would name the branch of
+        whatever repository happens to sit there, which is either a wrong
+        answer or a "detached HEAD" that misdiagnoses "no repository here".
+        """
         if target.branch is not None:
             return target.branch
         # Form 1: whatever the checkout is on right now.
         result = self._runner.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=None,
+            cwd=cwd,
             timeout=HOST_COMMAND_TIMEOUT_SECONDS,
         )
         branch = result.stdout.strip()
@@ -304,14 +310,20 @@ class GitHubCli:
     def post_comment(self, record: PullRequestRecord, body: str) -> HostComment:
         """Add a comment to the pull request."""
         path = f"repos/{record.owner}/{record.repository}/issues/{record.number}/comments"
-        payload = self._json(["api", "-X", "POST", path, "-f", "body=@-"], host=record.host, stdin=body)
+        payload = self._json(
+            ["api", "-X", "POST", path, "--input", "-"],
+            host=record.host,
+            stdin=_body_payload(body),
+        )
         return _to_comment(payload, ("gh", "api", path))
 
     def update_comment(self, record: PullRequestRecord, comment_id: str, body: str) -> HostComment:
         """Replace the body of a comment we previously posted."""
         path = f"repos/{record.owner}/{record.repository}/issues/comments/{comment_id}"
         payload = self._json(
-            ["api", "-X", "PATCH", path, "-f", "body=@-"], host=record.host, stdin=body
+            ["api", "-X", "PATCH", path, "--input", "-"],
+            host=record.host,
+            stdin=_body_payload(body),
         )
         return _to_comment(payload, ("gh", "api", path))
 
@@ -326,21 +338,15 @@ class GitHubCli:
     ) -> PullRequestRecord:
         """Open a pull request, with the body over stdin."""
         path = f"repos/{locator.owner}/{locator.repository}/pulls"
-        args = [
-            "api",
-            "-X",
-            "POST",
-            path,
-            "-f",
-            f"title={title}",
-            "-f",
-            f"head={head}",
-            "-f",
-            f"base={base}",
-            "-f",
-            "body=@-",
-        ]
-        result = self._run_gh(args, host=locator.host, stdin=body)
+        # The whole request body goes over stdin as one JSON object rather than
+        # through -f/-F field flags. gh reads a field value beginning with "@"
+        # from a file, and a title is free-form operator text: "@release-notes"
+        # would be read off disk, or fail as a missing file. --input takes the
+        # payload verbatim, so no value is interpreted. Field flags cannot be
+        # mixed in — with --input they become URL query parameters.
+        args = ["api", "-X", "POST", path, "--input", "-"]
+        payload_in = json.dumps({"title": title, "head": head, "base": base, "body": body})
+        result = self._run_gh(args, host=locator.host, stdin=payload_in)
         if result.returncode != 0:
             error = _classify_failure(result, locator.host)
             if isinstance(error, HostRequestRejectedError) and error.status == 422:
@@ -490,6 +496,16 @@ class GitHubCli:
         except ProcessTimedOutError as exc:
             _logger.warning("gh exceeded %ss: %s", exc.timeout, " ".join(exc.argv))
             raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
+
+
+def _body_payload(body: str) -> str:
+    """A one-field request body as JSON, for ``gh api --input -``.
+
+    Comment bodies are operator and model text. Passed as ``-f body=@-`` the
+    value is fine, but any field value beginning with ``@`` is read from a
+    file by gh, so bodies travel as a JSON document instead of a field.
+    """
+    return json.dumps({"body": body})
 
 
 def _classify_failure(result: ProcessResult, host: str) -> CodeHostError:
