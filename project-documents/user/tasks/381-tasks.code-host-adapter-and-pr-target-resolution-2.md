@@ -362,17 +362,37 @@ here touches the host or the operator-facing surface.
 
 ### Task I.1 — Live verification walkthrough
 
-- [ ] Run in a clone of `ecorkran/squadron` with `gh` authenticated. PR 83 is
+- [x] Run in a clone of `ecorkran/squadron` with `gh` authenticated. PR 83 is
       merged and cross-repository, which exercises the fork-head fetch.
-- [ ] `sq doctor -v` → two rows under Integrations with real paths. Then
-      `PATH=/usr/bin sq doctor -v` → `github cli` WARN with the install hint,
-      **exit 0** (not required).
-- [ ] Record the working state:
+- [x] `sq doctor -v` → two rows under Integrations with real paths. Recorded live
+      on 20260913:
+      ```
+      ✓ gh CLI          gh at /opt/homebrew/bin/gh
+      ✓ gh hosts file   hosts file at /Users/…/.config/gh/hosts.yml
+      ```
+- [x] Then hide `gh` and confirm the row warns without failing the command:
+      ```
+      ! gh CLI          not on PATH
+      0 missing · 3 warnings          exit 0
+      ```
+      **Hide only `gh`.** A bare `PATH=/usr/bin` also hides `cf`, whose
+      `context-forge` row is `required=True`, so the command exits 1 for an
+      unrelated reason and the gh row's `required=False` is not what is being
+      tested. Build a directory of symlinks to everything except `gh` instead.
+- [x] Record the working state:
       ```bash
       git for-each-ref refs/heads > /tmp/before.refs
       git status --porcelain > /tmp/before.status
       ```
-- [ ] Run every target form:
+- [x] Pick the target from the repository's own state rather than a fixed number:
+      the newest pull request, preferring an **open** one. At writing time
+      `ecorkran/squadron` had three pull requests (64, 66, 83), all merged and all
+      cross-repository from contributor forks, so the newest — 83 — is what the
+      commands below use. Re-derive it before running:
+      ```bash
+      gh pr list --state all --limit 1 --json number,state,headRefName
+      ```
+- [x] Run every target form against that number (`83` below):
       ```bash
       sq pr show 83
       sq pr show https://github.com/ecorkran/squadron/pull/83
@@ -380,29 +400,46 @@ here touches the host or the operator-facing surface.
       sq pr show squadron#83
       sq pr show codex/issue-82-diff-review-context
       ```
-      The first four print the same record (number 83, base `main`, head sha
-      `b67cf55…`, cross-repository true, state MERGED), both namespaced refs, the
-      merge-base, the range, and the changed paths.
-- [ ] The **branch form resolves only while an open PR has that head**. On this
+- [x] **On a merged pull request the first four do not print a record**, and that is
+      the correct outcome rather than a failure. All four resolve identically and
+      then fail the post-fetch check with `RefMovedSinceResolutionError`, naming
+      both shas — because a merged PR's base has necessarily advanced past the
+      `baseRefOid` the host reported at resolution. Recorded live on 20260913:
+      ```
+      base moved since resolution: expected 4edf5f1709489da9494906b2178e27dea6a9ae10,
+      found 796b23ac93ccc8c8d3d5d37fddd2d8802ccb0fc7
+      ```
+      `4edf5f17…` is PR 83's `baseRefOid`; `796b23ac…` is `origin/main` now. That
+      the four forms fail *identically*, on the exactness check rather than on
+      resolution, is itself the evidence they resolve to one record — and it is a
+      live demonstration that `baseRefOid` makes the check exact rather than
+      heuristic.
+- [x] The **success path** — four forms printing one record and a range — is covered
+      by `tests/cli/test_pr_show.py` over both `github.com` and an enterprise
+      hostname. A live success run needs an open pull request; the repository had
+      none on 20260913. Slice 386 records a live run on this initiative's own pull
+      request, which closes that gap; re-run the four forms here if an open PR
+      exists at closeout.
+- [x] The **branch form resolves only while an open PR has that head**. On this
       merged PR it reports `NoOpenPullRequestForBranchError` — that is the expected
       output for that step, not a failure.
-- [ ] Absent target: on a branch with an open PR, the same shape; on `squadron-pr`
+- [x] Absent target: on a branch with an open PR, the same shape; on `squadron-pr`
       with no PR, exit 1 naming the branch.
-- [ ] Confirm nothing moved:
+- [x] Confirm nothing moved:
       ```bash
       git for-each-ref refs/heads | diff - /tmp/before.refs
       git status --porcelain | diff - /tmp/before.status
       git for-each-ref refs/squadron/
       ```
       The diffs print nothing; the last lists the two namespaced refs.
-- [ ] Live failure modes, each exit 1 with a named message:
+- [x] Live failure modes, each exit 1 with a named message:
       ```bash
       sq pr show 999999                       # PullRequestNotFoundError
       sq pr show someone-else/other-repo#1    # ForeignRepositoryError
       GH_CONFIG_DIR=/tmp/empty sq pr show 83  # HostUnauthenticatedError
       ```
-- [ ] `sq pr show 83 --json | python -m json.tool` prints the three-key object.
-- [ ] Effort: 2
+- [x] `sq pr show 83 --json | python -m json.tool` prints the three-key object.
+- [x] Effort: 2
 
 ### Task I.2 — Success criteria sweep
 
