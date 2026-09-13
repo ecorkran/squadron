@@ -29,17 +29,17 @@ here touches the host or the operator-facing surface.
 
 ### Task F.1 — Capture `gh` response fixtures
 
-- [ ] Create `tests/codehost/fixtures/gh/`. Capture from **real** `gh` responses
+- [x] Create `tests/codehost/fixtures/gh/`. Capture from **real** `gh` responses
       against `ecorkran/squadron` — a fixture invented by hand proves nothing about
       a shape squadron does not control.
-- [ ] Capture: PR 83 resolution (GraphQL), `repos/ecorkran/squadron` (default
+- [x] Capture: PR 83 resolution (GraphQL), `repos/ecorkran/squadron` (default
       branch), the 404 body for a nonexistent branch, `user` (identity), and
       `reviewThreads` both empty and populated.
-- [ ] Record the `gh` version the fixtures came from in a README beside them. The
+- [x] Record the `gh` version the fixtures came from in a README beside them. The
       design's risk register names `gh` output drift as the live risk;
       `HostResponseMalformedError` is the runtime half, and this note is how a
       future reader knows when the fixtures went stale.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task F.2 — `GitHubCli` construction and `serves_host`
 
