@@ -203,11 +203,8 @@ here touches the host or the operator-facing surface.
       histories (`NoMergeBaseError`).
 - [ ] Cross-repository: the head fetches from `refs/pull/<n>/head` with only one
       remote configured.
-- [ ] Per the design correction above, also **write** the doctor-module invariant
-      test noted in the Corrections table: no `subprocess.run`/`Popen` originates
-      in `doctor_checks.py` during `run_all_checks`. `shutil.which` is permitted;
-      the git-hooks path is resolved by the caller and passed in
-      ([doctor_checks.py:465-472](src/squadron/cli/commands/doctor_checks.py#L465-L472)).
+- [ ] (The doctor-module subprocess invariant test lives with the doctor checks in
+      Part E, not here — it guards Part E's work and belongs in its test task.)
 - [ ] Effort: 3
 
 ### Task G.4 — Commit
@@ -247,9 +244,13 @@ here touches the host or the operator-facing surface.
 - [ ] Assert the body arrives **over stdin**, byte-for-byte, including a body with
       newlines, quotes, backticks, and a leading `-`. Assert the body does **not**
       appear anywhere in argv.
-- [ ] Assert `write_calls()` captures each of the four and stays empty across a
-      full `sq pr show` run — that empty assertion is 381's proof the slice is
-      read-only, and the mechanism 384 reuses.
+- [ ] Assert `write_calls()` captures each of the four.
+- [ ] Assert it stays **empty across a full scripted adapter pipeline** — parse
+      target, select remote, resolve, fetch and range — which is everything the
+      read path does and is all that exists at this point in the sequence. The
+      CLI-level counterpart runs in the `sq pr show` test task, once the command
+      exists. Together they are 381's proof the slice is read-only, and the
+      mechanism 384 reuses; neither half may be dropped.
 - [ ] `find_own_comment`: no match → `None`; several matches → earliest by
       `created_at`; a comment by another author with the marker is **not** matched.
 - [ ] Effort: 3
@@ -277,7 +278,7 @@ here touches the host or the operator-facing surface.
       [app.py:49-56](src/squadron/cli/app.py#L49-L56).
 - [ ] Effort: 3
 
-### Task H.4 — Test: the CLI and the import boundary
+### Task H.4 — Test: `sq pr show` behavior
 
 - [ ] `tests/cli/test_pr_show.py`, using the `cli_runner` fixture
       ([tests/cli/conftest.py:14](tests/cli/conftest.py#L14)).
@@ -285,17 +286,34 @@ here touches the host or the operator-facing surface.
       PR — one parametrized test with identical scripted host responses, run once
       on `github.com` and once on the enterprise hostname. This is the slice's
       headline functional criterion.
-- [ ] Every error in B.2's table reaches exit 1 through `sq pr show`, with a
-      WARNING-or-higher record (`caplog`). Table-driven; this is the design's
-      `test_errors_observable.py`.
 - [ ] `--json` emits the three-key object and parses.
+- [ ] The **CLI-level `write_calls()` assertion**: empty across a full `sq pr show`
+      run. This is the half deferred from the write-operations test task, which
+      could only script the adapter pipeline; together the two are the slice's
+      read-only proof. Neither may be dropped.
+- [ ] Effort: 2
+
+### Task H.5 — Test: error observability and import boundaries
+
+- [ ] Every error in the design's error table — **all nineteen classes** — reaches
+      exit 1 through `sq pr show`, with a WARNING-or-higher record (`caplog`).
+      Table-driven; one row per class, and the count is the check.
+- [ ] This is the design's `test_errors_observable.py`. **Placement deviation,
+      deliberate:** it lives in `tests/cli/test_pr_show.py` rather than its own file
+      under `tests/codehost/`, because exit codes are only observable through the
+      CLI and the design's own criterion couples type, log level, and exit code in
+      one assertion. If it outgrows that home, split it out then.
 - [ ] `tests/codehost/test_import_boundaries.py`: walk the import graph of
       `src/squadron/codehost` and `src/squadron/review`. Assert no `codehost`
       module imports `squadron.review`, `squadron.cli`, `squadron.pipeline`, or
       `squadron.providers`, and no `review` module imports `squadron.codehost`.
+- [ ] Separated from the task above because this is the densest test work in the
+      slice — nineteen error classes times three assertions each, plus a two-package
+      graph walk. Buried in a four-deliverable task it is the part most likely to
+      be left half-done.
 - [ ] Effort: 3
 
-### Task H.5 — Commit
+### Task H.6 — Commit
 
 - [ ] `uv run pytest -q`. **Full suite** — this is the first point where the new
       command is registered and could affect unrelated CLI tests.
@@ -364,6 +382,11 @@ here touches the host or the operator-facing surface.
   - [ ] every error: type, WARNING+ record, exit 1; scripted timeout names the bound
   - [ ] closed and merged PRs resolve; cross-repository fetches without a second remote
   - [ ] two doctor rows; `gh` absent reports and does not install
+- [ ] **Package-root re-exports**: every name in the design's Integration Points →
+      Provides list imports from `squadron.codehost` directly, not by deep path.
+      This is the contract 382, 384, and 385 consume; an empty or partial
+      `__init__.py` breaks them into deep-path imports and the divergence would
+      otherwise surface only at 382 integration.
 - [ ] Technical criteria: ruff clean, **pyright zero errors**, the import-graph test
       passes, every emitted `gh` argv is pinned, every parsed JSON shape has a
       fixture captured from a real response, files near 300 lines.

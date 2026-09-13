@@ -58,7 +58,7 @@ tasks below; neither changes scope.
 
 | Design text | Finding | Disposition |
 |---|---|---|
-| "`run_all_checks` still makes no subprocess call (**existing test extended**)" | No such test exists — `grep subprocess tests/cli/test_doctor_checks.py` returns nothing. The invariant is also narrower than stated: `run_all_checks` calls `shutil.which` freely, and its docstring records that `git_hooks_path` is resolved *by the caller* precisely because a subprocess would violate the module's contract. | G.3 **writes** the test rather than extending one, and states the invariant as "no `subprocess.run`/`Popen` from the doctor-checks module", which is the property that actually holds. |
+| "`run_all_checks` still makes no subprocess call (**existing test extended**)" | No such test exists — `grep subprocess tests/cli/test_doctor_checks.py` returns nothing. The invariant is also narrower than stated: `run_all_checks` calls `shutil.which` freely, and its docstring records that `git_hooks_path` is resolved *by the caller* precisely because a subprocess would violate the module's contract. | The doctor test task in Part E **writes** the test rather than extending one, and states the invariant as "no `subprocess.run`/`Popen` from the doctor-checks module", which is the property that actually holds. |
 | "`--cwd` resolves as `sq review code` does" | That logic is `_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show` has no use for. The design does not say how `pr.py` obtains it. | PM decision (20260913): **extract the cwd half** into a shared CLI helper; `_resolve_review_cwd` becomes a thin wrapper. Sequenced early, in Part A. Widens the `sq-base` promise — see Coordination. |
 
 ### Coordination
@@ -189,10 +189,15 @@ Everything downstream is tested through this seam. Build it first.
       [:1192](src/squadron/cli/commands/review.py#L1192)) stay untouched.
 - [ ] **Behavior-preserving.** If this edit changes any review behavior, it is
       wrong. The existing review test suite is the check.
-- [ ] The helper must not import from `squadron.review` for the cwd half —
-      `find_git_root` currently lives in `review/git_utils.py`. Either re-export it
-      or accept the `cli → review` import here and record which; do **not** let
-      `codehost/` acquire it either way.
+- [ ] `find_git_root` currently lives in `review/git_utils.py`. **Accept the
+      `cli → review` import** in the shared helper rather than moving or
+      re-exporting the function: `review.py` already imports it
+      ([review.py:34](src/squadron/cli/commands/review.py#L34)), `cli → review` is
+      an existing and permitted direction, and relocating a function seven other
+      callers use would widen a behavior-preserving extraction into a refactor.
+      What matters is the prohibition below, not where `find_git_root` sits.
+- [ ] `codehost/` must **not** acquire this import in either direction. The
+      `cli → codehost → core` rule is what the import-graph test pins.
 - [ ] Effort: 2
 
 ### Task A.6 — Test and commit Part A
@@ -215,6 +220,15 @@ exercise every field and every error class.
 ### Task B.1 — `codehost/models.py`
 
 - [ ] Create `src/squadron/codehost/` with `__init__.py`.
+- [ ] `__init__.py` **re-exports the package's public surface** — the design's
+      Integration Points → Provides list, which is the contract 382, 384, and 385
+      import. An empty `__init__.py` satisfies the "create it" bullet above and
+      still breaks those slices into deep-path imports, so the re-exports are their
+      own deliverable: `CodeHost`, `GitHubCli`, `PullRequestRecord`,
+      `ResolvedPullRequest`, `FetchedRange`, `ReviewDiscussion`, `HostComment`,
+      `OperatorIdentity`, the error hierarchy, `parse_target`, `list_remotes`,
+      `select_remote`, `build_github_host`. Add each name as its part lands; the
+      sweep in Part I verifies the full list imports from the package root.
 - [ ] All frozen dataclasses. Field names are the architecture's — do not rename.
 - [ ] `PullRequestRecord(host, owner, repository, number, base_ref, head_ref,
       head_sha, url)` with a `key` property returning
@@ -237,7 +251,9 @@ exercise every field and every error class.
 ### Task B.2 — `codehost/errors.py`
 
 - [ ] `CodeHostError(Exception)` carrying `fix_hint: str | None`.
-- [ ] One subclass per row of the design's error table. All sixteen:
+- [ ] One subclass per error named in the design's error table — **nineteen
+      classes across its fifteen rows**, since three rows group two or three
+      classes each. The count is the check; do not stop early:
       `GitHubCliMissingError`, `HostUnauthenticatedError`, `HostUnreachableError`,
       `HostCommandTimeoutError`, `PullRequestNotFoundError`,
       `NoOpenPullRequestForBranchError`, `AmbiguousBranchPullRequestsError`,
@@ -435,6 +451,14 @@ exercise every field and every error class.
       `GH_CONFIG_DIR` rather than touching the real `~/.config/gh`.
 - [ ] `read_gh_hosts` on a malformed YAML file returns an empty set and does not
       raise.
+- [ ] **Write the doctor-module subprocess invariant test** (the design named an
+      "existing test extended"; none exists — see the Corrections table above).
+      Assert no `subprocess.run`/`Popen` originates in `doctor_checks.py` during
+      `run_all_checks`. `shutil.which` is permitted; the git-hooks path is resolved
+      by the caller and passed in
+      ([doctor_checks.py:465-472](src/squadron/cli/commands/doctor_checks.py#L465-L472)).
+      It lives here, with the doctor checks it guards, rather than travelling to a
+      later part.
 - [ ] Effort: 2
 
 ### Task E.4 — Commit
@@ -442,6 +466,65 @@ exercise every field and every error class.
 - [ ] `uv run pytest tests/cli tests/codehost -q`; ruff; pyright.
 - [ ] Commit: `feat(doctor): add gh CLI and hosts-file presence checks`
 - [ ] Effort: 1
+
+---
+
+## Task Review Disposition
+
+Task review (`381-review.tasks.code-host-adapter-and-pr-target-resolution.part-1.md`,
+z-ai/glm-5.3-flash, CONCERNS, 20260913, sha `cb2ce122`, 22 tool calls). Five
+concerns and two notes actioned; one finding corrected in both directions.
+
+- **F004 (concern) — accepted, and the reviewer's own count corrected.** B.2 said
+  "All sixteen" over a list of **nineteen** class names. The reviewer caught the
+  discrepancy but proposed "nineteen classes across fourteen rows"; the design's
+  table has **fifteen** data rows, since three rows group two or three classes
+  each. So both the file and the review were wrong, in different places. The bullet
+  now reads nineteen classes across fifteen rows and says the count is the check.
+  The knock-on reference in the CLI error test ("B.2's table" — B.2 is a list, not
+  a table) now points at the design's error table with the count restated.
+- **F005 (concern) — accepted, a real ordering defect.** The write-operations test
+  task asserted `write_calls()` stays empty "across a full `sq pr show` run", one
+  task before `pr.py` is created. Verified: the bullet sits in the write test, and
+  the command is created in the next task. Split in two — the write test now
+  scripts a full adapter pipeline (parse, select, resolve, fetch), and the
+  CLI-level assertion moves to the `sq pr show` test where the command exists. The
+  review was right that dropping the bullet during execution would have cost the
+  slice its only in-suite read-only proof, which 384 is documented to reuse.
+- **F006 (concern) — accepted.** The CLI test task carried four unrelated
+  deliverables across two test files, including the densest test in the slice.
+  Split into a behavior task (six-form parity, `--json`, the CLI-level
+  `write_calls()` half) and an observability task (the nineteen-class error table,
+  the import-graph walk). The deviation from the design's separate
+  `test_errors_observable.py` is now stated rather than silent: exit codes are only
+  observable through the CLI, so the error table lives with the CLI test.
+- **F007 (concern) — accepted.** The cwd-helper extraction was documented in this
+  file but contradicted by the design, whose Excluded and Coordination sections
+  still said nothing under `review/` changes. Verified both lines still read that
+  way. The design now carries a fourth scope-corrections row, an amended Excluded
+  bullet, and a Coordination section naming both `sq-base` notifications. The
+  reviewer's minor point is also taken: the extraction's open
+  re-export-or-import choice is now decided — accept the `cli → review` import,
+  since `review.py` already has it and moving a function with seven other callers
+  would turn a behavior-preserving extraction into a refactor.
+- **F008 (concern) — accepted, the most consequential.** The design specifies that
+  `__init__.py` re-exports the package's public surface, and its Provides list is
+  the contract 382/384/385 import. The models task said only "create it" — every
+  checkbox satisfiable with an empty file, with the divergence surfacing only at
+  382 integration as deep-path imports. A re-export bullet naming the full Provides
+  list is added, verified once in the closeout sweep.
+- **F009 (note) — accepted.** The doctor-subprocess invariant test was assigned two
+  parts after the doctor checks it guards. Moved to the doctor test task, which
+  already extends `tests/cli/test_doctor_checks.py`. The reviewer flagged it could
+  not verify the "no such test exists" claim from its workspace; that claim was
+  verified here before the correction was written, and again now.
+- **F010 (note) — acknowledged, no change.** Per-part commit tasks are uniformly
+  effort-1 by design; they are the distributed checkpoints the process asks for.
+- **F001–F003 (pass)** — no action.
+
+Note on scope: the review's `sourceDocument` names file 1 and its filename says
+`part-1`, but its findings cover both files. No part 2 had arrived when this
+disposition was written; if one lands, it is dispositioned on top of this section.
 
 ---
 

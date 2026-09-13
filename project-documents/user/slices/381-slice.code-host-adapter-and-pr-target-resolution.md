@@ -59,8 +59,9 @@ changed-file list a review would examine, without a model in the loop.
   behavior rather than transport, but no 381 command calls them.
 - Scratch worktrees, PR metadata in prompts, review persistence, posting, PR creation (382-385).
 - The direct-API implementation and non-GitHub hosts (future work; the protocol is shaped for them).
-- Any change under `src/squadron/review/`. The review package imports nothing from `codehost` in
-  this slice; 382 imports the record type only.
+- Any change under `src/squadron/review/` **beyond the cwd-helper extraction recorded in Scope
+  corrections below**. The review package imports nothing from `codehost` in this slice; 382
+  imports the record type only.
 - Cross-repository targets (a PR in a repository none of the local remotes point at).
 
 ## Scope corrections against the plan entry
@@ -70,6 +71,7 @@ changed-file list a review would examine, without a model in the loop.
 | "exactly the operation list the parent fixes" | Bare-form resolution needs to know which remotes belong to the host an implementation serves (a fork layout with a GitLab mirror must still count one GitHub remote). That is a question to the implementation, not a git question. | The protocol gains one local, read-only operation, `serves_host(hostname)`. The parent permits additions to the protocol; it forbids extra methods on the `gh` implementation. Recorded in the parent under Design Goals, alongside the `repo#n` grammar form. |
 | "base moved since resolution" as a failure mode | `gh` exposes `baseRefOid`, so the base tip at resolution time is known and the post-fetch check is exact, not heuristic. The same check applies to the head. | One error class with a role field (base or head). |
 | "check a branch exists on the host" | A missing branch is an answer, not a failure. | Returns `False`; only transport and auth failures raise. |
+| "Nothing under `src/squadron/review/` changes" (Excluded, Coordination) | Found at task breakdown, not at design: `sq pr show --cwd` must anchor at the git root exactly as `sq review code` does, but that logic is `_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show` has no use for. Duplicating it violates DRY; importing a private helper across command modules is worse. | PM decision 20260913: extract the cwd half into a shared CLI helper; `_resolve_review_cwd` becomes a thin wrapper with an unchanged signature and all five call sites untouched. Behavior-preserving, committed on its own, and announced to `sq-base` as a second coordinated edit. |
 
 Effort stays 4/5.
 
@@ -86,9 +88,16 @@ Effort stays 4/5.
 
 ### Coordination
 
-Session `sq-base` (slice 917) asked to be told before the CLI command registry is touched. The
-one edit to `cli/app.py` (import and `add_typer` for `pr_app`) is announced to that session
-before it is made. Nothing under `src/squadron/review/` changes.
+Session `sq-base` (slice 917) asked to be told before the CLI command registry or anything under
+`src/squadron/review/` is touched. This slice makes two such edits, each announced to that
+session before it is made:
+
+1. `cli/app.py` — import and `add_typer` for `pr_app`.
+2. `review.py` — extracting the cwd half of `_resolve_review_cwd` into a shared CLI helper, so
+   `sq pr show --cwd` can anchor at the git root without duplicating the logic or importing a
+   private helper across command modules. Behavior-preserving, with the existing review suite as
+   the check; `_resolve_review_cwd` keeps its signature and all five call sites are untouched.
+   Added by PM decision 20260913 — see Scope corrections.
 
 ## Architecture
 
