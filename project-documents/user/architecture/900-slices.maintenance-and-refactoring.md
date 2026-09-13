@@ -202,7 +202,7 @@ The issue leaves one question open: whether a checkpoint-paused loop should be *
 **Status:** complete (20260813) · **Risk:** Medium (execution-state/resume semantics) · **Effort:** 2/5 · **Dependencies:** [910, 911]
 
 
-14. [ ] **(916) Review Scope Correctness — Diff Resolution, Empty-Scope Verdicts, and Tool Jail Roots**
+14. [x] **(916) Review Scope Correctness — Diff Resolution, Empty-Scope Verdicts, and Tool Jail Roots**
 Fixes [issue #89](https://github.com/ecorkran/squadron/issues/89), [issue #62](https://github.com/ecorkran/squadron/issues/62), [issue #70](https://github.com/ecorkran/squadron/issues/70), [issue #86](https://github.com/ecorkran/squadron/issues/86), and [issue #69](https://github.com/ecorkran/squadron/issues/69); likely closes [issue #71](https://github.com/ecorkran/squadron/issues/71). Five defects answering one question: **did the review examine the change set the operator meant, and was it equipped to read it?** Bundled because all five sit on the `sq review` CLI entry path (`cli/commands/review.py`) plus `review/git_utils.py`, and because #89 and #62 were observed on the *same* live PR review — the wrong subject and the empty subject are the two halves of one credibility failure.
 
 Motivating context: squadron reviews are moving toward PR-centric use against enterprise repos, where a branch is routinely a few merges behind its base. Every defect here fires under exactly those conditions.
@@ -235,7 +235,7 @@ Sequence D → A → C → B → E. D unbreaks tool-enabled non-code reviews and
 
 **Slice review:** `user/reviews/916-review.slice.review-scope-correctness.md` (glm-5.3, CONCERNS, 20260911) — all three concerns accepted; two changed the design. F001: B's empty-scope guard was pinned to the CLI, leaving `sq run` (the path that trips gates) unfixed — and neither existing `extract_diff_paths` call site is a scope check, both being nested under rules resolution, so a guard hung off them would silently skip when no rules dir resolves. Now a shared unconditional check below both entry points. F003: the original C3 would have made `sq review code --diff main` exit non-zero — the tool's most-documented invocation (10 README/COMMANDS.md examples plus slice 118's compatibility guarantee); it now warns and exits on verdict, with only an attempted-and-failed save exiting 1. F002 added the hang/timeout/no-repo enumeration for the new git call. Deferred: [issue #90](https://github.com/ecorkran/squadron/issues/90), no artifact naming scheme for slice-less reviews.
 
-**Status:** design complete, review addressed (20260911) · **Risk:** Medium (B's verdict surface, E's SDK behavior change) · **Effort:** 4/5 · **Dependencies:** none
+**Status:** complete (20260911) · **Risk:** Medium (B's verdict surface, E's SDK behavior change) · **Effort:** 4/5 · **Dependencies:** none
 
 15. [x] **(917) Review Artifact Integrity — Verdict Validity and Legible Degradation**
 Fixes [issue #77](https://github.com/ecorkran/squadron/issues/77), [issue #28](https://github.com/ecorkran/squadron/issues/28), [issue #84](https://github.com/ecorkran/squadron/issues/84), [issue #26](https://github.com/ecorkran/squadron/issues/26), and [issue #87](https://github.com/ecorkran/squadron/issues/87). Where 916 asks whether the review examined the right thing, this asks whether the **persisted artifact can be trusted, and whether its failures are legible**. Every part touches `review/parsers.py`, `review/models.py`, or `review/persistence.py`. Sequenced after 916 so the two do not contend for the same review-path files.
