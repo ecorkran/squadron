@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/381-slice.code-host-adapter-and-pr-t
 parent: project-documents/user/architecture/380-slices.pull-request-workflow.md
 dependencies: [905]
 interfaces: [382, 384, 385]
-status: not_started
+status: in_progress
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
@@ -101,11 +101,11 @@ Everything downstream is tested through this seam. Build it first.
 
 ### Task A.1 — `ProcessResult`, `ProcessRunner`, `SubprocessRunner`
 
-- [ ] Create `src/squadron/core/process_runner.py` beside
+- [x] Create `src/squadron/core/process_runner.py` beside
       [subprocess_text.py](src/squadron/core/subprocess_text.py).
-- [ ] `ProcessResult`: frozen dataclass, fields `argv: tuple[str, ...]`,
+- [x] `ProcessResult`: frozen dataclass, fields `argv: tuple[str, ...]`,
       `returncode: int`, `stdout: str`, `stderr: str`.
-- [ ] `ProcessRunner` protocol, exactly this signature — `stdin` is how write
+- [x] `ProcessRunner` protocol, exactly this signature — `stdin` is how write
       operations pass a body, and it is load-bearing for Part G:
 
   ```python
@@ -113,72 +113,72 @@ Everything downstream is tested through this seam. Build it first.
           env: Mapping[str, str] | None = None, stdin: str | None = None) -> ProcessResult: ...
   ```
 
-- [ ] `SubprocessRunner.run` wraps `subprocess.run` with
+- [x] `SubprocessRunner.run` wraps `subprocess.run` with
       `capture_output=True, text=True, check=False, timeout=timeout` and
       `**TEXT_DECODING` ([subprocess_text.py:25](src/squadron/core/subprocess_text.py#L25)).
       Every text-mode subprocess call in this repo passes it; do not omit it.
-- [ ] `env` is merged **over** `os.environ`, not substituted for it. A `gh` call
+- [x] `env` is merged **over** `os.environ`, not substituted for it. A `gh` call
       with a replaced environment loses `PATH` and `HOME`.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.2 — The two runner errors
 
-- [ ] `ProcessNotFoundError(executable)` from `FileNotFoundError`;
+- [x] `ProcessNotFoundError(executable)` from `FileNotFoundError`;
       `ProcessTimedOutError(argv, timeout)` from `subprocess.TimeoutExpired`.
-- [ ] Both are **distinct types**, not a shared `None` return. `run_git`
+- [x] Both are **distinct types**, not a shared `None` return. `run_git`
       ([git_utils.py:27](src/squadron/review/git_utils.py#L27)) returns `None` for
       both; the architecture names "host call exceeded its timeout" as its own
       failure mode, so 381 cannot collapse them.
-- [ ] The runner logs both at WARNING with the argv, and for the timeout the
+- [x] The runner logs both at WARNING with the argv, and for the timeout the
       bound, before raising.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task A.3 — `FakeProcessRunner`
 
-- [ ] Create `tests/codehost/` (with `__init__.py` — every tests subdirectory here
+- [x] Create `tests/codehost/` (with `__init__.py` — every tests subdirectory here
       is a package) and `tests/codehost/fake_runner.py`.
-- [ ] Scripted as an ordered list of `(argv_prefix, ProcessResult | Exception)`.
+- [x] Scripted as an ordered list of `(argv_prefix, ProcessResult | Exception)`.
       A scripted `Exception` is **raised**, which is how a wedged `gh` is produced.
-- [ ] Records every call including `cwd`, `env`, and `stdin`, so a test can assert
+- [x] Records every call including `cwd`, `env`, and `stdin`, so a test can assert
       the exact body sent over stdin.
-- [ ] An **unscripted argv raises immediately**. A fake that returns a benign
+- [x] An **unscripted argv raises immediately**. A fake that returns a benign
       default lets a test pass on a process the implementation should never have
       run — that is the whole reason this is not a `MagicMock`.
-- [ ] `write_calls()` returns the recorded argv subset that would mutate the host:
+- [x] `write_calls()` returns the recorded argv subset that would mutate the host:
       contains `-X POST`, `-X PATCH`, or `pr create`. 384's "zero writes without
       `--post`" assertion must be one call against this.
-- [ ] There is no existing `class Fake` in `tests/` to copy — this establishes the
+- [x] There is no existing `class Fake` in `tests/` to copy — this establishes the
       convention. Keep it a plain class, not a fixture, so `tests/core` can use it
       too.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task A.4 — Test: the real runner
 
-- [ ] Create `tests/core/test_process_runner.py` (`tests/core/` exists and holds
+- [x] Create `tests/core/test_process_runner.py` (`tests/core/` exists and holds
       `test_agent_registry.py`).
-- [ ] Cover, against `python -c` so no external binary is required:
-  - [ ] success — stdout, stderr, and returncode land on `ProcessResult`
-  - [ ] non-zero exit is **returned**, not raised (`check=False`)
-  - [ ] missing executable → `ProcessNotFoundError` naming the executable
-  - [ ] a sleep exceeding a short timeout → `ProcessTimedOutError` naming the bound
-  - [ ] `env` merges over `os.environ` rather than replacing it — assert a
+- [x] Cover, against `python -c` so no external binary is required:
+  - [x] success — stdout, stderr, and returncode land on `ProcessResult`
+  - [x] non-zero exit is **returned**, not raised (`check=False`)
+  - [x] missing executable → `ProcessNotFoundError` naming the executable
+  - [x] a sleep exceeding a short timeout → `ProcessTimedOutError` naming the bound
+  - [x] `env` merges over `os.environ` rather than replacing it — assert a
         pre-existing variable survives alongside the injected one
-  - [ ] non-UTF-8 bytes on stdout do not raise (the `TEXT_DECODING` pin)
-- [ ] Assert a WARNING record for both error paths (`caplog`).
-- [ ] Effort: 2
+  - [x] non-UTF-8 bytes on stdout do not raise (the `TEXT_DECODING` pin)
+- [x] Assert a WARNING record for both error paths (`caplog`).
+- [x] Effort: 2
 
 ### Task A.5 — Extract the shared cwd helper (touches `review.py`)
 
-- [ ] **Notify `sq-base` before making this edit.**
-- [ ] PM decision 20260913: `pr show --cwd` must anchor at the git root exactly as
+- [x] **Notify `sq-base` before making this edit.**
+- [x] PM decision 20260913: `pr show --cwd` must anchor at the git root exactly as
       `sq review code` does, but `_resolve_review_cwd`
       ([review.py:244](src/squadron/cli/commands/review.py#L244)) is private and
       also resolves a rules directory `pr show` does not need.
-- [ ] Create a shared CLI helper module holding the cwd half: the config-vs-flag
+- [x] Create a shared CLI helper module holding the cwd half: the config-vs-flag
       resolution now at [review.py:234-242](src/squadron/cli/commands/review.py#L234-L242)
       and the `find_git_root(...) or resolved_cwd` anchoring at
       [review.py:257](src/squadron/cli/commands/review.py#L257).
-- [ ] `_resolve_review_cwd` becomes a thin wrapper: call the shared helper, then
+- [x] `_resolve_review_cwd` becomes a thin wrapper: call the shared helper, then
       `resolve_rules_dir(review_cwd, None, rules_dir_flag)`
       ([rules.py:18](src/squadron/review/rules.py#L18)). Its signature and return
       tuple **do not change** — all five call sites
@@ -187,28 +187,28 @@ Everything downstream is tested through this seam. Build it first.
       [:877](src/squadron/cli/commands/review.py#L877),
       [:981](src/squadron/cli/commands/review.py#L981),
       [:1192](src/squadron/cli/commands/review.py#L1192)) stay untouched.
-- [ ] **Behavior-preserving.** If this edit changes any review behavior, it is
+- [x] **Behavior-preserving.** If this edit changes any review behavior, it is
       wrong. The existing review test suite is the check.
-- [ ] `find_git_root` currently lives in `review/git_utils.py`. **Accept the
+- [x] `find_git_root` currently lives in `review/git_utils.py`. **Accept the
       `cli → review` import** in the shared helper rather than moving or
       re-exporting the function: `review.py` already imports it
       ([review.py:34](src/squadron/cli/commands/review.py#L34)), `cli → review` is
       an existing and permitted direction, and relocating a function seven other
       callers use would widen a behavior-preserving extraction into a refactor.
       What matters is the prohibition below, not where `find_git_root` sits.
-- [ ] `codehost/` must **not** acquire this import in either direction. The
+- [x] `codehost/` must **not** acquire this import in either direction. The
       `cli → codehost → core` rule is what the import-graph test pins.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.6 — Test and commit Part A
 
-- [ ] Run `uv run pytest tests/core tests/review tests/cli -q`. All green — the
+- [x] Run `uv run pytest tests/core tests/review tests/cli -q`. All green — the
       review suite is what proves A.5 preserved behavior.
-- [ ] Add a test that the shared cwd helper anchors at the git root, and falls back
+- [x] Add a test that the shared cwd helper anchors at the git root, and falls back
       to the resolved cwd outside a work tree.
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
-- [ ] Commit: `feat(core): add injected process-runner seam with bounded timeouts`
-- [ ] Effort: 1
+- [x] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
+- [x] Commit: `feat(core): add injected process-runner seam with bounded timeouts`
+- [x] Effort: 1
 
 ---
 
