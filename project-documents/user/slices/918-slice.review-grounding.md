@@ -227,9 +227,21 @@ cross-reference. Its closing lines: `Verdict: PASS, with two NOTE findings ... L
 write positive PASS findings for the key criteria and the two NOTEs.` It then stopped.
 The reasoning was complete; the formatted output was never emitted.
 
-917 made this **more visible without fixing it**. The always-on Run Digest
-([persistence.py:184](src/squadron/review/persistence.py#L184)) now shows a long response
-with no located sections and zero surviving matches. What it does not show is *why*.
+A second, differently-shaped occurrence was observed 20260913 and widens the part.
+`sq review slice 917 -v --model kimi27` failed with
+`Model returned an empty final turn (finish_reason='stop', reasoning_chars=3)` — but the
+two lines above it were `list_files: path does not exist: project-documents/user/slices`
+and the same for `.../architecture`. Both tool calls failed, the model had nothing to
+review, and it stopped. The error blames the model for returning nothing when the actual
+cause was the tool layer failing twice first. (That run's own cause was a jail root
+predating `_resolve_review_cwd` — issue #86, fixed on `main` but not in any release. The
+misattribution is the durable defect, not the stale binary.)
+
+917 made both shapes **more visible without fixing either**. The always-on Run Digest
+([persistence.py:184](src/squadron/review/persistence.py#L184)) shows a long response with
+no located sections and zero surviving matches. What it does not show is *why* — and in
+the kimi27 shape it does not show that tools failed at all, so a reader cannot tell "the
+model produced nothing" from "the model was handed nothing".
 
 The two facts that would discriminate the cause are captured and then dropped.
 `finish_reason` and `reasoning_chars` live on `TurnResult`, but reach a caller only
@@ -261,20 +273,40 @@ Tool telemetry solved the identical problem — a fact known inside the agent, n
 rather than widening `TurnResult`'s documented role as internal plumbing or adding a
 second return channel. Two new keys: the stop reason and the reasoning character count.
 
-**D9 — Surface both in the Run Digest, and only there.** `_run_digest_lines`
+**D9 — Count failed tool calls and carry them the same way.** The kimi27 shape is
+diagnosable only if the artifact records that tools failed. `ToolResult.is_error` already
+exists as a first-class field ([tools/models.py:23](src/squadron/tools/models.py#L23)) and
+`_execute_tool_call` already branches on it to log at INFO
+([agent.py:373](src/squadron/providers/openai/agent.py#L373)) — but it returns `str`, so
+the error-ness is discarded at its return and never reaches the counter. `tool_calls_made`
+([agent.py:457](src/squadron/providers/openai/agent.py#L457)) counts calls without regard
+to outcome.
+
+Add a failed-call counter beside it and stamp it with the other telemetry. Prefer widening
+`_execute_tool_call`'s return over re-inspecting content strings downstream — matching on
+an `"Error: "` prefix would be exactly the string-dispatch this project forbids. Note the
+executor-raised path ([agent.py:367](src/squadron/providers/openai/agent.py#L367)) also
+yields an error the model sees; count it too, so the number means "tool calls that failed"
+rather than "tool calls whose executor returned `is_error`".
+
+**D10 — Surface all three in the Run Digest, and only there.** `_run_digest_lines`
 ([persistence.py:175](src/squadron/review/persistence.py#L175)) is 917's home for
 diagnostic facts, and its docstring already states that the frontmatter is for what the
-verdict gate checks while diagnostic keys there invite coupling. Two new digest lines.
-Nothing gates on them; they are evidence for a human or a future issue. Render an absent
-value with the digest's existing `_NOT_COMPUTED` treatment rather than inventing a
-placeholder — `None` means the provider offered no stop reason, which is different from
-a stop reason of `"stop"`.
+verdict gate checks while diagnostic keys there invite coupling. Three new digest lines:
+stop reason, reasoning characters, failed tool calls. Nothing gates on them; they are
+evidence for a human or a future issue. Render an absent value with the digest's existing
+`_NOT_COMPUTED` treatment rather than inventing a placeholder — `None` means the provider
+offered no stop reason, which is different from a stop reason of `"stop"`. A failed-call
+count of `0` is a real answer and must not render as not-computed.
 
-**D10 — Add the corresponding `ReviewResult` fields as optional.** Two nullable fields
-alongside `tool_calls_made` and the 917 digest fields. `None` means not reported, exactly
-as the existing tri-state fields use it. Not serialized into frontmatter (D9).
+The failed-call line earns its place next to the existing `Tool calls made` line: the pair
+`Tool calls made: 2` / `Tool calls failed: 2` names the kimi27 shape at a glance.
 
-**D11 — The SDK provider path is out of scope for step 1.** `finish_reason` is an
+**D11 — Add the corresponding `ReviewResult` fields as optional.** Three nullable
+fields alongside `tool_calls_made` and the 917 digest fields. `None` means not reported,
+exactly as the existing tri-state fields use it. Not serialized into frontmatter (D10).
+
+**D12 — The SDK provider path is out of scope for step 1.** `finish_reason` is an
 OpenAI/OpenRouter streaming concept. The SDK path has its own turn model, and reproducing
 #92 there is a separate investigation. Stamp what the OpenAI path knows; leave the SDK
 path stamping nothing, which reads as `None` and renders as not-computed. Do not fabricate
@@ -298,12 +330,17 @@ Record which branch the evidence selected in the DEVLOG before implementing it.
 
 ### Success criteria
 
-- Every review artifact's Run Digest carries a stop reason and a reasoning-character
-  count, on success and on degradation alike.
+- Every review artifact's Run Digest carries a stop reason, a reasoning-character count,
+  and a failed-tool-call count, on success and on degradation alike.
 - A review whose response parses to zero findings shows a non-empty response length
   **and** a stop reason in the same digest — the #92 signature, readable from the artifact
   with no `-vv` and no live terminal.
-- An SDK-path review renders both as not-computed rather than as a fabricated value.
+- A review in which every tool call failed shows `Tool calls made` and `Tool calls failed`
+  equal and non-zero — the kimi27 shape, distinguishable from a model that simply produced
+  nothing. A test drives a review whose tools all error and asserts both counts.
+- A run with no failed tool calls reports `0`, not not-computed.
+- An SDK-path review renders the stop reason and reasoning count as not-computed rather
+  than as fabricated values.
 - The #92 reproduction is re-run, its stop reason recorded in the DEVLOG, and the
   contingent fix for that branch implemented and verified against the same command.
 
@@ -324,16 +361,16 @@ Verified still present on `main`, 20260913.
 
 ### Decisions
 
-**D12 — Track installed files in a receipt; remove only what squadron installed.** The
+**D13 — Track installed files in a receipt; remove only what squadron installed.** The
 reporter's suggestion, and `sq skills` already does this — follow the existing mechanism
 rather than inventing a second one. Read its receipt shape and location during
 implementation and match it; a second, differently-shaped receipt for the same kind of
 job is the thing to avoid.
 
-**D13 — Make uninstall symmetric.** It removes every subdirectory the receipt records,
+**D14 — Make uninstall symmetric.** It removes every subdirectory the receipt records,
 not just `sq/`.
 
-**D14 — A file present but absent from the receipt is left alone, and stale receipt
+**D15 — A file present but absent from the receipt is left alone, and stale receipt
 entries are tolerated.** Pre-receipt installs exist in the wild: a user who installed
 before this change has squadron's own files on disk with no receipt naming them. Deleting
 unknown files is the bug being fixed, so the safe direction is to leave them and let the
@@ -412,8 +449,19 @@ sq review slice 916 --model <any>
 sed -n '/### Run Digest/,/^$/p' project-documents/user/reviews/916-review.slice.*.md
 ```
 
-Expect a stop reason and a reasoning-character count present on a clean PASS, not only on
-a degraded run. Then the #92 reproduction itself:
+Expect a stop reason, a reasoning-character count, and a failed-tool-call count present
+on a clean PASS, not only on a degraded run, with the failed count reading `0`.
+
+Then the kimi27 shape. This one has no clean CLI reproduction: the observed run's cause
+was a jail root predating `_resolve_review_cwd`, and on `main` that function anchors the
+jail at the git root regardless of `--cwd` — verified, `--cwd ./project-documents/user`
+still resolves to the repo root. The all-tools-fail path is therefore covered by the test
+named in the success criteria (a review whose executors all return `is_error`) rather than
+by a command here. If a live instance does recur, the check is that the failure artifact's
+digest shows `Tool calls made` and `Tool calls failed` equal and non-zero, so the artifact
+names the tool layer rather than blaming the model.
+
+Then the #92 reproduction itself:
 
 ```bash
 sq review slice 916 -v --model kimi3
