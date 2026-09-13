@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/381-slice.code-host-adapter-and-pr-t
 parent: project-documents/user/architecture/380-slices.pull-request-workflow.md
 dependencies: [905]
 interfaces: [382, 384, 385]
-status: not_started
+status: complete
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
@@ -443,51 +443,51 @@ here touches the host or the operator-facing surface.
 
 ### Task I.2 — Success criteria sweep
 
-- [ ] Walk the design's Functional criteria and confirm each is demonstrated by a
+- [x] Walk the design's Functional criteria and confirm each is demonstrated by a
       test or by I.1's recorded run:
-  - [ ] six forms → one record, on both `github.com` and an enterprise hostname
-  - [ ] fork layout: explicit resolves, bare raises naming both remotes; one
+  - [x] six forms → one record, on both `github.com` and an enterprise hostname
+  - [x] fork layout: explicit resolves, bare raises naming both remotes; one
         GitHub remote + non-GitHub mirror resolves bare
-  - [ ] foreign repository named on both sides
-  - [ ] both refs exist, merge-base is 40-hex, three-dot range, **no mutating git
+  - [x] foreign repository named on both sides
+  - [x] both refs exist, merge-base is 40-hex, three-dot range, **no mutating git
         verb** in recorded argv, and `for-each-ref`/`status` unchanged live
-  - [ ] every error: type, WARNING+ record, exit 1; scripted timeout names the bound
-  - [ ] closed and merged PRs resolve; cross-repository fetches without a second remote
-  - [ ] two doctor rows; `gh` absent reports and does not install
-- [ ] **Package-root re-exports**: every name in the design's Integration Points →
+  - [x] every error: type, WARNING+ record, exit 1; scripted timeout names the bound
+  - [x] closed and merged PRs resolve; cross-repository fetches without a second remote
+  - [x] two doctor rows; `gh` absent reports and does not install
+- [x] **Package-root re-exports**: every name in the design's Integration Points →
       Provides list imports from `squadron.codehost` directly, not by deep path.
       This is the contract 382, 384, and 385 consume; an empty or partial
       `__init__.py` breaks them into deep-path imports and the divergence would
       otherwise surface only at 382 integration.
-- [ ] Technical criteria: ruff clean, **pyright zero errors**, the import-graph test
+- [x] Technical criteria: ruff clean, **pyright zero errors**, the import-graph test
       passes, every emitted `gh` argv is pinned, every parsed JSON shape has a
       fixture captured from a real response, files near 300 lines.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task I.3 — Documentation and closeout
 
-- [ ] DEVLOG entry per `prompt.ai-project.system.md`, "Session State Summary",
+- [x] DEVLOG entry per `prompt.ai-project.system.md`, "Session State Summary",
       including the step-3 and step-5 output from I.1 (the design requires one run
       recorded).
-- [ ] CHANGELOG: a short user-facing line for `sq pr show` and one for the two new
+- [x] CHANGELOG: a short user-facing line for `sq pr show` and one for the two new
       doctor rows. Technical detail belongs in the DEVLOG, not here.
-- [ ] Record the protocol addition (`serves_host`) and the `repo#n` grammar form in
+- [x] Record the protocol addition (`serves_host`) and the `repo#n` grammar form in
       [380-arch.pull-request-workflow.md](project-documents/user/architecture/380-arch.pull-request-workflow.md)
       under Design Goals — **verify both are already present** from commit
       `79986dea` rather than adding them twice.
-- [ ] Note in the DEVLOG that no live GitHub Enterprise host was available; the GHE
+- [x] Note in the DEVLOG that no live GitHub Enterprise host was available; the GHE
       evidence is the parametrized test suite, and a recorded GHE run closes the gap
       when one is.
-- [ ] Mark this task file `status: complete`, set `dateUpdated`, and mark the slice
+- [x] Mark this task file `status: complete`, set `dateUpdated`, and mark the slice
       complete in
       [381-slice.code-host-adapter-and-pr-target-resolution.md](project-documents/user/slices/381-slice.code-host-adapter-and-pr-target-resolution.md)
       and in the slice plan
       [380-slices.pull-request-workflow.md](project-documents/user/architecture/380-slices.pull-request-workflow.md).
-- [ ] Confirm [issue #95](https://github.com/ecorkran/squadron/issues/95) (two-token
+- [x] Confirm [issue #95](https://github.com/ecorkran/squadron/issues/95) (two-token
       target form) remains open — deliberately not addressed here.
-- [ ] Merge the slice branch into `squadron-pr` (the configured
+- [x] Merge the slice branch into `squadron-pr` (the configured
       `git.integration_branch`). **Never to `main`.**
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ---
 

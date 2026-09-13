@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/381-slice.code-host-adapter-and-pr-t
 parent: project-documents/user/architecture/380-slices.pull-request-workflow.md
 dependencies: [905]
 interfaces: [382, 384, 385]
-status: in_progress
+status: complete
 dateCreated: 20260913
 dateUpdated: 20260913
 ---
