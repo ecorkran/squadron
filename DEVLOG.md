@@ -91,6 +91,39 @@ both section locations, and the four finding-shaped counts. The formatter reads
 `ReviewResult.finding_scan` and never re-parses; the end-to-end test uses a `raw_output` with
 no findings in it, so a re-parsing formatter would report zeros and fail.
 
+**Code review disposition.** `sq review code 917` (glm-5.3) returned three concerns and
+four notes. All three concerns were real and fixed:
+
+- **Blocking I/O on the event loop.** The new pipeline failure handler ran a 30-second git
+  subprocess plus file writes synchronously inside `async def _review`. Moved off-loop with
+  `asyncio.to_thread`, as one synchronous unit so sha resolution does not straddle the
+  boundary. The reviewer correctly noted the success path has the same pre-existing problem;
+  that is untouched here rather than fixed opportunistically.
+- **Duplicate path resolution.** `_check_line_bounds` re-resolved every citation
+  `_check_path_existence` had just resolved — and for a bare filename that is an `rglob` over
+  the whole review root, walked to exhaustion when the name is invented. Merged into one pass.
+  Measured on 30 bare-filename phantoms: **4.14s → 2.05s**, identical results, no test changes
+  required. `_path_exists_under` had no callers left and was removed.
+- **Verdict gate on a staged deletion.** The gate reported an absent path as unreadable
+  frontmatter and failed closed, and my comment credited the wrong mechanism for why that
+  supposedly could not happen. Verified empirically: `--diff-filter=ACMR` in the hook is what
+  excludes deletions, and `git diff --cached --name-only` without it does list them. The gate
+  is reachable directly through `sq events fire`, so it now handles an absent path itself.
+  A present-but-unreadable file still fails closed.
+
+Two notes were also fixed. The fence regex used a backreference requiring an exactly-equal
+closing fence; CommonMark allows longer, so a ``` block closed with ```` read as unclosed,
+masked to end of document, and **silently dropped every finding after it** — dropping real
+findings on valid input, the precise failure Part 3 exists to prevent. And
+`save_provider_failure` gained `name_suffix`, so a failure in part N of a split tasks review
+lands in that part's own slot rather than one no success path writes, where consecutive part
+failures overwrote each other.
+
+The two remaining notes (transient errors overwriting the live slot; failure and success
+artifacts resolving against different roots) are recorded in the review artifact and not acted
+on: the first is the deliberate fail-closed decision the design argues for, and the second is
+a pre-existing property of how `cwd` is threaded, not something this slice introduced.
+
 **Live verification.** `sq review slice 916` run three times across two models (kimi27 ×2,
 glm53). Zero `Finding title` / `src/module.py` phantoms, zero path-existence warnings, zero
 line-bounds warnings on every run. The glm53 run produced 9 real findings and a CONCERNS
