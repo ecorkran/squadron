@@ -8,6 +8,7 @@ import math
 import re
 import sys
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from squadron.review.models import (
@@ -471,14 +472,21 @@ def _check_cited_paths(
 # A model restating the required format almost always fences it, and
 # finding-shaped text inside a fence is never a finding (#91).
 # The closing fence must be *at least* as long as the opener, per CommonMark —
-# not exactly as long. A backreference would treat a ``` block closed with ````
-# as unclosed, mask to end of document, and silently drop every finding after
-# it. Dropping real findings on valid input is the failure this whole part
-# exists to prevent, so the closer is matched by character and length instead.
-_FENCE_RE = re.compile(
-    r"^[ \t]*(?P<fence>(?P<char>[`~])(?P=char){2,})[^\n]*\n"
-    r"(?P<body>.*?)(?:^[ \t]*(?P=char){3,}[ \t]*$|\Z)",
-    re.MULTILINE | re.DOTALL,
+# not exactly as long, and not merely three or more. Both directions are real
+# failures and the rule is one rule, so both are pinned by tests:
+#   - A ``` block closed with ```` must close. A backreference to the whole
+#     opener would call it unclosed, mask to end of document, and silently
+#     drop every finding after it — the failure this part exists to prevent.
+#   - A ```` block must *not* be closed by an inner ```. A bare {3,} closer
+#     ends the block early and unmasks the rest of a fenced format echo as if
+#     it were live text, which is the same bug pointing the other way.
+# ``(?P=char){N,}`` with N taken from the opener is not expressible in a static
+# pattern, so only the opener is matched here and the length comparison is
+# applied to candidate closers in code. An info string (```markdown) is part
+# of the opener and can never close a block.
+_FENCE_OPEN_RE = re.compile(
+    r"^[ \t]*(?P<fence>(?P<char>[`~])(?P=char){2,})[^\n]*\n",
+    re.MULTILINE,
 )
 
 # A markdown heading whose text is a single word, used to locate the sections
@@ -493,14 +501,55 @@ def _mask_fences(text: str) -> str:
     Every character inside a fence becomes a space except newlines, so line
     numbers and character offsets of unfenced text are unchanged and the
     masked text can be scanned in place of the original.
+
+    A candidate closer shorter than the opener does not close the block, per
+    CommonMark; the scan resumes past it and keeps looking. The pattern cannot
+    express "at least as long as the opener", so that comparison happens here.
     """
+    pieces: list[str] = []
+    position = 0
+    while position < len(text):
+        opener = _FENCE_OPEN_RE.search(text, position)
+        if opener is None:
+            break
+        fence = opener.group("fence")
+        body_start = opener.end()
+        close = _find_closer(text, body_start, fence)
+        body_end = close.start() if close is not None else len(text)
+        block_end = close.end() if close is not None else len(text)
 
-    def blank(match: re.Match[str]) -> str:
-        body = match.group("body")
-        masked_body = "".join("\n" if ch == "\n" else " " for ch in body)
-        return match.group(0).replace(body, masked_body, 1) if body else match.group(0)
+        pieces.append(text[position : opener.start()])
+        pieces.append(text[opener.start() : body_start])
+        pieces.append(_blank(text[body_start:body_end]))
+        pieces.append(text[body_end:block_end])
+        position = block_end
+    pieces.append(text[position:])
+    return "".join(pieces)
 
-    return _FENCE_RE.sub(blank, text)
+
+def _find_closer(text: str, start: int, fence: str) -> re.Match[str] | None:
+    """The first closer for *fence* at or after *start*, or ``None``.
+
+    A run of the same character shorter than the opener is not a closer: it is
+    ordinary content inside the block, so the search continues past it. No
+    sufficient run means an unclosed block, which runs to end of document.
+    """
+    pattern = _closer_pattern(fence[0])
+    for candidate in pattern.finditer(text, start):
+        if len(candidate.group("closer")) >= len(fence):
+            return candidate
+    return None
+
+
+@lru_cache(maxsize=2)
+def _closer_pattern(char: str) -> re.Pattern[str]:
+    """A candidate-closer pattern for one fence character."""
+    return re.compile(rf"^[ \t]*(?P<closer>{re.escape(char)}{{3,}})[ \t]*$\n?", re.MULTILINE)
+
+
+def _blank(body: str) -> str:
+    """*body* with every character but newlines replaced by a space."""
+    return "".join("\n" if ch == "\n" else " " for ch in body)
 
 
 def _count_finding_matches(text: str) -> int:

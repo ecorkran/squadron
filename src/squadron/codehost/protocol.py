@@ -52,8 +52,16 @@ class CodeHost(Protocol):
         ...
 
     def resolve_pull_request(
-        self, locator: RepositoryLocator, target: PullRequestTarget
-    ) -> ResolvedPullRequest: ...
+        self, locator: RepositoryLocator, target: PullRequestTarget, *, cwd: str
+    ) -> ResolvedPullRequest:
+        """Resolve a target to a full pull-request record.
+
+        ``cwd`` is the resolved repository root. The bare form reads HEAD from
+        the checkout, so it has to read it from the repository the command is
+        targeting rather than from the process's own working directory — an
+        agent's cwd is its tool jail root, which may be elsewhere entirely.
+        """
+        ...
 
     def default_branch(self, locator: RepositoryLocator) -> str: ...
 
