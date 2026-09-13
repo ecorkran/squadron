@@ -70,6 +70,11 @@ class AgentConfig(BaseModel):
     # not. Carried so the agent can stamp it into telemetry: an empty allowed_tools is
     # otherwise indistinguishable from a run that simply declared no tools.
     tools_suppressed_reason: str | None = None
+    # API agents: path patterns withheld from the tool jail, relative to cwd. Opaque to
+    # every layer below the caller that sets it — the agent threads them to tool binding
+    # without knowing why any pattern is present (slice 918, design D5). Empty means plain
+    # jail behavior, which is what every caller that does not set it gets.
+    tool_exclude_patterns: list[str] = Field(default_factory=list)
     permission_mode: str | None = None  # SDK agents: permission handling
     credentials: dict[str, Any] = Field(default_factory=dict)
 

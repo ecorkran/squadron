@@ -9,11 +9,10 @@ import asyncio
 import logging
 import os
 import signal
-from pathlib import Path
 
 from squadron.tools import limits
 from squadron.tools.builtin._shared import BASH_NAME, error, guarded, require_str, truncate
-from squadron.tools.models import ToolDescriptor, ToolExecutor, ToolResult
+from squadron.tools.models import JailSpec, ToolDescriptor, ToolExecutor, ToolResult
 from squadron.tools.registry import register
 
 _logger = logging.getLogger(__name__)
@@ -42,14 +41,14 @@ async def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
     await proc.wait()
 
 
-def _bash_factory(cwd: Path) -> ToolExecutor:
+def _bash_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             command = require_str(args, "command")
 
             proc = await asyncio.create_subprocess_shell(
                 command,
-                cwd=cwd,
+                cwd=spec.root,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 # Required so the timeout path can kill the whole group, not just the shell.

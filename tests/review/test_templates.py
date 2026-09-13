@@ -120,6 +120,48 @@ class TestLoadTemplate:
         assert t.prompt_builder is None
         assert t.model is None  # no model in YAML → None
 
+    def test_exclusion_fields_default_to_none(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML)
+        t = load_template(path)
+        assert t.diff_exclude_patterns is None
+        assert t.tool_exclude_patterns is None
+
+    def test_tool_exclude_patterns_parsed_from_yaml(self, tmp_path: Path) -> None:
+        yaml_with_excludes = VALID_YAML.replace(
+            "permission_mode: bypassPermissions",
+            "permission_mode: bypassPermissions\n"
+            "tool_exclude_patterns:\n"
+            "  - project-documents/user/reviews\n"
+            "  - some/other/dir",
+        )
+        path = _write_yaml(tmp_path, yaml_with_excludes)
+        t = load_template(path)
+        assert t.tool_exclude_patterns == ["project-documents/user/reviews", "some/other/dir"]
+
+    def test_tool_and_diff_exclusions_do_not_bleed_into_each_other(self, tmp_path: Path) -> None:
+        """The two lists are independent — one was written by copying the other (#94).
+
+        A template declaring only one must leave the other None, in both directions. A loader
+        that reuses the wrong key populates both from one declaration and the exclusion
+        silently applies where it was never asked for.
+        """
+        tool_only = VALID_YAML.replace(
+            "permission_mode: bypassPermissions",
+            "permission_mode: bypassPermissions\ntool_exclude_patterns: [reviews]",
+        )
+        diff_only = VALID_YAML.replace(
+            "permission_mode: bypassPermissions",
+            "permission_mode: bypassPermissions\ndiff_exclude_patterns: ['*.md']",
+        )
+
+        t_tool = load_template(_write_yaml(tmp_path, tool_only))
+        assert t_tool.tool_exclude_patterns == ["reviews"]
+        assert t_tool.diff_exclude_patterns is None
+
+        t_diff = load_template(_write_yaml(tmp_path, diff_only))
+        assert t_diff.diff_exclude_patterns == ["*.md"]
+        assert t_diff.tool_exclude_patterns is None
+
     def test_profile_field_parsed_from_yaml(self, tmp_path: Path) -> None:
         yaml_with_profile = VALID_YAML.replace(
             "permission_mode: bypassPermissions",

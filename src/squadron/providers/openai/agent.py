@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -125,6 +125,7 @@ class OpenAICompatibleAgent:
         allowed_tools: list[str] | None = None,
         tools_suppressed_reason: str | None = None,
         cwd: str | None = None,
+        tool_exclude_patterns: Sequence[str] | None = None,
         max_tool_iterations: int | None = None,
         max_history_chars: int | None = None,
         max_tool_result_chars: int | None = None,
@@ -136,6 +137,11 @@ class OpenAICompatibleAgent:
         self._history_chars = 0
         self._state = AgentState.idle
         self._cwd = cwd
+        # Opaque to this agent: a sequence of path patterns to withhold from the tool jail,
+        # threaded to ``materialize`` exactly as ``cwd`` is. The agent is a generic provider
+        # and deliberately does not know why any pattern is here or what a review type is
+        # (design D5) — the caller decides policy, this only carries it.
+        self._tool_exclude_patterns = tuple(tool_exclude_patterns or ())
         # Loop bounds are resolved by the caller (the provider reads user config) so
         # that no config file I/O happens inside an async turn. Falling back to the
         # registered ConfigKey default keeps the single source of truth in keys.py.
@@ -187,7 +193,7 @@ class OpenAICompatibleAgent:
                 )
             known_names: list[str] = list(requested_tools)
             self._tools_given = known_names
-            self._tool_executors = tools.materialize(known_names, cwd)
+            self._tool_executors = tools.materialize(known_names, cwd, self._tool_exclude_patterns)
             descriptors = [d for n in known_names if (d := tools.lookup(n)) is not None]
             self._tool_schemas = translation.build_tool_schemas(descriptors)
 

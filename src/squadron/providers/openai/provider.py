@@ -77,6 +77,7 @@ class OpenAICompatibleProvider:
             allowed_tools=config.allowed_tools,
             tools_suppressed_reason=config.tools_suppressed_reason,
             cwd=config.cwd,
+            tool_exclude_patterns=config.tool_exclude_patterns,
             max_tool_iterations=max_tool_iterations,
             max_history_chars=max_history_chars,
             max_tool_result_chars=max_tool_result_chars,

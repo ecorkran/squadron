@@ -187,6 +187,10 @@ async def run_review_with_profile(
         cwd=inputs.get("cwd"),
         allowed_tools=resolved_allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
+        # A document review must not read its own predecessors: they sit inside the tool
+        # jail under the reviewed document's name prefix (#94). Passed as a list, empty when
+        # the template declares none, so no layer below has to interpret None.
+        tool_exclude_patterns=list(template.tool_exclude_patterns or []),
         permission_mode=template.permission_mode,
         setting_sources=template.setting_sources,
         credentials={

@@ -1,8 +1,8 @@
 """Built-in tool implementations: ``read_file``, ``write_file``, ``bash``, ``list_files``, ``grep``.
 
 These names are the start of the canonical squadron tool vocabulary. Every executor is bound
-to a resolved working directory by its factory; the file tools treat that directory as a jail
-root and ``bash`` runs inside it.
+to a resolved :class:`~squadron.tools.models.JailSpec` by its factory; the file tools treat
+its root as a jail root, refuse anything under its exclusions, and ``bash`` runs in the root.
 
 The working directory is the only boundary at this stage. Network denial, environment
 scrubbing, and process isolation are architecture-documented future work, deliberately out of
@@ -22,6 +22,7 @@ from squadron.tools.builtin._shared import (
     LIST_FILES_NAME,
     READ_FILE_NAME,
     WRITE_FILE_NAME,
+    contained_in_jail,
     resolve_in_jail,
 )
 from squadron.tools.builtin.bash_tool import BASH, BASH_PARAMETERS
@@ -57,5 +58,6 @@ __all__ = [
     "WRITE_FILE_NAME",
     "WRITE_FILE_PARAMETERS",
     "_resolve_in_jail",
+    "contained_in_jail",
     "resolve_in_jail",
 ]
