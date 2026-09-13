@@ -84,9 +84,25 @@ must exist first.
       it. Document that at each field.
 - [ ] **Not serialized into frontmatter** (D10) — frontmatter is a consumed
       contract the verdict gate checks; these are diagnostic. Confirm they are
-      absent from `to_dict` and any frontmatter builder.
+      absent from any frontmatter builder.
+- [ ] **Do serialize them into `to_dict()`** ([models.py:131](src/squadron/review/models.py#L131))
+      as additive optional keys, null when unstamped — exactly how the sibling
+      telemetry `tools_given` / `tool_calls_made` already appears there. Requested
+      by the Amoeba orchestrator (20260913), which consumes
+      `sq review --output json` and routes on it: `tool_calls_made ==
+      failed_tool_calls > 0` and an abnormal `stop_reason` are mechanical
+      predicates that let a runner retry instead of escalating to a human.
+      Scraping the digest body for them would make a diagnostic section into a
+      contract, which D10 exists to prevent.
+- [ ] Note the split in a comment: frontmatter is what the verdict gate reads,
+      JSON is what programmatic consumers read, and these belong in the second
+      but not the first. The two surfaces are not required to match — the
+      existing `fallback_used` is already in JSON and absent from frontmatter.
+- [ ] Test the JSON keys: present and null on an unstamped (SDK-path) run,
+      populated on a stamped one.
 
-**Success:** fields present, frontmatter unchanged. Effort: 1.
+**Success:** fields present on the model, in `to_dict()`, absent from
+frontmatter, with tests covering the null and populated cases. Effort: 1.
 
 ### T2.5 — Read the facts back in `review_client`
 
