@@ -297,19 +297,19 @@ shows no new review-awareness. Effort: 2.
 
 ### T1.12 — Verify the reported reproduction
 
-- [ ] Follow the design's Part 1 walkthrough in the `squadron-pr` worktree, where
+- [x] Follow the design's Part 1 walkthrough in the `squadron-pr` worktree, where
       the 380 document and its five archived reviews live. Confirm the
       predecessors exist, then run three consecutive `sq review arch 380 -v`
       passes with a revision between each.
-- [ ] Confirm no finding quotes a phrase absent from the current
+- [x] Confirm no finding quotes a phrase absent from the current
       `380-arch.pull-request-workflow.md`, and that findings dispositioned in an
       earlier round do not reappear.
-- [ ] Confirm the exclusion **fired** rather than the model simply not looking:
+- [x] Confirm the exclusion **fired** rather than the model simply not looking:
       `sq review arch 380 -vv ... 2>&1 | grep -i 'refus'` shows WARNINGs, and
       nothing in the model-visible transcript names a denial.
-- [ ] Run from the repo root with `uv run sq` — the released `sq` predates
+- [x] Run from the repo root with `uv run sq` — the released `sq` predates
       `_resolve_review_cwd` (issue #86) and will not exercise this path correctly.
-- [ ] Record the outcome in the DEVLOG. If the exclusion does not fire, stop and
+- [x] Record the outcome in the DEVLOG. If the exclusion does not fire, stop and
       diagnose before proceeding — do not tune the patterns speculatively.
 
 **Success:** three convergent runs, WARNINGs present, transcript clean. Effort: 1.
@@ -318,5 +318,5 @@ shows no new review-awareness. Effort: 2.
 
 - [x] `uv run pytest tests/tools tests/review -q` green; `ruff format`,
       `ruff check`, `pyright` clean.
-- [ ] Commit: `fix(tools): exclude the reviews directory from document-review tool jails`
-- [ ] Effort: 1
+- [x] Commit: `fix(tools): exclude the reviews directory from document-review tool jails`
+- [x] Effort: 1

@@ -14,6 +14,92 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 918 Part 1 — jail exclusions for document reviews (#94)
+
+Implemented and committed as `50d2f8de` on `918-slice.review-grounding`.
+
+Tool binding now carries a `JailSpec` (resolved root + resolved exclusions) where it
+carried a bare `cwd`. `materialize` resolves both exactly once and builds the spec per
+call, so two reviews with different exclusions cannot interfere; a pattern resolving
+outside the jail is discarded at bind time with a WARNING. Both predicates consult the
+exclusions via `is_relative_to` — a test pins that a sibling named `reviews-archive` is
+not swept up by an exclusion of `reviews`, and it fails against a `str.startswith`
+implementation (verified by temporarily introducing one).
+
+Five document templates declare the exclusion; `code.yaml` and
+`judge-findings-addressed.yaml` deliberately do not, with the reason written at each
+omission and a test asserting both the absence and the comment. `REVIEWS_DIR` stays the
+single seam D4 requires: a test asserts every declared pattern equals it, so moving the
+constant fails until the templates follow.
+
+**One design correction found by its own test.** Routing an exclusion through the
+existing `None` return meant it rendered as `jail_violation`'s "resolves outside the
+working directory" — false for a path plainly inside the jail, and distinguishable from
+a genuine miss, which defeats D6. It also double-logged: the predicate called it an
+exclusion while `jail_violation` called it a jail escape. Refusals are now worded and
+logged in exactly one place. An operator sees "refusing excluded path"; the model sees
+the same `file not found` a nonexistent path produces, down to reporting the resolved
+path because `error()` carries `exc.filename`. Any divergence there is a distinguisher.
+
+**Sixth factory.** The breakdown counted five `(cwd: Path)` factories; `cf_tools`
+`_make_factory` is a sixth. Its inner closure could not take the parameter name `spec` —
+the enclosing `spec` is the `CfToolSpec` it closes over, so shadowing would have
+redirected every `spec.name` and `spec.arg_map` to the jail. Named `jail` there, with
+the reason at the site.
+
+### T1.12 — reported reproduction verified
+
+Three consecutive `sq review arch` passes against `380-arch.pull-request-workflow.md` in
+the `squadron-pr` worktree, which holds the document plus its five archived predecessors
+and one live review — the material #94 is about. Coordinated with the `sq-pr` session
+first: slice 381 was already merged (`cdee5518`) and its tree clean, so the runs
+disrupted nothing. Baseline `23769077` noted so its same-day edit was not miscounted as
+one of mine.
+
+Ran from the main checkout (`uv run sq`) with `--cwd` at the worktree. Note
+`_resolve_arch_file` ([review.py:465](src/squadron/cli/commands/review.py#L465))
+resolves an initiative index against the *process* cwd, not `--cwd`, so `sq review arch
+380 --cwd <elsewhere>` fails to find the document; an explicit path works. Pre-existing,
+unrelated to this slice, not filed.
+
+| Run | Revision before it | Reviews-dir attempts | Refusals | Verdict |
+|---|---|---|---|---|
+| 1 | none (baseline) | 552 | 552 | CONCERNS |
+| 2 | frontmatter `status` | 0 | 0 | CONCERNS |
+| 3 | 385 independence | 1 | 1 | PASS |
+
+Run 1 is the evidence the exclusion fires: 41 tool calls, 552 refusals, 12 naming the
+380 predecessors and 65 the archive, and **zero** reference to any review artifact in
+the output. No denial wording reached the model.
+
+Run 2 attempted the directory zero times — the model did not look, so there was nothing
+to refuse. That is the ambiguity T1.12 names, and why run 1's count matters: same binding,
+19 tool calls, different reading choices. Model variance, not a regression.
+
+Findings tracked the current text across revisions. Run 1's frontmatter finding does not
+reappear in run 3 after being fixed. The one run-3 finding quoting a phrase absent from
+the document (`sq pr show`) traces to `pr.py:32` in the source tree, which the review may
+legitimately read — not an archived review. Verdicts moved CONCERNS → CONCERNS → PASS,
+the opposite of #94's escalation-to-FAIL on unchanged text.
+
+The runs used the default `openrouter` profile (`minimax/minimax-m3`), not `arch.yaml`'s
+`model: opus` — profile model resolution wins over the template. Pre-existing behavior;
+it does not weaken the result, since a path deny-list is model-independent and the tool
+calls confirm the model genuinely reached for the directory.
+
+Both test revisions were reverted; the worktree is back at `cdee5518` (doc md5
+`6e89c0f1`), archive still five files, and no artifact from these runs was left behind.
+
+`sq-pr` also reported that the `squadron.frontmatter-gate` is vacuous in that worktree —
+`cf validate frontmatter` with staged paths silently skips out-of-root paths and exits 0
+with `filesChecked: 0` (context-forge#88; squadron#98 covers failing closed). Nothing was
+committed there, so no gate was relied on.
+
+Part 1 is complete except that T1.13's commit landed before this verification; Parts 2
+and 3 remain.
+
+## 20260913
+
 ### Slice 918 task breakdown (Phase 5)
 
 Design converted to `user/tasks/918-tasks.review-grounding-{1,2}.md`, split at the
