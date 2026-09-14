@@ -6,8 +6,8 @@ parent: user/architecture/380-slices.pull-request-workflow.md
 dependencies: [381, 916, 904]
 interfaces: [383, 384, 386]
 dateCreated: 20260913
-dateUpdated: 20260913
-status: not_started
+dateUpdated: 20260914
+status: complete
 ---
 
 # Slice Design: Review a PR

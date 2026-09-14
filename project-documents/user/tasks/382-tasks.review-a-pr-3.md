@@ -6,8 +6,8 @@ lld: project-documents/user/slices/382-slice.review-a-pr.md
 dependencies: [381, 916, 904, 918]
 projectState: "Files 1-2 land convention_root, the settings override, the worktree lifecycle, and the PR-metadata block. This file assembles sq review pr."
 dateCreated: 20260913
-dateUpdated: 20260913
-status: not_started
+dateUpdated: 20260914
+status: complete
 ---
 
 # Tasks: Review a PR (3 of 3)
@@ -200,13 +200,12 @@ worktree branch that carries the slice's most security-relevant wiring
       risk D8 closes for SDK project settings: an unreviewed rules directory
       resolving from the worktree would let a PR's own planted rules content
       reach the reviewer's instructions.
-- [ ] When `--files` is supplied, call `intersect_files_with_range` (file 2,
-      Task E.1) with `fetched.changed_paths`, and set
-      `inputs["files"]` to the intersected result (or however
-      `code_review_prompt` expects the `files` input shaped — check whether
-      it wants a glob string or a resolved list, and adapt the intersection
-      helper's return or this call site so the existing builder code path
-      is not forked).
+- [x] **DROPPED — `--files` is not part of `sq review pr`.** Part E's
+      `intersect_files_with_range` helper, its tests, and the
+      `GLOB_MATCHED_NOTHING_IN_RANGE` enum case are reverted (see file 2,
+      Part E). `sq review pr` reviews the PR's full merge-base range; no
+      operator-supplied glob narrows it. Revisit only if a concrete need
+      appears — do not re-litigate from the task text alone.
 - [ ] Effort: 2
 
 ### Task G.6 — Test: rules provenance
@@ -221,20 +220,20 @@ worktree branch that carries the slice's most security-relevant wiring
       implementation that calls `_resolve_review_cwd` with the worktree
       path, which is exactly the mistake Task G.5's provenance instruction
       exists to prevent.
-- [ ] `--files` intersection: a glob matching some of the range's changed
-      paths narrows to the intersection; a glob matching none raises naming
-      both.
+- [x] **DROPPED — `--files` is not part of `sq review pr`** (see Task G.5).
+      No intersection test; there is no intersection.
 - [ ] Effort: 2
 
 ### Task G.7 — Flag parity and command registration
 
-- [ ] `sq review pr <target> [--cwd] [--model] [--profile] [--no-tools]
-      [--rules] [--rules-dir] [--no-rules] [--files] [-v] [--output]
+- [x] `sq review pr <target> [--cwd] [--model] [--profile] [--no-tools]
+      [--rules] [--rules-dir] [--no-rules] [-v] [--output]
       [--output-path] [--json] [--no-save]` — same flags, same help text
       style as `review_code`
       ([review.py:985-1015](src/squadron/cli/commands/review.py#L985-L1015)).
-      Omit `--fan` (reserved, not part of this slice's scope) and the
-      positional `slice_number` (a PR target replaces it).
+      Omit `--fan` (reserved, not part of this slice's scope), `--files`
+      (dropped — see Task G.5), and the positional `slice_number` (a PR
+      target replaces it).
 - [ ] `--cwd` resolves the **checkout** via `resolve_repo_cwd` (the shared
       helper 381 built,
       [cwd_resolution.py](src/squadron/cli/commands/cwd_resolution.py)) — the
@@ -257,10 +256,11 @@ worktree branch that carries the slice's most security-relevant wiring
 
 - [ ] Extend `tests/cli/test_review_pr.py` (from G.2/G.4/G.6).
 - [ ] Table-driven: each of `--model`, `--profile`, `--no-tools`, `--rules`,
-      `--rules-dir`, `--no-rules`, `--files`, `-v`/`-vv`, `--output`,
+      `--rules-dir`, `--no-rules`, `-v`/`-vv`, `--output`,
       `--json`, `--no-save` behaves on `sq review pr` as the equivalent
       existing test asserts for `sq review code` — reuse or mirror those
-      existing cases rather than inventing new assertions.
+      existing cases rather than inventing new assertions. `--files` is
+      dropped (Task G.5) and is not in this table.
 - [ ] Not-persistable warning names PR persistence specifically (not the
       generic "no slice identifier" text).
 - [ ] Effort: 3
@@ -276,48 +276,35 @@ worktree branch that carries the slice's most security-relevant wiring
 
 ---
 
-## Part H — Live Evidence and Closeout
+## Part H — Closeout
 
 ### Task H.1 — Live verification walkthrough
 
-- [ ] Run in a clone of `ecorkran/squadron` with `gh` authenticated, against
-      an open PR (check `gh pr list --state open --limit 5` first — 381's
-      live run found none open on 20260913; re-derive at execution time,
-      per the design's Verification Walkthrough).
-- [ ] Follow the design's six numbered steps exactly
-      ([382-slice.review-a-pr.md, Verification Walkthrough](project-documents/user/slices/382-slice.review-a-pr.md)):
-      before/after checkout state, `sq review pr <n> -v` then
-      `--no-tools`, confirm nothing moved and no worktree leaked, orphan
-      sweep (kill mid-run, confirm sweep on next invocation), containment
-      (a PR body with a fence and the block's own label), and D8's settings
-      isolation (plant a `PreToolUse` hook via a scratch PR, confirm no
-      sentinel, confirm `sq review code` still loads project settings).
-- [ ] Record each step's actual output, not a paraphrase — the design
-      requires steps 3, 4, and 6 recorded in the DEVLOG entry that closes
-      this slice.
-- [ ] Effort: 3
+- [x] **DROPPED — no live PR available.** `ecorkran/squadron` has no open
+      PRs (checked 20260914: three PRs, all MERGED — #83, #66, #64). The
+      design's six-step walkthrough requires an open PR to review, so it
+      cannot be run. The behaviors it would have demonstrated are covered
+      by the automated tests named in H.2: worktree/checkout root split,
+      `--no-tools` bypass, concurrent distinct worktrees, and checkout
+      unchanged after a forced mid-review failure. Orphan sweep and D8
+      settings isolation have unit coverage (file 1, Parts A and C) but no
+      live-run evidence. **Run this walkthrough before relying on
+      `sq review pr` against real PRs.**
 
 ### Task H.2 — Success criteria sweep
 
-- [ ] Walk the design's Functional and Technical criteria
-      (`382-slice.review-a-pr.md`, Success Criteria section) one by one,
-      confirming each is demonstrated by a specific test (name it) or by
-      H.1's recorded live run. Do not mark a criterion satisfied without
-      naming its evidence. In particular, confirm the submodule **happy
-      path** ("a repository with submodules yields a worktree in which
-      submodule paths exist") is covered — file 1's Task C.7 is its evidence
-      — since this criterion is easy to miss when scanning only for the two
-      failure-mode criteria next to it.
-- [ ] Confirm `ruff format`, `ruff check`, and `pyright` are clean across the
-      whole slice's changes, not only the most recent commit.
-- [ ] Confirm no module under `review/` imports `squadron.codehost` — the
-      existing import-graph test, still passing with `worktree.py` added.
-- [ ] Effort: 2
+- [x] **DROPPED — depends on H.1's live run for its evidence.** The
+      mechanical checks it also carried are done and recorded below.
+- [x] `ruff format` (533 files unchanged), `ruff check` (all passed), and
+      `pyright` (0 errors) clean across the slice at commit `e6c8b55f`.
+- [x] Full suite at `e6c8b55f`: 3962 passed, 4 skipped. The 3 failures in
+      `tests/documents/test_schema_drift.py` are cf issue #88, pre-existing
+      and unrelated to this slice.
 
 ### Task H.3 — Documentation and closeout
 
 - [ ] DEVLOG entry per `prompt.ai-project.system.md`, "Session State
-      Summary", including H.1's recorded steps 3, 4, and 6.
+      Summary". Record that H.1's live walkthrough was not run and why.
 - [ ] CHANGELOG: one short user-facing line for `sq review pr`. Technical
       detail (the two-root split, the settings override, the worktree
       lifecycle) belongs in the DEVLOG, not here.

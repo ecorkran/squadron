@@ -94,6 +94,37 @@ class TestSaveOutcomeResolution:
         assert outcome == SaveOutcome.NOT_PERSISTABLE
         assert calls == []
 
+    def test_not_persistable_reason_defaults_to_existing_wording(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """slice 382, Task F.1/F.2: omitting the new parameter keeps today's wording."""
+        with caplog.at_level("WARNING", logger="squadron.cli.commands.review"):
+            _resolve_save_outcome(
+                no_save=False,
+                target=None,
+                save=lambda _info: True,
+                review_type="code",
+            )
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("no slice identifier" in message for message in warnings)
+
+    def test_not_persistable_reason_is_overridable(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A custom reason (e.g. sq review pr's pre-383 case) reaches the warning."""
+        with caplog.at_level("WARNING", logger="squadron.cli.commands.review"):
+            outcome = _resolve_save_outcome(
+                no_save=False,
+                target=None,
+                save=lambda _info: True,
+                review_type="pr",
+                not_persistable_reason="PR review persistence is not yet available (383)",
+            )
+        assert outcome == SaveOutcome.NOT_PERSISTABLE
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any(
+            "PR review persistence is not yet available (383)" in message for message in warnings
+        )
+        assert not any("no slice identifier" in message for message in warnings)
+
     def test_successful_write_is_saved(self) -> None:
         outcome = _resolve_save_outcome(
             no_save=False, target="slice", save=lambda _info: True, review_type="code"

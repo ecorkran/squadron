@@ -446,6 +446,41 @@ class TestReviewInputPassthrough:
         assert inputs["against"] == str(against_doc)
         assert inputs["cwd"] == "/tmp/test"
 
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_file", return_value=None)
+    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_no_pr_key_supplied_still_runs(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_format: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """slice 382, D4: 'pr' is a new optional input on the code template. A pipeline
+        step that never supplies it (every step predating this slice, and any non-PR
+        review) must keep running exactly as before — the pipeline action path never
+        validates supplied keys against a template's optional_inputs, so adding an
+        optional input to code.yaml must not, and does not, turn its absence into a
+        validation failure.
+        """
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(params={"template": "code", "diff": "main"})
+        with (
+            patch(f"{_P}.assert_reviewable_scope"),
+            patch(f"{_P}.normalize_diff_spec", side_effect=lambda spec, _cwd: spec),
+        ):
+            result = await ReviewAction().execute(ctx)
+
+        assert result.success is True
+        inputs = mock_run_review.call_args[0][1]
+        assert "pr" not in inputs
+
 
 # ---------------------------------------------------------------------------
 # Execute — persistence
