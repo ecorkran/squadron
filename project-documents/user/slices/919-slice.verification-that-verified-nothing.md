@@ -556,11 +556,27 @@ stated rather than the draft quietly amended.
 
 ### Part 1 — the real specimen parses (#96)
 
+**Run at Phase 6 completion, 20260914.** All commands below were executed against the
+finished Part 1 implementation; output shown is what actually printed, not a draft
+prediction.
+
 The fixture is the `### Raw Response` section of
 `project-documents/user/reviews/918-review.slice.review-grounding.md` — 3076 characters,
-zero newlines.
+zero newlines (byte-identical to the committed
+`tests/review/fixtures/918-newline-free-response.txt`, T1.1).
 
-Establish the baseline first, so the fix is measured against a recorded failure:
+**Correction to the draft:** the draft's baseline command called `_extract_verdict` and
+`_extract_findings` directly, bypassing `parse_review_output`'s normalization gate
+entirely. Those two functions are intentionally *not* changed to normalize on their own —
+normalization is applied once, in `parse_review_output`, before they ever see the text
+(D1, D5) — so calling them directly still reproduces the pre-fix numbers even after Part 1
+is complete. That is correct behavior, not a bug: it is what "normalization applied once,
+upstream" means. The **before** and **after** measurements below use two different calls
+for that reason; an external verifier re-running only the first would wrongly conclude
+Part 1 did nothing.
+
+Establish the pre-fix baseline (still true today, and expected to remain true — this
+demonstrates the functions are unchanged, not regressed):
 
 ```bash
 uv run python - << 'PY'
@@ -575,7 +591,7 @@ print("findings:", len(f), counts)
 PY
 ```
 
-Expected **before** the fix (recorded 20260913):
+Actual output (20260914, matches the 20260913 design measurement exactly):
 
 ```
 chars: 3076 newlines: 0
@@ -583,21 +599,61 @@ verdict: Verdict.UNKNOWN
 findings: 1 FindingScanCounts(total=1, in_fences=0, in_section=1, surviving=1)
 ```
 
-Expected **after**: `verdict: Verdict.PASS`, `findings: 4`, each with a non-empty
-`category` and a `location` that is not `unverified`.
+Now the fixed state, through the real entry point (`parse_review_output`, which is where
+normalization actually runs):
+
+```bash
+uv run python - << 'PY'
+import re, pathlib
+from squadron.review.parsers import parse_review_output
+t = pathlib.Path("project-documents/user/reviews/918-review.slice.review-grounding.md").read_text()
+raw = t[re.search(r'^### Raw Response\s*$', t, re.M).end():].strip()
+result = parse_review_output(raw, "slice", {})
+print("verdict:", result.verdict)
+print("findings:", len(result.findings))
+for f in result.findings:
+    print(" category:", bool(f.category), "location_verified:", f.location != "unverified", "description:", bool(f.description))
+PY
+```
+
+Actual output (20260914):
+
+```
+verdict: Verdict.PASS
+findings: 4
+ category: True location_verified: True description: True
+ category: True location_verified: True description: True
+ category: True location_verified: True description: True
+ category: True location_verified: True description: True
+```
 
 Then confirm the guard against a wrong verdict, which is the subtlest part of this fix —
-inserting only a newline after `Summary` yields `CONCERNS`:
+inserting only a newline after `Summary` yields `CONCERNS` if the bounded-search fix (D3)
+is not in place:
 
 ```bash
 uv run pytest tests/review/ -k "newline_free or verdict_fusion" -v
 ```
+
+Actual: 5 passed (20260914).
 
 And confirm #91 did not reopen, and the clean path is byte-identical:
 
 ```bash
 uv run pytest tests/review/ -k "fence or snapshot or clean_pass" -v
 ```
+
+Actual: 18 passed (20260914). This count includes tests unrelated to this slice (e.g.
+`test_specimen_is_inside_a_fence` across every template) that happen to match the `-k`
+filter — all pre-existing, none touched by this slice.
+
+**Caveat discovered during implementation:** verifying `summary_section_located is True`
+as a stated-vs-derived signal (originally suggested in T1.7) does not work — `_locate_section`
+has a pre-existing, unrelated bug (filed as
+[squadron#101](https://github.com/ecorkran/squadron/issues/101)) that makes it return
+`None` for the "summary" section whenever the document also contains findings elsewhere,
+regardless of newline-freedom. `fallback_used is False` is the correct signal instead, and
+is what T1.7's test actually asserts.
 
 ### Part 2 — a derived verdict is visible where the gate reads (#97)
 

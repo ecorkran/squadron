@@ -199,7 +199,7 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
     # line structure, so they need reviewing in the same change, not after it.
     newline_free = bool(result.raw_output) and "\n" not in result.raw_output
 
-    return [
+    lines = [
         "### Run Digest",
         "",
         f"- Response length: {len(result.raw_output)} chars",
@@ -214,8 +214,19 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         f"- Finding-shaped matches — inside fences: {scan.in_fences if scan else _NOT_COMPUTED}",
         f"- Finding-shaped matches — in findings section: {scan.in_section if scan else _NOT_COMPUTED}",
         f"- Finding-shaped matches — surviving validation: {scan.surviving if scan else _NOT_COMPUTED}",
-        "",
     ]
+    # Slice 919 Part 1 (#96), design D4: emitted only when normalization
+    # actually ran, never an always-present "count: 0" line. A response that
+    # took the unmodified path (D5) must render byte-identical to before this
+    # slice — the clean_pass_artifact.md snapshot guard depends on it, since
+    # it never triggers normalization.
+    if result.normalized_break_count > 0:
+        lines.append(
+            f"- Response line structure was normalized before parsing "
+            f"({result.normalized_break_count} break(s) inserted; see #96)"
+        )
+    lines.append("")
+    return lines
 
 
 def _render_tristate(value: bool | None) -> str:

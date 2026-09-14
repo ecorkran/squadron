@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from squadron.review import parsers as _parsers_module
 from squadron.review.models import Severity, Verdict
 from squadron.review.parsers import (
     UNVERIFIED_LOCATION,
@@ -1481,3 +1482,282 @@ class TestLineBoundsUncheckableCases:
 
         assert result.findings[0].location_verified is None
         assert any("Bug" in r.getMessage() for r in caplog.records)
+
+
+class TestNewlineFreeBaseline:
+    """The real newline-free specimen (#96) parses correctly (design SC1).
+
+    The fixture is the specimen already committed for 918
+    (``918-newline-free-response.txt``, 3076 chars, zero newlines) — no
+    second copy is created here. Before Part 1, the raw functions on this
+    text returned ``Verdict.UNKNOWN`` and collapsed 4 findings into 1
+    (design-recorded 20260913 measurement) — that was the pre-fix baseline
+    this class asserted until T1.7 flipped it to the fixed target state,
+    per the design's success criterion 1 being the target, not the
+    regression marker.
+    """
+
+    def test_specimen_is_still_3076_chars_zero_newlines(self) -> None:
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        assert len(specimen) == 3076
+        assert specimen.count("\n") == 0
+
+    def test_real_specimen_parses_to_pass_with_four_findings(self) -> None:
+        """Design success criterion 1, through the real parse entry point."""
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+
+        assert result.verdict is Verdict.PASS
+        assert len(result.findings) == 4
+        for finding in result.findings:
+            assert finding.category
+            assert finding.location != UNVERIFIED_LOCATION
+            assert finding.description
+
+    def test_verdict_is_stated_not_merely_derived_to_the_same_value(self) -> None:
+        """Pins that PASS is what the model actually said, not a coincidence.
+
+        A literal-minded implementation wiring normalization only into the
+        findings path (leaving _extract_verdict fed raw text) would also
+        produce PASS here: _verdict_from_findings' most-severe-wins
+        derivation over 4 non-FAIL/CONCERN findings yields PASS too, with
+        fallback_used=True. That would pass every other Part 1 criterion
+        while silently missing D3's fix to _extract_verdict itself.
+        fallback_used is False is what tells the two apart — it is set only
+        in the derivation/mismatch branches (parsers.py), neither of which
+        this run reaches once _extract_verdict itself parses PASS directly.
+
+        (summary_section_located is not used here: _locate_section's
+        self-closing guard — the same one documented for a '### Findings'
+        heading — also misfires for 'summary' whenever the document holds
+        findings elsewhere, independent of this slice and pre-existing on
+        main. Out of Part 1's scope; fallback_used is the accurate signal.)
+        """
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+
+        assert result.fallback_used is False
+
+    def test_newline_free_and_verdict_fusion_tests_pass_together(self) -> None:
+        """Every test added across T1.1-T1.6 passes as one shared run, not
+        merely in isolation — design SC1-4 held simultaneously (T1.7)."""
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+        normalized, _inserted = _parsers_module._normalize_line_structure(specimen)
+
+        assert result.verdict is Verdict.PASS
+        assert _parsers_module._extract_verdict(normalized) is Verdict.PASS
+        assert len(result.findings) == 4
+
+
+class TestNormalizeLineStructure:
+    """``_normalize_line_structure`` against the real specimen (D1/D2, T1.2/T1.3).
+
+    Each trap has its own guard test in ``TestNormalizeGuardsAgainstNaiveApproach``
+    below; these tests confirm the guarded normalizer's actual measured output.
+    """
+
+    def test_total_finding_matches_reaches_four(self) -> None:
+        """T1.2 success: normalizing yields total=4 finding-shaped matches."""
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(specimen)
+        _findings, counts, _located = _parsers_module._extract_findings(normalized)
+
+        assert counts.total == 4
+
+    def test_findings_section_spans_all_four_findings(self) -> None:
+        """T1.3 success: with Trap 3 guarded, in_section also reaches 4."""
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(specimen)
+        _findings, counts, _located = _parsers_module._extract_findings(normalized)
+
+        assert counts.total == 4
+        assert counts.in_section == 4
+
+    def test_trap3_location_anchor_hash_is_not_treated_as_heading(self) -> None:
+        """T1.3: a synthetic string isolating the location-anchor trap.
+
+        A dedicated regression separate from the full fixture, so a future
+        change to the fixture cannot silently stop exercising this trap.
+        """
+        text = (
+            "## SummaryPASS\n\n"
+            "## Findings\n"
+            "### [PASS] Titlecategory: cat"
+            "location: docs/foo.md#Some-Anchor-TextThe rest of the body follows."
+        )
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(text)
+
+        # No break inserted at the anchor's '#' — it must not read as a new
+        # level-1 heading that would truncate the findings section.
+        assert "\n#Some-Anchor" not in normalized
+        _findings, counts, located = _parsers_module._extract_findings(normalized)
+        assert located is True
+        assert counts.in_section == counts.total == 1
+
+
+class TestNormalizeGuardsAgainstNaiveApproach:
+    """T1.4: each trap's guard, constructed to fail on the naive first cut.
+
+    A naive normalizer inserts an unconditional break before every '#' /
+    '##' / '###' and before every tag. Each test here is built so that naive
+    approach produces the wrong answer, and the guarded implementation
+    (D2's three traps) produces the right one.
+    """
+
+    def test_trap1_mid_run_hash_is_not_split(self) -> None:
+        """D2 Trap 1: a naive lookahead like (?=#{2,6}\\s*\\S) fires on the
+        *second* '#' of '###', splitting it into a bogus level-1 heading plus
+        a demoted '##'. The guarded normalizer must anchor on the start of a
+        complete hash run only.
+        """
+        text = "intro text### [FAIL] Title\nbody text"
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(text)
+
+        # A naive mid-run split would produce "...text#\n## [FAIL]..." (break
+        # before the *second* '#'). The guarded version breaks before the
+        # whole run instead.
+        assert "text#\n##" not in normalized
+        assert "text\n### [FAIL]" in normalized
+
+    def test_trap2_fused_heading_word_is_separated(self) -> None:
+        """D2 Trap 2: '## SummaryPASSThe rest...' must not let _HEADING_RE's
+        [^\\n]*? capture swallow the whole following paragraph as heading
+        text — a break must land right after the recognized heading word.
+        """
+        text = "## SummaryPASSThe rest of the sentence follows here."
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(text)
+        heading_match = _parsers_module._HEADING_RE.search(normalized)
+
+        assert heading_match is not None
+        assert heading_match.group("text").strip() == "Summary"
+
+    def test_trap3_location_anchor_not_truncating_findings_section(self) -> None:
+        """D2 Trap 3, promoted to its own regression test for visibility
+        alongside the other two (T1.4's explicit instruction) — same case as
+        ``TestNormalizeLineStructure.test_trap3_location_anchor_hash_is_not_treated_as_heading``.
+        """
+        text = (
+            "## SummaryPASS\n\n"
+            "## Findings\n"
+            "### [PASS] Onecategory: c1location: a.md#Anchor-OneBody one text.\n"
+            "### [PASS] Twocategory: c2location: a.md#Anchor-TwoBody two text."
+        )
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(text)
+        _findings, counts, located = _parsers_module._extract_findings(normalized)
+
+        # A naive rule treating every '#' as a heading start would truncate
+        # the findings section at the first anchor, losing the second finding.
+        assert located is True
+        assert counts.in_section == counts.total == 2
+
+
+class TestVerdictFusionBoundedSearch:
+    """D3: a verdict keyword fused to the following word must not let the
+    search scan forward into a later finding's severity word.
+
+    The regression is real and reproducible with only a break inserted
+    after 'Summary' (no other change) — the exact case the design measured
+    against the real specimen. A test asserting merely "not UNKNOWN" would
+    pass on the CONCERNS bug and is explicitly rejected by the design.
+    """
+
+    def test_fused_keyword_does_not_scan_into_a_later_finding(self) -> None:
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+        # Only a break after "Summary" — the verdict keyword itself ("PASSThe
+        # slice design...") stays fused, and the summary prose contains the
+        # word "concerns" (lowercase, in "no architectural concerns rise").
+        only_summary_break = specimen.replace("## SummaryPASS", "## Summary\nPASS", 1)
+
+        verdict = _parsers_module._extract_verdict(only_summary_break)
+
+        assert verdict is Verdict.PASS
+
+    def test_full_pipeline_end_to_end_returns_pass(self) -> None:
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(specimen)
+        verdict = _parsers_module._extract_verdict(normalized)
+
+        assert verdict is Verdict.PASS
+
+
+class TestNormalizationWiredIntoParseEntryPoint:
+    """T1.6 (D5/D6): normalization runs only on a newline-free response, from
+    the real ``parse_review_output`` entry point, not the normalizer alone.
+    """
+
+    def test_real_specimen_parses_correctly_end_to_end(self) -> None:
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+
+        assert result.verdict is Verdict.PASS
+        assert len(result.findings) == 4
+        for finding in result.findings:
+            assert finding.category
+            assert finding.location != UNVERIFIED_LOCATION
+            assert finding.description
+
+    def test_raw_output_persists_the_original_unnormalized_text(self) -> None:
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+
+        assert result.raw_output == specimen
+
+    def test_a_response_containing_newlines_is_not_normalized(self) -> None:
+        """D5: the trigger is exactly the bug's signature. Any response that
+        parses correctly today (contains at least one newline) must take a
+        byte-identical path — normalized_break_count stays 0 and the parse
+        result is identical to what today's unmodified code produces.
+        """
+        result = parse_review_output(WELL_FORMED_PASS, "arch", {"input": "a.md"})
+
+        assert result.normalized_break_count == 0
+        assert result.verdict is Verdict.PASS
+        assert len(result.findings) == 2
+
+    def test_newline_free_response_sets_a_nonzero_break_count(self) -> None:
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+
+        assert result.normalized_break_count > 0
+
+
+class TestNewlineFreeDoesNotReopenFenceMasking:
+    """T1.8: design SC5 — #91 does not reopen.
+
+    A newline-free response structurally cannot contain a real fence before
+    normalization runs (_FENCE_OPEN_RE requires a trailing '\\n' the raw text
+    never has), so normalization must isolate fence markers onto their own
+    line first — otherwise quoted finding-format text inside what was meant
+    to be a fence leaks through as fabricated findings.
+    """
+
+    def test_quoted_finding_format_inside_a_fence_yields_no_findings_from_it(self) -> None:
+        text = (
+            "## SummaryPASS"
+            "## FindingsFormat reminder: "
+            "```"
+            "### [FAIL] Title"
+            "```"
+            "### [PASS] Real findingcategory: good"
+            "location: src/x.py:1This is real body text here."
+        )
+
+        result = parse_review_output(text, "slice", {})
+
+        assert result.verdict is Verdict.PASS
+        assert [f.title for f in result.findings] == ["Real finding"]

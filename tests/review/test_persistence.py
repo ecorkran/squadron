@@ -1219,6 +1219,32 @@ class TestStopReasonEvidenceInDigest:
         assert "- Response is newline-free: no" in markdown
         assert "- Response length: 0 chars" in markdown
 
+    def test_normalized_parse_discloses_the_break_count_in_the_digest(self) -> None:
+        """Slice 919 Part 1 (#96), design D4: a normalized parse must not be
+        indistinguishable from a clean one — that would fix #96 by
+        introducing a quieter version of #97."""
+        from squadron.review.parsers import parse_review_output
+
+        specimen = (Path(__file__).parent / "fixtures" / "918-newline-free-response.txt").read_text()
+        result = parse_review_output(specimen, "slice", {})
+        assert result.normalized_break_count > 0
+
+        markdown = format_review_markdown(result, "slice")
+
+        assert (
+            f"Response line structure was normalized before parsing "
+            f"({result.normalized_break_count} break(s) inserted"
+        ) in markdown
+
+    def test_unnormalized_response_shows_no_normalization_digest_line_at_all(self) -> None:
+        """D4's pinned emission rule: absent, not a zero-count line — an
+        'always emit, count: 0 when it didn't run' design would add a line to
+        every existing clean-pass artifact and break the byte-identical
+        snapshot guard."""
+        markdown = format_review_markdown(self._result(), "slice")
+
+        assert "normalized before parsing" not in markdown
+
 
 class TestRunDigestEndToEnd:
     """Parsed, then formatted — the counts a real run would show."""

@@ -139,6 +139,12 @@ class ReviewResult:
     summary_section_located: bool | None = None
     findings_section_located: bool | None = None
     finding_scan: FindingScanCounts | None = None
+    # Newline-free normalization (slice 919 Part 1, #96). 0 means the response
+    # contained at least one newline and took the unmodified parse path (D5) —
+    # not recoverable from raw_output alone at render time, unlike the
+    # newline-free indicator above, since an *inserted-break count* requires
+    # having actually run the normalizer. Feeds the run digest (D4) only.
+    normalized_break_count: int = 0
     # Prompt capture fields — populated at verbosity >= 2, excluded from to_dict()
     system_prompt: str | None = None
     user_prompt: str | None = None
