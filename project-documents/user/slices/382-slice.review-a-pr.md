@@ -66,6 +66,7 @@ the base has moved.
 | "the adapter-resolved range ... handed to the existing code review" (implying the range needs the checkout) | Probed on this repository at design time, not assumed: a linked worktree resolves `refs/squadron/...` (the ref store is shared, not per-worktree) and `git diff base...head` across those refs succeeds from inside it. | The range computes correctly from either root. `assert_reviewable_scope` and the diff injection keep taking one cwd and are untouched. The two-root split is about the jail and convention inputs only. Recorded as D2. |
 | "PR metadata ... rendered by the code prompt builder as one labeled fenced block" | Correct as far as it goes, but there is a second hole the plan does not name. `_inject_file_contents` iterates *every* input key and injects any value that is a real file path. A `pr` value is rendered text, so it is skipped — unless a body happens to name a real path, which would then be read off disk and injected. | Block goes through the builder as planned, **and** the new key joins `_SKIP_KEYS`. D4. |
 | "`--files`" in the parity list | `--files` scopes a review to a glob within one tree. On a PR the reviewable set is the range, and a glob would silently narrow it with no relation to what the host shows. | Accepted with a restriction: `--files` intersects the range rather than replacing it, and is documented as such. D7. |
+| "full parity with the existing review flags" and "the scratch worktree for tool-enabled reviews" — the plan treats the worktree as an isolation *measure* | Isolation is incomplete in the direction the plan does not look. Verified against the Agent SDK docs during review response: the SDK resolves project settings from the agent's `cwd` (the worktree), settings may define shell-command hooks, **neither `permission_mode` nor `allowed_tools` constrains a hook**, `project` scope also loads skills/commands/subagents, and there is no option to resolve settings from a different directory. An arbitrary contributor's PR could execute code on the operator's machine during an automated review. | The PR path loads no project settings at all: `setting_sources=[]` plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, as a per-invocation override rather than a `code.yaml` edit, since `sq review code` legitimately wants `[project]`. Named decision **D8**, with a test asserting a planted settings file is never read. Raised by the slice review's FAIL finding F001. |
 
 Effort stays 4/5.
 
@@ -114,8 +115,10 @@ target ──(381 boundary)──▶ ResolvedPullRequest + FetchedRange
               tools enabled? ──yes──▶ ScratchWorktree(record, run_id)  ← git worktree add
                             └──no───▶ (no tree; review reads the fetched ref alone)
                                     │
-   inputs = {cwd: <checkout>, diff: range, pr: <rendered block>,
-             review_root: <worktree or checkout>}
+   inputs = {cwd: <checkout>, diff: range, pr: <raw metadata: title, body,
+             issues, discussions>, review_root: <worktree or checkout>}
+                                    │
+              (the builder renders it — fence policy lives in one place, D4)
                                     │
                     assert_reviewable_scope(range, checkout)   ← D2: either root works
                                     │
@@ -141,10 +144,11 @@ answers. `convention_root: str | None = None` is added beside it:
   existing caller, so no other review path changes.
 
 Threaded to both providers that bind tools: the SDK provider passes `cwd` to the agent as it does
-now and does not pass `convention_root` (the SDK reads project settings from its own `cwd`, so
-`setting_sources: [project]` would read the worktree's — see the risk below); the non-SDK agent
-passes `cwd` to `tools.materialize` unchanged. The field's one consumer inside the review package
-is `_inject_file_contents`, which reads `CLAUDE.md` from `convention_root` when set.
+now and does not pass `convention_root` (the SDK resolves project settings from its own `cwd` and
+offers no way to redirect them — which is why D8 disables them outright on this path rather than
+pointing them at the checkout); the non-SDK agent passes `cwd` to `tools.materialize` unchanged.
+The field's one consumer inside the review package is `_inject_file_contents`, which reads
+`CLAUDE.md` from `convention_root` when set.
 
 Rejected: pointing `cwd` at the worktree and copying the rules into it. That makes the artifact's
 recorded roots a fiction and leaves `CLAUDE.md` resolution silently following the code.
@@ -173,6 +177,13 @@ directory from `config/manager.py`; `data_dir()` is package data and is the wron
   leaving paths the reviewer will cite as missing.
 - **Lock:** a `lock.json` in the worktree carrying pid **and** that process's start time, so a
   recycled pid does not read as alive.
+- **A malformed lock is an orphan, never an exception.** A crash mid-write is exactly the state
+  this lock exists to survive, so an unreadable, truncated, or unparsable `lock.json` — or one
+  missing either field — is treated as a dead owner: logged at WARNING naming the path and the
+  reason, then swept. The alternative, letting a parse error escape `sweep_orphans`, would fail
+  *every* subsequent `sq review pr` until someone cleaned the directory by hand — a worse outcome
+  than the orphan accumulation the sweep exists to prevent. A worktree whose lock is absent
+  entirely is also an orphan: the directory was created but never claimed.
 - **Sweep:** every invocation, before creating its own, prunes worktrees whose owner is gone
   (pid absent, or present with a different start time), then `git worktree prune`. An orphan never
   blocks a new review — the per-run id guarantees it.
@@ -182,9 +193,13 @@ directory from `config/manager.py`; `data_dir()` is package data and is the wron
 
 ### D4 — PR metadata reaches the model as data, through the builder
 
-One new optional template input, `pr`, carrying the already-rendered block. Rendered by
-`code_review_prompt` because the architecture fixes fence policy in one place, and because
-`_inject_file_contents` cannot carry it safely (see Scope corrections).
+One new optional template input, `pr`. **The CLI puts raw metadata into it — title, body, linked
+issue numbers, and unresolved discussions — and `code_review_prompt` renders the block.** The
+split matters: fence policy and label neutralization live in exactly one place, so a second
+caller (a later pipeline input, 386's slash transport) cannot supply a half-contained block. The
+CLI does not pre-render, and the builder does not fetch.
+
+`_inject_file_contents` cannot carry it either way (see Scope corrections).
 
 Containment is structural, not a label:
 
@@ -218,6 +233,45 @@ existing `SaveOutcome.NOT_PERSISTABLE` path and exit behavior are otherwise unto
 
 On `sq review code` a glob can stand alone. On a PR the range is the truth, so `--files` narrows
 within it. A glob matching nothing in the range is an error naming both, not an empty review.
+
+### D8 — The PR path loads no project settings, and the decision is not the template's to make
+
+**The worktree is attacker-controlled.** Verified against the Agent SDK documentation at design
+time, not assumed:
+
+- `setting_sources: ["project"]` reads `.claude/settings.json` from the agent's own `cwd` — on
+  the tools path, the scratch worktree.
+- Project settings may define `PreToolUse` hooks, and a shell-command hook executes an arbitrary
+  command.
+- **Neither `permission_mode` nor `allowed_tools` constrains hook execution.** The read-only tool
+  allowlist this template ships is not a mitigation; it never applies to hooks.
+- `project` scope also loads skills, commands, subagents, and `CLAUDE.md`, several of them
+  searching parent directories as well.
+- **There is no option to resolve settings from a directory other than `cwd`.**
+
+So a pull request from any contributor could plant a settings file — or a skill, or a subagent —
+in its own tree and execute code on the operator's machine during an automated review. That is
+the precise outcome the architecture's "never surprise the operator" principle forbids, and
+`sq review pr` on a public repository is the case the initiative exists to serve.
+
+**Decision: on the PR path the SDK loads no project settings at all** — `setting_sources=[]`,
+plus `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` in the agent's environment, which the SDK documentation
+names as the companion to `[]` for untrusted trees. Not "drop it if convenient": there is no
+redirect available, so disabling is the only form the fix can take.
+
+**Nothing of value is lost.** D1 already supplies rules and `CLAUDE.md` from the trusted checkout
+through squadron's own injection. The project conventions were arriving twice — once safely by
+injection, once unsafely through the SDK — and only the unsafe copy goes.
+
+**The value belongs to the invocation, not the template.** `setting_sources` lives on
+`ReviewTemplate` today, but the safe value depends on *what is being reviewed*: `sq review code`
+in the operator's own checkout legitimately wants `[project]`, and the same `code` template on a
+PR must not have it. Editing `code.yaml` would therefore fix the PR path by breaking the code
+path. Instead the template value stays the default and the PR path overrides it per invocation,
+threaded beside `convention_root` — an addition to D1's contract change rather than a second one.
+
+This also covers the non-SDK path: it reads no project settings at all, so it needs no override,
+and the override is a no-op there rather than a special case.
 
 ## Integration Points
 
@@ -259,6 +313,14 @@ within it. A glob matching nothing in the range is an error naming both, not an 
   on `sq review code`; a table-driven test covers each.
 - Running without 383 prints the not-persistable warning naming PR persistence, and exits on the
   verdict exactly as the other review paths do.
+- **A `.claude/settings.json` planted in the worktree is never read.** A worktree carrying a
+  settings file with a `PreToolUse` shell hook produces a review in which that hook never runs;
+  the test asserts the agent was constructed with `setting_sources=[]` and
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, and that the hook's observable side effect never appears.
+  The same test pins that `sq review code` still passes the template's `[project]`, so the fix
+  cannot silently spread to the path that legitimately wants project settings.
+- A worktree whose `lock.json` is truncated, unparsable, missing a field, or absent is swept as
+  an orphan with one WARNING; `sweep_orphans` raises nothing and the new review proceeds.
 
 ### Technical
 
@@ -298,8 +360,12 @@ Run in a clone of `ecorkran/squadron` with `gh` authenticated, against an open P
    then run another review and confirm the orphan is gone and the new review completed.
 5. Containment: review a PR whose body contains a fenced block and the literal block label;
    confirm with `-vvv` that the prompt log shows the block intact and the label neutralized.
+6. Settings isolation (D8): on a scratch branch, commit a `.claude/settings.json` declaring a
+   `PreToolUse` shell hook that writes a sentinel file, open a PR from it, and review it with
+   tools enabled. The review completes and the sentinel does not exist. Run the same review with
+   `sq review code` in the checkout to confirm that path still loads project settings.
 
-Steps 3 and 4 for one run are recorded in the DEVLOG entry that closes this slice.
+Steps 3, 4, and 6 for one run are recorded in the DEVLOG entry that closes this slice.
 
 ## Risk Assessment
 
@@ -307,12 +373,14 @@ Steps 3 and 4 for one run are recorded in the DEVLOG entry that closes this slic
   review from accumulating trees. Mitigation: pid plus start time so a recycled pid is not
   mistaken for alive, a per-run id so an orphan can never block, and a test that kills a process
   and asserts the next invocation prunes it.
-- **`setting_sources: [project]` on the SDK reads settings from the agent's own `cwd`**, which on
-  the tools path is the worktree. So a PR that edits `.claude/settings.json` could influence its
-  own review even though `CLAUDE.md` and rules come from the checkout. D1 closes the inputs
-  squadron injects; this one is the SDK's own resolution and is not squadron's to redirect.
-  Stated rather than assumed away: determine during implementation whether the code template
-  should drop `setting_sources` on the PR path, and record the answer. Do not leave it implicit.
+- **Untrusted project settings in the worktree — closed by D8, not deferred.** The worktree is
+  attacker-controlled, the SDK resolves project settings from the agent's `cwd`, settings can
+  define shell-command hooks, and neither `permission_mode` nor `allowed_tools` constrains a
+  hook. Left open, that is arbitrary code execution from any contributor's pull request.
+  Mitigation: `setting_sources=[]` and `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` on the PR path, as a
+  per-invocation override rather than a template edit, with a test asserting a planted
+  `.claude/settings.json` in the worktree is never read. The residual risk is that the SDK later
+  grows another `cwd`-relative load path; the test is what would catch it.
 - **Submodules in enterprise repositories** may need credentials the fetch does not have.
   Mitigation: named failure rather than a silently incomplete tree.
 - **`--files` semantics differ subtly from the code path** (intersect, not replace). Mitigation:
@@ -324,17 +392,28 @@ Steps 3 and 4 for one run are recorded in the DEVLOG entry that closes this slic
 
 1. `AgentConfig.convention_root` and its threading through both providers, with the
    byte-identical-prompt test. Behavior-preserving, lands alone.
-2. `_inject_file_contents` reads `CLAUDE.md` from `convention_root`; `_SKIP_KEYS` gains `pr`.
-3. `codehost/worktree.py` with lifecycle and sweep tests against the fake runner.
-4. `builders/code.py` — the PR block, fence-length and label-neutralization tests first.
-5. `code.yaml` — the optional input; pipeline-action tolerance test.
-6. `review.py` — the `pr` subcommand, `_warn_not_persistable`'s reason parameter, flag parity.
-7. Live run, DEVLOG entry, CHANGELOG line.
+2. **D8's settings override, threaded beside `convention_root`, with the isolation test.** Before
+   the worktree exists, so no branch can ever reach the SDK with the worktree as `cwd` and the
+   template's `[project]` still in force. The test is written first: it must fail against the
+   un-overridden path.
+3. `_inject_file_contents` reads `CLAUDE.md` from `convention_root`; `_SKIP_KEYS` gains `pr`.
+4. `codehost/worktree.py` with lifecycle and sweep tests against the fake runner, including the
+   malformed-lock table.
+5. `builders/code.py` — the PR block, fence-length and label-neutralization tests first.
+6. `code.yaml` — the optional input; pipeline-action tolerance test.
+7. `review.py` — the `pr` subcommand, `_warn_not_persistable`'s reason parameter, flag parity.
+8. Live run, DEVLOG entry, CHANGELOG line.
 
 ### Testing
 
 - `tests/codehost/test_worktree.py` — create, lock, sweep (live and dead owner), remove on
-  success/failure/timeout, unremovable worktree.
+  success/failure/timeout, unremovable worktree, and a malformed-lock table (truncated,
+  non-JSON, missing pid, missing start time, absent) asserting one WARNING, treat-as-orphan,
+  and no exception out of `sweep_orphans`.
+- `tests/review/test_pr_settings_isolation.py` — the PR path constructs its agent with
+  `setting_sources=[]` and `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; a worktree carrying a
+  hook-bearing `.claude/settings.json` produces no hook side effect; and `sq review code` still
+  passes the template's `[project]`.
 - `tests/review/test_code_builder_pr_block.py` — fence length against 3- and 4-backtick content,
   label neutralization, truncation.
 - `tests/review/test_convention_root.py` — `CLAUDE.md` from the convention root, and the
