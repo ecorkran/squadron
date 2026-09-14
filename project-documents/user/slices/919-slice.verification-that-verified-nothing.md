@@ -307,31 +307,36 @@ gets attention; a derived PASS clears every gate silently.
 
 ### Decisions
 
-**D6 — Emit provenance in frontmatter (Architect recommendation; PM ratification
-required before task breakdown).** The two options from the plan entry, with the
-recommendation stated:
+**D6 — Emit provenance as a frontmatter key (PM, 20260913).** `verdictSource` is written
+into review frontmatter with the closed vocabulary `stated | derived`.
 
-*Recommended — a frontmatter key, e.g. `verdictSource: stated | derived`.* Greppable, and
-it lets each consumer choose its own policy: CF can treat `derived` as not-clearing
-without squadron dictating that, and Amoeba can route on it. This is the only option that
-reaches the consumer that actually matters, and the consumer evidence on #97 (from the
-Amoeba orchestrator, 20260913) argues for it directly. Cost: a frontmatter schema
-addition, which needs a context-forge coordination step of the kind slice 383 is already
-running.
+The rationale is that the defect is an automated gate being fooled, so the fix has to
+reach the surface that gate reads. Frontmatter is greppable and lets each consumer choose
+its own policy: CF can treat `derived` as not-clearing, and Amoeba can decline to
+auto-continue on it, without squadron dictating either. The consumer evidence on #97 (from
+the Amoeba orchestrator, 20260913) asked for exactly this.
 
-*Alternative — `ReviewResult` and digest only.* Cheaper, no cross-repo coordination. But
-it leaves #97's actual defect in place: no external gate can read it, and it helps only a
-human who opens the file. It converts the bug into a documentation improvement.
+The rejected alternative — `ReviewResult` and digest only — was cheaper and needed no
+cross-repo coordination, but it leaves #97's actual defect in place: no external gate can
+read it, and it helps only a human who opens the file. That converts the bug into a
+documentation improvement.
 
-**This decision is the one genuine blocker in the slice.** It changes whether Part 2 has a
-cross-repo dependency, and therefore its task shape. Task breakdown should not begin on
-Part 2 until it is answered. Parts 1 and 3 are unaffected and can proceed.
+**Shipping it is not blocked on cf (verified 20260913).** Measured directly: a review
+artifact carrying `verdictSource: derived` passes `cf validate frontmatter` with zero
+findings, so cf tolerates the unknown key rather than rejecting it. Squadron can therefore
+emit the key immediately, and cf adopting it is a follow-on that makes the key *useful*
+rather than a precondition that makes it *safe*.
 
-**D7 — Carry the boolean, not a reason string (Architect, contingent on D6 taking the
-frontmatter route).** `fallback_used` does not distinguish *why* the parse failed — #96's
-newline-free shape and an ordinary reshaped summary both set it. A reason string would
-therefore need a vocabulary, and every consumer would have to switch on it, which is
-string-dispatch on a field whose values are not yet known. Emit `stated | derived` as a
+The coordination that remains is real but different in kind: until cf's review gate reads
+the key, a derived PASS still clears that gate. Squadron's half closes the information gap;
+CF's half closes the policy gap. File the cf issue when Part 2 lands so the key exists to
+point at, and do not hold Part 2 for it.
+
+**D7 — Carry the two-value vocabulary, not a reason string (Architect).**
+`fallback_used` does not distinguish *why* the parse failed — #96's newline-free shape
+and an ordinary reshaped summary both set it. A reason string would therefore need a
+vocabulary, and every consumer would have to switch on it, which is string-dispatch on a
+field whose values are not yet known. Emit `stated | derived` as a
 closed two-value vocabulary defined once as an enum, per `CLAUDE.md`'s rule against
 scattering comparison values. The *reason* stays in the digest, which is where a human
 triages.
@@ -368,9 +373,9 @@ pass today.
 5. The nothing-parsed branch's behavior is explicitly tested, whichever D8 chooses.
 6. The `to_dict()` JSON contract and the frontmatter agree — no surface says `stated`
    while another says `derived`.
-7. If D6 takes the frontmatter route, the context-forge coordination is recorded (issue or
-   equivalent) before the key ships, so cf's schema does not reject squadron's own
-   artifacts.
+7. A cf issue is filed once the key ships, asking CF's review gate to read it. Not a
+   precondition — cf tolerates the unknown key today (D6, verified) — but #97 is not
+   fully closed until a consumer acts on the value.
 
 ## Part 3 — Frontmatter gate fails closed (#98)
 
@@ -450,9 +455,9 @@ only the diagnosis. Worth a CHANGELOG line, since it changes when commits fail.
 - **918** — Part 1 builds on the newline-free digest indicator and the note left at
   [persistence.py:197](src/squadron/review/persistence.py#L197); the #92 non-reproduction
   is what scopes that issue out of this slice.
-- **Context Forge** — Part 2's frontmatter key, if D6 takes that route, is a schema
-  addition requiring cf coordination. This is the slice's only cross-repo dependency and
-  the reason Part 2 is sequenced last.
+- **Context Forge** — Part 2 emits `verdictSource` for CF's review gate to read. Verified
+  non-blocking: cf accepts the unknown key today, so squadron ships independently and CF
+  adopts on its own schedule. The gap stays open until it does (see Risks).
 - **Amoeba** — consumes `verdict` for routing and auto-continues on PASS; the provenance
   key is what lets it stop doing so on a derived one. Consumer, not a dependency.
 - **305** — its findings-addressed gate reads findings; a parse that recovers 4 findings
@@ -475,15 +480,17 @@ only the diagnosis. Worth a CHANGELOG line, since it changes when commits fail.
   afterthought.
 - **Part 3 will start failing commits that pass today.** By design (D13). The message
   quality is what separates "the gate works" from "the gate is broken."
-- **D6 is unresolved.** Part 2 cannot be broken into tasks until the PM answers. Parts 1
-  and 3 are independent of it.
+- **Part 2 half-fixes #97 until context-forge reads the key.** Squadron emitting
+  `verdictSource` makes a derived verdict visible; it does not stop CF's gate from clearing
+  on it. That is the correct split of responsibility (D9 — squadron records, consumers
+  decide), but the issue should not be closed as fixed on squadron's half alone.
 
 ## Effort
 
 3/5 overall. Part 1 is the bulk — the normalizer is small in lines but exacting, and the
 three measured traps plus the verdict-fusion fix each need their own test. Part 2 is small
-once D6 is answered, and its coordination step is more calendar than work. Part 3 is small
-and self-contained.
+in squadron (one frontmatter key, one enum, the read-back tests) and, with cf tolerance
+verified, carries no blocking coordination. Part 3 is small and self-contained.
 
 ## Verification walkthrough
 
