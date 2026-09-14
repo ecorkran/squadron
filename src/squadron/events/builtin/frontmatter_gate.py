@@ -19,10 +19,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import signal
 from typing import Any, cast
 
+from squadron.core.process_group import kill_process_group
 from squadron.events import EventType, register_event_action
 from squadron.events.contexts import CommitContext, EventContext
 from squadron.pipeline.models import ActionResult, ValidationError
@@ -38,21 +37,6 @@ _COULD_NOT_RUN_MESSAGE = (
     "cf could not run the validation — if this repo is not a registered cf "
     "project, run 'cf init' once, or disable this action in events.yaml."
 )
-
-
-async def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
-    """Kill *proc*'s whole process group and reap it, so no zombie or orphan
-    is left. Mirrors ``bash_tool.py``'s ``_kill_process_group`` exactly (D14)
-    — duplicated rather than imported, since sharing it would create a
-    dependency from ``events`` onto ``tools`` for one small helper.
-    """
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    except ProcessLookupError:
-        # The process exited on its own between the timeout firing and this kill. Nothing to
-        # signal; the wait below still reaps it.
-        pass
-    await proc.wait()
 
 
 def _worktree_cause_message(staged_count: int) -> str:
@@ -106,7 +90,7 @@ class FrontmatterGateAction:
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except TimeoutError:
-            await _kill_process_group(proc)
+            await kill_process_group(proc)
             message = f"cf validate frontmatter timed out after {timeout}s and was killed."
             _logger.warning("frontmatter-gate: %s", message)
             return ActionResult(success=False, action_type=self.name, outputs={}, error=message)

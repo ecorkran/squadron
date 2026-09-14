@@ -1825,3 +1825,95 @@ class TestVerdictSourceResolution:
 
         assert result.verdict is Verdict.UNKNOWN
         assert result.verdict_source is None
+
+
+class TestAnchorEndRegex:
+    """Code review F004: ``_ANCHOR_END_RE``'s load-bearing claim — an anchor
+    ``#`` is followed directly by its slug's first letter, not a space —
+    pinned in isolation, independent of the fixture.
+    """
+
+    def test_anchor_fused_directly_to_prose_is_matched(self) -> None:
+        text = "location: doc.md#Anchor-TextMoreProseHere"
+
+        match = _parsers_module._ANCHOR_END_RE.search(text)
+
+        assert match is not None
+        assert match.group() == "#Anchor-TextMoreProse"
+
+    def test_anchor_already_followed_by_a_space_is_not_matched(self) -> None:
+        """If a space already separates the anchor from following prose,
+        there is nothing to fix — the regex must not fire and risk
+        corrupting already-well-formed text. Uses an all-lowercase anchor
+        slug so no capital-letter word boundary exists inside the slug
+        itself for the lookahead to (mis)fire on — a slug containing an
+        internal capitalized word (e.g. 'Anchor-Text more prose') is a
+        different, real edge case pinned separately below.
+        """
+        text = "location: doc.md#anchor-text more prose"
+
+        match = _parsers_module._ANCHOR_END_RE.search(text)
+
+        assert match is None
+
+    def test_anchor_slug_with_internal_capital_word_before_a_space_is_partially_matched(
+        self,
+    ) -> None:
+        """A real, if unusual, edge case: an anchor slug containing an
+        internal capitalized word (kebab-case anchors commonly do, e.g. the
+        real fixture's '#Part-1--Jail-exclusions...') followed by a space
+        lets the lookahead fire on that internal word boundary rather than
+        at the space. Harmless in practice — a fully newline-free response
+        can never have a space here to begin with, since the specimen has
+        none anywhere — but documented so a future reader does not mistake
+        it for the space-terminated no-op case above.
+        """
+        text = "location: doc.md#Anchor-Text more prose"
+
+        match = _parsers_module._ANCHOR_END_RE.search(text)
+
+        assert match is not None
+        assert match.group() == "#Anchor-"
+
+    def test_anchor_end_break_terminates_the_location_value_at_the_slug(self) -> None:
+        """End-to-end through _normalize_line_structure: the inserted break
+        must land exactly at the slug boundary, not mid-slug or past it."""
+        text = (
+            "## SummaryPASS\n\n## Findings\n"
+            "### [PASS] Titlecategory: clocation: a.md#Some-AnchorMore prose follows."
+        )
+
+        normalized, _inserted = _parsers_module._normalize_line_structure(text)
+
+        assert "a.md#Some-Anchor\nMore prose follows." in normalized
+
+
+class TestFenceMarkerIsolation:
+    """Code review F004: ``_insert_around``'s two-pass fence-marker isolation
+    (the ``#91`` guard), pinned in isolation rather than only indirectly
+    through the fence-masking test.
+    """
+
+    def test_already_isolated_fence_markers_are_a_no_op(self) -> None:
+        text = "prose\n```\ncode\n```\nmore prose"
+
+        result, inserted = _parsers_module._insert_around(text, _parsers_module._FENCE_MARK_RE)
+
+        assert result == text
+        assert inserted == 0
+
+    def test_fused_opener_and_closer_are_both_isolated(self) -> None:
+        text = "prose```code```more prose"
+
+        result, inserted = _parsers_module._insert_around(text, _parsers_module._FENCE_MARK_RE)
+
+        assert result == "prose\n```\ncode\n```\nmore prose"
+        assert inserted == 4
+
+    def test_tilde_fence_markers_are_isolated_too(self) -> None:
+        text = "prose~~~code~~~more prose"
+
+        result, inserted = _parsers_module._insert_around(text, _parsers_module._FENCE_MARK_RE)
+
+        assert result == "prose\n~~~\ncode\n~~~\nmore prose"
+        assert inserted == 4

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -249,7 +250,7 @@ class TestSubprocessTimeout:
         kill_mock = AsyncMock()
         with (
             patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=proc)),
-            patch("squadron.events.builtin.frontmatter_gate._kill_process_group", new=kill_mock),
+            patch("squadron.events.builtin.frontmatter_gate.kill_process_group", new=kill_mock),
             caplog.at_level("WARNING", logger="squadron.events.builtin.frontmatter_gate"),
         ):
             result = await FrontmatterGateAction().execute(
@@ -283,7 +284,7 @@ class TestSubprocessTimeout:
 
         with (
             patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=proc)),
-            patch("squadron.events.builtin.frontmatter_gate._kill_process_group", new=AsyncMock()),
+            patch("squadron.events.builtin.frontmatter_gate.kill_process_group", new=AsyncMock()),
         ):
             timeout_result = await FrontmatterGateAction().execute(
                 _commit_context(str(tmp_path), staged_paths=("a.md",))
@@ -363,3 +364,41 @@ class TestRealCfIntegration:
             await _run_cf(["project", "rm", tmp_path.name, "--yes"], cwd=str(tmp_path))
 
         assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_real_cf_json_output_carries_an_int_files_checked_key(self, tmp_path: Path) -> None:
+        """Drift guard (code review F001): the gate's fail-closed logic hard-
+        depends on cf's ``--json`` output carrying an int ``filesChecked``
+        key. If cf ever renames or restructures it, every commit gate would
+        fail with the "could not be read" message and nothing would catch it
+        before shipping — this test is that catch, matching
+        test_schema_drift.py's fail-not-skip posture for the same reason.
+        """
+        self._require_cf()
+        doc_root = tmp_path / "project-documents" / "user" / "reviews"
+        doc_root.mkdir(parents=True)
+        clean_doc = doc_root / "zz-test-drift.md"
+        clean_doc.write_text(
+            "---\ndocType: review\nproject: test-project\nstatus: complete\n"
+            "dateCreated: 20260101\ndateUpdated: 20260101\n---\nbody\n"
+        )
+        await _run_cf(["init", "--lite", "--no-ide"], cwd=str(tmp_path))
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "cf",
+                "validate",
+                "frontmatter",
+                "--json",
+                str(clean_doc),
+                cwd=str(tmp_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout_bytes, _stderr_bytes = await proc.communicate()
+        finally:
+            await _run_cf(["project", "rm", tmp_path.name, "--yes"], cwd=str(tmp_path))
+
+        payload = json.loads(stdout_bytes.decode())
+        assert "filesChecked" in payload
+        assert isinstance(payload["filesChecked"], int)
+        assert payload["filesChecked"] == 1
