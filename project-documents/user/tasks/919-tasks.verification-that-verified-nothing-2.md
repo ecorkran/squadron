@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/919-slice.verification-that-verified
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [917, 918]
 interfaces: []
-status: not_started
+status: complete
 dateCreated: 20260914
 dateUpdated: 20260914
 ---
@@ -428,12 +428,12 @@ Effort: 1.
 
 ### T3.11 — Verify and commit Part 3
 
-- [ ] `uv run pytest tests/events/builtin/test_frontmatter_gate.py -v` green,
+- [x] `uv run pytest tests/events/builtin/test_frontmatter_gate.py -v` green,
       and `uv run pytest -q` for the full suite.
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
       clean.
-- [ ] Commit: `fix(events): fail closed when cf checks zero staged files (#98)`
-- [ ] Effort: 1
+- [x] Commit: `fix(events): fail closed when cf checks zero staged files (#98)`
+- [x] Effort: 1
 
 ---
 
@@ -441,20 +441,20 @@ Effort: 1.
 
 ### T4.1 — Full-suite gate and slice closeout
 
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
       clean across the whole tree — zero pyright errors is a merge blocker
       per `CLAUDE.md`.
-- [ ] `uv run pytest -q` full suite green. Compare the pass count against the
+- [x] `uv run pytest -q` full suite green. Compare the pass count against the
       design's stated baseline (3698 passed, 4 skipped in the default
       checkout before this slice) and confirm the new count reflects only
       this slice's additions, with no unexplained change in skip count.
-- [ ] Confirm all three parts' commits are present on the slice branch in
+- [x] Confirm all three parts' commits are present on the slice branch in
       order (T1.10, T2.7, T3.11).
-- [ ] Update the slice design's frontmatter `status` field from
+- [x] Update the slice design's frontmatter `status` field from
       `not_started` to `complete` (or the project's equivalent terminal
       status) once all tasks above are checked off — delegate the checklist
       update itself to the `task-checker` agent per `CLAUDE.md`.
-- [ ] Write the DEVLOG entry for this slice's completion per
+- [x] Write the DEVLOG entry for this slice's completion per
       `prompt.ai-project.system.md`'s Session State Summary guidance,
       covering all three parts and referencing #96, #97, #98.
 

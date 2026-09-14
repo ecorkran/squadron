@@ -6,8 +6,8 @@ parent: 900-slices.maintenance-and-refactoring.md
 dependencies: [917, 918]
 interfaces: []
 dateCreated: 20260913
-dateUpdated: 20260913
-status: not_started
+dateUpdated: 20260914
+status: complete
 ---
 
 # Slice Design: Verification That Verified Nothing
@@ -792,3 +792,13 @@ uv run pytest
 
 Zero pyright errors is a merge blocker. The full suite baseline before this slice is
 3698 passed, 4 skipped in the default checkout.
+
+**Actual, 20260914 (all three parts landed):** `ruff format --check` and `ruff check` both
+clean (525 files); `pyright` 0 errors, 0 warnings; `pytest -q` — **3941 passed, 4 skipped**
+in 454.68s. The +243 passed count is this slice's own new tests across all three parts
+(baseline reconciliation: no unexplained change — skip count unchanged at 4, and every new
+test added in T1.1-T3.11 is accounted for by this slice's commits). Four pre-existing,
+unrelated `RuntimeWarning: coroutine '...' was never awaited` warnings appeared in CLI
+test mocks (`tests/cli/commands/test_run.py`, `test_run_pipeline_lazy.py`,
+`test_import_boundaries.py`) — verified pre-existing (unrelated to this slice's files) and
+not investigated further, out of scope.
