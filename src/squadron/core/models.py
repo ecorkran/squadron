@@ -62,6 +62,11 @@ class AgentConfig(BaseModel):
     auth_token: str | None = None
     base_url: str | None = None
     cwd: str | None = None  # SDK and API agents: working directory
+    # SDK agents only: source directory for conventions (CLAUDE.md) when it differs from
+    # `cwd` (e.g. a scratch worktree holding reviewed code vs. the trusted checkout holding
+    # project conventions). None means "same as cwd" — today's behavior for every existing
+    # caller (slice 382, design D1).
+    convention_root: str | None = None
     setting_sources: list[str] | None = None  # SDK agents: e.g. ["project"]
     # SDK and API agents: tool whitelist. Note the vocabularies differ — SDK names
     # (e.g. "Read") vs. squadron registry names — see slice-262 decision D1.
