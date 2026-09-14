@@ -5,7 +5,7 @@ project: squadron
 audience: [human, ai]
 description: Append-only log of process decisions and design reasoning that has no home in other document types
 dateCreated: 20260716
-dateUpdated: 20260912
+dateUpdated: 20260914
 status: in_progress
 ---
 
@@ -19,6 +19,16 @@ that drift. When the file exceeds the standard size limit, split per
 file-naming-conventions (`-1`, `-2`, …).
 
 # Entries
+
+## 20260914 — A step gated on a resource the work cannot produce is a precondition or an issue, never a task
+
+**Context:** Slice 382's task breakdown carried Task H.1, a live verification walkthrough of `sq review pr` requiring an open pull request on `ecorkran/squadron` to review. No open PR existed when the breakdown was written, none existed when the slice was implemented, and the work itself had no way to produce one — the repository has had three pull requests in its history, all merged. H.1 was reviewed at task-review time, survived into the final breakdown, sat unstartable through the whole of Phase 6, and was dropped at closeout. Slice 381's live run had already hit the same absence a day earlier, and the breakdown's own text acknowledged it ("381's live run found none open; re-derive at execution time") without concluding that the task was therefore unwritable.
+
+**Decision:** A checklist item must be completable by doing the work. If a step depends on a resource outside the work's control — an artifact that does not exist and cannot be created by the slice, an external event, a wait period, another party's action — it does not go in the task file. It goes in one of two places: a **precondition**, stated in the breakdown's context section before the checklist begins, so the dependency is visible before anyone starts; or a **follow-up issue**, logged and numbered, linked from whatever decision deferred it. When an uncompletable item is discovered already sitting in a task file, drop it explicitly, record the reason and any coverage gap it leaves, and mark it `[x]` rather than leaving it `[ ]`.
+
+**Rationale:** An item that can never be checked off is indistinguishable, in the checkbox state the tooling reads, from an item nobody has gotten to yet. That corrupts the one signal the checklists exist to carry, and the corruption is silent — progress views and completion sweeps cannot tell a blocked-forever task from a pending one. The cost is also paid twice: once when the item consumes review attention during task review (H.1 was read by a reviewer and passed), and again at closeout when someone has to adjudicate it under time pressure. Writing the dependency as a precondition instead surfaces it at the only moment it can still change the plan — before the breakdown is committed to. Verification that genuinely requires live external state is real and should not be discarded; it is simply not schedulable as part of the slice that needs it, and pretending otherwise produces neither the verification nor an honest record that it is missing.
+
+**Follow-ups:** Slice 382 task file 3 (`382-tasks.review-a-pr-3.md`), Part H — H.1 and H.2 dropped with reasons recorded inline. DEVLOG entry for 20260914 records the resulting coverage caveat: the two-root split, `--no-tools` bypass, concurrent worktree paths, and checkout-unchanged-after-failure have automated coverage, while orphan sweep and D8 settings isolation have unit coverage but no live-run evidence — the design's six-step walkthrough should be run before `sq review pr` is relied on against real pull requests. No issue filed for the walkthrough itself; it becomes runnable the next time an open PR exists on the repository.
 
 ## 20260912 — GitHub Enterprise SSO stays `gh`'s problem; squadron surfaces the one visible symptom verbatim
 

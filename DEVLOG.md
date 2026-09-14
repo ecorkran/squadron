@@ -47,12 +47,6 @@ failure (`tests/cli/test_review_pr_worktree.py`). Orphan sweep and D8 settings i
 have unit coverage from file 1 but no live-run evidence. **Before relying on
 `sq review pr` against real PRs, run the design's six-step walkthrough.**
 
-A task that cannot be completed should not be written as a task. H.1 was gated on a
-resource that did not exist and could not be produced by the work itself; it sat
-unstartable through the whole slice. Future breakdowns: if a step depends on something
-outside the work's control, it is a precondition or a follow-up issue, not a checklist
-item.
-
 At close: 3962 passed, 4 skipped; `ruff format`/`ruff check`/`pyright` clean. The 3
 failures in `tests/documents/test_schema_drift.py` are cf issue #88, pre-existing and
 unrelated.
