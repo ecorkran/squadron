@@ -220,8 +220,6 @@ committed there, so no gate was relied on.
 Part 1 is complete except that T1.13's commit landed before this verification; Parts 2
 and 3 remain.
 
-## 20260913
-
 ### Slice 918 task breakdown (Phase 5)
 
 Design converted to `user/tasks/918-tasks.review-grounding-{1,2}.md`, split at the
@@ -307,6 +305,104 @@ that the exclusion is best-effort against it.
 `sq install-commands`' destructive delete, the three unimported runtime deps, and the
 undeclared `rich` were all verified still present. The two dependency findings were routed to
 the existing 907 Optional Dependency Split entry rather than split across two slices.
+
+### Slice 381 implementation (Phase 6)
+
+All nine parts implemented and committed on `381-slice.code-host-adapter-and-pr-target-resolution`,
+forked from and merging into `squadron-pr`. Full suite 3817 passed; ruff clean across 522 files;
+pyright zero over everything the slice touched. The three `tests/documents/test_schema_drift.py`
+failures are external — see the cf note below.
+
+**Four corrections where the design and the code disagreed.** Each was put to the PM rather than
+resolved silently. (1) `fetch_pull_request_refs` was fixed as taking a `PullRequestRecord`, but the
+post-fetch check needs `base_sha`, which the design deliberately places on `ResolvedPullRequest` as
+"the base tip the host reported at resolution". The method now takes the resolved pull request and
+reads the record from it; nothing is duplicated. (2) H.4 names `build_github_host` the single patch
+point, but `pr.py` first built one `SubprocessRunner` and used it for both the host and
+`list_remotes` — so patching the factory redirected only the `gh` calls while git enumeration
+shelled out for real, which is precisely how the enterprise test read the developer's own checkout
+and asserted against a host it never exercised. `CodeHost` gained a read-only `runner` property and
+`pr.py` takes its git work through it. (3) The cwd extraction from `review.py`, carried over from
+Phase 5. (4) `ForeignRepositoryError` read "no remote points at ecorkran/squadron; remotes are:
+origin -> ecorkran/squadron" when the only mismatch was the host; both sides now name theirs.
+
+**A gate that could not fail.** `squadron.frontmatter-gate` shells out to `cf validate frontmatter`
+with the staged paths. In a registered worktree cf silently skips out-of-root paths, reports
+`filesChecked: 0`, and exits 0 — so the gate reported success having validated nothing, and every
+`frontmatter-gate: ok` in this worktree was vacuous. Filed as context-forge#88 with the mechanism
+and a reproduction; `sq-base` filed squadron#98 for the squadron-side defense (fail closed when
+`filesChecked` is 0 and staged paths were non-empty) and confirmed `review-verdict-gate` is
+unaffected, since it parses frontmatter in-process. The same worktree-root inconsistency is
+context-forge#87's root cause. Bare `cf validate frontmatter` from the worktree checks all 507
+documents with zero findings, so 381's own documents are clean; the walkthrough records running it
+bare before merging rather than trusting the gate.
+
+**Live evidence, and what it could not show.** `ecorkran/squadron` has three pull requests (64, 66,
+83), all merged, all cross-repository from contributor forks — jakez-gh's two Windows fixes and
+mikemikimike's diff-only review hardening. None is open. On a merged pull request the four
+equivalent target forms cannot print a record: its base has necessarily advanced past the
+`baseRefOid` recorded at resolution, so the post-fetch check correctly raises
+`RefMovedSinceResolutionError` naming both shas (`4edf5f17…` expected, `796b23ac…` found — the
+latter being `main` after slice 917's DEVLOG commit). That the four forms fail *identically*, on the
+exactness check rather than on resolution, is itself evidence they resolve to one record, and a live
+demonstration that `baseRefOid` makes the check exact rather than heuristic. Both namespaced refs
+were written (`refs/squadron/pr/origin/83/{base,head}`, head at `b67cf55…` matching the fixture),
+and `git for-each-ref refs/heads` and `git status --porcelain` were byte-identical before and after
+— the no-mutation guarantee holding live, not only under test. The success path stays covered by
+`tests/cli/test_pr_show.py` over both hosts; 386's run against this initiative's own pull request
+closes the live gap.
+
+**No live GitHub Enterprise host was available.** The GHE evidence is the parametrized suite: every
+host-dependent case runs over `github.com` and `ghe.corp.example`, with a two-host `hosts.yml`
+fixture so the CLI's own `read_gh_hosts()` is what the enterprise leg exercises. A recorded GHE run
+closes that gap when a host exists.
+
+**Fixtures came off the wire**, not from memory: PR resolution, repository record, operator
+identity, REST 404 and 422, GraphQL `NOT_FOUND`, and `reviewThreads` both empty and populated, with
+the `gh` version recorded beside them. The populated threads case could not come from this
+repository — no pull request here has a single review thread — so it was captured from a public
+repository and its provenance noted, since the shape being pinned is GitHub's schema rather than
+squadron's data.
+
+**Carried forward.** `github_cli.py` is 578 lines against the ~300 guideline. Queries and response
+parsing were already split out; what remains is the class and its transport, and splitting the
+write operations or the classifier from the class they belong to would trade a line count for a
+worse boundary. Recorded as a judgment rather than forced. Issue #95 (two-token `repo number` form)
+remains open, deliberately unaddressed. Slice 918 will change `materialize()` and the `ToolFactory`
+contract; 381 does no tool binding, so they do not interact today — but 385's tool-enabled review
+paths would inherit that contract.
+
+### Slice 381 task breakdown (Phase 5)
+
+Wrote `user/tasks/381-tasks.code-host-adapter-and-pr-target-resolution-{1,2}.md` (`cc253771`).
+Nine parts, A-I, sequenced as the design's Implementation Notes give them, each part ending in
+its own verify-and-commit task so the branch stays landable throughout: the process-runner seam
+and the fake runner (A), models/errors/protocol (B), target grammar (C), remote enumeration and
+selection (D), `gh` config plus the two doctor checks (E), GitHub reads with argv pinning and
+structural failure classification (F), fetch and range with the no-mutation assertion (G), write
+operations and `sq pr show` (H), live evidence and closeout (I). Test tasks sit immediately after
+the implementation they cover rather than batched at the end. Split at 815 lines, on the Part F
+seam between pure-local work and host I/O: 452 and 395 lines, part 1 carrying the shared context
+and constraints and part 2 pointing back to it.
+
+Two design statements did not survive verification against the code, and both are corrected in
+the task file rather than passed through. The design's success criteria named an "existing test"
+asserting `run_all_checks` makes no subprocess call; no such test exists, and the invariant is
+also narrower than stated, since `run_all_checks` calls `shutil.which` freely and resolves
+`git_hooks_path` in the caller precisely to keep a subprocess out of the module. The breakdown
+now writes that test, with the invariant stated as it actually holds. Second, the design said
+`sq pr show --cwd` "resolves as `sq review code` does" without saying how: that logic is
+`_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show`
+has no use for. Put to the PM with three options; the call was to extract the cwd half into a
+shared CLI helper and leave `_resolve_review_cwd` a thin wrapper with an unchanged signature.
+That extraction is sequenced early, in the process-runner part, and committed on its own.
+
+Consequence for coordination: this slice now makes two edits `sq-base` asked to be warned about,
+not one -- registering `pr_app` in `app.py`, and the cwd helper extraction in `review.py`. Both
+are announced before they are made, and the extraction is behavior-preserving with the existing
+review suite as the check. Next: Phase 5 review of the task breakdown, then Phase 6
+implementation on branch `381-slice.code-host-adapter-and-pr-target-resolution` forked from
+`squadron-pr`.
 
 ---
 
@@ -428,9 +524,144 @@ line-bounds warnings on every run. The glm53 run produced 9 real findings and a 
 verdict. One kimi27 run returned prose-only output with no formatted block — the #92 shape,
 which this slice makes legible rather than recovers.
 
----
+### Slice 381 design (Phase 4)
 
-## 20260912
+Wrote `user/slices/381-slice.code-host-adapter-and-pr-target-resolution.md`. Layout: a
+`core/process_runner.py` seam (protocol, real runner, fake runner with `write_calls()`, distinct
+not-found and timeout errors) and a new `codehost/` package (models, errors, protocol, targets,
+remotes, refs, `github_cli.py`, `github_config.py`) with `cli → codehost → core` as the only
+import direction and a test walking both graphs. Two facts checked live shaped it: `gh api`
+failures are classifiable structurally (REST `status`, GraphQL `errors[].type`, exit 4 for auth
+per `gh help exit-codes`), so classification never matches message text; and
+`refs/pull/<n>/head` fetches for merged and cross-repository PRs on `ecorkran/squadron`, so a
+fork head needs no second remote. Pinned: the protocol gains one local read-only operation,
+`serves_host(hostname)`, because bare-form resolution must know which remotes belong to the host
+an implementation serves (fork-with-`upstream` refuses; GitHub plus a GitLab mirror resolves);
+`baseRefOid` makes "base moved since resolution" an exact post-fetch check, one error with a
+base/head role; branch-exists returns `False`, never raises; local refs are
+`refs/squadron/pr/<remote>/<n>/{base,head}`, force-updated and never cleaned; comment and PR
+bodies go over stdin; write operations are implemented and argv-pinned here but no 381 command
+calls them. PM edits after review: a sixth target form `repo#n` (owner taken from the remotes),
+`repo n` deferred as issue #95, and an explicit GitHub Enterprise section (hosts come from
+`hosts.yml` keys and remote URLs, `--hostname` on every call, tests parametrized over
+`github.com` and an enterprise host, no live GHE available). `sq pr show [TARGET] [--cwd]
+[--json]` is the proving consumer; two doctor rows
+(`gh` on PATH, hosts file readable) are WARN-level presence checks. Live evidence target is PR
+83 (merged, cross-repository). Design review: glm-5.3 was too slow to finish; kimi and glm-5.2
+returned quickly, glm-5.2 PASS with one concern and two notes, all dispositioned (`stdin` on the
+runner protocol signature, `MAX_DISCUSSION_PAGES = 10`, and the `repo#n` form plus the
+`serves_host` operation recorded in the architecture document). Next: Phase 5 task breakdown
+for 381; announce the `app.py`
+registration edit to `sq-base` before making it.
+
+### Initiative 380 slice plan (Phase 3)
+
+PM accepted the architecture at CONCERNS and advanced to Phase 3. Wrote
+`user/architecture/380-slices.pull-request-workflow.md`: six slices, 381-386. Foundation is
+the code-host adapter (381) with `sq pr show <target>` as its read-only proving consumer, so
+the boundary is verifiable before any model runs. 382 (`sq review pr`) ships before persistence
+and uses the existing not-persistable warning as the stated bridge; 383 (PR-keyed persistence,
+save-target contract absorbing arch and pipeline step-keyed saves) waits for 916 and 917 on
+`main` and for any context-forge schema change `cf validate frontmatter` demands; 384 (post)
+depends on 383; 385 (`sq pr create`) depends only on 381 and is placed after 384 for coherence;
+386 is parity, docs, and a recorded live run on this initiative's own PR. Future work holds the
+direct-API implementation, pipeline PR input, inline comments, other hosts, and cross-repo
+targets. Next: Phase 3 review of the slice plan, then Phase 4 design of 381.
+
+### Initiative 380 architecture review, glm-5.3 rounds
+
+PM ran `--model glm53`: 20 tool calls, read slices 905 and 916 and the persistence and review
+client code, and every finding was grounded. Round five (13 findings) and round six (14, all
+new) dispositioned into the doc. Pinned: the protocol list is exhaustive and now includes
+default branch, branch-exists-on-host, and find-and-update own comment; doctor stays within
+905's pure-check contract (presence only; auth and reachability checked at invocation); the
+artifact sha comes from the PR record, not HEAD; every convention input (rules, project
+instructions) loads from the operator's checkout and only reviewed code from the worktree;
+"latest saved review" is scoped to the base-to-head range; sections without an input carry an
+explicit no-input line; the outer fence is longer than any inner fence run and the label is
+neutralized; traceability is guaranteed for the deterministic parts only; the process-runner
+seam has a timeout and hang is an enumerated mode; foreign-repo targets are refused while
+explicit forms resolve against any matching remote; the unplanned-repo location is
+`review.external_reviews_dir` with a new `--reviews-dir` override (`--output-path` keeps its
+JSON-dump meaning); PR filenames use a non-numeric prefix so `{index}-review.*` consumers never
+match; `cf validate frontmatter` and the schema-drift test gate the PR frontmatter shape;
+comment idempotency is per authenticated login; `sq pr create` never pushes; worktrees
+initialize submodules; the save-target contract is structural and also absorbs the pipeline
+action's step-keyed shape. Current State corrected (rules fallback is real; three filename
+shapes exist today). Not re-run after round six; gate decision to the PM.
+
+### Initiative 380 architecture review, rounds three and four
+
+Round three (minimax-m3) returned FAIL, but quoted phrases removed from the document two
+revisions earlier and re-raised findings the current file states explicitly; the run also cited
+`942-analysis.tech-debt-audit.md`, so it was reading around the tree, and the archived prior
+reviews beside the live artifact are the plausible source. Filed as issue #94. Two genuinely
+new items were pinned: "alive" for the orphan sweep means the worktree's lock file names a
+process that still exists, and every host write first requires the adapter's identify-operator
+call to return a login. `--model sonnet` cannot run here (SDK profile refuses to launch inside a
+Claude Code session); `gpt54` returned 429 quota exhausted. Round four (kimi27) was grounded,
+no stale quotes, CONCERNS: every finding asks for a config key name, default path, or interface
+signature that the Phase 2 prompt tells the architect to leave to slice design. Stopping at four
+rounds. Gate stands at CONCERNS pending PM decision on whether to accept the doc as
+architecture-level and proceed to the 380 slice plan.
+
+### Initiative 380 architecture review, second round
+
+Re-review after the first disposition returned CONCERNS again: 10 concerns, 1 note, all new.
+Pinned: base and head are both fetched into namespaced refs before merge-base; comment
+idempotency is a hidden marker carrying the PR key, discovered through the host, with the
+lookup-then-post race acknowledged (next post updates the earliest marked comment and reports
+extras); each invocation sweeps orphaned squadron worktrees whose run is dead; the direct-API
+GitHub implementation is designed for, not scheduled, token from the environment when built;
+the integration branch is a PR base only if the adapter confirms it exists on the host, else
+creation fails rather than falling to `main`; `sq pr create` writes the section headings itself
+and validates them after the model fills prose; the save-target contract is filename stem,
+target frontmatter fields, and reviews directory; rules-source provenance is one additive
+optional frontmatter field. Protocol operations renamed by intent ("list unresolved review
+discussions"). The note's claim that initiative 360 owns review frontmatter is unsupported;
+917 is the live owner of persistence and the field is sequenced after it.
+
+### Initiative 380 architecture review disposition
+
+`sq review arch 380` (minimax-m3) returned CONCERNS: 11 concerns, 1 note. All addressed in the
+doc except one factual miss. Pinned as architecture: a save-target contract on the persistence
+side with the arch review migrated off its minimal-`SliceInfo` fabrication in the same slice;
+PR metadata enters through one optional input on the existing code template, rendered by the
+code prompt builder as a single labeled fenced block with a shared truncation limit; PR review
+frontmatter keeps `docType: review` with `sourceDocument` as the PR URL and a `pr` record, no
+slice fields, PR-keyed filename; scratch-worktree invariants (one per invocation, per-run id,
+registered, removed on success/failure/timeout, git-timeout bounded); PR base order is
+`--base`, then integration branch, then host default; tasks feed "how it was verified" and
+"known gaps"; composition uses the existing non-review one-shot path in
+`pipeline/summary_oneshot`; `gh` failure tests are unit-level through an injected
+process-runner seam. The "one implementation" over-engineering concern is answered by naming
+the concrete second: GitHub over its API for CI runs without `gh`. Rules degradation is now
+"reported, not suppressed" since `resolve_rules_dir` silently falls back to
+`~/.config/squadron/rules/`. The finding's claim that metrology keys on `slice:` in
+`capture.py`/`discovery.py` is unsupported by the code and was not acted on.
+
+### Initiative 380 architecture (Phase 2)
+
+Wrote `user/architecture/380-arch.pull-request-workflow.md` for **Pull Request Workflow**,
+initiative plan entry 13, added the same day. Three capabilities on one new boundary: a
+code-host adapter protocol (GitHub over the operator's `gh` first), `sq review pr <target>` as
+the existing code review with adapter-resolved inputs, and `sq pr create` composing a title and
+body from commits, slice artifacts, and the latest saved review. Existing flows are untouched
+and no PR is ever required.
+
+Grounding from the tree: nothing under `src/squadron` calls `gh` or a hosting API; persistence
+is `SliceInfo`-keyed, and arch reviews already fabricate a minimal `SliceInfo` to save, a
+pattern the design refuses to extend to PRs. Slice 916's own motivation names PR-centric
+enterprise use, and its merge-base `--diff` semantics are the range rule a PR review adopts.
+Decisions recorded as principles: the adapter resolves and the engine reviews; PR identity is
+a typed record produced once; tool-enabled reviews read a squadron-owned scratch worktree,
+never the operator's checkout; host writes are separate explicit operations with dry-run and
+identity refusal; PR-keyed persistence is sequenced after 916 and 917.
+
+Worktree setup: `git.integration_branch=squadron-pr` set in the per-checkout personal config
+(now gitignored), branch pushed; 380 work merges into `squadron-pr`, not `main`. PM ruled the
+cf worktree index range (960-999) does not constrain 380's numbering. Next: Phase 2 review,
+then the 380 slice plan.
 
 ### Slice 917 design (Phase 4)
 

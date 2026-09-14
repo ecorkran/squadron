@@ -107,7 +107,7 @@ class TestConfigCwd:
                 side_effect=mock_get_config,
             ),
             patch(
-                "squadron.cli.commands.review.find_git_root",
+                "squadron.cli.commands.cwd_resolution.find_git_root",
                 return_value=".",
             ),
         ):

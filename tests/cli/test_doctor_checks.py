@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
     CONTEXT_FORGE_PACKAGE,
     GIT_HOOKS_PATH,
+    GITHUB_CLI_INSTALL_HINT,
     SECTION_CONFIG,
     SECTION_INSTALL,
     SECTION_INTEGRATIONS,
@@ -25,6 +27,8 @@ from squadron.cli.commands.doctor_checks import (
     check_codex_cli,
     check_context_forge,
     check_git_hooks,
+    check_github_cli,
+    check_github_cli_hosts_file,
     check_models_toml,
     check_project_env,
     check_provider_profiles,
@@ -34,6 +38,7 @@ from squadron.cli.commands.doctor_checks import (
     check_squadron_install,
     run_all_checks,
 )
+from squadron.codehost.github_config import read_gh_hosts
 
 # --- T3: data model ---
 
@@ -406,3 +411,126 @@ def test_run_all_checks_survives_broken_check(monkeypatch: pytest.MonkeyPatch) -
 
     warn_rows = [r for r in results if r.status == CheckStatus.WARN and "check failed" in r.detail]
     assert len(warn_rows) >= 1
+
+
+# --- Slice 381: gh CLI and hosts-file presence ---
+
+
+def _which_returning(value: str | None) -> Callable[[str], str | None]:
+    """A ``shutil.which`` stub answering every name with ``value``."""
+
+    def _stub(_name: str) -> str | None:
+        return value
+
+    return _stub
+
+
+def test_check_github_cli_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", _which_returning("/opt/homebrew/bin/gh"))
+    result = check_github_cli()
+    assert result.status == CheckStatus.OK
+    assert "/opt/homebrew/bin/gh" in result.detail
+    assert result.section == SECTION_INTEGRATIONS
+    assert result.required is False
+
+
+def test_check_github_cli_absent_warns_with_named_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", _which_returning(None))
+    result = check_github_cli()
+    assert result.status == CheckStatus.WARN
+    assert result.detail == "not on PATH"
+    assert result.fix_hint == GITHUB_CLI_INSTALL_HINT
+    # Not required: a squadron install without PR workflows is complete.
+    assert result.required is False
+
+
+def test_hosts_file_present_and_readable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "hosts.yml").write_text("github.com:\n  user: someone\n")
+    result = check_github_cli_hosts_file()
+    assert result.status == CheckStatus.OK
+    assert str(tmp_path) in result.detail
+
+
+def test_hosts_file_missing_warns_with_auth_hint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    result = check_github_cli_hosts_file()
+    assert result.status == CheckStatus.WARN
+    assert result.detail == "missing"
+    assert result.fix_hint == "gh auth login"
+
+
+def test_hosts_file_unreadable_warns_naming_the_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    hosts = tmp_path / "hosts.yml"
+    hosts.write_text("github.com:\n")
+    hosts.chmod(0o000)
+    try:
+        result = check_github_cli_hosts_file()
+    finally:
+        hosts.chmod(0o600)
+    assert result.status == CheckStatus.WARN
+    assert "not readable" in result.detail
+    assert str(hosts) in result.detail
+
+
+# --- Slice 381: read_gh_hosts tolerates absence and malformation ---
+
+
+def test_read_gh_hosts_returns_top_level_keys(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "hosts.yml").write_text("github.com:\n  user: a\nghe.corp.example:\n  user: b\n")
+    assert read_gh_hosts() == {"github.com", "ghe.corp.example"}
+
+
+def test_read_gh_hosts_missing_file_is_empty_not_a_raise(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    assert read_gh_hosts() == set()
+
+
+def test_read_gh_hosts_malformed_yaml_is_empty_not_a_raise(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "hosts.yml").write_text("github.com:\n  - [unclosed\n")
+    assert read_gh_hosts() == set()
+
+
+def test_read_gh_hosts_non_mapping_is_empty_not_a_raise(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("GH_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "hosts.yml").write_text("- just\n- a\n- list\n")
+    assert read_gh_hosts() == set()
+
+
+# --- Slice 381: the doctor module runs no subprocess ---
+
+
+def test_run_all_checks_starts_no_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pure-check contract, asserted rather than assumed.
+
+    The design named an "existing test extended"; none existed. shutil.which is
+    permitted, and git_hooks_path is resolved by the caller and passed in
+    precisely because resolving it needs a subprocess.
+    """
+    import subprocess
+
+    def _forbidden(*args: object, **kwargs: object) -> object:
+        raise AssertionError(f"doctor checks started a subprocess: {args!r}")
+
+    monkeypatch.setattr(subprocess, "run", _forbidden)
+    monkeypatch.setattr(subprocess, "Popen", _forbidden)
+    monkeypatch.setattr(subprocess, "check_output", _forbidden)
+    monkeypatch.setattr(subprocess, "call", _forbidden)
+
+    results = run_all_checks()
+    assert results, "expected doctor rows"

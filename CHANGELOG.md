@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `sq pr show` reports a pull request without leaving your checkout: resolve it by number, URL, `owner/repo#number`, `repo#number`, a branch, or nothing at all for the current branch, and see its record, both fetched endpoints, the merge base, the range, and the changed paths. Read-only — it never checks anything out, so it works in a dirty working tree. Add `--json` for machine-readable output
+- `sq doctor` now reports whether the GitHub CLI is installed and whether its hosts file is readable, with install and login hints when either is missing. Neither is required, so a squadron install without pull-request workflows still reports healthy
 - Every review artifact now carries a run digest recording what the parse saw: response length, tool calls, whether the summary and findings sections were found, and how many finding-shaped matches were seen versus kept. Previously only a degraded review kept any evidence, so a confident PASS was the least auditable artifact on disk (#93)
 - The run digest now records why the model stopped, how much it spent reasoning, how many tool calls failed, and whether its response arrived with no line breaks. A review that returns a substantial answer but yields no findings used to leave nothing on disk explaining it; the artifact alone now distinguishes output that was never emitted from output that was emitted but unparseable, with no re-run and no `-vv` (#92)
 - `sq review --output json` now carries `stop_reason`, `reasoning_chars`, and `failed_tool_calls` (null when the provider reports none), so a runner can tell a failed review from a healthy one and retry rather than escalating (#92)

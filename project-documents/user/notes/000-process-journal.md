@@ -5,7 +5,7 @@ project: squadron
 audience: [human, ai]
 description: Append-only log of process decisions and design reasoning that has no home in other document types
 dateCreated: 20260716
-dateUpdated: 20260716
+dateUpdated: 20260912
 status: in_progress
 ---
 
@@ -19,6 +19,16 @@ that drift. When the file exceeds the standard size limit, split per
 file-naming-conventions (`-1`, `-2`, …).
 
 # Entries
+
+## 20260912 — GitHub Enterprise SSO stays `gh`'s problem; squadron surfaces the one visible symptom verbatim
+
+**Context:** Initiative 380 (pull request workflow) reaches GitHub only through the operator's authenticated `gh`. During slice 381 design the PM stated an emerging requirement: GitHub Enterprise hosts must work, and the enterprise accounts in question use SSO (SAML enforcement). The question was whether squadron becomes involved in that authorization or stays above it.
+
+**Decision:** Squadron stays above it. `gh` owns the credential lifecycle end to end: `gh auth login --hostname <ghe-host>` runs the browser OAuth flow, and on a SAML-enforced host that flow is where SSO authorization happens. Squadron never sees a token, never stores one, never sends an authorization header, and never initiates an auth flow. The adapter's only SSO-related behavior is passive: a token that was never SSO-authorized for an organization produces an HTTP 403 whose body says the resource is protected by organization SAML enforcement; under 381's structural classification that is `HostRequestRejectedError` carrying the host's message verbatim, so the operator reads GitHub's own words and the remedy is `gh auth refresh --hostname <host>` on their side. No dedicated SSO error ships in 381.
+
+**Rationale:** The architecture's "never holds a token of its own" principle is what makes GHE and SSO free: every enterprise auth arrangement (SAML, OIDC, IP allow-lists, token expiry policies) is already handled by `gh` and would have to be re-implemented, badly, by any squadron-side involvement. Adding a dedicated SSO error before it has been observed on a real host would mean guessing at the response shape. If it does become a common first-run experience, GitHub marks such responses with an `X-GitHub-SSO` response header, which `gh api --include` exposes; that header is a structural signal to key a dedicated error and hint on, and message-text matching is not an acceptable alternative.
+
+**Follow-ups:** Slice 381 design (`381-slice.code-host-adapter-and-pr-target-resolution.md`), GitHub Enterprise subsection and failure classification. Architecture `380-arch.pull-request-workflow.md`, Design Goals ("never holds a token of its own"). No issue filed; when a live GHE run in 386 or later shows the 403, file one citing this entry and key the error on the header.
 
 ## 20260716 — Three result-reduction mechanisms are converging but nothing links them: gate (304), fan-in (182/189), multi-sample judging (300 FW1)
 
