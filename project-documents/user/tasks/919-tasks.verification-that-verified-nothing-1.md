@@ -80,24 +80,30 @@ Re-verify every cited line number before editing — grep offsets drift, as
 
 ## Part 1 — Newline-free responses parse (#96)
 
-### T1.1 — Baseline the failing specimen as a committed test fixture
+### T1.1 — Baseline the failing specimen against the existing committed fixture
 
-- [ ] Extract the `### Raw Response` section of
-      `project-documents/user/reviews/918-review.slice.review-grounding.md`
-      into a new fixture file, e.g.
-      `tests/review/fixtures/newline_free_specimen.txt` — the raw text only,
-      no frontmatter, no wrapping.
-- [ ] Confirm it is 3076 characters with zero `\n`
-      (`python -c "print(len(open(p).read()), open(p).read().count(chr(10)))"`).
-- [ ] Write a test that loads the fixture and asserts today's **broken**
-      baseline via `_extract_verdict` and `_extract_findings`:
-      `Verdict.UNKNOWN`, 1 finding, `FindingScanCounts(total=1, in_fences=0,
-      in_section=1, surviving=1)`. This test is expected to start **failing**
-      once Part 1 lands — that transition is the proof the fix works, so mark
-      it clearly (e.g. a comment noting it documents the pre-fix baseline)
-      rather than deleting it once T1.7 flips it.
+- [ ] **Do not create a new fixture file.** The specimen is already committed
+      at `tests/review/fixtures/918-newline-free-response.txt` (3076 chars,
+      zero `\n`, used by
+      `test_real_newline_free_specimen_is_reported_as_newline_free` in
+      `tests/review/test_persistence.py:1191`) — a second copy of the same
+      blob would violate `CLAUDE.md`'s DRY rule and create a drift hazard.
+      Reuse this file for every Part 1 test that needs the specimen.
+- [ ] Confirm it is still 3076 characters with zero `\n` before relying on
+      it (`python -c "print(len(open(p).read()), open(p).read().count(chr(10)))"`)
+      — this is a drift guard, not a creation step.
+- [ ] Write a test in `tests/review/` (the parser-focused suite, not
+      `test_persistence.py`) that loads the existing fixture and asserts
+      today's **broken** baseline via `_extract_verdict` and
+      `_extract_findings`: `Verdict.UNKNOWN`, 1 finding,
+      `FindingScanCounts(total=1, in_fences=0, in_section=1, surviving=1)`.
+      This test is expected to start **failing** once Part 1 lands — that
+      transition is the proof the fix works, so mark it clearly (e.g. a
+      comment noting it documents the pre-fix baseline) rather than deleting
+      it once T1.7 flips it.
 
-**Success:** fixture committed, baseline numbers match the design's recorded
+**Success:** no new fixture file created; the baseline test reuses
+`918-newline-free-response.txt` and its numbers match the design's recorded
 20260913 measurement exactly. Effort: 1.
 
 ### T1.2 — Implement the normalization function, guarding Traps 1 and 2
@@ -219,12 +225,23 @@ non-empty `description`. Effort: 2.
       (`Verdict.PASS`, 4 findings, per T1.6), removing the stale
       "documents the pre-fix baseline" framing — the design's success
       criterion 1 is the target state, not the regression marker.
+- [ ] **Pin that the verdict is *stated*, not merely derived to the same
+      value.** `PASS` with 4 findings is also exactly what a
+      literal-minded implementation would produce if normalization were
+      wired only into the findings path while `_extract_verdict` still
+      received raw text — `_verdict_from_findings`'s most-severe-wins
+      derivation over 4 non-FAIL/CONCERN findings also yields `PASS`, with
+      `fallback_used=True`. That would pass every other Part 1 criterion
+      while silently missing D3. Assert `summary_section_located is True`
+      (or `fallback_used is False`) on this same fixture run so Part 1
+      itself proves the summary was actually parsed, not recovered.
 - [ ] Run `uv run pytest tests/review/ -k "newline_free or verdict_fusion" -v`
       and confirm every test added in T1.1-T1.6 passes together, not just
       individually.
 
 **Success:** design success criteria 1-4 all hold against one shared run of
-the real parse entry point. Effort: 1.
+the real parse entry point, and the run is confirmed *stated* rather than
+derived. Effort: 1.
 
 ### T1.8 — Confirm #91 (fence masking) does not reopen
 
@@ -238,7 +255,11 @@ the real parse entry point. Effort: 1.
 - [ ] Confirm the byte-identical snapshot guard is unaffected: run
       `uv run pytest tests/review/test_persistence.py -k clean_pass_artifact -v`
       and confirm it still passes with no fixture drift (a response
-      containing newlines never reaches the normalizer per T1.6).
+      containing newlines never reaches the normalizer per T1.6). This
+      check runs against pre-T1.9 code, so it only proves today's snapshot
+      is clean — it is not itself proof that T1.9's digest addition below
+      will leave the snapshot undisturbed; T1.9 re-runs this same check
+      after its change for that reason.
 
 **Success:** design success criteria 5 and 6 hold; no existing fence or
 snapshot test changed its expected output. Effort: 1.
@@ -251,19 +272,32 @@ snapshot test changed its expected output. Effort: 1.
       (contrast the existing newline-free indicator, which is computed
       directly from `raw_output` in `persistence.py` and needs no field).
       Thread it from `parse_review_output`'s return through to the result.
+- [ ] **Pin the emission rule explicitly: the new digest line(s) are emitted
+      only when normalization actually ran; a response that took the
+      unmodified path (D5) emits nothing new.** This is not a free choice —
+      it is what keeps design SC6 ("byte-identical except for intended
+      digest lines") true against the `clean_pass_artifact.md` snapshot,
+      which never triggers normalization. An "always emit, with
+      count: 0 when it didn't run" design would add a line to every
+      existing clean-pass artifact and break that snapshot.
 - [ ] Extend `_run_digest_lines` ([persistence.py:175](src/squadron/review/persistence.py#L175))
       with one or two new lines stating whether normalization ran and the
       break count, placed near the existing "Response is newline-free"
-      indicator ([persistence.py:206](src/squadron/review/persistence.py#L206)).
+      indicator ([persistence.py:206](src/squadron/review/persistence.py#L206)),
+      following the rule above.
 - [ ] Test: a normalized parse's digest shows normalization occurred with a
-      non-zero count; a response containing newlines shows it did not run
-      (count absent or zero, per whichever the field design chose — pin one
-      explicitly, do not leave it ambiguous).
+      non-zero count; a response containing newlines shows **no** new
+      digest line at all (not a zero-count line — per the pinned rule
+      above).
+- [ ] Re-run `uv run pytest tests/review/test_persistence.py -k clean_pass_artifact -v`
+      now that this task's change has landed, and confirm it still passes
+      with zero fixture drift — this is the check T1.8 could not yet make.
 
 **Success:** design success criteria 7 and 8 hold — the digest discloses
-normalization, and `### Raw Response` still holds the untouched original
-text (re-confirm T1.6's persistence check here now that the digest change
-touches the same render path). Effort: 2.
+normalization only when it ran, `### Raw Response` still holds the untouched
+original text (re-confirm T1.6's persistence check here now that the digest
+change touches the same render path), and the clean-pass snapshot is
+unchanged. Effort: 2.
 
 ### T1.10 — Verify and commit Part 1
 
