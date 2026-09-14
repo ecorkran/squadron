@@ -65,6 +65,29 @@ local `degraded`. What has no degradation parameter at all is
 `_review_frontmatter_lines` ([persistence.py:242](src/squadron/review/persistence.py#L242)).
 Part 2 is a frontmatter-emission change plus a policy decision, not new detection.
 
+## Slice review disposition (20260913)
+
+Slice review at sha `7b36737d` returned CONCERNS with three concerns and two notes; all
+five were verified against the code and all five are accepted and addressed here.
+
+- **F003 — Part 3's citations named a package that does not exist.** Correct. The gate
+  files live in `src/squadron/events/builtin/`, not `events/actions/`; `pipeline/actions/`
+  is a real but unrelated package, which is exactly what made the wrong path plausible.
+  Three references corrected.
+- **F004 — `_FENCE_OPENER` does not exist.** Correct: the symbol is `_FENCE_OPEN_RE`, at
+  line 487. Fair characterization from the review, too — a slice premised on verification
+  claims being trustworthy should not cite a symbol a grep will never find.
+- **F005 — no hang handling on the subprocess path.** The substantive finding. Accepted and
+  answered as **D14**: the part changes that call's contract, so the Failure-Mode
+  Enumeration rule applies, and `await proc.communicate()` has no timeout today.
+- **F006 — `parsers.py` line citations drifted 1-2 lines.** Correct; five citations came
+  from grep offsets rather than definition lines. All five corrected and re-verified.
+- **F007 — three-part bundling.** Note only, and the review's own reading is right: it
+  matches 901, 909, 910, and 916-918 in this same plan. No change.
+
+Nothing in the review contradicted a decision; the concerns were accuracy defects in the
+document plus one genuinely missing failure mode.
+
 ## Non-goals
 
 - **Fixing #92/#99.** 918 Part B landed the stop-reason instrumentation and the
@@ -101,7 +124,7 @@ it is last because it is the smallest and shares no file with the others.
 |---|---|---|---|
 | 1 — Newline-free responses parse | #96 | High | `review/parsers.py` |
 | 2 — Verdict provenance in frontmatter | #97 | High | `review/persistence.py`, `review/models.py` |
-| 3 — Frontmatter gate fails closed | #98 | Medium | `events/actions/frontmatter_gate.py` |
+| 3 — Frontmatter gate fails closed | #98 | Medium | `events/builtin/frontmatter_gate.py` |
 
 ## Part 1 — Newline-free responses parse (#96)
 
@@ -132,22 +155,22 @@ and none of the eight tags were extracted.
 Seven separate constructs in the parse pipeline depend on line structure. This is why
 per-regex relaxation was rejected:
 
-1. `_SUMMARY_RE` ([parsers.py:69](src/squadron/review/parsers.py#L69)) requires
+1. `_SUMMARY_RE` ([parsers.py:70](src/squadron/review/parsers.py#L70)) requires
    `##\s+Summary\s*\n+` before the verdict keyword.
-2. `_FINDING_RE` ([parsers.py:80](src/squadron/review/parsers.py#L80)) terminates each
+2. `_FINDING_RE` ([parsers.py:81](src/squadron/review/parsers.py#L81)) terminates each
    finding on a lookahead whose every alternative is `\n`-anchored, so only `\Z` matches
    and finding #1 absorbs the rest.
-3. `_CATEGORY_RE` / `_LOCATION_RE` ([parsers.py:105-106](src/squadron/review/parsers.py#L105-L106))
+3. `_CATEGORY_RE` / `_LOCATION_RE` ([parsers.py:106-107](src/squadron/review/parsers.py#L106-L107))
    are `^…$` under `re.MULTILINE`.
 4. `_FILE_REF_RE` is `^->\s*(.+)$` under `re.MULTILINE`.
 5. `_HEADING_RE` ([parsers.py:495](src/squadron/review/parsers.py#L495)) is
    `^(#{1,6})…$` under `re.MULTILINE`, which both `_locate_section` and the fence logic
    build on.
-6. `_FENCE_OPENER` ([parsers.py:488](src/squadron/review/parsers.py#L488)) is
+6. `_FENCE_OPEN_RE` ([parsers.py:487](src/squadron/review/parsers.py#L487)) is
    `^[ \t]*(fence)` under `re.MULTILINE`.
 7. Inside `_extract_findings`, title and body are split by newline directly:
    `title = title_raw.strip().split("\n")[0]` and `body = "\n".join(lines[1:])`
-   ([parsers.py:641-644](src/squadron/review/parsers.py#L641-L644)).
+   ([parsers.py:643-646](src/squadron/review/parsers.py#L643-L646)).
 
 ### Decisions
 
@@ -277,7 +300,7 @@ explicitly.
 
 The #96 run wrote `verdict: PASS` into frontmatter and it was committed. Nothing parsed
 it. `_extract_verdict` returned UNKNOWN; the collapsed single finding happened to carry
-`pass` severity; `_verdict_from_findings` ([parsers.py:122](src/squadron/review/parsers.py#L122))
+`pass` severity; `_verdict_from_findings` ([parsers.py:124](src/squadron/review/parsers.py#L124))
 derived PASS by most-severe-wins over that one finding.
 
 The recovery is correct and deliberate (#28) — its docstring says it exists "only to
@@ -382,7 +405,7 @@ pass today.
 ### What goes wrong today
 
 `frontmatter_gate.py:44` invokes `cf validate frontmatter` with the explicit staged paths
-and reads **only the exit code** ([frontmatter_gate.py:61](src/squadron/events/actions/frontmatter_gate.py#L61)).
+and reads **only the exit code** ([frontmatter_gate.py:61](src/squadron/events/builtin/frontmatter_gate.py#L61)).
 `cf validate frontmatter` validates "only the in-root .md files among them (others are
 silently skipped)", and in-root resolves against the registered project Identity path —
 the default checkout. Explicit paths under a sibling git worktree are dropped silently
@@ -434,6 +457,37 @@ The message from D10 is what makes it self-explanatory, and it should name the w
 (commit markdown from the default checkout, or register the worktree with cf) rather than
 only the diagnosis. Worth a CHANGELOG line, since it changes when commits fail.
 
+**D14 — Bound the `cf` subprocess with a timeout (Architect, added after slice review
+20260913).** Raised as a CONCERN by the slice review, and correct: this part changes how
+`frontmatter_gate.py` invokes and interprets the subprocess, so `rules/review-code.md`'s
+Failure-Mode Enumeration rule requires the hang case be answered explicitly, not left
+implicit. Verified on disk — `await proc.communicate()`
+([frontmatter_gate.py:52](src/squadron/events/builtin/frontmatter_gate.py#L52)) has no
+timeout, so a `cf` process that hangs blocks the commit indefinitely with no WARNING and
+no observable signal. Adding `--json` widens the exposure slightly (more work between
+spawn and exit), but the gap predates this slice.
+
+The pattern is established in-repo and must be reused rather than reinvented —
+`bash_tool.py:62` is the reference implementation: `asyncio.wait_for(proc.communicate(),
+timeout=...)`, `start_new_session=True` on the spawn so the timeout path can kill the whole
+process group, `_kill_process_group` to signal and reap it, and a WARNING naming the
+timeout and the command. Reaping matters: a killed-but-unreaped `cf` leaves a zombie behind
+every hung commit.
+
+A hang is **indeterminate, so it fails closed** — the same posture as D11's unreadable
+count and 172's D6, and for the same reason: the gate could not confirm validity. Its
+message must be distinguishable from both the worktree cause (D10) and the unreadable-count
+cause (D11), since the operator's next action differs in each case.
+
+The timeout value belongs in `tools/limits.py` alongside `BASH_TIMEOUT_S` (120.0) and
+`GREP_TIMEOUT_S` (5.0) rather than as a literal at the call site, per `CLAUDE.md`'s rule
+against hard-coded magic defaults, and should be read at call time so a lowered limit
+applies to the next invocation. `cf validate frontmatter` on a handful of staged files is
+fast, so a bound far below `BASH_TIMEOUT_S` is appropriate; the exact number is an
+implementation call. Note [#76](https://github.com/ecorkran/squadron/issues/76) proposes
+making these constants configurable — this adds one to the same set, it does not depend on
+that issue.
+
 ### Success criteria
 
 1. In a sibling worktree, a staged markdown file makes the gate **fail** with a message
@@ -442,10 +496,13 @@ only the diagnosis. Worth a CHANGELOG line, since it changes when commits fail.
    with cf's own findings.
 3. A commit staging no markdown passes (D12).
 4. Absent or unparseable `filesChecked` fails closed with its own distinct message (D11).
-5. `squadron.review-verdict-gate` is untouched — verified independent, it reads and parses
-   each staged path itself ([review_verdict_gate.py:97](src/squadron/events/actions/review_verdict_gate.py#L97))
+5. A hung `cf` is killed at the timeout, reaped, logged at WARNING, and fails the gate with
+   a message distinct from D10's and D11's (D14). Tested with a stub that sleeps past the
+   limit, asserting both the observable WARNING and that no process is left behind.
+6. `squadron.review-verdict-gate` is untouched — verified independent, it reads and parses
+   each staged path itself ([review_verdict_gate.py:97](src/squadron/events/builtin/review_verdict_gate.py#L97))
    and never shells out to cf.
-6. Tests cover the failure modes as observable signals (WARNING log or gate error), per
+7. Tests cover the failure modes as observable signals (WARNING log or gate error), per
    the Failure-Mode Enumeration rule in `rules/review-code.md`.
 
 ## Cross-slice dependencies and interfaces
@@ -577,11 +634,12 @@ Before the fix, committing that file reports `squadron.frontmatter-gate: ok`. Af
 must fail with a message naming the worktree cause. Then the three guard cases:
 
 ```bash
-uv run pytest tests/events/ -k "frontmatter_gate" -v
+uv run pytest tests/events/builtin/test_frontmatter_gate.py -v
 ```
 
-covering zero-checked-against-nonempty (fails), empty staged list (passes), and
-absent/unparseable `filesChecked` (fails with its own message).
+covering zero-checked-against-nonempty (fails), empty staged list (passes),
+absent/unparseable `filesChecked` (fails with its own message), and a hung `cf` (killed,
+reaped, WARNING logged, gate fails with a third distinct message).
 
 ### Gates
 
