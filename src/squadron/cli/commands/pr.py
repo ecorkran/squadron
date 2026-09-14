@@ -18,6 +18,7 @@ from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.codehost.errors import CodeHostError
 from squadron.codehost.github_cli import build_github_host
 from squadron.codehost.models import FetchedRange, ResolvedPullRequest
+from squadron.codehost.protocol import CodeHost
 from squadron.codehost.remotes import list_remotes, select_remote
 from squadron.codehost.targets import parse_target
 from squadron.core.process_runner import SubprocessRunner
@@ -27,6 +28,47 @@ pr_app = typer.Typer(
     help="Inspect and review pull requests.",
     no_args_is_help=True,
 )
+
+
+def resolve_and_fetch_pull_request(
+    target: str | None, repo_cwd: str
+) -> tuple[CodeHost, ResolvedPullRequest, FetchedRange]:
+    """Resolve *target* to a pull request and fetch its base/head endpoints.
+
+    The exact sequence ``sq pr show`` established: parse the target, pick the
+    serving remote, resolve the pull request, fetch its refs. Shared with
+    ``sq review pr`` (slice 382, Task G.1) so the two commands stay provably
+    identical up to the point their behavior diverges — this is not a second
+    implementation of ``pr show``'s resolution, it is the same one.
+
+    Raises ``CodeHostError`` on any adapter failure; callers render it the
+    same way ``pr show`` does.
+    """
+    host = build_github_host(SubprocessRunner())
+    # Git work goes through the host's own runner, not a second one: the
+    # factory is the single seam, so substituting the host has to redirect
+    # every process call a caller makes, not only the gh ones.
+    runner = host.runner
+
+    parsed = parse_target(target)
+    remotes = list_remotes(runner, repo_cwd)
+    locator = select_remote(parsed, remotes, host.serves_host)
+    resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
+    fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
+    return host, resolved, fetched
+
+
+def render_code_host_error(exc: CodeHostError) -> None:
+    """Print a CodeHostError the way every code-host command reports one.
+
+    Errors go to stderr so a command piped into a parser (e.g. ``--json``)
+    stays parseable when the command fails. Shared so ``sq review pr``
+    reports adapter failures identically to ``sq pr show`` (Task G.7).
+    """
+    errors = Console(stderr=True)
+    errors.print(f"[red]{exc}[/red]")
+    if exc.fix_hint:
+        errors.print(f"[dim]{exc.fix_hint}[/dim]")
 
 
 @pr_app.command("show")
@@ -43,27 +85,13 @@ def show(
 ) -> None:
     """Resolve a pull request, fetch its endpoints, and report the range."""
     repo_cwd = resolve_repo_cwd(cwd)
-    host = build_github_host(SubprocessRunner())
-    # Git work goes through the host's own runner, not a second one: the
-    # factory is the single seam, so substituting the host has to redirect
-    # every process call this command makes, not only the gh ones.
-    runner = host.runner
 
     try:
-        parsed = parse_target(target)
-        remotes = list_remotes(runner, repo_cwd)
-        locator = select_remote(parsed, remotes, host.serves_host)
-        resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
-        fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
+        _host, resolved, fetched = resolve_and_fetch_pull_request(target, repo_cwd)
     except CodeHostError as exc:
         # Every adapter failure has already been logged once at WARNING or
         # above by the layer that raised it; this is the operator-facing half.
-        # Errors go to stderr so `sq pr show --json` piped into a parser stays
-        # parseable when the command fails.
-        errors = Console(stderr=True)
-        errors.print(f"[red]{exc}[/red]")
-        if exc.fix_hint:
-            errors.print(f"[dim]{exc.fix_hint}[/dim]")
+        render_code_host_error(exc)
         raise typer.Exit(code=1) from exc
 
     if json_output:

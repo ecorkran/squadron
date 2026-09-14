@@ -141,7 +141,15 @@ renderer and its containment guarantees, independent of the CLI work.
 
 ---
 
-## Part E — `--files` Intersection Helper (D7)
+## Part E — `--files` Intersection Helper (D7) — REVERTED
+
+> **This Part was implemented (commit `3a01c46f`) and then reverted.**
+> `--files` is not part of `sq review pr`: the command reviews the PR's
+> full merge-base range, with no operator-supplied glob narrowing it.
+> `src/squadron/review/scope.py`, `tests/review/test_scope.py`, and the
+> `GLOB_MATCHED_NOTHING_IN_RANGE` case in `git_utils.py` are all removed.
+> The `[x]` marks below record what was built, not what ships. See file 3,
+> Task G.5.
 
 Isolated here because it is pure logic with no worktree or CLI dependency,
 and file 3's `pr` subcommand needs it ready to call.

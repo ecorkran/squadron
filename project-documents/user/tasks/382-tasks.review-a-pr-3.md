@@ -200,13 +200,12 @@ worktree branch that carries the slice's most security-relevant wiring
       risk D8 closes for SDK project settings: an unreviewed rules directory
       resolving from the worktree would let a PR's own planted rules content
       reach the reviewer's instructions.
-- [ ] When `--files` is supplied, call `intersect_files_with_range` (file 2,
-      Task E.1) with `fetched.changed_paths`, and set
-      `inputs["files"]` to the intersected result (or however
-      `code_review_prompt` expects the `files` input shaped — check whether
-      it wants a glob string or a resolved list, and adapt the intersection
-      helper's return or this call site so the existing builder code path
-      is not forked).
+- [x] **DROPPED — `--files` is not part of `sq review pr`.** Part E's
+      `intersect_files_with_range` helper, its tests, and the
+      `GLOB_MATCHED_NOTHING_IN_RANGE` enum case are reverted (see file 2,
+      Part E). `sq review pr` reviews the PR's full merge-base range; no
+      operator-supplied glob narrows it. Revisit only if a concrete need
+      appears — do not re-litigate from the task text alone.
 - [ ] Effort: 2
 
 ### Task G.6 — Test: rules provenance
@@ -221,20 +220,20 @@ worktree branch that carries the slice's most security-relevant wiring
       implementation that calls `_resolve_review_cwd` with the worktree
       path, which is exactly the mistake Task G.5's provenance instruction
       exists to prevent.
-- [ ] `--files` intersection: a glob matching some of the range's changed
-      paths narrows to the intersection; a glob matching none raises naming
-      both.
+- [x] **DROPPED — `--files` is not part of `sq review pr`** (see Task G.5).
+      No intersection test; there is no intersection.
 - [ ] Effort: 2
 
 ### Task G.7 — Flag parity and command registration
 
-- [ ] `sq review pr <target> [--cwd] [--model] [--profile] [--no-tools]
-      [--rules] [--rules-dir] [--no-rules] [--files] [-v] [--output]
+- [x] `sq review pr <target> [--cwd] [--model] [--profile] [--no-tools]
+      [--rules] [--rules-dir] [--no-rules] [-v] [--output]
       [--output-path] [--json] [--no-save]` — same flags, same help text
       style as `review_code`
       ([review.py:985-1015](src/squadron/cli/commands/review.py#L985-L1015)).
-      Omit `--fan` (reserved, not part of this slice's scope) and the
-      positional `slice_number` (a PR target replaces it).
+      Omit `--fan` (reserved, not part of this slice's scope), `--files`
+      (dropped — see Task G.5), and the positional `slice_number` (a PR
+      target replaces it).
 - [ ] `--cwd` resolves the **checkout** via `resolve_repo_cwd` (the shared
       helper 381 built,
       [cwd_resolution.py](src/squadron/cli/commands/cwd_resolution.py)) — the
@@ -257,10 +256,11 @@ worktree branch that carries the slice's most security-relevant wiring
 
 - [ ] Extend `tests/cli/test_review_pr.py` (from G.2/G.4/G.6).
 - [ ] Table-driven: each of `--model`, `--profile`, `--no-tools`, `--rules`,
-      `--rules-dir`, `--no-rules`, `--files`, `-v`/`-vv`, `--output`,
+      `--rules-dir`, `--no-rules`, `-v`/`-vv`, `--output`,
       `--json`, `--no-save` behaves on `sq review pr` as the equivalent
       existing test asserts for `sq review code` — reuse or mirror those
-      existing cases rather than inventing new assertions.
+      existing cases rather than inventing new assertions. `--files` is
+      dropped (Task G.5) and is not in this table.
 - [ ] Not-persistable warning names PR persistence specifically (not the
       generic "no slice identifier" text).
 - [ ] Effort: 3

@@ -130,11 +130,6 @@ class EmptyScopeCase(StrEnum):
     #: must not be folded into NO_CHANGES: "skip, already merged" is a valid
     #: response to that one and a wrong response to this.
     UNCOMPUTABLE = "uncomputable"
-    #: The range had changed files, but a --files glob matched none of them.
-    #: Distinct from ALL_EXCLUDED: this is an operator-supplied scoping glob
-    #: narrowing the range, not a template's exclusion patterns filtering it
-    #: (slice 382, design D7).
-    GLOB_MATCHED_NOTHING_IN_RANGE = "glob_matched_nothing_in_range"
 
 
 class EmptyScopeError(Exception):

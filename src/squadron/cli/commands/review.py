@@ -561,6 +561,8 @@ def _run_review_command(
     failure_target: SliceInfo | None = None,
     no_save: bool = False,
     failure_name_suffix: str | None = None,
+    convention_root: str | None = None,
+    setting_sources_override: list[str] | None = None,
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
@@ -630,6 +632,8 @@ def _run_review_command(
                 verbosity=verbosity,
                 model_allows_tools=allows_tools,
                 no_tools=no_tools,
+                convention_root=convention_root,
+                setting_sources_override=setting_sources_override,
             )
         )
     except RateLimitError as exc:
@@ -676,6 +680,8 @@ async def _execute_review(
     verbosity: int = 0,
     model_allows_tools: bool = True,
     no_tools: bool = False,
+    convention_root: str | None = None,
+    setting_sources_override: list[str] | None = None,
 ) -> ReviewResult:
     """Execute the review asynchronously."""
     return await run_review_with_profile(
@@ -687,6 +693,8 @@ async def _execute_review(
         verbosity=verbosity,
         model_allows_tools=model_allows_tools,
         no_tools=no_tools,
+        convention_root=convention_root,
+        setting_sources_override=setting_sources_override,
     )
 
 
