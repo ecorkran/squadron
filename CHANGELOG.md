@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Review artifacts now carry a `verdictSource: stated | derived` frontmatter key naming whether the verdict was the model's own stated `## Summary`, or recovered from finding severities after a failed summary parse. A recovered verdict was previously indistinguishable from a stated one to anything reading frontmatter — including the pipeline gates that clear a slice on `PASS` (#97)
 - `sq pr show` reports a pull request without leaving your checkout: resolve it by number, URL, `owner/repo#number`, `repo#number`, a branch, or nothing at all for the current branch, and see its record, both fetched endpoints, the merge base, the range, and the changed paths. Read-only — it never checks anything out, so it works in a dirty working tree. Add `--json` for machine-readable output
 - `sq doctor` now reports whether the GitHub CLI is installed and whether its hosts file is readable, with install and login hints when either is missing. Neither is required, so a squadron install without pull-request workflows still reports healthy
 - Every review artifact now carries a run digest recording what the parse saw: response length, tool calls, whether the summary and findings sections were found, and how many finding-shaped matches were seen versus kept. Previously only a degraded review kept any evidence, so a confident PASS was the least auditable artifact on disk (#93)
@@ -24,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Committing a review artifact whose `verdict:` is missing or is not one of the review verdicts is now rejected. An unrecognized verdict used to reach a pipeline gate as `UNKNOWN` and trip a checkpoint indistinguishably from a real one. Disable with `squadron.review-verdict-gate` in `events.yaml` (#77)
 
 ### Fixed
+- A review whose response arrives with no line breaks at all now parses correctly instead of collapsing every finding into one and losing the verdict. Previously, a naive fix to this could report a wrong verdict (e.g. `CONCERNS` instead of the model's actual `PASS`) rather than the honest "could not parse" outcome (#96)
+- **Behavior change:** committing markdown from a git worktree other than your project's default checkout is now rejected by `squadron.frontmatter-gate` if `cf` cannot confirm your staged files' frontmatter there — previously it silently reported `ok` without checking anything. If you hit this, commit markdown from the default checkout, or register the worktree with `cf` (#98)
 - A review that was offered tools and made none now reports `0` in its digest and frontmatter instead of reading as though nothing was measured (#92)
 - Review artifacts no longer report the template's own example as findings. A model that restated the required format before using it produced findings titled "Finding title" citing `src/module.py`, and the finding count tracked how much the model echoed the format rather than what it found (#91)
 - A review whose model returns nothing now leaves an artifact naming the provider failure and why the model stopped, instead of no artifact at all. The previous run's verdict is archived rather than left in the live slot, where a pipeline gate would read it as this run's result (#84)

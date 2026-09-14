@@ -646,6 +646,73 @@ class TestDegradedParseIsVisible:
         assert _make_result().to_dict()["fallback_used"] is False
 
 
+class TestVerdictSourceFrontmatterEmission:
+    """Slice 919 Part 2 (#97): verdictSource end to end, from the rendered
+    frontmatter block itself, not the internal ReviewResult — the whole
+    defect was one surface (JSON to_dict()) knowing what another
+    (frontmatter) did not.
+    """
+
+    def test_96_shaped_derivation_case_shows_derived_in_frontmatter(self) -> None:
+        from squadron.review.models import VerdictSource
+        from squadron.review.parsers import parse_review_output
+
+        result = parse_review_output("### [PASS] Titlecategory: catlocation: a.py:1Body.", "slice", {})
+        assert result.verdict_source is VerdictSource.DERIVED
+
+        markdown = format_review_markdown(result, "slice", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "verdict: PASS" in frontmatter_block
+        assert "verdictSource: derived" in frontmatter_block
+
+    def test_real_parsed_summary_case_shows_stated_in_frontmatter(self) -> None:
+        from squadron.review.models import VerdictSource
+        from squadron.review.parsers import parse_review_output
+
+        result = parse_review_output(
+            "## Summary\nPASS\n\n## Findings\n\n### [PASS] Title\nBody.\n", "slice", {}
+        )
+        assert result.verdict_source is VerdictSource.STATED
+
+        markdown = format_review_markdown(result, "slice", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "verdictSource: stated" in frontmatter_block
+
+    def test_to_dict_and_frontmatter_report_the_same_verdict_source(self) -> None:
+        """Design success criterion 6: no surface says stated while another
+        says derived. Checked for both the derived and stated cases."""
+        from squadron.review.parsers import parse_review_output
+
+        derived_result = parse_review_output(
+            "### [PASS] Titlecategory: catlocation: a.py:1Body.", "slice", {}
+        )
+        stated_result = parse_review_output(
+            "## Summary\nPASS\n\n## Findings\n\n### [PASS] Title\nBody.\n", "slice", {}
+        )
+
+        for result in (derived_result, stated_result):
+            json_value = result.to_dict()["verdictSource"]
+            markdown = format_review_markdown(result, "slice", _make_slice_info())
+            frontmatter_block = markdown.split("---", 2)[1]
+            frontmatter_line = next(
+                line for line in frontmatter_block.splitlines() if line.startswith("verdictSource:")
+            )
+            frontmatter_value = frontmatter_line.split(":", 1)[1].strip()
+
+            assert json_value == frontmatter_value
+
+    def test_no_verdict_source_set_renders_frontmatter_with_the_key_absent(self) -> None:
+        """Design success criterion 3: additive, absence is meaningful — a
+        ReviewResult built the way one was before this slice (verdict_source
+        defaults to None) must not render a placeholder key."""
+        markdown = format_review_markdown(_make_result(), "slice", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "verdictSource" not in frontmatter_block
+
+
 class TestArchiveIsNonDestructive:
     """A run of bad reviews must not walk a good one out of existence (#73)."""
 
@@ -1218,6 +1285,32 @@ class TestStopReasonEvidenceInDigest:
 
         assert "- Response is newline-free: no" in markdown
         assert "- Response length: 0 chars" in markdown
+
+    def test_normalized_parse_discloses_the_break_count_in_the_digest(self) -> None:
+        """Slice 919 Part 1 (#96), design D4: a normalized parse must not be
+        indistinguishable from a clean one — that would fix #96 by
+        introducing a quieter version of #97."""
+        from squadron.review.parsers import parse_review_output
+
+        specimen = (Path(__file__).parent / "fixtures" / "918-newline-free-response.txt").read_text()
+        result = parse_review_output(specimen, "slice", {})
+        assert result.normalized_break_count > 0
+
+        markdown = format_review_markdown(result, "slice")
+
+        assert (
+            f"Response line structure was normalized before parsing "
+            f"({result.normalized_break_count} break(s) inserted"
+        ) in markdown
+
+    def test_unnormalized_response_shows_no_normalization_digest_line_at_all(self) -> None:
+        """D4's pinned emission rule: absent, not a zero-count line — an
+        'always emit, count: 0 when it didn't run' design would add a line to
+        every existing clean-pass artifact and break the byte-identical
+        snapshot guard."""
+        markdown = format_review_markdown(self._result(), "slice")
+
+        assert "normalized before parsing" not in markdown
 
 
 class TestRunDigestEndToEnd:

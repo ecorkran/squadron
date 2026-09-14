@@ -17,6 +17,7 @@ from squadron.review.models import (
     ReviewResult,
     Severity,
     Verdict,
+    VerdictSource,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,11 +67,20 @@ _CRITERIA_LABEL_RE = re.compile(r"^([ \t]*)criteria:[ \t]*$", re.IGNORECASE | re
 # validated as a finite float separately; this only splits key from value.
 _CRITERIA_ENTRY_RE = re.compile(r"^[ \t]+([^:\n]+?):[ \t]*(.+?)[ \t]*$")
 
-# Matches "## Summary" section followed by a verdict keyword (possibly bold)
-_SUMMARY_RE = re.compile(
-    r"##\s+Summary\s*\n+\s*(?:.*?\b)?(?:\*{0,2})(PASS|CONCERNS|FAIL)(?:\*{0,2})\b",
-    re.IGNORECASE,
-)
+# Locates the "## Summary" heading; the verdict keyword itself is matched
+# separately, anchored immediately after it (see _extract_verdict / D3).
+_SUMMARY_HEADING_RE = re.compile(r"##\s+Summary\s*\n+\s*", re.IGNORECASE)
+
+# Matches a verdict keyword (possibly bold) at a fixed starting position —
+# used with re.match, never re.search, so it can only match the very next
+# word after the summary heading. A scanning re.search here is D3's bug: a
+# keyword fused to the following word (e.g. "PASSThe slice design...") has
+# no word boundary after "PASS", so a non-greedy '.*?' scan would run past
+# it looking for a bounded match and can find one belonging to a later
+# finding's severity word instead — a confidently wrong verdict, worse than
+# UNKNOWN. Anchoring at a fixed offset makes that scan impossible: either
+# the keyword starts right here, fused or not, or it does not match at all.
+_VERDICT_KEYWORD_RE = re.compile(r"(?:\*{0,2})(PASS|CONCERNS|FAIL)", re.IGNORECASE)
 
 # Matches finding blocks in five formats:
 #   ### [SEVERITY] Title          (standard bracketed heading)
@@ -113,11 +123,21 @@ _DEBUG_LOG_PATH = Path.home() / ".config" / "squadron" / "logs" / "review-debug.
 
 
 def _extract_verdict(text: str) -> Verdict:
-    """Parse verdict from the ## Summary section."""
-    match = _SUMMARY_RE.search(text)
-    if match is None:
+    """Parse verdict from the ## Summary section.
+
+    Bounded search (D3): the verdict keyword is matched immediately after
+    the heading via ``re.match``, not searched for. A scanning search would
+    let a fused keyword's missing word boundary carry the match forward into
+    a later finding's severity word, returning a confidently wrong verdict
+    instead of UNKNOWN.
+    """
+    heading = _SUMMARY_HEADING_RE.search(text)
+    if heading is None:
         return Verdict.UNKNOWN
-    keyword = match.group(1).upper()
+    keyword_match = _VERDICT_KEYWORD_RE.match(text, heading.end())
+    if keyword_match is None:
+        return Verdict.UNKNOWN
+    keyword = keyword_match.group(1).upper()
     return _VERDICT_MAP.get(keyword, Verdict.UNKNOWN)
 
 
@@ -494,6 +514,153 @@ _FENCE_OPEN_RE = re.compile(
 # emphasis, trailing ':' or '.', and surrounding whitespace all tolerated.
 _HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})[ \t]*(?P<text>[^\n]*?)[ \t]*$", re.MULTILINE)
 
+# --- Newline-free response normalization (#96, design D1/D2) ---
+#
+# A real heading-start hash run (1-6 '#') is always followed by a space.
+# This is also what makes Trap 1 (mid-run insertion) and Trap 3 (a '#' inside
+# a location: anchor, e.g. '...918-slice.review-grounding.md#The-problem')
+# structurally impossible to confuse with a heading start: the second '#' of
+# '###' is followed by '#', not a space, and an anchor '#' is followed
+# directly by its slug's first letter, not a space.
+_HEADING_START_RE = re.compile(r"#{1,6}(?= )")
+
+# Trap 2 (fused heading text): a break must also land after a recognized
+# single-word section heading ('## Summary' / '## Findings') when the next
+# character is not whitespace, or _HEADING_RE's [^\n]*? would swallow the
+# entire following paragraph as heading text. Keyed on the same closed
+# vocabulary _locate_section normalizes against.
+_SECTION_HEADING_FUSION_RE = re.compile(r"#{1,6}[ \t]+(Summary|Findings)(?=\S)", re.IGNORECASE)
+
+# Trap 2's second case: a verdict keyword fused to the prose that follows it
+# (e.g. '## SummaryPASSThe slice design...'). A break after the keyword is
+# necessary so _SUMMARY_RE's required word boundary exists; D3's bounded-
+# search fix to _extract_verdict is the durable guard against the same fusion
+# misdirecting a match into a later finding's severity word.
+_VERDICT_FUSION_RE = re.compile(r"\b(PASS|CONCERNS|FAIL)(?=[A-Za-z])", re.IGNORECASE)
+
+# A category:/location: tag fused to the preceding prose (no line break
+# separating a finding's title from its tags). _CATEGORY_RE/_LOCATION_RE are
+# '^...$' MULTILINE and need this break to find the tag at all.
+_TAG_FUSION_RE = re.compile(r"(?<=\S)(category:|location:)", re.IGNORECASE)
+
+# Trap 3's companion: once an anchor '#' is correctly left alone (not treated
+# as a heading), the anchor's kebab-case slug still runs directly into the
+# prose that follows with no terminator, which would otherwise make
+# _LOCATION_RE's '$'-bounded capture swallow the rest of the finding body as
+# part of the location value. Matches a path-like anchor fragment (a '#'
+# preceded by non-whitespace, i.e. not a heading start) up to where the
+# slug's letter/digit/dash run ends and a capitalized prose word begins.
+_ANCHOR_END_RE = re.compile(r"(?<=\S)#[A-Za-z0-9][A-Za-z0-9-]*(?=[A-Z][a-z])")
+
+# #91 guard: a fence marker (3+ backticks or tildes) in newline-free text is
+# fused to whatever surrounds it, so _FENCE_OPEN_RE's '^[ \t]*(fence)...\n'
+# requirement (MULTILINE) can never match it as-is — a newline-free response
+# structurally cannot open a real fence before normalization runs. Isolating
+# every fence marker onto its own line restores exactly the property
+# _mask_fences depends on, so a newline-free response that quotes the finding
+# format inside a fence gets masked the same as any other response (design
+# SC5) instead of leaking the quoted text through as fabricated findings.
+_FENCE_MARK_RE = re.compile(r"[`~]{3,}")
+
+
+def _insert_before(text: str, pattern: re.Pattern[str]) -> tuple[str, int]:
+    """*text* with a ``\\n`` inserted before each match not already at line start.
+
+    Returns the transformed text and the number of breaks inserted.
+    """
+    pieces: list[str] = []
+    position = 0
+    inserted = 0
+    for match in pattern.finditer(text):
+        start = match.start()
+        pieces.append(text[position:start])
+        if start > 0 and text[start - 1] != "\n":
+            pieces.append("\n")
+            inserted += 1
+        position = start
+    pieces.append(text[position:])
+    return "".join(pieces), inserted
+
+
+def _insert_after(text: str, pattern: re.Pattern[str]) -> tuple[str, int]:
+    """*text* with a ``\\n`` inserted after each match's end. Never de-dupes."""
+    pieces: list[str] = []
+    position = 0
+    inserted = 0
+    for match in pattern.finditer(text):
+        end = match.end()
+        pieces.append(text[position:end])
+        pieces.append("\n")
+        inserted += 1
+        position = end
+    pieces.append(text[position:])
+    return "".join(pieces), inserted
+
+
+def _insert_around(text: str, pattern: re.Pattern[str]) -> tuple[str, int]:
+    """*text* with a ``\\n`` inserted on both sides of each match, isolating
+    it onto its own line. Used for fence markers, where both the opener and
+    the following content need their own line for ``_FENCE_OPEN_RE`` and the
+    closer pattern (both ``^...$`` MULTILINE) to recognize them at all.
+    """
+    pieces: list[str] = []
+    position = 0
+    inserted = 0
+    for match in pattern.finditer(text):
+        start, end = match.start(), match.end()
+        pieces.append(text[position:start])
+        if start > 0 and text[start - 1] != "\n":
+            pieces.append("\n")
+            inserted += 1
+        pieces.append(text[start:end])
+        position = end
+    pieces.append(text[position:])
+    text = "".join(pieces)
+
+    pieces = []
+    position = 0
+    for match in pattern.finditer(text):
+        end = match.end()
+        pieces.append(text[position:end])
+        if end < len(text) and text[end] != "\n":
+            pieces.append("\n")
+            inserted += 1
+        position = end
+    pieces.append(text[position:])
+    return "".join(pieces), inserted
+
+
+def _normalize_line_structure(text: str) -> tuple[str, int]:
+    """Restore the line structure the parser's seven constructs assume (D1).
+
+    Applied only to a response detected as newline-free (D5) — every other
+    response is returned unchanged by the caller before reaching here.
+    Conservative and ordered: each pass targets one fusion shape measured
+    against the real specimen (design D2), never an unconditional break
+    before every '#' or tag, which a naive first cut showed makes the parse
+    strictly worse (0 findings instead of 1).
+
+    Fence markers are isolated first (#91 guard), before anything else can
+    insert a break inside what should become a masked fence body.
+
+    Returns the normalized text and the total count of inserted breaks, for
+    the run digest (D4).
+    """
+    total_inserted = 0
+    text, count = _insert_around(text, _FENCE_MARK_RE)
+    total_inserted += count
+    text, count = _insert_before(text, _HEADING_START_RE)
+    total_inserted += count
+    text, count = _insert_after(text, _SECTION_HEADING_FUSION_RE)
+    total_inserted += count
+    text, count = _insert_after(text, _VERDICT_FUSION_RE)
+    total_inserted += count
+    text, count = _insert_before(text, _TAG_FUSION_RE)
+    total_inserted += count
+    text, count = _insert_after(text, _ANCHOR_END_RE)
+    total_inserted += count
+    return text, total_inserted
+
 
 def _mask_fences(text: str) -> str:
     """Blank out the interior of every fenced code block, preserving offsets.
@@ -753,11 +920,30 @@ def parse_review_output(
     log a WARNING. Findings with ``location == UNVERIFIED_LOCATION`` are
     skipped by both checks.
     """
-    verdict = _extract_verdict(raw_output)
+    # Newline-free responses break seven line-structure-dependent constructs
+    # in this parser (#96, design D1). Scoped narrowly to that exact trigger
+    # (D5): every response that parses correctly today — anything containing
+    # at least one newline — takes this same, byte-identical path it always
+    # has. `parsed_text` is what every downstream parsing step reads;
+    # `raw_output` (unmodified) is what the ReviewResult and the artifact's
+    # `### Raw Response` section persist — the two must never be conflated.
+    if "\n" not in raw_output:
+        parsed_text, normalized_break_count = _normalize_line_structure(raw_output)
+    else:
+        parsed_text, normalized_break_count = raw_output, 0
+
+    verdict = _extract_verdict(parsed_text)
+    # Provenance (#97, D7): STATED unless a later branch derives or cannot
+    # resolve it. Set here, not computed from fallback_used, because one
+    # branch below (the findings-parse mismatch) sets fallback_used=True for
+    # a verdict that was genuinely stated — only the *findings* failed to
+    # parse (T2.3). Reassigning per branch, by what actually happened to the
+    # verdict, is the only way that branch resolves correctly.
+    verdict_source: VerdictSource | None = VerdictSource.STATED
     findings, finding_scan, findings_section_located = _extract_findings(
-        raw_output, verdict=verdict, template_name=template_name
+        parsed_text, verdict=verdict, template_name=template_name
     )
-    summary_section_located = _locate_section(_mask_fences(raw_output), "summary") is not None
+    summary_section_located = _locate_section(_mask_fences(parsed_text), "summary") is not None
     if not findings_section_located:
         # INFO, not WARNING: a missing heading is not a degradation. Real
         # reviews omit it and parse correctly, so warning here would fire on
@@ -800,6 +986,7 @@ def parse_review_output(
         )
         verdict = derived
         fallback_used = True
+        verdict_source = VerdictSource.DERIVED
     elif verdict is Verdict.UNKNOWN:
         # Genuinely unknown: no verdict and nothing to derive one from.
         # Previously silent, which made a failed parse indistinguishable
@@ -815,6 +1002,11 @@ def parse_review_output(
         # one case with nothing else to go on was the one that kept no evidence (#61).
         # The result's own fallback_used stays False — nothing was derived or fabricated;
         # the artifact keys its degraded rendering on the UNKNOWN verdict instead.
+        # verdictSource (#97, D8): omitted rather than STATED — there is no
+        # verdict here to attribute provenance to (UNKNOWN is not a resolved
+        # verdict), so "does not apply" is the honest answer, following the
+        # established _review_frontmatter_lines convention for optional keys.
+        verdict_source = None
         _write_debug_log(
             template=template_name,
             model=model,
@@ -827,6 +1019,11 @@ def parse_review_output(
     mismatch = verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings
     if mismatch:
         fallback_used = True
+        # verdictSource stays STATED here (#97, T2.3): this verdict came from
+        # _extract_verdict — the model genuinely stated it — only the
+        # *findings* failed to parse. fallback_used=True and STATED both hold
+        # simultaneously; do not compute verdict_source from fallback_used or
+        # this branch mislabels a stated verdict as derived.
         logger.warning(
             "%s review (model=%s) has verdict=%s but zero structured findings "
             "were parsed — the model likely did not follow the required "
@@ -870,9 +1067,11 @@ def parse_review_output(
         input_files=input_files,
         model=model,
         fallback_used=fallback_used,
+        verdict_source=verdict_source,
         score=score,
         criteria=criteria,
         summary_section_located=summary_section_located,
         findings_section_located=findings_section_located,
         finding_scan=finding_scan,
+        normalized_break_count=normalized_break_count,
     )

@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260913
+dateUpdated: 20260914
 
 ---
 
@@ -11,6 +11,129 @@ dateUpdated: 20260913
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260914
+
+### Slice 919 — Verification That Verified Nothing (#96, #97, #98)
+
+Committed as `ee5e01eb` (Part 1), `e183ef70` (Part 2), `afe341af` (Part 3). Slice 919 is
+complete.
+
+One theme across three layers: a check that verified nothing must not report success.
+Sequenced 1 → 2 → 3 per the design (inverting the plan entry's C → A → B) — Part 1 is the
+highest-severity defect and the trigger for Part 2's derived-verdict shape, so settling its
+leniency story first told Part 2 how many distinct degradation shapes the provenance flag
+needed to describe.
+
+**Part 1 — newline-free responses parse (#96).** A provider response with zero newlines
+broke seven line-structure-dependent constructs in `review/parsers.py`, collapsing four
+findings into one and losing the verdict. Fixed with a normalization pass
+(`_normalize_line_structure`) that restores line structure before the existing parser runs
+unchanged, applied only when a response is detected as newline-free (D5) — every other
+response takes the same byte-identical path it always has.
+
+Three named traps, each independently guarded and tested: mid-run hash insertion (`###`
+must never split at its second `#`), fused heading text (`## SummaryPASSThe rest...` needs
+a break after the recognized heading word, not an unconditional one), and a `#` inside a
+`location:` markdown anchor being mistaken for a heading (would truncate the findings
+section at the first anchor). A fourth trap surfaced during implementation, beyond the
+three named in the design: once the anchor `#` is correctly *not* treated as a heading, its
+kebab-case slug still runs directly into the following prose with no terminator, which
+would make `_LOCATION_RE`'s `$`-bounded capture swallow the rest of the finding body as the
+location value — fixed with a companion break inserted after the anchor's slug ends.
+
+The subtlest part of the fix: `_extract_verdict` used an unbounded `.*?` scan between the
+`## Summary` heading and the verdict keyword. With only a newline inserted after "Summary"
+(no other change), a fused `PASSThe` has no word boundary after `PASS`, so the scan ran
+forward and matched a `CONCERN` belonging to a later finding — a confidently wrong verdict,
+worse than the UNKNOWN it replaced. Fixed by replacing the scanning search with a
+fixed-position match (`re.match`, not `.search`) immediately after the heading — genuinely
+bounded, not merely newline-patched, so the same fix also closes the bug for other
+malformed-but-line-broken text.
+
+A second, unplanned fix was needed for design success criterion 5 (fence masking, #91,
+does not reopen): a genuinely newline-free response cannot contain a real fence before
+normalization runs (`_FENCE_OPEN_RE` requires a trailing `\n` the raw text never has), so
+without special handling a quoted `### [FAIL] Title` inside backtick markers would leak
+through as a fabricated finding. Fixed by isolating fence markers onto their own line as
+the first normalization pass, before anything else can insert a break inside what should
+become a masked fence body.
+
+**Discovered, filed, not fixed:** `_locate_section`'s self-closing guard (written for a
+`### Findings` heading that sits at its own findings' level) also misfires for `"summary"`
+whenever the document holds findings elsewhere — `summary_section_located` is `False` for
+essentially every well-formed review with both a stated verdict and findings, predating
+this slice (confirmed via `git stash` against pre-919 `main`). Out of Part 1's scope; filed
+as [squadron#101](https://github.com/ecorkran/squadron/issues/101).
+
+**Part 2 — verdict provenance in frontmatter (#97).** A verdict derived from findings after
+a failed summary parse (the #96 shape, recovery mechanism from #28) was indistinguishable
+in frontmatter from one the model actually stated — `fallback_used` already reached the
+artifact body and JSON, but `_review_frontmatter_lines` had no degradation parameter, so
+Context Forge's review gate (which reads frontmatter) could not tell a recovered PASS from
+a real one.
+
+Added `VerdictSource(StrEnum)` — `STATED | DERIVED`, a closed two-value vocabulary per D7
+— threaded through `parse_review_output` independently at each branch (never computed from
+`fallback_used`, since one branch — verdict genuinely stated but findings unparseable —
+sets `fallback_used=True` for a verdict that is nonetheless `STATED`, the one place the two
+fields diverge). Emitted as `verdictSource: stated|derived` in frontmatter adjacent to
+`verdict:`, at both call sites (the normal review path and the provider-failure path, which
+correctly omits the key — no `ReviewResult` exists there to attribute provenance to). Also
+added to `to_dict()` so the JSON and frontmatter surfaces can be compared for agreement
+(design SC6), verified directly by test.
+
+Filed the cross-repo coordination issue this slice's design called for:
+[context-forge#89](https://github.com/ecorkran/context-forge/issues/89), asking cf's review
+gate to read the key and decline to auto-clear on `derived`. Not a blocking precondition —
+verified `cf validate frontmatter` tolerates the unknown key today — but #97 stays only
+half-closed until a consumer acts on the value.
+
+**Part 3 — frontmatter gate fails closed (#98).** `frontmatter_gate.py` handed `cf` the
+staged paths and read only the exit code. In a sibling git worktree, `cf` silently resolves
+in-root against the registered default checkout, checks none of the paths handed to it, and
+exits 0 — the gate reported `ok` having verified nothing. Reproduced directly (throwaway
+invalid-frontmatter file in the `squadron-pr` worktree, never actually committed): `cf
+validate frontmatter --json` there reports `filesChecked: 0`, exit 0.
+
+Fixed by passing `--json` and reading `filesChecked`: zero-checked against a non-empty
+staged-path list now fails with a message naming the worktree cause (D10); an absent or
+unparseable count fails closed with its own distinct message, never a silent fallback to
+exit-code-only behavior (D11); zero-checked against an *empty* staged list still passes,
+since that's a legitimate "nothing to check" (D12). Also bounded the subprocess with a
+timeout (`FRONTMATTER_GATE_TIMEOUT_S = 20.0`, new constant in `tools/limits.py`) mirroring
+`bash_tool.py`'s `_kill_process_group` / `asyncio.wait_for` pattern exactly — added after
+the design's own slice review flagged the missing hang-handling as a Failure-Mode
+Enumeration gap. All three fail-closed messages (worktree, unreadable-count, timeout) are
+pairwise distinguishable by content, not just by `success is False`, since the operator's
+next action differs for each.
+
+This is a deliberate behavior change (D13): a worktree commit that passed vacuously before
+now fails, and will look like a new bug to whoever hits it first. CHANGELOG entry added
+naming the workaround (commit markdown from the default checkout, or register the worktree
+with `cf`).
+
+**Two review rounds, both CONCERNS, all findings addressed before implementation began**
+(prior session, `5b66a10e` / `29f35fd5`) — F001 on the Part 1 task breakdown caught a task
+telling the implementer to duplicate an already-committed fixture; F001/F002 on Part 2/3
+caught an untested design success criterion and a test gap that would have let
+`VerdictSource` silently be computed from `fallback_used` instead of set independently,
+exactly the divergent branch above.
+
+**Verification walkthrough refined from what was actually run**, per this phase's own
+instruction — corrections stated rather than the draft quietly amended: Part 1's baseline
+command (calling `_extract_verdict`/`_extract_findings` directly) still reproduces pre-fix
+numbers even after the fix landed, because normalization only ever runs inside
+`parse_review_output`, never inside those two functions themselves — expected, not a
+regression, and the walkthrough now uses the real entry point for the "after" measurement.
+Part 3's reproduction used the existing `squadron-pr` worktree (holding real, unrelated
+in-progress work for initiative 380) — a throwaway file was added and removed there without
+ever staging or committing it, confirmed via `git status --short` before and after.
+
+Full suite: 3941 passed, 4 skipped (design baseline was 3698 passed, 4 skipped; the +243 is
+this slice's own new tests, skip count unchanged). `ruff format`, `ruff check`, `pyright`
+all clean. Four pre-existing `RuntimeWarning`s in unrelated CLI test mocks, confirmed via
+`git log` to predate this slice's commits.
 
 ## 20260913
 

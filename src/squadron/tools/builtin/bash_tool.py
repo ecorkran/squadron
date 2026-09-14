@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import signal
 
+from squadron.core.process_group import kill_process_group
 from squadron.tools import limits
 from squadron.tools.builtin._shared import BASH_NAME, error, guarded, require_str, truncate
 from squadron.tools.models import JailSpec, ToolDescriptor, ToolExecutor, ToolResult
@@ -28,17 +27,6 @@ BASH_PARAMETERS: dict[str, object] = {
     },
     "required": ["command"],
 }
-
-
-async def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
-    """Kill *proc*'s whole process group and reap it, so no zombie or orphan is left."""
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-    except ProcessLookupError:
-        # The process exited on its own between the timeout firing and this kill. Nothing to
-        # signal; the wait below still reaps it.
-        pass
-    await proc.wait()
 
 
 def _bash_factory(spec: JailSpec) -> ToolExecutor:
@@ -61,7 +49,7 @@ def _bash_factory(spec: JailSpec) -> ToolExecutor:
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             except TimeoutError:
-                await _kill_process_group(proc)
+                await kill_process_group(proc)
                 _logger.warning(
                     "%s: command timed out after %ss and was killed: %s",
                     BASH_NAME,

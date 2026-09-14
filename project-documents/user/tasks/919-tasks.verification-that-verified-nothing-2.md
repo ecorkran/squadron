@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/919-slice.verification-that-verified
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [917, 918]
 interfaces: []
-status: not_started
+status: complete
 dateCreated: 20260914
 dateUpdated: 20260914
 ---
@@ -77,11 +77,11 @@ Re-verify every cited line number before editing.
 
 ### T2.1 — Define the `VerdictSource` enum
 
-- [ ] Add `VerdictSource(StrEnum)` to `review/models.py`, mirroring the
+- [x] Add `VerdictSource(StrEnum)` to `review/models.py`, mirroring the
       `Verdict` enum's style ([models.py:10](src/squadron/review/models.py#L10)):
       exactly two members, `STATED = "stated"` and `DERIVED = "derived"`
       (D7's closed two-value vocabulary — no reason string, no third value).
-- [ ] Place it near `Verdict` and `Severity` so the three enums read as a
+- [x] Place it near `Verdict` and `Severity` so the three enums read as a
       family.
 
 **Success:** `pyright` clean; the enum is importable from `review.models`
@@ -89,22 +89,22 @@ and defines exactly the two members. Effort: 1.
 
 ### T2.2 — Thread provenance through `parse_review_output`'s result
 
-- [ ] Add a field to `ReviewResult` carrying the resolved `VerdictSource` (or
+- [x] Add a field to `ReviewResult` carrying the resolved `VerdictSource` (or
       an equivalent that lets the caller compute it — decide based on
       whether `fallback_used` alone is sufficient, per D7's note that a
       normalized-but-then-stated parse, per D4, is still `stated`).
-- [ ] Set it in `parsers.py` at the same two sites that currently set
+- [x] Set it in `parsers.py` at the same two sites that currently set
       `fallback_used`: the derivation branch
       ([parsers.py:802](src/squadron/review/parsers.py#L802)) sets `DERIVED`;
       every other branch that produces a real verdict sets `STATED`.
-- [ ] Resolve D8 explicitly for the nothing-parsed branch
+- [x] Resolve D8 explicitly for the nothing-parsed branch
       ([parsers.py:816](src/squadron/review/parsers.py#L816), verdict stays
       `UNKNOWN`): choose and document whether this emits `STATED` (if
       unambiguous) or omits the key entirely, following the established
       `_review_frontmatter_lines` convention that an absent optional key
       means "does not apply." Write the chosen behavior as a code comment at
       the branch, not only in the task file.
-- [ ] Add `verdictSource` to `to_dict()` ([models.py:201](src/squadron/review/models.py#L201),
+- [x] Add `verdictSource` to `to_dict()` ([models.py:201](src/squadron/review/models.py#L201),
       beside `fallback_used`) so the JSON contract and frontmatter can be
       compared for agreement (design success criterion 6) — see T2.5.
 
@@ -115,17 +115,17 @@ the same field frontmatter will render. Effort: 2.
 
 ### T2.3 — Test provenance resolution in isolation
 
-- [ ] Test: the #96-shaped case (a parse that fails the summary but yields
+- [x] Test: the #96-shaped case (a parse that fails the summary but yields
       one benign finding, most-severe-wins deriving `PASS`) resolves to
       `VerdictSource.DERIVED` — this is the end-to-end regression for the
       defect #97 describes.
-- [ ] Test: a normal parse where `## Summary` is found directly resolves to
+- [x] Test: a normal parse where `## Summary` is found directly resolves to
       `VerdictSource.STATED`.
-- [ ] Test: a normalized-newline-free parse (Part 1) whose `## Summary` is
+- [x] Test: a normalized-newline-free parse (Part 1) whose `## Summary` is
       then found after normalization resolves to `STATED`, not `DERIVED` —
       confirms D7's orthogonality (`verdictSource` answers "did the model say
       this", not "how much work did squadron do to read it").
-- [ ] **Test the stated-vs-derived mismatch branch explicitly** — the
+- [x] **Test the stated-vs-derived mismatch branch explicitly** — the
       `verdict in (CONCERNS, FAIL) and not findings` case
       ([parsers.py:826-828](src/squadron/review/parsers.py#L826-L828)).
       `fallback_used` is `True` here too, but the verdict came from
@@ -137,7 +137,7 @@ the same field frontmatter will render. Effort: 2.
       `derived`; T2.2's field must be set independently at each branch, per
       what actually happened to the verdict, not derived from the findings
       flag.
-- [ ] Test the nothing-parsed branch per whichever T2.2 decided.
+- [x] Test the nothing-parsed branch per whichever T2.2 decided.
 
 **Success:** all five cases pass and are distinguishable from each other —
 no two produce the same `VerdictSource` for different reasons without a
@@ -146,19 +146,19 @@ if `VerdictSource` is ever computed from `fallback_used` directly. Effort: 2.
 
 ### T2.4 — Emit `verdictSource` in frontmatter at both call sites
 
-- [ ] Add a `verdict_source: VerdictSource | None` parameter to
+- [x] Add a `verdict_source: VerdictSource | None` parameter to
       `_review_frontmatter_lines` ([persistence.py:242](src/squadron/review/persistence.py#L242)),
       following the existing optional-key convention in that function
       (append the line only when the value is supplied, matching
       `reviewed_sha`/`revision_number`/`tools_suppressed_reason`'s pattern
       immediately below it).
-- [ ] Pass it at **both** call sites — the normal review path
+- [x] Pass it at **both** call sites — the normal review path
       ([persistence.py:352](src/squadron/review/persistence.py#L352)) from
       the `ReviewResult` field T2.2 added, and the provider-failure path
       ([persistence.py:683](src/squadron/review/persistence.py#L683)) with
       whatever value is correct for a failure (likely omitted — a provider
       failure has no verdict to attribute provenance to; decide and comment).
-- [ ] Emit the key as `verdictSource: stated` / `verdictSource: derived` in
+- [x] Emit the key as `verdictSource: stated` / `verdictSource: derived` in
       frontmatter, placed adjacent to the existing `verdict:` line for
       readability.
 
@@ -169,15 +169,15 @@ inconsistent. Effort: 2.
 
 ### T2.5 — Test frontmatter emission end to end
 
-- [ ] Test: a review artifact built from the #96-shaped derivation case
+- [x] Test: a review artifact built from the #96-shaped derivation case
       (T2.3's first case) has frontmatter containing both `verdict: PASS`
       and `verdictSource: derived` — read the rendered markdown's frontmatter
       block directly, not the internal `ReviewResult`, since the whole
       defect was one surface (JSON `to_dict()`) knowing what another
       (frontmatter) did not.
-- [ ] Test: a real parsed `## Summary` case's artifact shows
+- [x] Test: a real parsed `## Summary` case's artifact shows
       `verdictSource: stated`.
-- [ ] **`to_dict()` must also emit `verdictSource`**, not only frontmatter —
+- [x] **`to_dict()` must also emit `verdictSource`**, not only frontmatter —
       design success criterion 6 ("no surface says `stated` while another
       says `derived`") is not executable otherwise, since JSON currently
       carries only `fallback_used`. Add the key to `to_dict()`
@@ -186,7 +186,7 @@ inconsistent. Effort: 2.
       `verdictSource` and the frontmatter's `verdictSource` line report the
       same value for the same `ReviewResult`, for both the derived and
       stated cases.
-- [ ] Test: an existing artifact snapshot (or a `ReviewResult` built the way
+- [x] Test: an existing artifact snapshot (or a `ReviewResult` built the way
       one was before this slice) with no `verdictSource` field set renders
       frontmatter with the key **absent**, not a placeholder — confirms
       design success criterion 3 (additive, absence is meaningful).
@@ -197,12 +197,13 @@ executable tests, not just documentation claims. Effort: 2.
 
 ### T2.6 — File the Context Forge coordination issue
 
-- [ ] File an issue against context-forge (or the appropriate tracker) asking
+- [x] File an issue against context-forge (or the appropriate tracker) asking
       its review gate to read `verdictSource` and decline to auto-clear on
       `derived` — reference this slice and #97. Not a blocking precondition
       (D6 verified `cf` tolerates the unknown key today), but design success
-      criterion 7 requires it be filed once the key ships.
-- [ ] Link the filed issue number back into this task's checklist item and
+      criterion 7 requires it be filed once the key ships. Filed:
+      [context-forge#89](https://github.com/ecorkran/context-forge/issues/89)
+- [x] Link the filed issue number back into this task's checklist item and
       into the slice design's Part 2 section (a one-line addition noting the
       issue number, once known).
 
@@ -210,15 +211,15 @@ executable tests, not just documentation claims. Effort: 2.
 
 ### T2.7 — Verify and commit Part 2
 
-- [ ] `uv run pytest tests/review/ -q` green.
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
+- [x] `uv run pytest tests/review/ -q` green.
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
       clean.
-- [ ] Run the design's Part 2 verification walkthrough: construct the #96
+- [x] Run the design's Part 2 verification walkthrough: construct the #96
       shape, `grep -E '^(verdict|verdictSource):'` the resulting artifact,
       confirm both keys, then `uv run pytest tests/review/ -k "provenance or
       verdict_source" -v`.
-- [ ] Commit: `feat(review): emit verdictSource provenance in frontmatter (#97)`
-- [ ] Effort: 1
+- [x] Commit: `feat(review): emit verdictSource provenance in frontmatter (#97)`
+- [x] Effort: 1
 
 ---
 
@@ -226,7 +227,7 @@ executable tests, not just documentation claims. Effort: 2.
 
 ### T3.1 — Add the gate timeout constant
 
-- [ ] Add a new constant to `tools/limits.py` (e.g.
+- [x] Add a new constant to `tools/limits.py` (e.g.
       `FRONTMATTER_GATE_TIMEOUT_S`), placed alongside `BASH_TIMEOUT_S` and
       `GREP_TIMEOUT_S`, with a docstring comment following that module's
       existing style. Value should sit well below `BASH_TIMEOUT_S` (120.0)
@@ -234,7 +235,7 @@ executable tests, not just documentation claims. Effort: 2.
       — pick a concrete number (e.g. 15.0-30.0) and state the reasoning in
       the comment; this is an implementation call, not a design-mandated
       exact value.
-- [ ] Do **not** hard-code the value at the `frontmatter_gate.py` call site
+- [x] Do **not** hard-code the value at the `frontmatter_gate.py` call site
       (`CLAUDE.md`'s rule against scattering magic defaults) — reference
       `limits.FRONTMATTER_GATE_TIMEOUT_S` by module attribute, read at call
       time, matching `bash_tool.py`'s
@@ -246,20 +247,20 @@ by value) from the gate. Effort: 1.
 
 ### T3.2 — Pass `--json` and read `filesChecked` (D10)
 
-- [ ] In `FrontmatterGateAction.execute` ([frontmatter_gate.py:44](src/squadron/events/builtin/frontmatter_gate.py#L44)),
+- [x] In `FrontmatterGateAction.execute` ([frontmatter_gate.py:44](src/squadron/events/builtin/frontmatter_gate.py#L44)),
       add `--json` to the `cf validate frontmatter` invocation.
-- [ ] Parse `filesChecked` from the JSON stdout. When
+- [x] Parse `filesChecked` from the JSON stdout. When
       `context.staged_paths` is non-empty and `filesChecked == 0`, treat this
       as a **failure**, distinct from cf's own findings-based failure
       (exit code 1) and from the missing-cf/could-not-run cases already
       handled.
-- [ ] The failure message must name the likely cause per D10's wording: cf
+- [x] The failure message must name the likely cause per D10's wording: cf
       validated 0 of N staged files, which in a git worktree usually means cf
       resolved in-root against a different checkout, so the gate cannot
       confirm frontmatter and is failing closed. Do not just say "0 files
       checked" — the operator cannot infer the worktree cause from that
       alone.
-- [ ] **Update the existing fake-process tests in
+- [x] **Update the existing fake-process tests in
       `test_frontmatter_gate.py`'s `TestExitMapping`** so each includes a
       `filesChecked` key in its fake stdout —
       `test_exit_0_succeeds` currently returns `b'{"totalFindings":0}'` with
@@ -279,11 +280,11 @@ still pass. Effort: 2.
 
 ### T3.3 — Fail closed on absent or unparseable `filesChecked` (D11)
 
-- [ ] When the JSON cannot be parsed at all, or parses but has no
+- [x] When the JSON cannot be parsed at all, or parses but has no
       `filesChecked` key, take the same fail-closed path as T3.2 — never a
       silent fallback to exit-code-only behavior (`CLAUDE.md`'s "never use
       silent fallback values").
-- [ ] Give this case its own distinct message (per D11: "the count could not
+- [x] Give this case its own distinct message (per D11: "the count could not
       be read"), separate from T3.2's worktree-cause message, so the
       operator can tell a cf-version/output-shape problem from a worktree
       problem.
@@ -293,11 +294,11 @@ message distinguishable from T3.2's. Effort: 1.
 
 ### T3.4 — Confirm zero-staged-paths is a legitimate pass (D12)
 
-- [ ] Confirm (or add if missing) that when `context.staged_paths` is empty,
+- [x] Confirm (or add if missing) that when `context.staged_paths` is empty,
       `filesChecked: 0` is **not** treated as a failure — this must be
       tested explicitly, since it is the case that would otherwise make
       T3.2's fix fail every code-only commit.
-- [ ] The failure condition from T3.2 is specifically "zero-checked against
+- [x] The failure condition from T3.2 is specifically "zero-checked against
       non-empty staged input," never "zero-checked" alone — verify the
       implementation reads that way, not as two separate conditions that
       happen to coincide.
@@ -307,23 +308,23 @@ Effort: 1.
 
 ### T3.5 — Bound the subprocess with a timeout and reap on kill (D14)
 
-- [ ] Change the subprocess spawn
+- [x] Change the subprocess spawn
       ([frontmatter_gate.py:44-49](src/squadron/events/builtin/frontmatter_gate.py#L44-L49))
       to pass `start_new_session=True`, matching `bash_tool.py`'s reasoning
       (the timeout path must be able to kill the whole process group, not
       just the `cf` process itself).
-- [ ] Wrap `proc.communicate()` in `asyncio.wait_for(..., timeout=limits.FRONTMATTER_GATE_TIMEOUT_S)`
+- [x] Wrap `proc.communicate()` in `asyncio.wait_for(..., timeout=limits.FRONTMATTER_GATE_TIMEOUT_S)`
       (T3.1's constant), catching the timeout.
-- [ ] On timeout, kill and reap the process group — reuse or mirror
+- [x] On timeout, kill and reap the process group — reuse or mirror
       `_kill_process_group` from `bash_tool.py`
       ([bash_tool.py:33-40](src/squadron/tools/builtin/bash_tool.py#L33-L40))
       rather than reimplementing it; if it cannot be imported directly
       without creating an unwanted dependency between `tools` and `events`,
       duplicate the function with a comment noting it mirrors
       `bash_tool.py`'s implementation and why it is not shared.
-- [ ] Log at WARNING on timeout, naming the timeout value and that `cf` was
+- [x] Log at WARNING on timeout, naming the timeout value and that `cf` was
       killed — matching `bash_tool.py`'s WARNING wording style.
-- [ ] The gate fails on timeout, with a message distinct from both T3.2's
+- [x] The gate fails on timeout, with a message distinct from both T3.2's
       (worktree) and T3.3's (unparseable count) messages — the operator's
       next action differs for each of the three causes.
 
@@ -335,18 +336,18 @@ Enumeration rule's required observable signal. Effort: 3.
 
 ### T3.6 — Test the timeout path in `test_frontmatter_gate.py`
 
-- [ ] Extend `tests/events/builtin/test_frontmatter_gate.py` with a test
+- [x] Extend `tests/events/builtin/test_frontmatter_gate.py` with a test
       class for the timeout case, following the file's existing
       `_fake_process`/`_commit_context` helper pattern
       (or add a new helper that simulates a hanging `communicate()` — e.g. a
       mock whose `communicate` awaits `asyncio.sleep` longer than the test's
       patched timeout).
-- [ ] Assert: the gate's result is a failure; a WARNING was logged (use
+- [x] Assert: the gate's result is a failure; a WARNING was logged (use
       `caplog`, matching the existing project convention in
       `tests/tools/test_jail.py`'s WARNING assertions); the process's kill
       path was invoked (assert on the mock, since a real hung subprocess
       cannot be spawned safely in a unit test).
-- [ ] Patch `limits.FRONTMATTER_GATE_TIMEOUT_S` down to a small value for the
+- [x] Patch `limits.FRONTMATTER_GATE_TIMEOUT_S` down to a small value for the
       test rather than actually waiting close to its real value — keep the
       test fast.
 
@@ -355,11 +356,11 @@ if T3.5's timeout wrapping is removed. Effort: 2.
 
 ### T3.7 — Test the zero-checked and unparseable-count paths
 
-- [ ] Add tests to `test_frontmatter_gate.py` covering T3.2
+- [x] Add tests to `test_frontmatter_gate.py` covering T3.2
       (zero-checked-against-nonempty fails, with the worktree message), T3.3
       (absent/unparseable `filesChecked` fails, with its own message), and
       T3.4 (empty staged list with `filesChecked: 0` passes).
-- [ ] **Add the design's criterion 2 pair — the default-checkout case is
+- [x] **Add the design's criterion 2 pair — the default-checkout case is
       otherwise untested.** A fake `cf` returning exit 0 with
       `filesChecked` equal to the staged-path count passes (valid
       frontmatter, default checkout, unchanged from today); a fake `cf`
@@ -368,7 +369,7 @@ if T3.5's timeout wrapping is removed. Effort: 2.
       one of T3.2's or T3.3's fail-closed messages. This is what proves the
       fail-closed paths added by this part did not also start failing the
       ordinary, everything-worked case.
-- [ ] Confirm all three failure messages (worktree, unparseable-count,
+- [x] Confirm all three failure messages (worktree, unparseable-count,
       timeout) are distinguishable from each other by asserting on
       message content, not just on `success is False` — design success
       criterion 5 requires the messages be genuinely distinct, and a test
@@ -380,10 +381,10 @@ three failure messages are pairwise distinguishable. Effort: 2.
 
 ### T3.8 — Confirm `review_verdict_gate.py` is unaffected
 
-- [ ] Read `review_verdict_gate.py` ([review_verdict_gate.py:97](src/squadron/events/builtin/review_verdict_gate.py#L97))
+- [x] Read `review_verdict_gate.py` ([review_verdict_gate.py:97](src/squadron/events/builtin/review_verdict_gate.py#L97))
       and confirm it reads and parses each staged path itself, never
       shelling out to `cf` — this part must not have touched it.
-- [ ] Run its existing test file unchanged:
+- [x] Run its existing test file unchanged:
       `uv run pytest tests/events/builtin/test_review_verdict_gate.py -q`.
 
 **Success:** design success criterion 6 confirmed; no diff touches that
@@ -391,19 +392,19 @@ file. Effort: 1.
 
 ### T3.9 — Reproduce the original defect from a sibling worktree, then confirm the fix
 
-- [ ] From a sibling git worktree (`git worktree list` to confirm which
+- [x] From a sibling git worktree (`git worktree list` to confirm which
       checkout is default), stage a throwaway markdown file with genuinely
       invalid frontmatter, and confirm `cf validate frontmatter --json <path>`
       reports `filesChecked: 0`, exit 0 — reproducing #98 as the design's
       walkthrough describes.
-- [ ] Confirm that **before** this part's fix, committing that file would
+- [x] Confirm that **before** this part's fix, committing that file would
       have reported `squadron.frontmatter-gate: ok` (this can be confirmed
       against the pre-fix code via `git stash` or by checking out the prior
       commit in a scratch clone — do not actually commit invalid frontmatter
       to any real branch).
-- [ ] Confirm that **after** the fix, the same commit attempt fails with the
+- [x] Confirm that **after** the fix, the same commit attempt fails with the
       T3.2 worktree-cause message.
-- [ ] Record the outcome in the DEVLOG per the design's instruction to
+- [x] Record the outcome in the DEVLOG per the design's instruction to
       refine the verification walkthrough from what was actually run.
 
 **Success:** the reproduction is genuine (invalid frontmatter, not just a
@@ -412,13 +413,13 @@ assumed from the unit tests alone. Effort: 2.
 
 ### T3.10 — Add the CHANGELOG line (D13)
 
-- [ ] Add a CHANGELOG entry noting that commits from a git worktree with
+- [x] Add a CHANGELOG entry noting that commits from a git worktree with
       staged markdown may now fail frontmatter validation where they
       previously passed silently, and name the workaround (commit markdown
       from the default checkout, or register the worktree with `cf`) — this
       is a deliberate behavior change per D13 and needs to be visible to
       whoever hits it first.
-- [ ] Keep it a short, user-facing bullet per this project's changelog
+- [x] Keep it a short, user-facing bullet per this project's changelog
       convention — technical detail belongs in the DEVLOG entry from T3.9,
       not here.
 
@@ -427,12 +428,12 @@ Effort: 1.
 
 ### T3.11 — Verify and commit Part 3
 
-- [ ] `uv run pytest tests/events/builtin/test_frontmatter_gate.py -v` green,
+- [x] `uv run pytest tests/events/builtin/test_frontmatter_gate.py -v` green,
       and `uv run pytest -q` for the full suite.
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
       clean.
-- [ ] Commit: `fix(events): fail closed when cf checks zero staged files (#98)`
-- [ ] Effort: 1
+- [x] Commit: `fix(events): fail closed when cf checks zero staged files (#98)`
+- [x] Effort: 1
 
 ---
 
@@ -440,20 +441,20 @@ Effort: 1.
 
 ### T4.1 — Full-suite gate and slice closeout
 
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
       clean across the whole tree — zero pyright errors is a merge blocker
       per `CLAUDE.md`.
-- [ ] `uv run pytest -q` full suite green. Compare the pass count against the
+- [x] `uv run pytest -q` full suite green. Compare the pass count against the
       design's stated baseline (3698 passed, 4 skipped in the default
       checkout before this slice) and confirm the new count reflects only
       this slice's additions, with no unexplained change in skip count.
-- [ ] Confirm all three parts' commits are present on the slice branch in
+- [x] Confirm all three parts' commits are present on the slice branch in
       order (T1.10, T2.7, T3.11).
-- [ ] Update the slice design's frontmatter `status` field from
+- [x] Update the slice design's frontmatter `status` field from
       `not_started` to `complete` (or the project's equivalent terminal
       status) once all tasks above are checked off — delegate the checklist
       update itself to the `task-checker` agent per `CLAUDE.md`.
-- [ ] Write the DEVLOG entry for this slice's completion per
+- [x] Write the DEVLOG entry for this slice's completion per
       `prompt.ai-project.system.md`'s Session State Summary guidance,
       covering all three parts and referencing #96, #97, #98.
 

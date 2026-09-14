@@ -6,8 +6,8 @@ parent: 900-slices.maintenance-and-refactoring.md
 dependencies: [917, 918]
 interfaces: []
 dateCreated: 20260913
-dateUpdated: 20260913
-status: not_started
+dateUpdated: 20260914
+status: complete
 ---
 
 # Slice Design: Verification That Verified Nothing
@@ -398,7 +398,8 @@ pass today.
    while another says `derived`.
 7. A cf issue is filed once the key ships, asking CF's review gate to read it. Not a
    precondition — cf tolerates the unknown key today (D6, verified) — but #97 is not
-   fully closed until a consumer acts on the value.
+   fully closed until a consumer acts on the value. Filed:
+   [context-forge#89](https://github.com/ecorkran/context-forge/issues/89) (20260914).
 
 ## Part 3 — Frontmatter gate fails closed (#98)
 
@@ -556,11 +557,27 @@ stated rather than the draft quietly amended.
 
 ### Part 1 — the real specimen parses (#96)
 
+**Run at Phase 6 completion, 20260914.** All commands below were executed against the
+finished Part 1 implementation; output shown is what actually printed, not a draft
+prediction.
+
 The fixture is the `### Raw Response` section of
 `project-documents/user/reviews/918-review.slice.review-grounding.md` — 3076 characters,
-zero newlines.
+zero newlines (byte-identical to the committed
+`tests/review/fixtures/918-newline-free-response.txt`, T1.1).
 
-Establish the baseline first, so the fix is measured against a recorded failure:
+**Correction to the draft:** the draft's baseline command called `_extract_verdict` and
+`_extract_findings` directly, bypassing `parse_review_output`'s normalization gate
+entirely. Those two functions are intentionally *not* changed to normalize on their own —
+normalization is applied once, in `parse_review_output`, before they ever see the text
+(D1, D5) — so calling them directly still reproduces the pre-fix numbers even after Part 1
+is complete. That is correct behavior, not a bug: it is what "normalization applied once,
+upstream" means. The **before** and **after** measurements below use two different calls
+for that reason; an external verifier re-running only the first would wrongly conclude
+Part 1 did nothing.
+
+Establish the pre-fix baseline (still true today, and expected to remain true — this
+demonstrates the functions are unchanged, not regressed):
 
 ```bash
 uv run python - << 'PY'
@@ -575,7 +592,7 @@ print("findings:", len(f), counts)
 PY
 ```
 
-Expected **before** the fix (recorded 20260913):
+Actual output (20260914, matches the 20260913 design measurement exactly):
 
 ```
 chars: 3076 newlines: 0
@@ -583,15 +600,43 @@ verdict: Verdict.UNKNOWN
 findings: 1 FindingScanCounts(total=1, in_fences=0, in_section=1, surviving=1)
 ```
 
-Expected **after**: `verdict: Verdict.PASS`, `findings: 4`, each with a non-empty
-`category` and a `location` that is not `unverified`.
+Now the fixed state, through the real entry point (`parse_review_output`, which is where
+normalization actually runs):
+
+```bash
+uv run python - << 'PY'
+import re, pathlib
+from squadron.review.parsers import parse_review_output
+t = pathlib.Path("project-documents/user/reviews/918-review.slice.review-grounding.md").read_text()
+raw = t[re.search(r'^### Raw Response\s*$', t, re.M).end():].strip()
+result = parse_review_output(raw, "slice", {})
+print("verdict:", result.verdict)
+print("findings:", len(result.findings))
+for f in result.findings:
+    print(" category:", bool(f.category), "location_verified:", f.location != "unverified", "description:", bool(f.description))
+PY
+```
+
+Actual output (20260914):
+
+```
+verdict: Verdict.PASS
+findings: 4
+ category: True location_verified: True description: True
+ category: True location_verified: True description: True
+ category: True location_verified: True description: True
+ category: True location_verified: True description: True
+```
 
 Then confirm the guard against a wrong verdict, which is the subtlest part of this fix —
-inserting only a newline after `Summary` yields `CONCERNS`:
+inserting only a newline after `Summary` yields `CONCERNS` if the bounded-search fix (D3)
+is not in place:
 
 ```bash
 uv run pytest tests/review/ -k "newline_free or verdict_fusion" -v
 ```
+
+Actual: 5 passed (20260914).
 
 And confirm #91 did not reopen, and the clean path is byte-identical:
 
@@ -599,26 +644,81 @@ And confirm #91 did not reopen, and the clean path is byte-identical:
 uv run pytest tests/review/ -k "fence or snapshot or clean_pass" -v
 ```
 
+Actual: 18 passed (20260914). This count includes tests unrelated to this slice (e.g.
+`test_specimen_is_inside_a_fence` across every template) that happen to match the `-k`
+filter — all pre-existing, none touched by this slice.
+
+**Caveat discovered during implementation:** verifying `summary_section_located is True`
+as a stated-vs-derived signal (originally suggested in T1.7) does not work — `_locate_section`
+has a pre-existing, unrelated bug (filed as
+[squadron#101](https://github.com/ecorkran/squadron/issues/101)) that makes it return
+`None` for the "summary" section whenever the document also contains findings elsewhere,
+regardless of newline-freedom. `fallback_used is False` is the correct signal instead, and
+is what T1.7's test actually asserts.
+
 ### Part 2 — a derived verdict is visible where the gate reads (#97)
+
+**Run at Phase 6 completion, 20260914.**
 
 Construct the #96 shape — a parse that fails the summary but yields one benign finding —
 and read the artifact's frontmatter rather than its JSON:
 
 ```bash
-grep -E '^(verdict|verdictSource):' <the artifact>
+uv run python - << 'PY'
+from squadron.review.parsers import parse_review_output
+from squadron.review.persistence import format_review_markdown
+result = parse_review_output("### [PASS] Titlecategory: catlocation: a.py:1Body.", "slice", {})
+md = format_review_markdown(result, "slice")
+for line in md.splitlines():
+    if line.startswith("verdict"):
+        print(line)
+PY
 ```
 
-Expected: `verdict: PASS` accompanied by the derived marking. Then confirm the surfaces
-agree, since the whole defect was one surface knowing what another did not:
+Actual output (20260914):
+
+```
+verdict: PASS
+verdictSource: derived
+```
+
+A real review whose `## Summary` parsed shows the stated marking, confirmed against the
+same construction with a well-formed response:
+
+```
+verdict: PASS
+verdictSource: stated
+```
+
+Then confirm the surfaces agree, since the whole defect was one surface knowing what
+another did not:
 
 ```bash
 uv run pytest tests/review/ -k "provenance or verdict_source" -v
 ```
 
+Actual: 4 passed (20260914) — `test_parser_never_sets_provenance` (an unrelated pre-919
+test whose name happens to match the filter — the `provenance` field is a different,
+reserved slice-301 field, not `verdictSource`), plus three tests from this slice covering
+the nothing-parsed omission and the to_dict()/frontmatter agreement. The broader
+stated-vs-derived and mismatch-branch coverage lives in
+`tests/review/test_parsers.py::TestVerdictSourceResolution` and
+`tests/review/test_persistence.py::TestVerdictSourceFrontmatterEmission`, which this `-k`
+filter's literal string match does not select by name — run those classes directly for
+full Part 2 coverage:
+
+```bash
+uv run pytest tests/review/ -k "VerdictSourceResolution or VerdictSourceFrontmatterEmission" -v
+```
+
+Actual: 9 passed (20260914).
+
 A real review whose `## Summary` parsed must show the stated marking — a test that only
 exercises the derived side would pass with the key hard-coded.
 
 ### Part 3 — the gate fails closed in a worktree (#98)
+
+**Run at Phase 6 completion, 20260914.**
 
 Reproduce the vacuous pass first, from a sibling worktree, then confirm the fix. The
 throwaway file must carry frontmatter that is actually invalid, so that a gate which truly
@@ -630,16 +730,58 @@ git worktree list                      # confirm which checkout is default
 cf validate frontmatter --json <staged path>   # expect filesChecked: 0, exit 0
 ```
 
-Before the fix, committing that file reports `squadron.frontmatter-gate: ok`. After, it
-must fail with a message naming the worktree cause. Then the three guard cases:
+Actual (20260914, `squadron-pr` worktree, throwaway file with `status: not-a-real-status`):
+
+```
+git worktree list
+/Users/manta/source/repos/manta/squadron     e183ef70 [919-slice.verification-that-verified-nothing]
+/Users/manta/source/repos/manta/squadron-pr  3d7d197a [382-slice.review-a-pr]
+
+cf validate frontmatter --json project-documents/user/reviews/zz-919-worktree-repro.md
+{
+  "filesChecked": 0,
+  "totalFindings": 0,
+  "errors": 0,
+  "warnings": 0,
+  "findings": []
+}
+```
+
+Reproduced exactly as the design describes: `filesChecked: 0`, exit 0, despite genuinely
+invalid frontmatter. **Correction to the draft:** the throwaway file must not actually be
+committed to confirm the before/after behavior — `FrontmatterGateAction` was instead
+invoked directly (both the pre-fix module, extracted via `git show d1863815:...` for the
+subprocess-and-exit-code logic, and the current fix) against the same reproduction, so no
+invalid frontmatter ever touched real git history in either checkout. The throwaway file
+and any worktree changes were fully cleaned up after (`squadron-pr`'s `git status --short`
+confirmed empty of anything from this reproduction, alongside its own untouched
+pre-existing work for initiative 380).
+
+Before the fix (pre-fix code path, no `--json`, exit-code only): exit 0 —
+`squadron.frontmatter-gate: ok`, byte-identical to a gate that checked everything. After
+the fix, invoking `FrontmatterGateAction().execute(...)` against the identical scenario:
+
+```
+success: False
+error: cf validated 0 of 1 staged file(s); in a git worktree this usually means cf
+resolved in-root against a different checkout, so the gate cannot confirm frontmatter
+and is failing closed.
+```
+
+Then the guard cases, run directly rather than reconstructed by hand:
 
 ```bash
 uv run pytest tests/events/builtin/test_frontmatter_gate.py -v
 ```
 
-covering zero-checked-against-nonempty (fails), empty staged list (passes),
-absent/unparseable `filesChecked` (fails with its own message), and a hung `cf` (killed,
-reaped, WARNING logged, gate fails with a third distinct message).
+Actual: 16 passed (20260914) — covering zero-checked-against-nonempty (fails, worktree
+message), empty staged list (passes), the design's criterion-2 pair (matching
+`filesChecked` with findings fails carrying cf's own text; matching `filesChecked` with no
+findings passes, unchanged from today), absent/unparseable `filesChecked` (fails with its
+own message), a hung `cf` (killed, reaped, WARNING logged, gate fails with a third distinct
+message, patched to a 0.05s timeout for test speed), and pairwise message-distinguishability
+assertions across all three fail-closed causes. Runs in well under a second (0.91s for all
+16, including two real-`cf` integration tests).
 
 ### Gates
 
@@ -650,3 +792,13 @@ uv run pytest
 
 Zero pyright errors is a merge blocker. The full suite baseline before this slice is
 3698 passed, 4 skipped in the default checkout.
+
+**Actual, 20260914 (all three parts landed):** `ruff format --check` and `ruff check` both
+clean (525 files); `pyright` 0 errors, 0 warnings; `pytest -q` — **3941 passed, 4 skipped**
+in 454.68s. The +243 passed count is this slice's own new tests across all three parts
+(baseline reconciliation: no unexplained change — skip count unchanged at 4, and every new
+test added in T1.1-T3.11 is accounted for by this slice's commits). Four pre-existing,
+unrelated `RuntimeWarning: coroutine '...' was never awaited` warnings appeared in CLI
+test mocks (`tests/cli/commands/test_run.py`, `test_run_pipeline_lazy.py`,
+`test_import_boundaries.py`) — verified pre-existing (unrelated to this slice's files) and
+not investigated further, out of scope.

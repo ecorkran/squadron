@@ -5,16 +5,27 @@ mechanism (design D8). Exit mapping preserves 172's D6 posture: a gate that
 cannot determine validity must not pass. Uses
 ``asyncio.create_subprocess_exec`` — never a blocking subprocess call inside
 an async function (project async rule).
+
+Slice 919 Part 3 (#98) adds three more indeterminate cases this same posture
+covers: ``cf`` validating zero of N staged files (a sibling git worktree
+resolving in-root against a different checkout, D10), an unreadable
+``filesChecked`` count (D11), and a hung subprocess (D14) — each fails
+closed with its own distinguishable message, since the operator's next
+action differs for each cause.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from typing import Any, cast
 
+from squadron.core.process_group import kill_process_group
 from squadron.events import EventType, register_event_action
 from squadron.events.contexts import CommitContext, EventContext
 from squadron.pipeline.models import ActionResult, ValidationError
+from squadron.tools import limits
 
 _logger = logging.getLogger(__name__)
 
@@ -25,6 +36,22 @@ _MISSING_CF_MESSAGE = (
 _COULD_NOT_RUN_MESSAGE = (
     "cf could not run the validation — if this repo is not a registered cf "
     "project, run 'cf init' once, or disable this action in events.yaml."
+)
+
+
+def _worktree_cause_message(staged_count: int) -> str:
+    return (
+        f"cf validated 0 of {staged_count} staged file(s); in a git worktree this "
+        "usually means cf resolved in-root against a different checkout, so the "
+        "gate cannot confirm frontmatter and is failing closed."
+    )
+
+
+_UNREADABLE_COUNT_MESSAGE = (
+    "cf validate frontmatter's --json output could not be read (missing or "
+    "unparseable filesChecked) — the gate cannot confirm frontmatter and is "
+    "failing closed. This looks like a cf version or output-shape problem, "
+    "not a worktree problem."
 )
 
 
@@ -41,34 +68,81 @@ class FrontmatterGateAction:
     async def execute(self, context: EventContext) -> ActionResult:
         assert isinstance(context, CommitContext)
 
-        args = ["cf", "validate", "frontmatter", *context.staged_paths]
+        args = ["cf", "validate", "frontmatter", "--json", *context.staged_paths]
         try:
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 cwd=context.cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                # Required so the timeout path can kill the whole group, not just cf itself.
+                start_new_session=True,
             )
-            stdout_bytes, stderr_bytes = await proc.communicate()
         except FileNotFoundError:
             _logger.warning("frontmatter-gate: %s", _MISSING_CF_MESSAGE)
             return ActionResult(
                 success=False, action_type=self.name, outputs={}, error=_MISSING_CF_MESSAGE
             )
 
+        # Read the limit at call time (module attribute), never captured at import, so a
+        # lowered limit takes effect for the very next call — matches bash_tool.py.
+        timeout = limits.FRONTMATTER_GATE_TIMEOUT_S
+        try:
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except TimeoutError:
+            await kill_process_group(proc)
+            message = f"cf validate frontmatter timed out after {timeout}s and was killed."
+            _logger.warning("frontmatter-gate: %s", message)
+            return ActionResult(success=False, action_type=self.name, outputs={}, error=message)
+
         stdout = stdout_bytes.decode(errors="replace")
         stderr = stderr_bytes.decode(errors="replace")
         exit_code = proc.returncode
-
-        if exit_code == 0:
-            return ActionResult(success=True, action_type=self.name, outputs={"stdout": stdout})
 
         if exit_code == 2:
             message = f"{_COULD_NOT_RUN_MESSAGE}\n{stdout}{stderr}".strip()
             _logger.warning("frontmatter-gate: %s", message)
             return ActionResult(success=False, action_type=self.name, outputs={}, error=message)
 
-        message = stdout.strip() or stderr.strip() or f"cf validate frontmatter exited {exit_code}"
+        if exit_code not in (0, 1):
+            message = stdout.strip() or stderr.strip() or f"cf validate frontmatter exited {exit_code}"
+            _logger.warning("frontmatter-gate: %s", message)
+            return ActionResult(success=False, action_type=self.name, outputs={}, error=message)
+
+        # D11: a hand-parsed count, never a silent fallback to exit-code-only behavior — the
+        # same fail-closed posture as D10's worktree case and D14's timeout, for the same
+        # reason: the gate could not confirm validity, so it must not pass.
+        files_checked: int | None = None
+        try:
+            parsed: object = json.loads(stdout)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            # json.loads yields Any; narrow once here so the accessor below is typed
+            # (matches the pattern in codehost/github_cli.py).
+            payload = cast(dict[str, Any], parsed)
+            raw_count = payload.get("filesChecked")
+            if isinstance(raw_count, int):
+                files_checked = raw_count
+
+        if files_checked is None:
+            _logger.warning("frontmatter-gate: %s", _UNREADABLE_COUNT_MESSAGE)
+            return ActionResult(
+                success=False, action_type=self.name, outputs={}, error=_UNREADABLE_COUNT_MESSAGE
+            )
+
+        # D12: zero-checked is only a failure against non-empty staged input — a commit
+        # staging no markdown gives cf nothing to check, and filesChecked: 0 is correct.
+        staged_count = len(context.staged_paths)
+        if staged_count > 0 and files_checked == 0:
+            message = _worktree_cause_message(staged_count)
+            _logger.warning("frontmatter-gate: %s", message)
+            return ActionResult(success=False, action_type=self.name, outputs={}, error=message)
+
+        if exit_code == 0:
+            return ActionResult(success=True, action_type=self.name, outputs={"stdout": stdout})
+
+        message = stdout.strip() or stderr.strip() or "cf validate frontmatter exited 1"
         _logger.warning("frontmatter-gate: %s", message)
         return ActionResult(success=False, action_type=self.name, outputs={}, error=message)
 
