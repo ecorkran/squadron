@@ -86,7 +86,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
 
 ## Feature Slices
 
-2. [ ] **(382) Review a PR** — `sq review pr <target>` on top of 381: the adapter-resolved range and
+2. [x] **(382) Review a PR** — `sq review pr <target>` on top of 381: the adapter-resolved range and
    PR record handed to the existing code review; the scratch worktree for tool-enabled reviews
    with its full lifecycle (created under squadron's data directory, named by PR key plus run id,
    registered with git, lock file carrying pid and process start time, orphan sweep on every

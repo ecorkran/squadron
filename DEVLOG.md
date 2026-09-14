@@ -12,6 +12,53 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260914
+
+### Slice 382 closed — `sq review pr` (Phase 6)
+
+`sq review pr <target>` lands in `cli/commands/review_pr.py` (commit `e6c8b55f`), split
+out of `review.py` rather than growing a module already well past the ~300-line
+guideline. It ties 381's code-host boundary to the scratch-worktree lifecycle and the
+PR-metadata block.
+
+**The two-root split is the substance of this slice.** The review runs with
+`inputs["cwd"]` at the scratch worktree while conventions resolve from the checkout, so
+a PR that edits `CLAUDE.md` or the rules directory is reviewed *against the checkout's*
+versions rather than its own. `_resolve_pr_rules_content` calls `resolve_rules_dir`
+against the checkout directly and never routes through `_resolve_review_cwd`, which
+resolves both roots from one argument — correct for `sq review code`'s single root,
+silently wrong here. That was part 3's F001 finding at task review; the implementation
+follows it. D8's `setting_sources_override=[]` is passed regardless of `--no-tools`,
+since the SDK's project-settings resolution is not gated by the tool flag.
+
+**`--files` was dropped from the slice.** Part E implemented it (`3a01c46f`:
+`review/scope.py`, its tests, and a `GLOB_MATCHED_NOTHING_IN_RANGE` enum case), and the
+implementation was then reverted in the working tree while `review_pr.py` was written
+without the flag. The revert is committed as part of `e6c8b55f` and the drop is recorded
+in task files 2 and 3 so it is not re-litigated from stale task text. `sq review pr`
+reviews the PR's full merge-base range; no operator-supplied glob narrows it.
+
+**H.1's live verification walkthrough was not run, and was dropped rather than left
+open.** It requires an open PR on `ecorkran/squadron`; there are none (checked 20260914
+— #83, #66, #64, all MERGED). The behaviors it would have demonstrated have automated
+coverage: worktree/checkout root split, `--no-tools` bypass, concurrent runs producing
+distinct worktree paths, and the checkout left unchanged after a forced mid-review
+failure (`tests/cli/test_review_pr_worktree.py`). Orphan sweep and D8 settings isolation
+have unit coverage from file 1 but no live-run evidence. **Before relying on
+`sq review pr` against real PRs, run the design's six-step walkthrough.**
+
+A task that cannot be completed should not be written as a task. H.1 was gated on a
+resource that did not exist and could not be produced by the work itself; it sat
+unstartable through the whole slice. Future breakdowns: if a step depends on something
+outside the work's control, it is a precondition or a follow-up issue, not a checklist
+item.
+
+At close: 3962 passed, 4 skipped; `ruff format`/`ruff check`/`pyright` clean. The 3
+failures in `tests/documents/test_schema_drift.py` are cf issue #88, pre-existing and
+unrelated.
+
+---
+
 ## 20260913
 
 ### Slice 382 task-review findings addressed (Phase 5)
