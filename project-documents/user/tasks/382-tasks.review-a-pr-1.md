@@ -226,7 +226,7 @@ its own fix, so it fails against the un-overridden path first.
 
 ## Part B — `_SKIP_KEYS` Extended for the PR Input
 
-The `pr` input key does not exist yet (that lands in file 2's Part C), but
+The `pr` input key does not exist yet (that lands in file 2's Part D), but
 `_SKIP_KEYS` is a one-line, low-risk change with no dependency on the rest of
 this slice, and D4 depends on it being in place before the PR block ever
 reaches `_inject_file_contents`. Doing it here keeps Part A's file focused on
@@ -317,7 +317,28 @@ depends on the CLI command that will use it (file 2, Part D).
         the path and the git stderr, logged at ERROR.
 - [ ] Effort: 3
 
-### Task C.4 — Submodule init, bounded, two distinct failure modes
+### Task C.4 — Test: sweep and creation
+
+- [ ] **Test-with, split from the lifecycle test below (review finding, part
+      1, F002).** Sequenced here, immediately after C.1–C.3, rather than
+      after every implementation task in this Part — the design's Phase 5
+      guide requires tests as the immediate successor to their implementation,
+      not batched after several unrelated pieces land.
+- [ ] Create `tests/codehost/test_worktree.py` against `FakeProcessRunner`
+      (imported from `tests/codehost/fake_runner.py`, the existing
+      convention — do not create a second fake).
+- [ ] Create: happy path produces the expected path, argv, and a written
+      `lock.json` with correct `pid`/`started_at` shape.
+- [ ] Sweep: a live-owner lock (matching pid + start time, using the current
+      test process) is left; a dead-owner lock (pid not alive, or alive with
+      a mismatched start time) is swept with one WARNING.
+- [ ] Malformed-lock table, one case each: truncated JSON, non-JSON content,
+      missing `pid`, missing `started_at`, lock file absent entirely. Each
+      asserts one WARNING, treat-as-orphan, and `sweep_orphans` raises
+      nothing.
+- [ ] Effort: 3
+
+### Task C.5 — Submodule init, bounded, two distinct failure modes
 
 - [ ] Inside `__enter__`, after the lock is written: run
       `git submodule update --init --recursive` in the new worktree, bounded
@@ -332,11 +353,11 @@ depends on the CLI command that will use it (file 2, Part D).
       `SubmoduleTimeoutError(submodule_path, seconds)`, logged at ERROR
       naming both the submodule and the bound.
 - [ ] Either failure removes the worktree (via `__exit__`'s cleanup path,
-      Task C.5) before re-raising — no path leaves a half-initialized
+      Task C.6) before re-raising — no path leaves a half-initialized
       worktree behind.
 - [ ] Effort: 3
 
-### Task C.5 — Removal on every exit path
+### Task C.6 — Removal on every exit path
 
 - [ ] `__exit__` removes the worktree unconditionally — success, exception,
       or (via the caller's own timeout handling) a review that ran past a
@@ -350,43 +371,116 @@ depends on the CLI command that will use it (file 2, Part D).
       comment why.
 - [ ] Effort: 2
 
-### Task C.6 — Test: worktree lifecycle
+### Task C.7 — Test: submodule init and removal
 
-- [ ] Create `tests/codehost/test_worktree.py` against `FakeProcessRunner`
-      (imported from `tests/codehost/fake_runner.py`, the existing
-      convention — do not create a second fake).
-- [ ] Create: happy path produces the expected path, argv, and a written
-      `lock.json` with correct `pid`/`started_at` shape.
-- [ ] Sweep: a live-owner lock (matching pid + start time, using the current
-      test process) is left; a dead-owner lock (pid not alive, or alive with
-      a mismatched start time) is swept with one WARNING.
-- [ ] Malformed-lock table, one case each: truncated JSON, non-JSON content,
-      missing `pid`, missing `started_at`, lock file absent entirely. Each
-      asserts one WARNING, treat-as-orphan, and `sweep_orphans` raises
-      nothing.
-- [ ] Submodule init: a scripted non-zero exit → `SubmoduleUnfetchableError`
-      naming the submodule; a scripted `ProcessTimedOutError` →
-      `SubmoduleTimeoutError` naming the submodule and the bound; both assert
-      the worktree directory is absent afterward.
+- [ ] Extend `tests/codehost/test_worktree.py` (from C.4).
+- [ ] **Happy-path submodule init (review finding, both part 1 and part 3 —
+      F001/F003).** The design's Functional criteria state the *positive*
+      case as its own requirement, distinct from the two failure modes: "A
+      repository with submodules yields a worktree in which submodule paths
+      exist." Script a successful `git submodule update --init --recursive`
+      against a fake repository layout carrying at least one submodule path,
+      and assert the worktree's submodule path exists and is populated —
+      not merely that the command was called with the right argv.
+- [ ] Submodule init failures: a scripted non-zero exit →
+      `SubmoduleUnfetchableError` naming the submodule; a scripted
+      `ProcessTimedOutError` → `SubmoduleTimeoutError` naming the submodule
+      and the bound; both assert the worktree directory is absent afterward.
 - [ ] Removal: success, an exception raised inside the `with` block, and a
       scripted `git worktree remove` failure (asserts WARNING, no raise from
       `__exit__`) — all three confirmed via the fake runner's recorded calls
       plus directory-absence checks where a real temp directory is used.
 - [ ] Two concurrent `ScratchWorktree` instances for the same PR record (same
       `record`, different `run_id`) produce non-colliding paths.
-- [ ] Effort: 4
+- [ ] Effort: 3
 
-### Task C.7 — Commit Part C
+### Task C.8 — Load test: concurrent worktrees and submodule timeout under a realistic bound
 
-- [ ] Run `uv run pytest tests/codehost -q`. All green — including 381's
-      existing `test_import_boundaries.py`, confirming `worktree.py` adds no
-      forbidden import.
+- [ ] **Required by the load-test tier (review finding, part 3, F002).**
+      `python.md`'s rules: "any code on the simulation, network,
+      concurrency, or environment-layer paths requires at least one load
+      test... asserting on latency, throughput, or resource bounds — not
+      just functional correctness." The scratch-worktree lifecycle is both
+      concurrency (lock/orphan-sweep races across processes) and network
+      (bounded submodule fetch) code, and `tests/codehost/test_worktree.py`
+      (C.4/C.7) only proves functional correctness against a scripted fake.
+- [ ] Create `tests/load/test_worktree_concurrency.py`, following the
+      existing precedent `tests/load/test_grep_timeout.py` (real timing, a
+      realistic configuration, not a scripted instant response).
+- [ ] Case 1 — concurrent creation: launch several (e.g. 5–10) real
+      `ScratchWorktree` creations against a real local throwaway git
+      repository (not the fake runner — this is what makes it a load test
+      rather than a duplicate of C.4/C.7) concurrently, and assert all
+      succeed with non-colliding paths within a generous bound tied to
+      `GIT_QUERY_TIMEOUT_SECONDS`, not an arbitrary wall-clock number.
+- [ ] Case 2 — submodule timeout under real timing: a submodule pointed at
+      an address that hangs (e.g. a non-routable IP, or a local listener
+      that accepts and never responds) actually gets cut off at
+      `GIT_FETCH_TIMEOUT_SECONDS` within a small multiple of the bound, not
+      merely that a `ProcessTimedOutError` is raised on a scripted fake
+      (already covered functionally by C.7) — this is the assertion that
+      the real subprocess timeout mechanism, not just the exception type,
+      actually holds under a realistic wait.
+- [ ] No new CI wiring needed: `testpaths = ["tests"]` already runs
+      `tests/load/` unconditionally.
+- [ ] Effort: 3
+
+### Task C.9 — Commit Part C
+
+- [ ] Run `uv run pytest tests/codehost tests/load -q`. All green — including
+      381's existing `test_import_boundaries.py`, confirming `worktree.py`
+      adds no forbidden import.
 - [ ] Add `ScratchWorktree`, `sweep_orphans`, and the new error classes to
       `codehost/__init__.py`'s re-export list (the package contract 382's own
       design names as `Provides`).
 - [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
 - [ ] Commit: `feat(codehost): add scratch-worktree lifecycle with orphan sweep`
 - [ ] Effort: 1
+
+---
+
+## Task Review Disposition
+
+Task review
+(`382-review.tasks.review-a-pr.part-1.md`, claude-sonnet-5, CONCERNS,
+20260913, sha `78ccf3bb`), reviewing this file. Two concerns and one note
+actioned; two pass findings, no action.
+
+- **F001 (concern) — accepted.** No task tested the design's happy-path
+  submodule criterion ("a repository with submodules yields a worktree in
+  which submodule paths exist"), only the two failure modes. Verified: C.6
+  (as originally numbered) covered only `SubmoduleUnfetchableError` and
+  `SubmoduleTimeoutError`. Task C.7 now adds the positive case explicitly,
+  asserting the submodule path exists and is populated rather than only that
+  the right argv was called.
+- **F002 (concern) — accepted, the structural one.** C.1–C.5 (effort 13) and
+  Part G's G.1–G.4 (effort 12, file 3) each landed fully before their first
+  test task, unlike Parts A/D/E/F which interleave at a finer grain. Part C
+  is restructured: C.1–C.3 (errors, sweep, create) → **C.4** (test: sweep and
+  creation) → C.5 (submodule init) → C.6 (removal) → **C.7** (test: submodule
+  init incl. the F001 happy path, and removal) → **C.8** (load test, see
+  below) → C.9 (commit). Part G's restructuring is dispositioned in file 3's
+  own Task Review Disposition, since the finding's location (batched G tasks)
+  lives there.
+- **F003 (note) — accepted.** The closeout task (file 3, H.3) named no
+  explicit `git commit` bullet for the DEVLOG/CHANGELOG/status updates it
+  makes before merging, unlike every other Part's closing task. Fixed in
+  file 3's H.3.
+- **F004 (pass)** — D8 correctly sequenced before the worktree exists. No
+  action.
+- **F005 (pass)** — full traceability, no scope creep, anchors verified
+  against live code. No action.
+
+A companion finding in `382-review.tasks.review-a-pr.part-3.md` (F002,
+concern) required a load test for the worktree lifecycle's concurrency and
+network paths, per the project's load-test tier rule
+(`python.md`, "any code on the simulation, network, concurrency, or
+environment-layer paths requires at least one load test... asserting on
+latency, throughput, or resource bounds"). No task in any of the three files
+added one. **New Task C.8** adds `tests/load/test_worktree_concurrency.py`,
+following the existing `tests/load/test_grep_timeout.py` precedent: real
+concurrent worktree creation against a throwaway repository, and a real
+(not scripted) submodule-timeout case bounded by `GIT_FETCH_TIMEOUT_SECONDS`.
 
 ---
 

@@ -56,11 +56,29 @@ renderer and its containment guarantees, independent of the CLI work.
 
 ### Task D.3 — `_pr_block`: fence-length and label neutralization
 
+- [ ] **Truncation-cap mechanism, decided here rather than left open (review
+      finding, part 2, F001).** `builders/code.py` today has zero imports
+      beyond `from __future__ import annotations` — a pure, config-free
+      module that only reads pre-resolved values off the `inputs` dict (the
+      existing `diff_exclude_patterns` key is the precedent: the CLI/
+      `review_client` layer resolves it via `get_config` and hands the
+      builder a plain string, never fetching config itself). `_pr_block`
+      follows the same shape: it does **not** call `get_config` and does
+      **not** import `squadron.config.manager`. Instead, the caller that
+      already resolves `review.max_file_size_bytes` —
+      `_inject_file_contents` ([review_client.py:361](src/squadron/review/review_client.py#L361)) —
+      resolves it once and the CLI (file 3, Task G.1) threads it into
+      `inputs["pr_max_bytes"]` as a stringified int, exactly as
+      `diff_exclude_patterns` is threaded today. `_pr_block` reads
+      `inputs.get("pr_max_bytes")` and passes it to the shared truncation
+      helper (see the bullet below) — no new config/IO dependency enters
+      this module.
 - [ ] In [builders/code.py](src/squadron/review/builders/code.py), add
-      `_pr_block(pr_metadata: str) -> str`. Content shape (raw metadata the
-      CLI assembles, per D4): title, body, linked issue numbers, unresolved
-      discussions (path, line, author, body) — already formatted into one
-      string by the CLI; this function only fences and labels it.
+      `_pr_block(pr_metadata: str, max_bytes: int) -> str`. Content shape
+      (raw metadata the CLI assembles, per D4): title, body, linked issue
+      numbers, unresolved discussions (path, line, author, body) — already
+      formatted into one string by the CLI; this function only fences,
+      labels, and truncates it.
 - [ ] Outer fence length: find the longest run of consecutive backticks
       anywhere in `pr_metadata`, use a fence one backtick longer (minimum
       three). A 4-backtick run inside forces a 5-backtick outer fence. This
@@ -72,19 +90,26 @@ renderer and its containment guarantees, independent of the CLI work.
       insert a zero-width character or otherwise break the exact string
       match before emission, without altering the visible text a human or
       model reads.
-- [ ] Truncate through the existing size discipline: call the same
-      truncation helper `_inject_file_contents` uses
-      (`_truncate` — [review_client.py:332](src/squadron/review/review_client.py#L332)) —
-      check whether it is already importable/reusable from `builders/code.py`
-      without creating a `review_client` → `builders` circular import; if it
-      is private and import would create a cycle, factor the truncation
-      logic into a shared, dependency-free location (e.g. `review/models.py`
-      or a new small module) rather than duplicating the byte-cap logic.
-      State the truncation in the block's own text when it occurs (design
-      requirement).
-- [ ] `code_review_prompt` calls `_pr_block(inputs["pr"])` and appends it to
-      the prompt when `inputs.get("pr")` is present; omitted entirely when
-      absent.
+- [ ] Truncate through the existing size discipline: import `_truncate`
+      directly from `review_client`
+      ([review_client.py:332](src/squadron/review/review_client.py#L332)).
+      **Verified no import cycle results**: `review_client.py` never imports
+      `builders/code.py` — the builder is loaded at runtime by the dotted
+      path `code.yaml` names
+      (`squadron.review.builders.code.code_review_prompt`), not by a Python
+      `import` statement, so `builders/code.py → review_client` is a new,
+      one-directional edge. `_truncate` is private (leading underscore) but
+      not module-private in any enforced sense; import it as
+      `from squadron.review.review_client import _truncate` and call
+      `_truncate(pr_metadata, "pr", max_bytes)`, matching its existing
+      signature. State the truncation in the block's own text when it
+      occurs (design requirement).
+- [ ] `code_review_prompt` calls
+      `_pr_block(inputs["pr"], int(inputs["pr_max_bytes"]))` and appends the
+      result to the prompt when `inputs.get("pr")` is present; omitted
+      entirely when absent. A `pr` key present without `pr_max_bytes` is a
+      caller error — raise rather than defaulting to an arbitrary cap (no
+      silent fallback values, project rule).
 - [ ] Effort: 4
 
 ### Task D.4 — Test: fence length, label neutralization, truncation
@@ -97,10 +122,13 @@ renderer and its containment guarantees, independent of the CLI work.
 - [ ] PR body containing the literal block label text does not close or
       confuse the block — assert the rendered prompt keeps the block intact
       (the design's own success criterion; use this test to satisfy it).
-- [ ] Content exceeding the configured size cap is truncated and the block
-      states so.
+- [ ] Content exceeding a small test-supplied `max_bytes` is truncated and
+      the block states so; content under the cap is untouched.
 - [ ] `inputs` with no `pr` key produces a prompt identical to today's (no
-      block, no stray heading).
+      block, no stray heading), and `code_review_prompt` never reads
+      `pr_max_bytes` in that case.
+- [ ] `inputs["pr"]` present without `inputs["pr_max_bytes"]` raises rather
+      than silently picking a default cap.
 - [ ] Effort: 3
 
 ### Task D.5 — Commit Part D
@@ -151,6 +179,47 @@ and file 3's `pr` subcommand needs it ready to call.
 - [ ] `uv run pytest tests/review -q`; ruff; pyright.
 - [ ] Commit: `feat(review): intersect --files with the PR range rather than replacing it`
 - [ ] Effort: 1
+
+---
+
+## Task Review Disposition
+
+Task review
+(`382-review.tasks.review-a-pr.part-2.md`, claude-sonnet-5, CONCERNS,
+20260913, sha `78ccf3bb`), reviewing this file. One concern and two notes
+actioned; three pass findings, no action.
+
+- **F001 (concern) — accepted, the substantive one.** Task D.3 told the
+  implementer to truncate `_pr_block`'s content "through the existing size
+  discipline" without saying how the builder — a pure, config-free module
+  with zero imports beyond `from __future__ import annotations` — would
+  obtain the `max_file_size` integer `_truncate` requires. Verified both
+  claims directly: `builders/code.py` has no other imports, and
+  `_inject_file_contents` resolves the cap itself via `get_config(...,
+  cwd=cwd_for_config)`, a pattern the builder does not follow for any other
+  value (`diff_exclude_patterns` arrives pre-resolved as a plain string via
+  `inputs`, never fetched by the builder). Also verified the reviewer's
+  implicit premise that reusing `_truncate` would create a
+  `review_client ↔ builders` cycle: it would not — `review_client.py` never
+  imports `builders/code.py` at all; the builder is loaded at runtime by the
+  dotted path `code.yaml` names, not a Python `import`. Task D.3 now
+  threads a pre-resolved `inputs["pr_max_bytes"]` (the CLI resolves it,
+  matching the `diff_exclude_patterns` precedent) and imports `_truncate`
+  directly from `review_client` — a new one-directional edge, not a cycle.
+  Task D.4 gained a case for the missing-cap error path.
+- **F002 (note) — accepted.** File 1's Part B intro said the `pr` input key
+  "lands in file 2's Part C"; file 2 has no Part C — it starts at Part D.
+  Fixed in file 1.
+- **F006 (note) — partially accepted.** Of the two placement decisions this
+  finding named, D.3's is now resolved by F001's fix above (no ambiguity
+  remains — the mechanism is stated exactly). E.1's module-placement choice
+  (`rules.py` vs. a new `review/scope.py`) is left as an implementer
+  decision with a stated procedure, since it is a genuinely minor
+  organizational call with no security or correctness weight — consistent
+  with the reviewer's own assessment that it is "low-risk."
+- **F003 (pass)** — D4/D7 scope is tight, no scope creep. No action.
+- **F004 (pass)** — code anchors are accurate. No action.
+- **F005 (pass)** — test-with pattern and commit checkpoints. No action.
 
 ---
 

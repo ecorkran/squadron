@@ -14,6 +14,60 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 382 task-review findings addressed (Phase 5)
+
+Three task reviews landed CONCERNS against `78ccf3bb`
+(`382-review.tasks.review-a-pr.part-{1,2,3}.md`, claude-sonnet-5). Six concerns and
+five notes actioned across the three task files; each file now carries its own Task
+Review Disposition section.
+
+**The sharpest finding (part 3, F001):** the design's D1 prose and Functional criteria
+name both "the rules directory **and** `CLAUDE.md`" as convention inputs the two-root
+split must source from the checkout, but every task touching the split covered only
+`CLAUDE.md`. Verified directly against `_resolve_review_cwd`
+([review.py:237](src/squadron/cli/commands/review.py#L237)): it resolves both the
+reviewing cwd and the rules directory from one argument, correct for `sq review
+code`'s single root, silently wrong if called with the worktree path on the PR path —
+the same class of risk D8 closes for SDK settings, left open for rules content instead.
+File 3's Task G.5 now states rules resolve from the checkout explicitly; new Task G.6
+adds the isolation test.
+
+**A missing mechanism (part 2, F001):** Task D.3 told the implementer to truncate the
+PR block "through the existing size discipline" without saying how — `builders/code.py`
+is a pure, config-free module and has no path to `review.max_file_size_bytes`. Verified
+the fix has no cost: `review_client.py` never imports `builders/code.py` (the builder
+loads by dotted path from `code.yaml`, not a Python import), so importing `_truncate`
+directly creates a new one-directional edge, not the cycle the original task hedged
+about. `code_review_prompt` now threads a pre-resolved `inputs["pr_max_bytes"]`,
+matching the existing `diff_exclude_patterns` precedent exactly.
+
+**Test-with violations, both restructured:** file 1's Part C (worktree lifecycle) and
+file 3's Part G (`sq review pr` command) each batched several implementation tasks
+before their first test, unlike every other Part. Both split at the same principle —
+test immediately after the piece with the most security/correctness weight, not after
+whatever happens to land last. Part C: create → test → submodule/removal → test → load
+test → commit. Part G: resolve/fetch → test → worktree branch (D5, D8's override calls)
+→ test → scope/rules/files → test → registration → test → commit.
+
+**Two coverage gaps, both closed:** the design's happy-path submodule criterion ("a
+repository with submodules yields a worktree in which submodule paths exist") had no
+test anywhere — both part-1 and part-3 reviews caught this independently as F001/F003.
+And the worktree lifecycle's concurrency and network paths had no `tests/load/` case,
+required by `python.md`'s load-test tier rule and precedented by
+`tests/load/test_grep_timeout.py`. New Task C.8 adds real concurrent worktree creation
+and a real (not scripted) submodule-timeout case.
+
+Five smaller findings also fixed: two broken cross-file references ("file 2's Part C"
+→ Part D; a `pr.py` anchor one line short of the sequence it describes), and the
+closeout task gaining an explicit commit step before merge (flagged identically by both
+part-1 and part-3 reviews). Two notes about implementer-facing placement decisions
+(where `ReviewResult` reports both roots; which module hosts the `--files` intersection
+helper) were left as-is — genuinely low-risk, with a stated decision procedure, and
+better decided at implementation time than guessed at breakdown time.
+
+All three task files remain `status: not_started`; no source file under `src/squadron/`
+has been touched. Committed as a single follow-up to the original breakdown commit.
+
 ### Slice 382 task breakdown (Phase 5)
 
 Design converted to `user/tasks/382-tasks.review-a-pr-{1,2,3}.md`. Split into three

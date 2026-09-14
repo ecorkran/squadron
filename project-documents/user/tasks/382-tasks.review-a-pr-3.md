@@ -68,6 +68,13 @@ and file 2's PR block. D2 (no range split needed) and D5 (tools decide which
 tree) are implemented here, not as separate library code — they are choices
 inside this command.
 
+**Test-with restructuring note (review finding, part 3, F004).** The
+original breakdown batched all four implementation tasks (resolution,
+worktree branch, scope/rules, registration) before any test task ran. Tests
+now interleave at two points: after resolution/fetch (G.2), and after the
+worktree branch that carries the slice's most security-relevant wiring
+(G.4) — the same grain Parts A, D, E, and F already use.
+
 ### Task G.1 — Resolve target, fetch range, assemble the PR-metadata string
 
 - [ ] `review.py` is already at 1263 lines (well past the project's
@@ -80,7 +87,7 @@ inside this command.
 - [ ] Resolve `target` via `parse_target` → `list_remotes` → `select_remote`
       → `host.resolve_pull_request` → `host.fetch_pull_request_refs`,
       reusing the exact sequence `pr.py`'s `show` command already
-      establishes ([pr.py:34-56](src/squadron/cli/commands/pr.py#L34-L56)).
+      establishes ([pr.py:34-57](src/squadron/cli/commands/pr.py#L34-L57)).
       Do not duplicate this sequence as a second implementation — factor it
       into a shared helper both `pr show` and `review pr` call, so 381's
       command and this one stay provably identical up to the point their
@@ -92,7 +99,23 @@ inside this command.
       here.
 - [ ] Effort: 3
 
-### Task G.2 — Tools-decide-the-tree branch (D5)
+### Task G.2 — Test: target resolution and PR-metadata assembly
+
+- [ ] Create `tests/cli/test_review_pr.py`, monkeypatching
+      `build_github_host` the same way `tests/cli/test_pr_show.py` does
+      (381's established seam — do not invent a second one).
+- [ ] The shared resolution helper (factored out in G.1) resolves a target
+      to the same `ResolvedPullRequest`/`FetchedRange` `pr show` would
+      produce for the same target — assert against `pr show`'s own existing
+      fixtures/scripted responses rather than duplicating them.
+- [ ] The assembled PR-metadata string carries title, body, linked issue
+      numbers, and unresolved discussions from the scripted
+      `ResolvedPullRequest`/`list_unresolved_discussions` — assert the raw
+      string content, not the fenced/rendered form (that's file 2's Task
+      D.4).
+- [ ] Effort: 2
+
+### Task G.3 — Tools-decide-the-tree branch (D5)
 
 - [ ] When tools are enabled (`not no_tools`, mirroring `review_code`'s own
       `no_tools` flag): call `sweep_orphans` then enter a `ScratchWorktree`
@@ -123,7 +146,35 @@ inside this command.
       speculative field 383 doesn't yet define).
 - [ ] Effort: 4
 
-### Task G.3 — Diff range, scope assertion, and `--files` intersection
+### Task G.4 — Test: worktree integration through the command
+
+- [ ] **Sequenced immediately after the worktree branch it tests (review
+      finding, part 3, F004)** — this is the slice's most security-relevant
+      wiring (worktree jail, `convention_root`, `setting_sources_override`
+      all converge in G.3), so it does not wait behind scope/rules-dir
+      wiring and command registration the way the original ordering did.
+- [ ] With tools enabled: the review's prompt (captured at `-vvv`, or via
+      whatever seam `test_pr_settings_isolation.py` established in file 1)
+      shows `cwd` pointing at a worktree path distinct from the checkout,
+      and the injected `CLAUDE.md` content matching the **checkout's**
+      version even when a differing one is planted in the worktree — the
+      design's "PR that edits the rules directory or CLAUDE.md is reviewed
+      against the checkout's versions" criterion.
+- [ ] With `--no-tools`: no `ScratchWorktree` is entered (assert via a spy or
+      by confirming no `git worktree add` call appears in the fake runner's
+      recorded calls) and the review still completes using the checkout
+      alone.
+- [ ] Two concurrent `sq review pr` invocations against the same target (run
+      sequentially in the test but with distinct `run_id`s forced, or
+      genuinely concurrently if the test harness supports it) produce
+      distinct worktree paths and both complete.
+- [ ] The operator's checkout is confirmed unchanged
+      (`git status --porcelain`, `git for-each-ref refs/heads`) before and
+      after a run that raises mid-review (force a failure via the fake
+      runner) — the design's forced-failure criterion.
+- [ ] Effort: 3
+
+### Task G.5 — Diff range, scope assertion, rules provenance, and `--files` intersection
 
 - [ ] `inputs["diff"] = fetched.diff_range` (the three-dot merge-base range
       from 381). No normalization call — 381's fetch already produced the
@@ -131,6 +182,24 @@ inside this command.
 - [ ] `assert_reviewable_scope(diff, checkout_cwd, exclude_patterns)` — D2:
       always against the checkout, regardless of whether a worktree exists,
       since the ref store is shared across worktrees.
+- [ ] **Rules-directory provenance is part of the two-root split, not only
+      `CLAUDE.md` (review finding, part 3, F001).** D1's prose and the
+      design's Functional criteria both name "the rules directory **and**
+      `CLAUDE.md`" as convention inputs that must come from the checkout.
+      `_resolve_review_cwd` ([review.py:237](src/squadron/cli/commands/review.py#L237))
+      resolves both the reviewing `cwd` *and* the rules directory
+      (`resolve_rules_dir`) from the same single argument — today's
+      single-root assumption, correct for `sq review code` where there is
+      only one root. On `sq review pr` this function must **not** be called
+      with the worktree path. Resolve the rules directory from the
+      **checkout** cwd (`repo_cwd` from Task G.1, before G.3's worktree
+      branch ever runs) via `resolve_rules_dir(checkout_cwd, None,
+      rules_dir_flag)` directly — the same call `_resolve_review_cwd` makes
+      internally, but anchored at the checkout regardless of which root
+      `inputs["cwd"]` ends up holding after G.3. This is the same class of
+      risk D8 closes for SDK project settings: an unreviewed rules directory
+      resolving from the worktree would let a PR's own planted rules content
+      reach the reviewer's instructions.
 - [ ] When `--files` is supplied, call `intersect_files_with_range` (file 2,
       Task E.1) with `fetched.changed_paths`, and set
       `inputs["files"]` to the intersected result (or however
@@ -140,7 +209,24 @@ inside this command.
       is not forked).
 - [ ] Effort: 2
 
-### Task G.4 — Flag parity and command registration
+### Task G.6 — Test: rules provenance
+
+- [ ] Extend `tests/cli/test_review_pr.py` (from G.2/G.4).
+- [ ] **The rules-directory half of the two-root criterion (review finding,
+      part 3, F001).** Plant a `.claude/rules/` (or configured rules
+      directory) in the worktree with content that differs from the
+      checkout's own rules directory. Assert the rendered `rules_content`
+      passed into the review — not just `CLAUDE.md` — comes from the
+      **checkout's** rules directory. This must fail against a naive
+      implementation that calls `_resolve_review_cwd` with the worktree
+      path, which is exactly the mistake Task G.5's provenance instruction
+      exists to prevent.
+- [ ] `--files` intersection: a glob matching some of the range's changed
+      paths narrows to the intersection; a glob matching none raises naming
+      both.
+- [ ] Effort: 2
+
+### Task G.7 — Flag parity and command registration
 
 - [ ] `sq review pr <target> [--cwd] [--model] [--profile] [--no-tools]
       [--rules] [--rules-dir] [--no-rules] [--files] [-v] [--output]
@@ -167,11 +253,9 @@ inside this command.
       `pr show` catches it — message and fix hint to stderr, exit 1.
 - [ ] Effort: 3
 
-### Task G.5 — Test: flag parity table
+### Task G.8 — Test: flag parity table
 
-- [ ] Create `tests/cli/test_review_pr.py`, monkeypatching
-      `build_github_host` the same way `tests/cli/test_pr_show.py` does
-      (381's established seam — do not invent a second one).
+- [ ] Extend `tests/cli/test_review_pr.py` (from G.2/G.4/G.6).
 - [ ] Table-driven: each of `--model`, `--profile`, `--no-tools`, `--rules`,
       `--rules-dir`, `--no-rules`, `--files`, `-v`/`-vv`, `--output`,
       `--json`, `--no-save` behaves on `sq review pr` as the equivalent
@@ -179,35 +263,9 @@ inside this command.
       existing cases rather than inventing new assertions.
 - [ ] Not-persistable warning names PR persistence specifically (not the
       generic "no slice identifier" text).
-- [ ] `--files` intersection: a glob matching some of the range's changed
-      paths narrows to the intersection; a glob matching none raises naming
-      both.
 - [ ] Effort: 3
 
-### Task G.6 — Test: worktree integration through the command
-
-- [ ] With tools enabled: the review's prompt (captured at `-vvv`, or via
-      whatever seam `test_pr_settings_isolation.py` established in file 1)
-      shows `cwd` pointing at a worktree path distinct from the checkout,
-      and the injected `CLAUDE.md` content matching the **checkout's**
-      version even when a differing one is planted in the worktree — the
-      design's "PR that edits the rules directory or CLAUDE.md is reviewed
-      against the checkout's versions" criterion.
-- [ ] With `--no-tools`: no `ScratchWorktree` is entered (assert via a spy or
-      by confirming no `git worktree add` call appears in the fake runner's
-      recorded calls) and the review still completes using the checkout
-      alone.
-- [ ] Two concurrent `sq review pr` invocations against the same target (run
-      sequentially in the test but with distinct `run_id`s forced, or
-      genuinely concurrently if the test harness supports it) produce
-      distinct worktree paths and both complete.
-- [ ] The operator's checkout is confirmed unchanged
-      (`git status --porcelain`, `git for-each-ref refs/heads`) before and
-      after a run that raises mid-review (force a failure via the fake
-      runner) — the design's forced-failure criterion.
-- [ ] Effort: 3
-
-### Task G.7 — Commit Part G
+### Task G.9 — Commit Part G
 
 - [ ] Run `uv run pytest -q`. **Full suite** — this registers a new command
       path and touches shared functions (`_warn_not_persistable`,
@@ -245,7 +303,11 @@ inside this command.
       (`382-slice.review-a-pr.md`, Success Criteria section) one by one,
       confirming each is demonstrated by a specific test (name it) or by
       H.1's recorded live run. Do not mark a criterion satisfied without
-      naming its evidence.
+      naming its evidence. In particular, confirm the submodule **happy
+      path** ("a repository with submodules yields a worktree in which
+      submodule paths exist") is covered — file 1's Task C.7 is its evidence
+      — since this criterion is easy to miss when scanning only for the two
+      failure-mode criteria next to it.
 - [ ] Confirm `ruff format`, `ruff check`, and `pyright` are clean across the
       whole slice's changes, not only the most recent commit.
 - [ ] Confirm no module under `review/` imports `squadron.codehost` — the
@@ -264,6 +326,10 @@ inside this command.
       [382-slice.review-a-pr.md](project-documents/user/slices/382-slice.review-a-pr.md)
       and in the slice plan
       [380-slices.pull-request-workflow.md](project-documents/user/architecture/380-slices.pull-request-workflow.md).
+- [ ] **Commit the DEVLOG entry, CHANGELOG line, and status/completion
+      updates above** (review finding: every other Part in this breakdown
+      ends with an explicit commit step; closeout must too, before the
+      merge) — `docs: close out slice 382 (review a pr)` or similar.
 - [ ] Merge the slice branch (`382-slice.review-a-pr`) into `squadron-pr`
       (the configured `git.integration_branch`). **Never to `main`.**
 - [ ] Effort: 2
@@ -273,8 +339,67 @@ inside this command.
 ## Coverage Check
 
 Every design decision maps to a task above: D1 → Part A (file 1); D2 → Task
-G.1/G.3 (no separate library code, a command-level choice); D3 → Part C
-(file 1); D4 → Part D (file 2); D5 → Task G.2; D6 → Part F; D7 → Part E
-(file 2); D8 → Part A (file 1), Task A.4–A.5. Excluded per the design's scope
-(persistence, posting, PR creation, slash-command parity, pipeline PR
-targets) has no task here by design.
+G.1/G.5 (no separate library code, a command-level choice); D3 → Part C
+(file 1); D4 → Part D (file 2); D5 → Task G.3; D6 → Part F; D7 → Part E
+(file 2); D8 → Part A (file 1), Task A.4–A.5, and Task G.3's override calls.
+Excluded per the design's scope (persistence, posting, PR creation,
+slash-command parity, pipeline PR targets) has no task here by design.
+
+---
+
+## Task Review Disposition
+
+Task review
+(`382-review.tasks.review-a-pr.part-3.md`, claude-sonnet-5, CONCERNS,
+20260913, sha `78ccf3bb`), reviewing this file. Four concerns and three
+notes actioned; two pass findings, no action.
+
+- **F001 (concern) — accepted, the sharpest finding across all three
+  reviews.** D1's prose and the design's own Functional criteria name both
+  "the rules directory and `CLAUDE.md`" as convention inputs the two-root
+  split must source from the checkout, but every task touching the split
+  (file 1's A.1–A.3, this file's original G.2/G.6) covered only `CLAUDE.md`
+  via `_inject_file_contents`. Verified directly: `_resolve_review_cwd`
+  ([review.py:237](src/squadron/cli/commands/review.py#L237)) resolves both
+  the reviewing `cwd` *and* the rules directory from one argument — correct
+  for `sq review code`'s single root, silently wrong if called with the
+  worktree path on the PR path. Left unresolved, this is the same class of
+  risk D8 closes for SDK project settings, just for rules content instead of
+  hook execution. Fixed: Task G.5 (renumbered from G.3) now states the rules
+  directory must resolve from the checkout `cwd` explicitly, calling
+  `resolve_rules_dir` directly rather than through `_resolve_review_cwd`.
+  New Task G.6 adds the isolation test: a worktree carrying different rules
+  content than the checkout, asserting the rendered `rules_content` traces
+  to the checkout.
+- **F002 (concern) — accepted.** No task added a `tests/load/` case for the
+  worktree lifecycle's concurrency and network paths, required by the
+  project's load-test tier rule. Dispositioned in file 1 (new Task C.8),
+  since the code under test lives there.
+- **F003 (concern) — accepted, a duplicate of file 1's F001.** Same fix:
+  file 1's Task C.7 now covers the happy-path submodule criterion. File 3's
+  H.2 (success criteria sweep) now names C.7 as the evidence explicitly, so
+  the sweep does not silently pass over this criterion the way it did
+  before.
+- **F004 (concern) — accepted.** Part G originally batched G.1–G.4 (target
+  resolution, the worktree branch, scope/rules/`--files`, and full
+  registration) before its first test task. Restructured: G.1 (resolve/
+  fetch) → **G.2** (test) → G.3 (worktree branch, D5) → **G.4** (test —
+  sequenced immediately after the security-relevant worktree wiring, not
+  after registration) → G.5 (scope/rules/`--files`) → **G.6** (test: rules
+  provenance, folds in F001's fix) → G.7 (registration) → **G.8** (test:
+  flag parity) → G.9 (commit).
+- **F005 (note) — accepted.** `pr.py`'s cited sequence ended at
+  `fetch_pull_request_refs`, which is at line 57, one past the cited
+  `34-56` range. Fixed to `34-57`.
+- **F006 (note) — accepted, no change needed beyond acknowledging it.** The
+  `ReviewResult`-vs-display-layer placement choice for reporting "both
+  roots" is left to the implementer with a stated decision procedure,
+  consistent with file 2's F006 disposition on a similar minor placement
+  choice — genuinely low-risk and better decided against 383's actual
+  persistence shape than guessed here.
+- **F007 (note) — accepted, a duplicate of file 1's F003.** H.3 now has an
+  explicit commit step before the merge.
+- **F008 (pass)** — Parts F/G/H trace cleanly to D6, D2/D5, and closeout; no
+  scope creep. No action.
+- **F009 (pass)** — code anchors verified accurate against live source. No
+  action.
