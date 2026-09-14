@@ -4,64 +4,55 @@ layer: project
 reviewType: slice
 slice: review-a-pr
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 sourceDocument: project-documents/user/slices/382-slice.review-a-pr.md
 aiModel: claude-sonnet-5
 status: complete
 dateCreated: 20260913
 dateUpdated: 20260913
-reviewedSha: fdb46f40e90eb0c9c918851fb125565a6ccff7c1
+reviewedSha: a8c745acac38bb212bc54a6445394973431d076a
 findings:
   - id: F001
-    severity: fail
-    category: security
-    summary: "SDK `setting_sources: [project]` leaves the two-root isolation boundary open to PR-controlled code execution"
-    location: "project-documents/user/slices/382-slice.review-a-pr.md:310-315"
+    severity: pass
+    category: alignment
+    summary: "Two-root split correctly closes the gap the plan didn't express"
+    location: "project-documents/user/slices/382-slice.review-a-pr.md:136-165"
   - id: F002
-    severity: concern
-    category: failure-mode-enumeration
-    summary: "Lock-file corruption is not enumerated as a failure mode for the sweep path"
-    location: "project-documents/user/slices/382-slice.review-a-pr.md:174-178"
+    severity: pass
+    category: security
+    summary: "Untrusted-settings risk closes a real gap the architecture didn't foresee, without contradicting it"
+    location: "project-documents/user/slices/382-slice.review-a-pr.md:237-274"
   - id: F003
     severity: concern
-    category: under-specification
-    summary: "Data Flow diagram and D4 disagree on which layer renders the PR metadata block"
-    location: "project-documents/user/slices/382-slice.review-a-pr.md:117"
+    category: error-handling
+    summary: "Submodule fetch during worktree creation is unbounded network I/O with no named hang/timeout signal"
+    location: "project-documents/user/slices/382-slice.review-a-pr.md:174-177"
   - id: F004
-    severity: pass
-    category: alignment
-    summary: "Two-root split correctly implements the architecture's convention/code isolation rule"
-    location: "project-documents/user/slices/382-slice.review-a-pr.md:133-151"
-  - id: F005
-    severity: pass
-    category: alignment
-    summary: "Scope stays within the slice plan's boundary, with corrections tracked transparently"
-    location: "project-documents/user/slices/382-slice.review-a-pr.md:53-70"
+    severity: note
+    category: documentation
+    summary: "Worktree location diverges from the architecture's literal wording without going through the scope-correction mechanism"
+    location: "project-documents/user/slices/382-slice.review-a-pr.md:169-170"
 ---
 
 # Review: slice — slice 382
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** claude-sonnet-5
 
 ## Findings
 
-### [FAIL] SDK `setting_sources: [project]` leaves the two-root isolation boundary open to PR-controlled code execution
+### [PASS] Two-root split correctly closes the gap the plan didn't express
 
-The whole point of D1's `convention_root` split is that "how this project works" (rules, `CLAUDE.md`) must come from the trusted checkout while only reviewed code comes from the untrusted worktree (architecture: "Which tree rules load from," "a PR that edits the rules directory cannot review itself against its own edits"). The Risk Assessment section itself identifies that this guarantee is incomplete: the SDK provider's `setting_sources: [project]` resolves `.claude/settings.json` from its own `cwd`, which on the tools path is the scratch worktree — i.e., attacker-controlled PR content. Claude Code settings can define hooks that execute arbitrary shell commands on tool-call events, so an adversarial PR could plant a `.claude/settings.json` in its own worktree and get code executed on the operator's machine during an automated review — the exact "surprise the operator" scenario the architecture's two-root principle exists to prevent. The document's resolution is "determine during implementation whether the code template should drop `setting_sources` on the PR path, and record the answer" — a design-time TBD on a security-critical trust boundary, with no test in the Testing section asserting the settings-isolation behavior either way. Per this project's failure-mode enumeration standard ("explicitly, not implicitly," "silent failure paths are bugs in waiting"), a known-open path for untrusted code influence on the reviewer process should be closed (e.g., a firm decision to drop `setting_sources` on the PR path, or an explicit sandboxing argument) before this slice is implemented, not deferred.
+D1/D2 give `AgentConfig.convention_root` a precise meaning (jail root vs. convention root) that matches the architecture's "Which tree rules load from" principle (380-arch:243-250) exactly, and D2 backs the "no split needed for the diff range" claim with a design-time probe rather than an assumption, consistent with the project's no-guessing rule.
 
-### [CONCERN] Lock-file corruption is not enumerated as a failure mode for the sweep path
+### [PASS] Untrusted-settings risk closes a real gap the architecture didn't foresee, without contradicting it
 
-D3 introduces `lock.json` (pid + start time) as a new on-disk I/O artifact that `sweep_orphans` reads on every invocation before creating a new worktree. The doc specifies liveness semantics (pid absent, or present with a different start time ⇒ orphan) but does not say what happens when the lock file is truncated or unparsable — the exact state a process crash mid-write would leave behind, which is precisely the abnormal-exit scenario D3 is designed around. If an unhandled parse exception propagates out of `sweep_orphans`, it would fail *every* subsequent `sq review pr` invocation until the directory is cleaned by hand, which is a worse outcome than the orphan-accumulation problem D3 solves. The Testing section (`test_worktree.py`) lists "sweep (live and dead owner)" but not a corrupt/partial lock file case. Per the project's Failure-Mode Enumeration rule, this new I/O path needs an explicit answer ("what if the lock file is malformed") with an observable signal (WARNING + treat-as-orphan, most likely) and a matching test.
+D8 extends the architecture's "Isolated checkout for tool-enabled reviews" and "Never surprise the operator" principles (380-arch:73-75, 114-117) to a threat (attacker-planted `.claude/settings.json` hooks) the architecture text never names. The fix is scoped per-invocation rather than as a template edit, correctly preserving `sq review code`'s legitimate use of `[project]` — no boundary violation.
 
-### [CONCERN] Data Flow diagram and D4 disagree on which layer renders the PR metadata block
+### [CONCERN] Submodule fetch during worktree creation is unbounded network I/O with no named hang/timeout signal
 
-The `Data Flow: sq review pr <target>` diagram shows the CLI assembling `inputs = {..., pr: <rendered block>, ...}` before calling `run_review_with_profile` — implying the fenced/label-neutralized block already exists when the CLI builds inputs. D4 states the opposite: the block is "Rendered by `code_review_prompt`" (the builder inside `review/builders/code.py`, invoked during template rendering) specifically "because the architecture fixes fence policy in one place." Component Structure and Implementation Notes (`_pr_block()` in `builders/code.py`, built before `review.py` in the implementation order) support D4's version, so the diagram's `<rendered block>` label appears to be a documentation slip rather than the intended contract — but as written it leaves ambiguous whether `review.py` passes raw PR metadata (title/body/issues/discussions) or a pre-rendered string into `inputs["pr"]`. Since this input is called out under "Provides" as a reusable integration point, the ambiguity should be resolved before implementation so the CLI and builder aren't written against different assumptions.
+D3 states `git worktree add` is "bounded by the git timeout," but the following sentence about `git submodule update --init --recursive` only says a submodule "that cannot be fetched fails the review naming it" — it never states this call is bounded by the same timeout, and unlike the lock-file and worktree-removal failure modes (which each name an explicit WARNING log line, per lines 182-183 and 191-192), no log level or metric is named for a submodule fetch that hangs rather than cleanly fails. Submodule init is real network I/O against a third-party remote (a private submodule needing credentials the operator's `gh` doesn't provide is called out in Risk Assessment line 384 as a *failure* case, but not as a *hang* case). The parent architecture's own failure-mode principle (380-arch:121-128) requires each new I/O path's hang/timeout/disconnect behavior to be enumerated with an observable signal and a test; the Testing section (382-slice:409-412) lists "create, lock, sweep..., remove on success/failure/timeout" but no test exercises a submodule fetch that hangs. Recommend naming the observable signal (log level) for a submodule-fetch timeout explicitly and adding it to the test list, the same way the lock and removal paths already do.
 
-### [PASS] Two-root split correctly implements the architecture's convention/code isolation rule
+### [NOTE] Worktree location diverges from the architecture's literal wording without going through the scope-correction mechanism
 
-D1 adds `convention_root` alongside `cwd` rather than repointing `cwd` at the worktree, matches the architecture's explicit rejection of "pointing `cwd` at the worktree and copying the rules into it," defaults to `None` (`cwd`) preserving every existing caller's behavior, and is backed by a byte-identical-prompt pin test. This is a faithful, non-overreaching translation of the "Which tree rules load from" architectural principle into a concrete, minimally-invasive contract change.
-
-### [PASS] Scope stays within the slice plan's boundary, with corrections tracked transparently
-
-The Excluded list (persistence, posting, creation, slash parity, pipeline surface) matches the 380 slice plan's sequencing exactly, and the "Scope corrections against the plan entry" table documents three places where design-time investigation (not assumption) overturned the plan's wording — each with a named decision (D1, D4, D7) rather than a silent deviation. This matches both the architecture's "explicit degradation, not silent" ethos and the project's "do not guess or assume" rule.
+380-arch:212 says the scratch worktree is "created under squadron's data directory"; this slice places it under `~/.config/squadron/worktrees/` and argues `data_dir()` is "package data and is the wrong home" (382-slice:169-170). The reasoning is sound, but it's a deviation from the architecture's own words that isn't captured in the "Scope corrections against the plan entry" table (which only reconciles against the slice-plan doc, not the architecture doc). Worth a one-line note in that table or elsewhere so a future reader doesn't need to reconcile the two documents themselves.

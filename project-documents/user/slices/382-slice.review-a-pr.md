@@ -167,14 +167,29 @@ which is where `inputs["cwd"]` points. Only the jail and the convention inputs a
 ### D3 — Scratch worktree lifecycle
 
 One worktree per invocation, under `~/.config/squadron/worktrees/` (the existing user config
-directory from `config/manager.py`; `data_dir()` is package data and is the wrong home).
+directory from `config/manager.py`).
+
+**Deviation from the architecture's wording, recorded here because the corrections table above
+reconciles only against the slice plan.** The architecture says the worktree is "created under
+squadron's data directory." Taken literally that names `data_dir()`, which resolves to the
+installed package's `squadron/data/` — shipped read-only package data, wrong for per-run mutable
+state and inside the wheel on a normal install. The intent is plainly "squadron's own directory,
+not the operator's repository," and `~/.config/squadron/` is the only per-user writable location
+squadron already owns. Same intent, correct home; no change to the architecture is needed.
 
 - **Name:** `<host>-<owner>-<repo>-<number>-<run_id>`, the record's `key` with path separators
   flattened plus a per-run id, so two concurrent reviews of one PR never collide.
 - **Creation:** `git worktree add --detach <path> <head_ref>` against the fetched head ref,
-  bounded by the git timeout. Submodules are initialized (`git submodule update --init
-  --recursive`) in it; a submodule that cannot be fetched fails the review naming it, rather than
-  leaving paths the reviewer will cite as missing.
+  bounded by the git timeout.
+- **Submodule init is bounded network I/O, and a hang is its own mode.** Submodules are
+  initialized (`git submodule update --init --recursive`) in the worktree, bounded by
+  `GIT_FETCH_TIMEOUT_SECONDS` — the fetch bound, not the query bound, because this call reaches
+  third-party remotes and moves data. Two distinct outcomes, each observable:
+  - A submodule that **cannot be fetched** (auth, gone, unreachable) fails the review at ERROR
+    naming the submodule path, rather than leaving paths the reviewer will cite as missing.
+  - A submodule that **hangs** exceeds the bound and fails the review at ERROR naming the
+    submodule path and the bound — never a silent stall, and never an unbounded wait on a remote
+    squadron does not control. The worktree is removed on this path like any other failure.
 - **Lock:** a `lock.json` in the worktree carrying pid **and** that process's start time, so a
   recycled pid does not read as alive.
 - **A malformed lock is an orphan, never an exception.** A crash mid-write is exactly the state
@@ -306,8 +321,10 @@ and the override is a no-op there rather than a special case.
 - A PR body containing a triple-backtick fence and a copy of the block label does not escape the
   block; a test asserts the rendered prompt keeps it intact. A four-backtick run inside forces a
   five-backtick outer fence.
-- A repository with submodules yields a worktree in which submodule paths exist; an unfetchable
-  submodule fails the review naming it.
+- A repository with submodules yields a worktree in which submodule paths exist. An unfetchable
+  submodule fails the review at ERROR naming it; a submodule fetch that hangs is cut off at
+  `GIT_FETCH_TIMEOUT_SECONDS` and fails at ERROR naming both the submodule and the bound. The
+  worktree is removed on both paths, asserted by the directory being absent afterwards.
 - Every existing review flag (`--model`, `--profile`, `--no-tools`, `--rules`, `--rules-dir`,
   `--no-rules`, `--files`, `-v`, `--output`, `--json`, `--no-save`) behaves on `sq review pr` as
   on `sq review code`; a table-driven test covers each.
@@ -381,8 +398,12 @@ Steps 3, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
   per-invocation override rather than a template edit, with a test asserting a planted
   `.claude/settings.json` in the worktree is never read. The residual risk is that the SDK later
   grows another `cwd`-relative load path; the test is what would catch it.
-- **Submodules in enterprise repositories** may need credentials the fetch does not have.
-  Mitigation: named failure rather than a silently incomplete tree.
+- **Submodule init is the one call that reaches a remote squadron does not control.** An
+  enterprise or private submodule may need credentials the fetch does not have, and a remote that
+  accepts the connection but never answers would otherwise stall the review indefinitely.
+  Mitigation: bounded by `GIT_FETCH_TIMEOUT_SECONDS`, with both outcomes — unfetchable and hung —
+  failing at ERROR naming the submodule, the hang naming the bound too, and the worktree removed
+  either way. Named failure rather than a silently incomplete tree or a silent stall.
 - **`--files` semantics differ subtly from the code path** (intersect, not replace). Mitigation:
   D7 makes it explicit, an empty intersection is an error, and the help text says so.
 
@@ -409,7 +430,10 @@ Steps 3, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
 - `tests/codehost/test_worktree.py` — create, lock, sweep (live and dead owner), remove on
   success/failure/timeout, unremovable worktree, and a malformed-lock table (truncated,
   non-JSON, missing pid, missing start time, absent) asserting one WARNING, treat-as-orphan,
-  and no exception out of `sweep_orphans`.
+  and no exception out of `sweep_orphans`. Submodule init gets two cases against the fake
+  runner: a scripted non-zero exit (unfetchable) and a scripted `ProcessTimedOutError` (hang),
+  each asserting the ERROR log names the submodule path, that the hang case names the bound,
+  and that the worktree is removed either way.
 - `tests/review/test_pr_settings_isolation.py` — the PR path constructs its agent with
   `setting_sources=[]` and `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; a worktree carrying a
   hook-bearing `.claude/settings.json` produces no hook side effect; and `sq review code` still
