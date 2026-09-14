@@ -14,6 +14,45 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260913
 
+### Slice 382 task breakdown (Phase 5)
+
+Design converted to `user/tasks/382-tasks.review-a-pr-{1,2,3}.md`. Split into three
+files rather than two: the design carries eight named decisions (D1–D8) with two of
+them — D1 (the two-root split) and D8 (the settings-isolation fix) — security- and
+correctness-critical enough to warrant sequencing and testing in complete isolation
+before anything else in the slice exists. File 1 (398 lines) covers exactly that plus
+the `_SKIP_KEYS` addition and the scratch-worktree lifecycle (D3); file 2 (162 lines)
+covers the PR-metadata block (D4) and the `--files` intersection helper (D7); file 3
+(280 lines) assembles the `sq review pr` subcommand (D2, D5, D6) and closes the slice.
+All three are within the 450-line target with room under the ~100-line tolerance.
+
+**One gap the design's data-flow diagram did not resolve, found during breakdown.**
+The design shows `AgentConfig(cwd=review_root, convention_root=checkout)` as if the CLI
+constructs the config directly, but `run_review_with_profile` takes an `inputs` dict and
+builds `AgentConfig` internally — there was no parameter for a caller to hand it a
+convention root or a settings override. Verified against `review_client.py` at
+`a43d6ec8` before writing tasks. Task 1.1/1.2/1.4 add two new keyword-only parameters,
+`convention_root` and `setting_sources_override`, both defaulting to `None` so every
+existing caller (including `sq review code`) is unaffected; this is recorded as a
+Corrections-table entry rather than a design amendment, since it narrows an
+implementation mechanism rather than changing a decision.
+
+**Confirmed against the installed SDK rather than assumed:** `ClaudeAgentOptions` has a
+direct `env: dict[str, str]` field, so D8's `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` needs no
+indirection through `os.environ` — Task 1.4 names the field directly.
+
+**Sequencing note carried into Task 1.5's isolation test:** it must be written (or
+temporarily run against a reverted fix) to fail first, so the test file itself is
+evidence it would have caught the un-overridden path — the same discipline the design's
+Implementation Notes require of the isolation test generally.
+
+Two verified-but-uncertain points left as implementer choices rather than resolved here,
+each with a real anchor rather than a guess: where `ReviewResult` should report "both
+roots" (task 3, G.2 — `ReviewResult`'s current fields have no slot for it and 383 will
+define persistence-facing shape), and whether `review.py` (already 1263 lines) needs a
+sibling module for the new subcommand (task 3, G.1 — decided yes, a new `review_pr.py`,
+rather than growing the existing file further).
+
 ### Slice 918 Part 3 — receipt-based command install (#65 finding 1)
 
 Committed as `9c0d7a37`. Slice 918 is complete.
