@@ -6,8 +6,8 @@ lld: project-documents/user/slices/382-slice.review-a-pr.md
 dependencies: [381, 916, 904, 918]
 projectState: "File 1 (Parts A-C) lands convention_root, the settings override, and the scratch-worktree lifecycle. This file adds the PR-metadata block and its template input."
 dateCreated: 20260913
-dateUpdated: 20260913
-status: not_started
+dateUpdated: 20260914
+status: complete
 ---
 
 # Tasks: Review a PR (2 of 3)
@@ -31,32 +31,32 @@ renderer and its containment guarantees, independent of the CLI work.
 
 ### Task D.1 — `code.yaml`: declare the optional `pr` input
 
-- [ ] In [code.yaml](src/squadron/data/templates/code.yaml), add to
+- [x] In [code.yaml](src/squadron/data/templates/code.yaml), add to
       `inputs.optional`:
       ```yaml
       - name: pr
         description: "Pull request metadata (title, body, linked issues, discussions) rendered as a fenced block"
       ```
-- [ ] Do not add a `default`. Absence means no PR context — every non-PR
+- [x] Do not add a `default`. Absence means no PR context — every non-PR
       caller of the `code` template (including `sq review code`) is
       unaffected.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task D.2 — Test: pipeline action tolerates the new input
 
-- [ ] Locate the pipeline `review` action's input validation (search for
+- [x] Locate the pipeline `review` action's input validation (search for
       where template `inputs.optional`/`required` are checked against a
       pipeline step's supplied keys — likely in `squadron/pipeline/` or
       wherever `ReviewTemplate.required_inputs`/`optional_inputs` are
       consumed outside the CLI).
-- [ ] Add a test: a pipeline step invoking the `code` template with no `pr`
+- [x] Add a test: a pipeline step invoking the `code` template with no `pr`
       key supplied still runs — an optional input the pipeline never
       populates must not become a validation failure.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task D.3 — `_pr_block`: fence-length and label neutralization
 
-- [ ] **Truncation-cap mechanism, decided here rather than left open (review
+- [x] **Truncation-cap mechanism, decided here rather than left open (review
       finding, part 2, F001).** `builders/code.py` today has zero imports
       beyond `from __future__ import annotations` — a pure, config-free
       module that only reads pre-resolved values off the `inputs` dict (the
@@ -73,24 +73,24 @@ renderer and its containment guarantees, independent of the CLI work.
       `inputs.get("pr_max_bytes")` and passes it to the shared truncation
       helper (see the bullet below) — no new config/IO dependency enters
       this module.
-- [ ] In [builders/code.py](src/squadron/review/builders/code.py), add
+- [x] In [builders/code.py](src/squadron/review/builders/code.py), add
       `_pr_block(pr_metadata: str, max_bytes: int) -> str`. Content shape
       (raw metadata the CLI assembles, per D4): title, body, linked issue
       numbers, unresolved discussions (path, line, author, body) — already
       formatted into one string by the CLI; this function only fences,
       labels, and truncates it.
-- [ ] Outer fence length: find the longest run of consecutive backticks
+- [x] Outer fence length: find the longest run of consecutive backticks
       anywhere in `pr_metadata`, use a fence one backtick longer (minimum
       three). A 4-backtick run inside forces a 5-backtick outer fence. This
       is the same defect class as the review parser's closer-length bug
       fixed on 381's review — a fixed-length fence is not containment.
-- [ ] Label neutralization: the block's own label (e.g. `### Pull Request`
+- [x] Label neutralization: the block's own label (e.g. `### Pull Request`
       or whatever heading text is chosen — pick one and use it consistently)
       must not appear verbatim inside `pr_metadata`'s content; if it does,
       insert a zero-width character or otherwise break the exact string
       match before emission, without altering the visible text a human or
       model reads.
-- [ ] Truncate through the existing size discipline: import `_truncate`
+- [x] Truncate through the existing size discipline: import `_truncate`
       directly from `review_client`
       ([review_client.py:332](src/squadron/review/review_client.py#L332)).
       **Verified no import cycle results**: `review_client.py` never imports
@@ -104,40 +104,40 @@ renderer and its containment guarantees, independent of the CLI work.
       `_truncate(pr_metadata, "pr", max_bytes)`, matching its existing
       signature. State the truncation in the block's own text when it
       occurs (design requirement).
-- [ ] `code_review_prompt` calls
+- [x] `code_review_prompt` calls
       `_pr_block(inputs["pr"], int(inputs["pr_max_bytes"]))` and appends the
       result to the prompt when `inputs.get("pr")` is present; omitted
       entirely when absent. A `pr` key present without `pr_max_bytes` is a
       caller error — raise rather than defaulting to an arbitrary cap (no
       silent fallback values, project rule).
-- [ ] Effort: 4
+- [x] Effort: 4
 
 ### Task D.4 — Test: fence length, label neutralization, truncation
 
-- [ ] Create `tests/review/test_code_builder_pr_block.py`.
-- [ ] 3-backtick content inside the PR body → outer fence is 4 backticks;
+- [x] Create `tests/review/test_code_builder_pr_block.py`.
+- [x] 3-backtick content inside the PR body → outer fence is 4 backticks;
       4-backtick content → outer fence is 5 backticks. Assert the rendered
       block, when scanned for the outer fence's exact character sequence,
       finds it only at open and close.
-- [ ] PR body containing the literal block label text does not close or
+- [x] PR body containing the literal block label text does not close or
       confuse the block — assert the rendered prompt keeps the block intact
       (the design's own success criterion; use this test to satisfy it).
-- [ ] Content exceeding a small test-supplied `max_bytes` is truncated and
+- [x] Content exceeding a small test-supplied `max_bytes` is truncated and
       the block states so; content under the cap is untouched.
-- [ ] `inputs` with no `pr` key produces a prompt identical to today's (no
+- [x] `inputs` with no `pr` key produces a prompt identical to today's (no
       block, no stray heading), and `code_review_prompt` never reads
       `pr_max_bytes` in that case.
-- [ ] `inputs["pr"]` present without `inputs["pr_max_bytes"]` raises rather
+- [x] `inputs["pr"]` present without `inputs["pr_max_bytes"]` raises rather
       than silently picking a default cap.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task D.5 — Commit Part D
 
-- [ ] Run `uv run pytest tests/review -q`. All green, including every
+- [x] Run `uv run pytest tests/review -q`. All green, including every
       existing `builders/code.py` and `code.yaml` test.
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
-- [ ] Commit: `feat(review): render PR metadata as a contained fenced block`
-- [ ] Effort: 1
+- [x] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
+- [x] Commit: `feat(review): render PR metadata as a contained fenced block`
+- [x] Effort: 1
 
 ---
 
@@ -148,37 +148,37 @@ and file 3's `pr` subcommand needs it ready to call.
 
 ### Task E.1 — Intersect a glob with a changed-path set
 
-- [ ] Add a small function (co-locate with `extract_diff_paths` in
+- [x] Add a small function (co-locate with `extract_diff_paths` in
       [rules.py](src/squadron/review/rules.py), or a new
       `review/scope.py` if that module is a better fit — check which is more
       consistent with existing organization before choosing) —
       `intersect_files_with_range(files_glob: str, changed_paths: Sequence[str], cwd: str) -> list[str]`.
-- [ ] Resolves the glob against `cwd`, intersects with `changed_paths`
+- [x] Resolves the glob against `cwd`, intersects with `changed_paths`
       (already known from the `FetchedRange`, no second git call).
-- [ ] An empty intersection raises `EmptyScopeError`
+- [x] An empty intersection raises `EmptyScopeError`
       ([git_utils.py:135](src/squadron/review/git_utils.py#L135)) — it
       already carries `case`, matched patterns, and excluded-file-count as
       structured fields for exactly this "nothing to review" situation; add
       whatever `case` value or fields best describe "glob matched nothing in
       range" rather than defining a second error type for the same failure
       shape. Message names both the glob and the range.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.2 — Test: intersection semantics
 
-- [ ] A glob matching some changed paths and some non-changed paths returns
+- [x] A glob matching some changed paths and some non-changed paths returns
       only the intersection.
-- [ ] A glob matching nothing in the range raises, naming the glob and the
+- [x] A glob matching nothing in the range raises, naming the glob and the
       range in the error.
-- [ ] A glob matching everything in the range returns the full changed-path
+- [x] A glob matching everything in the range returns the full changed-path
       list unchanged.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task E.3 — Commit Part E
 
-- [ ] `uv run pytest tests/review -q`; ruff; pyright.
-- [ ] Commit: `feat(review): intersect --files with the PR range rather than replacing it`
-- [ ] Effort: 1
+- [x] `uv run pytest tests/review -q`; ruff; pyright.
+- [x] Commit: `feat(review): intersect --files with the PR range rather than replacing it`
+- [x] Effort: 1
 
 ---
 
