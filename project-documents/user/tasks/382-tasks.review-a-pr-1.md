@@ -6,7 +6,7 @@ lld: project-documents/user/slices/382-slice.review-a-pr.md
 dependencies: [381, 916, 904, 918]
 projectState: "381 (code-host adapter) and 918 (jail exclusions, telemetry) are merged. This slice spends 381's boundary on sq review pr."
 dateCreated: 20260913
-dateUpdated: 20260913
+dateUpdated: 20260914
 status: not_started
 ---
 
@@ -114,67 +114,67 @@ its own fix, so it fails against the un-overridden path first.
 
 ### Task A.1 — `AgentConfig.convention_root`
 
-- [ ] In [models.py](src/squadron/core/models.py), add
+- [x] In [models.py](src/squadron/core/models.py), add
       `convention_root: str | None = None` beside `cwd`
       ([models.py:64](src/squadron/core/models.py#L64)), with a comment: `None`
       means "same as `cwd`" — today's behavior for every existing caller.
-- [ ] Do not thread it into `OpenAICompatibleAgent` or `tools.materialize` —
+- [x] Do not thread it into `OpenAICompatibleAgent` or `tools.materialize` —
       D1 states only `_inject_file_contents` consumes it. The non-SDK path's
       jail root stays `cwd` alone.
-- [ ] Effort: 1
+- [x] Effort: 1
 
 ### Task A.2 — Thread `convention_root` through `run_review_with_profile`
 
-- [ ] In [review_client.py](src/squadron/review/review_client.py), add a
+- [x] In [review_client.py](src/squadron/review/review_client.py), add a
       keyword-only parameter `convention_root: str | None = None` to
       `run_review_with_profile` ([review_client.py:60](src/squadron/review/review_client.py#L60)).
       See Corrections table above — this is the mechanism the design's data
       flow diagram assumed but did not name.
-- [ ] Pass it to the `AgentConfig(...)` construction
+- [x] Pass it to the `AgentConfig(...)` construction
       ([review_client.py:180](src/squadron/review/review_client.py#L180)) as
       `convention_root=convention_root`.
-- [ ] Pass it to `_inject_file_contents` as a new keyword-only parameter
+- [x] Pass it to `_inject_file_contents` as a new keyword-only parameter
       `convention_root: str | None = None`
       ([review_client.py:343](src/squadron/review/review_client.py#L343)); inside,
       use `convention_root if convention_root is not None else inputs.get("cwd", ".")`
       as the directory the `CLAUDE.md` candidates are resolved against
       ([review_client.py:438](src/squadron/review/review_client.py#L438)), replacing
       today's `cwd_for_claude = inputs.get("cwd", ".")`.
-- [ ] No other call site changes. `sq review code` and every other existing
+- [x] No other call site changes. `sq review code` and every other existing
       caller of `run_review_with_profile` omits the new parameter and gets
       `None`, which resolves to exactly today's `cwd`-sourced behavior.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.3 — Test: convention root is honored, and existing behavior is byte-identical
 
-- [ ] Create `tests/review/test_convention_root.py`.
-- [ ] A run with `convention_root` set to a directory whose `CLAUDE.md`
+- [x] Create `tests/review/test_convention_root.py`.
+- [x] A run with `convention_root` set to a directory whose `CLAUDE.md`
       differs from the one at `inputs["cwd"]` injects the **convention root's**
       content into the prompt, not the cwd's.
-- [ ] A run that omits `convention_root` entirely produces a byte-identical
+- [x] A run that omits `convention_root` entirely produces a byte-identical
       prompt to the same run before this task's changes existed — pin this
       against a fixture captured from the current `test_content_injection.py`
       or `test_review_client.py` cases, whichever already covers
       `CLAUDE.md` injection.
-- [ ] Run `uv run pytest tests/review -q` — full existing suite green,
+- [x] Run `uv run pytest tests/review -q` — full existing suite green,
       confirming A.1–A.2 changed no observable behavior for any caller that
       does not pass the new parameter.
-- [ ] Effort: 2
+- [x] Effort: 2
 
 ### Task A.4 — `setting_sources_override` on `run_review_with_profile`
 
-- [ ] Add a second keyword-only parameter,
+- [x] Add a second keyword-only parameter,
       `setting_sources_override: list[str] | None = None`.
-- [ ] When not `None`, it replaces `template.setting_sources` in the
+- [x] When not `None`, it replaces `template.setting_sources` in the
       `AgentConfig` construction
       ([review_client.py:186](src/squadron/review/review_client.py#L186)) —
       i.e. `setting_sources=(setting_sources_override if setting_sources_override is not None else template.setting_sources)`.
       `None` (the default) preserves today's template-only behavior exactly,
       including for `sq review code`, whose `code.yaml` sets `[project]`.
-- [ ] Do **not** edit `code.yaml`. Design D8: the safe value depends on what
+- [x] Do **not** edit `code.yaml`. Design D8: the safe value depends on what
       is being reviewed, not on the template, so the template's `[project]`
       must survive for the code path.
-- [ ] Add the environment variable
+- [x] Add the environment variable
       `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` to the agent's environment whenever
       `setting_sources_override == []`. `ClaudeAgentOptions` has a direct
       `env: dict[str, str]` field (confirmed in the installed
@@ -183,44 +183,44 @@ its own fix, so it fails against the un-overridden path first.
       ([sdk/provider.py:39](src/squadron/providers/sdk/provider.py#L39)),
       merged with any existing `env` entries rather than overwriting them if
       `create_agent` ever gains another `env` source later.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task A.5 — Test: the isolation test, written to fail first
 
-- [ ] Create `tests/review/test_pr_settings_isolation.py`.
-- [ ] **Write this test before Task A.4's production code**, or if A.4 is
+- [x] Create `tests/review/test_pr_settings_isolation.py`.
+- [x] **Write this test before Task A.4's production code**, or if A.4 is
       already merged when this task starts, temporarily revert it, run the
       test, confirm it fails, then restore A.4. The design requires the test
       prove it would have caught the un-overridden path — recording that it
       failed first is the evidence.
-- [ ] Plant a `.claude/settings.json` in a temp directory declaring a
+- [x] Plant a `.claude/settings.json` in a temp directory declaring a
       `PreToolUse` hook whose command writes a sentinel file (e.g.
       `touch sentinel.txt`) into a second temp location.
-- [ ] Call `run_review_with_profile` with `cwd` set to the directory carrying
+- [x] Call `run_review_with_profile` with `cwd` set to the directory carrying
       the settings file and `setting_sources_override=[]`. Assert:
-      - [ ] the constructed `AgentConfig` (or the `ClaudeAgentOptions` built
+      - [x] the constructed `AgentConfig` (or the `ClaudeAgentOptions` built
             from it) carries `setting_sources=[]`.
-      - [ ] the environment passed to the agent carries
+      - [x] the environment passed to the agent carries
             `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`.
-      - [ ] the sentinel file does not exist after the run.
-- [ ] A second case in the same file: the same setup **without** the
+      - [x] the sentinel file does not exist after the run.
+- [x] A second case in the same file: the same setup **without** the
       override (`setting_sources_override=None`, template default in force)
       still passes `[project]` through — this is `sq review code`'s existing
       path and must be pinned so the fix does not silently spread to it.
-- [ ] Stub the SDK boundary the way
+- [x] Stub the SDK boundary the way
       `tests/review/test_template_sdk_regression.py` does: patch
       `"squadron.providers.sdk.agent.ClaudeSDKAgent"` (that file's
       `_AGENT_PATCH` constant) with `create=True`, and assert against the
       `ClaudeAgentOptions`/`AgentConfig` the mock was constructed or called
       with — do not invent a second stubbing seam.
-- [ ] Effort: 3
+- [x] Effort: 3
 
 ### Task A.6 — Commit Part A
 
-- [ ] Run `uv run pytest tests/review tests/core -q`. All green.
-- [ ] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
-- [ ] Commit: `feat(review): add convention_root and per-invocation settings override`
-- [ ] Effort: 1
+- [x] Run `uv run pytest tests/review tests/core -q`. All green.
+- [x] `uv run ruff format`, `uv run ruff check`, `uv run pyright`.
+- [x] Commit: `feat(review): add convention_root and per-invocation settings override`
+- [x] Effort: 1
 
 ---
 
