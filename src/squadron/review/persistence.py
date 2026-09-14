@@ -14,7 +14,7 @@ from typing import Any, Protocol, TypedDict
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
-from squadron.review.models import ReviewResult, Verdict
+from squadron.review.models import ReviewResult, Verdict, VerdictSource
 
 _logger = logging.getLogger(__name__)
 
@@ -256,6 +256,7 @@ def _review_frontmatter_lines(
     slice_name: str,
     project_name: str,
     verdict: str,
+    verdict_source: VerdictSource | None,
     source_doc: str,
     model: str,
     today: str,
@@ -275,9 +276,11 @@ def _review_frontmatter_lines(
     artifact byte-for-byte unchanged when a feature does not apply:
     ``reviewedSha`` (slice 306), ``revision_number`` (slice 911), the tool
     telemetry pair (slice 265 D5 — an absent ``toolsGiven`` means "never
-    offered", while ``toolCallsMade: 0`` means "offered, used none"), and
+    offered", while ``toolCallsMade: 0`` means "offered, used none"),
     ``toolsSuppressedReason`` (slice 266, present only when a declared set was
-    emptied).
+    emptied), and ``verdictSource`` (slice 919 Part 2, #97 — absent for the
+    nothing-parsed branch, D8, where there is no verdict to attribute
+    provenance to).
     """
     lines = [
         "---",
@@ -287,12 +290,18 @@ def _review_frontmatter_lines(
         f"slice: {slice_name}",
         f"project: {project_name}",
         f"verdict: {verdict}",
-        f"sourceDocument: {source_doc}",
-        f"aiModel: {model}",
-        f"status: {DocumentStatus.COMPLETE}",
-        f"dateCreated: {today}",
-        f"dateUpdated: {today}",
     ]
+    if verdict_source is not None:
+        lines.append(f"verdictSource: {verdict_source.value}")
+    lines.extend(
+        [
+            f"sourceDocument: {source_doc}",
+            f"aiModel: {model}",
+            f"status: {DocumentStatus.COMPLETE}",
+            f"dateCreated: {today}",
+            f"dateUpdated: {today}",
+        ]
+    )
     if reviewed_sha is not None:
         lines.append(f"reviewedSha: {reviewed_sha}")
     if revision_number is not None:
@@ -365,6 +374,12 @@ def format_review_markdown(
         slice_name=slice_name,
         project_name=project_name,
         verdict=resolved_verdict,
+        # A judge template's verdict_override is a threshold-based verdict computed by the
+        # caller (enforce_judge), never something parse_review_output derived — result.verdict
+        # stays UNKNOWN and result.verdict_source stays None in that case, which is the
+        # honest answer: squadron's parser never determined provenance for it. Part 2 records
+        # provenance for what the parser resolved, not for a caller's own override.
+        verdict_source=result.verdict_source,
         source_doc=source_doc,
         model=resolved_model,
         today=today,
@@ -696,6 +711,9 @@ def format_provider_failure_markdown(
         slice_name=slice_name,
         project_name=project_name,
         verdict=Verdict.UNKNOWN.value,
+        # Omitted: a provider failure has no verdict to attribute provenance to (there is
+        # no ReviewResult here at all, let alone one the parser resolved a verdict from).
+        verdict_source=None,
         source_doc=source_doc,
         model=model or "unknown",
         today=today,

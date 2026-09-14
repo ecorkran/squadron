@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from squadron.review import parsers as _parsers_module
-from squadron.review.models import Severity, Verdict
+from squadron.review.models import Severity, Verdict, VerdictSource
 from squadron.review.parsers import (
     UNVERIFIED_LOCATION,
     location_line,
@@ -1761,3 +1761,67 @@ class TestNewlineFreeDoesNotReopenFenceMasking:
 
         assert result.verdict is Verdict.PASS
         assert [f.title for f in result.findings] == ["Real finding"]
+
+
+class TestVerdictSourceResolution:
+    """Slice 919 Part 2 (#97): each branch resolves verdict_source correctly,
+    independently of fallback_used (T2.3).
+    """
+
+    def test_96_shaped_derivation_resolves_to_derived(self) -> None:
+        """The end-to-end regression for the defect #97 describes: a parse
+        that fails the summary but yields one benign finding, most-severe-
+        wins deriving PASS, must be marked derived."""
+        text = "### [PASS] Titlecategory: catlocation: a.py:1Body."
+
+        result = parse_review_output(text, "slice", {})
+
+        assert result.verdict is Verdict.PASS
+        assert result.verdict_source is VerdictSource.DERIVED
+        assert result.fallback_used is True
+
+    def test_normal_parse_with_summary_found_directly_resolves_to_stated(self) -> None:
+        text = "## Summary\nPASS\n\n## Findings\n\n### [PASS] Title\nBody.\n"
+
+        result = parse_review_output(text, "slice", {})
+
+        assert result.verdict is Verdict.PASS
+        assert result.verdict_source is VerdictSource.STATED
+
+    def test_normalized_newline_free_parse_resolves_to_stated_not_derived(self) -> None:
+        """D7's orthogonality: verdictSource answers 'did the model say this',
+        not 'how much work did squadron do to read it'. A normalized parse
+        whose Summary is then found directly is still STATED."""
+        specimen = (_FIXTURES / "918-newline-free-response.txt").read_text(encoding="utf-8")
+
+        result = parse_review_output(specimen, "slice", {})
+
+        assert result.verdict is Verdict.PASS
+        assert result.verdict_source is VerdictSource.STATED
+        assert result.normalized_break_count > 0
+
+    def test_stated_verdict_with_unparseable_findings_stays_stated_not_derived(self) -> None:
+        """The one branch where fallback_used and verdict_source diverge
+        (parsers.py mismatch branch): verdict=CONCERNS/FAIL came from
+        _extract_verdict directly — the model stated it — only the findings
+        failed to parse. fallback_used is True here too, but verdict_source
+        must not be computed from it, or this branch mislabels a stated
+        verdict as derived.
+        """
+        text = "## Summary\nCONCERNS\n\nUnstructured content with no finding headings.\n"
+
+        result = parse_review_output(text, "slice", {})
+
+        assert result.verdict is Verdict.CONCERNS
+        assert result.fallback_used is True
+        assert result.verdict_source is VerdictSource.STATED
+
+    def test_nothing_parsed_branch_omits_verdict_source(self) -> None:
+        """D8: UNKNOWN is not a resolved verdict to attribute provenance to;
+        the key is omitted (None) rather than defaulted to STATED."""
+        text = "Just some prose with no structure at all."
+
+        result = parse_review_output(text, "slice", {})
+
+        assert result.verdict is Verdict.UNKNOWN
+        assert result.verdict_source is None

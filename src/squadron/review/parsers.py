@@ -17,6 +17,7 @@ from squadron.review.models import (
     ReviewResult,
     Severity,
     Verdict,
+    VerdictSource,
 )
 
 logger = logging.getLogger(__name__)
@@ -932,6 +933,13 @@ def parse_review_output(
         parsed_text, normalized_break_count = raw_output, 0
 
     verdict = _extract_verdict(parsed_text)
+    # Provenance (#97, D7): STATED unless a later branch derives or cannot
+    # resolve it. Set here, not computed from fallback_used, because one
+    # branch below (the findings-parse mismatch) sets fallback_used=True for
+    # a verdict that was genuinely stated — only the *findings* failed to
+    # parse (T2.3). Reassigning per branch, by what actually happened to the
+    # verdict, is the only way that branch resolves correctly.
+    verdict_source: VerdictSource | None = VerdictSource.STATED
     findings, finding_scan, findings_section_located = _extract_findings(
         parsed_text, verdict=verdict, template_name=template_name
     )
@@ -978,6 +986,7 @@ def parse_review_output(
         )
         verdict = derived
         fallback_used = True
+        verdict_source = VerdictSource.DERIVED
     elif verdict is Verdict.UNKNOWN:
         # Genuinely unknown: no verdict and nothing to derive one from.
         # Previously silent, which made a failed parse indistinguishable
@@ -993,6 +1002,11 @@ def parse_review_output(
         # one case with nothing else to go on was the one that kept no evidence (#61).
         # The result's own fallback_used stays False — nothing was derived or fabricated;
         # the artifact keys its degraded rendering on the UNKNOWN verdict instead.
+        # verdictSource (#97, D8): omitted rather than STATED — there is no
+        # verdict here to attribute provenance to (UNKNOWN is not a resolved
+        # verdict), so "does not apply" is the honest answer, following the
+        # established _review_frontmatter_lines convention for optional keys.
+        verdict_source = None
         _write_debug_log(
             template=template_name,
             model=model,
@@ -1005,6 +1019,11 @@ def parse_review_output(
     mismatch = verdict in (Verdict.CONCERNS, Verdict.FAIL) and not findings
     if mismatch:
         fallback_used = True
+        # verdictSource stays STATED here (#97, T2.3): this verdict came from
+        # _extract_verdict — the model genuinely stated it — only the
+        # *findings* failed to parse. fallback_used=True and STATED both hold
+        # simultaneously; do not compute verdict_source from fallback_used or
+        # this branch mislabels a stated verdict as derived.
         logger.warning(
             "%s review (model=%s) has verdict=%s but zero structured findings "
             "were parsed — the model likely did not follow the required "
@@ -1048,6 +1067,7 @@ def parse_review_output(
         input_files=input_files,
         model=model,
         fallback_used=fallback_used,
+        verdict_source=verdict_source,
         score=score,
         criteria=criteria,
         summary_section_located=summary_section_located,

@@ -77,11 +77,11 @@ Re-verify every cited line number before editing.
 
 ### T2.1 — Define the `VerdictSource` enum
 
-- [ ] Add `VerdictSource(StrEnum)` to `review/models.py`, mirroring the
+- [x] Add `VerdictSource(StrEnum)` to `review/models.py`, mirroring the
       `Verdict` enum's style ([models.py:10](src/squadron/review/models.py#L10)):
       exactly two members, `STATED = "stated"` and `DERIVED = "derived"`
       (D7's closed two-value vocabulary — no reason string, no third value).
-- [ ] Place it near `Verdict` and `Severity` so the three enums read as a
+- [x] Place it near `Verdict` and `Severity` so the three enums read as a
       family.
 
 **Success:** `pyright` clean; the enum is importable from `review.models`
@@ -89,22 +89,22 @@ and defines exactly the two members. Effort: 1.
 
 ### T2.2 — Thread provenance through `parse_review_output`'s result
 
-- [ ] Add a field to `ReviewResult` carrying the resolved `VerdictSource` (or
+- [x] Add a field to `ReviewResult` carrying the resolved `VerdictSource` (or
       an equivalent that lets the caller compute it — decide based on
       whether `fallback_used` alone is sufficient, per D7's note that a
       normalized-but-then-stated parse, per D4, is still `stated`).
-- [ ] Set it in `parsers.py` at the same two sites that currently set
+- [x] Set it in `parsers.py` at the same two sites that currently set
       `fallback_used`: the derivation branch
       ([parsers.py:802](src/squadron/review/parsers.py#L802)) sets `DERIVED`;
       every other branch that produces a real verdict sets `STATED`.
-- [ ] Resolve D8 explicitly for the nothing-parsed branch
+- [x] Resolve D8 explicitly for the nothing-parsed branch
       ([parsers.py:816](src/squadron/review/parsers.py#L816), verdict stays
       `UNKNOWN`): choose and document whether this emits `STATED` (if
       unambiguous) or omits the key entirely, following the established
       `_review_frontmatter_lines` convention that an absent optional key
       means "does not apply." Write the chosen behavior as a code comment at
       the branch, not only in the task file.
-- [ ] Add `verdictSource` to `to_dict()` ([models.py:201](src/squadron/review/models.py#L201),
+- [x] Add `verdictSource` to `to_dict()` ([models.py:201](src/squadron/review/models.py#L201),
       beside `fallback_used`) so the JSON contract and frontmatter can be
       compared for agreement (design success criterion 6) — see T2.5.
 
@@ -115,17 +115,17 @@ the same field frontmatter will render. Effort: 2.
 
 ### T2.3 — Test provenance resolution in isolation
 
-- [ ] Test: the #96-shaped case (a parse that fails the summary but yields
+- [x] Test: the #96-shaped case (a parse that fails the summary but yields
       one benign finding, most-severe-wins deriving `PASS`) resolves to
       `VerdictSource.DERIVED` — this is the end-to-end regression for the
       defect #97 describes.
-- [ ] Test: a normal parse where `## Summary` is found directly resolves to
+- [x] Test: a normal parse where `## Summary` is found directly resolves to
       `VerdictSource.STATED`.
-- [ ] Test: a normalized-newline-free parse (Part 1) whose `## Summary` is
+- [x] Test: a normalized-newline-free parse (Part 1) whose `## Summary` is
       then found after normalization resolves to `STATED`, not `DERIVED` —
       confirms D7's orthogonality (`verdictSource` answers "did the model say
       this", not "how much work did squadron do to read it").
-- [ ] **Test the stated-vs-derived mismatch branch explicitly** — the
+- [x] **Test the stated-vs-derived mismatch branch explicitly** — the
       `verdict in (CONCERNS, FAIL) and not findings` case
       ([parsers.py:826-828](src/squadron/review/parsers.py#L826-L828)).
       `fallback_used` is `True` here too, but the verdict came from
@@ -137,7 +137,7 @@ the same field frontmatter will render. Effort: 2.
       `derived`; T2.2's field must be set independently at each branch, per
       what actually happened to the verdict, not derived from the findings
       flag.
-- [ ] Test the nothing-parsed branch per whichever T2.2 decided.
+- [x] Test the nothing-parsed branch per whichever T2.2 decided.
 
 **Success:** all five cases pass and are distinguishable from each other —
 no two produce the same `VerdictSource` for different reasons without a
@@ -146,19 +146,19 @@ if `VerdictSource` is ever computed from `fallback_used` directly. Effort: 2.
 
 ### T2.4 — Emit `verdictSource` in frontmatter at both call sites
 
-- [ ] Add a `verdict_source: VerdictSource | None` parameter to
+- [x] Add a `verdict_source: VerdictSource | None` parameter to
       `_review_frontmatter_lines` ([persistence.py:242](src/squadron/review/persistence.py#L242)),
       following the existing optional-key convention in that function
       (append the line only when the value is supplied, matching
       `reviewed_sha`/`revision_number`/`tools_suppressed_reason`'s pattern
       immediately below it).
-- [ ] Pass it at **both** call sites — the normal review path
+- [x] Pass it at **both** call sites — the normal review path
       ([persistence.py:352](src/squadron/review/persistence.py#L352)) from
       the `ReviewResult` field T2.2 added, and the provider-failure path
       ([persistence.py:683](src/squadron/review/persistence.py#L683)) with
       whatever value is correct for a failure (likely omitted — a provider
       failure has no verdict to attribute provenance to; decide and comment).
-- [ ] Emit the key as `verdictSource: stated` / `verdictSource: derived` in
+- [x] Emit the key as `verdictSource: stated` / `verdictSource: derived` in
       frontmatter, placed adjacent to the existing `verdict:` line for
       readability.
 
@@ -169,15 +169,15 @@ inconsistent. Effort: 2.
 
 ### T2.5 — Test frontmatter emission end to end
 
-- [ ] Test: a review artifact built from the #96-shaped derivation case
+- [x] Test: a review artifact built from the #96-shaped derivation case
       (T2.3's first case) has frontmatter containing both `verdict: PASS`
       and `verdictSource: derived` — read the rendered markdown's frontmatter
       block directly, not the internal `ReviewResult`, since the whole
       defect was one surface (JSON `to_dict()`) knowing what another
       (frontmatter) did not.
-- [ ] Test: a real parsed `## Summary` case's artifact shows
+- [x] Test: a real parsed `## Summary` case's artifact shows
       `verdictSource: stated`.
-- [ ] **`to_dict()` must also emit `verdictSource`**, not only frontmatter —
+- [x] **`to_dict()` must also emit `verdictSource`**, not only frontmatter —
       design success criterion 6 ("no surface says `stated` while another
       says `derived`") is not executable otherwise, since JSON currently
       carries only `fallback_used`. Add the key to `to_dict()`
@@ -186,7 +186,7 @@ inconsistent. Effort: 2.
       `verdictSource` and the frontmatter's `verdictSource` line report the
       same value for the same `ReviewResult`, for both the derived and
       stated cases.
-- [ ] Test: an existing artifact snapshot (or a `ReviewResult` built the way
+- [x] Test: an existing artifact snapshot (or a `ReviewResult` built the way
       one was before this slice) with no `verdictSource` field set renders
       frontmatter with the key **absent**, not a placeholder — confirms
       design success criterion 3 (additive, absence is meaningful).
@@ -197,12 +197,13 @@ executable tests, not just documentation claims. Effort: 2.
 
 ### T2.6 — File the Context Forge coordination issue
 
-- [ ] File an issue against context-forge (or the appropriate tracker) asking
+- [x] File an issue against context-forge (or the appropriate tracker) asking
       its review gate to read `verdictSource` and decline to auto-clear on
       `derived` — reference this slice and #97. Not a blocking precondition
       (D6 verified `cf` tolerates the unknown key today), but design success
-      criterion 7 requires it be filed once the key ships.
-- [ ] Link the filed issue number back into this task's checklist item and
+      criterion 7 requires it be filed once the key ships. Filed:
+      [context-forge#89](https://github.com/ecorkran/context-forge/issues/89)
+- [x] Link the filed issue number back into this task's checklist item and
       into the slice design's Part 2 section (a one-line addition noting the
       issue number, once known).
 

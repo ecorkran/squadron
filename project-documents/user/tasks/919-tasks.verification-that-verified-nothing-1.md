@@ -301,12 +301,12 @@ unchanged. Effort: 2.
 
 ### T1.10 — Verify and commit Part 1
 
-- [ ] `uv run pytest tests/review/ -q` green.
-- [ ] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
+- [x] `uv run pytest tests/review/ -q` green.
+- [x] `uv run ruff format --check . && uv run ruff check . && uv run pyright`
       clean — zero pyright errors, per `CLAUDE.md`.
-- [ ] Run the design's Part 1 verification walkthrough commands directly
+- [x] Run the design's Part 1 verification walkthrough commands directly
       (the `uv run python -` snippet and the two `pytest -k` invocations in
       the slice design's Verification Walkthrough section) and confirm the
       "Expected after" numbers match exactly.
-- [ ] Commit: `fix(review): normalize newline-free responses before parsing (#96)`
-- [ ] Effort: 1
+- [x] Commit: `fix(review): normalize newline-free responses before parsing (#96)`
+- [x] Effort: 1

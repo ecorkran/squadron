@@ -25,6 +25,23 @@ class Severity(StrEnum):
     FAIL = "FAIL"
 
 
+class VerdictSource(StrEnum):
+    """Whether a review's verdict was stated by the model or derived (#97).
+
+    A closed two-value vocabulary (D7), not a reason string: fallback_used
+    already does not distinguish *why* a parse failed, and a reason string
+    would need its own vocabulary every consumer switches on — string-dispatch
+    on a field whose values are not yet known. The *reason* stays in the run
+    digest, which is where a human triages; this field answers only "did the
+    model say this?", orthogonal to how much work squadron did to read it
+    (a normalized-but-then-stated parse, per slice 919 Part 1's D4, is still
+    STATED).
+    """
+
+    STATED = "stated"
+    DERIVED = "derived"
+
+
 class TemplateValidationError(Exception):
     """Raised when a template YAML file fails validation."""
 
@@ -97,6 +114,13 @@ class ReviewResult:
     timestamp: datetime = field(default_factory=datetime.now)
     model: str | None = None
     fallback_used: bool = False
+    # Whether the verdict was stated by the model or derived from findings
+    # (slice 919 Part 2, #97). None means "does not apply" — the
+    # nothing-parsed branch, where verdict stays UNKNOWN (D8) — not computed
+    # from fallback_used: the findings-parse-mismatch branch sets
+    # fallback_used=True for a verdict that was genuinely STATED, so the two
+    # fields are independent and must not be conflated.
+    verdict_source: VerdictSource | None = None
     # Numeric scoring foundation (slice 300) — all optional, default None.
     # score/criteria are populated by the parser when present; provenance is a
     # reserved field (added here, never set or read in this slice — slice 301).
@@ -205,6 +229,12 @@ class ReviewResult:
             # A degraded parse must be visible to JSON consumers too, or an
             # empty findings list reads as "the model found nothing" (issue #72).
             "fallback_used": self.fallback_used,
+            # Slice 919 Part 2 (#97): always present, null when it does not apply (the
+            # nothing-parsed branch, D8) — so a consumer can tell "does not apply" from
+            # "never computed" without inferring it from a missing key, matching
+            # stop_reason's convention above. Must agree with frontmatter's
+            # verdictSource line for the same ReviewResult (design SC6).
+            "verdictSource": self.verdict_source.value if self.verdict_source else None,
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.

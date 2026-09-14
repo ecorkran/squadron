@@ -398,7 +398,8 @@ pass today.
    while another says `derived`.
 7. A cf issue is filed once the key ships, asking CF's review gate to read it. Not a
    precondition — cf tolerates the unknown key today (D6, verified) — but #97 is not
-   fully closed until a consumer acts on the value.
+   fully closed until a consumer acts on the value. Filed:
+   [context-forge#89](https://github.com/ecorkran/context-forge/issues/89) (20260914).
 
 ## Part 3 — Frontmatter gate fails closed (#98)
 
@@ -657,19 +658,60 @@ is what T1.7's test actually asserts.
 
 ### Part 2 — a derived verdict is visible where the gate reads (#97)
 
+**Run at Phase 6 completion, 20260914.**
+
 Construct the #96 shape — a parse that fails the summary but yields one benign finding —
 and read the artifact's frontmatter rather than its JSON:
 
 ```bash
-grep -E '^(verdict|verdictSource):' <the artifact>
+uv run python - << 'PY'
+from squadron.review.parsers import parse_review_output
+from squadron.review.persistence import format_review_markdown
+result = parse_review_output("### [PASS] Titlecategory: catlocation: a.py:1Body.", "slice", {})
+md = format_review_markdown(result, "slice")
+for line in md.splitlines():
+    if line.startswith("verdict"):
+        print(line)
+PY
 ```
 
-Expected: `verdict: PASS` accompanied by the derived marking. Then confirm the surfaces
-agree, since the whole defect was one surface knowing what another did not:
+Actual output (20260914):
+
+```
+verdict: PASS
+verdictSource: derived
+```
+
+A real review whose `## Summary` parsed shows the stated marking, confirmed against the
+same construction with a well-formed response:
+
+```
+verdict: PASS
+verdictSource: stated
+```
+
+Then confirm the surfaces agree, since the whole defect was one surface knowing what
+another did not:
 
 ```bash
 uv run pytest tests/review/ -k "provenance or verdict_source" -v
 ```
+
+Actual: 4 passed (20260914) — `test_parser_never_sets_provenance` (an unrelated pre-919
+test whose name happens to match the filter — the `provenance` field is a different,
+reserved slice-301 field, not `verdictSource`), plus three tests from this slice covering
+the nothing-parsed omission and the to_dict()/frontmatter agreement. The broader
+stated-vs-derived and mismatch-branch coverage lives in
+`tests/review/test_parsers.py::TestVerdictSourceResolution` and
+`tests/review/test_persistence.py::TestVerdictSourceFrontmatterEmission`, which this `-k`
+filter's literal string match does not select by name — run those classes directly for
+full Part 2 coverage:
+
+```bash
+uv run pytest tests/review/ -k "VerdictSourceResolution or VerdictSourceFrontmatterEmission" -v
+```
+
+Actual: 9 passed (20260914).
 
 A real review whose `## Summary` parsed must show the stated marking — a test that only
 exercises the derived side would pass with the key hard-coded.
