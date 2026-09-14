@@ -34,6 +34,10 @@ Full rationale and decisions D6-D14 are in the slice design — read it before
 starting. Issues: [#97](https://github.com/ecorkran/squadron/issues/97),
 [#98](https://github.com/ecorkran/squadron/issues/98).
 
+Commit after each task per `CLAUDE.md`'s "at least once per task" rule — the
+only checklist items explicitly named `Verify and commit` (T2.7, T3.11) are
+each part's semantic closeout commit, not the only commits in the part.
+
 Part 2 and Part 3 touch disjoint files and do not depend on each other or on
 Part 1's completion in the same working session, but Part 1 must be merged
 first per the design's execution order. Each part ends in its own
@@ -100,10 +104,14 @@ and defines exactly the two members. Effort: 1.
       `_review_frontmatter_lines` convention that an absent optional key
       means "does not apply." Write the chosen behavior as a code comment at
       the branch, not only in the task file.
+- [ ] Add `verdictSource` to `to_dict()` ([models.py:201](src/squadron/review/models.py#L201),
+      beside `fallback_used`) so the JSON contract and frontmatter can be
+      compared for agreement (design success criterion 6) — see T2.5.
 
 **Success:** every path through `parse_review_output` that returns a verdict
 other than the nothing-parsed case sets an unambiguous `VerdictSource`; the
-nothing-parsed case's behavior is decided and commented. Effort: 2.
+nothing-parsed case's behavior is decided and commented; `to_dict()` carries
+the same field frontmatter will render. Effort: 2.
 
 ### T2.3 — Test provenance resolution in isolation
 
@@ -117,11 +125,24 @@ nothing-parsed case's behavior is decided and commented. Effort: 2.
       then found after normalization resolves to `STATED`, not `DERIVED` —
       confirms D7's orthogonality (`verdictSource` answers "did the model say
       this", not "how much work did squadron do to read it").
+- [ ] **Test the stated-vs-derived mismatch branch explicitly** — the
+      `verdict in (CONCERNS, FAIL) and not findings` case
+      ([parsers.py:826-828](src/squadron/review/parsers.py#L826-L828)).
+      `fallback_used` is `True` here too, but the verdict came from
+      `_extract_verdict` (the model genuinely stated it) — only the
+      *findings* failed to parse. This is the one branch where
+      `fallback_used` and the correct `VerdictSource` diverge, so it must
+      resolve to `STATED`. **Do not compute `VerdictSource` as a function of
+      `fallback_used` alone** — that would silently mislabel this branch as
+      `derived`; T2.2's field must be set independently at each branch, per
+      what actually happened to the verdict, not derived from the findings
+      flag.
 - [ ] Test the nothing-parsed branch per whichever T2.2 decided.
 
-**Success:** all four cases pass and are distinguishable from each other —
+**Success:** all five cases pass and are distinguishable from each other —
 no two produce the same `VerdictSource` for different reasons without a
-comment explaining why that is correct. Effort: 2.
+comment explaining why that is correct, and the mismatch-branch test fails
+if `VerdictSource` is ever computed from `fallback_used` directly. Effort: 2.
 
 ### T2.4 — Emit `verdictSource` in frontmatter at both call sites
 
@@ -156,9 +177,15 @@ inconsistent. Effort: 2.
       (frontmatter) did not.
 - [ ] Test: a real parsed `## Summary` case's artifact shows
       `verdictSource: stated`.
-- [ ] Test: `to_dict()`'s JSON output and the frontmatter agree for the same
-      `ReviewResult` — assert both surfaces report the same value for the
-      same input, closing design success criterion 6.
+- [ ] **`to_dict()` must also emit `verdictSource`**, not only frontmatter —
+      design success criterion 6 ("no surface says `stated` while another
+      says `derived`") is not executable otherwise, since JSON currently
+      carries only `fallback_used`. Add the key to `to_dict()`
+      ([models.py:201](src/squadron/review/models.py#L201), beside
+      `fallback_used`) as part of T2.2, not here. Test: `to_dict()`'s
+      `verdictSource` and the frontmatter's `verdictSource` line report the
+      same value for the same `ReviewResult`, for both the derived and
+      stated cases.
 - [ ] Test: an existing artifact snapshot (or a `ReviewResult` built the way
       one was before this slice) with no `verdictSource` field set renders
       frontmatter with the key **absent**, not a placeholder — confirms
@@ -232,10 +259,23 @@ by value) from the gate. Effort: 1.
       confirm frontmatter and is failing closed. Do not just say "0 files
       checked" — the operator cannot infer the worktree cause from that
       alone.
+- [ ] **Update the existing fake-process tests in
+      `test_frontmatter_gate.py`'s `TestExitMapping`** so each includes a
+      `filesChecked` key in its fake stdout —
+      `test_exit_0_succeeds` currently returns `b'{"totalFindings":0}'` with
+      no `filesChecked` key, which passes today only because nothing reads
+      that field yet. Once this task and T3.3 land, D11's fail-closed rule
+      makes an absent `filesChecked` a failure, so this and the sibling
+      exit-1/exit-2 tests will go red unless updated to include a
+      `filesChecked` count consistent with their fake `staged_paths`. Fix
+      the tests as part of this task, not as an unplanned discovery at
+      T3.11.
 
 **Success:** a fake `cf` process returning exit 0 with
 `{"filesChecked": 0, ...}` against non-empty staged paths now fails, with a
-message containing the worktree explanation. Effort: 2.
+message containing the worktree explanation; the three pre-existing
+`TestExitMapping` tests are updated to carry a `filesChecked` value and
+still pass. Effort: 2.
 
 ### T3.3 — Fail closed on absent or unparseable `filesChecked` (D11)
 
@@ -319,6 +359,15 @@ if T3.5's timeout wrapping is removed. Effort: 2.
       (zero-checked-against-nonempty fails, with the worktree message), T3.3
       (absent/unparseable `filesChecked` fails, with its own message), and
       T3.4 (empty staged list with `filesChecked: 0` passes).
+- [ ] **Add the design's criterion 2 pair — the default-checkout case is
+      otherwise untested.** A fake `cf` returning exit 0 with
+      `filesChecked` equal to the staged-path count passes (valid
+      frontmatter, default checkout, unchanged from today); a fake `cf`
+      returning exit 1 with `filesChecked` equal to the staged-path count
+      and findings in stdout fails, carrying cf's own finding text — not
+      one of T3.2's or T3.3's fail-closed messages. This is what proves the
+      fail-closed paths added by this part did not also start failing the
+      ordinary, everything-worked case.
 - [ ] Confirm all three failure messages (worktree, unparseable-count,
       timeout) are distinguishable from each other by asserting on
       message content, not just on `success is False` — design success
