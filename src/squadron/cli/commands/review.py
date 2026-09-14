@@ -283,22 +283,29 @@ def _worst_outcome(left: SaveOutcome, right: SaveOutcome) -> SaveOutcome:
     return left if _OUTCOME_SEVERITY[left] >= _OUTCOME_SEVERITY[right] else right
 
 
-def _warn_not_persistable(review_type: str) -> None:
+_DEFAULT_NOT_PERSISTABLE_REASON = "no slice identifier"
+
+
+def _warn_not_persistable(review_type: str, reason: str) -> None:
     """Report that no artifact was written, and how to get one.
 
     A warning that only reports absence leaves the operator where they
-    started, so this names the remedy alongside the fact.
+    started, so this names the remedy alongside the fact. ``reason`` names
+    *why* there is nothing to name an artifact with — distinct callers (a
+    slice-less ``sq review code``, or ``sq review pr`` before 383's
+    persistence lands) have distinct reasons.
     """
     _logger.warning(
-        "%s review was not saved: no slice identifier, so there is no artifact "
+        "%s review was not saved: %s, so there is no artifact "
         "name to write under. Supply a slice number, or use --output file with "
         "--output-path to choose a destination.",
         review_type,
+        reason,
     )
     # stderr, not stdout: --output json must stay machine-parseable, and this
     # warning is operator-facing rather than part of the review payload.
     Console(stderr=True).print(
-        "[yellow]Review not saved: no slice identifier to name an artifact.[/yellow]\n"
+        f"[yellow]Review not saved: {reason}.[/yellow]\n"
         "[yellow]Supply a slice number, or use --output file with --output-path.[/yellow]"
     )
 
@@ -309,6 +316,7 @@ def _resolve_save_outcome[SaveTargetT](
     target: SaveTargetT | None,
     save: Callable[[SaveTargetT], bool],
     review_type: str,
+    not_persistable_reason: str = _DEFAULT_NOT_PERSISTABLE_REASON,
 ) -> SaveOutcome:
     """Decide and perform the save, returning what actually happened.
 
@@ -320,11 +328,15 @@ def _resolve_save_outcome[SaveTargetT](
     It is passed *into* ``save`` rather than captured by it so the non-None
     narrowing reaches the callee: a checker cannot carry a
     ``target is not None`` test across a closure boundary.
+
+    ``not_persistable_reason`` overrides the warning's wording for callers whose
+    "no target" reason isn't the default slice-less case (e.g. ``sq review pr``,
+    which has no target until 383 lands regardless of slice identifier).
     """
     if no_save:
         return SaveOutcome.SUPPRESSED
     if target is None:
-        _warn_not_persistable(review_type)
+        _warn_not_persistable(review_type, not_persistable_reason)
         return SaveOutcome.NOT_PERSISTABLE
     return SaveOutcome.SAVED if save(target) else SaveOutcome.UNSAVED
 
