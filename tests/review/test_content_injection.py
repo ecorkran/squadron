@@ -49,6 +49,24 @@ def test_cwd_key_is_skipped(tmp_path: Path) -> None:
     assert "should not appear" not in result
 
 
+def test_pr_key_is_skipped(tmp_path: Path) -> None:
+    """The pr key is skipped even if its value happens to be a real, readable file path.
+
+    A pr input value is rendered text from the PR-metadata builder (slice 382, design D4),
+    never a file path — without the skip, a PR body could name a real file on disk and have
+    it injected as if it were a reviewed document (Scope corrections table, design row 3).
+    """
+    pr_file = tmp_path / "pr"
+    pr_file.write_text("should not appear")
+
+    prompt = "Review this"
+    inputs = {"pr": str(pr_file), "cwd": str(tmp_path)}
+
+    result = _inject_file_contents(prompt, inputs)
+    assert result == prompt  # no injection
+    assert "should not appear" not in result
+
+
 def test_nonexistent_file_is_skipped(tmp_path: Path) -> None:
     """Non-existent file paths are skipped without error."""
     prompt = "Review this"

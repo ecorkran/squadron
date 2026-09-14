@@ -321,7 +321,10 @@ async def run_review_with_profile(
     return result
 
 
-_SKIP_KEYS = {"cwd", "diff", "files"}
+# "pr" (slice 382, design D4): a pr input value is rendered text from the builder, never a
+# file path; without this, the "is this a real path" check below could read a real file
+# named inside a PR body off disk and inject it (Scope corrections table, design row 3).
+_SKIP_KEYS = {"cwd", "diff", "files", "pr"}
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
 
