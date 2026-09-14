@@ -718,6 +718,8 @@ exercises the derived side would pass with the key hard-coded.
 
 ### Part 3 — the gate fails closed in a worktree (#98)
 
+**Run at Phase 6 completion, 20260914.**
+
 Reproduce the vacuous pass first, from a sibling worktree, then confirm the fix. The
 throwaway file must carry frontmatter that is actually invalid, so that a gate which truly
 validated would fail on content rather than on the count:
@@ -728,16 +730,58 @@ git worktree list                      # confirm which checkout is default
 cf validate frontmatter --json <staged path>   # expect filesChecked: 0, exit 0
 ```
 
-Before the fix, committing that file reports `squadron.frontmatter-gate: ok`. After, it
-must fail with a message naming the worktree cause. Then the three guard cases:
+Actual (20260914, `squadron-pr` worktree, throwaway file with `status: not-a-real-status`):
+
+```
+git worktree list
+/Users/manta/source/repos/manta/squadron     e183ef70 [919-slice.verification-that-verified-nothing]
+/Users/manta/source/repos/manta/squadron-pr  3d7d197a [382-slice.review-a-pr]
+
+cf validate frontmatter --json project-documents/user/reviews/zz-919-worktree-repro.md
+{
+  "filesChecked": 0,
+  "totalFindings": 0,
+  "errors": 0,
+  "warnings": 0,
+  "findings": []
+}
+```
+
+Reproduced exactly as the design describes: `filesChecked: 0`, exit 0, despite genuinely
+invalid frontmatter. **Correction to the draft:** the throwaway file must not actually be
+committed to confirm the before/after behavior — `FrontmatterGateAction` was instead
+invoked directly (both the pre-fix module, extracted via `git show d1863815:...` for the
+subprocess-and-exit-code logic, and the current fix) against the same reproduction, so no
+invalid frontmatter ever touched real git history in either checkout. The throwaway file
+and any worktree changes were fully cleaned up after (`squadron-pr`'s `git status --short`
+confirmed empty of anything from this reproduction, alongside its own untouched
+pre-existing work for initiative 380).
+
+Before the fix (pre-fix code path, no `--json`, exit-code only): exit 0 —
+`squadron.frontmatter-gate: ok`, byte-identical to a gate that checked everything. After
+the fix, invoking `FrontmatterGateAction().execute(...)` against the identical scenario:
+
+```
+success: False
+error: cf validated 0 of 1 staged file(s); in a git worktree this usually means cf
+resolved in-root against a different checkout, so the gate cannot confirm frontmatter
+and is failing closed.
+```
+
+Then the guard cases, run directly rather than reconstructed by hand:
 
 ```bash
 uv run pytest tests/events/builtin/test_frontmatter_gate.py -v
 ```
 
-covering zero-checked-against-nonempty (fails), empty staged list (passes),
-absent/unparseable `filesChecked` (fails with its own message), and a hung `cf` (killed,
-reaped, WARNING logged, gate fails with a third distinct message).
+Actual: 16 passed (20260914) — covering zero-checked-against-nonempty (fails, worktree
+message), empty staged list (passes), the design's criterion-2 pair (matching
+`filesChecked` with findings fails carrying cf's own text; matching `filesChecked` with no
+findings passes, unchanged from today), absent/unparseable `filesChecked` (fails with its
+own message), a hung `cf` (killed, reaped, WARNING logged, gate fails with a third distinct
+message, patched to a 0.05s timeout for test speed), and pairwise message-distinguishability
+assertions across all three fail-closed causes. Runs in well under a second (0.91s for all
+16, including two real-`cf` integration tests).
 
 ### Gates
 
