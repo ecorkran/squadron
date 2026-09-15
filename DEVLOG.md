@@ -2,13 +2,58 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260914
+dateUpdated: 20260915
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260915
+
+### Slice 920 — Slice Design: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
+
+Phase 4 (Slice Design) complete. Design at
+`project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`.
+No code changed; slice is not started.
+
+**The upgrade is not the slice.** The compatibility probe was rebuilt against
+`claude-agent-sdk==0.2.152` and confirmed the prior session's finding: all 14 public names,
+all 9 `ClaudeAgentOptions` fields, and all three private modules squadron touches survive the
+bump. What the probe added this round is the shape of the thing that actually changes —
+`RateLimitEvent(rate_limit_info: RateLimitInfo, uuid, session_id)`, with
+`RateLimitStatus = Literal['allowed', 'allowed_warning', 'rejected']` and a `raw` field
+preserving the original payload. Both a `rejected` and an `allowed_warning` payload now parse
+cleanly; **neither raises**.
+
+That last fact is the whole design. Throttle detection is currently keyed off a *parse
+failure* — `MessageParseError` → dead generator → `ClaudeSDKError` → `"rate_limit" in
+str(exc)` → backoff. After the upgrade that chain's first link never fires, the event parses
+into a type `translate_sdk_message` returns `[]` for, and the throttle disappears with no
+error, no log, and no backoff. Squadron would keep hammering a limiter that is rejecting it —
+the exact defect the backoff was added to fix, now silent.
+
+**Decisions.** D1 deletes the shim outright rather than keeping a version-guarded no-op: the
+floor pin makes it unreachable by construction, and the stale-lockfile hedge is not real. D2
+keeps `>=` rather than a ceiling — the CLI ships *inside* the package, so pinning the SDK back
+pins the CLI back and recreates the original bug. D4 raises a `RateLimitRejected(ClaudeSDKError)`
+at dispatch so all three existing `except ClaudeSDKError` loops need no restructuring, and
+retains the substring path as a second signal for genuine 429s surfaced as plain errors.
+
+**Two findings the plan entry did not have.** `set_model` is already in use at
+`sdk_session.py:125`, so the entry's note about the pipeline working around its absence is
+stale. And `sdk_session.dispatch` iterates `receive_response()` **directly**, with no
+`_skip_unparseable` wrapper — unlike both agent paths — so it needs its own inline inspection.
+That asymmetry is the most likely place for this slice to half-land.
+
+**The test suite cannot close this slice.** Every existing throttle test fabricates the
+`MessageParseError`/`ClaudeSDKError` the SDK will no longer raise, so the suite stays green
+against a completely broken implementation. Rewriting those onto real `RateLimitEvent` objects
+is a non-negotiable success criterion, and the walkthrough requires a live review, a live
+metrology audit, and a forced-throttle observation — the original failure appeared only ~30
+tool calls into an audit, and the dangerous mode produces nothing to assert on.
+
 
 ---
 
