@@ -17,7 +17,11 @@ from claude_agent_sdk import (
     RateLimitEvent,
     RateLimitInfo,
     RateLimitStatus,
+    ResultMessage,
     TextBlock,
+    ThinkingBlock,
+    ToolResultBlock,
+    ToolUseBlock,
 )
 
 from squadron.core.models import AgentState, Message, MessageType
@@ -45,6 +49,30 @@ def options() -> ClaudeAgentOptions:
 @pytest.fixture
 def query_agent(options: ClaudeAgentOptions) -> ClaudeSDKAgent:
     return ClaudeSDKAgent(name="query-bot", options=options, mode="query")
+
+
+@pytest.fixture
+def tooled_query_agent(options: ClaudeAgentOptions) -> ClaudeSDKAgent:
+    return ClaudeSDKAgent(
+        name="query-bot",
+        options=options,
+        mode="query",
+        tools_given=["read_file", "grep"],
+    )
+
+
+def _make_result(**overrides: object) -> ResultMessage:
+    base: dict[str, object] = {
+        "subtype": "success",
+        "duration_ms": 100,
+        "duration_api_ms": 80,
+        "is_error": False,
+        "num_turns": 1,
+        "session_id": "sess-1",
+        "result": "done",
+    }
+    base.update(overrides)
+    return ResultMessage(**base)  # type: ignore[arg-type]
 
 
 @pytest.fixture
@@ -792,3 +820,125 @@ class TestRateLimitBackoff:
             messages = await _collect(query_agent.handle_message(input_message))
 
         assert any("work" in msg.content for msg in messages)
+
+
+# ---------------------------------------------------------------------------
+# Tool-use telemetry (issue #110)
+# ---------------------------------------------------------------------------
+
+
+class TestToolTelemetry:
+    """The SDK path must report tools_given/tool_calls_made like the OpenAI agent does.
+
+    Before this, the SDK provider never stamped this telemetry at all, so every
+    SDK-path review reported "not offered"/"not computed" regardless of whether
+    tools were actually given to or used by the model.
+    """
+
+    @pytest.mark.asyncio
+    async def test_no_tools_configured_stamps_no_tool_keys(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield _make_result()
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert "tools_given" not in messages[-1].metadata
+        assert "tool_calls_made" not in messages[-1].metadata
+
+    @pytest.mark.asyncio
+    async def test_tools_given_but_unused_reports_zero_calls(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="no tools needed")], model="claude")
+            yield _make_result(result="no tools needed")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == ["read_file", "grep"]
+        assert messages[-1].metadata["tool_calls_made"] == 0
+
+    @pytest.mark.asyncio
+    async def test_tool_calls_made_matches_actual_tool_use_blocks(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[
+                    ToolUseBlock(id="t1", name="Read", input={"path": "a.py"}),
+                    ToolUseBlock(id="t2", name="Grep", input={"pattern": "foo"}),
+                ],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="file contents", is_error=False)
+            yield ToolResultBlock(tool_use_id="t2", content="match", is_error=False)
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == ["read_file", "grep"]
+        assert messages[-1].metadata["tool_calls_made"] == 2
+        assert messages[-1].metadata["failed_tool_calls"] == 0
+
+    @pytest.mark.asyncio
+    async def test_failed_tool_result_increments_failed_tool_calls(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[ToolUseBlock(id="t1", name="Read", input={"path": "missing.py"})],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="No such file", is_error=True)
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["failed_tool_calls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_reason_and_reasoning_chars_stamped_from_result(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[ThinkingBlock(thinking="hmm", signature="sig")], model="claude"
+            )
+            yield _make_result(result="done", stop_reason="end_turn")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["stop_reason"] == "end_turn"
+        assert messages[-1].metadata["reasoning_chars"] == len("hmm")
+
+    @pytest.mark.asyncio
+    async def test_client_mode_stamps_telemetry_too(
+        self, options: ClaudeAgentOptions, input_message: Message
+    ) -> None:
+        client_agent = ClaudeSDKAgent(
+            name="client-bot", options=options, mode="client", tools_given=["read_file"]
+        )
+        mock_client = AsyncMock()
+
+        async def mock_receive():
+            yield AssistantMessage(
+                content=[ToolUseBlock(id="t1", name="Read", input={"path": "a.py"})],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="ok", is_error=False)
+            yield _make_result(result="done")
+
+        mock_client.receive_response = mock_receive
+
+        with patch(_CLIENT, return_value=mock_client):
+            messages = await _collect(client_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == ["read_file"]
+        assert messages[-1].metadata["tool_calls_made"] == 1

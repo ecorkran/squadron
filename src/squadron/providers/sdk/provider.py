@@ -95,6 +95,10 @@ class ClaudeSDKProvider:
         cap_s = config.credentials.get("rate_limit_cap_s")
         if cap_s is not None:
             agent_kwargs["rate_limit_cap_s"] = float(cap_s)  # pyright: ignore[reportArgumentType]
+        # Canonical names (pre-translation), so tool telemetry (issue #110) is stamped in
+        # the same vocabulary the OpenAI agent uses — callers never see Claude's names.
+        if config.allowed_tools is not None:
+            agent_kwargs["tools_given"] = list(config.allowed_tools)
         return ClaudeSDKAgent(name=config.name, options=options, mode=mode, **agent_kwargs)  # pyright: ignore[reportArgumentType]
 
     async def validate_credentials(self) -> bool:

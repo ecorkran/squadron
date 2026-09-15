@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from claude_agent_sdk import (
+    AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
     ClaudeSDKError,
@@ -15,6 +16,10 @@ from claude_agent_sdk import (
     CLINotFoundError,
     ProcessError,
     RateLimitEvent,
+    ResultMessage,
+    ThinkingBlock,
+    ToolResultBlock,
+    ToolUseBlock,
 )
 from claude_agent_sdk import (
     query as sdk_query,
@@ -53,6 +58,7 @@ class ClaudeSDKAgent:
         mode: str = "query",
         max_rate_limit_retries: int = MAX_RATE_LIMIT_RETRIES,
         rate_limit_cap_s: float = RATE_LIMIT_MAX_BACKOFF_S,
+        tools_given: list[str] | None = None,
     ) -> None:
         self._name = name
         self._options = options
@@ -65,6 +71,14 @@ class ClaudeSDKAgent:
         # Cumulative across the agent's life, so a caller can report what a
         # run actually cost in throttling rather than leaving it anecdotal.
         self._rate_limit_stats = RateLimitStats()
+        # Canonical squadron tool names (design D5 parity with the OpenAI agent's
+        # ``_tools_given``): what the run was offered, independent of whether it was used.
+        # Empty when no tools were configured, so a caller can tell "offered but unused"
+        # apart from "never offered" (issue #110).
+        self._tools_given: list[str] = list(tools_given) if tools_given else []
+        self._tool_calls_made = 0
+        self._failed_tool_calls = 0
+        self._reasoning_chars = 0
 
     # -- Protocol properties ------------------------------------------------
 
@@ -141,6 +155,37 @@ class ClaudeSDKAgent:
                 )
             yield sdk_msg
 
+    def _translate_and_track(self, sdk_msg: Any) -> list[Message]:
+        """Translate one SDK message, updating tool-use counters and stamping telemetry.
+
+        Mirrors the OpenAI agent's ``_stamp_tool_telemetry`` (design D5 parity, issue
+        #110): a caller must be able to tell "offered tools, used none" apart from "never
+        offered any." Counters accumulate across the whole stream; the ``ResultMessage`` is
+        the SDK's own end-of-turn signal, so telemetry is stamped there rather than on the
+        last yielded ``Message`` — buffering to find "the last message" would require
+        holding the whole stream in memory first.
+        """
+        if isinstance(sdk_msg, AssistantMessage):
+            for block in sdk_msg.content:
+                if isinstance(block, ToolUseBlock):
+                    self._tool_calls_made += 1
+                elif isinstance(block, ThinkingBlock):
+                    self._reasoning_chars += len(block.thinking)
+        elif isinstance(sdk_msg, ToolResultBlock):
+            if sdk_msg.is_error:
+                self._failed_tool_calls += 1
+
+        translated = translate_sdk_message(sdk_msg, sender=self._name)
+        if isinstance(sdk_msg, ResultMessage) and translated:
+            final = translated[-1]
+            final.metadata["stop_reason"] = sdk_msg.stop_reason
+            final.metadata["reasoning_chars"] = self._reasoning_chars
+            final.metadata["failed_tool_calls"] = self._failed_tool_calls
+            if self._tools_given:
+                final.metadata["tools_given"] = list(self._tools_given)
+                final.metadata["tool_calls_made"] = self._tool_calls_made
+        return translated
+
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:
         """One-shot execution via ``sdk_query``.
 
@@ -155,7 +200,7 @@ class ClaudeSDKAgent:
             try:
                 stream = sdk_query(prompt=message.content, options=self._options)
                 async for sdk_msg in self._skip_unparseable(stream):
-                    for translated in translate_sdk_message(sdk_msg, sender=self._name):
+                    for translated in self._translate_and_track(sdk_msg):
                         yield translated
                 self._state = AgentState.idle
                 return
@@ -204,7 +249,7 @@ class ClaudeSDKAgent:
                 try:
                     async for sdk_msg in self._skip_unparseable(self._client.receive_response()):
                         progressed = True
-                        for translated in translate_sdk_message(sdk_msg, sender=self._name):
+                        for translated in self._translate_and_track(sdk_msg):
                             yield translated
                     break  # normal completion
                 except ClaudeSDKError as exc:
