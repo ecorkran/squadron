@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260913
+dateUpdated: 20260915
 
 ---
 
@@ -11,6 +11,54 @@ dateUpdated: 20260913
 A lightweight, append-only record of development activity. Newest entries first.
 
 ---
+
+## 20260915
+
+### Slice 383 design (Phase 4)
+
+`383-slice.pr-keyed-review-persistence.md` written and committed (`cba46123`). Phase 4 only —
+no code, no task breakdown.
+
+**The slice is a migration, not an addition.** The plan frames it as "add PR persistence", but
+persistence is generic at the top (`_resolve_save_outcome` takes a `SaveTargetT`) and hardwired
+to `SliceInfo` beneath, so the two non-slice callers already work around it: the arch review
+fabricates a `SliceInfo` from an initiative index, and the pipeline action bypasses
+`save_review_result` entirely for a lower-level call keyed by step name and index. The design's
+D1 is a three-method `SaveTarget` protocol that all four targets satisfy; the PR target is then
+an ordinary implementation rather than a fourth shape. Migration acceptance is byte-identity
+against fixtures captured *before* the change on all three existing paths.
+
+**The plan's named context-forge dependency does not exist, and the probe method is the
+finding.** cf's `review` schema requires only `docType`, `project`, `status`, `dateCreated`,
+`dateUpdated` — `slice` is required for `slice-design` and `tasks`, not for `review` — and
+unknown keys (`pr`, `rulesSource`) pass through. A PR-shaped fixture validated clean: file count
+529 → 530, zero findings. Getting there took three attempts, because `cf validate frontmatter`
+resolves by *registered project*, not cwd (`-p` is the only override). The active `squadron`
+project is registered at `~/source/repos/manta/squadron`, so every invocation from this worktree
+— explicit-path *and* walk — was silently reading the main checkout or skipping entirely,
+returning `filesChecked: 0`. That is the "a skipped fixture proves nothing" trap
+`tests/documents/test_schema_drift.py` warns about in its own docstring, and it is the same
+registered-root mismatch behind the three pre-existing drift failures here (context-forge #88,
+not squadron's to fix). Recorded as D7 so implementation does not re-derive it: the slice's own
+validation test must assert `filesChecked` *increased*, never merely that findings were zero.
+
+**Two plan items were larger than their wording.** The rules-source provenance field is
+described as "one additive optional frontmatter key", but the value does not exist to record —
+`resolve_rules_dir` returns a bare `Path | None` and discards which of five branches produced
+it, so a project `rules/` and `~/.config/squadron/rules/` are indistinguishable to the caller.
+D6 makes it a signature change returning path *and* source, sequenced first since every review
+path calls it. And `PullRequestRecord.key` is `host/owner/repo#number` — containing `/` and `#`
+— while its docstring calls it "filesystem-safe" and points at this slice; 382 already flattens
+it in `worktree.py::_flatten_key`, so D3 promotes that to a `path_key` property rather than
+writing the second copy.
+
+`reviewedSha` is flagged as the easiest thing to get wrong: the current code resolves it from
+the process working directory, which on the PR path is the operator's tree, not the reviewed
+one, and still yields a plausible sha. The target supplies it, and the test deliberately makes
+the two differ.
+
+Status is `pending-review`; the design has not been reviewed or approved. Slice plan entry
+already carried its materialized `(383)` index, so no plan edit was owed.
 
 ## 20260914
 
