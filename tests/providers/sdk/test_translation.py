@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 from claude_agent_sdk import (
     AssistantMessage,
+    RateLimitEvent,
+    RateLimitInfo,
+    RateLimitStatus,
     ResultMessage,
     TextBlock,
     ToolResultBlock,
@@ -211,6 +214,27 @@ class TestResultMessage:
         # Falls back to str(msg) since result is None
         assert isinstance(result[0].content, str)
         assert len(result[0].content) > 0
+
+
+# ---------------------------------------------------------------------------
+# RateLimitEvent
+# ---------------------------------------------------------------------------
+
+
+class TestRateLimitEvent:
+    @pytest.mark.parametrize("status", ["rejected", "allowed", "allowed_warning"])
+    def test_translates_to_one_system_message(self, status: RateLimitStatus) -> None:
+        event = RateLimitEvent(
+            rate_limit_info=RateLimitInfo(status=status),
+            uuid="evt-1",
+            session_id="sess-1",
+        )
+        result = translate_sdk_message(event, sender=SENDER)
+        assert len(result) == 1
+        msg = result[0]
+        assert msg.message_type == MessageType.system
+        assert msg.metadata["sdk_type"] == "rate_limit_event"
+        assert msg.metadata["status"] == status
 
 
 # ---------------------------------------------------------------------------
