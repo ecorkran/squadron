@@ -14,6 +14,9 @@ from claude_agent_sdk import (
     CLIJSONDecodeError,
     CLINotFoundError,
     ProcessError,
+    RateLimitEvent,
+    RateLimitInfo,
+    RateLimitStatus,
     TextBlock,
 )
 
@@ -488,6 +491,49 @@ class TestUnparseableMessages:
             with pytest.raises(ProviderError):
                 await _collect(query_agent.handle_message(input_message))
             assert query_agent.state == AgentState.failed
+
+
+class TestRateLimitClassification:
+    """Typed classification of a real ``RateLimitEvent`` — not a fabrication.
+
+    Success criterion 9: fabricating the exception the SDK no longer raises
+    tests a dead path. These tests construct the real SDK dataclasses.
+    """
+
+    @pytest.mark.parametrize(
+        ("status", "expected"),
+        [
+            ("rejected", True),
+            ("allowed", False),
+            ("allowed_warning", False),
+        ],
+    )
+    def test_event_blocks_only_on_rejected(self, status: RateLimitStatus, expected: bool) -> None:
+        from squadron.providers.sdk.rate_limit import event_blocks
+
+        event = RateLimitEvent(
+            rate_limit_info=RateLimitInfo(status=status),
+            uuid="evt-1",
+            session_id="sess-1",
+        )
+        assert event_blocks(event) is expected
+
+    def test_is_throttle_true_for_rate_limit_rejected(self) -> None:
+        from squadron.providers.sdk.rate_limit import (
+            RateLimitRejected,
+            _is_throttle,  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        )
+
+        assert _is_throttle(RateLimitRejected("x")) is True
+
+    def test_is_throttle_retains_the_substring_path(self) -> None:
+        """A genuine 429 can still surface as a plain ClaudeSDKError."""
+        from squadron.providers.sdk.rate_limit import (
+            _is_throttle,  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        )
+
+        assert _is_throttle(ClaudeSDKError("rate_limit_event: slow down")) is True
+        assert _is_throttle(ClaudeSDKError("some other error")) is False
 
 
 class TestRateLimitBackoff:
