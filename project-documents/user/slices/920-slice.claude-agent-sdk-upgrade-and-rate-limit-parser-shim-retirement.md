@@ -261,9 +261,10 @@ Where the raise happens, per mode:
 
 - **Query mode** and **agent client mode** — in `_skip_unparseable`, which both
   already wrap. It becomes the single inspection point: on a `RateLimitEvent`
-  whose status is `rejected`, raise `RateLimitRejected`; otherwise log at DEBUG
-  and skip (informational events must not reach translation and must not
-  terminate the stream).
+  whose status is `rejected`, raise `RateLimitRejected` — the event itself is
+  intercepted here and never yielded onward. Otherwise (informational), log at
+  DEBUG and **yield the event through as normal** so it reaches translation
+  (D6) rather than being silently dropped; it must not terminate the stream.
 - **Pipeline `dispatch`** — [sdk_session.py:151](src/squadron/pipeline/sdk_session.py#L151)
   iterates `self.client.receive_response()` **directly, with no
   `_skip_unparseable` wrapper**. It needs its own inspection inside the loop,
