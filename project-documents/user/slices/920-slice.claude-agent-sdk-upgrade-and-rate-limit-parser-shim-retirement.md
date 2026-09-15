@@ -131,8 +131,17 @@ assumptions — the design below depends on them.
 - `ClaudeSDKClient` methods gained in 0.2.x (`get_context_usage`, `stop_task`,
   `rewind_files`, MCP controls). **Correction to the slice plan entry:**
   `set_model` is *already in use* at [sdk_session.py:125](src/squadron/pipeline/sdk_session.py#L125)
-  — the entry's note about the pipeline "working around its absence" is stale.
-  No action either way.
+  and is called routinely by pipelines, so the entry's note about the pipeline
+  "working around its absence" is stale.
+
+  Out of scope, but for a documented reason rather than because it is uniformly
+  fine: `set_model` takes effect only in straight-CLI execution (`sq run`, where
+  the SDK owns the Claude Code subprocess). In an IDE-extension or Claude Code
+  session the call is issued and returns, but the switch does **not** take
+  effect — model selection is user-only there. This is a known, accepted
+  limitation; the call is left to run rather than branched on session type.
+  Nothing in this slice changes that, and nothing in this slice should be
+  written as if `set_model` were uniformly effective.
 - `StreamEvent` / `ConversationResetMessage` handling. Both are new to the
   return union, but neither is presently symptomatic. `_skip_unparseable` and
   translation's `return []` handle them non-fatally.
@@ -424,6 +433,13 @@ throttling occurs, the run reports a rate-limit summary
 (`N rate-limit pauses, Ns spent waiting`) and resumes rather than aborting. If
 no throttling occurs, the audit simply completes — a clean run is a pass for
 this step, not a missing observation.
+
+**Run this from a straight CLI, not from an IDE-extension or Claude Code
+session.** Model overrides via `set_model` are inert in those environments (the
+call returns, the switch does not take effect), so an audit driven from one may
+not exercise the model it reports. That does not affect the rate-limit paths
+under test here, but it does mean such a run is not evidence about which model
+was used.
 
 **5. Forced-throttle observation** — closes the gap step 4 leaves when no live
 throttle occurs. Inject a `rejected` `RateLimitEvent` into a dispatch path
