@@ -68,8 +68,11 @@ protocol instead of inventing a fourth workaround.
 ### Excluded
 
 - Posting (384), PR creation (385), slash-command parity and documentation (386).
-- Any change to what a *slice* review's artifact contains. Slice and arch artifacts are
-  byte-identical before and after this slice; that is the migration's acceptance test (D2).
+- Any change to what a *slice* review's artifact contains **through the migration itself**. Slice
+  and arch artifacts are byte-identical across the migration, asserted against untouched fixtures;
+  that is the migration's acceptance test (D2). The two additive keys this slice does introduce —
+  `rulesSource` and `targetKind` — land afterwards as one deliberate, separately-reviewed change,
+  never inside the migration's diff.
 - Reading PR reviews back for resolution or metrology. Those consumers are shown not to match
   (D4); teaching them to *act* on PR reviews is not in scope and nothing needs it yet.
 - Any context-forge schema change. Probed at design time and not required — see D7.
@@ -191,6 +194,19 @@ step reviews must produce files identical to what they produce today, asserted a
 captured *before* the change on all three paths. Any diff is a regression, not an improvement —
 this slice is not the place to fix artifact formatting.
 
+**Byte-identity is verified before either new frontmatter key is added.** This slice introduces
+two additive keys that every target writes — `rulesSource` (D6) and `targetKind` (D4) — and both
+necessarily change the bytes of slice, arch, and step artifacts. Adding them during the migration
+would make byte-identity unverifiable: a check whose fixtures may be updated on intent cannot
+distinguish an intended key from unintended drift, which is the only thing it exists to catch.
+
+So the migration completes and proves itself against untouched fixtures *first*. The two keys
+land afterwards, together, as a single deliberate change with one fixture update covering both —
+reviewed as an intentional artifact change rather than absorbed into the migration's diff. The
+fixtures are regenerated once, at that point, and the diff is confirmed to contain exactly the
+two new keys and nothing else. Neither key's scope narrows: both are still written on every
+review, as D4 and D6 specify.
+
 **One deliberate behavior change.** The pipeline step path currently calls `format_review_markdown`
 + `save_review_file` directly, which returns `None` on failure and never runs the
 refuse-on-failed-archive guard that `save_review_result` enforces. Migrating it onto the contract
@@ -246,6 +262,10 @@ plan, these consumers read the target kind explicitly: a `targetKind` frontmatte
 meaning `slice` so existing artifacts keep parsing. Classification reads frontmatter, never the
 filename — the same rule `capture._read_review_type` already follows, and the reason it is
 reliable where filename parsing is not.
+
+Like `rulesSource`, this key is written **after** the migration's byte-identity verification, and
+the two land together as one deliberate artifact change (D2, D6). Absence-means-`slice` is what
+keeps every artifact written before that point readable, so the ordering costs nothing.
 
 Archiving, digest, and 917's integrity rendering are target-agnostic already: they operate on
 `ReviewResult` and on paths, never on slice identity. They get a PR-artifact test, not changes.
@@ -308,6 +328,11 @@ callers that do not care ignore the second value.
 `rulesSource` is then written as an optional frontmatter key on every review, not only PR
 reviews — the value is equally true for a slice review and costs nothing. Optional means existing
 artifacts without it still parse, and its absence is never inferred as any particular source.
+
+Writing the key is sequenced **after** the migration's byte-identity verification, together with
+`targetKind` (D2, D4). The signature change lands first and alone as described below; the
+frontmatter key follows once slice, arch, and step artifacts have been proven unchanged. The
+scope is unaffected — every review still carries it.
 
 This is the one change here that touches a function every review path calls, which is why it is
 sequenced first in the implementation order: behavior-preserving, lands alone, with a test that
@@ -385,7 +410,10 @@ for every other review.
 - `sq review resolve 42` and metrology capture for index 42 select the slice review, with a PR
   review of PR 42 present in the same directory.
 - Arch reviews, slice reviews, and pipeline step-keyed reviews are **byte-identical** to
-  pre-migration fixtures on all three paths.
+  pre-migration fixtures on all three paths, asserted with no new frontmatter key yet present.
+- After `rulesSource` and `targetKind` land, the regenerated fixtures differ from the
+  pre-migration ones by **exactly those two keys and nothing else**, asserted on all three paths.
+  A third difference is unintended drift the migration check would otherwise have hidden.
 - A pipeline step review whose target file cannot be archived is refused and logged, and the
   action still returns its review result rather than failing.
 - Archiving, digest, and 917's integrity rendering run on a PR review artifact unchanged.
@@ -448,8 +476,10 @@ Steps 2, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
 
 - **Three callers migrate at once.** The arch, slice, and pipeline paths change shape in one
   slice, and a formatting regression would silently alter every artifact written afterwards.
-  Mitigation: byte-identity fixtures captured before the change on all three paths, asserted after
-  — the migration is not "tests still pass" but "output is unchanged".
+  Mitigation: byte-identity fixtures captured before the change on all three paths and asserted
+  once the migration lands, while no new frontmatter key yet exists — the migration is not "tests
+  still pass" but "output is unchanged". The two additive keys land only after that assertion is
+  green, so the check is never asked to tell an intended key from a regression.
 - **`resolve_rules_dir` is called by every review path.** A signature change there reaches code
   this slice otherwise does not touch. Mitigation: sequenced first, landing alone, with a test
   pinning that every existing caller's resolved path is unchanged.
@@ -462,14 +492,20 @@ Steps 2, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
 
 ### Order
 
-1. `resolve_rules_dir` returns its source (D6), all callers updated, paths pinned unchanged.
+1. `resolve_rules_dir` returns its source (D6), all callers updated, paths pinned unchanged. The
+   signature only — the `rulesSource` frontmatter key comes later, at step 7.
 2. `SaveTarget` protocol with `SliceTarget`, `ArchTarget`, `StepTarget`; byte-identity fixtures
    captured first, then persistence migrated onto the contract (D1, D2).
 3. Arch review drops `_arch_slice_info`; pipeline step path migrates, with its archive-guard test.
+   **Byte-identity is verified green on all three paths here, against untouched fixtures.** No
+   new frontmatter key exists yet, so any diff at this point is unintended drift — which is the
+   only condition this check can detect, and why it precedes step 7.
 4. `PullRequestRecord.path_key`, with `worktree.py::_flatten_key` collapsed onto it (D3).
 5. `review.external_reviews_dir`, `--reviews-dir`, and the precedence resolver (D5).
 6. `PrTarget` and the real save in `review_pr.py`, replacing 382's stub (D3, D8).
-7. `targetKind` classification and the non-matching-glob regression tests (D4).
+7. `rulesSource` and `targetKind` added together on every target (D4, D6), with the fixtures
+   regenerated once and the diff confirmed to contain exactly those two keys; then `targetKind`
+   classification and the non-matching-glob regression tests (D4).
 8. Conventions guide, cf validation test, live run, DEVLOG entry, CHANGELOG line.
 
 ### Testing
@@ -483,6 +519,10 @@ Steps 2, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
 - `tests/review/test_review_consumers_ignore_pr.py` — resolve and metrology capture for index 42
   with a PR-42 review present.
 - `tests/review/test_rules_source.py` — each `RulesSource` branch, and existing callers' paths
-  unchanged.
+  unchanged. This covers the resolver's *return value* only.
+- `tests/review/test_rules_source_artifact.py` — the end-to-end half: write an artifact, read
+  `rulesSource` back from the written file, and assert it matches the branch the loader actually
+  took. The resolver test and the write are separately correct in ways that still leave a
+  hardcoded or never-threaded value undetected; only reading the field back off disk closes that.
 - `tests/documents/` — the PR-shape cf validation test, asserting `filesChecked` increased.
 - Live evidence is recorded, not asserted; no test needs `gh`, network, or auth.
