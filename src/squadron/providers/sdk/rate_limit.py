@@ -1,10 +1,17 @@
 """Shared rate-limit detection and backoff for SDK-backed paths.
 
 Both the SDK agent and the pipeline's SDK session retry on provider
-throttling. They previously carried independent copies of the retry budget,
-the marker string, and (in one case) no backoff at all — which is how the
-agent's skip path came to swallow the notice the retry path was waiting for.
-One home for all three so the paths cannot drift apart again.
+throttling, reading their signal from the SDK's typed ``RateLimitEvent``
+(``rate_limit_info.status``). They previously carried independent copies of
+the retry budget, the marker string, and (in one case) no backoff at all —
+which is how the agent's skip path came to swallow the notice the retry path
+was waiting for. One home for all three so the paths cannot drift apart
+again.
+
+Before the SDK's parser understood ``rate_limit_event`` natively (< 0.2.152),
+this module also carried a monkey-patch that taught the pinned parser to
+accept the type. The floor was raised past that version and the patch was
+removed — see squadron issue #30.
 """
 
 from __future__ import annotations
@@ -13,8 +20,6 @@ from dataclasses import dataclass
 from typing import cast
 
 from claude_agent_sdk import ClaudeSDKError, RateLimitEvent
-
-from squadron.core.models import RATE_LIMIT_EVENT_TYPE
 
 #: Default retry budget. Callers that know their workload is heavier (the
 #: metrology audit, whose subagent fan-out multiplies request rate) override
@@ -32,68 +37,12 @@ RATE_LIMIT_BASE_BACKOFF_S = 2.0
 RATE_LIMIT_MAX_BACKOFF_S = 60.0
 
 #: Substring identifying a rate-limit notice in a plain SDK error's text
-#: (e.g. a genuine 429 surfaced as ``ClaudeSDKError``). Parse failures carry
-#: a payload and are classified structurally below — never by this string.
+#: (e.g. a genuine 429 surfaced as ``ClaudeSDKError``). A typed
+#: ``RateLimitEvent`` is classified structurally instead — never by this
+#: string; see ``event_blocks``.
 RATE_LIMIT_MARKER = "rate_limit"
 
 _STATUS_REJECTED = "rejected"
-
-
-def is_rate_limit_event(data: dict[str, object] | None) -> bool:
-    """True when a parse-failure payload is the CLI's rate-limit status event."""
-    return bool(data) and data.get("type") == RATE_LIMIT_EVENT_TYPE
-
-
-def install_rate_limit_parser_shim() -> None:
-    """Teach the pinned SDK parser to accept ``rate_limit_event``.
-
-    The SDK calls ``parse_message`` *inside* the ``async for`` that drives
-    the message stream (``_internal/client.py``). An exception there
-    propagates out of that async generator, which **terminates it
-    permanently** — every later ``__anext__`` raises ``StopAsyncIteration``.
-    So a consumer cannot recover by catching ``MessageParseError`` and
-    continuing: the stream is already dead, and the run ends with zero
-    messages and no error.
-
-    The only place to intervene is before the parser raises. This wraps
-    ``parse_message`` to map an informational rate-limit event onto a
-    ``SystemMessage`` the SDK already understands. A ``rejected`` status is
-    left to raise, so genuine throttling still reaches the backoff path.
-
-    Idempotent, and a no-op on an SDK version whose parser knows the type
-    (the wrapper only ever sees payloads the real parser rejected). Remove
-    once the pin moves past a parser with native support.
-    """
-    from claude_agent_sdk._errors import MessageParseError
-    from claude_agent_sdk._internal import message_parser as _parser
-    from claude_agent_sdk.types import SystemMessage
-
-    if getattr(_parser.parse_message, "_squadron_rate_limit_shim", False):
-        return
-
-    inner = _parser.parse_message
-
-    def parse_message(data: dict[str, object]) -> object:
-        try:
-            return inner(data)  # pyright: ignore[reportArgumentType]
-        except MessageParseError:
-            if is_rate_limit_event(data) and not rate_limit_event_blocks(data):
-                return SystemMessage(subtype=RATE_LIMIT_EVENT_TYPE, data=data)
-            raise
-
-    parse_message._squadron_rate_limit_shim = True  # pyright: ignore[reportFunctionMemberAccess]
-
-    # Two call sites, bound differently, so both need patching:
-    #   * ``ClaudeSDKClient`` (client mode) imports inside its receive loop,
-    #     so it picks up a patch to the defining module.
-    #   * ``_internal.client`` (query mode) imports at module scope, so it
-    #     holds the original by value and needs its own binding replaced.
-    # Verified rather than assumed: patching only the defining module left
-    # query mode still dying on the event.
-    _parser.parse_message = parse_message  # pyright: ignore[reportAttributeAccessIssue]
-    from claude_agent_sdk._internal import client as _client
-
-    setattr(_client, "parse_message", parse_message)  # noqa: B010 - see above
 
 
 def rate_limit_event_blocks(data: dict[str, object] | None) -> bool:
