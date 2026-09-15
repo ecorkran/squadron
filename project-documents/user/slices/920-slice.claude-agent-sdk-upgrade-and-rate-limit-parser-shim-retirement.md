@@ -134,14 +134,26 @@ assumptions — the design below depends on them.
   and is called routinely by pipelines, so the entry's note about the pipeline
   "working around its absence" is stale.
 
-  Out of scope, but for a documented reason rather than because it is uniformly
-  fine: `set_model` takes effect only in straight-CLI execution (`sq run`, where
-  the SDK owns the Claude Code subprocess). In an IDE-extension or Claude Code
-  session the call is issued and returns, but the switch does **not** take
-  effect — model selection is user-only there. This is a known, accepted
-  limitation; the call is left to run rather than branched on session type.
-  Nothing in this slice changes that, and nothing in this slice should be
-  written as if `set_model` were uniformly effective.
+  Out of scope, and worth stating precisely because squadron selects models by
+  two different mechanisms:
+
+  - **By construction (agent path).** `_dispatch_via_agent` bakes the resolved
+    model into `AgentConfig(model=model_id)` and spawns a one-shot agent per
+    step ([dispatch.py:129](src/squadron/pipeline/actions/dispatch.py#L129)).
+    Nothing is switched — each step gets an agent built for its own model. This
+    is the common case and the one where per-step models vary most freely.
+  - **By mutation (session path).** `_dispatch_via_session` holds one long-lived
+    `ClaudeSDKClient`, so a per-step model change must mutate the live session —
+    hence `set_model`, with a no-op skip when the model already matches
+    ([sdk_session.py:122](src/squadron/pipeline/sdk_session.py#L122)). Reached
+    only when the resolved profile is an SDK profile, so its range is narrower.
+
+  `set_model` therefore belongs to the session path alone, and the IDE-extension
+  / Claude Code limitation applies to that path for the "no Claude in Claude"
+  reason: `ClaudeSDKClient` spawns a Claude Code subprocess, which is blocked
+  inside an existing Claude session. Non-SDK agent-path steps spawn no such
+  subprocess and select models normally in any environment. Nothing in this
+  slice changes any of it.
 - `StreamEvent` / `ConversationResetMessage` handling. Both are new to the
   return union, but neither is presently symptomatic. `_skip_unparseable` and
   translation's `return []` handle them non-fatally.
@@ -435,11 +447,9 @@ no throttling occurs, the audit simply completes — a clean run is a pass for
 this step, not a missing observation.
 
 **Run this from a straight CLI, not from an IDE-extension or Claude Code
-session.** Model overrides via `set_model` are inert in those environments (the
-call returns, the switch does not take effect), so an audit driven from one may
-not exercise the model it reports. That does not affect the rate-limit paths
-under test here, but it does mean such a run is not evidence about which model
-was used.
+session.** The SDK-backed paths this slice touches depend on spawning a Claude
+Code subprocess, which is blocked inside an existing Claude session — so an
+audit driven from one does not exercise the paths under test here at all.
 
 **5. Forced-throttle observation** — closes the gap step 4 leaves when no live
 throttle occurs. Inject a `rejected` `RateLimitEvent` into a dispatch path
