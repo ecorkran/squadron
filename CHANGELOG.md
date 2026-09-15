@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.3] - 20260915
+
 ### Added
 - Review artifacts now carry a `verdictSource: stated | derived` frontmatter key naming whether the verdict was the model's own stated `## Summary`, or recovered from finding severities after a failed summary parse. A recovered verdict was previously indistinguishable from a stated one to anything reading frontmatter — including the pipeline gates that clear a slice on `PASS` (#97)
 - `sq pr show` reports a pull request without leaving your checkout: resolve it by number, URL, `owner/repo#number`, `repo#number`, a branch, or nothing at all for the current branch, and see its record, both fetched endpoints, the merge base, the range, and the changed paths. Read-only — it never checks anything out, so it works in a dirty working tree. Add `--json` for machine-readable output
@@ -39,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`allowed_tools` now limits which tools an SDK agent has at all, not just which are pre-approved.** This affects every SDK agent — spawn and pipeline dispatch as well as reviews. A config that previously listed a few tools in `allowed_tools` and relied on the rest staying available (permission-gated) will now find the rest absent. List every tool an agent needs. Tool names must be squadron's canonical ones (`read_file`, `list_files`, `grep`, `write_file`, `bash`); an unrecognized name fails loudly rather than being ignored
+- Minimum supported `claude-agent-sdk` version raised to 0.2.152
+
+### Fixed
+- A pipeline step could retry a rejected rate-limit response forever with no timeout, hanging indefinitely, if the rejection was the first message received. It now correctly exhausts its retry budget and fails (#30)
 
 ## [0.12.2] - 20260909
 
