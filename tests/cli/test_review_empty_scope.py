@@ -280,8 +280,7 @@ class TestPipelineNormalizesDiff:
 
         with (
             patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
-            patch(f"{_PIPELINE}.save_review_file", return_value=None),
-            patch(f"{_PIPELINE}.format_review_markdown", return_value="# Review"),
+            patch(f"{_PIPELINE}.save_review_result", return_value=Path("/tmp/reviews/review.md")),
         ):
             mock_review.return_value = ReviewResult(
                 verdict=Verdict.PASS,
@@ -332,8 +331,7 @@ class TestPipelineExplicitDiffWins:
 
         with (
             patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
-            patch(f"{_PIPELINE}.save_review_file", return_value=None),
-            patch(f"{_PIPELINE}.format_review_markdown", return_value="# Review"),
+            patch(f"{_PIPELINE}.save_review_result", return_value=Path("/tmp/reviews/review.md")),
             patch(f"{_PIPELINE}.resolve_slice_info", return_value=slice_info),
             # Would otherwise replace the step's value with a slice-derived range.
             patch(

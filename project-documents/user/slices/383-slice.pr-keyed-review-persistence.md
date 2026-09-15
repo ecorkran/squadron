@@ -253,6 +253,25 @@ That is a fix, but it is a change to an existing path: it gets its own test, and
 existing "persistence failure never fails the action" boundary (its `try/except` around the save)
 is preserved so the new refusal is logged and non-fatal exactly as a write failure is today.
 
+**The migration's real blast radius is `mock.patch`, not the save logic.** Recorded because it is
+counter-intuitive and the remaining tasks repeat the pattern. `mock.patch` validates its target
+attribute at *setup* time and raises `AttributeError` when the name is absent, so removing
+`format_review_markdown` and `save_review_file` from the pipeline action's module namespace broke
+**44 tests across four files** — `test_review_action.py`, `test_review_action_integration.py`,
+`test_judge_cycle.py`, `test_review_empty_scope.py` — including many with nothing to do with
+persistence (model resolution, tool threading, rules wiring). Every one died before its body ran.
+
+Two consequences worth carrying into Task 7, which deletes 382's stub the same way:
+
+- A large, alarming failure count after this kind of change is usually *one* missing name, not one
+  problem per test. Read the first traceback before concluding anything about scope.
+- The reverse case is the dangerous one. A patch whose target still exists but is no longer called
+  fails *silently* — it intercepts nothing, the real function runs, and a test asserting "no file
+  was written" still passes. Thirteen sites here stubbed `save_review_file` with
+  `return_value=None`, which was its failure signal; they were repointed at `save_review_result`
+  and given a `Path`, since that function raises rather than returning `None` and a `None` stub
+  would have been quietly dishonest.
+
 ### D3 — The PR target, its filename, and the key that is not filesystem-safe
 
 `PrTarget(record: PullRequestRecord, rules_source: RulesSource)`, constructed in

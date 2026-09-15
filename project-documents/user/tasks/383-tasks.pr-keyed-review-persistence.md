@@ -151,22 +151,22 @@ This task must complete **before** Task 3 touches `persistence.py`. Fixtures cap
 
 This is a **behavior change on an existing path**, not pure refactoring — it is the only save path that never runs the refuse-on-failed-archive guard.
 
-- [ ] **4.1 Route the step path through the contract**
-  - [ ] `src/squadron/pipeline/actions/review.py` stops calling `format_review_markdown` + `save_review_file` directly
-  - [ ] It calls `save_review_result` with a `StepTarget`, gaining `archive_existing_review`'s guard
-  - [ ] **Preserve the action's existing boundary:** its `try/except` around the save keeps persistence failure non-fatal to the action
-  - [ ] Success: `pyright` clean
-  - [ ] Effort: 2
+- [x] **4.1 Route the step path through the contract**
+  - [x] `src/squadron/pipeline/actions/review.py` stops calling `format_review_markdown` + `save_review_file` directly
+  - [x] It calls `save_review_result` with a `StepTarget`, gaining `archive_existing_review`'s guard
+  - [x] **Preserve the action's existing boundary:** its `try/except` around the save keeps persistence failure non-fatal to the action
+  - [x] Success: `pyright` clean
+  - [x] Effort: 2
 
-- [ ] **4.2 Test the step path's byte-identity and its new refusal** *(test-with 4.1)*
-  - [ ] Step artifact matches its Task 2 fixture byte-for-byte
-  - [ ] **New test for the deliberate change:** a step review whose target file cannot be archived is refused and logged, and the action still returns its review result rather than failing
-  - [ ] Success: both pass; the refusal is observable in logs at WARNING or above, not silent
-  - [ ] Effort: 2
+- [x] **4.2 Test the step path's byte-identity and its new refusal** *(test-with 4.1)*
+  - [x] Step artifact matches its Task 2 fixture byte-for-byte
+  - [x] **New test for the deliberate change:** a step review whose target file cannot be archived is refused and logged, and the action still returns its review result rather than failing
+  - [x] Success: both pass; the refusal is observable in logs at WARNING or above, not silent
+  - [x] Effort: 2
 
-- [ ] **4.3 Commit** — `refactor(pipeline): migrate step-keyed save onto the contract`
-  - [ ] Success: all three byte-identity comparisons now pass; `ruff format`, `ruff check`, `pyright` clean
-  - [ ] Effort: 1
+- [x] **4.3 Commit** — `refactor(pipeline): migrate step-keyed save onto the contract`
+  - [x] Success: all three byte-identity comparisons now pass; `ruff format`, `ruff check`, `pyright` clean
+  - [x] Effort: 1
 
 ---
 

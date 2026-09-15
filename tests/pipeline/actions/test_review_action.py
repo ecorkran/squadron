@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -126,8 +127,7 @@ class TestReviewValidation:
 
 class TestReviewExecuteHappyPath:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -136,7 +136,6 @@ class TestReviewExecuteHappyPath:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -149,8 +148,7 @@ class TestReviewExecuteHappyPath:
         assert result.action_type == "review"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -159,7 +157,6 @@ class TestReviewExecuteHappyPath:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -169,8 +166,7 @@ class TestReviewExecuteHappyPath:
         assert result.verdict == "CONCERNS"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -179,7 +175,6 @@ class TestReviewExecuteHappyPath:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -193,8 +188,7 @@ class TestReviewExecuteHappyPath:
         assert f["severity"] == "concern"  # type: ignore[index]
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -203,7 +197,6 @@ class TestReviewExecuteHappyPath:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -221,8 +214,7 @@ class TestReviewExecuteHappyPath:
 
 class TestReviewScoreThreading:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -231,7 +223,6 @@ class TestReviewScoreThreading:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -242,8 +233,7 @@ class TestReviewScoreThreading:
         assert result.criteria == {"alignment": 90.0}
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -252,7 +242,6 @@ class TestReviewScoreThreading:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -271,8 +260,7 @@ class TestReviewScoreThreading:
 
 class TestReviewModelResolution:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -281,7 +269,6 @@ class TestReviewModelResolution:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -292,8 +279,7 @@ class TestReviewModelResolution:
         ctx.resolver.resolve.assert_called_once_with("opus", None)
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -302,7 +288,6 @@ class TestReviewModelResolution:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -315,8 +300,7 @@ class TestReviewModelResolution:
         assert result.metadata["profile"] == "openrouter"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -325,7 +309,6 @@ class TestReviewModelResolution:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -338,8 +321,7 @@ class TestReviewModelResolution:
         assert result.metadata["profile"] == "openai"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -348,7 +330,6 @@ class TestReviewModelResolution:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -361,8 +342,7 @@ class TestReviewModelResolution:
         assert result.metadata["profile"] == ProfileName.SDK
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -371,7 +351,6 @@ class TestReviewModelResolution:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """A judge template's own `model:` default (e.g. judge.slice-vs-arch's
@@ -402,8 +381,7 @@ class TestReviewModelResolution:
 
 class TestReviewInputPassthrough:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -412,7 +390,6 @@ class TestReviewInputPassthrough:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
         tmp_path: Path,
     ) -> None:
@@ -448,8 +425,7 @@ class TestReviewInputPassthrough:
         assert inputs["cwd"] == "/tmp/test"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -458,7 +434,6 @@ class TestReviewInputPassthrough:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """slice 382, D4: 'pr' is a new optional input on the code template. A pipeline
@@ -490,8 +465,7 @@ class TestReviewInputPassthrough:
 
 class TestReviewPersistence:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -500,7 +474,6 @@ class TestReviewPersistence:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -511,8 +484,7 @@ class TestReviewPersistence:
         assert result.outputs["review_file"] == "/tmp/reviews/review.md"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", side_effect=OSError("disk full"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", side_effect=OSError("disk full"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -521,7 +493,6 @@ class TestReviewPersistence:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -532,8 +503,7 @@ class TestReviewPersistence:
         assert "review_file" not in result.outputs
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -542,7 +512,6 @@ class TestReviewPersistence:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -550,11 +519,10 @@ class TestReviewPersistence:
 
         await ReviewAction().execute(_make_context(iteration=2))
 
-        assert mock_format.call_args.kwargs["revision_number"] == 2
+        assert mock_save.call_args.kwargs["revision_number"] == 2
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -563,7 +531,6 @@ class TestReviewPersistence:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -571,7 +538,81 @@ class TestReviewPersistence:
 
         await ReviewAction().execute(_make_context())  # iteration defaults to 0
 
-        assert mock_format.call_args.kwargs["revision_number"] is None
+        assert mock_save.call_args.kwargs["revision_number"] is None
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_slice_less_step_saves_through_the_contract(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """The step path routes through ``save_review_result``, not around it.
+
+        Before slice 383 this branch called ``format_review_markdown`` and
+        ``save_review_file`` directly, which is why it was the only save path
+        that never ran the refuse-on-failed-archive guard. Pinning the target
+        here is what keeps a future refactor from quietly restoring the
+        bypass — the byte-identity fixture pins the rendered output, not the
+        call path that produced it.
+        """
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        await ReviewAction().execute(_make_context())
+
+        target = mock_save.call_args.kwargs["target"]
+        # Named from the step, exactly as save_review_file's positional
+        # step_name/step_index arguments did.
+        assert target.filename_stem("code") == "0-review.code.review-step"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result", side_effect=OSError("prior review could not be archived"))
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_unarchivable_step_review_is_refused_and_logged_not_silent(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """The deliberate behaviour change this migration introduces (D2).
+
+        Routing the step path through the contract means it now inherits
+        ``archive_existing_review``'s guard: a review whose prior content
+        cannot be preserved is refused rather than overwriting it. That
+        refusal arrives as ``OSError`` where the old direct call merely
+        returned ``None``.
+
+        Three things must hold, and the third is the one worth guarding — a
+        failure to persist the secondary artifact must not discard a review
+        the provider was already paid for:
+
+        1. nothing is written (the existing file survives);
+        2. the refusal is observable at WARNING or above, never silent;
+        3. the action still returns its review result.
+        """
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        with caplog.at_level("WARNING", logger=_P):
+            result = await ReviewAction().execute(_make_context())
+
+        assert result.success is True
+        assert "review_file" not in result.outputs
+        assert result.outputs["response"] == _make_review_result().raw_output
+        assert any(r.levelno >= logging.WARNING for r in caplog.records), (
+            "a refused write must leave a WARNING-or-above record; a silent "
+            "refusal is indistinguishable from a successful save"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -709,8 +750,7 @@ def _mock_judge_template(judge: dict[str, object] | None = None) -> ReviewTempla
 
 class TestJudgeEnforcement:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -719,7 +759,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_judge_template()
@@ -731,8 +770,7 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -741,7 +779,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_judge_template()
@@ -752,8 +789,7 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -762,7 +798,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -773,8 +808,7 @@ class TestJudgeEnforcement:
         assert result.verdict == "CONCERNS"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -783,7 +817,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         # Template default pass_floor=75; step override raises it to 95.
@@ -798,8 +831,7 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -808,7 +840,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """302: a judge template's model emits a verdict despite the prompt
@@ -823,8 +854,7 @@ class TestJudgeEnforcement:
         assert result.provenance == "judge"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.resolve_slice_info")
     @patch(f"{_P}.get_template")
@@ -835,7 +865,6 @@ class TestJudgeEnforcement:
         mock_get_template: MagicMock,
         mock_resolve_slice_info: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """302: a SliceInfo missing arch_file leaves `against` unresolved for
@@ -876,8 +905,7 @@ class TestJudgeEnforcement:
         mock_run_review.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -886,7 +914,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -910,9 +937,8 @@ class TestJudgeEnforcement:
         assert result.success is True
         assert result.verdict == "UNKNOWN"
         assert result.provenance == "judge"
-        mock_format.assert_called_once()
-        assert mock_format.call_args.kwargs["verdict_override"] == "UNKNOWN"
         mock_save.assert_called_once()
+        assert mock_save.call_args.kwargs["verdict_override"] == "UNKNOWN"
         assert any(r.levelno >= 30 for r in caplog.records)
 
     @pytest.mark.asyncio
@@ -937,8 +963,7 @@ class TestJudgeEnforcement:
         assert any(r.levelno >= 30 for r in caplog.records)
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -947,7 +972,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """Judge templates omit a verdict line by design (result.verdict is
@@ -960,12 +984,11 @@ class TestJudgeEnforcement:
         result = await ReviewAction().execute(_make_context())
 
         assert result.verdict == "PASS"
-        mock_format.assert_called_once()
-        assert mock_format.call_args.kwargs["verdict_override"] == "PASS"
+        mock_save.assert_called_once()
+        assert mock_save.call_args.kwargs["verdict_override"] == "PASS"
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -974,7 +997,6 @@ class TestJudgeEnforcement:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -982,7 +1004,7 @@ class TestJudgeEnforcement:
 
         await ReviewAction().execute(_make_context())
 
-        assert mock_format.call_args.kwargs["verdict_override"] is None
+        assert mock_save.call_args.kwargs["verdict_override"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -992,8 +1014,7 @@ class TestJudgeEnforcement:
 
 class TestReviewMetadata:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1002,7 +1023,6 @@ class TestReviewMetadata:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -1026,8 +1046,7 @@ class TestReviewActionRulesWiring:
     """
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1036,7 +1055,6 @@ class TestReviewActionRulesWiring:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
         tmp_path: Path,
     ) -> None:
@@ -1061,8 +1079,7 @@ class TestReviewActionRulesWiring:
 
     @pytest.mark.asyncio
     @patch(f"{_P}.extract_diff_paths", return_value=["src/foo.py"])
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1071,7 +1088,6 @@ class TestReviewActionRulesWiring:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
         mock_diff: MagicMock,
         tmp_path: Path,
@@ -1103,8 +1119,7 @@ class TestReviewActionRulesWiring:
         assert "Python auto rules." in rc
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1113,7 +1128,6 @@ class TestReviewActionRulesWiring:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
         tmp_path: Path,
     ) -> None:
@@ -1141,8 +1155,7 @@ class TestReviewActionRulesWiring:
         assert "Caller-supplied rules." in rc
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1151,7 +1164,6 @@ class TestReviewActionRulesWiring:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
         tmp_path: Path,
     ) -> None:
@@ -1307,8 +1319,7 @@ class TestReviewAllowedToolsThreading:
     """The resolved tool list must reach run_review_with_profile, not merely be read."""
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1317,7 +1328,6 @@ class TestReviewAllowedToolsThreading:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -1329,8 +1339,7 @@ class TestReviewAllowedToolsThreading:
         assert mock_run_review.call_args.kwargs["allowed_tools"] == ["read_file", "grep"]
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1339,7 +1348,6 @@ class TestReviewAllowedToolsThreading:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """Regression guard for the `sq review` CLI path, which never sets this parameter."""
@@ -1352,8 +1360,7 @@ class TestReviewAllowedToolsThreading:
         assert mock_run_review.call_args.kwargs["allowed_tools"] is None
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1362,7 +1369,6 @@ class TestReviewAllowedToolsThreading:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """A malformed shape raises rather than silently dropping tools (design D3)."""
@@ -1380,8 +1386,7 @@ class TestReviewToolTelemetryMetadata:
     """ReviewResult's telemetry reaches ActionResult.metadata (slice 265, task 23)."""
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1390,7 +1395,6 @@ class TestReviewToolTelemetryMetadata:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -1405,8 +1409,7 @@ class TestReviewToolTelemetryMetadata:
         assert result.metadata["tool_calls_made"] == 5
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1415,7 +1418,6 @@ class TestReviewToolTelemetryMetadata:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
@@ -1430,8 +1432,7 @@ class TestReviewToolTelemetryMetadata:
         assert result.metadata["tool_calls_made"] == 0
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=Path("/tmp/reviews/review.md"))
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -1440,7 +1441,6 @@ class TestReviewToolTelemetryMetadata:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         mock_get_template.return_value = _mock_template()
