@@ -1,5 +1,5 @@
 ---
-docType: review-response
+docType: notes
 layer: project
 reviewType: code
 slice: review-a-pr
