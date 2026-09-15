@@ -19,6 +19,7 @@ from rich.console import Console
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.cli.commands.pr import render_code_host_error, resolve_and_fetch_pull_request
 from squadron.cli.commands.review import (
+    _cf_project_name,  # pyright: ignore[reportPrivateUsage]
     _exit_on,  # pyright: ignore[reportPrivateUsage]
     _resolve_save_outcome,  # pyright: ignore[reportPrivateUsage]
     _resolve_verbosity,  # pyright: ignore[reportPrivateUsage]
@@ -26,18 +27,17 @@ from squadron.cli.commands.review import (
     review_app,
 )
 from squadron.codehost.errors import CodeHostError
-from squadron.codehost.models import ResolvedPullRequest
+from squadron.codehost.models import PullRequestRecord, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
 from squadron.codehost.worktree import ScratchWorktree
 from squadron.config.manager import get_config
 from squadron.review.git_utils import EmptyScopeError, assert_reviewable_scope
-from squadron.review.rules import load_review_rules, resolve_rules_dir
+from squadron.review.persistence import save_review_result
+from squadron.review.reviews_dir import resolve_reviews_dir
+from squadron.review.rules import RulesSource, load_review_rules, resolve_rules_dir
 from squadron.review.templates import get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
-
-_NOT_PERSISTABLE_REASON = "PR review persistence is not yet available (383)"
-
 
 def assemble_pr_metadata(resolved: ResolvedPullRequest, host: CodeHost) -> str:
     """Raw PR content the CLI assembles: title, body, linked issues, discussions.
@@ -73,7 +73,7 @@ def _resolve_pr_rules_content(
     rules_dir_flag: str | None,
     rules_flag: str | None,
     changed_paths: list[str],
-) -> str | None:
+) -> tuple[str | None, RulesSource]:
     """Rules-directory provenance is part of the two-root split, not only CLAUDE.md.
 
     Resolved from ``checkout_cwd`` explicitly, never via ``_resolve_review_cwd``
@@ -81,6 +81,11 @@ def _resolve_pr_rules_content(
     ``inputs["cwd"]`` ends up holding once the worktree branch runs, which is exactly
     the mistake this function exists to avoid: an unreviewed rules directory planted in
     the PR's own worktree must never reach the reviewer's instructions.
+
+    Returns the assembled rules content **and** which source produced the rules
+    directory. The source is written to the artifact as ``rulesSource`` (D6), so
+    it has to survive this call rather than being resolved a second time later —
+    a second resolution could disagree with the one the reviewer actually got.
     """
     rules_path = rules_flag
     if not rules_path:
@@ -89,14 +94,72 @@ def _resolve_pr_rules_content(
             rules_path = config_rules
     manual_content = Path(rules_path).read_text() if rules_path else None
 
-    checkout_rules_dir, _rules_source = resolve_rules_dir(checkout_cwd, None, rules_dir_flag)
+    checkout_rules_dir, rules_source = resolve_rules_dir(checkout_cwd, None, rules_dir_flag)
     file_paths = changed_paths if checkout_rules_dir is not None else []
-    return load_review_rules(
+    content = load_review_rules(
         "code",
         checkout_rules_dir,
         file_paths=file_paths,
         manual_rules_content=manual_content,
     )
+    return content, rules_source
+
+
+class PrTarget:
+    """A review of a pull request, as persistence sees it (slice 383, D3).
+
+    Built here rather than in ``review/``, which must never import
+    ``codehost``. Satisfying ``SaveTargetProtocol`` structurally is what lets
+    the CLI hand persistence a target the review package never learns about.
+
+    The stem carries no slice-name segment: a PR has no slice name, and
+    deriving one from the PR title would be a fabricated identifier that
+    changes whenever someone edits the title.
+    """
+
+    def __init__(self, record: PullRequestRecord, rules_source: RulesSource) -> None:
+        self._record = record
+        self._rules_source = rules_source
+
+    @property
+    def rules_source(self) -> RulesSource:
+        """Which source produced the rules the reviewer was given (D6).
+
+        Carried here so the artifact records the resolution this run actually
+        used. Written to frontmatter in Task 8, after byte-identity is green.
+        """
+        return self._rules_source
+
+    def filename_stem(self, review_type: str) -> str:
+        return f"{self._record.path_key}-review.{review_type}"
+
+    def frontmatter_fields(self) -> dict[str, object]:
+        # No slice key — this review is not about one. The nested mapping
+        # renders as indented lines the way `criteria:` already does (D2).
+        return {
+            "pr": {
+                "host": self._record.host,
+                "owner": self._record.owner,
+                "repository": self._record.repository,
+                "number": self._record.number,
+                "url": self._record.url,
+            }
+        }
+
+    def source_document(self) -> str | None:
+        return self._record.url
+
+    def reviewed_sha(self) -> str | None:
+        """The PR's head, never the operator's.
+
+        ``save_review_result`` used to stamp ``resolve_reviewed_sha(".")`` —
+        the process working directory, which on this path is the operator's
+        own tree. That yields a real, plausible-looking sha for a commit the
+        review never examined, which is why D3 moved the resolution onto the
+        target. 384's staleness check compares this value against the live PR
+        head, so a wrong one reads as "up to date" while being unrelated.
+        """
+        return self._record.head_sha
 
 
 @review_app.command("pr")
@@ -175,11 +238,15 @@ def review_pr(
         output = "json"
     verbosity = _resolve_verbosity(verbose)
 
-    rules_content = (
-        None
-        if no_rules
-        else _resolve_pr_rules_content(checkout_cwd, rules_dir_flag, rules, list(fetched.changed_paths))
-    )
+    # --no-rules reports NONE rather than the source a resolver would have
+    # picked: no rules reached the reviewer, so naming a directory in the
+    # artifact would claim a provenance this run does not have.
+    if no_rules:
+        rules_content, rules_source = None, RulesSource.NONE
+    else:
+        rules_content, rules_source = _resolve_pr_rules_content(
+            checkout_cwd, rules_dir_flag, rules, list(fetched.changed_paths)
+        )
 
     inputs: dict[str, str] = {"diff": diff}
     if exclude_patterns:
@@ -233,12 +300,49 @@ def review_pr(
     roots += "[/dim]"
     Console(stderr=True).print(roots)
 
+    def _save_pr(target: PrTarget) -> bool:
+        """Persist the review, reporting where it landed and which rule chose there.
+
+        The location is printed whether or not the write succeeds: an operator
+        who does not know where their review went has been failed either way
+        (D5), and a failed write names the path they would have to fix.
+        """
+        reviews_dir, rule = resolve_reviews_dir(
+            flag=reviews_dir_flag,
+            cwd=checkout_cwd,
+            host=resolved.record.host,
+            owner=resolved.record.owner,
+            repository=resolved.record.repository,
+        )
+        console = Console(stderr=True)
+        try:
+            path = save_review_result(
+                result,
+                "code",
+                as_json=use_json,
+                reviews_dir=reviews_dir,
+                input_file=resolved.record.url,
+                target=target,
+                project_name=_cf_project_name(),
+                heading_label=f"PR #{resolved.record.number}",
+            )
+        except OSError as exc:
+            # Never a fall-through to the next precedence rule: writing
+            # somewhere the operator did not ask for, and reporting success,
+            # is the failure this names the path to avoid (D5).
+            console.print(f"[red]Review not saved to {reviews_dir} ({rule}): {exc}[/red]")
+            return False
+        console.print(f"[green]Saved review to {path}[/green] [dim]({rule})[/dim]")
+        return True
+
     outcome = _resolve_save_outcome(
         no_save=no_save,
-        target=None,
-        save=lambda _target: False,
+        # A PR review always has a target, so NOT_PERSISTABLE is unreachable
+        # here — it survives for the case it actually describes, a slice-less
+        # `sq review code` with nothing to name an artifact under (D8).
+        target=PrTarget(resolved.record, rules_source),
+        save=_save_pr,
         review_type="pr",
-        not_persistable_reason=_NOT_PERSISTABLE_REASON,
     )
 
     _exit_on(result.verdict, outcome)

@@ -227,33 +227,33 @@ This is a **behavior change on an existing path**, not pure refactoring — it i
 
 ## Task 7 — `PrTarget` and the real save (D3, D8)
 
-- [ ] **7.1 Implement `PrTarget` in the CLI layer**
-  - [ ] Construct in `src/squadron/cli/commands/review_pr.py` — **not** in `review/`, which must never import `codehost`
-  - [ ] Takes the `PullRequestRecord` and the `RulesSource` from Task 1
-  - [ ] Stem is `{path_key}-review.{review_type}` — no slice-name segment, and never derived from the PR title
-  - [ ] `frontmatter_fields()` returns a `pr` mapping (host, owner, repository, number, url) and no slice key; nested mapping renders as indented lines the way `criteria:` already does
-  - [ ] `source_document()` is the PR URL
-  - [ ] **`reviewed_sha` is `record.head_sha`** — never `resolve_reviewed_sha(".")`, which on this path is the operator's tree
-  - [ ] Success: `pyright` clean; import-graph test still passes
-  - [ ] Effort: 2
+- [x] **7.1 Implement `PrTarget` in the CLI layer**
+  - [x] Construct in `src/squadron/cli/commands/review_pr.py` — **not** in `review/`, which must never import `codehost`
+  - [x] Takes the `PullRequestRecord` and the `RulesSource` from Task 1
+  - [x] Stem is `{path_key}-review.{review_type}` — no slice-name segment, and never derived from the PR title
+  - [x] `frontmatter_fields()` returns a `pr` mapping (host, owner, repository, number, url) and no slice key; nested mapping renders as indented lines the way `criteria:` already does
+  - [x] `source_document()` is the PR URL
+  - [x] **`reviewed_sha` is `record.head_sha`** — never `resolve_reviewed_sha(".")`, which on this path is the operator's tree
+  - [x] Success: `pyright` clean; import-graph test still passes
+  - [x] Effort: 2
 
-- [ ] **7.2 Replace 382's stub with the real save (D8)**
-  - [ ] Delete `_NOT_PERSISTABLE_REASON` and the `save=lambda _target: False` stub
-  - [ ] `NOT_PERSISTABLE` survives only for its real case: a review with no target to name an artifact under (slice-less `sq review code`)
-  - [ ] A PR review always has a target — it saves, or reports `UNSAVED` with non-zero exit
-  - [ ] Success: `ruff check` and `pyright` clean
-  - [ ] Effort: 2
+- [x] **7.2 Replace 382's stub with the real save (D8)**
+  - [x] Delete `_NOT_PERSISTABLE_REASON` and the `save=lambda _target: False` stub
+  - [x] `NOT_PERSISTABLE` survives only for its real case: a review with no target to name an artifact under (slice-less `sq review code`)
+  - [x] A PR review always has a target — it saves, or reports `UNSAVED` with non-zero exit
+  - [x] Success: `ruff check` and `pyright` clean
+  - [x] Effort: 2
 
-- [ ] **7.3 Test PR persistence** *(test-with 7.1–7.2)*
-  - [ ] Create `tests/cli/test_review_pr_persistence.py`
-  - [ ] **`reviewedSha` is the PR's, not yours** — set up operator HEAD deliberately different from PR head so the two cannot pass by coincidence
-  - [ ] Unplanned-repository case: review saves externally and `git status --porcelain` is empty afterwards
-  - [ ] A PR review of a slice-less `sq review code` still takes `NOT_PERSISTABLE`
-  - [ ] Success: all pass; no test requires `gh`, network, or auth
-  - [ ] Effort: 3
+- [x] **7.3 Test PR persistence** *(test-with 7.1–7.2)*
+  - [x] Create `tests/cli/test_review_pr_persistence.py`
+  - [x] **`reviewedSha` is the PR's, not yours** — set up operator HEAD deliberately different from PR head so the two cannot pass by coincidence
+  - [x] Unplanned-repository case: review saves externally and `git status --porcelain` is empty afterwards
+  - [x] A PR review of a slice-less `sq review code` still takes `NOT_PERSISTABLE`
+  - [x] Success: all pass; no test requires `gh`, network, or auth
+  - [x] Effort: 3
 
-- [ ] **7.4 Commit** — `feat(review): persist PR reviews under a PR-keyed name`
-  - [ ] Effort: 1
+- [x] **7.4 Commit** — `feat(review): persist PR reviews under a PR-keyed name`
+  - [x] Effort: 1
 
 ---
 

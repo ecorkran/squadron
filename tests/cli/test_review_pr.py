@@ -288,16 +288,32 @@ def test_json_flag_selects_json_output(
     assert "json" in captured_review[0]["args"]
 
 
-def test_not_persistable_warning_names_pr_persistence(
+def test_pr_review_no_longer_reports_persistence_unavailable(
     cli_runner: CliRunner,
     patched_host: dict[str, object],
     captured_review: list[dict[str, object]],
 ) -> None:
-    """The warning names PR persistence specifically, not the generic slice text."""
-    _arm(patched_host)
-    result = cli_runner.invoke(app, _PARITY_BASE)
+    """383 replaced 382's stub, so neither refusal wording can appear.
 
-    assert "383" in result.output, result.output
+    This test asserted the opposite until this slice — that the run warned
+    "PR review persistence is not yet available (383)". NOT_PERSISTABLE
+    survives for the case it actually describes, a slice-less ``sq review
+    code`` with nothing to name an artifact under (D8); a PR review always has
+    a target and never reaches it.
+
+    Deliberately asserts the *absence* of the refusal rather than the presence
+    of an artifact. This suite's fake ``_Result`` carries a verdict and nothing
+    else, because every case here is unit-level — did this flag reach the
+    review call — and rendering an artifact from it would require teaching the
+    fake the whole ``ReviewResult`` shape. The real save, its location, and its
+    filename are covered in ``test_review_pr_persistence.py``, whose fixtures
+    are built for exactly that.
+    """
+    _arm(patched_host)
+    result = cli_runner.invoke(app, [*_PARITY_BASE, "--no-save"])
+
+    assert "not yet available" not in result.output
+    assert "383" not in result.output
     assert "slice identifier" not in result.output
 
 

@@ -109,20 +109,24 @@ class TestSaveOutcomeResolution:
         assert any("no slice identifier" in message for message in warnings)
 
     def test_not_persistable_reason_is_overridable(self, caplog: pytest.LogCaptureFixture) -> None:
-        """A custom reason (e.g. sq review pr's pre-383 case) reaches the warning."""
+        """A caller whose "no target" case is not the slice-less one can say so.
+
+        The sample reason used to be 382's "PR review persistence is not yet
+        available (383)". 383 landed that persistence, so the string would now
+        assert something false about this repository; the override mechanism it
+        exercises is unchanged, so only the sample moved.
+        """
         with caplog.at_level("WARNING", logger="squadron.cli.commands.review"):
             outcome = _resolve_save_outcome(
                 no_save=False,
                 target=None,
                 save=lambda _info: True,
-                review_type="pr",
-                not_persistable_reason="PR review persistence is not yet available (383)",
+                review_type="code",
+                not_persistable_reason="no reviewable target for this run",
             )
         assert outcome == SaveOutcome.NOT_PERSISTABLE
         warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
-        assert any(
-            "PR review persistence is not yet available (383)" in message for message in warnings
-        )
+        assert any("no reviewable target for this run" in message for message in warnings)
         assert not any("no slice identifier" in message for message in warnings)
 
     def test_successful_write_is_saved(self) -> None:

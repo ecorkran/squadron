@@ -484,6 +484,23 @@ increased, never merely that findings were zero — a skipped file also reports 
 The three pre-existing `test_schema_drift.py` failures in this worktree are that same
 registered-root mismatch (context-forge issue #88), unrelated to this slice and not its to fix.
 
+#### A note on test fakes, for Task 8
+
+Landing the real save turned one existing test from a passing assertion into a
+`_Result` object has no attribute 'timestamp'` error, and the fix was to **narrow the test, not
+fatten the fake**. `tests/cli/test_review_pr.py` installs a two-line stub carrying only
+`verdict = "PASS"`, because every case in that suite is unit-level: did this flag reach the review
+call. Before 383 nothing on that path ever rendered markdown, so the stub was sufficient. Driving
+a real `save_review_result` through it would require teaching the fake the whole `ReviewResult`
+shape — timestamp, raw output, findings, scan counts — and would quietly convert a fast
+flag-routing suite into a persistence suite.
+
+The real save, its location, its filename, and its `reviewedSha` are asserted in
+`tests/cli/test_review_pr_persistence.py`, whose fixtures exist for that. The general rule, which
+Task 8 will meet again when two new keys start rendering on every path: when a change makes an
+existing fake insufficient, check whether the test was ever *about* the thing the fake now has to
+model. If it was not, the assertion moves rather than the fake growing.
+
 ### D8 — Not-persistable keeps its meaning
 
 382's `_NOT_PERSISTABLE_REASON` ("PR review persistence is not yet available (383)") is deleted
