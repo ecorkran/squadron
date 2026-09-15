@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260913
+dateUpdated: 20260914
 status: in_progress
 ---
 
@@ -369,6 +369,21 @@ Sequence **A → B → C**, revised from C → A → B during slice design. A mu
 **Slice design:** `user/slices/919-slice.verification-that-verified-nothing.md`
 
 **Status:** complete (20260914) · **Risk:** Medium-High (Part A changes the parser every review artifact passes through, and the #91 fence-masking interaction is a verified collision rather than a theoretical one; Part B may add a frontmatter key that external gates consume, requiring context-forge coordination; Part C changes a commit gate's pass/fail posture and will start failing closed in worktrees where it previously passed vacuously) · **Effort:** 3/5 · **Dependencies:** [917 — Part A must not reopen #91's fence masking and Part B extends its verdict gate; 918 — Part A builds on the newline-free digest indicator, and the #92 non-reproduction is what scopes that issue out of here]
+
+18. [ ] **(920) Claude Agent SDK Upgrade — 0.1.38 → 0.2.x and Retiring the Rate-Limit Parser Shim**
+Fixes [issue #30](https://github.com/ecorkran/squadron/issues/30). The pin is `claude-agent-sdk>=0.1.38`; the installed version is 0.1.38 and the current release is **0.2.152** (the issue was filed against 0.2.128 and the gap has widened since). The bundled CLI ships with the package and has moved ahead of the pinned parser, so the CLI emits message types the parser treats as fatal — the observed symptom was a real `sq metrology audit run` dying mid-stream after ~30 tool calls with `ProviderError: Unknown message type: rate_limit_event` from the parser's `case _:` fallthrough.
+
+**The compatibility surface was probed before scoping, not assumed.** Installing 0.2.152 in a throwaway venv and exercising it against squadron's actual usage: all 14 public names squadron imports are present (`AssistantMessage`, `ClaudeSDKClient`, `ClaudeAgentOptions`, `ResultMessage`, `SystemMessage`, `TextBlock`, `ToolUseBlock`, `ToolResultBlock`, `query`, and the five error types); all 9 `ClaudeAgentOptions` fields squadron sets (`cwd`, `permission_mode`, `system_prompt`, `model`, `tools`, `allowed_tools`, `setting_sources`, `hooks`, `max_turns`) still exist, and both option shapes squadron constructs build without error; and the three private modules squadron reaches into — `_internal.message_parser`, `_internal.client`, `_errors` — all still exist with the same shape, including the module-scope `parse_message` binding on `_internal.client` that the shim patches separately. So #30's framing of "~90 releases of drift touching every provider path" overstates the risk: the drift is real, but the API squadron depends on held across the minor bump.
+
+**What actually changes is the rate-limit path.** 0.2.152 parses `rate_limit_event` natively, returning a **new** `RateLimitEvent` message type (it is now in `query()`'s return union alongside `StreamEvent` and `ConversationResetMessage`). That makes [`install_rate_limit_parser_shim`](src/squadron/providers/sdk/rate_limit.py) dead by its own terms — its docstring says *"Remove once the pin moves past a parser with native support"*, and the wrapper only ever sees payloads the real parser rejected, so it silently becomes a no-op rather than failing loudly. But the retirement is not a deletion: throttle detection is currently keyed off a **parse failure** (`MessageParseError` carrying a payload, classified by `rate_limit_event_blocks`), and that failure will no longer occur. A `rejected` status must still reach the backoff path, which now means recognizing a typed event instead of a caught exception. Getting this wrong fails silently in the direction that matters — squadron would stop backing off under genuine throttling and hammer the rate limiter, which is the exact defect the backoff was added to fix.
+
+Two further consequences follow from `RateLimitEvent` being a new type. Message-type dispatch in [`translation.py`](src/squadron/providers/sdk/translation.py) and the agent's `_skip_unparseable` path will both encounter something they have never seen; the defensive skip (`97c3cb3`) is correct to keep regardless of version, but it must not become the thing that swallows `rejected`. And `ClaudeSDKClient` gained methods squadron does not use (`set_model`, `get_context_usage`, `stop_task`, `rewind_files`, MCP controls) — out of scope here, but `set_model` is worth noting because the pipeline's model-override path currently works around its absence.
+
+**Proposed shape — three parts.** **A:** raise the pin to a tested floor and decide pin-vs-range, retire the shim, and confirm `_skip_unparseable` still guards only genuinely-unknown types. **B:** route `RateLimitEvent` through translation and re-key throttle classification off the typed event rather than `MessageParseError`, preserving the `allowed`/`allowed_warning`/`rejected` distinction and the existing backoff schedule — `rate_limit_event_blocks`'s classification logic survives, its input changes. **C:** verification per the issue's own acceptance bar — the full provider suite, plus at least one real end-to-end review and one metrology audit, since the original failure appeared only in a long-running audit after ~30 tool calls and no unit test would have caught it.
+
+**Open question for design:** whether the shim is deleted outright or kept as a version-guarded no-op for users pinned below the new floor. Deleting is cleaner and the floor makes it unreachable; keeping it hedges against a user with a stale lockfile, at the cost of carrying code that cannot be exercised. Decide in slice design, not during implementation.
+
+**Status:** not started · **Risk:** Medium (touches every SDK-backed path — review, dispatch, pipeline, metrology — and the failure mode of getting the rate-limit re-keying wrong is silent: no backoff under real throttling, observable only as degraded behavior under load) · **Effort:** 3/5 · **Dependencies:** none — the compatibility probe found no blocking API breakage, so this can be picked up independently
 
 ---
 
