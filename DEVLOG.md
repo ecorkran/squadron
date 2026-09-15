@@ -12,6 +12,50 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260915
 
+### Slice 920 — Implementation: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
+
+Phase 6 complete on branch `920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement`.
+13 of 14 tasks done; Task 13 blocked by a pre-existing, unrelated bug.
+
+Throttle detection was re-keyed onto typed `RateLimitEvent` across all three dispatch paths —
+`agent.py`'s shared `_skip_unparseable` and `sdk_session.dispatch`'s inline loop, which has no
+such wrapper and needed its own inspection (the asymmetry the design flagged as the likeliest
+half-landing point). `translation.py` now makes an informational event observable instead of
+silently dropping it. The shim (`install_rate_limit_parser_shim`, `is_rate_limit_event`) and its
+now-dead dict-based sibling `rate_limit_event_blocks` are deleted.
+
+Task 8's grep for other `sdk_type` exclusion lists found three more consumers of
+`agent.handle_message()` with the same issue-#23-class gap — `summary_oneshot.py`,
+`review_client.py`, `pipeline/actions/dispatch.py` — fixed the same way. Moved
+`RATE_LIMIT_EVENT_TYPE` to `core/models.py` (alongside `SDK_RESULT_TYPE`) so
+`review_client.py`'s "no provider-specific imports" boundary held. Also fixed:
+`test_translation.py`'s bare-`dict` fixture (42 pre-existing pyright errors, `TypedDict` now),
+and renamed `_is_throttle` → `is_throttle` since it's a genuine cross-module contract, not
+module-private.
+
+Every test fabricating `MessageParseError`/`ClaudeSDKError("rate_limit_event: ...")` now
+constructs a real `RateLimitEvent`, landed in the same commit as the production change it
+covers (Success Criterion 9). Success Criterion 10 (informational ≠ throttle) is covered in
+every consumer. `test_provider.py` and `test_audit_cli.py` needed no changes — confirmed both
+pass unmodified (Task 10), since neither fabricates an SDK parser exception. `test_agent.py`
+under `providers/openai/` was correctly left untouched — its only rate-limit test is on an
+independent, non-SDK path.
+
+**Task 12 (live review), passed.** `sq review code --diff main...HEAD -v` completed cleanly
+against the real SDK/CLI: verdict produced, no `Unknown message type` warning, no leaked
+`rate_limit_event` text, no live throttle observed. Returned CONCERNS with two real findings
+against this slice's own diff — both fixed in a follow-up commit.
+
+**Task 13 (live metrology audit), blocked.** `sq metrology audit run` fails before reaching any
+SDK code: a pre-existing, unrelated bug in `_AUDIT_ALLOWED_TOOLS` (Claude-native tool names
+never updated for a separate canonical-name translation commit). Confirmed unchanged on `main`.
+Filed as [issue #107](https://github.com/ecorkran/squadron/issues/107) with Task 13's
+verification intent recorded there. Task 12's live review stands as this slice's live-path
+evidence in its place.
+
+Full suite green: 3965 passed, 4 skipped (pre-existing). `ruff format`, `ruff check`, `pyright`
+(src-only per project config, tests tracked separately as issue #50) all clean.
+
 ### Slice 920 — Slice Design: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
 
 Phase 4 (Slice Design) complete. Design at

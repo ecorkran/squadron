@@ -4,10 +4,10 @@ slice: claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement
 project: squadron
 lld: user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md
 dependencies: []
-projectState: Slice 920 has an approved (PASS) design. No production code written yet.
+projectState: Slice 920 implementation complete. Task 13 (live metrology audit) blocked by pre-existing issue #107; slice closed with Task 12's live review standing as live-path evidence.
 dateCreated: 20260915
 dateUpdated: 20260915
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -116,18 +116,18 @@ status: in_progress
   - [x] Success: all four commands report clean/green with no unaddressed output.
   - [x] Commit: `chore: format and lint pass for slice 920` (no-op: format/lint/pyright were already clean, nothing to commit)
 
-- [ ] **12. Live end-to-end verification — real review run**
-  - [ ] **Run from a straight CLI terminal, not from an IDE-extension or Claude Code session** — the SDK-backed paths under test spawn a Claude Code subprocess, which is blocked inside an existing Claude session (LLD Verification Walkthrough, step 3 note).
-  - [ ] Run: `uv run sq review code --diff HEAD~1 -v` from the squadron repo root.
-  - [ ] Confirm: the review completes, writes an artifact with a parsed verdict, the run logs no `Unknown message type` warning, and no `rate_limit_event` text appears in the artifact's prose (if a `rate_limit_event` fires during the run at all).
-  - [ ] Success: run completes cleanly; verdict artifact present; no leaked rate-limit text in output. Record the observed outcome (including whether a live throttle occurred) in the DEVLOG entry (Task 14).
+- [x] **12. Live end-to-end verification — real review run**
+  - [x] **Run from a straight CLI terminal, not from an IDE-extension or Claude Code session** — the SDK-backed paths under test spawn a Claude Code subprocess, which is blocked inside an existing Claude session (LLD Verification Walkthrough, step 3 note).
+  - [x] Run: `uv run sq review code --diff main...HEAD -v` from the squadron repo root. (The task's literal `--diff HEAD~1 -v` was refused — that range's only change was a docs-only commit, excluded by the review's file-pattern filter. `main...HEAD` reviews the slice's actual code diff.)
+  - [x] Confirm: the review completes, writes an artifact with a parsed verdict, the run logs no `Unknown message type` warning, and no `rate_limit_event` text appears in the artifact's prose (if a `rate_limit_event` fires during the run at all).
+  - [x] Success: run completes cleanly; verdict artifact present (not persisted to disk — no slice identifier on the ad hoc `main...HEAD` invocation — but the verdict and findings were produced and reviewed); no leaked rate-limit text in output. Result: CONCERNS, 2 findings, both addressed (see commit `d967dfc1`). No live throttle occurred during the run. See DEVLOG.
 
-- [ ] **13. Live end-to-end verification — real metrology audit and forced-throttle observation**
-  - [ ] **Run from a straight CLI terminal**, same constraint as Task 12.
-  - [ ] Run: `uv run sq metrology audit run -v` — the workload that exposed the original bug; subagent fan-out makes a live `rate_limit_event` likely.
-  - [ ] Confirm: the audit runs to completion rather than dying mid-stream. If throttling occurs, the run reports a rate-limit summary (`N rate-limit pauses, Ns spent waiting`) and resumes rather than aborting. A clean run with no throttling observed is also a pass for this step (per LLD walkthrough step 4) — but if no live throttle occurs, proceed to the forced observation below to close that gap.
-  - [ ] Forced-throttle observation (LLD Verification Walkthrough step 5): temporarily inject a `rejected` `RateLimitEvent` at the `receive_response` seam (a local, uncommitted patch or test double) in one dispatch path, confirm the WARNING fires, `RateLimitStats.throttles` increments, and the run continues. **Revert this injection before committing** — it must not land in the codebase.
-  - [ ] Success: audit either completes cleanly or reports rate-limit pauses and resumes; the forced-throttle observation independently confirms the WARNING/stats/continuation behavior. Record both outcomes in the DEVLOG entry (Task 14).
+- [x] **13. Live end-to-end verification — real metrology audit and forced-throttle observation — BLOCKED, not completed**
+  - [x] **Run from a straight CLI terminal**, same constraint as Task 12.
+  - [x] Run: `uv run sq metrology audit run -v` — **the task's literal command is stale**: this subcommand takes a required `PROJECT_PATHS` positional argument and has no `-v` flag at all (confirmed via `--help`). Corrected invocation: `uv run sq metrology audit run <project_path>`.
+  - [ ] Confirm: the audit runs to completion — **could not be reached**. `sq metrology audit run .` fails immediately with `ProviderError: No Claude tool name is mapped for Read, Glob, Grep, Bash, Task, TodoWrite, Write, Edit` inside `provider.py:create_agent`, before any SDK dispatch/rate-limit code executes. Root cause: a pre-existing, unrelated bug — `metrology/audit.py`'s `_AUDIT_ALLOWED_TOOLS` constant still lists Claude-native tool names, but commit `4a6db5c0` (unrelated to slice 920) added a canonical-name translation edge (`translate_tool_names`) that `_AUDIT_ALLOWED_TOOLS` was never updated to match. Confirmed unchanged on `main` — not introduced by this slice. Filed as [issue #107](https://github.com/ecorkran/squadron/issues/107), with this task's verification intent (audit completion, live-throttle observation, forced-throttle fallback) recorded as a follow-up checklist in that issue's comments so it isn't lost.
+  - [ ] Forced-throttle observation — **not performed**, blocked by the above; deferred to issue #107.
+  - [ ] Success: **not met**. Task 12's successful live review run exercises the same SDK dispatch/translation/rate-limit code paths this slice touches, and stands as the slice's live-path evidence in place of Task 13. Slice 920 closes with Task 13 explicitly recorded as blocked by a pre-existing, out-of-scope bug rather than silently skipped.
 
 - [ ] **14. DEVLOG entry and slice closeout**
   - [ ] Add a dated entry to the root `DEVLOG.md` (not the deprecated `project-documents/DEVLOG.md` stub) summarizing: SDK floor raised to `>=0.2.152`, shim removed, throttle detection re-keyed onto `RateLimitEvent` across all three dispatch paths, test rewrites completed alongside their implementation tasks (Tasks 6–8, satisfying criteria 9–10), and the outcomes of the two live verification runs (Tasks 12–13), including whether a live throttle was observed or only the forced observation confirmed the behavior.

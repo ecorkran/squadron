@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260915
 dateUpdated: 20260915
-status: not_started
+status: complete
 ---
 
 # Slice Design: Claude Agent SDK Upgrade — 0.1.38 → 0.2.x and Retiring the Rate-Limit Parser Shim
@@ -436,10 +436,13 @@ uv run ruff format --check . && uv run ruff check . && uv run pyright
 ```
 
 **3. Real end-to-end review** — exercises query/client dispatch and translation
-against the live CLI at the new floor:
+against the live CLI at the new floor. Use a diff range that actually contains
+reviewable code — `HEAD~1` alone may resolve to a docs-only commit the review
+excludes by file pattern, in which case widen the range (e.g. `main...HEAD`
+for a whole branch):
 
 ```bash
-uv run sq review code --diff HEAD~1 -v
+uv run sq review code --diff main...HEAD -v
 ```
 
 Confirm: the review completes, writes an artifact with a parsed verdict, and the
@@ -447,10 +450,11 @@ run logs no `Unknown message type` warning. A `rate_limit_event` arriving during
 this run must not appear in the artifact's prose.
 
 **4. Real metrology audit** — the workload that exposed the original bug; the
-subagent fan-out makes a live `rate_limit_event` likely:
+subagent fan-out makes a live `rate_limit_event` likely. `PROJECT_PATHS` is a
+required positional argument; this subcommand has no `-v`/verbose flag:
 
 ```bash
-uv run sq metrology audit run -v
+uv run sq metrology audit run <project_path>
 ```
 
 Confirm: the audit runs to completion rather than dying mid-stream. If
@@ -458,6 +462,14 @@ throttling occurs, the run reports a rate-limit summary
 (`N rate-limit pauses, Ns spent waiting`) and resumes rather than aborting. If
 no throttling occurs, the audit simply completes — a clean run is a pass for
 this step, not a missing observation.
+
+**Caveat discovered during slice 920 implementation:** at the time this slice
+was implemented, `sq metrology audit run <project_path>` failed unconditionally
+before reaching any SDK/rate-limit code, due to a pre-existing, unrelated bug —
+see [issue #107](https://github.com/ecorkran/squadron/issues/107). Step 4 could
+not be completed; step 3 (the live review run) stood in as this slice's
+live-path evidence instead. Confirm issue #107 is resolved before relying on
+step 4 to re-verify this slice's behavior.
 
 **Run this from a straight CLI, not from an IDE-extension or Claude Code
 session.** The SDK-backed paths this slice touches depend on spawning a Claude
