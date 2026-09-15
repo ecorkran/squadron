@@ -250,7 +250,7 @@ class ReviewAction:
         if diff_ref:
             assert_reviewable_scope(diff_ref, cwd, exclude_patterns)
 
-        rules_dir, _rules_source = resolve_rules_dir(cwd, None, None)
+        rules_dir, rules_source = resolve_rules_dir(cwd, None, None)
         file_paths: list[str] = []
         if rules_dir is not None:
             if diff_ref:
@@ -375,7 +375,12 @@ class ReviewAction:
                         input_file=inputs.get("input"),
                         verdict_override=verdict_override,
                         revision_number=revision_number,
-                        target=StepTarget(context.step_name, context.step_index, cwd=cwd),
+                        target=StepTarget(
+                            context.step_name,
+                            context.step_index,
+                            cwd=cwd,
+                            rules_source=rules_source,
+                        ),
                     )
                 )
         except Exception:  # noqa: BLE001

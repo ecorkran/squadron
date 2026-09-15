@@ -35,6 +35,7 @@ from squadron.review.git_utils import EmptyScopeError, assert_reviewable_scope
 from squadron.review.persistence import save_review_result
 from squadron.review.reviews_dir import resolve_reviews_dir
 from squadron.review.rules import RulesSource, load_review_rules, resolve_rules_dir
+from squadron.review.save_target import TargetKind
 from squadron.review.templates import get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
@@ -143,7 +144,9 @@ class PrTarget:
                 "repository": self._record.repository,
                 "number": self._record.number,
                 "url": self._record.url,
-            }
+            },
+            "targetKind": TargetKind.PR.value,
+            "rulesSource": self._rules_source.value,
         }
 
     def source_document(self) -> str | None:

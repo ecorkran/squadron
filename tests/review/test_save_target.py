@@ -16,6 +16,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from squadron.review.persistence import SaveTargetProtocol, SliceInfo
+from squadron.review.rules import RulesSource
 from squadron.review.save_target import ArchTarget, SaveTarget, SliceTarget, StepTarget
 
 _SHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c"
@@ -41,8 +42,19 @@ class TestSliceTarget:
 
     def test_frontmatter_carries_the_slice_name(self) -> None:
         assert SliceTarget(_slice_info()).frontmatter_fields() == {
-            "slice": "review-and-checkpoint-actions"
+            "slice": "review-and-checkpoint-actions",
+            "targetKind": "slice",
+            # NONE, not absent: the constructor's default says "no rules
+            # source was threaded here", which is a different claim from
+            # "rules came from nowhere" only in that it is explicit.
+            "rulesSource": "none",
         }
+
+    def test_frontmatter_reports_the_rules_source_it_was_given(self) -> None:
+        """Written on every review, not only PR reviews (D6)."""
+        fields = SliceTarget(_slice_info(), rules_source=RulesSource.PROJECT).frontmatter_fields()
+
+        assert fields["rulesSource"] == "project"
 
     def test_source_document_is_the_design_file(self) -> None:
         assert (
@@ -96,7 +108,11 @@ class TestArchTarget:
         reproducing that. ``targetKind`` is what eventually makes the
         distinction readable (D4, Task 8).
         """
-        assert ArchTarget(380, self._ARCH).frontmatter_fields() == {"slice": "pull-request-workflow"}
+        assert ArchTarget(380, self._ARCH).frontmatter_fields() == {
+            "slice": "pull-request-workflow",
+            "targetKind": "arch",
+            "rulesSource": "none",
+        }
 
     def test_source_document_is_the_arch_file(self) -> None:
         assert ArchTarget(380, self._ARCH).source_document() == self._ARCH
@@ -115,7 +131,11 @@ class TestStepTarget:
 
     def test_frontmatter_carries_the_unknown_fallback(self) -> None:
         """The step path rendered with no ``SliceInfo``, so ``slice`` read ``unknown``."""
-        assert StepTarget("review-code", 3).frontmatter_fields() == {"slice": "unknown"}
+        assert StepTarget("review-code", 3).frontmatter_fields() == {
+            "slice": "unknown",
+            "targetKind": "step",
+            "rulesSource": "none",
+        }
 
     def test_names_no_source_document(self) -> None:
         """The step path passes its input explicitly; the target claims none."""

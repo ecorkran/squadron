@@ -261,44 +261,44 @@ This is a **behavior change on an existing path**, not pure refactoring — it i
 
 Both new keys land here, **after** Task 3.8 and Task 4.2 have proven byte-identity green against untouched fixtures. This is the one deliberate artifact change in the slice; it is not part of the migration's diff (D2).
 
-- [ ] **8.1 Write `rulesSource` and `targetKind` through the contract**
-  - [ ] Thread the `RulesSource` from Task 1.2 through to `frontmatter_fields()` so `rulesSource` is written on **every** review, not only PR reviews (D6)
-  - [ ] Every target writes `targetKind` (`slice` | `arch` | `step` | `pr`) (D4)
-  - [ ] **Absence means `slice`** for `targetKind`, and absence of `rulesSource` is never inferred as any particular source — artifacts written before this task keep parsing
-  - [ ] `*-review.*` consumers (`metrology/discovery`, archive, digest) classify by reading `targetKind` — **never by parsing the filename**
-  - [ ] Success: `pyright` clean
-  - [ ] Effort: 2
+- [x] **8.1 Write `rulesSource` and `targetKind` through the contract**
+  - [x] Thread the `RulesSource` from Task 1.2 through to `frontmatter_fields()` so `rulesSource` is written on **every** review, not only PR reviews (D6)
+  - [x] Every target writes `targetKind` (`slice` | `arch` | `step` | `pr`) (D4)
+  - [x] **Absence means `slice`** for `targetKind`, and absence of `rulesSource` is never inferred as any particular source — artifacts written before this task keep parsing
+  - [x] `*-review.*` consumers (`metrology/discovery`, archive, digest) classify by reading `targetKind` — **never by parsing the filename**
+  - [x] Success: `pyright` clean
+  - [x] Effort: 2
 
-- [ ] **8.2 Regenerate the fixtures and pin the diff** *(test-with 8.1)*
-  - [ ] Regenerate the three Task 2 fixtures **once**, now that both keys exist
-  - [ ] Assert the regenerated fixtures differ from the pre-migration ones by **exactly these two keys and nothing else**, on all three paths
-  - [ ] A third difference is unintended drift the migration check would otherwise have hidden — investigate it, do not absorb it into the fixture
-  - [ ] Success: the two-key diff is asserted, not eyeballed; `tests/review/test_persistence_migration.py` passes against the regenerated fixtures
-  - [ ] Effort: 2
+- [x] **8.2 Regenerate the fixtures and pin the diff** *(test-with 8.1)*
+  - [x] Regenerate the three Task 2 fixtures **once**, now that both keys exist
+  - [x] Assert the regenerated fixtures differ from the pre-migration ones by **exactly these two keys and nothing else**, on all three paths
+  - [x] A third difference is unintended drift the migration check would otherwise have hidden — investigate it, do not absorb it into the fixture
+  - [x] Success: the two-key diff is asserted, not eyeballed; `tests/review/test_persistence_migration.py` passes against the regenerated fixtures
+  - [x] Effort: 2
 
-- [ ] **8.3 Test `rulesSource` end-to-end** *(test-with 8.1)*
-  - [ ] Write a review artifact, read `rulesSource` back **from the written file**, and assert it matches the directory the loader actually used — for each of the `flag`, `config`, `project`, `user`, and `template` branches (D6's six members less `none`)
-  - [ ] `flag` and `config` matter most here: they are the two a careless implementation most easily records as `project`, and the artifact is the only place that error becomes visible
-  - [ ] This closes the gap between Task 1.3 (the resolver returns the right source) and 8.1 (the field is written): neither alone catches a hardcoded value or a source that never reaches `frontmatter_fields()`
-  - [ ] Assert an artifact written without the key still parses
-  - [ ] Success: all branches pass; a deliberately hardcoded `rulesSource` fails this test
-  - [ ] Effort: 2
+- [x] **8.3 Test `rulesSource` end-to-end** *(test-with 8.1)*
+  - [x] Write a review artifact, read `rulesSource` back **from the written file**, and assert it matches the directory the loader actually used — for each of the `flag`, `config`, `project`, `user`, and `template` branches (D6's six members less `none`)
+  - [x] `flag` and `config` matter most here: they are the two a careless implementation most easily records as `project`, and the artifact is the only place that error becomes visible
+  - [x] This closes the gap between Task 1.3 (the resolver returns the right source) and 8.1 (the field is written): neither alone catches a hardcoded value or a source that never reaches `frontmatter_fields()`
+  - [x] Assert an artifact written without the key still parses
+  - [x] Success: all branches pass; a deliberately hardcoded `rulesSource` fails this test
+  - [x] Effort: 2
 
-- [ ] **8.4 Test that `{index}-review.*` consumers cannot match** *(test-with 8.1)*
-  - [ ] Create `tests/review/test_review_consumers_ignore_pr.py`
-  - [ ] Place a PR review of PR 42 beside a slice review of slice 42 in one directory
-  - [ ] Assert `sq review resolve 42` selects the slice review
-  - [ ] Assert metrology capture for index 42 selects the slice review
-  - [ ] Success: both pass — these consumers build their glob from an `int`, so a non-numeric prefix cannot match by construction; this test pins that
-  - [ ] Effort: 2
+- [x] **8.4 Test that `{index}-review.*` consumers cannot match** *(test-with 8.1)*
+  - [x] Create `tests/review/test_review_consumers_ignore_pr.py`
+  - [x] Place a PR review of PR 42 beside a slice review of slice 42 in one directory
+  - [x] Assert `sq review resolve 42` selects the slice review
+  - [x] Assert metrology capture for index 42 selects the slice review
+  - [x] Success: both pass — these consumers build their glob from an `int`, so a non-numeric prefix cannot match by construction; this test pins that
+  - [x] Effort: 2
 
-- [ ] **8.5 Test that archiving, digest, and 917 integrity run on a PR artifact**
-  - [ ] Assert each runs unchanged against a PR review artifact
-  - [ ] Success: all pass without changes to those paths — they are target-agnostic already
-  - [ ] Effort: 2
+- [x] **8.5 Test that archiving, digest, and 917 integrity run on a PR artifact**
+  - [x] Assert each runs unchanged against a PR review artifact
+  - [x] Success: all pass without changes to those paths — they are target-agnostic already
+  - [x] Effort: 2
 
-- [ ] **8.6 Commit** — `feat(review): add rules-source and target-kind frontmatter keys`
-  - [ ] Effort: 1
+- [x] **8.6 Commit** — `feat(review): add rules-source and target-kind frontmatter keys`
+  - [x] Effort: 1
 
 ---
 

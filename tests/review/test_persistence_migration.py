@@ -5,20 +5,29 @@ step — with one ``SaveTarget`` contract. Its acceptance test is not "tests sti
 pass" but "the bytes are unchanged": every artifact these three paths write must
 be identical before and after (design D2).
 
-The fixtures in ``fixtures/383-premigration-*.md`` were captured at commit
-1e6548b8, against unmodified persistence code, *before* Task 3 touched
-``persistence.py``. A fixture captured afterwards would prove nothing.
+Two fixture sets, kept side by side on purpose:
 
-**Any diff here is a regression, not an improvement.** Do not update a fixture
-to match new output. The one sanctioned regeneration is Task 8.2, when
-``rulesSource`` and ``targetKind`` are added together — at which point the diff
-must contain exactly those two keys and nothing else.
+- ``fixtures/383-premigration-*.md`` were captured at commit 1e6548b8, against
+  unmodified persistence code, *before* Task 3 touched ``persistence.py``. A
+  fixture captured afterwards would prove nothing.
+- ``fixtures/383-postkeys-*.md`` are the same three artifacts after Task 8
+  added ``targetKind`` and ``rulesSource``. That was the one sanctioned
+  regeneration, and ``TestTheTwoNewKeysAreTheOnlyChange`` asserts the
+  difference between the sets is exactly those two keys — a third difference
+  would be drift arriving inside a regeneration everyone had already agreed to
+  accept.
 
-``reviewed_sha`` is pinned rather than resolved. ``save_review_result``
-currently stamps ``resolve_reviewed_sha(".")`` — the live repository HEAD —
-which would invalidate a byte-identity fixture on every commit. The migration
-moves that resolution onto the target (Task 3.6); what must not change is the
-rendered output *given* a sha, which is what these fixtures hold.
+**These tests drive the targets, not a raw ``SliceInfo``.** Until Task 8 they
+passed a bare ``SliceInfo`` (or ``None``) and rendered through
+``format_review_markdown``'s fallback branch — the path the production save no
+longer takes. They passed after the migration, and after the two keys were
+added, because they were never exercising ``frontmatter_fields()`` at all. The
+hole was invisible precisely because a green byte-identity check is what the
+migration wanted to see. Any future assertion here must construct a target.
+
+``reviewed_sha`` is pinned rather than resolved. The live save resolves it from
+git, which would invalidate a byte-identity fixture on every commit; what these
+pin is the rendered output *given* a sha.
 """
 
 from __future__ import annotations
@@ -26,8 +35,12 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 from squadron.review.persistence import SliceInfo, format_review_markdown
+from squadron.review.rules import RulesSource
+from squadron.review.save_target import ArchTarget, SliceTarget, StepTarget
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -102,11 +115,13 @@ class TestPreMigrationByteIdentity:
         rendered = format_review_markdown(
             _migration_result(),
             "code",
-            _slice_info(),
+            target=SliceTarget(_slice_info(), rules_source=RulesSource.PROJECT),
+            project_name="squadron",
+            heading_label="slice 146",
             reviewed_sha=_PINNED_SHA,
         )
 
-        fixture = _FIXTURES / "383-premigration-slice.md"
+        fixture = _FIXTURES / "383-postkeys-slice.md"
         assert rendered == fixture.read_text()
 
     def test_arch_path(self) -> None:
@@ -115,26 +130,56 @@ class TestPreMigrationByteIdentity:
         rendered = format_review_markdown(
             _migration_result(),
             "arch",
-            arch_info,
-            source_document=arch_info["arch_file"],
+            target=ArchTarget(
+                arch_info["index"],
+                arch_info["arch_file"],
+                rules_source=RulesSource.PROJECT,
+            ),
+            project_name="squadron",
+            heading_label="slice 380",
             reviewed_sha=_PINNED_SHA,
         )
 
-        fixture = _FIXTURES / "383-premigration-arch.md"
+        fixture = _FIXTURES / "383-postkeys-arch.md"
         assert rendered == fixture.read_text()
 
     def test_step_path(self) -> None:
-        """The step path renders with no slice info — the fallback shape is pinned too."""
+        """The step path's target supplies the ``unknown`` fallbacks explicitly."""
         rendered = format_review_markdown(
             _migration_result(),
             "code",
-            None,
+            target=StepTarget("review-step", 0, rules_source=RulesSource.PROJECT),
+            project_name="unknown",
+            heading_label="slice 0",
             source_document="project-documents/user/slices/383-slice.md",
             reviewed_sha=_PINNED_SHA,
         )
 
-        fixture = _FIXTURES / "383-premigration-step.md"
+        fixture = _FIXTURES / "383-postkeys-step.md"
         assert rendered == fixture.read_text()
+
+
+class TestTheTwoNewKeysAreTheOnlyChange:
+    """Task 8.2's actual requirement, and the reason the fixtures were captured.
+
+    The pre-migration fixtures are kept alongside the regenerated ones so the
+    diff can be asserted rather than eyeballed. A third difference is drift the
+    migration check would otherwise have hidden — it would arrive inside a
+    regeneration everyone had already agreed to accept.
+    """
+
+    @pytest.mark.parametrize("path_name", ["slice", "arch", "step"])
+    def test_diff_against_premigration_is_exactly_two_keys(self, path_name: str) -> None:
+        before = (_FIXTURES / f"383-premigration-{path_name}.md").read_text().splitlines()
+        after = (_FIXTURES / f"383-postkeys-{path_name}.md").read_text().splitlines()
+
+        added = [line for line in after if line not in before]
+        removed = [line for line in before if line not in after]
+
+        assert removed == [], f"the two keys are additive; nothing should disappear: {removed}"
+        assert sorted(added) == ["rulesSource: project", "targetKind: " + path_name], (
+            f"expected exactly targetKind and rulesSource to appear, got: {added}"
+        )
 
 
 class TestPreMigrationFilenames:

@@ -759,7 +759,7 @@ def review_slice(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "against": against,
@@ -787,7 +787,7 @@ def review_slice(
         save=lambda info: _save_and_report(
             result,
             "slice",
-            SliceTarget(info, cwd=review_cwd),
+            SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
             as_json=use_json,
             input_file=input_file,
             project_name=info["project"],
@@ -871,7 +871,7 @@ def review_arch(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "cwd": review_cwd,
@@ -900,9 +900,9 @@ def review_arch(
         # target names itself from the document, which is what _arch_slice_info
         # fabricated a whole SliceInfo to do (D1).
         arch_target: SaveTargetProtocol = (
-            SliceTarget(arch_failure_target, cwd=review_cwd)
+            SliceTarget(arch_failure_target, cwd=review_cwd, rules_source=rules_source)
             if arch_failure_target is not None
-            else ArchTarget(index, input_file, cwd=review_cwd)
+            else ArchTarget(index, input_file, cwd=review_cwd, rules_source=rules_source)
         )
         return _save_and_report(
             result,
@@ -977,7 +977,7 @@ def review_tasks(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
     # Seeded with the least-serious outcome; each part's own outcome is folded
@@ -1026,7 +1026,7 @@ def review_tasks(
             return _save_and_report(
                 part_result,
                 "tasks",
-                SliceTarget(info, cwd=review_cwd),
+                SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
                 as_json=use_json,
                 input_file=path,
                 name_suffix=suf,
@@ -1086,7 +1086,7 @@ def review_code(
     code_template = get_template("code")
     exclude_patterns = code_template.diff_exclude_patterns if code_template else None
 
-    review_cwd, code_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, code_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
     # A user-supplied --diff is normalized whether or not a slice number came
     # with it: `sq review code 118 --diff main` overrides the range but keeps
@@ -1200,7 +1200,7 @@ def review_code(
         save=lambda info: _save_and_report(
             result,
             "code",
-            SliceTarget(info, cwd=review_cwd),
+            SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
             as_json=use_json,
             project_name=info["project"],
         ),

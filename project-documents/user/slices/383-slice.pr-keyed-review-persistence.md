@@ -484,6 +484,35 @@ increased, never merely that findings were zero — a skipped file also reports 
 The three pre-existing `test_schema_drift.py` failures in this worktree are that same
 registered-root mismatch (context-forge issue #88), unrelated to this slice and not its to fix.
 
+#### The byte-identity harness had a hole, and it was invisible by construction
+
+Recorded because it is the most useful thing this slice learned, and because the same shape will
+recur wherever a check exists to confirm that nothing changed.
+
+The Task 2 harness called `format_review_markdown(result, review_type, slice_info, ...)` — a raw
+`SliceInfo`, no `target=`. That renders through the fallback branch, which the production save
+stopped using in Task 3.7. So the harness passed after the migration, passed again after Task 4
+migrated the step path, and would have passed after Task 8 added two keys to every artifact,
+because it was never calling `frontmatter_fields()` at all.
+
+**The hole survived precisely because the check was green.** A byte-identity assertion exists to
+report "nothing moved"; when it reports exactly that, nobody looks closer. The failure mode is the
+same one D7 records for `cf validate frontmatter` — a skipped file also reports zero findings —
+and the same one Task 1 hit with a module-level constant a test could not patch. Three instances
+in one slice, all with the shape: *the passing result and the not-actually-checked result are
+indistinguishable from outside.*
+
+What caught it here was Task 8 adding keys that **had** to change the bytes. The harness stayed
+green when it was required to fail, and that contradiction is what exposed it. So the practical
+rule: a check whose whole job is to detect change should be verified against a known change at
+least once. If it cannot be made to fail on demand, it is not yet evidence.
+
+The harness now constructs real targets, and its module docstring carries this note so a future
+assertion is not written back into the fallback branch. The two fixture sets are kept side by side
+— `383-premigration-*.md` and `383-postkeys-*.md` — with the diff between them asserted to be
+exactly the two keys, so the regeneration Task 8.2 sanctioned cannot hide a third change inside
+itself.
+
 #### A note on test fakes, for Task 8
 
 Landing the real save turned one existing test from a passing assertion into a

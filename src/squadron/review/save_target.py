@@ -27,10 +27,12 @@ the CLI layer build a PR target this module never learns about.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from squadron.review.persistence import SliceInfo, resolve_reviewed_sha
+from squadron.review.rules import RulesSource
 
 
 @runtime_checkable
@@ -77,6 +79,24 @@ class SaveTarget(Protocol):
         ...
 
 
+class TargetKind(StrEnum):
+    """What a review is *about*, written to frontmatter as ``targetKind`` (D4).
+
+    Consumers that enumerate every review file classify by reading this, never
+    by parsing the filename — the rule ``capture._read_review_type`` already
+    follows, and the reason it is reliable where filename parsing is not.
+
+    Absence means :attr:`SLICE`. Every artifact written before this key existed
+    is a slice, arch, or step review, and the first two already carry a
+    ``slice`` key; treating absence as anything else would strand them.
+    """
+
+    SLICE = "slice"
+    ARCH = "arch"
+    STEP = "step"
+    PR = "pr"
+
+
 class SliceTarget:
     """A review of a slice, named and keyed by its ``SliceInfo``.
 
@@ -85,9 +105,15 @@ class SliceTarget:
     reasons unrelated to saving. This slice is not a ``SliceInfo`` refactor.
     """
 
-    def __init__(self, slice_info: SliceInfo, cwd: str = ".") -> None:
+    def __init__(
+        self,
+        slice_info: SliceInfo,
+        cwd: str = ".",
+        rules_source: RulesSource = RulesSource.NONE,
+    ) -> None:
         self._info = slice_info
         self._cwd = cwd
+        self._rules_source = rules_source
 
     @property
     def slice_info(self) -> SliceInfo:
@@ -98,7 +124,11 @@ class SliceTarget:
         return f"{self._info['index']}-review.{review_type}.{self._info['slice_name']}"
 
     def frontmatter_fields(self) -> dict[str, object]:
-        return {"slice": self._info["slice_name"]}
+        return {
+            "slice": self._info["slice_name"],
+            "targetKind": TargetKind.SLICE.value,
+            "rulesSource": self._rules_source.value,
+        }
 
     def source_document(self) -> str | None:
         return self._info.get("design_file")
@@ -115,10 +145,17 @@ class ArchTarget:
     fabrication did — an arch review has no slice name to borrow.
     """
 
-    def __init__(self, index: int, arch_file: str, cwd: str = ".") -> None:
+    def __init__(
+        self,
+        index: int,
+        arch_file: str,
+        cwd: str = ".",
+        rules_source: RulesSource = RulesSource.NONE,
+    ) -> None:
         self._index = index
         self._arch_file = arch_file
         self._cwd = cwd
+        self._rules_source = rules_source
 
     @property
     def arch_name(self) -> str:
@@ -132,8 +169,14 @@ class ArchTarget:
     def frontmatter_fields(self) -> dict[str, object]:
         # The pre-migration arch path fabricated a SliceInfo whose slice_name
         # was the arch document's name, so `slice:` carried that value. Byte
-        # identity requires reproducing it, not correcting it here.
-        return {"slice": self.arch_name}
+        # identity required reproducing it, not correcting it. `targetKind` is
+        # what finally says this is not a slice review, without moving the key
+        # a reader may already depend on.
+        return {
+            "slice": self.arch_name,
+            "targetKind": TargetKind.ARCH.value,
+            "rulesSource": self._rules_source.value,
+        }
 
     def source_document(self) -> str | None:
         return self._arch_file
@@ -153,16 +196,31 @@ class StepTarget:
 
     _UNKNOWN = "unknown"
 
-    def __init__(self, step_name: str, step_index: int, cwd: str = ".") -> None:
+    def __init__(
+        self,
+        step_name: str,
+        step_index: int,
+        cwd: str = ".",
+        rules_source: RulesSource = RulesSource.NONE,
+    ) -> None:
         self._step_name = step_name
         self._step_index = step_index
         self._cwd = cwd
+        self._rules_source = rules_source
 
     def filename_stem(self, review_type: str) -> str:
         return f"{self._step_index}-review.{review_type}.{self._step_name}"
 
     def frontmatter_fields(self) -> dict[str, object]:
-        return {"slice": self._UNKNOWN}
+        # `slice: unknown` is the pre-migration fallback, reproduced rather
+        # than repaired (D2). `targetKind` is what makes the distinction
+        # readable: a step review is not a slice review whose name went
+        # missing, which is the only thing `unknown` could previously convey.
+        return {
+            "slice": self._UNKNOWN,
+            "targetKind": TargetKind.STEP.value,
+            "rulesSource": self._rules_source.value,
+        }
 
     def source_document(self) -> str | None:
         # The step path passes its input explicitly; the target names none.
