@@ -25,7 +25,7 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 
-from squadron.core.models import SDK_RESULT_TYPE
+from squadron.core.models import RATE_LIMIT_EVENT_TYPE, SDK_RESULT_TYPE
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -172,8 +172,17 @@ class SDKExecutionSession:
                             # part of the response's actual prose — mixing
                             # them in with no separator produced an
                             # unreadable, unparseable run-on line (issue #23,
-                            # same class of bug as #22/#20).
-                            if sdk_type not in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
+                            # same class of bug as #22/#20). An informational
+                            # RateLimitEvent is now observable (translation.py)
+                            # rather than silently dropped, but it is a
+                            # usage-meter notice, not response prose, so it
+                            # is excluded here the same way.
+                            if sdk_type not in (
+                                SDK_RESULT_TYPE,
+                                "tool_use",
+                                "tool_result",
+                                RATE_LIMIT_EVENT_TYPE,
+                            ):
                                 response_parts.append(translated.content)
                             sid = translated.metadata.get("session_id")
                             if isinstance(sid, str) and sid:

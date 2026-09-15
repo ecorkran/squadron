@@ -14,6 +14,8 @@ from typing import cast
 
 from claude_agent_sdk import ClaudeSDKError, RateLimitEvent
 
+from squadron.core.models import RATE_LIMIT_EVENT_TYPE
+
 #: Default retry budget. Callers that know their workload is heavier (the
 #: metrology audit, whose subagent fan-out multiplies request rate) override
 #: it per agent.
@@ -33,19 +35,6 @@ RATE_LIMIT_MAX_BACKOFF_S = 60.0
 #: (e.g. a genuine 429 surfaced as ``ClaudeSDKError``). Parse failures carry
 #: a payload and are classified structurally below — never by this string.
 RATE_LIMIT_MARKER = "rate_limit"
-
-#: The CLI message type behind most "rate limit" sightings. Its own schema
-#: description reads "Rate limit event emitted when rate limit info
-#: changes" — it is a *status* event feeding the usage indicator, fired on
-#: any change, and the CLI's own SDK adapter ignores it
-#: (``[sdkMessageAdapter] Ignoring rate_limit_event message``). Payload:
-#: ``{type, rate_limit_info: {status: allowed|allowed_warning|rejected,
-#: resetsAt?, rateLimitType?, utilization?, ...}, uuid, session_id}``.
-#: Only ``rejected`` means requests are actually being blocked. Treating
-#: every event as a throttle made squadron pause and restart the stream on
-#: each usage-info change — an interactive session receives the identical
-#: events and shows nothing.
-RATE_LIMIT_EVENT_TYPE = "rate_limit_event"
 
 _STATUS_REJECTED = "rejected"
 

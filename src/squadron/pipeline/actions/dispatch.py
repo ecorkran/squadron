@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from squadron.core.agent_registry import get_registry
-from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
+from squadron.core.models import (
+    RATE_LIMIT_EVENT_TYPE,
+    SDK_RESULT_TYPE,
+    AgentConfig,
+    Message,
+    MessageType,
+)
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
@@ -162,7 +168,10 @@ async def one_shot_dispatch_with_telemetry(
             if given is not None:
                 telemetry["tools_given"] = given
                 telemetry["tool_calls_made"] = response.metadata.get("tool_calls_made", 0)
-            if response.metadata.get("sdk_type") == SDK_RESULT_TYPE:
+            sdk_type = response.metadata.get("sdk_type")
+            # An informational RateLimitEvent is a usage-meter notice, not
+            # response prose, and is excluded the same way (issue #23 class).
+            if sdk_type in (SDK_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
                 continue
             response_parts.append(response.content)
     finally:

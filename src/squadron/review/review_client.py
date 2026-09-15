@@ -16,7 +16,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.config.manager import get_config
-from squadron.core.models import SDK_RESULT_TYPE, AgentConfig, Message, MessageType
+from squadron.core.models import (
+    RATE_LIMIT_EVENT_TYPE,
+    SDK_RESULT_TYPE,
+    AgentConfig,
+    Message,
+    MessageType,
+)
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
 from squadron.providers.base import ProviderType
@@ -241,6 +247,8 @@ async def run_review_with_profile(
             # (e.g. "Using tool: Bash", command stdout) that are not part of
             # the review's actual prose and must not be mixed into it — non-SDK
             # providers never set sdk_type and are unaffected by this filter.
+            # An informational RateLimitEvent is a usage-meter notice, not
+            # review prose, and is excluded the same way (issue #23 class).
             given = response.metadata.get("tools_given")
             if given is not None:
                 tools_given = given
@@ -260,7 +268,7 @@ async def run_review_with_profile(
             stamped_failures = response.metadata.get("failed_tool_calls")
             if stamped_failures is not None:
                 failed_tool_calls = stamped_failures
-            if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result"):
+            if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result", RATE_LIMIT_EVENT_TYPE):
                 continue
             output_parts.append(response.content)
     finally:

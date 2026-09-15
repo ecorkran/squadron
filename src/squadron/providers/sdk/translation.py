@@ -13,8 +13,7 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 
-from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
-from squadron.providers.sdk.rate_limit import RATE_LIMIT_EVENT_TYPE
+from squadron.core.models import RATE_LIMIT_EVENT_TYPE, SDK_RESULT_TYPE, Message, MessageType
 
 
 def translate_sdk_message(sdk_msg: Any, sender: str) -> list[Message]:

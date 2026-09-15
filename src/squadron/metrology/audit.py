@@ -527,7 +527,7 @@ async def _collect_audit_output(
     ``on_progress`` rather than simply discarded: an unattended run that
     prints nothing for twenty minutes is indistinguishable from a hang.
     """
-    from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
+    from squadron.core.models import RATE_LIMIT_EVENT_TYPE, SDK_RESULT_TYPE, Message, MessageType
 
     message = Message(
         sender="metrology-audit",
@@ -554,7 +554,9 @@ async def _collect_audit_output(
                         )
                     )
             continue
-        if sdk_type == SDK_RESULT_TYPE:
+        if sdk_type in (SDK_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
+            # An informational RateLimitEvent is a usage-meter notice, not
+            # audit prose, and is excluded the same way (issue #23 class).
             continue
         parts.append(response.content)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
     return "\n".join(parts)
