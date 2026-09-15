@@ -192,36 +192,36 @@ This is a **behavior change on an existing path**, not pure refactoring — it i
 
 ## Task 6 — Reviews-directory precedence and failure modes (D5)
 
-- [ ] **6.1 Add the `review.external_reviews_dir` config key**
-  - [ ] In `src/squadron/config/keys.py`, following the existing `metrology.store_dir` shape (`type_=str`, `default=None`)
-  - [ ] Success: key registered and readable; `pyright` clean
-  - [ ] Effort: 1
+- [x] **6.1 Add the `review.external_reviews_dir` config key**
+  - [x] In `src/squadron/config/keys.py`, following the existing `metrology.store_dir` shape (`type_=str`, `default=None`)
+  - [x] Success: key registered and readable; `pyright` clean
+  - [x] Effort: 1
 
-- [ ] **6.2 Implement the precedence resolver**
-  - [ ] Order: `--reviews-dir` → existing project reviews dir → `review.external_reviews_dir` → `~/.config/squadron/reviews/<host>/<owner>/<repo>/`
-  - [ ] Built-in default is under `~/.config/squadron/` — **not** `data_dir()`, which resolves to the installed package's read-only directory
-  - [ ] Rule 2 **requires** the project reviews directory to already exist; it is never created, so squadron does not put `project-documents/` in a repository that did not ask for one
-  - [ ] **Precedence selects once and never falls through on failure** — a failure of the selected directory is an error, not an advance to the next rule (the silent fallback the project rules forbid)
-  - [ ] Print the chosen directory **and which rule chose it**
-  - [ ] Success: `pyright` clean
-  - [ ] Effort: 3
+- [x] **6.2 Implement the precedence resolver**
+  - [x] Order: `--reviews-dir` → existing project reviews dir → `review.external_reviews_dir` → `~/.config/squadron/reviews/<host>/<owner>/<repo>/`
+  - [x] Built-in default is under `~/.config/squadron/` — **not** `data_dir()`, which resolves to the installed package's read-only directory
+  - [x] Rule 2 **requires** the project reviews directory to already exist; it is never created, so squadron does not put `project-documents/` in a repository that did not ask for one
+  - [x] **Precedence selects once and never falls through on failure** — a failure of the selected directory is an error, not an advance to the next rule (the silent fallback the project rules forbid)
+  - [x] Print the chosen directory **and which rule chose it**
+  - [x] Success: `pyright` clean
+  - [x] Effort: 3
 
-- [ ] **6.3 Add the `--reviews-dir` flag**
-  - [ ] Add to `sq review pr`; help text distinguishes it from the existing `--output-path` (a JSON dump destination, unchanged in meaning)
-  - [ ] Success: flag parses; help text names both
-  - [ ] Effort: 1
+- [x] **6.3 Add the `--reviews-dir` flag**
+  - [x] Add to `sq review pr`; help text distinguishes it from the existing `--output-path` (a JSON dump destination, unchanged in meaning)
+  - [x] Success: flag parses; help text names both
+  - [x] Effort: 1
 
-- [ ] **6.4 Test precedence and every enumerated failure mode** *(test-with 6.1–6.3)*
-  - [ ] Table-test the full chain: flag beats existing project dir, beats config key, beats built-in default
-  - [ ] `--reviews-dir` at a non-existent path is **created** (`parents=True`) and written
-  - [ ] An uncreatable directory reports `UNSAVED` with non-zero exit and a message naming the path and the selecting rule
-  - [ ] A failed write reports `UNSAVED` with non-zero exit
-  - [ ] **No fall-through on failure:** assert the next-rule location is empty afterwards
-  - [ ] Success: all four failure modes produce an observable signal, each asserted
-  - [ ] Effort: 3
+- [x] **6.4 Test precedence and every enumerated failure mode** *(test-with 6.1–6.3)*
+  - [x] Table-test the full chain: flag beats existing project dir, beats config key, beats built-in default
+  - [x] `--reviews-dir` at a non-existent path is **created** (`parents=True`) and written
+  - [x] An uncreatable directory reports `UNSAVED` with non-zero exit and a message naming the path and the selecting rule
+  - [x] A failed write reports `UNSAVED` with non-zero exit
+  - [x] **No fall-through on failure:** assert the next-rule location is empty afterwards
+  - [x] Success: all four failure modes produce an observable signal, each asserted
+  - [x] Effort: 3
 
-- [ ] **6.5 Commit** — `feat(review): add reviews-directory precedence and --reviews-dir`
-  - [ ] Effort: 1
+- [x] **6.5 Commit** — `feat(review): add reviews-directory precedence and --reviews-dir`
+  - [x] Effort: 1
 
 ---
 

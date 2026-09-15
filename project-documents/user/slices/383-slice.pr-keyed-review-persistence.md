@@ -372,6 +372,28 @@ exist, because creating it is what would put `project-documents/` inside a repos
 asked for one. When it does not exist, precedence continues to rule 3 — that is selection, not
 a failure fall-through.
 
+#### Where the resolver lives
+
+`src/squadron/review/reviews_dir.py`, not the CLI layer — and it takes `host`, `owner` and
+`repository` as **plain strings** rather than a `PullRequestRecord`. The record would be the
+natural parameter, but `review/` must never import `codehost`, and the import-boundary test walks
+every file in the package. The CLI caller already imports both, so it passes the three fields.
+
+This also keeps the precedence rule beside `REVIEWS_DIR`, the constant it is built from, rather
+than in `cli/commands/`. The alternative considered was importing it into `review_pr.py` from
+`cli/commands/review.py`, which is where that module already reaches for four private helpers
+under `pyright: ignore[reportPrivateUsage]`; a fifth would have deepened a pattern already
+flagged four times.
+
+`resolve_reviews_dir` returns the directory **and** a `ReviewsDirRule`, whose values are written
+in operator terms (`--reviews-dir`, `review.external_reviews_dir`, `project reviews directory`,
+`built-in default`) because they are printed with the result. A rule name that tells the operator
+what to change is the difference between a location they can act on and one they can only read.
+
+The resolver **creates nothing**. Creation stays in `save_review_result`, so an `OSError` is
+reported through the existing unsaved-review path with the chosen directory named — and so a
+caller asking only *where* a review would go does not mutate the filesystem to find out.
+
 ### D6 — Rules-source provenance requires `resolve_rules_dir` to report its source
 
 The plan calls this "one additive optional frontmatter key", but the value does not exist:

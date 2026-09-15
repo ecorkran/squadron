@@ -122,6 +122,19 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "~/.config/squadron/metrology/). Mainly for tests."
         ),
     ),
+    "review.external_reviews_dir": ConfigKey(
+        name="review.external_reviews_dir",
+        type_=str,
+        default=None,
+        description=(
+            "Where reviews land for a repository that has no "
+            "project-documents/ of its own — a PR review in someone else's "
+            "checkout. Unset, such reviews go to "
+            "~/.config/squadron/reviews/<host>/<owner>/<repo>/. A repository "
+            "that does have a reviews directory keeps its reviews there, and "
+            "--reviews-dir overrides both."
+        ),
+    ),
     "metrology.sample_budget": ConfigKey(
         name="metrology.sample_budget",
         type_=int,

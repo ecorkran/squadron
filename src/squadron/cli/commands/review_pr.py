@@ -125,7 +125,20 @@ def review_pr(
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
     output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
-    output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
+    output_path: str | None = typer.Option(
+        None,
+        "--output-path",
+        help="File path for --output file (a JSON dump, not the review artifact).",
+    ),
+    reviews_dir_flag: str | None = typer.Option(
+        None,
+        "--reviews-dir",
+        help=(
+            "Directory for the saved review artifact. Overrides the project's "
+            "reviews directory and review.external_reviews_dir. Distinct from "
+            "--output-path, which is a JSON dump destination."
+        ),
+    ),
     use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
 ) -> None:
