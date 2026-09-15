@@ -14,6 +14,36 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260915
 
+### Slice 383 task breakdown (Phase 5)
+
+`383-tasks.pr-keyed-review-persistence.md` written and committed (`7c0d5825`). Nine tasks, 328
+lines, following the design's own implementation order. No code.
+
+The ordering is the design's, not a fresh one, and two sequencing constraints carry real weight.
+`resolve_rules_dir` (D6) lands first and alone because every review path calls it, so its
+signature change stays out of the migration's diff. Byte-identity fixtures are captured in task 2
+— **before** anything touches `persistence.py` — and the harness is asserted green against
+unmodified code first, since a fixture captured after the change proves nothing. Task 8.1 flags
+the one place that could quietly invalidate them: adding `targetKind` to every target's
+frontmatter may shift the existing three artifacts, and if it does, that is a Project Manager
+question rather than a fixture to update.
+
+Two items are called out as behavior changes rather than refactoring. The pipeline step path
+(task 4) gains `archive_existing_review`'s refuse-on-failed-archive guard, which it has never
+run — so it gets its own test for the refusal, and the action's existing non-fatal `try/except`
+boundary is explicitly preserved. And the D5 precedence chain is written as select-once with no
+fall-through on failure: task 6.4 asserts the next-rule location is empty after a failure, because
+a fall-through would be exactly the silent fallback the project rules forbid.
+
+The frontmatter gate caught the file on first commit. `projectState` described the 382 stub
+literally, and the `: ` inside `save=lambda _target: False` made YAML read a mapping separator
+mid-scalar. Reworded rather than escaped. Worth noting for future task files: prose frontmatter
+values that quote code are a parse hazard, and the gate is what catches them.
+
+No tool guides applied — the slice is stdlib Python plus `cf` as a validation target, and none of
+the eleven `tool-guides/` directories covers either. `cf status` now reads `pending-review` at
+`0/217 tasks`. Phase 6 implementation remains, so the slice is not marked complete.
+
 ### Slice 383 design (Phase 4)
 
 `383-slice.pr-keyed-review-persistence.md` written and committed (`cba46123`). Phase 4 only —
