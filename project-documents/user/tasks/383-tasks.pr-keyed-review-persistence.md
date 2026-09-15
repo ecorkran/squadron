@@ -66,22 +66,22 @@ Sequenced first because `resolve_rules_dir` is called by every review path; land
 
 This task must complete **before** Task 3 touches `persistence.py`. Fixtures captured after the change prove nothing.
 
-- [ ] **2.1 Capture pre-migration artifacts for all three existing paths**
-  - [ ] Generate and store a reference artifact for a **slice** review, an **arch** review, and a **pipeline step** review
-  - [ ] Store under `tests/review/fixtures/` as the exact bytes each path writes today
-  - [ ] Record in the fixture directory (or a short README) which commit the fixtures were captured at
-  - [ ] Success: three fixture files exist and are committed; each was produced by current unmodified code
-  - [ ] Effort: 2
+- [x] **2.1 Capture pre-migration artifacts for all three existing paths**
+  - [x] Generate and store a reference artifact for a **slice** review, an **arch** review, and a **pipeline step** review
+  - [x] Store under `tests/review/fixtures/` as the exact bytes each path writes today
+  - [x] Record in the fixture directory (or a short README) which commit the fixtures were captured at
+  - [x] Success: three fixture files exist and are committed; each was produced by current unmodified code
+  - [x] Effort: 2
 
-- [ ] **2.2 Add the byte-identity test harness** *(test-with 2.1)*
-  - [ ] Create `tests/review/test_persistence_migration.py`
-  - [ ] Assert each path's current output equals its fixture byte-for-byte
-  - [ ] Success: all three comparisons pass **against unmodified code** — confirming the harness is wired correctly before it is relied upon
-  - [ ] Effort: 2
+- [x] **2.2 Add the byte-identity test harness** *(test-with 2.1)*
+  - [x] Create `tests/review/test_persistence_migration.py`
+  - [x] Assert each path's current output equals its fixture byte-for-byte
+  - [x] Success: all three comparisons pass **against unmodified code** — confirming the harness is wired correctly before it is relied upon
+  - [x] Effort: 2
 
-- [ ] **2.3 Commit** — `test(review): capture pre-migration persistence fixtures`
-  - [ ] Success: fixtures and harness committed together; this is the rollback point for the migration
-  - [ ] Effort: 1
+- [x] **2.3 Commit** — `test(review): capture pre-migration persistence fixtures`
+  - [x] Success: fixtures and harness committed together; this is the rollback point for the migration
+  - [x] Effort: 1
 
 ---
 
