@@ -82,6 +82,7 @@ protocol instead of inventing a fourth workaround.
 | "the `review.external_reviews_dir` config key with its default under squadron's per-user data directory keyed by host, owner, and repository" | Correct, but the plan does not say what happens when a repository *has* `project-documents/` and the operator also set the key. Precedence has to be stated or two reviews of one PR land in two places depending on cwd. | Explicit precedence chain in D5: `--reviews-dir` > project reviews dir when one exists > `review.external_reviews_dir` > built-in per-user default. The chosen location **and its source** are printed. |
 | "the non-numeric PR filename prefix, with `{index}-review.*` consumers shown never to match" | True, and stronger than the plan states: `locate_review` and metrology's capture both build their glob from a caller-supplied *integer*, so a non-numeric prefix cannot match by construction, not merely by convention. But `PullRequestRecord.key` is `host/owner/repo#number` — containing `/` and `#`, which a filename cannot carry — while its own docstring claims it is "filesystem-safe". | The stem flattens the key (D3). 382 already flattens it for worktree directories in `codehost/worktree.py::_flatten_key`; this slice promotes that helper to the record itself rather than writing the second copy, and corrects the misleading docstring. |
 | "the rules-source provenance field as one additive optional frontmatter key" | The value does not exist to be recorded. `resolve_rules_dir` returns a bare `Path | None` and discards which of its five branches produced it, so "project, user, or template" cannot be read off the result — `~/.config/squadron/rules` and a project `rules/` are both just a `Path`. | A signature change, not a field addition: `resolve_rules_dir` returns the path **and** its source. Named D6, and it is the one change in this slice that touches a function every review path calls. |
+| "a target yields the filename stem, the target-specific frontmatter fields, and **the reviews directory**" (parent architecture, "Persistence takes a target, not a slice") | The third part does not belong on the target. The directory depends on the *invocation* — `--reviews-dir`, whether the repository has a `project-documents/` — not on what is being reviewed, so every implementation would carry a value it does not choose and cannot answer. `save_review_result` already takes `reviews_dir` as a parameter today for exactly this reason. | Protocol is `filename_stem`, `frontmatter_fields`, `source_document`; the directory is resolved by the caller and passed in (D1, D5). `source_document` is an addition the architecture does not name — it is target-specific frontmatter that happens to have its own parameter already. **A deliberate deviation from the parent's literal wording**, recorded here rather than left inside D1's prose; raised as F005 at slice review. |
 | "the pipeline action's step-keyed save migrated onto the same contract" | The step path does not merely name files differently — it calls `format_review_markdown` and `save_review_file` directly, so it is the only save path that never runs `archive_existing_review`'s refuse-on-failed-archive guard and silently returns `None` on write failure. | Migrating it onto the contract closes that gap as a side effect. Called out in D2 because it is a behavior change on an existing path, not pure refactoring, and it needs its own test. |
 
 Effort stays 3/5.
@@ -276,6 +277,24 @@ been failed regardless of whether the file was written.
 `--reviews-dir` is distinct from the existing `--output-path`, which is a JSON dump destination
 and keeps that meaning. The help text for both says so, because the two are easy to confuse.
 
+**Failure modes of the write path, enumerated.** This is a new I/O path, so the architecture's
+"failure modes are enumerated and observable" principle applies to it directly rather than by
+inheritance. Precedence selects a directory *once*; a failure of the selected directory is never
+a fall-through to the next rule, which would silently write somewhere the operator did not ask
+for — the precise silent fallback the project rules forbid.
+
+| Mode | Behavior |
+|---|---|
+| Selected directory does not exist (rules 1, 3, 4) | Created, `parents=True`. `--reviews-dir /nonexistent` is created, not refused — matching `metrology`'s store dir, not `--rules-dir`'s silent degrade-to-`None`. |
+| Directory cannot be created (permissions, read-only parent, path is a file) | `OSError` from the existing `mkdir` outside the try in `save_review_result` → `_save_and_report` reports it → `UNSAVED` → non-zero exit. The message names the path and the selecting rule. |
+| Write fails (disk full, permissions, path became unwritable) | Same `UNSAVED` path. The review is already displayed, so the run is not lost. |
+| Prior artifact cannot be archived | Existing refuse-to-overwrite guard, unchanged: the write is refused rather than destroying content. |
+
+Rule 2 is the one exception to "created": it *requires* the project reviews directory to already
+exist, because creating it is what would put `project-documents/` inside a repository that never
+asked for one. When it does not exist, precedence continues to rule 3 — that is selection, not
+a failure fall-through.
+
 ### D6 — Rules-source provenance requires `resolve_rules_dir` to report its source
 
 The plan calls this "one additive optional frontmatter key", but the value does not exist:
@@ -359,6 +378,10 @@ for every other review.
   the repository** — asserted by `git status --porcelain` being empty afterwards.
 - The full precedence chain is table-tested: `--reviews-dir` beats an existing project directory,
   which beats the config key, which beats the built-in default.
+- Each enumerated write-path failure mode (D5) is asserted: `--reviews-dir` at a non-existent
+  path is created and written; an uncreatable directory and a failed write each report `UNSAVED`
+  with a non-zero exit and a message naming the path; and neither falls through to the next
+  precedence rule — asserted by the next-rule location being empty afterwards.
 - `sq review resolve 42` and metrology capture for index 42 select the slice review, with a PR
   review of PR 42 present in the same directory.
 - Arch reviews, slice reviews, and pipeline step-keyed reviews are **byte-identical** to
