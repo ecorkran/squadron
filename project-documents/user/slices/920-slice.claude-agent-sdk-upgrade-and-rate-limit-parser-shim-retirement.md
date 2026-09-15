@@ -394,9 +394,21 @@ against a completely broken implementation.
     that would re-break issue #23's stream-restart behavior.
 11. `pyright` reports zero errors; `ruff format` and `ruff check` are clean.
 
-**Affected test files:** `tests/providers/sdk/test_agent.py` (primary),
-`tests/pipeline/test_sdk_session.py`, `tests/providers/sdk/test_provider.py`,
-`tests/metrology/test_audit_cli.py`, `tests/providers/openai/test_agent.py`.
+**Affected test files — requiring the criterion-9 rewrite:**
+`tests/providers/sdk/test_agent.py` (primary — fabricates both
+`MessageParseError` with a `rate_limit_event` payload and
+`ClaudeSDKError("rate_limit_event: ...")`), `tests/pipeline/test_sdk_session.py`
+(fabricates `ClaudeSDKError("rate_limit_event")`),
+`tests/providers/sdk/test_provider.py` and `tests/metrology/test_audit_cli.py`
+(shim install and rate-limit config plumbing).
+
+**Not affected:** `tests/providers/openai/test_agent.py` is *not* in scope for
+criterion 9. Its only rate-limit test constructs `openai.RateLimitError`
+([test_agent.py:167](tests/providers/openai/test_agent.py#L167)) — the OpenAI
+SDK's own exception on an independent provider path — and the file never imports
+`claude_agent_sdk`. It is covered as a must-not-break regression by the
+`pytest tests/providers` run in walkthrough step 2, and must not be modified by
+this slice.
 
 ## Verification Walkthrough
 
@@ -482,6 +494,28 @@ by D2 and handled by `_skip_unparseable` (D5).
 ## Open Questions
 
 None. The shim disposition (D1) and pin form (D2) are decided.
+
+## Slice Review Disposition
+
+`user/reviews/920-review.slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`
+(z-ai/glm-5.2, **PASS**, 20260915, reviewed sha `5380878e`) — six PASS findings
+and one CONCERN, accepted and fixed.
+
+**F007 (scope accuracy) — accepted.** `tests/providers/openai/test_agent.py` was
+listed among affected test files, but it has no SDK rate-limit dependency: its
+only rate-limit test constructs `openai.RateLimitError` on an independent
+provider path, and the file never imports `claude_agent_sdk`. It was swept in by
+a broad `rate_limit` grep over `tests/` during scoping. Listing it risks an
+implementer modifying an unrelated provider's tests in the name of criterion 9.
+The affected-files list is now split into files requiring the criterion-9
+rewrite (with the specific fabrication each one carries) and an explicit
+not-affected entry for the OpenAI file, covered instead as a must-not-break
+regression by walkthrough step 2.
+
+No design decisions changed. D1–D6 stand as written; the four PASS findings on
+scope, layering, integration points, and failure-mode enumeration confirmed the
+dispatch asymmetry (D4) and the `sdk_type` exclusion-set requirement (D6)
+against source.
 
 ## Effort
 
