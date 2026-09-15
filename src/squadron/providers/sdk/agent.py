@@ -132,7 +132,9 @@ class ClaudeSDKAgent:
                 continue
             if isinstance(sdk_msg, RateLimitEvent):
                 if event_blocks(sdk_msg):
-                    raise RateLimitRejected(str(sdk_msg.rate_limit_info.status))
+                    raise RateLimitRejected(
+                        f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}"
+                    )
                 self._log.debug(
                     "Informational rate-limit event (%s); passing through.",
                     sdk_msg.rate_limit_info.status,

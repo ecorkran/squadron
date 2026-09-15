@@ -153,7 +153,9 @@ class SDKExecutionSession:
                         # agent.py), so a RateLimitEvent must be inspected
                         # here, inline, before anything else touches it.
                         if isinstance(sdk_msg, RateLimitEvent) and event_blocks(sdk_msg):
-                            raise RateLimitRejected(str(sdk_msg.rate_limit_info.status))
+                            raise RateLimitRejected(
+                                f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}"
+                            )
                         # Raise before appending any content so no partial
                         # error text reaches the caller or _check_cli_error.
                         if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:

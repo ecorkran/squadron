@@ -17,7 +17,6 @@ removed — see squadron issue #30.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 from claude_agent_sdk import ClaudeSDKError, RateLimitEvent
 
@@ -43,24 +42,6 @@ RATE_LIMIT_MAX_BACKOFF_S = 60.0
 RATE_LIMIT_MARKER = "rate_limit"
 
 _STATUS_REJECTED = "rejected"
-
-
-def rate_limit_event_blocks(data: dict[str, object] | None) -> bool:
-    """True when the event says requests are being rejected — a real throttle.
-
-    ``allowed`` and ``allowed_warning`` are usage-meter updates; only
-    ``rejected`` warrants backing off. A malformed payload is treated as
-    informational: the failure mode of guessing "throttled" is pausing and
-    restarting a healthy stream on every usage change, which is the exact
-    defect this classification exists to remove.
-    """
-    if not data:
-        return False
-    info = data.get("rate_limit_info")
-    if not isinstance(info, dict):
-        return False
-    status: object = cast("dict[str, object]", info).get("status")
-    return status == _STATUS_REJECTED
 
 
 def event_blocks(event: RateLimitEvent) -> bool:
