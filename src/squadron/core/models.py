@@ -111,6 +111,17 @@ class ShutdownReport(BaseModel):
 # Consumers should skip messages where metadata["sdk_type"] == SDK_RESULT_TYPE.
 SDK_RESULT_TYPE = "result"
 
+# The CLI message type behind most "rate limit" sightings. Its own schema
+# description reads "Rate limit event emitted when rate limit info changes"
+# — it is a *status* event feeding the usage indicator, fired on any change,
+# and the CLI's own SDK adapter ignores it
+# (``[sdkMessageAdapter] Ignoring rate_limit_event message``). Only a
+# ``rejected`` status means requests are actually being blocked; an
+# informational one is a usage-meter notice, not response prose — consumers
+# should skip messages where metadata["sdk_type"] == RATE_LIMIT_EVENT_TYPE
+# the same way they skip SDK_RESULT_TYPE.
+RATE_LIMIT_EVENT_TYPE = "rate_limit_event"
+
 
 class TopologyConfig(BaseModel):
     """Configuration for the agent communication topology."""

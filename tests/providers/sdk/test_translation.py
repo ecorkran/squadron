@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TypedDict
+
 import pytest
 from claude_agent_sdk import (
     AssistantMessage,
+    RateLimitEvent,
+    RateLimitInfo,
+    RateLimitStatus,
     ResultMessage,
     TextBlock,
     ToolResultBlock,
@@ -139,9 +144,17 @@ class TestToolResultBlock:
 # ---------------------------------------------------------------------------
 
 
+class _ResultMessageBaseKwargs(TypedDict):
+    duration_ms: int
+    duration_api_ms: int
+    is_error: bool
+    num_turns: int
+    session_id: str
+
+
 class TestResultMessage:
     @pytest.fixture
-    def _base_kwargs(self) -> dict:
+    def _base_kwargs(self) -> _ResultMessageBaseKwargs:
         return {
             "duration_ms": 1000,
             "duration_api_ms": 800,
@@ -150,7 +163,7 @@ class TestResultMessage:
             "session_id": "sess-1",
         }
 
-    def test_success_subtype(self, _base_kwargs: dict) -> None:
+    def test_success_subtype(self, _base_kwargs: _ResultMessageBaseKwargs) -> None:
         msg = ResultMessage(
             subtype="success",
             result="Task completed.",
@@ -176,7 +189,7 @@ class TestResultMessage:
         result = translate_sdk_message(msg, sender=SENDER)
         assert result[0].metadata["session_id"] == "sess-abc"
 
-    def test_error_subtype(self, _base_kwargs: dict) -> None:
+    def test_error_subtype(self, _base_kwargs: _ResultMessageBaseKwargs) -> None:
         msg = ResultMessage(
             subtype="error",
             result="Something went wrong",
@@ -204,13 +217,34 @@ class TestResultMessage:
         result = translate_sdk_message(msg, sender=SENDER)
         assert result[0].metadata["session_id"] == "sess-err"
 
-    def test_no_result_attribute(self, _base_kwargs: dict) -> None:
+    def test_no_result_attribute(self, _base_kwargs: _ResultMessageBaseKwargs) -> None:
         msg = ResultMessage(subtype="success", **_base_kwargs)
         result = translate_sdk_message(msg, sender=SENDER)
         assert len(result) == 1
         # Falls back to str(msg) since result is None
         assert isinstance(result[0].content, str)
         assert len(result[0].content) > 0
+
+
+# ---------------------------------------------------------------------------
+# RateLimitEvent
+# ---------------------------------------------------------------------------
+
+
+class TestRateLimitEvent:
+    @pytest.mark.parametrize("status", ["rejected", "allowed", "allowed_warning"])
+    def test_translates_to_one_system_message(self, status: RateLimitStatus) -> None:
+        event = RateLimitEvent(
+            rate_limit_info=RateLimitInfo(status=status),
+            uuid="evt-1",
+            session_id="sess-1",
+        )
+        result = translate_sdk_message(event, sender=SENDER)
+        assert len(result) == 1
+        msg = result[0]
+        assert msg.message_type == MessageType.system
+        assert msg.metadata["sdk_type"] == "rate_limit_event"
+        assert msg.metadata["status"] == status
 
 
 # ---------------------------------------------------------------------------
