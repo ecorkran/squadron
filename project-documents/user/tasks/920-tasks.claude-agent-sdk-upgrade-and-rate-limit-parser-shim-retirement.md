@@ -1,0 +1,154 @@
+---
+docType: tasks
+slice: claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement
+project: squadron
+lld: user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md
+dependencies: []
+projectState: Slice 920 has an approved (PASS) design. No production code written yet.
+dateCreated: 20260915
+dateUpdated: 20260915
+status: not_started
+---
+
+## Context Summary
+- Working on the `claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement` slice (index 920), fixing [issue #30](https://github.com/ecorkran/squadron/issues/30).
+- Current state: `pyproject.toml` pins `claude-agent-sdk>=0.1.38`; a ~50-line parser-patching shim in `src/squadron/providers/sdk/rate_limit.py` (`install_rate_limit_parser_shim`) works around that version's parser raising on the CLI's `rate_limit_event` message type.
+- The design is a bump to `>=0.2.152` (the parser now handles `rate_limit_event` natively as a typed `RateLimitEvent`) plus a re-key of throttle detection from "parse failure occurred" to "typed event says `status == 'rejected'`". Full rationale, decisions D1–D6, and probe findings: see the LLD referenced above — tasks below reference it rather than restating it.
+- No dependencies on other in-flight slices.
+- Delivers: shim removed, SDK floor raised, throttle detection re-keyed onto the native typed event across all three dispatch paths (query mode, agent client mode, pipeline `dispatch`), tests rewritten to exercise the real mechanism, and both a live review and a live metrology audit run to confirm no silent backoff loss.
+- Next planned slice: none currently queued behind this one; see `900-slices.maintenance-and-refactoring.md` for the parent architecture's remaining backlog.
+
+## Tasks
+
+- [ ] **1. Raise the SDK dependency floor**
+  - [ ] Edit `pyproject.toml`: change `"claude-agent-sdk>=0.1.38"` to `"claude-agent-sdk>=0.2.152"` (floor only — no ceiling; see LLD Decision D2 for why a ceiling would recreate the defect).
+  - [ ] Run `uv lock` to refresh `uv.lock` against the new floor.
+  - [ ] Run `uv sync` and confirm the resolved version: `python -c "import importlib.metadata as m; print(m.version('claude-agent-sdk'))"` reports `>= 0.2.152`.
+  - [ ] Success: `pyproject.toml` shows the new floor, `uv.lock` is regenerated and committed, resolved version confirmed ≥ 0.2.152.
+  - [ ] Commit: `chore: raise claude-agent-sdk floor to 0.2.152`
+
+- [ ] **2. Add typed classification and the dedicated throttle exception**
+  - [ ] In `src/squadron/providers/sdk/rate_limit.py`, add `event_blocks(event: RateLimitEvent) -> bool` per LLD Decision D3 — delegates to the same `_STATUS_REJECTED` constant `rate_limit_event_blocks` already uses, reading `event.rate_limit_info.status` (not `.raw`).
+  - [ ] Add `class RateLimitRejected(ClaudeSDKError)` per LLD Decision D4, with a docstring explaining it signals a typed `rejected` event (a genuine throttle) — do not implement any behavior beyond subclassing.
+  - [ ] Add a module-level `_is_throttle(exc: Exception) -> bool` helper: `True` for `RateLimitRejected`, or for any other `ClaudeSDKError` whose `str(exc)` contains `RATE_LIMIT_MARKER` (the retained substring path for a genuine 429 surfaced as plain text — LLD D4).
+  - [ ] Import `RateLimitEvent` from `claude_agent_sdk` at the top of `rate_limit.py`.
+  - [ ] Success: `event_blocks`, `RateLimitRejected`, and `_is_throttle` exist in `rate_limit.py`; `_STATUS_REJECTED` remains the single definition referenced by both classifiers (no duplicated literal).
+  - [ ] Commit: `feat: add typed rate-limit classification and RateLimitRejected`
+
+- [ ] **3. Unit tests for the new classification helpers**
+  - [ ] In `tests/providers/sdk/test_agent.py` (or a new focused test module if preferred — keep with existing `TestRateLimitBackoff` class if adding to that file), add tests constructing a real `RateLimitEvent(rate_limit_info=RateLimitInfo(status=..., ...), uuid=..., session_id=...)` for each of `rejected`, `allowed`, `allowed_warning` and assert `event_blocks` returns `True` only for `rejected`.
+  - [ ] Add a test asserting `_is_throttle(RateLimitRejected("x"))` is `True`.
+  - [ ] Add a test asserting `_is_throttle(ClaudeSDKError("rate_limit_event: slow down"))` is `True` (retained substring path) and `_is_throttle(ClaudeSDKError("some other error"))` is `False`.
+  - [ ] Run: `uv run pytest tests/providers/sdk/test_agent.py -q -k "classif or throttle or RateLimitRejected"` — confirm new tests pass.
+  - [ ] Success: new tests pass; they construct real SDK types, not fabricated exceptions.
+  - [ ] Commit: `test: add unit coverage for typed rate-limit classification`
+
+- [ ] **4. Translation: recognize `RateLimitEvent` explicitly**
+  - [ ] In `src/squadron/providers/sdk/translation.py`, add an explicit `isinstance(sdk_msg, RateLimitEvent)` branch in `translate_sdk_message` per LLD Decision D6: return one `Message` with `message_type=MessageType.system`, `metadata={"sdk_type": "rate_limit_event", "status": <event.rate_limit_info.status>}`. Import `RateLimitEvent` from `claude_agent_sdk`.
+  - [ ] Do not raise or filter here — dispatch-site inspection (Task 6/7) happens before translation ever sees a `rejected` event; this branch only needs to make the type observable rather than silently dropped via the existing `return []` default.
+  - [ ] Success: `translate_sdk_message` returns a non-empty list for a `RateLimitEvent` input instead of falling through to `return []`.
+  - [ ] Commit: `feat: translate RateLimitEvent into an observable system message`
+
+- [ ] **5. Test the translation branch**
+  - [ ] In `tests/providers/sdk/test_translation.py` (create if it does not exist, following the existing test-file layout for this module), add a test constructing a real `RateLimitEvent` and asserting `translate_sdk_message` returns one message with `metadata["sdk_type"] == "rate_limit_event"` and the correct status.
+  - [ ] Run: `uv run pytest tests/providers/sdk/test_translation.py -q` — confirm pass.
+  - [ ] Success: new test passes and exercises the real `RateLimitEvent` type, not a mock standing in for it.
+  - [ ] Commit: `test: add coverage for RateLimitEvent translation`
+
+- [ ] **6. Re-key `agent.py`'s `_skip_unparseable` — the single inspection point for query and client modes**
+  - [ ] In `src/squadron/providers/sdk/agent.py`, rewrite `_skip_unparseable` per LLD Decision D4/D5:
+    - [ ] Remove the `except MessageParseError` branch's `is_rate_limit_event(exc.data)` special case — after the upgrade, `rate_limit_event` parses natively, so a `MessageParseError` cannot carry one at the pinned floor. Keep the branch itself (WARNING log, skip) for genuinely unknown future types.
+    - [ ] Add inspection of yielded messages: when a yielded `sdk_msg` is a `RateLimitEvent` with `event_blocks(sdk_msg)` true, raise `RateLimitRejected` instead of yielding it onward. Otherwise (informational), log at DEBUG and continue the loop without yielding it to the caller as a raw SDK type — let it flow to translation as normal (see LLD D6 on why this is not redundant with D4).
+    - [ ] Rewrite the method's docstring — it currently narrates the shim's now-removed mechanics (`install_rate_limit_parser_shim`, stream-already-dead framing). Replace with the two-concern description from LLD Decision D5: (1) unparseable message → WARNING, skip, stream ends cleanly; (2) typed `RateLimitEvent` → inspect, raise on `rejected`, stream stays alive.
+  - [ ] In the same file, replace both `RATE_LIMIT_MARKER in str(exc)` gates (in `_handle_query_mode` and `_handle_client_mode`) with `_is_throttle(exc)`, per LLD Decision D4.
+  - [ ] Remove the now-unused `is_rate_limit_event` import; remove the `MessageParseError` import only if no branch still references it (it should still be referenced by the retained unparseable-skip branch — keep the import).
+  - [ ] Success: `agent.py` no longer imports `is_rate_limit_event`; both query-mode and client-mode retry gates use `_is_throttle`; `_skip_unparseable`'s docstring accurately describes post-upgrade behavior.
+  - [ ] Commit: `refactor: re-key agent.py throttle detection onto typed RateLimitEvent`
+
+- [ ] **7. Re-key `sdk_session.py`'s `dispatch` — the asymmetric path with no `_skip_unparseable` wrapper**
+  - [ ] In `src/squadron/pipeline/sdk_session.py`, remove the `install_rate_limit_parser_shim` import and its call in `connect()`; remove the associated comment block referencing the shim.
+  - [ ] Inside `dispatch`'s `async for sdk_msg in self.client.receive_response():` loop, add inline inspection **before** the existing `ResultMessage.is_error` check: when `sdk_msg` is a `RateLimitEvent` with `event_blocks(sdk_msg)` true, raise `RateLimitRejected`. Otherwise let it continue to `translate_sdk_message` as normal (informational events must become observable per Task 4, not dropped).
+  - [ ] This is the asymmetric path called out in LLD Decision D4 and flagged in the design as "the most likely place for the slice to half-land" — there is no `_skip_unparseable` wrapper here, so this inspection cannot be shared with Task 6's change; it must be added directly in this loop.
+  - [ ] Replace the `RATE_LIMIT_MARKER in str(exc)` gate in `dispatch`'s `except ClaudeSDKError` branch with `_is_throttle(exc)`.
+  - [ ] Rewrite the stale comments in `dispatch` (the "Informational rate-limit events never reach here: the parser shim absorbs them..." block) to describe the new mechanism per LLD Decision D5's two-concern framing.
+  - [ ] Success: `sdk_session.py` no longer imports or calls `install_rate_limit_parser_shim`; the `dispatch` loop inspects `RateLimitEvent` inline before the `ResultMessage.is_error` check; the retry gate uses `_is_throttle`.
+  - [ ] Commit: `refactor: re-key sdk_session.dispatch throttle detection onto typed RateLimitEvent`
+
+- [ ] **8. Extend `dispatch`'s `sdk_type` exclusion set — required by LLD Decision D6**
+  - [ ] In `src/squadron/pipeline/sdk_session.py`'s `dispatch`, find the `if sdk_type not in (SDK_RESULT_TYPE, "tool_use", "tool_result"):` check that gates `response_parts.append`. Add `"rate_limit_event"` to that exclusion tuple.
+  - [ ] This is not optional: without it, an informational rate-limit notice concatenates into the returned prose — the exact defect class from issue #23. Verify no other `sdk_type` exclusion list exists elsewhere in the codebase that also needs the addition (grep for `SDK_RESULT_TYPE` across `src/`).
+  - [ ] Success: a `RateLimitEvent`-derived message never appears in `dispatch`'s returned response string.
+  - [ ] Commit: `fix: exclude rate_limit_event from dispatch response text`
+
+- [ ] **9. Remove the shim itself and its call sites**
+  - [ ] In `src/squadron/providers/sdk/rate_limit.py`, delete `install_rate_limit_parser_shim` in its entirety and delete `is_rate_limit_event` (loses its only production caller per Task 6).
+  - [ ] Rewrite the module docstring — it currently narrates the shim's history and purpose as the module's lead description; per LLD Part A, update it to describe the module's post-upgrade role (typed classification, backoff constants, stats) without referencing the removed shim as current behavior. A brief historical note (why the constants/classifier exist) is fine; the shim's mechanics are not.
+  - [ ] In `src/squadron/providers/sdk/provider.py`, remove the `install_rate_limit_parser_shim` import and its call in `create_agent` (with its preceding comment).
+  - [ ] Confirm `src/squadron/pipeline/sdk_session.py` no longer references it (done in Task 7 — verify here as a checkpoint).
+  - [ ] Success: `grep -rn "install_rate_limit_parser_shim" src` returns no matches. `grep -rn "is_rate_limit_event" src` returns no matches. `grep -rn "claude_agent_sdk._internal" src` returns no matches (per LLD Success Criterion 2).
+  - [ ] Commit: `refactor: delete rate-limit parser shim, floor makes it unreachable`
+
+- [ ] **10. Rewrite `test_agent.py`'s fabricated-exception tests onto real `RateLimitEvent` objects**
+  - [ ] This is the load-bearing test task — LLD Success Criterion 9 is non-negotiable: every test in `tests/providers/sdk/test_agent.py` that currently constructs `MessageParseError` with a `rate_limit_event` payload, or `ClaudeSDKError("rate_limit_event: ...")`, tests a path that can no longer occur post-upgrade and must be rewritten to inject a real `RateLimitEvent` into the mocked SDK stream instead.
+  - [ ] Rewrite `test_a_rejected_rate_limit_event_reaches_the_backoff` — replace the `MessageParseError` fabrication with a generator that yields a real `RateLimitEvent(rate_limit_info=RateLimitInfo(status="rejected", ...), uuid=..., session_id=...)`; assert the same outcome (`ProviderRateLimitError` raised, `slept` length equals the retry budget).
+  - [ ] Rewrite `test_retries_actually_sleep` and `test_stats_accumulate_across_retries` and `test_exhausted_rate_limit_raises_a_distinct_error` — replace each `_make_error_gen(ClaudeSDKError("rate_limit_event: slow down"))` / `(...quota")` with a generator yielding a real `RateLimitEvent` with `status="rejected"` on every call (mirroring `_make_error_gen`'s repeat-forever shape, or a small local helper if the shape doesn't fit `_make_error_gen` directly).
+  - [ ] Rewrite `test_budget_resets_when_work_comes_through` — replace the `raise ClaudeSDKError("rate_limit_event: slow down")` inside `receive_response` with `yield RateLimitEvent(rate_limit_info=RateLimitInfo(status="rejected", ...), ...)` (a yield, not a raise — the whole point of this test and this slice is that the stream stays alive). Assert the same outcome (`throttles == max_throttles`, message count, final state `idle`).
+  - [ ] Delete the four shim-specific tests that no longer apply: `test_the_shim_absorbs_informational_events`, `test_the_shim_lets_a_rejected_event_raise`, `test_the_shim_patches_both_sdk_call_sites`, `test_the_shim_leaves_other_parse_failures_alone` — the mechanism they test (parser monkey-patching) is deleted in Task 9.
+  - [ ] Update `TestUnparseableMessages`'s class docstring and `test_unparseable_message_does_not_kill_the_stream` / `test_content_after_an_unparseable_message_still_arrives` / `test_other_unknown_messages_are_still_skipped`: these stay as-is in mechanism (a genuinely unknown type still raises `MessageParseError` and is still skipped per LLD D5) — verify they still pass unmodified after Task 6's docstring rewrite; update only comments that reference the now-removed shim if any do.
+  - [ ] Add a new test for LLD Success Criterion 10: an `allowed_warning` `RateLimitEvent` reaching `_skip_unparseable` must **not** raise, must **not** increment `RateLimitStats.throttles`, and the stream must continue to yield subsequent messages normally.
+  - [ ] Success: `grep -n "MessageParseError.*rate_limit\|ClaudeSDKError(\"rate_limit_event" tests/providers/sdk/test_agent.py` returns no matches (a plain `MessageParseError` for an unrelated unknown type, e.g. `telemetry_ping`, is fine and expected to remain).
+  - [ ] Run: `uv run pytest tests/providers/sdk/test_agent.py -q` — all tests pass.
+  - [ ] Commit: `test: rewrite test_agent.py rate-limit tests onto real RateLimitEvent`
+
+- [ ] **11. Rewrite `test_sdk_session.py`'s fabricated-exception test**
+  - [ ] Rewrite `test_dispatch_retries_on_rate_limit` in `tests/pipeline/test_sdk_session.py`: replace `raise ClaudeSDKError("rate_limit_event")` inside `_gen()` with `yield` of a real `RateLimitEvent(rate_limit_info=RateLimitInfo(status="rejected", ...), uuid=..., session_id=...)` on the first two calls, succeeding on the third. Assert the same outcome (`"done" in result`, `call_count == 3`).
+  - [ ] Add a test for LLD Success Criterion 10 in this file: an `allowed`/`allowed_warning` `RateLimitEvent` yielded from `receive_response` must not trigger a retry and must not appear in the returned response text (covers Task 8's exclusion-set change).
+  - [ ] Success: `grep -n "ClaudeSDKError(\"rate_limit_event" tests/pipeline/test_sdk_session.py` returns no matches.
+  - [ ] Run: `uv run pytest tests/pipeline/test_sdk_session.py -q` — all tests pass.
+  - [ ] Commit: `test: rewrite test_sdk_session.py rate-limit test onto real RateLimitEvent`
+
+- [ ] **12. Verify `test_provider.py` and `test_audit_cli.py` need no fabrication rewrite, only plumbing checks**
+  - [ ] `tests/providers/sdk/test_provider.py`: `test_rate_limit_overrides_reach_the_agent` tests config plumbing (`max_rate_limit_retries`, `rate_limit_cap_s` reach the agent constructor) and does not fabricate an SDK exception — confirm it still passes unmodified after Task 9 removes the shim call from `provider.py`. If `create_agent`'s test setup ever asserted the shim was installed, remove that assertion (grep first to confirm it doesn't exist — it wasn't found in the current file).
+  - [ ] `tests/metrology/test_audit_cli.py`: `test_rate_limited_campaign_stops_instead_of_grinding` and `test_rate_limit_is_reported_distinctly_from_a_bad_run` construct `AuditRunResult(failure=AuditRunFailure.RATE_LIMITED, detail="rate_limit_event: quota")` directly — this is CLI-layer plumbing decoupled from the SDK parser mechanism (never touches `MessageParseError`/`ClaudeSDKError`), so it needs no rewrite for Success Criterion 9. Confirm both pass unmodified.
+  - [ ] Run: `uv run pytest tests/providers/sdk/test_provider.py tests/metrology/test_audit_cli.py -q` — all pass with no source changes needed in these two files.
+  - [ ] Do not modify `tests/providers/openai/test_agent.py` — confirmed out of scope per LLD's "Not affected" note (it constructs `openai.RateLimitError` on an independent provider path and never imports `claude_agent_sdk`).
+  - [ ] Success: both files pass unmodified; a one-line note in the DEVLOG entry (Task 16) records that no changes were needed here, so a reviewer doesn't wonder if they were missed.
+
+- [ ] **13. Full suite, lint, and type-check pass**
+  - [ ] Run: `uv run pytest tests/providers/sdk tests/pipeline/test_sdk_session.py -q` — confirm green.
+  - [ ] Run: `uv run pytest tests/providers tests/metrology -q` — confirm green (broader regression sweep per LLD walkthrough step 2).
+  - [ ] Run: `uv run pytest -q` (full suite) — confirm green; no unrelated regressions.
+  - [ ] Run: `uv run ruff format --check .` — confirm clean; if not, run `uv run ruff format .` and re-check.
+  - [ ] Run: `uv run ruff check .` — confirm zero errors.
+  - [ ] Run: `uv run pyright` — confirm zero errors (merge blocker per project guidelines).
+  - [ ] Success: all four commands report clean/green with no unaddressed output.
+  - [ ] Commit: `chore: format and lint pass for slice 920`
+
+- [ ] **14. Live end-to-end verification — real review run**
+  - [ ] **Run from a straight CLI terminal, not from an IDE-extension or Claude Code session** — the SDK-backed paths under test spawn a Claude Code subprocess, which is blocked inside an existing Claude session (LLD Verification Walkthrough, step 3 note).
+  - [ ] Run: `uv run sq review code --diff HEAD~1 -v` from the squadron repo root.
+  - [ ] Confirm: the review completes, writes an artifact with a parsed verdict, the run logs no `Unknown message type` warning, and no `rate_limit_event` text appears in the artifact's prose (if a `rate_limit_event` fires during the run at all).
+  - [ ] Success: run completes cleanly; verdict artifact present; no leaked rate-limit text in output. Record the observed outcome (including whether a live throttle occurred) in the DEVLOG entry (Task 16).
+
+- [ ] **15. Live end-to-end verification — real metrology audit and forced-throttle observation**
+  - [ ] **Run from a straight CLI terminal**, same constraint as Task 14.
+  - [ ] Run: `uv run sq metrology audit run -v` — the workload that exposed the original bug; subagent fan-out makes a live `rate_limit_event` likely.
+  - [ ] Confirm: the audit runs to completion rather than dying mid-stream. If throttling occurs, the run reports a rate-limit summary (`N rate-limit pauses, Ns spent waiting`) and resumes rather than aborting. A clean run with no throttling observed is also a pass for this step (per LLD walkthrough step 4) — but if no live throttle occurs, proceed to the forced observation below to close that gap.
+  - [ ] Forced-throttle observation (LLD Verification Walkthrough step 5): temporarily inject a `rejected` `RateLimitEvent` at the `receive_response` seam (a local, uncommitted patch or test double) in one dispatch path, confirm the WARNING fires, `RateLimitStats.throttles` increments, and the run continues. **Revert this injection before committing** — it must not land in the codebase.
+  - [ ] Success: audit either completes cleanly or reports rate-limit pauses and resumes; the forced-throttle observation independently confirms the WARNING/stats/continuation behavior. Record both outcomes in the DEVLOG entry (Task 16).
+
+- [ ] **16. DEVLOG entry and slice closeout**
+  - [ ] Add a dated entry to the root `DEVLOG.md` (not the deprecated `project-documents/DEVLOG.md` stub) summarizing: SDK floor raised to `>=0.2.152`, shim removed, throttle detection re-keyed onto `RateLimitEvent` across all three dispatch paths, test rewrite completed (criteria 9–10), and the outcomes of the two live verification runs (Tasks 14–15), including whether a live throttle was observed or only the forced observation confirmed the behavior.
+  - [ ] Note explicitly that `tests/providers/sdk/test_provider.py` and `tests/metrology/test_audit_cli.py` needed no source changes (Task 12), and that `tests/providers/openai/test_agent.py` was correctly left untouched.
+  - [ ] Update the slice design's frontmatter `status` from `not_started` to `complete` in `user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`, and update `dateUpdated`.
+  - [ ] Update the parent architecture doc `user/architecture/900-slices.maintenance-and-refactoring.md` entry 18 — mark slice 920 complete, add a pointer to this task file and to the DEVLOG entry. Update `dateUpdated`.
+  - [ ] Delegate final task-file checklist verification to the `task-checker` agent (per project guidelines) rather than hand-editing checkboxes for the earlier tasks in this file.
+  - [ ] Success: DEVLOG entry present at repo root; slice design and architecture doc both reflect `complete` status; task-checker confirms all checkboxes accurately reflect completed work.
+  - [ ] Commit: `docs: close out slice 920 — SDK upgrade and shim retirement complete`
+
+## Notes
+
+- Tasks 6 and 7 touch the two structurally different dispatch mechanisms called out in the LLD — do not attempt to unify them into one shared code path in this slice; `_skip_unparseable` and the pipeline's inline loop are separate call shapes and unifying them is out of scope (not listed in LLD Technical Scope).
+- Every task that adds or rewrites a test constructs the actual `RateLimitEvent`/`RateLimitInfo` SDK types (imported from `claude_agent_sdk`) rather than mocking them — this is the entire point of Success Criterion 9 and must not be worked around with a `MagicMock(spec=RateLimitEvent)` that never exercises the real dataclass shape.
+- `StreamEvent` and `ConversationResetMessage` handling is explicitly out of scope per the LLD — do not add branches for them in this slice.
+- `ClaudeSDKClient` methods gained in 0.2.x (`get_context_usage`, `stop_task`, `rewind_files`, MCP controls) are explicitly out of scope.
