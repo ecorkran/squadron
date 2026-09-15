@@ -264,6 +264,48 @@ async def test_dispatch_retries_on_rate_limit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dispatch_exhausts_retry_budget_on_persistent_rejection() -> None:
+    """A rejected event on every attempt must exhaust the retry budget.
+
+    Regression guard for a bug where a RateLimitEvent that arrived as the
+    *first* message in the stream set ``progressed = True`` before the
+    rejection check ran, so the except-handler's ``if progressed:
+    retries = 0`` unconditionally reset the budget every attempt. A
+    persistently rejecting provider then retried forever with no timeout.
+    A rejected event must never count as progress.
+    """
+    from claude_agent_sdk import RateLimitEvent, RateLimitInfo
+
+    from squadron.providers.errors import ProviderError
+    from squadron.providers.sdk.rate_limit import MAX_RATE_LIMIT_RETRIES
+
+    client = _make_client()
+    session = _make_session(client)
+
+    call_count = 0
+
+    async def _gen():  # type: ignore[return]
+        nonlocal call_count
+        call_count += 1
+        yield RateLimitEvent(
+            rate_limit_info=RateLimitInfo(status="rejected"),
+            uuid=f"evt-{call_count}",
+            session_id="sess-1",
+        )
+
+    gen_mock = MagicMock()
+    gen_mock.__aiter__ = lambda self: _gen()
+    client.receive_response.return_value = gen_mock
+
+    with patch(f"{_MOD}.asyncio.sleep", new=AsyncMock()):
+        with pytest.raises(ProviderError):
+            await session.dispatch("test")
+
+    # First attempt plus MAX_RATE_LIMIT_RETRIES retries.
+    assert call_count == MAX_RATE_LIMIT_RETRIES + 1
+
+
+@pytest.mark.asyncio
 async def test_dispatch_raises_provider_auth_on_cli_not_found() -> None:
     from claude_agent_sdk import CLINotFoundError
 

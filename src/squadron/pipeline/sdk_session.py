@@ -148,14 +148,18 @@ class SDKExecutionSession:
                 progressed = False
                 try:
                     async for sdk_msg in self.client.receive_response():
-                        progressed = True
                         # No _skip_unparseable wrapper on this path (unlike
                         # agent.py), so a RateLimitEvent must be inspected
-                        # here, inline, before anything else touches it.
+                        # here, inline, before anything else touches it —
+                        # and before `progressed` is set, so a rejected
+                        # event as the very first message correctly
+                        # consumes retry budget instead of resetting it
+                        # (a rejected event is not progress).
                         if isinstance(sdk_msg, RateLimitEvent) and event_blocks(sdk_msg):
                             raise RateLimitRejected(
                                 f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}"
                             )
+                        progressed = True
                         # Raise before appending any content so no partial
                         # error text reaches the caller or _check_cli_error.
                         if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
