@@ -172,21 +172,21 @@ This is a **behavior change on an existing path**, not pure refactoring — it i
 
 ## Task 5 — `PullRequestRecord.path_key` (D3)
 
-- [ ] **5.1 Promote `_flatten_key` to a record property**
-  - [ ] Add a `path_key` property to `PullRequestRecord` returning the flattened, filesystem-safe form
-  - [ ] Collapse `codehost/worktree.py::_flatten_key` onto it — one definition, not two copies that can drift
-  - [ ] **Correct the misleading docstring:** `key` is `host/owner/repo#number` and is *not* filesystem-safe; say which property is
-  - [ ] Success: worktree directory naming behavior unchanged; `pyright` clean
-  - [ ] Effort: 2
+- [x] **5.1 Promote `_flatten_key` to a record property**
+  - [x] Add a `path_key` property to `PullRequestRecord` returning the flattened, filesystem-safe form
+  - [x] Collapse `codehost/worktree.py::_flatten_key` onto it — one definition, not two copies that can drift
+  - [x] **Correct the misleading docstring:** `key` is `host/owner/repo#number` and is *not* filesystem-safe; say which property is
+  - [x] Success: worktree directory naming behavior unchanged; `pyright` clean
+  - [x] Effort: 2
 
-- [ ] **5.2 Test `path_key` and worktree naming** *(test-with 5.1)*
-  - [ ] Assert `path_key` contains no `/` or `#`
-  - [ ] Assert existing worktree directory names are unchanged by the collapse
-  - [ ] Success: both pass
-  - [ ] Effort: 1
+- [x] **5.2 Test `path_key` and worktree naming** *(test-with 5.1)*
+  - [x] Assert `path_key` contains no `/` or `#`
+  - [x] Assert existing worktree directory names are unchanged by the collapse
+  - [x] Success: both pass
+  - [x] Effort: 1
 
-- [ ] **5.3 Commit** — `refactor(codehost): promote flattened key to PullRequestRecord.path_key`
-  - [ ] Effort: 1
+- [x] **5.3 Commit** — `refactor(codehost): promote flattened key to PullRequestRecord.path_key`
+  - [x] Effort: 1
 
 ---
 

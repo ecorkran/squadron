@@ -102,11 +102,6 @@ def _worktree_root() -> Path:
     return Path.home() / ".config" / "squadron" / "worktrees"
 
 
-def _flatten_key(record: PullRequestRecord) -> str:
-    """``record.key`` with path-hostile characters flattened for a directory name."""
-    return record.key.replace("/", "-").replace("#", "-")
-
-
 def _current_process_start_time(runner: ProcessRunner) -> float:
     """The current process's start time, as epoch seconds.
 
@@ -322,7 +317,7 @@ class ScratchWorktree:
         sweep_orphans(self._runner, self._checkout_cwd, self._root)
 
         self._root.mkdir(parents=True, exist_ok=True)
-        path = self._root / f"{_flatten_key(self._record)}-{self._run_id}"
+        path = self._root / f"{self._record.path_key}-{self._run_id}"
         self._path = path
 
         # Claim the path *before* it exists on disk. Between `git worktree add` and the

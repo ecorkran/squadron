@@ -21,7 +21,6 @@ from squadron.codehost.worktree import (
     SubmoduleUnfetchableError,
     WorktreeCreationError,
     _current_process_start_time,
-    _flatten_key,
     _worktree_root,
     sweep_orphans,
 )
@@ -59,14 +58,37 @@ def _write_lock(path: Path, *, pid: int, started_at: float) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _flatten_key / _worktree_root
+# PullRequestRecord.path_key / _worktree_root
 # ---------------------------------------------------------------------------
 
 
-def test_flatten_key_replaces_path_hostile_characters() -> None:
+def test_path_key_replaces_path_hostile_characters() -> None:
+    """The flattening moved onto the record (383, D3); the result is unchanged.
+
+    This literal is what ``_flatten_key`` produced before the collapse, so it
+    doubles as the assertion that existing worktree directory names did not
+    move — the name a running worktree was created under must still be the
+    name a later sweep computes for it.
+    """
     record = _record(number=83)
+
+    # key stays deliberately unflattened: it reads the way a PR is written.
     assert record.key == "github.com/acme/widgets#83"
-    assert _flatten_key(record) == "github.com-acme-widgets-83"
+    assert record.path_key == "github.com-acme-widgets-83"
+
+
+def test_path_key_carries_no_character_a_path_cannot() -> None:
+    """The property's whole reason for existing, asserted rather than assumed.
+
+    ``key``'s docstring claimed to be filesystem-safe while returning a string
+    with ``/`` and ``#`` in it. Two consumers build names from this — the
+    scratch worktree directory and the review artifact filename — so the
+    guarantee is pinned here rather than trusted.
+    """
+    record = _record(number=83)
+
+    assert "/" not in record.path_key
+    assert "#" not in record.path_key
 
 
 def test_worktree_root_is_under_config_squadron() -> None:
