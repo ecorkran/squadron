@@ -39,6 +39,7 @@ from squadron.review.git_utils import (
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.persistence import (
     TASKS_DIR,
+    SaveTargetProtocol,
     SliceInfo,
     resolve_reviewed_sha,
     resolve_slice_info,
@@ -54,6 +55,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
+from squadron.review.save_target import ArchTarget, SliceTarget
 from squadron.review.template_inputs import missing_input_files
 from squadron.review.templates import (
     ReviewTemplate,
@@ -348,13 +350,19 @@ def _resolve_save_outcome[SaveTargetT](
 def _save_and_report(
     result: ReviewResult,
     review_type: str,
-    slice_info: SliceInfo,
+    target: SaveTargetProtocol,
     *,
     as_json: bool = False,
     input_file: str | None = None,
     name_suffix: str | None = None,
+    project_name: str | None = None,
 ) -> bool:
     """Persist a review, reporting either where it landed or why it did not.
+
+    Takes a save target rather than a ``SliceInfo`` (slice 383, D1). The four
+    review subcommands all persist through here, so this is the one place the
+    contract has to be honoured — a caller that has a slice wraps it in a
+    ``SliceTarget``, and one that does not supplies its own implementation.
 
     Returns whether the file was written. ``save_review_result`` refuses to
     overwrite an existing review whose prior content it could not archive
@@ -368,10 +376,11 @@ def _save_and_report(
         path = save_review_result(
             result,
             review_type,
-            slice_info,
             as_json=as_json,
             input_file=input_file,
             name_suffix=name_suffix,
+            target=target,
+            project_name=project_name,
         )
     except OSError as exc:
         rprint(f"[red]Review not saved: {exc}[/red]")
@@ -776,7 +785,12 @@ def review_slice(
         # cannot carry `persistable=... is not None` across the lambda boundary.
         target=slice_info,
         save=lambda info: _save_and_report(
-            result, "slice", info, as_json=use_json, input_file=input_file
+            result,
+            "slice",
+            SliceTarget(info, cwd=review_cwd),
+            as_json=use_json,
+            input_file=input_file,
+            project_name=info["project"],
         ),
         review_type="slice",
     )
@@ -784,22 +798,36 @@ def review_slice(
     _exit_on(result.verdict, outcome)
 
 
-def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
-    """The minimal SliceInfo an arch review is named and saved under.
+def _cf_project_name() -> str:
+    """The ``project:`` frontmatter value, from Context Forge.
 
-    Arch reviews key on an initiative index rather than a slice, so this
-    synthesizes the shape the save and failure paths both need.
+    Extracted from ``_arch_slice_info``, which fabricated a whole ``SliceInfo``
+    partly to carry this one string. The degradation is deliberate and
+    pre-existing: a review authored where cf cannot answer writes
+    ``project: unknown`` rather than guessing a name from the directory, which
+    is the behaviour issue fixed in ``ac01838c`` (the value used to be
+    hardcoded ``squadron``).
+    """
+    try:
+        return ContextForgeClient().get_project().name
+    except (ContextForgeNotAvailable, ContextForgeError) as exc:
+        _logger.warning("Could not resolve project name from ContextForge: %s", exc)
+        return "unknown"
+
+
+def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
+    """The minimal SliceInfo an arch review's *failure* artifact is named under.
+
+    The save path no longer needs this — it uses ``ArchTarget`` (D1). But
+    ``save_provider_failure`` still takes a ``SliceInfo``, and migrating that
+    path is not in this slice's scope, so the fabrication survives for its one
+    remaining consumer rather than being deleted out from under it.
     """
     arch_name = (
         Path(input_file).stem.split(".", 1)[1]
         if "." in Path(input_file).stem
         else Path(input_file).stem
     )
-    try:
-        project_name = ContextForgeClient().get_project().name
-    except (ContextForgeNotAvailable, ContextForgeError) as exc:
-        _logger.warning("Could not resolve project name from ContextForge: %s", exc)
-        project_name = "unknown"
     return SliceInfo(
         index=index,
         name=arch_name,
@@ -807,7 +835,7 @@ def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
         design_file=None,
         task_files=[],
         arch_file=input_file,
-        project=project_name,
+        project=_cf_project_name(),
     )
 
 
@@ -867,13 +895,22 @@ def review_arch(
     )
 
     def _save_arch(index: int) -> bool:
-        arch_slice_info = (
-            arch_failure_target
+        # The failure path already built a SliceInfo for this run; reuse it
+        # rather than rebuilding the identity a second way. Otherwise the arch
+        # target names itself from the document, which is what _arch_slice_info
+        # fabricated a whole SliceInfo to do (D1).
+        arch_target: SaveTargetProtocol = (
+            SliceTarget(arch_failure_target, cwd=review_cwd)
             if arch_failure_target is not None
-            else _arch_slice_info(index, input_file)
+            else ArchTarget(index, input_file, cwd=review_cwd)
         )
         return _save_and_report(
-            result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
+            result,
+            "arch",
+            arch_target,
+            as_json=use_json,
+            input_file=input_file,
+            project_name=_cf_project_name(),
         )
 
     outcome = _resolve_save_outcome(
@@ -989,10 +1026,11 @@ def review_tasks(
             return _save_and_report(
                 part_result,
                 "tasks",
-                info,
+                SliceTarget(info, cwd=review_cwd),
                 as_json=use_json,
                 input_file=path,
                 name_suffix=suf,
+                project_name=info["project"],
             )
 
         part_outcome = _resolve_save_outcome(
@@ -1159,7 +1197,13 @@ def review_code(
     outcome = _resolve_save_outcome(
         no_save=no_save,
         target=slice_info,
-        save=lambda info: _save_and_report(result, "code", info, as_json=use_json),
+        save=lambda info: _save_and_report(
+            result,
+            "code",
+            SliceTarget(info, cwd=review_cwd),
+            as_json=use_json,
+            project_name=info["project"],
+        ),
         review_type="code",
     )
 

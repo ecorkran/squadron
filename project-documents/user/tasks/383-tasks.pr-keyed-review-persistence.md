@@ -87,63 +87,63 @@ This task must complete **before** Task 3 touches `persistence.py`. Fixtures cap
 
 ## Task 3 — The `SaveTarget` contract (D1, D2)
 
-- [ ] **3.1 Define the `SaveTarget` protocol**
-  - [ ] Create `src/squadron/review/save_target.py`
-  - [ ] Three methods only: `filename_stem(review_type)`, `frontmatter_fields()`, `source_document()`
-  - [ ] The reviews directory is **not** a protocol method — it is invocation-dependent and passed to `save_review_result` as it is today (D1)
-  - [ ] Use `typing.Protocol` (structural), not a base class or union — `review/` must never name `PrTarget`
-  - [ ] Success: module imports nothing from `squadron.codehost`; `pyright` clean
-  - [ ] Effort: 2
+- [x] **3.1 Define the `SaveTarget` protocol**
+  - [x] Create `src/squadron/review/save_target.py`
+  - [x] Three methods only: `filename_stem(review_type)`, `frontmatter_fields()`, `source_document()`
+  - [x] The reviews directory is **not** a protocol method — it is invocation-dependent and passed to `save_review_result` as it is today (D1)
+  - [x] Use `typing.Protocol` (structural), not a base class or union — `review/` must never name `PrTarget`
+  - [x] Success: module imports nothing from `squadron.codehost`; `pyright` clean
+  - [x] Effort: 2
 
-- [ ] **3.2 Implement `SliceTarget`**
-  - [ ] Wraps the existing `SliceInfo` rather than replacing it — `SliceInfo` keeps its current shape and consumers
-  - [ ] `frontmatter_fields()` returns the `slice` key; `filename_stem` reproduces today's slice naming exactly
-  - [ ] Resolves `reviewed_sha` from git as the current code does
-  - [ ] Success: implements the protocol; `pyright` clean
-  - [ ] Effort: 1
+- [x] **3.2 Implement `SliceTarget`**
+  - [x] Wraps the existing `SliceInfo` rather than replacing it — `SliceInfo` keeps its current shape and consumers
+  - [x] `frontmatter_fields()` returns the `slice` key; `filename_stem` reproduces today's slice naming exactly
+  - [x] Resolves `reviewed_sha` from git as the current code does
+  - [x] Success: implements the protocol; `pyright` clean
+  - [x] Effort: 1
 
-- [ ] **3.3 Implement `ArchTarget`**
-  - [ ] Takes an initiative index and arch document — this replaces `_arch_slice_info`'s fabrication (`cli/commands/review.py`)
-  - [ ] `filename_stem` reproduces today's arch review naming exactly
-  - [ ] Success: implements the protocol; `pyright` clean
-  - [ ] Effort: 1
+- [x] **3.3 Implement `ArchTarget`**
+  - [x] Takes an initiative index and arch document — this replaces `_arch_slice_info`'s fabrication (`cli/commands/review.py`)
+  - [x] `filename_stem` reproduces today's arch review naming exactly
+  - [x] Success: implements the protocol; `pyright` clean
+  - [x] Effort: 1
 
-- [ ] **3.4 Implement `StepTarget`**
-  - [ ] Takes a pipeline step name and index
-  - [ ] `filename_stem` reproduces today's step-keyed naming exactly
-  - [ ] Success: implements the protocol; `pyright` clean
-  - [ ] Effort: 1
+- [x] **3.4 Implement `StepTarget`**
+  - [x] Takes a pipeline step name and index
+  - [x] `filename_stem` reproduces today's step-keyed naming exactly
+  - [x] Success: implements the protocol; `pyright` clean
+  - [x] Effort: 1
 
-- [ ] **3.5 Test the three implementations** *(test-with 3.1–3.4)*
-  - [ ] Create `tests/review/test_save_target.py`
-  - [ ] One test per implementation covering stem, frontmatter fields, and source document
-  - [ ] Success: all pass; separate assertions per implementation, not one combined test
-  - [ ] Effort: 2
+- [x] **3.5 Test the three implementations** *(test-with 3.1–3.4)*
+  - [x] Create `tests/review/test_save_target.py`
+  - [x] One test per implementation covering stem, frontmatter fields, and source document
+  - [x] Success: all pass; separate assertions per implementation, not one combined test
+  - [x] Effort: 2
 
-- [ ] **3.6 Split frontmatter rendering into common and target-specific (D2)**
-  - [ ] `_review_frontmatter_lines` stops emitting `slice:` unconditionally; target-specific keys come from `frontmatter_fields()`
-  - [ ] Common keys stay where they are (`docType`, `layer`, `reviewType`, `project`, `verdict`, `sourceDocument`, `aiModel`, `status`, dates, existing optional keys)
-  - [ ] **Keep line-based rendering.** Do not move to `yaml.safe_dump` — 917's artifact work depends on current formatting (D2)
-  - [ ] `reviewed_sha` comes from the target rather than being resolved inside `save_review_result`
-  - [ ] **Add no new frontmatter key here.** `rulesSource` and `targetKind` land together in Task 8, after byte-identity is verified — adding either now would make the Task 3.8 check unable to distinguish an intended key from unintended drift (D2)
-  - [ ] Success: `pyright` clean; the rendered key set is unchanged from pre-migration
-  - [ ] Effort: 3
+- [x] **3.6 Split frontmatter rendering into common and target-specific (D2)**
+  - [x] `_review_frontmatter_lines` stops emitting `slice:` unconditionally; target-specific keys come from `frontmatter_fields()`
+  - [x] Common keys stay where they are (`docType`, `layer`, `reviewType`, `project`, `verdict`, `sourceDocument`, `aiModel`, `status`, dates, existing optional keys)
+  - [x] **Keep line-based rendering.** Do not move to `yaml.safe_dump` — 917's artifact work depends on current formatting (D2)
+  - [x] `reviewed_sha` comes from the target rather than being resolved inside `save_review_result`
+  - [x] **Add no new frontmatter key here.** `rulesSource` and `targetKind` land together in Task 8, after byte-identity is verified — adding either now would make the Task 3.8 check unable to distinguish an intended key from unintended drift (D2)
+  - [x] Success: `pyright` clean; the rendered key set is unchanged from pre-migration
+  - [x] Effort: 3
 
-- [ ] **3.7 Migrate `save_review_result` and `format_review_markdown` to take a target**
-  - [ ] Both take a `SaveTarget` rather than a `SliceInfo`
-  - [ ] Slice and arch call sites in `cli/commands/review.py` pass targets; `_arch_slice_info` is deleted
-  - [ ] Success: `ruff check` and `pyright` clean
-  - [ ] Effort: 3
+- [x] **3.7 Migrate `save_review_result` and `format_review_markdown` to take a target**
+  - [x] Both take a `SaveTarget` rather than a `SliceInfo`
+  - [x] Slice and arch call sites in `cli/commands/review.py` pass targets; `_arch_slice_info` is deleted
+  - [x] Success: `ruff check` and `pyright` clean
+  - [x] Effort: 3
 
-- [ ] **3.8 Verify byte-identity for slice and arch** *(test-with 3.6–3.7)*
-  - [ ] Run `tests/review/test_persistence_migration.py` — slice and arch artifacts must match their Task 2 fixtures byte-for-byte
-  - [ ] **Any diff is a regression, not an improvement.** Do not update a fixture to match new output
-  - [ ] Success: slice and arch comparisons pass; full existing test suite passes
-  - [ ] Effort: 2
+- [x] **3.8 Verify byte-identity for slice and arch** *(test-with 3.6–3.7)*
+  - [x] Run `tests/review/test_persistence_migration.py` — slice and arch artifacts must match their Task 2 fixtures byte-for-byte
+  - [x] **Any diff is a regression, not an improvement.** Do not update a fixture to match new output
+  - [x] Success: slice and arch comparisons pass; full existing test suite passes
+  - [x] Effort: 2
 
-- [ ] **3.9 Commit** — `refactor(review): persistence takes a save target`
-  - [ ] Success: `ruff format`, `ruff check`, `pyright` clean; byte-identity passing for slice and arch
-  - [ ] Effort: 1
+- [x] **3.9 Commit** — `refactor(review): persistence takes a save target`
+  - [x] Success: `ruff format`, `ruff check`, `pyright` clean; byte-identity passing for slice and arch
+  - [x] Effort: 1
 
 ---
 

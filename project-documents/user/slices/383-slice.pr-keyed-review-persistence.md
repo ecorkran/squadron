@@ -157,11 +157,49 @@ class SaveTarget(Protocol):
     def source_document(self) -> str | None: ...
 ```
 
-Three methods, because persistence asks exactly three target-specific questions. The reviews
-*directory* is deliberately **not** a fourth method: it depends on the invocation (`--reviews-dir`,
-the project's presence) rather than on the target, so it is resolved by the caller and passed in,
-as `save_review_result` already accepts it today. Putting it on the target would make every
-implementation carry a directory it does not choose.
+The reviews *directory* is deliberately **not** a method: it depends on the invocation
+(`--reviews-dir`, the project's presence) rather than on the target, so it is resolved by the
+caller and passed in, as `save_review_result` already accepts it today. Putting it on the target
+would make every implementation carry a directory it does not choose.
+
+#### Corrections made during implementation
+
+**The protocol has four methods, not three.** `reviewed_sha()` was added. D3 requires a PR
+review's sha to come from the record rather than `resolve_reviewed_sha(".")`, and the only way to
+express that through one save path is to let the target answer it — slice, arch and step targets
+resolve from git exactly as before, `PrTarget` returns the record's head sha. Stating the protocol
+as three methods and then special-casing the sha at the call site would have reintroduced the
+"solved twice, differently" shape this contract exists to remove.
+
+**The protocol is declared twice, deliberately.** `save_target.py` imports `SliceInfo` and
+`resolve_reviewed_sha` from `persistence.py`, so `persistence.py` cannot import the protocol type
+back without closing a cycle. It therefore declares its own structural copy
+(`SaveTargetProtocol`). Moving `SliceInfo` to break the cycle was rejected: it has five consumers
+and this slice is explicitly not a `SliceInfo` refactor. Structural typing is what makes the
+duplication safe — implementations satisfy both by shape — and
+`tests/review/test_save_target.py` asserts the two declarations name the same members, so a method
+added to one and not the other fails a test rather than drifting silently.
+
+**`project_name` is a caller-supplied parameter, not a protocol method.** `project:` is a key
+*every* review carries, so by D2's own split it is common rather than target-specific. It is
+passed to `format_review_markdown` alongside `model` and `source_document`, which are already
+resolved-by-caller for the same reason. A PR review in a repository squadron never planned has no
+Context Forge project to ask, and writes `project: unknown` — the same degradation the pipeline
+step path already produces, and the behaviour `ac01838c` established when it stopped the value
+being hardcoded.
+
+**The body heading is parameterised.** Every review's body opens `# Review: {type} — slice {N}`.
+A PR has no slice index, and `slice 0` would be a fabricated identifier — the same objection D3
+raises against deriving a filename from a PR title, and one `format_provider_failure_markdown`
+already acts on ("No '— slice 0' for a run with no slice: a fabricated index reads as real").
+`format_review_markdown` takes a `heading_label`: existing paths pass `slice {index}` and their
+bytes are unchanged, `PrTarget` passes `PR #42`. This is a new artifact shape rather than a
+migration change, and 384 renders it into a PR comment.
+
+**`_arch_slice_info` survives, narrowed.** The save path no longer calls it, but
+`save_provider_failure` still takes a `SliceInfo` and migrating that path is not in scope. The
+fabrication remains for that one consumer, with its project-name resolution extracted to
+`_cf_project_name()` so the two paths share it rather than growing a second copy.
 
 A `Protocol` rather than a base class or a union: persistence already uses `Protocol` for its `cf`
 client, the implementations live in three different packages, and a union would have to name
