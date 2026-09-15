@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
+from claude_agent_sdk import ClaudeSDKError, RateLimitEvent
+
 #: Default retry budget. Callers that know their workload is heavier (the
 #: metrology audit, whose subagent fan-out multiplies request rate) override
 #: it per agent.
@@ -121,6 +123,27 @@ def rate_limit_event_blocks(data: dict[str, object] | None) -> bool:
         return False
     status: object = cast("dict[str, object]", info).get("status")
     return status == _STATUS_REJECTED
+
+
+def event_blocks(event: RateLimitEvent) -> bool:
+    """True when a typed SDK rate-limit event says requests are rejected."""
+    return event.rate_limit_info.status == _STATUS_REJECTED
+
+
+class RateLimitRejected(ClaudeSDKError):
+    """A typed rate-limit event reporting ``rejected`` — a genuine throttle.
+
+    Raised at the dispatch site when a parsed ``RateLimitEvent``'s status is
+    ``rejected``, so the existing ``except ClaudeSDKError`` backoff loops
+    catch it without restructuring.
+    """
+
+
+def _is_throttle(exc: Exception) -> bool:
+    """True for a typed throttle, or a genuine 429 surfaced as plain text."""
+    if isinstance(exc, RateLimitRejected):
+        return True
+    return isinstance(exc, ClaudeSDKError) and RATE_LIMIT_MARKER in str(exc)
 
 
 def rate_limit_backoff_s(attempt: int, cap_s: float = RATE_LIMIT_MAX_BACKOFF_S) -> float:
