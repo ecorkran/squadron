@@ -11,7 +11,7 @@ _PR_BLOCK_LABEL = "### Pull Request"
 
 # Zero-width space (U+200B) — invisible in rendered text, breaks an exact substring match
 # without altering what a human or model reads.
-_ZERO_WIDTH_SPACE = "​"
+_ZERO_WIDTH_SPACE = "\u200b"
 
 _BACKTICK_RUN_RE = re.compile(r"`+")
 

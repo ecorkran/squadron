@@ -199,6 +199,16 @@ squadron already owns. Same intent, correct home; no change to the architecture 
   *every* subsequent `sq review pr` until someone cleaned the directory by hand — a worse outcome
   than the orphan accumulation the sweep exists to prevent. A worktree whose lock is absent
   entirely is also an orphan: the directory was created but never claimed.
+- **Amended (code review 382, F002): absent lock plus a live claim is not an orphan.** The rule
+  above is correct for a crashed run but, taken alone, deletes a *live* one: `git worktree add`
+  creates the directory before the lock can be written, and a concurrent invocation's sweep
+  reads that gap as "created but never claimed." Because `git worktree add` refuses a
+  pre-existing target directory, the claim cannot live inside the worktree — it is a sibling
+  `<name>.claim` in the worktree root, written before `add` and unlinked once the real lock
+  lands (and on every creation failure). It carries the same pid and start time as the lock, so
+  one set of rules reads both: a claim whose writer is gone is swept exactly like a dead lock,
+  and only a *live* claim protects an unlocked directory. The sweep skips the claim files
+  themselves for free, since that loop already ignores non-directories.
 - **Sweep:** every invocation, before creating its own, prunes worktrees whose owner is gone
   (pid absent, or present with a different start time), then `git worktree prune`. An orphan never
   blocks a new review — the per-run id guarantees it.

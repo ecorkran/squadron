@@ -30,6 +30,7 @@ from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
 _logger = logging.getLogger(__name__)
 
 _LOCK_FILENAME = "lock.json"
+_CLAIM_SUFFIX = ".claim"
 
 
 class WorktreeError(CodeHostError):
@@ -172,6 +173,34 @@ def _read_lock(lock_path: Path) -> WorktreeLock | None:
     return WorktreeLock(pid=raw_pid, started_at=float(raw_started_at))
 
 
+def _claim_path(worktree_path: Path) -> Path:
+    """The claim file for *worktree_path*, as a sibling rather than a child.
+
+    ``git worktree add`` refuses a target directory that already exists, so the claim
+    cannot be written inside the worktree it claims. It sits beside it instead, and
+    ``sweep_orphans`` skips it for free: that loop already ignores non-directories.
+    """
+    return worktree_path.parent / f"{worktree_path.name}{_CLAIM_SUFFIX}"
+
+
+def _write_claim(path: Path, lock: WorktreeLock) -> None:
+    """Record *lock*'s owner as the creator of *path*, before the worktree exists.
+
+    Same payload as the lock, so ``_read_lock``/``_is_orphan`` interpret both with one
+    set of rules: a claim whose writer died is swept exactly like a dead lock.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"pid": lock.pid, "started_at": lock.started_at}))
+
+
+def _unlink_claim(path: Path) -> None:
+    """Drop a claim file. Never raises — a stray claim is swept, not fatal."""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        _logger.warning("Failed to remove worktree claim %s: %s", path, exc)
+
+
 def _is_orphan(runner: ProcessRunner, lock: WorktreeLock | None) -> bool:
     """Whether the owner recorded by *lock* is gone, or a different process entirely."""
     if lock is None:
@@ -205,11 +234,22 @@ def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = 
 
     for entry in sorted(worktree_root.iterdir()):
         if not entry.is_dir():
-            continue
+            continue  # also skips the sibling .claim files (see _claim_path)
         lock_path = entry / _LOCK_FILENAME
         lock = _read_lock(lock_path)
         if lock is not None and not _is_orphan(runner, lock):
             continue  # live owner, matching pid and start time — leave it alone
+
+        if lock is None:
+            # No lock yet does not mean abandoned: `git worktree add` refuses a
+            # pre-existing target directory, so the claim cannot live inside the
+            # worktree and a live creator is briefly indistinguishable from a crashed
+            # one. The sibling claim closes that window — a live claimant is still
+            # setting up, and sweeping it would delete a worktree out from under a
+            # concurrent run.
+            claim = _read_lock(_claim_path(entry))
+            if claim is not None and not _is_orphan(runner, claim):
+                continue
 
         reason = "no readable/parseable lock" if lock is None else "owner process is gone"
         _logger.warning("Sweeping orphaned worktree %s (%s)", entry, reason)
@@ -285,19 +325,37 @@ class ScratchWorktree:
         path = self._root / f"{_flatten_key(self._record)}-{self._run_id}"
         self._path = path
 
-        result = self._runner.run(
-            ["git", "worktree", "add", "--detach", str(path), self._head_ref],
-            cwd=self._checkout_cwd,
-            timeout=GIT_QUERY_TIMEOUT_SECONDS,
-        )
-        if result.returncode != 0:
-            _logger.error("git worktree add failed for %s: %s", path, result.stderr)
-            raise WorktreeCreationError(path, result.stderr)
-
-        # The lock must exist before any submodule work — it is what the sweep uses to
-        # tell "worktree exists, still being set up" from "worktree exists, abandoned."
+        # Claim the path *before* it exists on disk. Between `git worktree add` and the
+        # lock write, the directory is real but unlocked, and a concurrent run's sweep
+        # would read it as an unclaimed orphan and remove it mid-setup. The claim closes
+        # that window from the outside, since `add` will not accept an existing directory.
         lock = WorktreeLock(pid=os.getpid(), started_at=_current_process_start_time(self._runner))
-        (path / _LOCK_FILENAME).write_text(json.dumps({"pid": lock.pid, "started_at": lock.started_at}))
+        claim_path = _claim_path(path)
+        _write_claim(claim_path, lock)
+
+        try:
+            result = self._runner.run(
+                ["git", "worktree", "add", "--detach", str(path), self._head_ref],
+                cwd=self._checkout_cwd,
+                timeout=GIT_QUERY_TIMEOUT_SECONDS,
+            )
+            if result.returncode != 0:
+                _logger.error("git worktree add failed for %s: %s", path, result.stderr)
+                raise WorktreeCreationError(path, result.stderr)
+
+            # The lock must exist before any submodule work — it is what the sweep uses to
+            # tell "worktree exists, still being set up" from "worktree exists, abandoned."
+            (path / _LOCK_FILENAME).write_text(
+                json.dumps({"pid": lock.pid, "started_at": lock.started_at})
+            )
+        except BaseException:
+            # The claim outlives this process only as sweepable litter; drop it eagerly so
+            # a failed creation leaves nothing behind. Re-raised immediately.
+            _unlink_claim(claim_path)
+            raise
+
+        # Handed off: the real lock now speaks for this worktree.
+        _unlink_claim(claim_path)
 
         try:
             self._init_submodules(path)

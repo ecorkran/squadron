@@ -134,11 +134,13 @@ def review_pr(
 
     try:
         host, resolved, fetched = resolve_and_fetch_pull_request(target, checkout_cwd)
+        # Inside the handler: assemble_pr_metadata fetches unresolved discussions over the
+        # adapter, so transport/auth failures there are adapter failures like any other and
+        # must render the same way rather than escaping as a traceback.
+        pr_metadata = assemble_pr_metadata(resolved, host)
     except CodeHostError as exc:
         render_code_host_error(exc)
         raise typer.Exit(code=1) from exc
-
-    pr_metadata = assemble_pr_metadata(resolved, host)
 
     # D2: no range normalization — 381's fetch already produced the correct
     # three-dot merge-base form.

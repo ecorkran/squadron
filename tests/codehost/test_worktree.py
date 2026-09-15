@@ -146,6 +146,97 @@ def test_sweep_orphans_removes_dead_owner_with_one_warning(
     assert str(entry) in warnings[0].message
 
 
+def test_sweep_leaves_unlocked_worktree_with_a_live_claim_alone(tmp_path: Path) -> None:
+    """F002: a worktree mid-creation has no lock yet — its live claim must protect it.
+
+    Without the claim the sweep reads "directory exists, no lock" as an orphan and removes
+    a worktree another run is still setting up.
+    """
+    root = tmp_path / "worktrees"
+    entry = root / "github.com-acme-widgets-83-run1"
+    entry.mkdir(parents=True)  # created by 'git worktree add', lock not yet written
+    my_pid = os.getpid()
+    (root / "github.com-acme-widgets-83-run1.claim").write_text(
+        json.dumps({"pid": my_pid, "started_at": 1789388838.0})
+    )
+
+    runner = FakeProcessRunner(
+        [
+            (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok(_LSTART)),
+            (["git", "worktree", "prune"], _worktree_add_ok()),
+        ]
+    )
+    sweep_orphans(runner, CHECKOUT_CWD, root=root)
+
+    assert entry.exists()
+    assert not any("remove" in call.argv for call in runner.calls)
+
+
+def test_sweep_removes_unlocked_worktree_whose_claim_owner_is_gone(tmp_path: Path) -> None:
+    """The claim narrows the orphan rule, it does not retire it: a dead claimant is swept."""
+    root = tmp_path / "worktrees"
+    entry = root / "github.com-acme-widgets-83-run1"
+    entry.mkdir(parents=True)
+    dead_pid = 999999
+    (root / "github.com-acme-widgets-83-run1.claim").write_text(
+        json.dumps({"pid": dead_pid, "started_at": 1789388838.0})
+    )
+
+    runner = FakeProcessRunner(
+        [
+            (["ps", "-o", "lstart=", "-p", str(dead_pid)], _ps_ok(lstart="")),
+            (["git", "worktree", "remove", "--force", str(entry)], _worktree_add_ok()),
+            (["git", "worktree", "prune"], _worktree_add_ok()),
+        ]
+    )
+    sweep_orphans(runner, CHECKOUT_CWD, root=root)
+
+    assert not entry.exists()
+
+
+def test_claim_is_removed_once_the_real_lock_lands(tmp_path: Path) -> None:
+    """The claim is scaffolding: once the lock speaks for the worktree, it is gone."""
+    root = tmp_path / "worktrees"
+    record = _record(number=83)
+    head_ref = "refs/squadron/pr/origin/83/head"
+    my_pid = os.getpid()
+    expected_path = root / "github.com-acme-widgets-83-run1"
+
+    runner = _FakeRunnerCreatingWorktreeDir(
+        _full_happy_script(expected_path, head_ref, my_pid, removal=_worktree_add_ok()),
+        created_dir=expected_path,
+    )
+
+    with ScratchWorktree(runner, record, head_ref, "run1", CHECKOUT_CWD, root=root) as entered:
+        assert (entered.path / "lock.json").exists()
+        assert not (root / "github.com-acme-widgets-83-run1.claim").exists()
+
+
+def test_claim_is_removed_when_worktree_creation_fails(tmp_path: Path) -> None:
+    """A failed 'git worktree add' must not leave its claim behind as litter."""
+    root = tmp_path / "worktrees"
+    record = _record(number=83)
+    head_ref = "refs/squadron/pr/origin/83/head"
+    my_pid = os.getpid()
+
+    runner = FakeProcessRunner(
+        [
+            (["git", "worktree", "prune"], _worktree_add_ok()),
+            (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok()),
+            (
+                ["git", "worktree", "add", "--detach"],
+                ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad ref"),
+            ),
+        ]
+    )
+
+    with pytest.raises(WorktreeCreationError):
+        with ScratchWorktree(runner, record, head_ref, "run1", CHECKOUT_CWD, root=root):
+            pass
+
+    assert not (root / "github.com-acme-widgets-83-run1.claim").exists()
+
+
 @pytest.mark.parametrize(
     "corrupt",
     [
@@ -212,11 +303,12 @@ def test_scratch_worktree_create_produces_expected_path_and_lock(tmp_path: Path)
     runner = _FakeRunnerCreatingWorktreeDir(
         [
             (["git", "worktree", "prune"], _worktree_add_ok()),  # from the internal sweep
+            # 'ps' first: the pre-creation claim (F002) carries this process's start time.
+            (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok()),
             (
                 ["git", "worktree", "add", "--detach", str(expected_path), head_ref],
                 _worktree_add_ok(),
             ),
-            (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok()),
             # Submodule init (Task C.5) is not covered by this test — script a no-op.
             (["git", "submodule", "update", "--init", "--recursive"], _worktree_add_ok()),
             (["git", "worktree", "remove", "--force"], _worktree_add_ok()),
@@ -240,6 +332,8 @@ def test_scratch_worktree_add_failure_raises_creation_error(tmp_path: Path) -> N
     runner = FakeProcessRunner(
         [
             (["git", "worktree", "prune"], _worktree_add_ok()),
+            # 'ps' first: the pre-creation claim (F002) resolves this process's start time.
+            (["ps", "-o", "lstart=", "-p", str(os.getpid())], _ps_ok()),
             (
                 ["git", "worktree", "add", "--detach"],
                 ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad ref"),
@@ -261,14 +355,18 @@ def test_scratch_worktree_add_failure_raises_creation_error(tmp_path: Path) -> N
 def _create_and_lock_script(
     expected_path: Path, head_ref: str, my_pid: int
 ) -> list[tuple[list[str], ProcessResult | Exception]]:
-    """The scripted calls through 'worktree created, lock written' — before submodule init."""
+    """The scripted calls through 'worktree created, lock written' — before submodule init.
+
+    The 'ps' call precedes 'git worktree add': the claim written before creation (F002)
+    carries this process's start time, so the identity lookup happens first.
+    """
     return [
         (["git", "worktree", "prune"], _worktree_add_ok()),
+        (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok()),
         (
             ["git", "worktree", "add", "--detach", str(expected_path), head_ref],
             _worktree_add_ok(),
         ),
-        (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok()),
     ]
 
 

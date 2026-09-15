@@ -160,6 +160,30 @@ def test_assemble_pr_metadata_carries_unresolved_discussions() -> None:
     assert "please fix this" in metadata
 
 
+def test_discussion_fetch_failure_renders_as_an_adapter_error_not_a_traceback(
+    patched_host: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F002 of the 382 code review: ``assemble_pr_metadata`` reaches the network too.
+
+    It fetches unresolved discussions over the adapter, so a transport/auth failure there
+    is an adapter failure like any other and must take the same rendered exit-1 path as a
+    failed resolve — not escape as an unhandled traceback.
+    """
+    from squadron.codehost.errors import HostResponseMalformedError
+
+    _arm(patched_host)
+
+    def _raise(_self: object, _record: object) -> list[object]:
+        raise HostResponseMalformedError(("gh", "graphql"), "reviewThreads missing from response")
+
+    monkeypatch.setattr(GitHubCli, "list_unresolved_discussions", _raise)
+
+    result = CliRunner().invoke(app, ["review", "pr", "83"])
+
+    assert result.exit_code == 1
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
 def test_assemble_pr_metadata_no_discussions_has_no_discussions_section() -> None:
     resolved = _resolved()
     metadata = assemble_pr_metadata(resolved, _FakeHost([]))
