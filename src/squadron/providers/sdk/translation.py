@@ -6,6 +6,7 @@ from typing import Any
 
 from claude_agent_sdk import (
     AssistantMessage,
+    RateLimitEvent,
     ResultMessage,
     TextBlock,
     ToolResultBlock,
@@ -13,6 +14,7 @@ from claude_agent_sdk import (
 )
 
 from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
+from squadron.providers.sdk.rate_limit import RATE_LIMIT_EVENT_TYPE
 
 
 def translate_sdk_message(sdk_msg: Any, sender: str) -> list[Message]:
@@ -29,6 +31,8 @@ def translate_sdk_message(sdk_msg: Any, sender: str) -> list[Message]:
         return [_translate_tool_result(sdk_msg, sender)]
     if isinstance(sdk_msg, ResultMessage):
         return [_translate_result(sdk_msg, sender)]
+    if isinstance(sdk_msg, RateLimitEvent):
+        return [_translate_rate_limit_event(sdk_msg, sender)]
     return []
 
 
@@ -73,6 +77,19 @@ def _translate_tool_result(block: ToolResultBlock, sender: str) -> Message:
         content=str(block.content),
         message_type=MessageType.system,
         metadata={"sdk_type": "tool_result"},
+    )
+
+
+def _translate_rate_limit_event(event: RateLimitEvent, sender: str) -> Message:
+    return Message(
+        sender=sender,
+        recipients=["all"],
+        content=f"Rate limit status: {event.rate_limit_info.status}",
+        message_type=MessageType.system,
+        metadata={
+            "sdk_type": RATE_LIMIT_EVENT_TYPE,
+            "status": event.rate_limit_info.status,
+        },
     )
 
 
