@@ -129,14 +129,14 @@ status: complete
   - [ ] Forced-throttle observation — **not performed**, blocked by the above; deferred to issue #107.
   - [ ] Success: **not met**. Task 12's successful live review run exercises the same SDK dispatch/translation/rate-limit code paths this slice touches, and stands as the slice's live-path evidence in place of Task 13. Slice 920 closes with Task 13 explicitly recorded as blocked by a pre-existing, out-of-scope bug rather than silently skipped.
 
-- [ ] **14. DEVLOG entry and slice closeout**
-  - [ ] Add a dated entry to the root `DEVLOG.md` (not the deprecated `project-documents/DEVLOG.md` stub) summarizing: SDK floor raised to `>=0.2.152`, shim removed, throttle detection re-keyed onto `RateLimitEvent` across all three dispatch paths, test rewrites completed alongside their implementation tasks (Tasks 6–8, satisfying criteria 9–10), and the outcomes of the two live verification runs (Tasks 12–13), including whether a live throttle was observed or only the forced observation confirmed the behavior.
-  - [ ] Note explicitly that `tests/providers/sdk/test_provider.py` and `tests/metrology/test_audit_cli.py` needed no source changes (Task 10), and that `tests/providers/openai/test_agent.py` was correctly left untouched.
-  - [ ] Update the slice design's frontmatter `status` from `not_started` to `complete` in `user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`, and update `dateUpdated`.
-  - [ ] Update the parent architecture doc `user/architecture/900-slices.maintenance-and-refactoring.md` entry 18 — mark slice 920 complete, add a pointer to this task file and to the DEVLOG entry. Update `dateUpdated`.
-  - [ ] Delegate final task-file checklist verification to the `task-checker` agent (per project guidelines) rather than hand-editing checkboxes for the earlier tasks in this file.
-  - [ ] Success: DEVLOG entry present at repo root; slice design and architecture doc both reflect `complete` status; task-checker confirms all checkboxes accurately reflect completed work.
-  - [ ] Commit: `docs: close out slice 920 — SDK upgrade and shim retirement complete`
+- [x] **14. DEVLOG entry and slice closeout**
+  - [x] Add a dated entry to the root `DEVLOG.md` (not the deprecated `project-documents/DEVLOG.md` stub) summarizing: SDK floor raised to `>=0.2.152`, shim removed, throttle detection re-keyed onto `RateLimitEvent` across all three dispatch paths, test rewrites completed alongside their implementation tasks (Tasks 6–8, satisfying criteria 9–10), and the outcomes of the two live verification runs (Tasks 12–13), including whether a live throttle was observed or only the forced observation confirmed the behavior.
+  - [x] Note explicitly that `tests/providers/sdk/test_provider.py` and `tests/metrology/test_audit_cli.py` needed no source changes (Task 10), and that `tests/providers/openai/test_agent.py` was correctly left untouched.
+  - [x] Update the slice design's frontmatter `status` from `not_started` to `complete` in `user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`, and update `dateUpdated`.
+  - [x] Update the parent architecture doc `user/architecture/900-slices.maintenance-and-refactoring.md` entry 18 — mark slice 920 complete, add a pointer to this task file and to the DEVLOG entry. Update `dateUpdated`.
+  - [x] Delegate final task-file checklist verification to the `task-checker` agent (per project guidelines) rather than hand-editing checkboxes for the earlier tasks in this file.
+  - [x] Success: DEVLOG entry present at repo root; slice design and architecture doc both reflect `complete` status; task-checker confirms all checkboxes accurately reflect completed work.
+  - [x] Commit: `docs: close out slice 920 — SDK upgrade and shim retirement complete`
 
 ## Notes
 
