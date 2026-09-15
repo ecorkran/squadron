@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.4] - 20260915
+
+### Fixed
+- SDK-backed reviews (any Claude Agent SDK model — haiku, sonnet, etc.) now report `tools_given`, `tool_calls_made`, `failed_tool_calls`, `stop_reason`, and `reasoning_chars` in the run digest. Previously these always read as not-offered/not-computed on the SDK path regardless of whether tools were actually given to or used by the model (#110)
+
 ## [0.12.3] - 20260915
 
 ### Added
