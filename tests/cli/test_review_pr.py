@@ -172,6 +172,111 @@ def test_assemble_pr_metadata_no_discussions_has_no_discussions_section() -> Non
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def captured_review(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, object]]:
+    """Capture what each flag actually delivers to the review call.
+
+    Asserting on the kwargs rather than on rendered output: this is the seam every
+    flag converges on, and it does not move when display formatting changes.
+    """
+    calls: list[dict[str, object]] = []
+
+    class _Result:
+        verdict = "PASS"
+
+    def _fake(*args: object, **kwargs: object) -> _Result:
+        calls.append({"args": args, **kwargs})
+        return _Result()
+
+    monkeypatch.setattr("squadron.cli.commands.review_pr._run_review_command", _fake)
+    return calls
+
+
+def _arm(patched_host: dict[str, object]) -> None:
+    """Load the script the fake runner replays for one ``sq review pr`` invocation.
+
+    One call beyond ``_resolve_and_fetch_script()``: ``assemble_pr_metadata`` asks the
+    host for unresolved discussions, which ``sq pr show`` never does. Kept here rather
+    than in that helper, which is deliberately scoped to what ``pr show`` calls.
+    """
+    holder = patched_host["script_holder"]
+    script = _resolve_and_fetch_script()
+    script.append((["gh", "api", "graphql"], _ok(_fixture("pr83-reviewthreads.json"))))
+    holder["script"] = script  # type: ignore[index]
+
+
+#: Every case here runs on the ``--no-tools`` path. The flags under test are
+#: unit-level — does this option reach the review call — and the worktree lifecycle
+#: they would otherwise drive is real git work covered against a real repository in
+#: ``test_review_pr_worktree.py``. ``--no-tools`` itself is covered there too, by
+#: ``test_no_tools_uses_checkout_alone_no_worktree``.
+_PARITY_BASE = ["review", "pr", "83", "--no-tools"]
+
+
+@pytest.mark.parametrize(
+    ("flags", "kwarg", "expected"),
+    [
+        (["--model", "opus"], "model_flag", "opus"),
+        (["--profile", "sdk"], "profile_flag", "sdk"),
+        (["--no-save"], "no_save", True),
+        ([], "no_save", False),
+    ],
+)
+def test_flag_parity_reaches_the_review_call(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    captured_review: list[dict[str, object]],
+    flags: list[str],
+    kwarg: str,
+    expected: object,
+) -> None:
+    """Each flag on `sq review pr` lands the same way it does on `sq review code`."""
+    _arm(patched_host)
+    result = cli_runner.invoke(app, [*_PARITY_BASE, *flags])
+
+    assert captured_review, f"review was never invoked: {result.output}"
+    assert captured_review[0][kwarg] == expected
+
+
+def test_no_rules_suppresses_rules_content(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    captured_review: list[dict[str, object]],
+) -> None:
+    """--no-rules suppresses rule injection entirely (parity with review_code)."""
+    _arm(patched_host)
+    result = cli_runner.invoke(app, [*_PARITY_BASE, "--no-rules", "--no-save"])
+
+    assert captured_review, f"review was never invoked: {result.output}"
+    assert None in captured_review[0]["args"]
+
+
+def test_json_flag_selects_json_output(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    captured_review: list[dict[str, object]],
+) -> None:
+    """--json overrides --output, as on review_code."""
+    _arm(patched_host)
+    result = cli_runner.invoke(app, [*_PARITY_BASE, "--json", "--no-save"])
+
+    assert captured_review, f"review was never invoked: {result.output}"
+    assert "json" in captured_review[0]["args"]
+
+
+def test_not_persistable_warning_names_pr_persistence(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    captured_review: list[dict[str, object]],
+) -> None:
+    """The warning names PR persistence specifically, not the generic slice text."""
+    _arm(patched_host)
+    result = cli_runner.invoke(app, _PARITY_BASE)
+
+    assert "383" in result.output, result.output
+    assert "slice identifier" not in result.output
+
+
 def test_resolution_produces_the_same_record_pr_show_would(
     cli_runner: CliRunner, patched_host: dict[str, object], tmp_path: Path
 ) -> None:
