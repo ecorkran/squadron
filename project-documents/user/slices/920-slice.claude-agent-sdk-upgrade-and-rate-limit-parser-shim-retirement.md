@@ -248,10 +248,10 @@ if RATE_LIMIT_MARKER in str(exc) and retries < budget:
 to
 
 ```python
-if _is_throttle(exc) and retries < budget:
+if is_throttle(exc) and retries < budget:
 ```
 
-where `_is_throttle` returns `True` for `RateLimitRejected` **or** for a plain
+where `is_throttle` returns `True` for `RateLimitRejected` **or** for a plain
 `ClaudeSDKError` whose text contains `RATE_LIMIT_MARKER`. The substring path is
 retained deliberately: a genuine HTTP 429 can still surface as a plain
 `ClaudeSDKError`, and that path is unrelated to `rate_limit_event` parsing. It
@@ -330,7 +330,7 @@ CLI emits rate_limit_event
   → (informational path continues to translation)        │
                                                          ▼
                               existing except ClaudeSDKError
-                              → _is_throttle(exc) → backoff, stats, retry
+                              → is_throttle(exc) → backoff, stats, retry
 ```
 
 **After (pipeline `dispatch`):** identical, except inspection is inline in the
@@ -349,7 +349,7 @@ call sites. Add `RateLimitRejected` and `event_blocks`. Update
 `rate_limit.py`'s module docstring, which currently narrates the shim's history.
 
 **Part B — Re-key throttle detection.** *The load-bearing part.*
-Add `_is_throttle`; replace the three `RATE_LIMIT_MARKER in str(exc)` gates.
+Add `is_throttle`; replace the three `RATE_LIMIT_MARKER in str(exc)` gates.
 Inspect `RateLimitEvent` in `_skip_unparseable` and inline in
 `sdk_session.dispatch`. Add translation's branch and extend `dispatch`'s
 `sdk_type` exclusion set. Rewrite the stale docstrings/comments in

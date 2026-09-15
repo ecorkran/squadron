@@ -139,7 +139,7 @@ class RateLimitRejected(ClaudeSDKError):
     """
 
 
-def _is_throttle(exc: Exception) -> bool:
+def is_throttle(exc: Exception) -> bool:
     """True for a typed throttle, or a genuine 429 surfaced as plain text."""
     if isinstance(exc, RateLimitRejected):
         return True
