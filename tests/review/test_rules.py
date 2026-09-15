@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.review.models import ReviewResult, Verdict
+from squadron.review.rules import RulesSource
 
 
 @pytest.fixture
@@ -53,7 +54,10 @@ class TestRulesFlag:
 
         # Isolate from filesystem: suppress auto-template-rules resolution so
         # we only test that the explicit --rules file content reaches the runner.
-        with patch("squadron.cli.commands.review.resolve_rules_dir", return_value=None):
+        with patch(
+            "squadron.cli.commands.review.resolve_rules_dir",
+            return_value=(None, RulesSource.NONE),
+        ):
             result = cli_runner.invoke(
                 app, ["review", "code", "--rules", str(rules_file), "--files", "**/*"]
             )
@@ -85,7 +89,7 @@ class TestRulesFlag:
             ),
             patch(
                 "squadron.cli.commands.review.resolve_rules_dir",
-                return_value=None,
+                return_value=(None, RulesSource.NONE),
             ),
         ):
             result = cli_runner.invoke(app, ["review", "code", "--files", "**/*"])
@@ -119,7 +123,7 @@ class TestRulesFlag:
             ),
             patch(
                 "squadron.cli.commands.review.resolve_rules_dir",
-                return_value=None,
+                return_value=(None, RulesSource.NONE),
             ),
         ):
             result = cli_runner.invoke(
@@ -156,7 +160,7 @@ class TestConfigDefaultRules:
             ),
             patch(
                 "squadron.cli.commands.review.resolve_rules_dir",
-                return_value=None,
+                return_value=(None, RulesSource.NONE),
             ),
         ):
             result = cli_runner.invoke(app, ["review", "code", "--files", "**/*"])

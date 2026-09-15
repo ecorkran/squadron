@@ -7,7 +7,7 @@ dependencies: [382, 916, 917]
 interfaces: [384, 385, 386]
 dateCreated: 20260915
 dateUpdated: 20260915
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: PR-Keyed Review Persistence
@@ -322,8 +322,47 @@ The plan calls this "one additive optional frontmatter key", but the value does 
 project `rules/` directory and `~/.config/squadron/rules/` are both just a `Path` to the caller.
 
 So the signature changes to return the path and its source together — a `RulesSource` StrEnum
-(`PROJECT`, `USER`, `TEMPLATE`, `NONE`) beside the path. Every caller is updated in this slice;
-callers that do not care ignore the second value.
+beside the path. Every caller is updated in this slice; callers that do not care ignore the
+second value.
+
+**The enum has six members, not four.** The plan's "project, user, template" undercounts what the
+resolver actually distinguishes, and `TEMPLATE` as written named no branch at all:
+
+| Member | Branch |
+|---|---|
+| `FLAG` | `--rules-dir` |
+| `CONFIG` | the `rules_dir` config key |
+| `PROJECT` | `{cwd}/rules/` **or** `{cwd}/.claude/rules/` |
+| `USER` | `~/.config/squadron/rules/` |
+| `TEMPLATE` | `~/.config/squadron/templates/` (new branch, see below) |
+| `NONE` | nothing found |
+
+`FLAG` and `CONFIG` are separate members because collapsing either into `PROJECT` would make
+`rulesSource` assert provenance the artifact does not have: `--rules-dir /tmp/scratch` is not a
+project source, and an artifact claiming it was is a false record that nothing downstream can
+correct. Both project-local layouts *do* collapse into `PROJECT` — the question the key answers is
+whose rules these are, and either layout answers "the project's".
+
+**`TEMPLATE` required adding a branch, and that is a deliberate scope addition.** At design time
+`resolve_rules_dir` had no template branch, which is why the member appeared to name nothing. But
+`~/.config/squadron/templates/` already exists as an established convention — it is defined in
+code as `USER_TEMPLATES_DIR` (`review/templates/__init__.py`) and sits beside user-defined models
+(`models.toml`) and pipelines (`pipelines/`). User review templates are the more likely home for
+`review-code.md` than a project `rules/` directory, so a provenance key that cannot name them
+records the wrong thing for the common case.
+
+The branch is appended at the **tail** — after `~/.config/squadron/rules/`, before the `None`
+return. Tail position is what keeps D6 behavior-preserving on the path value: the new branch is
+reachable only where the resolver previously returned `None`, so every input that resolved to a
+path before resolves to the same path now. Task 1.2's "do not change which path any branch
+resolves" holds exactly, and the caller-path pinning test stays valid as written.
+
+One implementation constraint, recorded because it is invisible and easy to reintroduce: the
+branch derives its path from `Path.home()` at call time rather than reading the module-level
+`USER_TEMPLATES_DIR` constant. The constant binds at import, so a test patching `Path.home()`
+could never reach the branch — it would pass by *skipping* rather than by resolving, which is the
+same "a skipped check proves nothing" failure D7 records for `cf validate`. The templates package
+still owns the canonical location; only the directory name is read from it.
 
 `rulesSource` is then written as an optional frontmatter key on every review, not only PR
 reviews — the value is equally true for a slice review and costs nothing. Optional means existing

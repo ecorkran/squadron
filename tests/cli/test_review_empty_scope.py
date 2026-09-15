@@ -20,6 +20,7 @@ from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
 from squadron.review.git_utils import EmptyScopeCase, EmptyScopeError
 from squadron.review.models import ReviewResult, Verdict
+from squadron.review.rules import RulesSource
 
 _PIPELINE = "squadron.pipeline.actions.review"
 
@@ -181,7 +182,10 @@ class TestCLIRefusesEmptyScope:
                 "squadron.cli.commands.review.get_config",
                 side_effect=_config_reader(str(md_only_repo)),
             ),
-            patch("squadron.cli.commands.review.resolve_rules_dir", return_value=None),
+            patch(
+                "squadron.cli.commands.review.resolve_rules_dir",
+                return_value=(None, RulesSource.NONE),
+            ),
         ):
             with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
                 result = cli_runner.invoke(app, ["review", "code", "--diff", "main"])
@@ -239,7 +243,7 @@ class TestPipelineRefusesEmptyScope:
         self, md_only_repo: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         with (
-            patch(f"{_PIPELINE}.resolve_rules_dir", return_value=None),
+            patch(f"{_PIPELINE}.resolve_rules_dir", return_value=(None, RulesSource.NONE)),
             patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
         ):
             with caplog.at_level("WARNING", logger="squadron.review.git_utils"):

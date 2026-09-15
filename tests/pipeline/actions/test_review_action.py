@@ -19,6 +19,7 @@ from squadron.review.models import (
     Severity,
     Verdict,
 )
+from squadron.review.rules import RulesSource
 from squadron.review.templates import InputDef, ReviewTemplate
 
 _P = "squadron.pipeline.actions.review"
@@ -1159,7 +1160,7 @@ class TestReviewActionRulesWiring:
         mock_run_review.return_value = _make_review_result()
 
         # Force resolve_rules_dir to return None regardless of dev environment
-        with patch(f"{_P}.resolve_rules_dir", return_value=None):
+        with patch(f"{_P}.resolve_rules_dir", return_value=(None, RulesSource.NONE)):
             ctx = _make_context(
                 cwd=str(tmp_path),
                 params={"template": "code"},

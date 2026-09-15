@@ -7,7 +7,7 @@ dependencies: [382, 916, 917]
 projectState: "382 merged; `sq review pr` reviews but persists nothing — the save callback is stubbed to always return false. 916 and 917 complete and present on `squadron-pr`. No context-forge dependency (retired at design time, D7)."
 dateCreated: 20260915
 dateUpdated: 20260915
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -32,29 +32,33 @@ Sequenced first because `resolve_rules_dir` is called by every review path; land
 
 **Scope note:** this task changes the *signature* and nothing else. The `rulesSource` frontmatter key it makes possible is written in Task 8, after byte-identity is verified — writing it here would defeat the Task 3.8 check (D2).
 
-- [ ] **1.1 Add the `RulesSource` enum**
-  - [ ] Define a `RulesSource` StrEnum in `src/squadron/review/rules.py` with members for project, user, template, and none
-  - [ ] Values are lowercase strings (`project`, `user`, `template`, `none`) — these are written to frontmatter and read back
-  - [ ] Success: enum defined; `pyright` clean; no other module changed yet
-  - [ ] Effort: 1
+- [x] **1.1 Add the `RulesSource` enum**
+  - [x] Define a `RulesSource` StrEnum in `src/squadron/review/rules.py` with six members: `FLAG`, `CONFIG`, `PROJECT`, `USER`, `TEMPLATE`, `NONE` (D6)
+  - [x] Values are lowercase strings — these are written to frontmatter and read back
+  - [x] `FLAG` and `CONFIG` stay distinct from `PROJECT`: a `--rules-dir` path is not a project source, and recording it as one is a false provenance claim
+  - [x] Success: enum defined; `pyright` clean; no other module changed yet
+  - [x] Effort: 1
 
-- [ ] **1.2 Change `resolve_rules_dir` to return path and source**
-  - [ ] Return the resolved path **and** its `RulesSource` together instead of a bare `Path | None`
-  - [ ] Each of the five existing branches reports the source that produced it; the not-found branch reports `NONE`
-  - [ ] Do not change which path any branch resolves — this task is behavior-preserving on the path value
-  - [ ] Success: every existing caller updated to the new signature; `ruff check` and `pyright` clean
-  - [ ] Effort: 2
+- [x] **1.2 Change `resolve_rules_dir` to return path and source**
+  - [x] Return the resolved path **and** its `RulesSource` together instead of a bare `Path | None`
+  - [x] Each existing branch reports the source that produced it; both project-local layouts (`rules/`, `.claude/rules/`) report `PROJECT`; the not-found branch reports `NONE`
+  - [x] **Add the `~/.config/squadron/templates/` branch at the tail** — after user `rules/`, before the `None` return (D6). Tail position is what keeps this behavior-preserving: the branch is reachable only where the resolver previously returned `None`
+  - [x] Derive the templates path from `Path.home()` at call time, **not** from the module-level `USER_TEMPLATES_DIR` constant — the constant binds at import, so a test patching `Path.home()` would pass by skipping the branch rather than resolving it
+  - [x] Do not change which path any pre-existing branch resolves — behavior-preserving on the path value
+  - [x] Success: every existing caller updated to the new signature; `ruff check` and `pyright` clean
+  - [x] Effort: 3
 
-- [ ] **1.3 Test the rules-source branches** *(test-with 1.1–1.2)*
-  - [ ] Create `tests/review/test_rules_source.py`
-  - [ ] Assert each `RulesSource` branch is reported for the directory layout that triggers it
-  - [ ] **Pin the paths:** assert every existing caller's resolved *path* is unchanged from pre-change behavior
-  - [ ] Success: all tests pass; the full existing review test suite passes unchanged
-  - [ ] Effort: 2
+- [x] **1.3 Test the rules-source branches** *(test-with 1.1–1.2)*
+  - [x] Extend `tests/review/test_rules_module.py::TestResolveRulesDir` — it already covers every branch, so the source assertions belong beside the existing path assertions rather than in a parallel file
+  - [x] Assert each `RulesSource` branch is reported for the directory layout that triggers it, including `TEMPLATE`
+  - [x] Assert user `rules/` still beats `templates/` when both exist — pins the tail position, not just the branch's existence
+  - [x] **Pin the paths:** assert every existing caller's resolved *path* is unchanged from pre-change behavior
+  - [x] Success: all tests pass; the full existing review test suite passes unchanged
+  - [x] Effort: 2
 
-- [ ] **1.4 Commit** — `refactor(review): resolve_rules_dir reports its source`
-  - [ ] Success: `ruff format`, `ruff check`, `pyright` all clean before committing
-  - [ ] Effort: 1
+- [x] **1.4 Commit** — `refactor(review): resolve_rules_dir reports its source`
+  - [x] Success: `ruff format`, `ruff check`, `pyright` all clean before committing
+  - [x] Effort: 1
 
 ---
 
@@ -273,7 +277,8 @@ Both new keys land here, **after** Task 3.8 and Task 4.2 have proven byte-identi
   - [ ] Effort: 2
 
 - [ ] **8.3 Test `rulesSource` end-to-end** *(test-with 8.1)*
-  - [ ] Write a review artifact, read `rulesSource` back **from the written file**, and assert it matches the directory the loader actually used — for each of the `project`, `user`, and `template` branches
+  - [ ] Write a review artifact, read `rulesSource` back **from the written file**, and assert it matches the directory the loader actually used — for each of the `flag`, `config`, `project`, `user`, and `template` branches (D6's six members less `none`)
+  - [ ] `flag` and `config` matter most here: they are the two a careless implementation most easily records as `project`, and the artifact is the only place that error becomes visible
   - [ ] This closes the gap between Task 1.3 (the resolver returns the right source) and 8.1 (the field is written): neither alone catches a hardcoded value or a source that never reaches `frontmatter_fields()`
   - [ ] Assert an artifact written without the key still parses
   - [ ] Success: all branches pass; a deliberately hardcoded `rulesSource` fails this test

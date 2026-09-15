@@ -49,6 +49,7 @@ from squadron.review.resolution import Resolution, ResolutionResult, resolve_rev
 from squadron.review.resolution_evidence import ResolutionError
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
+    RulesSource,
     extract_diff_paths,
     load_review_rules,
     resolve_rules_dir,
@@ -234,8 +235,10 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[str, Path | None]:
-    """Resolve the reviewing agent's working directory and its rules directory.
+def _resolve_review_cwd(
+    cwd: str | None, rules_dir_flag: str | None
+) -> tuple[str, Path | None, RulesSource]:
+    """Resolve the reviewing agent's working directory, rules directory, and source.
 
     The cwd half is shared with ``sq pr show`` — see
     :func:`squadron.cli.commands.cwd_resolution.resolve_repo_cwd` for why the
@@ -245,7 +248,8 @@ def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[st
     same root rather than from the configured subdirectory.
     """
     review_cwd = resolve_repo_cwd(cwd)
-    return review_cwd, resolve_rules_dir(review_cwd, None, rules_dir_flag)
+    rules_dir, rules_source = resolve_rules_dir(review_cwd, None, rules_dir_flag)
+    return review_cwd, rules_dir, rules_source
 
 
 class SaveOutcome(StrEnum):
@@ -746,7 +750,7 @@ def review_slice(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "against": against,
@@ -839,7 +843,7 @@ def review_arch(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "cwd": review_cwd,
@@ -936,7 +940,7 @@ def review_tasks(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
     # Seeded with the least-serious outcome; each part's own outcome is folded
@@ -1044,7 +1048,7 @@ def review_code(
     code_template = get_template("code")
     exclude_patterns = code_template.diff_exclude_patterns if code_template else None
 
-    review_cwd, code_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, code_rules_dir, _rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
     # A user-supplied --diff is normalized whether or not a slice number came
     # with it: `sq review code 118 --diff main` overrides the range but keeps
@@ -1257,7 +1261,7 @@ def review_resolve(
     and UNKNOWN both exit 1 — an answer that could not be reached is not a pass.
     """
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, _ = _resolve_review_cwd(cwd, None)
+    review_cwd, _, _ = _resolve_review_cwd(cwd, None)
 
     model_id, resolved_profile = _resolve_judge_model(model, profile)
 

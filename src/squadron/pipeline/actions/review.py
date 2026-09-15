@@ -250,7 +250,7 @@ class ReviewAction:
         if diff_ref:
             assert_reviewable_scope(diff_ref, cwd, exclude_patterns)
 
-        rules_dir = resolve_rules_dir(cwd, None, None)
+        rules_dir, _rules_source = resolve_rules_dir(cwd, None, None)
         file_paths: list[str] = []
         if rules_dir is not None:
             if diff_ref:

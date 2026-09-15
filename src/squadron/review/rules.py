@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import fnmatch
 import re
+from enum import StrEnum
 from pathlib import Path
 
 from squadron.config.manager import get_config
 from squadron.review.git_utils import run_git
+from squadron.review.templates import USER_TEMPLATES_DIR
 
 # Frontmatter YAML block at start of file
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
@@ -15,19 +17,38 @@ _PATHS_RE = re.compile(r"^paths\s*:\s*\[(.+?)\]", re.MULTILINE)
 _PATHS_LIST_RE = re.compile(r"^paths\s*:\s*\n((?:\s*-\s*.+\n?)+)", re.MULTILINE)
 
 
+class RulesSource(StrEnum):
+    """Which source produced the resolved rules directory.
+
+    Written to review frontmatter as ``rulesSource``, so the values are part
+    of the artifact contract: lowercase, and read back by consumers.
+    """
+
+    FLAG = "flag"
+    CONFIG = "config"
+    PROJECT = "project"
+    USER = "user"
+    TEMPLATE = "template"
+    NONE = "none"
+
+
 def resolve_rules_dir(
     cwd: str,
     config_rules_dir: str | None,
     cli_rules_dir: str | None,
-) -> Path | None:
-    """Resolve the rules directory.
+) -> tuple[Path | None, RulesSource]:
+    """Resolve the rules directory and report which source produced it.
 
     Priority: CLI flag > config > {cwd}/rules/ > {cwd}/.claude/rules/
-    > ~/.config/squadron/rules/ > None.
+    > ~/.config/squadron/rules/ > ~/.config/squadron/templates/ > None.
+
+    Both project-local candidates report :attr:`RulesSource.PROJECT`: the
+    question the source answers is *whose* rules these are, and the answer
+    for either layout is the project's.
     """
     if cli_rules_dir is not None:
         p = Path(cli_rules_dir)
-        return p if p.is_dir() else None
+        return (p, RulesSource.FLAG) if p.is_dir() else (None, RulesSource.NONE)
 
     if config_rules_dir is None:
         config_val = get_config("rules_dir")
@@ -36,19 +57,33 @@ def resolve_rules_dir(
 
     if config_rules_dir is not None:
         p = Path(config_rules_dir)
-        return p if p.is_dir() else None
+        return (p, RulesSource.CONFIG) if p.is_dir() else (None, RulesSource.NONE)
 
     cwd_path = Path(cwd)
     for candidate in ("rules", ".claude/rules"):
         p = cwd_path / candidate
         if p.is_dir():
-            return p
+            return p, RulesSource.PROJECT
 
     user_rules = Path.home() / ".config" / "squadron" / "rules"
     if user_rules.is_dir():
-        return user_rules
+        return user_rules, RulesSource.USER
 
-    return None
+    # Tail position, appended rather than inserted: this branch is reachable
+    # only where the resolver previously returned None, so every input that
+    # resolved to a path before still resolves to the same one. User review
+    # templates live beside user models and pipelines under ~/.config/squadron.
+    #
+    # Derived from Path.home() here rather than read off the module-level
+    # constant: the constant is bound at import time, so a test patching
+    # Path.home() could never reach this branch — it would pass by skipping
+    # rather than by resolving. The templates package still owns the canonical
+    # location; USER_TEMPLATES_DIR.name keeps the directory spelled once.
+    user_templates = Path.home() / ".config" / "squadron" / USER_TEMPLATES_DIR.name
+    if user_templates.is_dir():
+        return user_templates, RulesSource.TEMPLATE
+
+    return None, RulesSource.NONE
 
 
 def _parse_frontmatter_paths(content: str) -> list[str] | None:

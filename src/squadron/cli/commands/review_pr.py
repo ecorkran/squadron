@@ -89,7 +89,7 @@ def _resolve_pr_rules_content(
             rules_path = config_rules
     manual_content = Path(rules_path).read_text() if rules_path else None
 
-    checkout_rules_dir = resolve_rules_dir(checkout_cwd, None, rules_dir_flag)
+    checkout_rules_dir, _rules_source = resolve_rules_dir(checkout_cwd, None, rules_dir_flag)
     file_paths = changed_paths if checkout_rules_dir is not None else []
     return load_review_rules(
         "code",

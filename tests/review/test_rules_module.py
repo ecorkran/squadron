@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from squadron.review.rules import (
+    RulesSource,
     detect_languages_from_paths,
     get_template_rules,
     load_rules_content,
@@ -29,8 +30,9 @@ class TestResolveRulesDir:
         config_dir = tmp_path / "config-rules"
         config_dir.mkdir()
 
-        result = resolve_rules_dir(str(tmp_path), str(config_dir), str(cli_dir))
+        result, source = resolve_rules_dir(str(tmp_path), str(config_dir), str(cli_dir))
         assert result == cli_dir
+        assert source is RulesSource.FLAG
 
     def test_config_wins_over_default(self, tmp_path: Path) -> None:
         """Config beats cwd default."""
@@ -40,8 +42,9 @@ class TestResolveRulesDir:
         (tmp_path / "rules").mkdir()
 
         with patch("squadron.review.rules.get_config", return_value=str(config_dir)):
-            result = resolve_rules_dir(str(tmp_path), None, None)
+            result, source = resolve_rules_dir(str(tmp_path), None, None)
         assert result == config_dir
+        assert source is RulesSource.CONFIG
 
     def test_falls_back_to_cwd_rules(self, tmp_path: Path) -> None:
         """Uses {cwd}/rules/ when it exists."""
@@ -49,8 +52,9 @@ class TestResolveRulesDir:
         rules_dir.mkdir()
 
         with patch("squadron.review.rules.get_config", return_value=None):
-            result = resolve_rules_dir(str(tmp_path), None, None)
+            result, source = resolve_rules_dir(str(tmp_path), None, None)
         assert result == rules_dir
+        assert source is RulesSource.PROJECT
 
     def test_claude_rules_fallback(self, tmp_path: Path) -> None:
         """Uses .claude/rules/ when rules/ is absent."""
@@ -58,8 +62,11 @@ class TestResolveRulesDir:
         claude_rules.mkdir(parents=True)
 
         with patch("squadron.review.rules.get_config", return_value=None):
-            result = resolve_rules_dir(str(tmp_path), None, None)
+            result, source = resolve_rules_dir(str(tmp_path), None, None)
         assert result == claude_rules
+        # Both project-local layouts report PROJECT: the source answers whose
+        # rules these are, and either layout answers "the project's".
+        assert source is RulesSource.PROJECT
 
     def test_user_rules_fallback(self, tmp_path: Path) -> None:
         """Uses ~/.config/squadron/rules/ when project-level dirs are absent."""
@@ -72,8 +79,40 @@ class TestResolveRulesDir:
             patch("squadron.review.rules.get_config", return_value=None),
             patch("pathlib.Path.home", return_value=tmp_path),
         ):
-            result = resolve_rules_dir(str(project), None, None)
+            result, source = resolve_rules_dir(str(project), None, None)
         assert result == user_rules
+        assert source is RulesSource.USER
+
+    def test_user_templates_fallback(self, tmp_path: Path) -> None:
+        """Uses ~/.config/squadron/templates/ when even user rules/ is absent."""
+        project = tmp_path / "project"
+        project.mkdir()
+        user_templates = tmp_path / ".config" / "squadron" / "templates"
+        user_templates.mkdir(parents=True)
+
+        with (
+            patch("squadron.review.rules.get_config", return_value=None),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
+            result, source = resolve_rules_dir(str(project), None, None)
+        assert result == user_templates
+        assert source is RulesSource.TEMPLATE
+
+    def test_user_rules_beats_templates(self, tmp_path: Path) -> None:
+        """Templates sit at the tail: user rules/ still wins when both exist."""
+        project = tmp_path / "project"
+        project.mkdir()
+        user_rules = tmp_path / ".config" / "squadron" / "rules"
+        user_rules.mkdir(parents=True)
+        (tmp_path / ".config" / "squadron" / "templates").mkdir(parents=True)
+
+        with (
+            patch("squadron.review.rules.get_config", return_value=None),
+            patch("pathlib.Path.home", return_value=tmp_path),
+        ):
+            result, source = resolve_rules_dir(str(project), None, None)
+        assert result == user_rules
+        assert source is RulesSource.USER
 
     def test_user_rules_fallback_creates_path(self, tmp_path: Path) -> None:
         """User rules dir must exist to be returned."""
@@ -81,8 +120,9 @@ class TestResolveRulesDir:
             patch("squadron.review.rules.get_config", return_value=None),
             patch("pathlib.Path.home", return_value=tmp_path),
         ):
-            result = resolve_rules_dir(str(tmp_path), None, None)
+            result, source = resolve_rules_dir(str(tmp_path), None, None)
         assert result is None
+        assert source is RulesSource.NONE
 
     def test_returns_none_when_none_exist(self, tmp_path: Path) -> None:
         """Returns None when no rules dir found."""
@@ -90,13 +130,15 @@ class TestResolveRulesDir:
             patch("squadron.review.rules.get_config", return_value=None),
             patch("pathlib.Path.home", return_value=tmp_path),
         ):
-            result = resolve_rules_dir(str(tmp_path), None, None)
+            result, source = resolve_rules_dir(str(tmp_path), None, None)
         assert result is None
+        assert source is RulesSource.NONE
 
     def test_cli_flag_nonexistent_returns_none(self, tmp_path: Path) -> None:
         """CLI flag pointing to non-existent dir returns None."""
-        result = resolve_rules_dir(str(tmp_path), None, str(tmp_path / "nope"))
+        result, source = resolve_rules_dir(str(tmp_path), None, str(tmp_path / "nope"))
         assert result is None
+        assert source is RulesSource.NONE
 
 
 # ---------------------------------------------------------------------------
