@@ -21,6 +21,7 @@ from claude_agent_sdk import (
     CLIJSONDecodeError,
     CLINotFoundError,
     ProcessError,
+    RateLimitEvent,
     ResultMessage,
 )
 
@@ -32,8 +33,9 @@ from squadron.providers.errors import (
 )
 from squadron.providers.sdk.rate_limit import (
     MAX_RATE_LIMIT_RETRIES,
-    RATE_LIMIT_MARKER,
-    install_rate_limit_parser_shim,
+    RateLimitRejected,
+    event_blocks,
+    is_throttle,
     rate_limit_backoff_s,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
@@ -93,11 +95,6 @@ class SDKExecutionSession:
         runtime ``set_permission_mode("bypassPermissions")`` calls, so we
         do not attempt one here.
         """
-        # Must precede any streaming: the pinned parser dies on the CLI's
-        # rate-limit status event, and that kills the whole stream. Applied
-        # here because pipeline clients are constructed in several places
-        # but all of them connect through this method.
-        install_rate_limit_parser_shim()
         await self.client.connect()
         _logger.debug("SDKExecutionSession: connected")
 
@@ -129,10 +126,11 @@ class SDKExecutionSession:
     async def dispatch(self, prompt: str) -> str:
         """Send a prompt and collect the full response text.
 
-        Includes rate-limit retry logic: when the CLI emits a
-        ``rate_limit_event`` the SDK raises ``ClaudeSDKError``.
-        We retry ``receive_response()`` on the same session (the underlying
-        channel remains intact) up to ``_MAX_RATE_LIMIT_RETRIES`` times.
+        Includes rate-limit retry logic: a ``rejected`` ``RateLimitEvent``
+        raises ``RateLimitRejected`` inline in the loop below (this path has
+        no ``_skip_unparseable`` wrapper, unlike ``agent.py``). We retry
+        ``receive_response()`` on the same session (the underlying channel
+        remains intact) up to ``MAX_RATE_LIMIT_RETRIES`` times.
 
         Returns:
             The concatenated text content of all response messages.
@@ -151,6 +149,11 @@ class SDKExecutionSession:
                 try:
                     async for sdk_msg in self.client.receive_response():
                         progressed = True
+                        # No _skip_unparseable wrapper on this path (unlike
+                        # agent.py), so a RateLimitEvent must be inspected
+                        # here, inline, before anything else touches it.
+                        if isinstance(sdk_msg, RateLimitEvent) and event_blocks(sdk_msg):
+                            raise RateLimitRejected(str(sdk_msg.rate_limit_info.status))
                         # Raise before appending any content so no partial
                         # error text reaches the caller or _check_cli_error.
                         if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
@@ -178,18 +181,20 @@ class SDKExecutionSession:
                                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
                     break  # normal completion
                 except ClaudeSDKError as exc:
-                    # Informational rate-limit events never reach here: the
-                    # parser shim absorbs them, because a parse failure has
-                    # already killed the SDK's generator and no amount of
-                    # retrying can resume it. Only a genuine throttle does.
-                    # See ``install_rate_limit_parser_shim``.
+                    # A RateLimitEvent with status='rejected' raises
+                    # RateLimitRejected above; a genuine 429 can also
+                    # surface as a plain ClaudeSDKError. is_throttle
+                    # classifies both. Informational events are not
+                    # exceptions at all — they are yielded through the
+                    # `async for` like any other message and never reach
+                    # this handler.
                     #
                     # A throttle after work came
                     # through is a fresh event, so the budget bounds
                     # consecutive failures rather than throttles-per-run.
                     if progressed:
                         retries = 0
-                    if RATE_LIMIT_MARKER in str(exc) and retries < MAX_RATE_LIMIT_RETRIES:
+                    if is_throttle(exc) and retries < MAX_RATE_LIMIT_RETRIES:
                         retries += 1
                         delay = rate_limit_backoff_s(retries)
                         _logger.warning(

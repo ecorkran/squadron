@@ -194,7 +194,7 @@ async def test_dispatch_excludes_tool_call_noise() -> None:
 
 @pytest.mark.asyncio
 async def test_dispatch_retries_on_rate_limit() -> None:
-    from claude_agent_sdk import AssistantMessage, ClaudeSDKError, TextBlock
+    from claude_agent_sdk import AssistantMessage, RateLimitEvent, RateLimitInfo, TextBlock
 
     client = _make_client()
     session = _make_session(client)
@@ -205,7 +205,12 @@ async def test_dispatch_retries_on_rate_limit() -> None:
         nonlocal call_count
         call_count += 1
         if call_count < 3:
-            raise ClaudeSDKError("rate_limit_event")
+            yield RateLimitEvent(
+                rate_limit_info=RateLimitInfo(status="rejected"),
+                uuid=f"evt-{call_count}",
+                session_id="sess-1",
+            )
+            return
         # Third call succeeds
         msg = MagicMock(spec=AssistantMessage)
         block = MagicMock(spec=TextBlock)
