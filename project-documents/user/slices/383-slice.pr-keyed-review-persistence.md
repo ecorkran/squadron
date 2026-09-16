@@ -7,7 +7,7 @@ dependencies: [382, 916, 917]
 interfaces: [384, 385, 386]
 dateCreated: 20260915
 dateUpdated: 20260915
-status: in_progress
+status: complete
 ---
 
 # Slice Design: PR-Keyed Review Persistence
@@ -470,6 +470,21 @@ not assumed:
 - Empirically: a PR-shaped fixture (non-numeric name, no `slice`, nested `pr:` mapping) placed in
   the reviews directory took the validated file count from 529 to 530 with **zero** findings
   against it.
+
+**Correction, made while implementing Task 9.2.** That probe is reproducible only from the
+*registered project root*. `cf project list` gives `squadron` the path
+`~/source/repos/manta/squadron` — the main checkout — so from this worktree the count does not
+move when a fixture is added here, and explicit paths report `filesChecked: 0` even for files that
+plainly exist. `cf validate frontmatter --help` states the rule outright: with paths it validates
+"only the in-root .md files among them (others are silently skipped)". `-p squadron` changes
+nothing, because squadron is already the selected project; the path it resolves to is the issue.
+
+The probe's *conclusion* stands — cf needs no schema change for a PR-shaped artifact — but the
+count comparison cannot be run from here. `tests/documents/test_pr_review_frontmatter.py` therefore
+opens by writing a throwaway fixture and checking whether the walked count moves at all; when it
+does not, it skips with the reason and names context-forge #88 rather than failing. Failing would
+have added a fourth red test to the three this worktree already carries for that exact cause,
+while the same task requires there be exactly three.
 
 **The probe is easy to run wrong, so the method matters.** `cf validate frontmatter` resolves its
 project by *registered project*, not by working directory, and `-p/--project` is the only

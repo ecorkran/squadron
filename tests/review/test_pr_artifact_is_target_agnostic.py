@@ -70,9 +70,7 @@ def _result(verdict: Verdict = Verdict.CONCERNS) -> ReviewResult:
 class TestArchivingAPrArtifact:
     """The refuse-to-overwrite guard keys on paths, not on what was reviewed."""
 
-    def test_a_prior_pr_review_is_archived_before_being_overwritten(
-        self, tmp_path: Path
-    ) -> None:
+    def test_a_prior_pr_review_is_archived_before_being_overwritten(self, tmp_path: Path) -> None:
         target = _pr_target()
         first = save_review_result(
             _result(Verdict.PASS),
@@ -99,9 +97,7 @@ class TestArchivingAPrArtifact:
         # The live slot holds the new run, not the archived one.
         assert first.read_bytes() != original
 
-    def test_archive_guard_refuses_when_the_copy_cannot_be_made(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_guard_refuses_when_the_copy_cannot_be_made(self, tmp_path: Path) -> None:
         """A PR artifact gets the same refusal any other review would.
 
         ``archive/`` is occupied by a *file*, so the guard cannot create the
@@ -172,9 +168,7 @@ class TestRunDigestOnAPrArtifact:
 class TestThePrArtifactIsWellFormed:
     """What a PR review's frontmatter actually says, end to end."""
 
-    def test_frontmatter_names_the_pr_and_carries_no_slice_key(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frontmatter_names_the_pr_and_carries_no_slice_key(self, tmp_path: Path) -> None:
         path = save_review_result(
             _result(),
             "code",
@@ -191,9 +185,7 @@ class TestThePrArtifactIsWellFormed:
         assert "  number: 42" in text
         assert f"reviewedSha: {_PR_HEAD}" in text
 
-    def test_the_heading_names_the_pr_rather_than_a_fabricated_slice(
-        self, tmp_path: Path
-    ) -> None:
+    def test_the_heading_names_the_pr_rather_than_a_fabricated_slice(self, tmp_path: Path) -> None:
         """``slice 0`` would read as real. The provider-failure path already
         refused to emit it for a run with no slice; this is the same refusal on
         the success path."""

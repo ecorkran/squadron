@@ -148,9 +148,7 @@ class TestReviewedShaIsThePullRequests:
 class TestSliceLessCodeReviewStillRefuses:
     """NOT_PERSISTABLE keeps the meaning it always had (D8)."""
 
-    def test_a_code_review_with_no_slice_is_still_not_persistable(
-        self, tmp_path: Path
-    ) -> None:
+    def test_a_code_review_with_no_slice_is_still_not_persistable(self, tmp_path: Path) -> None:
         """383 deleted the PR stub, not the outcome it borrowed.
 
         ``sq review code`` with no slice number has nothing to name an artifact

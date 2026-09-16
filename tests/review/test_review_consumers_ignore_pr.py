@@ -95,9 +95,7 @@ class TestResolveSelectsTheSliceReview:
 
         assert found.name == _SLICE_NAME
 
-    def test_it_is_unambiguous_despite_two_code_reviews_of_42(
-        self, both_reviews: Path
-    ) -> None:
+    def test_it_is_unambiguous_despite_two_code_reviews_of_42(self, both_reviews: Path) -> None:
         """The PR artifact does not even register as a competing candidate.
 
         ``locate_review`` raises on an ambiguous index. If the PR review could
@@ -118,9 +116,7 @@ class TestResolveSelectsTheSliceReview:
 
 
 class TestMetrologyCaptureSelectsTheSliceReview:
-    def test_capture_for_index_42_finds_the_slice_not_the_pr(
-        self, both_reviews: Path
-    ) -> None:
+    def test_capture_for_index_42_finds_the_slice_not_the_pr(self, both_reviews: Path) -> None:
         resolved = resolve_target("42", None, str(both_reviews))
 
         assert resolved.name == _SLICE_NAME
@@ -155,9 +151,7 @@ class TestTargetKindClassifies:
         """
         reviews = tmp_path / REVIEWS_DIR
         reviews.mkdir(parents=True)
-        legacy = _SLICE_REVIEW.replace("targetKind: slice\n", "").replace(
-            "rulesSource: project\n", ""
-        )
+        legacy = _SLICE_REVIEW.replace("targetKind: slice\n", "").replace("rulesSource: project\n", "")
         path = reviews / _SLICE_NAME
         path.write_text(legacy, encoding="utf-8")
 

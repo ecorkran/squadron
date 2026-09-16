@@ -40,6 +40,7 @@ from squadron.review.templates import get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
 
+
 def assemble_pr_metadata(resolved: ResolvedPullRequest, host: CodeHost) -> str:
     """Raw PR content the CLI assembles: title, body, linked issues, discussions.
 

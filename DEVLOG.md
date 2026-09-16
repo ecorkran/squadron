@@ -12,6 +12,52 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260916
+
+### Slice 383 implementation (Phase 6)
+
+Nine tasks complete, verified live against [PR #111](https://github.com/ecorkran/squadron/pull/111)
+(`ecorkran/squadron`), commits `1e6548b8`..`b4129c53` plus closeout. `RulesSource` on
+`resolve_rules_dir` (task 1), byte-identity fixtures ahead of the migration (task 2), the
+`SaveTarget` protocol and its three implementations (task 3), the pipeline step path migrated
+onto it (task 4), `PullRequestRecord.path_key` (task 5), the reviews-directory precedence chain
+(task 6), `PrTarget` replacing the 382 stub (task 7), and `targetKind`/`rulesSource` frontmatter
+on every target (task 8).
+
+Task 3's byte-identity harness had a blind spot invisible until task 8: it called
+`format_review_markdown` with a raw `SliceInfo` and no `target=`, so it rendered through the
+fallback branch and never exercised `frontmatter_fields()` — the path production actually uses.
+It went on passing through tasks 3 and 4 for the wrong reason, and would have stayed green after
+task 8 added two new keys to every artifact, because it wasn't checking the code that changed.
+Caught only because task 8's keys had to move the bytes and the harness didn't move. Rewritten to
+construct real targets; two fixture sets are kept side by side (`383-premigration-*.md`,
+`383-postkeys-*.md`) with a test asserting the diff is exactly `targetKind` and `rulesSource`. A
+check whose job is to detect change is not evidence until it's been shown to fire on a known one.
+
+**Live verification (walkthrough steps 2, 4, 6; step 3 covered instead by
+`test_review_consumers_ignore_pr.py`):**
+
+Step 2 — `reviewedSha` is the PR's head, not the operator's: reviewed from
+`/Users/manta/source/repos/manta/squadron-pr` at `HEAD=b4129c53`, the saved artifact recorded
+`reviewedSha: 86a0044b...`, matching `gh pr view 111`'s head exactly.
+
+Step 4 — reviewed from a scratch repo with no `project-documents/`: saved to
+`~/.config/squadron/reviews/github.com/ecorkran/squadron/`, source reported as "built-in default",
+`git status` clean.
+
+Step 6 — same run's frontmatter carried `targetKind: pr` and `rulesSource: project` (rules read
+from the reviewing checkout's own conventions, not the PR's).
+
+Found and worked around in the process, not a defect in this slice: this machine's
+`~/.config/squadron/config.toml` carries a stray global `cwd: ./project-documents/user` left over
+from another project. Against a repo lacking that path, `ProcessRunner` mireports the resulting
+`FileNotFoundError` on `cwd` as "executable not found: git" — misleading, but the underlying
+config value is the actual fault, not `process_runner.py`. Worked around here with an explicit
+`--cwd .`; not filed as an issue against this slice.
+
+Full suite after closeout: 3 failed / 4053 passed / 6 skipped (context-forge#88, pre-existing,
+unrelated to this slice). `ruff format`, `ruff check`, `pyright` all clean.
+
 ## 20260915
 
 ### Slice 383 task breakdown (Phase 5)

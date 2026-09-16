@@ -127,7 +127,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
      handling in enterprise repositories.
    - **Relative Effort:** 4/5
 
-3. [ ] **(383) PR-Keyed Review Persistence** — The structural save-target contract on the persistence
+3. [x] **(383) PR-Keyed Review Persistence** — The structural save-target contract on the persistence
    side (filename stem, target-specific frontmatter fields, reviews directory) that a slice target
    and a PR target both satisfy, with the arch review migrated off its minimal-`SliceInfo`
    fabrication and the pipeline action's step-keyed save migrated onto the same contract, so one
