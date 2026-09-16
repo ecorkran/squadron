@@ -1279,6 +1279,18 @@ class TestSectionBounding:
         assert with_summary.summary_section_located is True
         assert without_summary.summary_section_located is False
 
+    def test_summary_section_located_true_alongside_findings_elsewhere(self) -> None:
+        """#101: the findings-heading self-closing guard must not leak into
+        "summary" — a Summary section legitimately holds no finding-shaped
+        text even when the document has findings elsewhere.
+        """
+        response = "## Summary\nPASS\n\n## Findings\n\n### [PASS] Clean module structure\nBody.\n"
+
+        result = parse_review_output(response, "slice", {})
+
+        assert result.summary_section_located is True
+        assert result.verdict is Verdict.PASS
+
 
 class TestIssue92ProseOnlyResponse:
     """#92: a full turn of prose review that never emits the required block.

@@ -736,14 +736,16 @@ def _locate_section(text: str, name: str) -> tuple[int, int] | None:
     higher level, or to the end of the document. A deeper heading (the ``###``
     of an individual finding) does not terminate the section.
 
-    Returns ``None`` when the located span holds no finding-shaped text while
-    the document does. A ``### Findings`` heading is the case: it sits at the
-    same level as the ``### [SEV]`` findings it introduces, so it closes
-    before its own first finding. Bounding to that empty span would discard
-    every real finding in the document, so the caller falls back to the
-    unbounded scan instead — the same posture taken for a headingless
-    response, and for the same reason: never drop a real finding to exclude a
-    phantom.
+    Returns ``None`` for the ``"findings"`` name specifically when the
+    located span holds no finding-shaped text while the document does. A
+    ``### Findings`` heading is the case: it sits at the same level as the
+    ``### [SEV]`` findings it introduces, so it closes before its own first
+    finding. Bounding to that empty span would discard every real finding in
+    the document, so the caller falls back to the unbounded scan instead —
+    the same posture taken for a headingless response, and for the same
+    reason: never drop a real finding to exclude a phantom. Other section
+    names (e.g. ``"summary"``) legitimately hold zero finding-shaped text and
+    are unaffected by this guard.
     """
     for match in _HEADING_RE.finditer(text):
         if _normalize_heading_text(match.group("text")) != name:
@@ -755,7 +757,9 @@ def _locate_section(text: str, name: str) -> tuple[int, int] | None:
             if len(following.group("hashes")) <= level:
                 end = following.start()
                 break
-        if _count_finding_matches(text[start:end]) == 0 < _count_finding_matches(text):
+        if name == "findings" and _count_finding_matches(text[start:end]) == 0 < _count_finding_matches(
+            text
+        ):
             return None
         return start, end
     return None
