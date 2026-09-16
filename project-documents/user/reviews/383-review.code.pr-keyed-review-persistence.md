@@ -6,7 +6,7 @@ slice: pr-keyed-review-persistence
 targetKind: slice
 rulesSource: project
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 sourceDocument: project-documents/user/slices/383-slice.pr-keyed-review-persistence.md
 aiModel: z-ai/glm-5.3
 status: complete
@@ -66,7 +66,7 @@ findings:
 
 # Review: code — slice 0
 
-**Verdict:** FAIL
+**Verdict:** CONCERNS
 **Model:** z-ai/glm-5.3
 
 ## Findings
