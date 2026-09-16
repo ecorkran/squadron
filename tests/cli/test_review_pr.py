@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -301,20 +302,50 @@ def test_pr_review_no_longer_reports_persistence_unavailable(
     code`` with nothing to name an artifact under (D8); a PR review always has
     a target and never reaches it.
 
-    Deliberately asserts the *absence* of the refusal rather than the presence
-    of an artifact. This suite's fake ``_Result`` carries a verdict and nothing
-    else, because every case here is unit-level — did this flag reach the
-    review call — and rendering an artifact from it would require teaching the
-    fake the whole ``ReviewResult`` shape. The real save, its location, and its
-    filename are covered in ``test_review_pr_persistence.py``, whose fixtures
-    are built for exactly that.
+    Runs *without* ``--no-save``, which is what makes the assertion able to
+    fail. Under ``--no-save`` this asserted nothing: ``_resolve_save_outcome``
+    returns SUPPRESSED before reaching the ``target is None`` branch, so 382's
+    stub printed no refusal either and the test passed against the code it was
+    meant to guard (383 review, F004). ``save_review_result`` is mocked because
+    this suite's fake ``_Result`` carries only a verdict and cannot render an
+    artifact; the real save, its location, and its filename are covered in
+    ``test_review_pr_persistence.py``.
     """
     _arm(patched_host)
-    result = cli_runner.invoke(app, [*_PARITY_BASE, "--no-save"])
+    with patch("squadron.cli.commands.review_pr.save_review_result") as save:
+        save.return_value = Path("/tmp/github.com-ecorkran-squadron-83-review.code.md")
+        result = cli_runner.invoke(app, _PARITY_BASE)
 
     assert "not yet available" not in result.output
     assert "383" not in result.output
     assert "slice identifier" not in result.output
+    # The save was reached, so the absence above is the save path's silence
+    # rather than a suppressed branch's.
+    assert save.called, f"persistence was never attempted: {result.output}"
+
+
+def test_a_failed_pr_save_reports_unsaved_and_exits_one(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    captured_review: list[dict[str, object]],
+) -> None:
+    """An unwritten review must never look like a written one (D5).
+
+    The slice's success criteria name this case directly: a failed write
+    reports UNSAVED with a non-zero exit and a message naming the path. Nothing
+    drove it through the CLI until now — the resolver and the target were each
+    unit-tested, but not the composition that reports the failure.
+    """
+    _arm(patched_host)
+    with patch(
+        "squadron.cli.commands.review_pr.save_review_result",
+        side_effect=OSError("read-only filesystem"),
+    ) as save:
+        result = cli_runner.invoke(app, [*_PARITY_BASE, "--reviews-dir", "/nonexistent/place"])
+
+    assert save.called, f"persistence was never attempted: {result.output}"
+    assert result.exit_code == 1, result.output
+    assert "/nonexistent/place" in result.output
 
 
 def test_resolution_produces_the_same_record_pr_show_would(

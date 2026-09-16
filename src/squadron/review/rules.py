@@ -29,6 +29,12 @@ class RulesSource(StrEnum):
     PROJECT = "project"
     USER = "user"
     TEMPLATE = "template"
+    #: Rules reached the reviewer from an explicit ``--rules`` file (or the
+    #: ``default_rules`` config key) with no rules *directory* resolving. The
+    #: enum otherwise names directory sources; without this member such a run
+    #: recorded ``none``, which a consumer would read as "no rules were given"
+    #: while rules demonstrably were.
+    FILE = "file"
     NONE = "none"
 
 

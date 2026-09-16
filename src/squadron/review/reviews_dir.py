@@ -81,7 +81,12 @@ def resolve_reviews_dir(
     if project_reviews.is_dir():
         return project_reviews, ReviewsDirRule.PROJECT
 
-    configured = get_config("review.external_reviews_dir")
+    # cwd, not the process working directory: the project config lives in the
+    # checkout being reviewed, which `sq review pr --cwd` makes a different
+    # directory from the one squadron was invoked in. Reading it from the
+    # process cwd silently ignores the key and falls to the built-in default —
+    # the silent location change this precedence chain exists to make visible.
+    configured = get_config("review.external_reviews_dir", cwd=cwd)
     if isinstance(configured, str) and configured:
         return Path(configured), ReviewsDirRule.CONFIG
 

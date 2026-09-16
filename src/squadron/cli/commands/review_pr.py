@@ -19,7 +19,6 @@ from rich.console import Console
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.cli.commands.pr import render_code_host_error, resolve_and_fetch_pull_request
 from squadron.cli.commands.review import (
-    _cf_project_name,  # pyright: ignore[reportPrivateUsage]
     _exit_on,  # pyright: ignore[reportPrivateUsage]
     _resolve_save_outcome,  # pyright: ignore[reportPrivateUsage]
     _resolve_verbosity,  # pyright: ignore[reportPrivateUsage]
@@ -31,6 +30,7 @@ from squadron.codehost.models import PullRequestRecord, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
 from squadron.codehost.worktree import ScratchWorktree
 from squadron.config.manager import get_config
+from squadron.integrations.context_forge import cf_project_name
 from squadron.review.git_utils import EmptyScopeError, assert_reviewable_scope
 from squadron.review.persistence import save_review_result
 from squadron.review.reviews_dir import resolve_reviews_dir
@@ -84,19 +84,25 @@ def _resolve_pr_rules_content(
     the mistake this function exists to avoid: an unreviewed rules directory planted in
     the PR's own worktree must never reach the reviewer's instructions.
 
-    Returns the assembled rules content **and** which source produced the rules
-    directory. The source is written to the artifact as ``rulesSource`` (D6), so
-    it has to survive this call rather than being resolved a second time later —
+    Returns the assembled rules content **and** which source produced the
+    rules. The source is written to the artifact as ``rulesSource`` (D6), so it
+    has to survive this call rather than being resolved a second time later —
     a second resolution could disagree with the one the reviewer actually got.
     """
     rules_path = rules_flag
     if not rules_path:
-        config_rules = get_config("default_rules")
+        config_rules = get_config("default_rules", cwd=checkout_cwd)
         if isinstance(config_rules, str):
             rules_path = config_rules
     manual_content = Path(rules_path).read_text() if rules_path else None
 
     checkout_rules_dir, rules_source = resolve_rules_dir(checkout_cwd, None, rules_dir_flag)
+    # A --rules file with no directory resolving is still rules reaching the
+    # reviewer. Reporting NONE there would claim the run got none, the mirror
+    # image of the --no-rules reasoning: the key must not under-report any more
+    # than it over-reports.
+    if checkout_rules_dir is None and manual_content is not None:
+        rules_source = RulesSource.FILE
     file_paths = changed_paths if checkout_rules_dir is not None else []
     content = load_review_rules(
         "code",
@@ -327,7 +333,7 @@ def review_pr(
                 reviews_dir=reviews_dir,
                 input_file=resolved.record.url,
                 target=target,
-                project_name=_cf_project_name(),
+                project_name=cf_project_name(),
                 heading_label=f"PR #{resolved.record.number}",
             )
         except OSError as exc:

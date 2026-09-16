@@ -347,9 +347,15 @@ class ReviewAction:
         revision_number = context.iteration if context.iteration >= 1 else None
         review_file_path: str | None = None
         try:
+            # Off-thread for the same reason the provider-failure branch above
+            # is: the save runs a git subprocess bounded at 30s through the
+            # target's reviewed_sha(), plus archive_existing_review's read and
+            # write, and no blocking call belongs on the event loop inside an
+            # async def (project async rule).
             if slice_info is not None:
                 review_file_path = str(
-                    save_review_result(
+                    await asyncio.to_thread(
+                        save_review_result,
                         result,
                         template_name,
                         slice_info,
@@ -368,7 +374,8 @@ class ReviewAction:
                 # boundary below keeps it non-fatal to the action exactly as
                 # a write failure was.
                 review_file_path = str(
-                    save_review_result(
+                    await asyncio.to_thread(
+                        save_review_result,
                         result,
                         template_name,
                         reviews_dir=Path(cwd) / REVIEWS_DIR,

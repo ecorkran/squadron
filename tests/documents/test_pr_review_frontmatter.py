@@ -25,6 +25,8 @@ from __future__ import annotations
 import json
 import subprocess
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -84,6 +86,30 @@ def _cf_validate() -> dict[str, object]:
     return json.loads(result.stdout)
 
 
+@contextmanager
+def _fixture_in_reviews(name: str) -> Iterator[Path]:
+    """Write a fixture into the real reviews directory, and always remove it.
+
+    The fixture cannot live in ``tmp_path``: cf validates only files under the
+    registered project root, so a fixture written anywhere else is silently
+    skipped and proves nothing. That forces a write into the working tree, and
+    a write into the working tree is debris the moment anything goes wrong —
+    an interrupted run leaves a ``zz-*.md`` that ``cf validate`` then walks and
+    that can be committed by accident.
+
+    ``mkdir`` is inside the guarded region for the same reason: a failure
+    between creating the directory and entering the caller's ``try`` would
+    otherwise escape the cleanup entirely.
+    """
+    path = _REVIEWS / name
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_PR_FRONTMATTER, encoding="utf-8")
+        yield path
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def _skip_unless_this_checkout_is_the_registered_root() -> int:
     """Return the baseline count, or fail naming why the probe cannot run.
 
@@ -97,13 +123,8 @@ def _skip_unless_this_checkout_is_the_registered_root() -> int:
     files_checked = baseline["filesChecked"]
     assert isinstance(files_checked, int)
 
-    probe = _REVIEWS / f"zz-rootcheck-{uuid.uuid4().hex}.md"
-    probe.parent.mkdir(parents=True, exist_ok=True)
-    probe.write_text(_PR_FRONTMATTER, encoding="utf-8")
-    try:
+    with _fixture_in_reviews(f"zz-rootcheck-{uuid.uuid4().hex}.md"):
         after = _cf_validate()
-    finally:
-        probe.unlink(missing_ok=True)
 
     after_count = after["filesChecked"]
     assert isinstance(after_count, int)
@@ -128,13 +149,8 @@ class TestPrShapedFrontmatterValidates:
         """
         baseline = _skip_unless_this_checkout_is_the_registered_root()
 
-        fixture = _REVIEWS / f"zz-pr-shape-{uuid.uuid4().hex}.md"
-        fixture.parent.mkdir(parents=True, exist_ok=True)
-        fixture.write_text(_PR_FRONTMATTER, encoding="utf-8")
-        try:
+        with _fixture_in_reviews(f"zz-pr-shape-{uuid.uuid4().hex}.md"):
             report = _cf_validate()
-        finally:
-            fixture.unlink(missing_ok=True)
 
         assert report["filesChecked"] == baseline + 1, (
             f"cf checked {report['filesChecked']}, expected {baseline + 1} — "
@@ -151,13 +167,9 @@ class TestPrShapedFrontmatterValidates:
         """
         baseline = _skip_unless_this_checkout_is_the_registered_root()
 
-        fixture = _REVIEWS / f"github.com-ecorkran-squadron-{uuid.uuid4().hex[:6]}-review.code.md"
-        fixture.parent.mkdir(parents=True, exist_ok=True)
-        fixture.write_text(_PR_FRONTMATTER, encoding="utf-8")
-        try:
+        name = f"github.com-ecorkran-squadron-{uuid.uuid4().hex[:6]}-review.code.md"
+        with _fixture_in_reviews(name):
             report = _cf_validate()
-        finally:
-            fixture.unlink(missing_ok=True)
 
         assert report["filesChecked"] == baseline + 1
         assert report["totalFindings"] == 0, report["findings"]

@@ -697,6 +697,9 @@ def save_review_result(
             could not be archived (see :func:`archive_existing_review`). The
             existing file is left untouched — losing a review to a silent
             overwrite is the failure this refuses to allow.
+        ValueError: If neither ``target`` nor ``slice_info`` is supplied, so
+            there is nothing to name the artifact under. Raising beats
+            inventing a filename the caller never chose.
     """
     directory = reviews_dir or REVIEWS_DIR
     directory.mkdir(parents=True, exist_ok=True)

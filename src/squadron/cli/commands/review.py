@@ -24,6 +24,7 @@ from squadron.integrations.context_forge import (
     ContextForgeClient,
     ContextForgeError,
     ContextForgeNotAvailable,
+    cf_project_name,
 )
 from squadron.models.aliases import model_allows_tools, resolve_model_alias
 from squadron.providers.errors import ProviderError
@@ -798,23 +799,6 @@ def review_slice(
     _exit_on(result.verdict, outcome)
 
 
-def _cf_project_name() -> str:
-    """The ``project:`` frontmatter value, from Context Forge.
-
-    Extracted from ``_arch_slice_info``, which fabricated a whole ``SliceInfo``
-    partly to carry this one string. The degradation is deliberate and
-    pre-existing: a review authored where cf cannot answer writes
-    ``project: unknown`` rather than guessing a name from the directory, which
-    is the behaviour issue fixed in ``ac01838c`` (the value used to be
-    hardcoded ``squadron``).
-    """
-    try:
-        return ContextForgeClient().get_project().name
-    except (ContextForgeNotAvailable, ContextForgeError) as exc:
-        _logger.warning("Could not resolve project name from ContextForge: %s", exc)
-        return "unknown"
-
-
 def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
     """The minimal SliceInfo an arch review's *failure* artifact is named under.
 
@@ -835,7 +819,7 @@ def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
         design_file=None,
         task_files=[],
         arch_file=input_file,
-        project=_cf_project_name(),
+        project=cf_project_name(),
     )
 
 
@@ -895,14 +879,15 @@ def review_arch(
     )
 
     def _save_arch(index: int) -> bool:
-        # The failure path already built a SliceInfo for this run; reuse it
-        # rather than rebuilding the identity a second way. Otherwise the arch
-        # target names itself from the document, which is what _arch_slice_info
-        # fabricated a whole SliceInfo to do (D1).
-        arch_target: SaveTargetProtocol = (
-            SliceTarget(arch_failure_target, cwd=review_cwd, rules_source=rules_source)
-            if arch_failure_target is not None
-            else ArchTarget(index, input_file, cwd=review_cwd, rules_source=rules_source)
+        # Always ArchTarget, never SliceTarget. The reuse of arch_failure_target
+        # that stood here was unreachable in its SliceTarget branch's negation:
+        # this closure runs only when arch_index is not None, which is exactly
+        # when arch_failure_target is not None, so every persisted arch review
+        # rendered targetKind: slice. _arch_slice_info survives for
+        # save_provider_failure alone (D1); the save path names itself from the
+        # document, which is what ArchTarget is for.
+        arch_target: SaveTargetProtocol = ArchTarget(
+            index, input_file, cwd=review_cwd, rules_source=rules_source
         )
         return _save_and_report(
             result,
@@ -910,7 +895,7 @@ def review_arch(
             arch_target,
             as_json=use_json,
             input_file=input_file,
-            project_name=_cf_project_name(),
+            project_name=cf_project_name(),
         )
 
     outcome = _resolve_save_outcome(

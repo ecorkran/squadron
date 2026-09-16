@@ -8,8 +8,8 @@ index, and the pipeline action bypassed ``save_review_result`` entirely for a
 lower-level call keyed by step name and index. Both are the same unmet need,
 solved twice (design D1).
 
-``SaveTarget`` is that need stated once: three questions persistence actually
-asks of whatever is being reviewed.
+``SaveTarget`` is that need stated once: the four questions persistence
+actually asks of whatever is being reviewed.
 
 The reviews *directory* is deliberately not a fourth question. It depends on
 the invocation — ``--reviews-dir``, whether the repository has a
@@ -37,7 +37,12 @@ from squadron.review.rules import RulesSource
 
 @runtime_checkable
 class SaveTarget(Protocol):
-    """The three target-specific questions a review artifact's shape depends on."""
+    """The four target-specific questions a review artifact's shape depends on.
+
+    ``reviewed_sha`` is the fourth, added after the design named three: the sha
+    has to come from the target rather than from ``save_review_result``, which
+    resolves it from the process working directory (D3).
+    """
 
     def filename_stem(self, review_type: str) -> str:
         """The artifact's name, without the ``.md``/``.json`` extension.

@@ -283,3 +283,52 @@ class TestFailedSaveExitsOne:
         assert mock_run_review.called, (
             f"{subcommand}: review never ran, so exit 1 did not come from the save"
         )
+
+
+class TestArchReviewsPersistAsArchReviews:
+    """383 review, F001 — the only CLI-level assertion on a saved targetKind.
+
+    ``sq review arch <index>`` wrote ``targetKind: slice`` into every artifact:
+    the save closure reused the ``SliceInfo`` the *failure* path had built, and
+    the ``ArchTarget`` branch guarding against that was unreachable, because
+    the closure runs exactly when that ``SliceInfo`` is non-None. The migration
+    test constructed ``ArchTarget`` directly and so never saw it.
+
+    Asserted on the frontmatter the command actually wrote, not on the target
+    type: the artifact is what downstream consumers (384/385) classify by, and
+    a test on the type would pass again the moment the wiring regressed.
+    """
+
+    def test_a_saved_arch_review_is_keyed_arch_not_slice(
+        self,
+        cli_runner: CliRunner,
+        mock_run_review: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        arch = tmp_path / "380-arch.pull-request-workflow.md"
+        arch.write_text("# arch\n")
+        reviews = tmp_path / "reviews"
+        reviews.mkdir()
+
+        with (
+            patch(
+                "squadron.cli.commands.review._resolve_arch_file",
+                return_value=str(arch),
+            ),
+            # persistence's own default, not review.py's — that module never
+            # imports REVIEWS_DIR, and _save_and_report passes no reviews_dir,
+            # so this is the directory the arch save actually resolves.
+            patch("squadron.review.persistence.REVIEWS_DIR", reviews),
+            patch(
+                "squadron.cli.commands.review.cf_project_name",
+                return_value="squadron",
+            ),
+        ):
+            result = cli_runner.invoke(app, ["review", "arch", "380"])
+
+        assert result.exit_code == 0, result.output
+        written = list(reviews.glob("*.md"))
+        assert written, f"no artifact was saved: {result.output}"
+        frontmatter = written[0].read_text(encoding="utf-8")
+        assert "targetKind: arch" in frontmatter
+        assert "targetKind: slice" not in frontmatter
