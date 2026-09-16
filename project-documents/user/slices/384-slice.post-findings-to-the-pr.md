@@ -495,8 +495,9 @@ exit 1 with zero writes recorded.
   comparing the two strings.
 - A finding summary containing a triple-backtick run and a copy of the marker opener posts intact
   and yields exactly one marker in the body, asserted by counting marker occurrences.
-- A review with more findings than the size bound posts a body under 65536 characters that names
-  the omitted count and the artifact path.
+- A review with more findings than the size bound posts a body under 65536 characters whose
+  truncation line names the omitted count and **no path** — the composer has no artifact location
+  to name, and D6 permits posting when the save failed (D2).
 - A `PASS` review with no findings posts a body containing the explicit no-findings line.
 - A failed save followed by a successful post: the comment is written, and the command exits 1
   for the save.
