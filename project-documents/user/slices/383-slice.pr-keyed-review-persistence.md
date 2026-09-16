@@ -560,8 +560,10 @@ for every other review.
 
 - The `SaveTarget` protocol — 384 and 385 both consume persisted reviews, and any later non-slice
   review target implements it rather than inventing a fifth shape.
-- The persisted PR review artifact, which 384 renders into a PR comment and whose `reviewedSha`
-  384's staleness statement compares against.
+- The persisted PR review artifact, whose `reviewedSha` 384's staleness statement compares
+  against. 384's comment is composed from the same `ReviewResult` this artifact is written from,
+  not read back from the file — see 384's D2 for why, and note that posting therefore does not
+  gate on a successful save.
 - `resolve_rules_dir`'s source, and `rulesSource` on every review artifact.
 - `review.external_reviews_dir`, `--reviews-dir`, and `PullRequestRecord.path_key`.
 

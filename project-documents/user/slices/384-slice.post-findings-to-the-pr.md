@@ -68,6 +68,9 @@ is fixed once, here, in one place.
   signature and gain the other-author and duplicate cases.
 - `tests/cli/test_review_pr_post.py`: the decision table and every refusal path.
 - `tests/review/test_pr_comment.py`: the body composer, the marker, and dry-run/real equality.
+- `project-documents/user/architecture/380-arch.pull-request-workflow.md`: the protocol operation
+  list and the posting paragraph, brought into agreement with D1 and D2 following 381's precedent
+  for recording protocol changes in the parent; 383's Provides entry likewise.
 - CHANGELOG line; DEVLOG entry with one recorded live post.
 
 ### Excluded
@@ -98,6 +101,12 @@ what happens when the save fails.
 The plan entry also lists `--dry-run` as a flag of this slice alongside `--post`. It is, but with
 the precedence stated in D3: `--dry-run` without `--post` is an error rather than a silent
 no-op, because "print what would be posted" is meaningless when nothing would be posted.
+
+Both corrections — this one and D1's protocol change — are recorded in the parent architecture
+document as part of this design, following 381's precedent of noting protocol changes where the
+protocol is specified rather than only in the slice that made them. The architecture's operation
+list, its posting paragraph, and 383's Provides entry were updated when this design was reviewed;
+no document still describes the shape this slice replaces.
 
 ## Dependencies
 
@@ -163,14 +172,20 @@ review completes → ReviewResult
        │              → [c] → UPDATE c
        │              → [c, …] → UPDATE c, report the rest
        │
-       compose_comment(result, record, live_head_sha=record.head_sha)
+       resolve_pull_request(...) → live_head = resolved.record.head_sha
+       │   └─ CodeHostError → report, exit 1, no write (D7)
+       │
+       compose_comment(result, record, live_head_sha=live_head)
+       │      record.head_sha is what was reviewed; live_head is what the PR
+       │      has now. Distinct values, or the staleness line could never fire.
        │
        ├─ --dry-run → print body, exit on verdict, no write
        └─ else      → post_comment | update_comment → print comment URL
 ```
 
-The post step runs **after** the save step and does not gate on it (D6). Both the identity call
-and the discovery call are reads; the single write is the last thing that happens.
+The post step runs **after** the save step and does not gate on it (D6). All three calls before
+the write — identity, discovery, and the post-time head read — are reads; the single write is the
+last thing that happens.
 
 ## Technical Decisions
 
@@ -265,10 +280,16 @@ Composition rules, each of which a test pins:
   is matched as a whole HTML comment (D4) so a summary quoting `<!-- squadron-review:` cannot
   forge one. This is the same containment concern 382 handled for the inbound direction, in the
   outbound one.
-- **Size.** GitHub rejects an issue comment body over 65536 characters. The composer truncates
-  the findings list at a constant under that bound and appends a line naming how many findings
-  were omitted and where the full artifact is. A review with 400 findings posts a usable comment
-  rather than a rejected one.
+- **Size.** GitHub rejects an issue comment body over 65536 characters. The composer truncates the
+  findings list at a constant under that bound and appends a line naming **how many findings were
+  omitted** — a count it can compute from its own inputs. It does not name the artifact's
+  location: `compose_comment(result, record, live_head_sha)` carries no path, 383 resolves the
+  location invocation-dependently in the CLI layer, and `pr_comment.py` must not learn
+  persistence. D6 makes the omission necessary rather than merely convenient — a post proceeds
+  when the save failed, so there may be no artifact to point at, and a comment naming a path that
+  does not exist would be a false statement on a public PR. The truncation line therefore reads
+  `_N further findings omitted; see the full review._` and nothing more. A review with 400
+  findings posts a usable comment rather than a rejected one.
 
 ### D3 — `--post` and `--dry-run`, and why the dry run cannot drift
 
@@ -297,9 +318,10 @@ the dry run also prints which action *would* have been taken (`would create` / `
 <url>`) and the reports for other operators' comments — on **stderr**, so stdout is the body and
 nothing else, and a test can compare stdout against the body a real run sends over stdin.
 
-One consequence worth naming: the dry run performs the same two reads (identity, discovery) as a
-real post. It must, or it could not say whether it would create or update, and the staleness line
-depends on the live head. `--dry-run` is not an offline mode.
+One consequence worth naming: the dry run performs the same three reads (identity, discovery, and
+the post-time head read of D7) as a real post. It must, or it could not say whether it would
+create or update, and the staleness line depends on the live head. `--dry-run` is not an offline
+mode, and every one of those reads is bounded by the same timeout as a real post (D8).
 
 ### D4 — The marker
 
@@ -339,7 +361,7 @@ composer additionally neutralizes any `<!-- squadron-review:` occurring inside a
 | Only theirs | `post_comment`; report each of theirs by author and URL | 1 | verdict / save |
 | Mine and theirs | `update_comment` on my earliest; report theirs | 1 | verdict / save |
 | `--dry-run` with `--post` | print body and the action that would be taken | 0 | verdict / save |
-| The write raises `CodeHostError` | `render_code_host_error`, already logged at WARNING by the adapter | 0 | 1 |
+| Any of the four host calls raises another `CodeHostError` (transport, auth, timeout) | `render_code_host_error`, already logged at WARNING by the adapter (D8) | 0 | 1 |
 
 Notes the table compresses:
 
@@ -399,6 +421,37 @@ Where the live head comes from: `resolve_pull_request` re-run at post time retur
 posted without the statement — a comment that silently omits a staleness warning it could not
 compute is worse than one that did not appear.
 
+### D8 — Every host call on the post path is bounded, and transport failure refuses the post
+
+D5's table enumerates the *semantic* outcomes — who owns which comment, and what to do about it.
+It does not cover the case where a call simply fails, and the post path adds four host call sites
+(identity, discovery, the D7 head read, the write) where 382 and 383 added none.
+
+**The bound.** Every one of the four goes through 381's `_run_gh`, so each is bounded by
+`HOST_COMMAND_TIMEOUT_SECONDS` (30s) and a wedged host surfaces as `HostCommandTimeoutError`
+rather than a hang. This slice adds no new timeout constant and introduces no unbounded call. The
+dry run is bounded identically, since it performs three of the four (D3).
+
+**The handling.** All four raise `CodeHostError` subclasses, and 381 established that each is
+logged once at WARNING or above by the layer that raises it. The CLI half is uniform: any
+`CodeHostError` from the post step is rendered by `render_code_host_error` and exits 1 with no
+write. That covers `HostUnauthenticatedError`, `GitHubCliMissingError`, `HostUnreachableError`,
+and `HostCommandTimeoutError` at every one of the four sites, and it is why `OperatorUnidentifiedError`
+gets its own D5 row: it is the one failure whose *reason* is worth a specific operator-facing
+message (`gh auth login --hostname <host>`) rather than the generic render.
+
+Two properties this fixes in place rather than leaving to fall out of the catch:
+
+- **A refusal before the write is a refusal, not a partial post.** Identity, discovery, and the
+  head read all precede the single write, so a transport failure at any of them means zero writes.
+  The saved artifact is untouched and the operator re-runs `--post`.
+- **The D7 head read is not exempt.** Its failure refuses the post (D7's own rule) through this
+  same path, rather than posting a comment whose staleness statement could not be computed.
+
+The criteria assert the signal for each site rather than trusting the catch-all to compose: a
+transport failure injected at identity, at discovery, at the head read, and at the write each
+exit 1 with zero writes recorded.
+
 ## Integration Points
 
 ### Provides
@@ -449,6 +502,13 @@ compute is worse than one that did not appear.
   for the save.
 - A `CodeHostError` from the write exits 1, names the error, and leaves the saved artifact in
   place.
+- A transport failure injected at **each** of the four host call sites — identity, discovery, the
+  D7 head read, and the write — exits 1 and records zero writes, asserted per site rather than
+  once (D8). The head-read row also asserts no comment was posted, since that is the one site
+  whose failure could plausibly be papered over by omitting the staleness line.
+- Every recorded host call on the post path carries `HOST_COMMAND_TIMEOUT_SECONDS`, asserted from
+  `FakeProcessRunner`'s recorded `timeout`, and a scripted `ProcessTimedOutError` at any of them
+  exits 1 with zero writes.
 - One recorded live post on a real PR, and a second run against it showing the comment updated
   rather than duplicated.
 
@@ -537,7 +597,10 @@ Steps 3, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
 3. `--post` and `--dry-run` on `sq review pr`, the identity refusal, and the create-or-update
    decision (D3, D5), against the fake runner. The zero-writes assertion lands with the flag.
 4. The staleness statement and its post-time head read (D7).
-5. Live post, DEVLOG entry, CHANGELOG line.
+5. The transport-failure and timeout assertions across all four host call sites (D8). Last of the
+   code steps because it asserts a property of the finished path — three of the four sites do not
+   exist until step 4 lands.
+6. Live post, DEVLOG entry, CHANGELOG line.
 
 ### Testing
 
@@ -551,6 +614,11 @@ Steps 3, 4, and 6 for one run are recorded in the DEVLOG entry that closes this 
   recorded argv and the write count; the identity refusal asserting no listing call follows; the
   save-failed-post-succeeded combination and its exit code; the `--dry-run` requires-`--post`
   error.
+- `tests/cli/test_review_pr_post_failures.py` — D8: a transport failure and a
+  `ProcessTimedOutError` injected at each of the four host call sites, each asserting exit 1, zero
+  writes, and for the head-read site that no comment was posted; plus the recorded `timeout` on
+  every post-path call. Kept separate from the decision table because these are one assertion
+  shape applied across four sites, and mixing them into the semantic table obscures both.
 - `tests/cli/test_review_pr_post_equality.py` — the dry-run/real equality assertion, kept separate
   because it is the one test that must drive two full invocations and compare their outputs. A
   composer test cannot substitute for it: two call sites passing different arguments to the same
