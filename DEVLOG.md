@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260915
+dateUpdated: 20260917
 
 ---
 
@@ -13,6 +13,65 @@ A lightweight, append-only record of development activity. Newest entries first.
 ---
 
 ## 20260917
+
+### Slice 385 design (Phase 4)
+
+`385-slice.create-a-pr-with-a-good-message.md` written. `sq pr create` is the initiative's
+authoring side and its second and final host write.
+
+Eight decisions. D1 fixes base selection as a chain that *refuses* rather than falls through: a
+configured `git.integration_branch` absent from the host fails creation naming the branch, because
+"this repository says work merges to `dev/erik` and the host has never heard of it" is not the
+same situation as "no integration branch configured." An explicit `--base` is deliberately not
+pre-confirmed — `open_pull_request` rejects a bad base with a 422 that names it, and the
+fall-through a pre-check would prevent is only silent in the integration-branch case.
+
+D2 splits the pushed-branch precondition into two checks with different fixes: missing on the host
+(`branch_exists` false → `git push -u`) and behind (host sha ≠ local sha → `git push`). The sha
+read is `git ls-remote` through the adapter's existing process-runner seam rather than a new
+protocol operation — the architecture fixes the operation list, and this question is answerable
+with git against a remote the locator already names.
+
+D3 resolved the plan entry's named risk. The claim was that `pipeline/summary_oneshot`'s docstring
+scopes it to non-SDK profiles while the review default is `sdk`, and that the slice must correct
+"the docstring or the routing." Tracing it: `summary_oneshot` contains no `is_sdk_profile` check
+and no rejection path — it resolves any registered profile through `get_profile` →
+`get_provider` → `create_agent`. The gate is in its caller, `pipeline/actions/summary.py`, which
+routes the SDK arm to `context.sdk_session.capture_summary` and refuses when no session exists.
+That is a pipeline concern: a pipeline summary step must reuse its live SDK session rather than
+open a second one. A CLI command has no session, and the CLI already runs `sdk` through a one-shot
+daily — `review_client.run_review_with_profile`, the same provider sequence with no session, is
+what `sq review code --profile sdk` uses. So `sdk` through a one-shot was never the risk it was
+flagged as. The composer performs that sequence directly rather than calling either existing
+function (both are ~200-line and shaped for their own callers — one pipeline-shaped, one
+review-shaped), and the correction owed is to `summary_oneshot`'s docstring, which describes its
+caller's policy as if it were the module's behavior. The routing is correct and unchanged. The
+plan entry was amended to record this.
+
+D4 and D5 are the section contract: five squadron-written headings, deterministic facts written by
+squadron directly beneath the prose they support, and a presence-and-filled check that fails
+creation rather than degrading it. "Filled" is defined structurally — non-empty after stripping
+the deterministic block, and not a bare restatement of the heading — because that catches the
+failure that actually occurs (a dropped or empty section) without pretending to judge prose
+quality. No retry on failure: a retry loop makes the command's token cost unbounded, and the
+operator can rerun having seen the reason.
+
+D7 scopes "the latest review" to shas *in* the base-to-head range rather than ancestors of head,
+which is what keeps a long-lived integration branch from attaching a neighboring slice's review to
+this PR. Two gaps surfaced during reconnaissance and are now owned by this slice: there is no
+`{index}-slice.{name}` branch-name parser in the tree (only the reverse lookup in `git_utils`),
+and nothing anywhere reads task-file checkbox state — `_tasks_input` passes task files to the
+review template as paths for injection. Both parsers are new here.
+
+D6 puts the logic in a new `src/squadron/pr/` package in the CLI's dependency tier. The work needs
+`codehost` types and `review` helpers together, which the import-boundary test forbids inside
+`review/`; 384 set the precedent that the combination lives in the CLI layer. Keeping it in
+`cli/commands/pr.py` would push that file well past the size guideline and make it testable only
+through Typer's runner.
+
+Dependencies are 381 alone. 383 is not a prerequisite — without it the provenance section carries
+its no-input line, the architecture's stated degraded path — though 383 is merged, so the degraded
+path will be exercised by unplanned repositories rather than by this one.
 
 ### Slice 384 implementation (Phase 6)
 

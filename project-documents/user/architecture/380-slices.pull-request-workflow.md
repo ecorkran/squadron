@@ -194,7 +194,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
    - **Risk:** Low — the operations are small and the fake runner covers the branches.
    - **Relative Effort:** 2/5
 
-5. [ ] **(385) Create a PR with a Good Message** — `sq pr create`: base selection in the parent's
+5. [ ] **(385) Create a PR with a Good Message** — Designed: `385-slice.create-a-pr-with-a-good-message.md`. `sq pr create`: base selection in the parent's
    order (`--base`, then the configured integration branch when the adapter confirms it exists on
    the host, else the host default branch, with the chosen base and its source printed and no
    fall-through to `main`); the pushed-branch precondition (head on the host and matching the
@@ -202,9 +202,12 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
    base-to-head range, the slice design and tasks when the branch name matches
    `{index}-slice.{name}` and `cf` resolves it, and the latest review whose reviewed sha lies in
    that range, else none); deterministic assembly of the exact parts (commit list, linked slice,
-   review provenance, reviewed sha); one-shot prose composition through `pipeline/summary_oneshot`
-   with the review model and profile flags, after verifying the `sdk` profile through it and
-   correcting the docstring or the routing; squadron-written section headings (what changed, why,
+   review provenance, reviewed sha); one-shot prose composition with the review model and profile
+   flags (385 design resolved the `sdk`-through-one-shot question: `summary_oneshot` does not
+   refuse `sdk` — its caller `pipeline/actions/summary.py` gates on SDK-session reuse, a pipeline
+   concern the CLI does not have — so the composer performs the one-shot sequence directly, as
+   `run_review_with_profile` already does, and the correction owed is to `summary_oneshot`'s
+   docstring, not its routing); squadron-written section headings (what changed, why,
    how it was verified, known gaps, review provenance) with the model filling prose, sections
    without an input carrying an explicit no-input line, and a presence-and-filled check before
    creation; `--dry-run` printing title and body; and creation through the adapter.
