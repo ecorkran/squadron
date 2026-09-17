@@ -2,13 +2,45 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260915
+dateUpdated: 20260917
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260917
+
+### Slice 921 — Task Breakdown: Small Fixes Batch (#67, #103)
+
+Phase 5 complete: [921-tasks.small-fixes-batch.md](project-documents/user/tasks/921-tasks.small-fixes-batch.md)
+(355 lines), converted from the design that landed two review rounds earlier
+today (FAIL → CONCERNS, both addressed). Two independent fixes, each its own
+part ending in a gate/commit task:
+
+- **Part A (#67)** — a shared `_reject_unknown_alias` helper wired into both
+  `_run_review_command` and `_resolve_judge_model`, firing only when alias
+  resolution is a no-op *and* none of the three profile channels (flag,
+  template, config) supplies a value — matching the design's corrected
+  rationale, not the flag-only guard an earlier draft proposed. Task 1.4
+  flags that this fix invalidates an existing test
+  (`test_unknown_model_passes_through` in `test_review_profile.py`) that
+  currently asserts the opposite of the new intended behavior — updating it
+  is a task, not an afterthought.
+- **Part B (#103)** — a new `_sibling_projects` helper (filesystem-derived,
+  `OSError`-guarded per review F002) partitions `--restore` matches into
+  clean/excluded; only the no-`--key` default is scoped to `clean`, while
+  `--key` and the picker listing still see everything, per the
+  non-composable-requirement fix from review F001/F001-followup.
+
+Also fixed en route: entry 19 in `900-slices.maintenance-and-refactoring.md`
+already existed and needed no changes; task file references it directly
+rather than duplicating its content.
+
+Not yet done: Phase 6 implementation. No branch created — per project git
+rules, Phase 5 stays on `main` (`git.integration_branch` unset, verified via
+`cf config get`).
 
 ## 20260915
 
