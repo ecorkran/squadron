@@ -12,6 +12,86 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260917
+
+### Slice 384 implementation (Phase 6)
+
+Seven code tasks complete on branch `384-slice.post-findings-to-the-pr`, merged into
+`squadron-pr` (the initiative's integration branch — never `main`). `sq review pr --post` writes
+the saved review to the pull request as one comment.
+
+Task 1 replaced 381's `find_own_comment` with `find_marked_comments(record, *, marker) ->
+list[HostComment]` (D1): every marked comment, any author, ordered oldest-first, with
+`author_login` populated from the payload. The old operation filtered to the operator and
+returned only the earliest by `min()`, which discarded both things the architecture asks squadron
+to *report* — another operator's marked comment, and the operator's own duplicates — before any
+caller could see them. Zero production callers existed, so the change replaced the operation
+outright rather than adding a second one beside it; `grep -r find_own_comment src tests` returns
+nothing.
+
+Task 2 added `src/squadron/review/pr_comment.py`: pure functions composing a PR comment body from
+a `ReviewResult` and a `PullRequestRecord`, never from the saved artifact file (D2) — the artifact
+carries frontmatter, a run digest, and at `-vv` a prompt-and-response appendix that must never
+reach a public PR. Findings come from `structured_findings` (the same projection the artifact's
+frontmatter uses), grouped `fail`/`concern`/`note`/`pass` with within-group order preserved, a
+size bound under GitHub's 65536-character limit whose truncation line names only the omitted
+count — never a path, since D6 permits posting after a failed save, when there may be no artifact
+to name. Task 3 extended the existing import-boundary guard (`tests/codehost/test_import_boundaries.py`)
+to permit exactly this module importing exactly `PullRequestRecord`, checked by name so the
+exception cannot silently widen.
+
+Tasks 4–6 added `--post`/`--dry-run` and `_post_review` to `sq review pr`: identity resolved
+first as a clean early exit, discovery via `find_marked_comments`, partition into mine/theirs,
+update the earliest of mine and report the rest (own duplicates and other operators' comments
+alike) by author and URL, create when none are mine. The comment body is bound once
+(`compose_comment`) and shared by `--dry-run` and a real post, so the two cannot drift by
+construction rather than by discipline (D3). The post step runs after the save step and does not
+gate on its outcome (D6). D7's staleness statement compares the reviewed sha against a fresh
+`resolve_pull_request` read taken at post time, not the resolution-time record — comparing a
+value to itself would mean the line could never fire, the mistake the slice design's own first
+draft made and its review caught (F001).
+
+Task 7 added `tests/cli/test_review_pr_post_failures.py`, asserting D8's failure matrix
+per-site rather than once: a classified transport failure and a scripted `ProcessTimedOutError`
+at each of the four post-path host calls (identity, discovery, the head re-read, the write) both
+exit 1 with no effective write, every post-path call carries `HOST_COMMAND_TIMEOUT_SECONDS`, and
+a save that succeeded followed by a failed post leaves the saved artifact untouched. The
+`write_calls()` helper 381 built counts any recorded `-X POST`/`-X PATCH` argv, attempted or not
+— so at the write site itself, whose failing call *is* the one write attempt, the assertion reads
+"exactly one attempt, never a retry or a duplicate" rather than "none," which is what the other
+three sites assert.
+
+Full gate: `ruff format --check`, `ruff check`, `pyright` (0 errors) all clean. Full suite: 4079
+passed, 6 skipped, 3 failed — the pre-existing `test_schema_drift.py` failures (context-forge
+#88), unchanged by this slice.
+
+**Live verification (walkthrough steps 1–4, 6; step 5 not independently exercised live — see
+below):**
+
+No open PR existed on `ecorkran/squadron` at verification time (all five prior PRs are merged),
+so a throwaway PR (#115) was opened from `main` with one non-excluded file under a scratch
+directory, used for the walkthrough, and closed — not merged — once evidence was gathered; its
+branch was deleted both locally and on the remote afterward.
+
+Step 3 — `sq review pr 115 --no-tools --no-save --post` printed
+`https://github.com/ecorkran/squadron/pull/115#issuecomment-5719292536`. Reading the comment back
+confirmed `<!-- squadron-review: github.com/ecorkran/squadron#115 -->` as the literal first line —
+an HTML comment, invisible on the rendered PR, visible only via "View source."
+
+Step 4 — running the same command again printed the **same** comment URL, and
+`gh pr view 115 --json comments --jq '.comments | length'` still read `1`: one comment, updated in
+place, not a second one.
+
+Step 6 — `sq review pr 115 --no-tools --no-save --dry-run` printed `--dry-run requires --post` and
+exited 1, before any host call.
+
+Step 5 (staleness line) was not exercised live — the throwaway PR's head did not move between
+posts, and forcing it to would have meant a second push cycle for a PR that existed only to be
+closed. Covered deterministically instead at both the composer level
+(`tests/review/test_pr_comment.py::TestStaleness`) and the CLI level
+(`test_moved_head_includes_the_staleness_line`, which drives a real post-time re-resolution over
+the fake runner with a scripted head differing from the reviewed sha).
+
 ## 20260916
 
 ### Slice 383 implementation (Phase 6)

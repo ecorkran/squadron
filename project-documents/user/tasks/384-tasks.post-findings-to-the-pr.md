@@ -6,8 +6,8 @@ lld: user/slices/384-slice.post-findings-to-the-pr.md
 dependencies: [381, 383]
 projectState: "383 merged to `squadron-pr`; `sq review pr` reviews and persists. 381's comment operations (`find_own_comment`, `post_comment`, `update_comment`, `identify_operator`) are implemented over `gh` and fake-runner tested, with no production caller — this slice is their first. Design reviewed (CONCERNS, all findings addressed) at a527599a."
 dateCreated: 20260916
-dateUpdated: 20260916
-status: not_started
+dateUpdated: 20260917
+status: complete
 ---
 
 ## Context Summary
@@ -235,24 +235,24 @@ Last of the code tasks: it asserts a property of the finished path, and three of
 
 ## Task 8 — Verification, evidence, and close
 
-- [ ] **8.1 Full gate**
-  - [ ] `ruff format`, `ruff check`, `pyright` — zero pyright errors
-  - [ ] Full test suite; the three `tests/documents/test_schema_drift.py` failures are the known context-forge #88 symptom and must be **unchanged** by this slice
-  - [ ] `grep -r find_own_comment src tests` returns nothing
-  - [ ] Success: gates green
-  - [ ] Effort: 1
+- [x] **8.1 Full gate**
+  - [x] `ruff format`, `ruff check`, `pyright` — zero pyright errors
+  - [x] Full test suite; the three `tests/documents/test_schema_drift.py` failures are the known context-forge #88 symptom and must be **unchanged** by this slice
+  - [x] `grep -r find_own_comment src tests` returns nothing
+  - [x] Success: gates green
+  - [x] Effort: 1
 
-- [ ] **8.2 Live evidence**
-  - [ ] Run the LLD's Verification Walkthrough against a real PR: default writes nothing, `--dry-run` prints without posting, `--post` creates, a second `--post` updates rather than duplicates, and `--dry-run` alone refuses
-  - [ ] Confirm the rendered comment shows no marker and that "View source" shows it as the first line
-  - [ ] Record steps 3, 4, and 6 in the DEVLOG entry
-  - [ ] Success: one squadron comment on the PR after two runs, with an edited indicator
-  - [ ] Effort: 2
+- [x] **8.2 Live evidence**
+  - [x] Run the LLD's Verification Walkthrough against a real PR: default writes nothing, `--dry-run` prints without posting, `--post` creates, a second `--post` updates rather than duplicates, and `--dry-run` alone refuses
+  - [x] Confirm the rendered comment shows no marker and that "View source" shows it as the first line
+  - [x] Record steps 3, 4, and 6 in the DEVLOG entry
+  - [x] Success: one squadron comment on the PR after two runs, with an edited indicator
+  - [x] Effort: 2
 
-- [ ] **8.3 Close the slice**
-  - [ ] CHANGELOG line — short and user-facing
-  - [ ] DEVLOG entry per the Session State Summary guidance, carrying the live evidence
-  - [ ] Set `status: complete` in the LLD and mark entry 4 `[x]` in `380-slices.pull-request-workflow.md`
-  - [ ] Merge `384-slice.post-findings-to-the-pr` into `squadron-pr`. **Never into `main`** — the integration branch is set for this initiative
-  - [ ] Success: slice closed, branch merged, gates green
-  - [ ] Effort: 1
+- [x] **8.3 Close the slice**
+  - [x] CHANGELOG line — short and user-facing
+  - [x] DEVLOG entry per the Session State Summary guidance, carrying the live evidence
+  - [x] Set `status: complete` in the LLD and mark entry 4 `[x]` in `380-slices.pull-request-workflow.md`
+  - [x] Merge `384-slice.post-findings-to-the-pr` into `squadron-pr`. **Never into `main`** — the integration branch is set for this initiative
+  - [x] Success: slice closed, branch merged, gates green
+  - [x] Effort: 1

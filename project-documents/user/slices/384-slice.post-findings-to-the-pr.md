@@ -6,8 +6,8 @@ parent: user/architecture/380-slices.pull-request-workflow.md
 dependencies: [381, 383]
 interfaces: [386]
 dateCreated: 20260916
-dateUpdated: 20260916
-status: not_started
+dateUpdated: 20260917
+status: complete
 ---
 
 # Slice Design: Post Findings to the PR
@@ -527,48 +527,56 @@ exit 1 with zero writes recorded.
 ### Verification Walkthrough
 
 Run in a clone of `ecorkran/squadron` with `gh` authenticated, against an open PR you can comment
-on.
+on. Run against a **reviewable** diff — a PR whose only changed files match the code template's
+`diff_exclude_patterns` (`*.md`, `*.yaml`, `*.json`, `*.txt`, and others) is refused before
+resolution reaches the post step at all, with a message naming the exclusion; add at least one
+non-excluded file (e.g. `.py`) to the PR before running any step below.
+
+Confirmed live 20260917 against a throwaway PR (`ecorkran/squadron#115`, opened from `main`,
+closed — not merged — once evidence was gathered), carrying one `.py` file under a scratch
+directory.
 
 1. Confirm the default writes nothing. Review the PR with no post flag:
    ```
-   sq review pr <number>
+   sq review pr 115 --no-tools --no-save
    ```
-   The PR shows no new comment.
+   Verdict PASS printed; no `--post`, so no host write. Confirmed via
+   `gh pr view 115 --repo ecorkran/squadron --json comments --jq '.comments | length'` → `0`.
 2. See exactly what would be posted, without posting:
    ```
-   sq review pr <number> --post --dry-run
+   sq review pr 115 --no-tools --no-save --post --dry-run
    ```
-   The body prints to stdout; stderr names whether it would create or update. The PR is still
-   unchanged. Keep this output.
+   The body printed to stdout, marker first line included; stderr printed `would create`. The
+   comment count was still `0` afterward — confirmed unchanged.
 3. Post it:
    ```
-   sq review pr <number> --post
+   sq review pr 115 --no-tools --no-save --post
    ```
-   The printed comment URL opens the comment on the PR. Its rendered form shows no marker; "View
-   source" on the comment shows `<!-- squadron-review: github.com/<owner>/<repo>#<number> -->` as
-   the first line.
+   Printed `https://github.com/ecorkran/squadron/pull/115#issuecomment-5719292536`. Reading the
+   comment body back (`gh pr view 115 --json comments --jq '.comments[0].body'`) showed
+   `<!-- squadron-review: github.com/ecorkran/squadron#115 -->` as the literal first line — an
+   HTML comment, so it renders as nothing on the PR itself; "View source" on the comment is what
+   shows it.
 4. Confirm idempotency. Run the same command again:
    ```
-   sq review pr <number> --post
+   sq review pr 115 --no-tools --no-save --post
    ```
-   The PR still has exactly one squadron comment, with an "edited" indicator, and the printed URL
-   is the same as step 3's.
-5. Confirm the staleness line. Push a commit to the PR branch, then post a review taken against
-   the older head — in practice, run step 3, push, and run step 3 again:
-   ```
-   git push && sq review pr <number> --post
-   ```
-   Since the second review resolves the new head, no staleness line appears. To see one, the
-   reviewed sha must differ from the live head; the deterministic assertion for this lives in the
-   fake-runner test, and the live step is confirmation that the line renders as intended when it
-   fires.
+   Printed the **same** URL (`...issuecomment-5719292536`) as step 3. `gh pr view 115 --json
+   comments --jq '.comments | length'` still read `1` — one comment, updated in place (GitHub
+   shows a PATCH as an "edited" comment), not a second one.
+5. Staleness line — not independently exercised live this run (the throwaway PR's head did not
+   move between posts). Its rendering is asserted deterministically at both the composer level
+   (`tests/review/test_pr_comment.py::TestStaleness`) and the CLI level
+   (`tests/cli/test_review_pr_post.py::test_moved_head_includes_the_staleness_line`, which drives
+   a real post-time re-resolution over the fake runner with a scripted head that differs from the
+   reviewed sha) — matching the caveat this section already carried before the live run.
 6. Confirm the refusal path:
    ```
-   sq review pr <number> --dry-run
+   sq review pr 115 --no-tools --no-save --dry-run
    ```
-   Exits 1 naming that `--dry-run` requires `--post`.
+   Printed `--dry-run requires --post` and exited 1, before any host call.
 
-Steps 3, 4, and 6 for one run are recorded in the DEVLOG entry that closes this slice.
+Steps 3, 4, and 6 for this run are recorded in the DEVLOG entry that closes this slice.
 
 ## Risk Assessment
 
