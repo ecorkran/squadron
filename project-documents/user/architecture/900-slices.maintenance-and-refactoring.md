@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260915
+dateUpdated: 20260916
 status: in_progress
 ---
 
@@ -388,6 +388,10 @@ Two further consequences follow from `RateLimitEvent` being a new type. Message-
 **Complete.** Task file: `user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`. DEVLOG: 20260915 implementation entry. Implementation matched the design; the `sdk_type` exclusion-set fix widened to three more consumers of `agent.handle_message()` found by the task's own grep instruction (`summary_oneshot.py`, `review_client.py`, `pipeline/actions/dispatch.py`). Live review verification (Task 12) passed; live metrology-audit verification (Task 13) is blocked by a pre-existing, unrelated bug — [issue #107](https://github.com/ecorkran/squadron/issues/107) — and deferred rather than completed.
 
 **Status:** not started · **Risk:** Medium (touches every SDK-backed path — review, dispatch, pipeline, metrology — and the failure mode of getting the rate-limit re-keying wrong is silent: no backoff under real throttling, observable only as degraded behavior under load) · **Effort:** 3/5 · **Dependencies:** none — the compatibility probe found no blocking API breakage, so this can be picked up independently
+
+19. [ ] **(921) Small Fixes Batch — Alias Errors, Summary Restore Scoping, Test Logger Leakage, Destructive Install** — Four independently small, root-caused bugs bundled into one slice:
+[Issue #67](https://github.com/ecorkran/squadron/issues/67): an unknown model alias (e.g. `glm53`) yields a misleading trust-warning cascade instead of a clear "unknown alias" error. [Issue #103](https://github.com/ecorkran/squadron/issues/103): `sq summary --restore` with no key defaults to the most recent summary file across *all* sibling-worktree projects rather than scoping to the current project, so a restore can silently seed context from the wrong project. [Issue #78](https://github.com/ecorkran/squadron/issues/78): review CLI verbosity wiring mutates the global logger level, so test outcomes depend on run order — a test earlier in the suite can leave logging configured in a way that masks a later test's real coverage. [Issue #65](https://github.com/ecorkran/squadron/issues/65) finding 1 only (findings 2–3 remain routed to 907 above): `sq install-commands` deletes any `*.md` under `~/.claude/commands/<subdir>/` not present in the bundle, including user-owned files the user placed there themselves, and `uninstall_commands` is asymmetric (only clears `sq/`); fix is a receipt-tracked install (as `sq skills` already does) so removal is scoped to files squadron itself installed.
+Risk: Low (each fix is localized — an error-path message, a restore key-selection default, test-fixture logger scoping, and an install/uninstall file-tracking change — none touch a shared parse/dispatch hot path). Effort: 2/5. Dependencies: none.
 
 ---
 
