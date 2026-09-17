@@ -118,6 +118,17 @@ def _comment(comment_id: int, login: str, body: str, created_at: str) -> dict[st
     }
 
 
+def _comment_from_deleted_account(comment_id: int, body: str, created_at: str) -> dict[str, object]:
+    """A comment whose author account no longer exists: no ``user`` object at all."""
+    return {
+        "id": comment_id,
+        "user": None,
+        "body": body,
+        "created_at": created_at,
+        "html_url": f"https://example/{comment_id}",
+    }
+
+
 def _post_result(payload: dict[str, object]) -> str:
     return json.dumps(payload)
 
@@ -295,6 +306,34 @@ def test_another_logins_marked_comment_is_not_updated(
     argvs = [call.argv for call in runner.write_calls()]
     assert any("POST" in argv for argv in argvs)
     assert not any("issues/comments/9" in " ".join(argv) for argv in argvs)
+
+
+def test_a_deleted_accounts_marked_comment_is_reported_without_a_blank_author(
+    cli_runner: CliRunner, patched_host: dict[str, object], fake_result: object
+) -> None:
+    """A comment with no user object at all is still reported legibly, not as a blank name."""
+    _arm(
+        patched_host,
+        (["gh", "api", "user"], _ok(_fixture("user.json"))),
+        (
+            ["gh", "api", "--paginate"],
+            _ok(
+                _comments_page(
+                    _comment_from_deleted_account(11, f"quoting {_MARKER}", "2026-01-01T00:00:00Z")
+                )
+            ),
+        ),
+        (["gh", "api", "graphql"], _ok(_pr_resolve_payload())),
+        (
+            ["gh", "api", "-X", "POST"],
+            _ok(_post_result({"id": 12, "html_url": "https://example/12", "body": "x"})),
+        ),
+    )
+    result = cli_runner.invoke(app, [*_PARITY_BASE, "--post"])
+
+    assert result.exit_code == 0, result.output
+    assert "Marked comment by , " not in result.output
+    assert "an unknown author" in result.output
 
 
 def test_several_of_my_own_updates_earliest_and_reports_rest(

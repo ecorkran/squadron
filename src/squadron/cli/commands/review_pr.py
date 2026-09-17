@@ -175,17 +175,27 @@ class PrTarget:
         return self._record.head_sha
 
 
+#: Placeholder for ``RepositoryLocator.remote_name`` when reconstructing one
+#: to re-resolve a PR already identified by number. ``resolve_pull_request``
+#: only reads ``remote_name`` to look up a branch's PR when ``target.number``
+#: is absent (see ``_branch_for``/``_number_for_branch`` in ``github_cli.py``);
+#: since ``_resolve_live_head`` always supplies ``target.number``, that path
+#: never runs and this value is never consulted. Named rather than an inline
+#: literal so a reader does not mistake it for a real remote.
+_UNUSED_REMOTE_NAME = "unused"
+
+
 def _resolve_live_head(host: CodeHost, record: PullRequestRecord, *, cwd: str) -> str:
     """Re-resolve the pull request at post time, returning its current head sha (D7).
 
     Not the record captured at resolution — that is the reviewed sha, and
     comparing it to itself means the staleness line could never fire (F001).
-    ``remote_name`` on the reconstructed locator is unused by
-    ``resolve_pull_request``: identity is already known (``record.number``),
-    so no branch lookup and no remote enumeration happen on this path.
     """
     locator = RepositoryLocator(
-        host=record.host, owner=record.owner, repository=record.repository, remote_name="origin"
+        host=record.host,
+        owner=record.owner,
+        repository=record.repository,
+        remote_name=_UNUSED_REMOTE_NAME,
     )
     target = PullRequestTarget(form=TargetForm.NUMBER, number=record.number)
     resolved = host.resolve_pull_request(locator, target, cwd=cwd)
@@ -230,10 +240,12 @@ def _post_review(
     mine = [comment for comment in marked if comment.author_login == operator.login]
     theirs = [comment for comment in marked if comment.author_login != operator.login]
     for comment in theirs + mine[1:]:
-        _logger.info("marked comment by %s left untouched: %s", comment.author_login, comment.url)
-        console.print(
-            f"[dim]Marked comment by {comment.author_login}, left untouched: {comment.url}[/dim]"
-        )
+        # author_login is "" when the host reports no user object — a comment
+        # from a since-deleted account. Named explicitly so the report line
+        # never reads as a blank, mid-sentence gap.
+        author = comment.author_login or "an unknown author"
+        _logger.info("marked comment by %s left untouched: %s", author, comment.url)
+        console.print(f"[dim]Marked comment by {author}, left untouched: {comment.url}[/dim]")
 
     try:
         live_head_sha = _resolve_live_head(host, record, cwd=cwd)

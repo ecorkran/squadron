@@ -47,7 +47,7 @@ def compose_comment(result: ReviewResult, record: PullRequestRecord, *, live_hea
         marker_for(record),
         f"## Squadron review — {result.verdict.value}",
         "",
-        _model_line(result, record, live_head_sha=live_head_sha),
+        _model_line(result, record),
     ]
     staleness = _staleness_line(record.head_sha, live_head_sha)
     if staleness is not None:
@@ -58,7 +58,7 @@ def compose_comment(result: ReviewResult, record: PullRequestRecord, *, live_hea
     return "\n".join(lines)
 
 
-def _model_line(result: ReviewResult, record: PullRequestRecord, *, live_head_sha: str) -> str:
+def _model_line(result: ReviewResult, record: PullRequestRecord) -> str:
     model = result.model or "unknown"
     reviewed = record.head_sha[:7] if record.head_sha else "unknown"
     return f"**Model:** `{model}` · **Reviewed:** `{reviewed}`"
