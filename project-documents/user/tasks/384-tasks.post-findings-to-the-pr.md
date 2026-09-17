@@ -215,21 +215,21 @@ The decision table in D5 is this task's specification. Each row is a test in 5.5
 
 Last of the code tasks: it asserts a property of the finished path, and three of the four call sites do not exist until Task 6 lands.
 
-- [ ] **7.1 Confirm uniform handling**
-  - [ ] Any `CodeHostError` from the post step is rendered by `render_code_host_error` and exits 1 with no write (D8)
-  - [ ] This covers `HostUnauthenticatedError`, `GitHubCliMissingError`, `HostUnreachableError`, and `HostCommandTimeoutError` at all four sites
-  - [ ] Confirm no new timeout constant is introduced — all four calls go through 381's `_run_gh` and inherit `HOST_COMMAND_TIMEOUT_SECONDS`
-  - [ ] Success: no unbounded host call on the post path
-  - [ ] Effort: 1
+- [x] **7.1 Confirm uniform handling**
+  - [x] Any `CodeHostError` from the post step is rendered by `render_code_host_error` and exits 1 with no write (D8)
+  - [x] This covers `HostUnauthenticatedError`, `GitHubCliMissingError`, `HostUnreachableError`, and `HostCommandTimeoutError` at all four sites
+  - [x] Confirm no new timeout constant is introduced — all four calls go through 381's `_run_gh` and inherit `HOST_COMMAND_TIMEOUT_SECONDS`
+  - [x] Success: no unbounded host call on the post path
+  - [x] Effort: 1
 
-- [ ] **7.2 Test the failure matrix** *(test-with 7.1)*
-  - [ ] New `tests/cli/test_review_pr_post_failures.py` — kept separate from the decision table because this is one assertion shape applied across four sites, and mixing them obscures both
-  - [ ] Inject a transport failure at **each** of the four sites (identity, discovery, head read, write): each exits 1 and records zero writes
-  - [ ] Inject a scripted `ProcessTimedOutError` at each of the four: same outcome
-  - [ ] Assert the recorded `timeout` on every post-path call equals `HOST_COMMAND_TIMEOUT_SECONDS`
-  - [ ] Assert the saved artifact is left in place after a failed write
-  - [ ] Success: all sites covered per-site, not once
-  - [ ] Effort: 3
+- [x] **7.2 Test the failure matrix** *(test-with 7.1)*
+  - [x] New `tests/cli/test_review_pr_post_failures.py` — kept separate from the decision table because this is one assertion shape applied across four sites, and mixing them obscures both
+  - [x] Inject a transport failure at **each** of the four sites (identity, discovery, head read, write): each exits 1 and records zero writes
+  - [x] Inject a scripted `ProcessTimedOutError` at each of the four: same outcome
+  - [x] Assert the recorded `timeout` on every post-path call equals `HOST_COMMAND_TIMEOUT_SECONDS`
+  - [x] Assert the saved artifact is left in place after a failed write
+  - [x] Success: all sites covered per-site, not once
+  - [x] Effort: 3
 
 ---
 

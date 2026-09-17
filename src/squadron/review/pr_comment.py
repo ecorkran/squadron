@@ -35,9 +35,7 @@ def marker_for(record: PullRequestRecord) -> str:
     return f"{MARKER_PREFIX} {record.key} -->"
 
 
-def compose_comment(
-    result: ReviewResult, record: PullRequestRecord, *, live_head_sha: str
-) -> str:
+def compose_comment(result: ReviewResult, record: PullRequestRecord, *, live_head_sha: str) -> str:
     """Render ``result`` as a PR comment body.
 
     Findings come from ``result.structured_findings``, not ``result.findings``

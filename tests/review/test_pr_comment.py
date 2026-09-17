@@ -133,9 +133,7 @@ class TestSize:
         findings = [_finding(title=f"finding-{i}") for i in range(250)]
         body = compose_comment(_result(findings=findings), _record(), live_head_sha=_HEAD)
 
-        omission_line = next(
-            line for line in body.splitlines() if "further findings omitted" in line
-        )
+        omission_line = next(line for line in body.splitlines() if "further findings omitted" in line)
         assert ".md" not in omission_line
         assert "/" not in omission_line
 
