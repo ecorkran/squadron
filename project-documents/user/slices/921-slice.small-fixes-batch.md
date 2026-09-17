@@ -81,6 +81,19 @@ consistent with the project's fail-explicit convention, but a real behavior
 change worth calling out in the task's acceptance criteria, not just the
 `--model` flag case the issue title names.
 
+A second, currently-working invocation shape also starts failing (review
+F003): no shipped template declares `profile:` (verified — `grep profile:
+src/squadron/data/templates/*.yaml` finds nothing, only `model:` keys), so
+`template.profile` is always `None` in practice, and `sq review code --model
+<a-valid-literal-model-id>` with no `--profile` flag and no
+`default_review_profile` config — which dispatches correctly today via the
+bare `"sdk"` default — will fail with the unknown-alias error after this fix.
+This is not a typo case; it is a valid literal model ID that the guard cannot
+distinguish from a typo without the now-required `--profile` signal. Record
+this explicitly in the task's acceptance criteria and consider whether the
+error message should suggest `--profile` as the remedy for users hitting
+this specific shape.
+
 **Judge path (review F004).** `_resolve_judge_model` (review.py:1160-1176)
 has the identical shape: `resolve_model_alias(raw_model)` returning `(name,
 None)` flows into `_resolve_profile(profile_flag or alias_profile, template)`
@@ -144,26 +157,46 @@ limitation in the code comment rather than implying completeness.
 
 **Fix.** After computing `matches` at line 110-114: derive `sibling_projects`
 from `Path(cwd).resolve().parent.iterdir()` (directory names other than
-`project` itself), then filter out any match whose **stem** (not the
-stripped remainder) starts with `f"{sibling}-"` for some `sibling` in
-`sibling_projects` that is not `project` and for which `project` is not
-itself a prefix-continuation of `sibling` (guard against removing the
-current project's own valid files when project names nest the other way,
-e.g. project `squadron-pr` restoring while sibling `squadron` exists).
-Apply the identical predicate inside `_summary_key` so the picker listing
-(line 126) and key-matching (line 146) can't disagree with default-selection
-about what counts as "this project's" summary.
+`project` itself), then partition `matches` into `clean` (stem does not start
+with `f"{sibling}-"` for any `sibling` in `sibling_projects` where `project`
+is not itself a prefix-continuation of `sibling`) and `excluded` (the rest).
+Default (no `--key`) selects `matches[0]` restricted to `clean` — never
+`excluded` — matching today's `_select_summary` shape but scoped to the
+unambiguous set.
 
-**Disambiguation policy (required by review F001).** A stem like
-`squadron-pr-p5a.md` is genuinely ambiguous — it may be sibling project
-`squadron-pr`'s key `p5a`, or the current project `squadron`'s own key
-`pr-p5a`. The fix must not silently guess. When a match is filtered out under
-this rule *and* no `--key` was given, `_handle_restore` should not silently
-proceed with the remaining set as if this were fine when it was the only or
-most-recent match — treat it as a collision: still print it in the stderr
-listing (labeled as excluded and why), but require the caller to pass
-`--key <the literal stem-derived key>` to restore it explicitly rather than
-ever selecting it as the silent default.
+**Disambiguation policy (required by review F001 and F001-followup):** the
+first draft required both "apply the identical predicate inside
+`_summary_key` so key-matching can't disagree with default-selection" and
+"an excluded file must remain restorable via `--key`" — these do not compose,
+since removing a match from the matchable set makes it unselectable under any
+key. Resolved: `excluded` files are **not** removed from the set `--key`
+matches against; only the **default** (no-`--key`) selection is restricted to
+`clean`. `_summary_key`'s return value is unchanged for every stem, including
+excluded ones — it always returns `path.stem.removeprefix(f"{project}-")`,
+so an excluded file's key is that same value (e.g. `pr-p5a` for stem
+`squadron-pr-p5a` under project `squadron`) and is not given special-cased
+ambiguity; the caller who already knows the exact stem-derived key can
+still pass it via `--key`. What changes: the stderr listing (line 126) marks
+excluded entries distinctly (e.g. a trailing `(excluded from default —
+matches sibling project 'squadron-pr'; use --key '{key}' to restore)`), and
+the no-`--key` path in `_handle_restore` raises the same "no summary files
+found" error when `clean` is empty even though `matches` (unfiltered) is not
+— rather than silently falling through to an excluded file.
+
+**Failure modes on the new I/O path (required by review F002).** `iterdir()`
+on the parent directory is a new filesystem call with its own failure modes,
+per this project's own precedent (916's design named the hang/timeout/no-repo
+family explicitly for a new git call, and its review confirmed that rigor).
+Enumerated: parent directory unreadable (permissions), parent removed
+between `resolve()` and `iterdir()` (race), or cwd resolving to a filesystem
+root with no meaningful "siblings" concept — all surface as `OSError` (or a
+subclass) from `iterdir()`, uncaught today. Handling: catch `OSError` around
+the sibling-derivation call specifically, log at WARNING with the parent path
+and the exception, and degrade to an empty `sibling_projects` set — i.e. fall
+back to today's unfiltered behavior for that single invocation rather than
+crashing `_handle_restore` entirely. This keeps the enumeration a pure
+enhancement: on failure, restore behaves exactly as it does before this fix,
+never worse.
 
 ## Non-goals
 
