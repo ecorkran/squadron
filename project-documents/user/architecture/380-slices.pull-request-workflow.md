@@ -167,7 +167,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
      once.
    - **Relative Effort:** 3/5
 
-4. [ ] **(384) Post Findings to the PR** — The opt-in `--post` on `sq review pr`: the saved review
+4. [x] **(384) Post Findings to the PR** — The opt-in `--post` on `sq review pr`: the saved review
    rendered as one summary comment carrying verdict, findings, model, reviewed head sha, a
    generated-by-squadron statement, and a hidden marker with the PR key; idempotency per
    authenticated login (update the marked comment authored by the current login, report marked
