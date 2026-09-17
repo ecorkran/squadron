@@ -26,13 +26,16 @@ from squadron.cli.commands.review import (
     review_app,
 )
 from squadron.codehost.errors import CodeHostError
-from squadron.codehost.models import PullRequestRecord, ResolvedPullRequest
+from squadron.codehost.models import PullRequestRecord, RepositoryLocator, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
+from squadron.codehost.targets import PullRequestTarget, TargetForm
 from squadron.codehost.worktree import ScratchWorktree
 from squadron.config.manager import get_config
 from squadron.integrations.context_forge import cf_project_name
 from squadron.review.git_utils import EmptyScopeError, assert_reviewable_scope
+from squadron.review.models import ReviewResult
 from squadron.review.persistence import save_review_result
+from squadron.review.pr_comment import compose_comment, marker_for
 from squadron.review.reviews_dir import resolve_reviews_dir
 from squadron.review.rules import RulesSource, load_review_rules, resolve_rules_dir
 from squadron.review.save_target import TargetKind
@@ -172,6 +175,93 @@ class PrTarget:
         return self._record.head_sha
 
 
+def _resolve_live_head(host: CodeHost, record: PullRequestRecord, *, cwd: str) -> str:
+    """Re-resolve the pull request at post time, returning its current head sha (D7).
+
+    Not the record captured at resolution — that is the reviewed sha, and
+    comparing it to itself means the staleness line could never fire (F001).
+    ``remote_name`` on the reconstructed locator is unused by
+    ``resolve_pull_request``: identity is already known (``record.number``),
+    so no branch lookup and no remote enumeration happen on this path.
+    """
+    locator = RepositoryLocator(
+        host=record.host, owner=record.owner, repository=record.repository, remote_name="origin"
+    )
+    target = PullRequestTarget(form=TargetForm.NUMBER, number=record.number)
+    resolved = host.resolve_pull_request(locator, target, cwd=cwd)
+    return resolved.record.head_sha
+
+
+def _post_review(
+    host: CodeHost,
+    record: PullRequestRecord,
+    result: ReviewResult,
+    *,
+    dry_run: bool,
+    cwd: str,
+) -> None:
+    """Identity, discovery, decide, write or print — the whole of D5's table.
+
+    Reads before the write: identity, discovery, and the post-time head read.
+    Any ``CodeHostError`` from any of the four host calls this makes refuses
+    the post with no write (D8).
+    """
+    console = Console(stderr=True)
+    try:
+        # Resolved first and separately from discovery (D1): the identity
+        # refusal is a clean early exit rather than a failure discovered
+        # mid-discovery. OperatorUnidentifiedError's fix_hint already carries
+        # the `gh auth login --hostname` remedy (D5's row exists to require
+        # this reads distinctly, not to add a second code path).
+        operator = host.identify_operator(record.host)
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    try:
+        marked = host.find_marked_comments(record, marker=marker_for(record))
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    # Oldest first (the adapter's ordering): mine[0], if present, is the
+    # earliest and therefore the one updated; any further entries are the
+    # operator's own duplicates, reported exactly like another author's.
+    mine = [comment for comment in marked if comment.author_login == operator.login]
+    theirs = [comment for comment in marked if comment.author_login != operator.login]
+    for comment in theirs + mine[1:]:
+        _logger.info("marked comment by %s left untouched: %s", comment.author_login, comment.url)
+        console.print(
+            f"[dim]Marked comment by {comment.author_login}, left untouched: {comment.url}[/dim]"
+        )
+
+    try:
+        live_head_sha = _resolve_live_head(host, record, cwd=cwd)
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    body = compose_comment(result, record, live_head_sha=live_head_sha)
+
+    if dry_run:
+        action = "would update" if mine else "would create"
+        target_url = mine[0].url if mine else None
+        console.print(f"[dim]{action}{f' {target_url}' if target_url else ''}[/dim]")
+        print(body)
+        return
+
+    try:
+        if mine:
+            comment = host.update_comment(record, mine[0].id, body)
+        else:
+            comment = host.post_comment(record, body)
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]{comment.url}[/green]")
+
+
 @review_app.command("pr")
 def review_pr(
     target: str | None = typer.Argument(
@@ -214,8 +304,22 @@ def review_pr(
     ),
     use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
     no_save: bool = typer.Option(False, "--no-save", help="Suppress review file save"),
+    post: bool = typer.Option(
+        False, "--post", help="Post the review to the pull request as one comment."
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Print the comment that --post would write, without writing it. Requires --post.",
+    ),
 ) -> None:
     """Review a pull request's code over its fetched merge-base range."""
+    if dry_run and not post:
+        # Not a silent no-op: "print what would be posted" is meaningless when
+        # nothing would be posted (D3).
+        rprint("[red]--dry-run requires --post[/red]")
+        raise typer.Exit(code=1)
+
     checkout_cwd = resolve_repo_cwd(cwd)
 
     try:
@@ -354,5 +458,11 @@ def review_pr(
         save=_save_pr,
         review_type="pr",
     )
+
+    if post:
+        # Independent of the save outcome, and after it (D6): the review
+        # exists in memory and the operator asked for it on the PR regardless
+        # of whether the artifact write succeeded.
+        _post_review(host, resolved.record, result, dry_run=dry_run, cwd=checkout_cwd)
 
     _exit_on(result.verdict, outcome)
