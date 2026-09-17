@@ -1,0 +1,5 @@
+# 384 live-evidence throwaway PR
+
+This PR exists only to exercise `sq review pr --post` / `--dry-run` live
+against a real PR for slice 384's Verification Walkthrough (Task 8.2). It
+will be closed, not merged.
