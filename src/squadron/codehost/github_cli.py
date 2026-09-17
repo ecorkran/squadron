@@ -278,34 +278,31 @@ class GitHubCli:
             expected_head_sha=record.head_sha,
         )
 
-    def find_own_comment(self, record: PullRequestRecord, *, marker: str) -> HostComment | None:
-        """The operator's own earliest comment carrying ``marker``.
+    def find_marked_comments(self, record: PullRequestRecord, *, marker: str) -> list[HostComment]:
+        """Every comment carrying ``marker``, any author, oldest first.
 
         ``marker`` is supplied by the caller: its format is 384's to define,
         and inventing one here would fix a convention this slice has no
-        business fixing. Matching requires both the operator's login and the
-        marker, so a marker quoted by someone else is not mistaken for ours.
+        business fixing. The author filter that once lived here is gone —
+        partitioning by author is the caller's job, because the caller is
+        what reports the non-own matches (D1).
         """
-        operator = self.identify_operator(record.host).login
         path = f"repos/{record.owner}/{record.repository}/issues/{record.number}/comments"
         comments = self._json_list(["api", "--paginate", path], host=record.host)
 
-        mine = [
-            comment
-            for comment in comments
-            if _nested_login(comment) == operator and marker in str(comment.get("body") or "")
+        marked = [comment for comment in comments if marker in str(comment.get("body") or "")]
+        # Oldest first: a missing created_at sorts first under an empty-string
+        # key, matching how the prior min() treated it.
+        marked.sort(key=lambda comment: str(comment.get("created_at") or ""))
+        return [
+            HostComment(
+                id=str(require(comment, "id", ("gh", "api", path))),
+                author_login=_nested_login(comment),
+                body=str(comment.get("body") or ""),
+                url=str(comment.get("html_url") or ""),
+            )
+            for comment in marked
         ]
-        if not mine:
-            return None
-        # Earliest by created_at: the first one we posted is the one we update,
-        # so a duplicate posted later never becomes the canonical comment.
-        earliest = min(mine, key=lambda comment: str(comment.get("created_at") or ""))
-        return HostComment(
-            id=str(require(earliest, "id", ("gh", "api", path))),
-            author_login=operator,
-            body=str(earliest.get("body") or ""),
-            url=str(earliest.get("html_url") or ""),
-        )
 
     def post_comment(self, record: PullRequestRecord, body: str) -> HostComment:
         """Add a comment to the pull request."""
