@@ -36,17 +36,17 @@ Test tasks follow their implementation task directly. No test in this slice call
 
 Pure function, no dependencies, first consumed by Task 7.1. Landing alone makes a regression here unambiguous.
 
-- [ ] **1.1 Write `parse_slice_branch`**
-  - [ ] Create `src/squadron/pr/__init__.py` and `src/squadron/pr/branch.py`
-  - [ ] `parse_slice_branch(branch: str) -> int | None` — returns the index when the branch matches the `{index}-slice.{name}` convention, `None` otherwise
-  - [ ] Match the convention as the project's git rules define it: leading digits, `-slice.`, then a non-empty name
-  - [ ] A branch that does not match returns `None`. It is not an error — the architecture says a non-matching branch "gets a commits-only description, not a guessed slice"
-  - [ ] Effort: 1
+- [x] **1.1 Write `parse_slice_branch`**
+  - [x] Create `src/squadron/pr/__init__.py` and `src/squadron/pr/branch.py`
+  - [x] `parse_slice_branch(branch: str) -> int | None` — returns the index when the branch matches the `{index}-slice.{name}` convention, `None` otherwise
+  - [x] Match the convention as the project's git rules define it: leading digits, `-slice.`, then a non-empty name
+  - [x] A branch that does not match returns `None`. It is not an error — the architecture says a non-matching branch "gets a commits-only description, not a guessed slice"
+  - [x] Effort: 1
 
-- [ ] **1.2 Test `parse_slice_branch`**
-  - [ ] `tests/pr/test_branch.py`. Cases: `385-slice.create-a-pr-with-a-good-message` → `385`; `384-slice.post-findings-to-the-pr` → `384`; `squadron-pr` → `None`; `main` → `None`; `feature/add-thing` → `None`; a branch with digits but no `-slice.` → `None`; a name containing further dots (`910-slice.foo.bar`) → `910`
-  - [ ] Success: every case passes; no case raises
-  - [ ] Effort: 1
+- [x] **1.2 Test `parse_slice_branch`**
+  - [x] `tests/pr/test_branch.py`. Cases: `385-slice.create-a-pr-with-a-good-message` → `385`; `384-slice.post-findings-to-the-pr` → `384`; `squadron-pr` → `None`; `main` → `None`; `feature/add-thing` → `None`; a branch with digits but no `-slice.` → `None`; a name containing further dots (`910-slice.foo.bar`) → `910`
+  - [x] Success: every case passes; no case raises
+  - [x] Effort: 1
 
 ---
 
