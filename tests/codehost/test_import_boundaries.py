@@ -23,14 +23,27 @@ _FORBIDDEN_FROM_CODEHOST = (
     "squadron.providers",
 )
 
-#: And the reverse direction: the review engine must not depend on the adapter.
-_FORBIDDEN_FROM_REVIEW = ("squadron.codehost",)
+#: And the reverse direction: the review engine must not depend on the adapter,
+#: nor on 385's ``pr/`` package, which sits above it in the CLI's dependency
+#: tier (D6) — the opposite of the direction ``review`` is allowed to depend.
+_FORBIDDEN_FROM_REVIEW = ("squadron.codehost", "squadron.pr")
 
 #: The one permitted exception (384, D2): ``pr_comment.py`` takes a
 #: ``PullRequestRecord`` — a frozen dataclass carrying no host behavior — so
 #: the composer can build a body without the review package learning the
 #: host's other shapes. No other ``codehost`` symbol is exempt.
 _PERMITTED_REVIEW_IMPORT = "squadron.codehost.models"
+
+
+def _is_or_is_under(imported: str, package: str) -> bool:
+    """Whether ``imported`` is ``package`` itself or one of its submodules.
+
+    A plain ``str.startswith`` check would treat ``squadron.pr`` as a match
+    for ``squadron.providers`` — a real false positive this test hit once
+    ``squadron.pr`` (385) was added to the forbidden set, since it is a
+    literal string prefix of ``squadron.providers`` with no boundary check.
+    """
+    return imported == package or imported.startswith(package + ".")
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -65,7 +78,7 @@ def _python_files(package: str) -> list[Path]:
 def test_codehost_does_not_import_upward(path: Path) -> None:
     for imported in _imported_modules(path):
         for forbidden in _FORBIDDEN_FROM_CODEHOST:
-            assert not imported.startswith(forbidden), (
+            assert not _is_or_is_under(imported, forbidden), (
                 f"{path.name} imports {imported}; codehost must not depend on "
                 f"{forbidden} — the direction is cli -> codehost -> core"
             )
@@ -75,7 +88,7 @@ def test_codehost_does_not_import_upward(path: Path) -> None:
 def test_review_does_not_import_codehost(path: Path) -> None:
     for imported in _imported_modules(path):
         for forbidden in _FORBIDDEN_FROM_REVIEW:
-            if not imported.startswith(forbidden):
+            if not _is_or_is_under(imported, forbidden):
                 continue
             if path.name == "pr_comment.py" and imported == _PERMITTED_REVIEW_IMPORT:
                 # 384, D2: the one exception, checked precisely below rather

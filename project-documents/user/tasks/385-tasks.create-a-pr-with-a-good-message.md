@@ -330,17 +330,17 @@ Mirrors 384's Task 7 matrix. The five call sites are `identify_operator`, `branc
 
 Two small corrections the design owes.
 
-- [ ] **15.1 Extend the import-boundary test**
-  - [ ] In `tests/codehost/test_import_boundaries.py`, add a case asserting `review/` does not import `pr/` (D6)
-  - [ ] Confirm the existing review-package import ban and 384's single carve-out for `pr_comment.py` are unchanged
-  - [ ] Effort: 1
+- [x] **15.1 Extend the import-boundary test**
+  - [x] In `tests/codehost/test_import_boundaries.py`, add a case asserting `review/` does not import `pr/` (D6)
+  - [x] Confirm the existing review-package import ban and 384's single carve-out for `pr_comment.py` are unchanged
+  - [x] Effort: 1
 
-- [ ] **15.2 Correct the `summary_oneshot` docstring (D3)**
-  - [ ] In `src/squadron/pipeline/summary_oneshot.py`, correct the module docstring: it currently says "One-shot summary execution for non-SDK provider profiles", which describes its *caller's* policy rather than the module's behavior. State that the module routes any registered profile, and that the pipeline's SDK-session reuse is the caller's rule
-  - [ ] **Do not change the routing.** It is correct, and the pipeline gate in `pipeline/actions/summary.py` stays where it belongs
-  - [ ] Add a test asserting the module routes a registered profile without reference to SDK-ness
-  - [ ] Success: `pipeline/actions/summary.py` is unmodified by this task
-  - [ ] Effort: 1
+- [x] **15.2 Correct the `summary_oneshot` docstring (D3)**
+  - [x] In `src/squadron/pipeline/summary_oneshot.py`, correct the module docstring: it currently says "One-shot summary execution for non-SDK provider profiles", which describes its *caller's* policy rather than the module's behavior. State that the module routes any registered profile, and that the pipeline's SDK-session reuse is the caller's rule
+  - [x] **Do not change the routing.** It is correct, and the pipeline gate in `pipeline/actions/summary.py` stays where it belongs
+  - [x] Add a test asserting the module routes a registered profile without reference to SDK-ness
+  - [x] Success: `pipeline/actions/summary.py` is unmodified by this task
+  - [x] Effort: 1
 
 ---
 
