@@ -153,18 +153,18 @@ Two checks, two different fixes. Both before any model call and any write.
 
 ## Task 7 — Input gathering: commits and slice artifacts (D7)
 
-- [ ] **7.1 Gather commits and the slice**
-  - [ ] Create `src/squadron/pr/inputs.py` with the commit and slice halves of `gather_inputs`
-  - [ ] Commits: `commits_in_range(base, head)` from Task 3. Always present — an empty range is impossible here, since a PR with no commits cannot be opened
-  - [ ] Slice: `parse_slice_branch(head)` from Task 1; on a match, `resolve_slice_info(cf_client, index)` for the design file and task files; read the first task file and `parse_task_items` it (Task 2)
-  - [ ] A branch that names a slice `cf` cannot resolve degrades to no-slice with a WARNING naming the index — not fatal, because a PR should still open
-  - [ ] A missing or unreadable task file degrades to no task items with a WARNING, leaving the design file usable for "why"
-  - [ ] Effort: 3
+- [x] **7.1 Gather commits and the slice**
+  - [x] Create `src/squadron/pr/inputs.py` with the commit and slice halves of `gather_inputs`
+  - [x] Commits: `commits_in_range(base, head)` from Task 3. Always present — an empty range is impossible here, since a PR with no commits cannot be opened
+  - [x] Slice: `parse_slice_branch(head)` from Task 1; on a match, `resolve_slice_info(cf_client, index)` for the design file and task files; read the first task file and `parse_task_items` it (Task 2)
+  - [x] A branch that names a slice `cf` cannot resolve degrades to no-slice with a WARNING naming the index — not fatal, because a PR should still open
+  - [x] A missing or unreadable task file degrades to no task items with a WARNING, leaving the design file usable for "why"
+  - [x] Effort: 3
 
-- [ ] **7.2 Test commit and slice gathering**
-  - [ ] `tests/pr/test_inputs.py`. Cases: slice branch with design and tasks; slice branch whose index `cf` does not know → WARNING, no slice, no raise; non-slice branch → no slice, no `cf` call; task file absent → design present, items empty; `cf` unavailable entirely
-  - [ ] Assert the WARNING is emitted (per the design principles' failure-mode-observability rule) in each degraded case
-  - [ ] Effort: 2
+- [x] **7.2 Test commit and slice gathering**
+  - [x] `tests/pr/test_inputs.py`. Cases: slice branch with design and tasks; slice branch whose index `cf` does not know → WARNING, no slice, no raise; non-slice branch → no slice, no `cf` call; task file absent → design present, items empty; `cf` unavailable entirely
+  - [x] Assert the WARNING is emitted (per the design principles' failure-mode-observability rule) in each degraded case
+  - [x] Effort: 2
 
 ---
 
