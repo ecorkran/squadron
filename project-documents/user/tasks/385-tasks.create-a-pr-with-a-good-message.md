@@ -351,12 +351,12 @@ Two small corrections the design owes.
   - [x] Full test suite. The 3 pre-existing schema-drift failures (context-forge issue #88) are expected and must be unchanged by this slice
   - [x] Effort: 1
 
-- [ ] **16.2 Walk the design's verification steps live**
-  - [ ] Execute the LLD's Verification Walkthrough, all six steps: dry run on a slice branch; the base refusal with a nonexistent integration branch; both push preconditions; the unplanned-repository path; dry-run/real equality followed by a live creation; and `sq review pr --dry-run --post` reading the created body back
-  - [ ] **Step 6 is the two-readers claim checked rather than asserted** — the reviewer parses the sections squadron wrote
-  - [ ] Restore `git.integration_branch` to `squadron-pr` after step 2
-  - [ ] Record the created PR's URL as evidence
-  - [ ] Effort: 3
+- [x] **16.2 Walk the design's verification steps live**
+  - [x] Execute the LLD's Verification Walkthrough, all six steps: dry run on a slice branch; the base refusal with a nonexistent integration branch; both push preconditions; the unplanned-repository path; dry-run/real equality followed by a live creation; and `sq review pr --dry-run --post` reading the created body back
+  - [x] **Step 6 is the two-readers claim checked rather than asserted** — the reviewer parses the sections squadron wrote
+  - [x] Restore `git.integration_branch` to `squadron-pr` after step 2
+  - [x] Record the created PR's URL as evidence
+  - [x] Effort: 3
 
 - [ ] **16.3 Rewrite the Verification Walkthrough with observed output**
   - [ ] Replace the LLD's draft walkthrough in place with the actual commands and their observed output, as 384 did
