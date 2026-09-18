@@ -134,20 +134,20 @@ The design's table is the specification. Three outcomes for the integration-bran
 
 Two checks, two different fixes. Both before any model call and any write.
 
-- [ ] **6.1 Write the precondition checks**
-  - [ ] Create `src/squadron/pr/preconditions.py` with `check_head_pushed(host, locator, *, head: str, local_sha: str, cwd: str) -> None`, raising on refusal
-  - [ ] **Missing:** `branch_exists(locator, head)` false → raise naming the branch and the `git push -u <remote> <head>` command
-  - [ ] **Behind:** the host's sha for the branch differs from `local_sha` → raise naming both shas and the `git push <remote> <head>` command
-  - [ ] Read the remote sha with `git ls-remote <remote> refs/heads/<head>` through the adapter's process-runner seam, bounded by **`GIT_QUERY_TIMEOUT_SECONDS`** — the constant `codehost/refs.py` and `codehost/remotes.py` use for git queries, *not* `HOST_COMMAND_TIMEOUT_SECONDS`, which is for `gh` invocations (D2). Both are 30s today; the distinction is which constant a future change moves
-  - [ ] **Do not add a protocol operation** — the architecture fixes the operation list, and this is answerable with git against a remote the locator already names, as 381 fetches refs with git (D2)
-  - [ ] The remote name comes from the locator
-  - [ ] Effort: 3
+- [x] **6.1 Write the precondition checks**
+  - [x] Create `src/squadron/pr/preconditions.py` with `check_head_pushed(host, locator, *, head: str, local_sha: str, cwd: str) -> None`, raising on refusal
+  - [x] **Missing:** `branch_exists(locator, head)` false → raise naming the branch and the `git push -u <remote> <head>` command
+  - [x] **Behind:** the host's sha for the branch differs from `local_sha` → raise naming both shas and the `git push <remote> <head>` command
+  - [x] Read the remote sha with `git ls-remote <remote> refs/heads/<head>` through the adapter's process-runner seam, bounded by **`GIT_QUERY_TIMEOUT_SECONDS`** — the constant `codehost/refs.py` and `codehost/remotes.py` use for git queries, *not* `HOST_COMMAND_TIMEOUT_SECONDS`, which is for `gh` invocations (D2). Both are 30s today; the distinction is which constant a future change moves
+  - [x] **Do not add a protocol operation** — the architecture fixes the operation list, and this is answerable with git against a remote the locator already names, as 381 fetches refs with git (D2)
+  - [x] The remote name comes from the locator
+  - [x] Effort: 3
 
-- [ ] **6.2 Test the preconditions**
-  - [ ] `tests/pr/test_preconditions.py`. Cases: branch absent → refusal naming `git push -u`; branch present and shas equal → passes; branch present and shas differ → refusal naming `git push` and both shas; `ls-remote` returning no matching ref; `ls-remote` timing out → refusal, not a silent pass
-  - [ ] Assert the `ls-remote` call carries `GIT_QUERY_TIMEOUT_SECONDS`, not the `gh` constant
-  - [ ] Success: the two refusals name different commands
-  - [ ] Effort: 2
+- [x] **6.2 Test the preconditions**
+  - [x] `tests/pr/test_preconditions.py`. Cases: branch absent → refusal naming `git push -u`; branch present and shas equal → passes; branch present and shas differ → refusal naming `git push` and both shas; `ls-remote` returning no matching ref; `ls-remote` timing out → refusal, not a silent pass
+  - [x] Assert the `ls-remote` call carries `GIT_QUERY_TIMEOUT_SECONDS`, not the `gh` constant
+  - [x] Success: the two refusals name different commands
+  - [x] Effort: 2
 
 ---
 
