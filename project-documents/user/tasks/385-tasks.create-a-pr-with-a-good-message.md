@@ -110,23 +110,23 @@ Two helpers `git_utils.py` lacks. Both go beside the existing ones and use the m
 
 The design's table is the specification. Three outcomes for the integration-branch term, not two.
 
-- [ ] **5.1 Write `select_base`**
-  - [ ] Create `src/squadron/pr/base.py` with `select_base(host, locator, *, base_flag: str | None, cwd: str) -> BaseSelection`
-  - [ ] `BaseSelection` is a frozen dataclass with `base: str` and `source: BaseSource`, where `BaseSource` is a `StrEnum` with members for the flag, the integration branch, and the host default — **not** free-text strings, per the project's rule against scattering comparison values
-  - [ ] Implement D1's table exactly:
+- [x] **5.1 Write `select_base`**
+  - [x] Create `src/squadron/pr/base.py` with `select_base(host, locator, *, base_flag: str | None, cwd: str) -> BaseSelection`
+  - [x] `BaseSelection` is a frozen dataclass with `base: str` and `source: BaseSource`, where `BaseSource` is a `StrEnum` with members for the flag, the integration branch, and the host default — **not** free-text strings, per the project's rule against scattering comparison values
+  - [x] Implement D1's table exactly:
     - `--base` given → use it, `source=flag`, **no host confirmation** (the design says why: a bad `--base` is loud, because `open_pull_request` rejects it with a 422 that names it)
     - integration branch set and `branch_exists` true → use it, `source=integration-branch`
     - integration branch set and `branch_exists` false → **raise**, naming the branch
     - integration branch unset or empty → `default_branch(locator)`, `source=host-default`
-  - [ ] Read `git.integration_branch` through `ContextForgeClient.get_config`, the same subprocess path `resolve_diff_base` uses. Accept an injectable client for tests, as `resolve_diff_base` does
-  - [ ] **Do not degrade an unreachable `cf` to a default base.** When `cf` is unavailable the key is treated as unset and the chain proceeds to the host default; when `cf` answers with a branch name, that name is authoritative and the confirmation applies (D1)
-  - [ ] Effort: 3
+  - [x] Read `git.integration_branch` through `ContextForgeClient.get_config`, the same subprocess path `resolve_diff_base` uses. Accept an injectable client for tests, as `resolve_diff_base` does
+  - [x] **Do not degrade an unreachable `cf` to a default base.** When `cf` is unavailable the key is treated as unset and the chain proceeds to the host default; when `cf` answers with a branch name, that name is authoritative and the confirmation applies (D1)
+  - [x] Effort: 3
 
-- [ ] **5.2 Test base selection**
-  - [ ] `tests/pr/test_base.py`, against the fake runner and a fake cf client. One case per table row, plus: `cf` unavailable → host default, no raise; `cf` returns empty string → host default; the refusal case asserts the branch name appears in the message and that `default_branch` was **never called**
-  - [ ] Assert `--base` makes no `branch_exists` call
-  - [ ] Success: the refusal case would fail if the implementation fell through to the host default
-  - [ ] Effort: 2
+- [x] **5.2 Test base selection**
+  - [x] `tests/pr/test_base.py`, against the fake runner and a fake cf client. One case per table row, plus: `cf` unavailable → host default, no raise; `cf` returns empty string → host default; the refusal case asserts the branch name appears in the message and that `default_branch` was **never called**
+  - [x] Assert `--base` makes no `branch_exists` call
+  - [x] Success: the refusal case would fail if the implementation fell through to the host default
+  - [x] Effort: 2
 
 ---
 
