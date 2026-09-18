@@ -25,7 +25,7 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
-from squadron.models.aliases import model_allows_tools, resolve_model_alias
+from squadron.models.aliases import get_all_aliases, model_allows_tools, resolve_model_alias
 from squadron.providers.errors import ProviderError
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
@@ -506,6 +506,39 @@ def _resolve_profile(
     return "sdk"
 
 
+def _reject_unknown_alias(
+    name: str,
+    profile_flag: str | None,
+    template: ReviewTemplate | None,
+) -> None:
+    """Reject a name that resolved to no alias and has no profile to justify it.
+
+    ``resolve_model_alias`` returns ``(name, None)`` for anything it doesn't
+    recognize, on the assumption that it's a literal model ID. That makes a
+    typo'd alias indistinguishable from a real ID, so it dispatches and fails
+    downstream as an UNKNOWN verdict (issue #67). A supplied profile is the
+    signal that the caller meant a literal ID; with no profile from any of the
+    three channels ``_resolve_profile`` consults, treat it as a typo and fail
+    fast here.
+
+    Mirrors ``_resolve_profile``'s cascade *without* its ``"sdk"`` fallback —
+    the fallback is what silently rescued typos before.
+    """
+    if profile_flag is not None:
+        return
+    if template is not None and template.profile is not None:
+        return
+    if isinstance(get_config("default_review_profile"), str):
+        return
+
+    known = sorted(get_all_aliases().keys())
+    rprint(
+        f"[red]Error: unknown model alias '{name}'; known: {known}. "
+        f"If this is a literal model ID, pass --profile to dispatch it directly.[/red]"
+    )
+    raise typer.Exit(code=1)
+
+
 def _resolve_model(
     flag: str | None,
     template: ReviewTemplate | None = None,
@@ -603,6 +636,11 @@ def _run_review_command(
     allows_tools = model_allows_tools(raw_model)
     if raw_model is not None:
         alias_model, alias_profile = resolve_model_alias(raw_model)
+        # Guard stays inside this block: alias_* are None when no model was
+        # supplied at all, and `None == None and None is None` would reject
+        # every model-less invocation.
+        if alias_model == raw_model and alias_profile is None:
+            _reject_unknown_alias(raw_model, profile_flag, template)
 
     resolved_model = alias_model or raw_model
     resolved_profile = _resolve_profile(profile_flag or alias_profile, template)
@@ -1172,6 +1210,10 @@ def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tu
     alias_profile: str | None = None
     if raw_model is not None:
         alias_model, alias_profile = resolve_model_alias(raw_model)
+        # Same placement constraint as _run_review_command's guard: inside the
+        # block, or a model-less judge resolution rejects on None == None.
+        if alias_model == raw_model and alias_profile is None:
+            _reject_unknown_alias(raw_model, profile_flag, template)
 
     return alias_model or raw_model, _resolve_profile(profile_flag or alias_profile, template)
 
