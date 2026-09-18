@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.review.models import ReviewResult, Verdict
+from squadron.review.rules import RulesSource
 
 
 @pytest.fixture
@@ -122,7 +123,7 @@ class TestDiffSpecNormalizationAtCLI:
             # assertion below runs only on machines that happen to have one.
             patch(
                 "squadron.cli.commands.review.resolve_rules_dir",
-                return_value=rules_dir,
+                return_value=(rules_dir, RulesSource.PROJECT),
             ),
             patch(
                 "squadron.cli.commands.review.extract_diff_paths",

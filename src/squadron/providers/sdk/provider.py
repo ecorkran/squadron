@@ -77,6 +77,16 @@ class ClaudeSDKProvider:
             kwargs["cwd"] = config.cwd
         if config.setting_sources is not None:
             kwargs["setting_sources"] = config.setting_sources
+            # An empty list is the PR-review path's explicit "no project settings"
+            # override (slice 382, design D8) — the worktree under review is
+            # untrusted, and setting_sources=[] alone does not stop the CLI's
+            # auto-memory feature from reading project-adjacent state. Merged with
+            # any existing env entries rather than overwriting, so a future env
+            # source added to create_agent does not silently lose this.
+            if config.setting_sources == []:
+                existing_env: dict[str, str] = dict(kwargs.get("env") or {})  # type: ignore[arg-type]
+                existing_env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
+                kwargs["env"] = existing_env
 
         kwargs["permission_mode"] = (
             config.permission_mode if config.permission_mode is not None else _DEFAULT_PERMISSION_MODE

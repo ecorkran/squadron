@@ -56,10 +56,20 @@ now.
   GitHub remote, where a naive "exactly one remote" rule would refuse. Added at 381 design
   (`79986dea`); the parent permits additions to the protocol and forbids only extra methods on the
   `gh` implementation.
+- **Discovery returns what the caller must report.** The comment-discovery operation returns
+  *every* comment carrying squadron's marker, with its author, rather than only the operator's
+  own. 381 shipped it as `find_own_comment`, filtering to the operator inside the adapter and
+  returning at most one; 384, its first consumer, found that signature structurally unable to
+  express two requirements stated below under posting idempotency — marked comments from other
+  operators are reported, and after a concurrent double-post the extras are reported — because
+  both were discarded before the caller could see them. Replaced at 384 design with
+  `find_marked_comments`, returning the matches oldest-first; partitioning by author moved to the
+  caller, which is also where the reporting happens. The operation had no production caller at
+  the time, so the change was contained to the slice that needed it.
 - **Host behind a protocol.** Every hosting interaction (resolve a PR, report its base branch
   and the host's default branch, check that a named branch exists on the host, fetch base and
-  head, list unresolved review discussions, find and update the operator's own prior squadron
-  comment, post a review comment, open a PR, identify the operator)
+  head, list unresolved review discussions, find the comments carrying squadron's marker, update
+  a comment, post a review comment, open a PR, identify the operator)
   goes through one adapter protocol, plus one local, read-only question added by slice 381:
   whether the implementation serves a given hostname, which bare-form target resolution needs
   to tell a host remote from any other. That list is the protocol; a slice that needs another
@@ -171,10 +181,15 @@ review frontmatter contract without a slice index, into the project's reviews di
 exists or into a configured squadron-owned location when the repository has none. Archiving,
 digest, and integrity checks from the 900-band review work apply unchanged.
 
-**Posting is a separate, explicit write.** With the opt-in flag, the saved review is rendered as
-one PR comment and posted through the adapter under the operator's identity. The comment carries
-the verdict, findings, model, and the reviewed head sha, so a reader can tell what was reviewed
-and by what. A later invocation on the same PR updates or supersedes rather than stacking.
+**Posting is a separate, explicit write.** With the opt-in flag, the review is composed into one
+PR comment and posted through the adapter under the operator's identity. The comment carries the
+verdict, findings, model, and the reviewed head sha, so a reader can tell what was reviewed and by
+what. A later invocation on the same PR updates or supersedes rather than stacking. The comment is
+composed from the same `ReviewResult` the artifact is written from — not excerpted from the
+artifact file, which carries frontmatter, a run digest, and at `-vv` the full prompt text that
+must not reach a public PR. Drawing both from the same structured findings is what keeps the
+comment and the artifact from disagreeing, and it means posting does not gate on a successful
+save. Established at 384 design.
 
 **`sq pr create` is a composition step.** It gathers the branch's commits against the target, the
 slice design and tasks when the branch name and `cf` identify a slice, and the latest saved

@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260913
+dateUpdated: 20260917
 
 ---
 
@@ -12,7 +12,463 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ---
 
+## 20260917
+
+### Slice 385 task breakdown (Phase 5)
+
+`385-tasks.create-a-pr-with-a-good-message.md` written — 16 tasks, 350 lines, no split needed.
+
+Order follows the design's implementation order, which is itself the command's execution order:
+the two new parsers first and alone (branch name, task checkboxes), then git helpers, then the
+`resolve_locator` extraction, then each stage of the command in the sequence it runs — base
+selection, preconditions, input gathering, assembly, composition, the section contract, the
+presence check — and the command wiring last, thin by construction. Test tasks sit immediately
+after their implementation task; no test in the slice calls a model, which is exercised once,
+live, in Task 16.
+
+Three tasks carry criteria that would pass a plausible-but-wrong implementation, so each names
+the failure it is there to catch. Task 5.2's base-selection refusal asserts `default_branch` was
+*never called*, which is what distinguishes a refusal from a fall-through. Task 8.2's review scan
+builds a review whose sha is an ancestor of head but outside `base..head` and asserts it is not
+selected — the case that fails if the implementation uses ancestry or file mtime instead of range
+membership. Task 13.2 asserts a precondition failure means the composer was never called, which
+is the token-cost ordering the design specifies.
+
+Task 2.2 follows the project's parsing rule that a fixture must include the format the parser
+consumes in production: the checkbox parser gets a test reading a real task file, not only
+synthetic cases, because a parser that silently requires one indent level would otherwise pass.
+
+Task 16.4 leaves the code-review command choice to the PM rather than picking one, per the
+standing preference.
+
+### Slice 385 design review response
+
+Slice-design review run against the committed design (`z-ai/glm-5.2`, reviewed sha `2c138d42`):
+CONCERNS, six PASS and three concerns, all three correct and all three addressed. `responseStatus:
+addressed` on the review; the response section is in the LLD.
+
+F007 caught a wrong constant: D8 described all five calls as "host calls bounded by
+`HOST_COMMAND_TIMEOUT_SECONDS`", but `git ls-remote` is a git query, and `codehost/refs.py` and
+`codehost/remotes.py` bound those with `GIT_QUERY_TIMEOUT_SECONDS`. Both are 30 seconds, so nothing
+was practically wrong — what was wrong is which constant a future change would move. The
+conflation had propagated into a success criterion as well.
+
+F008 found the model call unenumerated. The project's own design principles require failure-mode
+enumeration for each new I/O path, and the composer is one; its failures are not `CodeHostError`
+and needed their own handling statement. Now a process-boundary handler logging at ERROR and
+exiting non-zero, with the note that composition's position (after every read, before the only
+write) means the failure leaves no state to unwind.
+
+F009 found a genuine gap. `--title` appeared in the flag list, the data-flow diagram, and the
+`open_pull_request` call, and the design never said where a title comes from when the flag is
+absent — the implementer would have had to invent one. Now **D4a**: the flag, else the slice's
+human name from the design's H1 (the frontmatter `slice` field is the kebab-case slug, not a
+title), else a model-composed line under 72 characters falling back to the first commit's subject.
+The middle term is the common case here and is deterministic —
+asking a model to invent a title for a slice literally named "Create a PR with a Good Message"
+spends tokens to lose information. D4a is also the slice's one degradation rather than refusal, and
+states the proportionality argument against D5's hard failure: a mediocre title over a correct body
+is not worth failing a creation, where a missing body section is.
+
+Task file updated in the same pass — Tasks 6 and 14 for the constant, Task 10 for the failure mode,
+and a new Task 10a for the title.
+
+### Slice 385 design (Phase 4)
+
+`385-slice.create-a-pr-with-a-good-message.md` written. `sq pr create` is the initiative's
+authoring side and its second and final host write.
+
+Eight decisions. D1 fixes base selection as a chain that *refuses* rather than falls through: a
+configured `git.integration_branch` absent from the host fails creation naming the branch, because
+"this repository says work merges to `dev/erik` and the host has never heard of it" is not the
+same situation as "no integration branch configured." An explicit `--base` is deliberately not
+pre-confirmed — `open_pull_request` rejects a bad base with a 422 that names it, and the
+fall-through a pre-check would prevent is only silent in the integration-branch case.
+
+D2 splits the pushed-branch precondition into two checks with different fixes: missing on the host
+(`branch_exists` false → `git push -u`) and behind (host sha ≠ local sha → `git push`). The sha
+read is `git ls-remote` through the adapter's existing process-runner seam rather than a new
+protocol operation — the architecture fixes the operation list, and this question is answerable
+with git against a remote the locator already names.
+
+D3 resolved the plan entry's named risk. The claim was that `pipeline/summary_oneshot`'s docstring
+scopes it to non-SDK profiles while the review default is `sdk`, and that the slice must correct
+"the docstring or the routing." Tracing it: `summary_oneshot` contains no `is_sdk_profile` check
+and no rejection path — it resolves any registered profile through `get_profile` →
+`get_provider` → `create_agent`. The gate is in its caller, `pipeline/actions/summary.py`, which
+routes the SDK arm to `context.sdk_session.capture_summary` and refuses when no session exists.
+That is a pipeline concern: a pipeline summary step must reuse its live SDK session rather than
+open a second one. A CLI command has no session, and the CLI already runs `sdk` through a one-shot
+daily — `review_client.run_review_with_profile`, the same provider sequence with no session, is
+what `sq review code --profile sdk` uses. So `sdk` through a one-shot was never the risk it was
+flagged as. The composer performs that sequence directly rather than calling either existing
+function (both are ~200-line and shaped for their own callers — one pipeline-shaped, one
+review-shaped), and the correction owed is to `summary_oneshot`'s docstring, which describes its
+caller's policy as if it were the module's behavior. The routing is correct and unchanged. The
+plan entry was amended to record this.
+
+D4 and D5 are the section contract: five squadron-written headings, deterministic facts written by
+squadron directly beneath the prose they support, and a presence-and-filled check that fails
+creation rather than degrading it. "Filled" is defined structurally — non-empty after stripping
+the deterministic block, and not a bare restatement of the heading — because that catches the
+failure that actually occurs (a dropped or empty section) without pretending to judge prose
+quality. No retry on failure: a retry loop makes the command's token cost unbounded, and the
+operator can rerun having seen the reason.
+
+D7 scopes "the latest review" to shas *in* the base-to-head range rather than ancestors of head,
+which is what keeps a long-lived integration branch from attaching a neighboring slice's review to
+this PR. Two gaps surfaced during reconnaissance and are now owned by this slice: there is no
+`{index}-slice.{name}` branch-name parser in the tree (only the reverse lookup in `git_utils`),
+and nothing anywhere reads task-file checkbox state — `_tasks_input` passes task files to the
+review template as paths for injection. Both parsers are new here.
+
+D6 puts the logic in a new `src/squadron/pr/` package in the CLI's dependency tier. The work needs
+`codehost` types and `review` helpers together, which the import-boundary test forbids inside
+`review/`; 384 set the precedent that the combination lives in the CLI layer. Keeping it in
+`cli/commands/pr.py` would push that file well past the size guideline and make it testable only
+through Typer's runner.
+
+Dependencies are 381 alone. 383 is not a prerequisite — without it the provenance section carries
+its no-input line, the architecture's stated degraded path — though 383 is merged, so the degraded
+path will be exercised by unplanned repositories rather than by this one.
+
+### Slice 384 implementation (Phase 6)
+
+Seven code tasks complete on branch `384-slice.post-findings-to-the-pr`, merged into
+`squadron-pr` (the initiative's integration branch — never `main`). `sq review pr --post` writes
+the saved review to the pull request as one comment.
+
+Task 1 replaced 381's `find_own_comment` with `find_marked_comments(record, *, marker) ->
+list[HostComment]` (D1): every marked comment, any author, ordered oldest-first, with
+`author_login` populated from the payload. The old operation filtered to the operator and
+returned only the earliest by `min()`, which discarded both things the architecture asks squadron
+to *report* — another operator's marked comment, and the operator's own duplicates — before any
+caller could see them. Zero production callers existed, so the change replaced the operation
+outright rather than adding a second one beside it; `grep -r find_own_comment src tests` returns
+nothing.
+
+Task 2 added `src/squadron/review/pr_comment.py`: pure functions composing a PR comment body from
+a `ReviewResult` and a `PullRequestRecord`, never from the saved artifact file (D2) — the artifact
+carries frontmatter, a run digest, and at `-vv` a prompt-and-response appendix that must never
+reach a public PR. Findings come from `structured_findings` (the same projection the artifact's
+frontmatter uses), grouped `fail`/`concern`/`note`/`pass` with within-group order preserved, a
+size bound under GitHub's 65536-character limit whose truncation line names only the omitted
+count — never a path, since D6 permits posting after a failed save, when there may be no artifact
+to name. Task 3 extended the existing import-boundary guard (`tests/codehost/test_import_boundaries.py`)
+to permit exactly this module importing exactly `PullRequestRecord`, checked by name so the
+exception cannot silently widen.
+
+Tasks 4–6 added `--post`/`--dry-run` and `_post_review` to `sq review pr`: identity resolved
+first as a clean early exit, discovery via `find_marked_comments`, partition into mine/theirs,
+update the earliest of mine and report the rest (own duplicates and other operators' comments
+alike) by author and URL, create when none are mine. The comment body is bound once
+(`compose_comment`) and shared by `--dry-run` and a real post, so the two cannot drift by
+construction rather than by discipline (D3). The post step runs after the save step and does not
+gate on its outcome (D6). D7's staleness statement compares the reviewed sha against a fresh
+`resolve_pull_request` read taken at post time, not the resolution-time record — comparing a
+value to itself would mean the line could never fire, the mistake the slice design's own first
+draft made and its review caught (F001).
+
+Task 7 added `tests/cli/test_review_pr_post_failures.py`, asserting D8's failure matrix
+per-site rather than once: a classified transport failure and a scripted `ProcessTimedOutError`
+at each of the four post-path host calls (identity, discovery, the head re-read, the write) both
+exit 1 with no effective write, every post-path call carries `HOST_COMMAND_TIMEOUT_SECONDS`, and
+a save that succeeded followed by a failed post leaves the saved artifact untouched. The
+`write_calls()` helper 381 built counts any recorded `-X POST`/`-X PATCH` argv, attempted or not
+— so at the write site itself, whose failing call *is* the one write attempt, the assertion reads
+"exactly one attempt, never a retry or a duplicate" rather than "none," which is what the other
+three sites assert.
+
+Full gate: `ruff format --check`, `ruff check`, `pyright` (0 errors) all clean. Full suite: 4079
+passed, 6 skipped, 3 failed — the pre-existing `test_schema_drift.py` failures (context-forge
+#88), unchanged by this slice.
+
+**Live verification (walkthrough steps 1–4, 6; step 5 not independently exercised live — see
+below):**
+
+No open PR existed on `ecorkran/squadron` at verification time (all five prior PRs are merged),
+so a throwaway PR (#115) was opened from `main` with one non-excluded file under a scratch
+directory, used for the walkthrough, and closed — not merged — once evidence was gathered; its
+branch was deleted both locally and on the remote afterward.
+
+Step 3 — `sq review pr 115 --no-tools --no-save --post` printed
+`https://github.com/ecorkran/squadron/pull/115#issuecomment-5719292536`. Reading the comment back
+confirmed `<!-- squadron-review: github.com/ecorkran/squadron#115 -->` as the literal first line —
+an HTML comment, invisible on the rendered PR, visible only via "View source."
+
+Step 4 — running the same command again printed the **same** comment URL, and
+`gh pr view 115 --json comments --jq '.comments | length'` still read `1`: one comment, updated in
+place, not a second one.
+
+Step 6 — `sq review pr 115 --no-tools --no-save --dry-run` printed `--dry-run requires --post` and
+exited 1, before any host call.
+
+Step 5 (staleness line) was not exercised live — the throwaway PR's head did not move between
+posts, and forcing it to would have meant a second push cycle for a PR that existed only to be
+closed. Covered deterministically instead at both the composer level
+(`tests/review/test_pr_comment.py::TestStaleness`) and the CLI level
+(`test_moved_head_includes_the_staleness_line`, which drives a real post-time re-resolution over
+the fake runner with a scripted head differing from the reviewed sha).
+
+## 20260916
+
+### Slice 383 implementation (Phase 6)
+
+Nine tasks complete, verified live against [PR #111](https://github.com/ecorkran/squadron/pull/111)
+(`ecorkran/squadron`), commits `1e6548b8`..`b4129c53` plus closeout. `RulesSource` on
+`resolve_rules_dir` (task 1), byte-identity fixtures ahead of the migration (task 2), the
+`SaveTarget` protocol and its three implementations (task 3), the pipeline step path migrated
+onto it (task 4), `PullRequestRecord.path_key` (task 5), the reviews-directory precedence chain
+(task 6), `PrTarget` replacing the 382 stub (task 7), and `targetKind`/`rulesSource` frontmatter
+on every target (task 8).
+
+Task 3's byte-identity harness had a blind spot invisible until task 8: it called
+`format_review_markdown` with a raw `SliceInfo` and no `target=`, so it rendered through the
+fallback branch and never exercised `frontmatter_fields()` — the path production actually uses.
+It went on passing through tasks 3 and 4 for the wrong reason, and would have stayed green after
+task 8 added two new keys to every artifact, because it wasn't checking the code that changed.
+Caught only because task 8's keys had to move the bytes and the harness didn't move. Rewritten to
+construct real targets; two fixture sets are kept side by side (`383-premigration-*.md`,
+`383-postkeys-*.md`) with a test asserting the diff is exactly `targetKind` and `rulesSource`. A
+check whose job is to detect change is not evidence until it's been shown to fire on a known one.
+
+**Live verification (walkthrough steps 2, 4, 6; step 3 covered instead by
+`test_review_consumers_ignore_pr.py`):**
+
+Step 2 — `reviewedSha` is the PR's head, not the operator's: reviewed from
+`/Users/manta/source/repos/manta/squadron-pr` at `HEAD=b4129c53`, the saved artifact recorded
+`reviewedSha: 86a0044b...`, matching `gh pr view 111`'s head exactly.
+
+Step 4 — reviewed from a scratch repo with no `project-documents/`: saved to
+`~/.config/squadron/reviews/github.com/ecorkran/squadron/`, source reported as "built-in default",
+`git status` clean.
+
+Step 6 — same run's frontmatter carried `targetKind: pr` and `rulesSource: project` (rules read
+from the reviewing checkout's own conventions, not the PR's).
+
+Found and worked around in the process, not a defect in this slice: this machine's
+`~/.config/squadron/config.toml` carries a stray global `cwd: ./project-documents/user` left over
+from another project. Against a repo lacking that path, `ProcessRunner` mireports the resulting
+`FileNotFoundError` on `cwd` as "executable not found: git" — misleading, but the underlying
+config value is the actual fault, not `process_runner.py`. Worked around here with an explicit
+`--cwd .`; not filed as an issue against this slice.
+
+Full suite after closeout: 3 failed / 4053 passed / 6 skipped (context-forge#88, pre-existing,
+unrelated to this slice). `ruff format`, `ruff check`, `pyright` all clean.
+
+## 20260915
+
+### Slice 383 task breakdown (Phase 5)
+
+`383-tasks.pr-keyed-review-persistence.md` written and committed (`7c0d5825`). Nine tasks, 328
+lines, following the design's own implementation order. No code.
+
+The ordering is the design's, not a fresh one, and two sequencing constraints carry real weight.
+`resolve_rules_dir` (D6) lands first and alone because every review path calls it, so its
+signature change stays out of the migration's diff. Byte-identity fixtures are captured in task 2
+— **before** anything touches `persistence.py` — and the harness is asserted green against
+unmodified code first, since a fixture captured after the change proves nothing. Task 8.1 flags
+the one place that could quietly invalidate them: adding `targetKind` to every target's
+frontmatter may shift the existing three artifacts, and if it does, that is a Project Manager
+question rather than a fixture to update.
+
+Two items are called out as behavior changes rather than refactoring. The pipeline step path
+(task 4) gains `archive_existing_review`'s refuse-on-failed-archive guard, which it has never
+run — so it gets its own test for the refusal, and the action's existing non-fatal `try/except`
+boundary is explicitly preserved. And the D5 precedence chain is written as select-once with no
+fall-through on failure: task 6.4 asserts the next-rule location is empty after a failure, because
+a fall-through would be exactly the silent fallback the project rules forbid.
+
+The frontmatter gate caught the file on first commit. `projectState` described the 382 stub
+literally, and the `: ` inside `save=lambda _target: False` made YAML read a mapping separator
+mid-scalar. Reworded rather than escaped. Worth noting for future task files: prose frontmatter
+values that quote code are a parse hazard, and the gate is what catches them.
+
+No tool guides applied — the slice is stdlib Python plus `cf` as a validation target, and none of
+the eleven `tool-guides/` directories covers either. `cf status` now reads `pending-review` at
+`0/217 tasks`. Phase 6 implementation remains, so the slice is not marked complete.
+
+### Slice 383 design (Phase 4)
+
+`383-slice.pr-keyed-review-persistence.md` written and committed (`cba46123`). Phase 4 only —
+no code, no task breakdown.
+
+**The slice is a migration, not an addition.** The plan frames it as "add PR persistence", but
+persistence is generic at the top (`_resolve_save_outcome` takes a `SaveTargetT`) and hardwired
+to `SliceInfo` beneath, so the two non-slice callers already work around it: the arch review
+fabricates a `SliceInfo` from an initiative index, and the pipeline action bypasses
+`save_review_result` entirely for a lower-level call keyed by step name and index. The design's
+D1 is a three-method `SaveTarget` protocol that all four targets satisfy; the PR target is then
+an ordinary implementation rather than a fourth shape. Migration acceptance is byte-identity
+against fixtures captured *before* the change on all three existing paths.
+
+**The plan's named context-forge dependency does not exist, and the probe method is the
+finding.** cf's `review` schema requires only `docType`, `project`, `status`, `dateCreated`,
+`dateUpdated` — `slice` is required for `slice-design` and `tasks`, not for `review` — and
+unknown keys (`pr`, `rulesSource`) pass through. A PR-shaped fixture validated clean: file count
+529 → 530, zero findings. Getting there took three attempts, because `cf validate frontmatter`
+resolves by *registered project*, not cwd (`-p` is the only override). The active `squadron`
+project is registered at `~/source/repos/manta/squadron`, so every invocation from this worktree
+— explicit-path *and* walk — was silently reading the main checkout or skipping entirely,
+returning `filesChecked: 0`. That is the "a skipped fixture proves nothing" trap
+`tests/documents/test_schema_drift.py` warns about in its own docstring, and it is the same
+registered-root mismatch behind the three pre-existing drift failures here (context-forge #88,
+not squadron's to fix). Recorded as D7 so implementation does not re-derive it: the slice's own
+validation test must assert `filesChecked` *increased*, never merely that findings were zero.
+
+**Two plan items were larger than their wording.** The rules-source provenance field is
+described as "one additive optional frontmatter key", but the value does not exist to record —
+`resolve_rules_dir` returns a bare `Path | None` and discards which of five branches produced
+it, so a project `rules/` and `~/.config/squadron/rules/` are indistinguishable to the caller.
+D6 makes it a signature change returning path *and* source, sequenced first since every review
+path calls it. And `PullRequestRecord.key` is `host/owner/repo#number` — containing `/` and `#`
+— while its docstring calls it "filesystem-safe" and points at this slice; 382 already flattens
+it in `worktree.py::_flatten_key`, so D3 promotes that to a `path_key` property rather than
+writing the second copy.
+
+`reviewedSha` is flagged as the easiest thing to get wrong: the current code resolves it from
+the process working directory, which on the PR path is the operator's tree, not the reviewed
+one, and still yields a plausible sha. The target supplies it, and the test deliberately makes
+the two differ.
+
+Status is `pending-review`; the design has not been reviewed or approved. Slice plan entry
+already carried its materialized `(383)` index, so no plan edit was owed.
+
+## 20260914
+
+### Slice 382 closed — `sq review pr` (Phase 6)
+
+`sq review pr <target>` lands in `cli/commands/review_pr.py` (commit `e6c8b55f`), split
+out of `review.py` rather than growing a module already well past the ~300-line
+guideline. It ties 381's code-host boundary to the scratch-worktree lifecycle and the
+PR-metadata block.
+
+**The two-root split is the substance of this slice.** The review runs with
+`inputs["cwd"]` at the scratch worktree while conventions resolve from the checkout, so
+a PR that edits `CLAUDE.md` or the rules directory is reviewed *against the checkout's*
+versions rather than its own. `_resolve_pr_rules_content` calls `resolve_rules_dir`
+against the checkout directly and never routes through `_resolve_review_cwd`, which
+resolves both roots from one argument — correct for `sq review code`'s single root,
+silently wrong here. That was part 3's F001 finding at task review; the implementation
+follows it. D8's `setting_sources_override=[]` is passed regardless of `--no-tools`,
+since the SDK's project-settings resolution is not gated by the tool flag.
+
+**`--files` was dropped from the slice.** Part E implemented it (`3a01c46f`:
+`review/scope.py`, its tests, and a `GLOB_MATCHED_NOTHING_IN_RANGE` enum case), and the
+implementation was then reverted in the working tree while `review_pr.py` was written
+without the flag. The revert is committed as part of `e6c8b55f` and the drop is recorded
+in task files 2 and 3 so it is not re-litigated from stale task text. `sq review pr`
+reviews the PR's full merge-base range; no operator-supplied glob narrows it.
+
+**H.1's live verification walkthrough was not run, and was dropped rather than left
+open.** It requires an open PR on `ecorkran/squadron`; there are none (checked 20260914
+— #83, #66, #64, all MERGED). The behaviors it would have demonstrated have automated
+coverage: worktree/checkout root split, `--no-tools` bypass, concurrent runs producing
+distinct worktree paths, and the checkout left unchanged after a forced mid-review
+failure (`tests/cli/test_review_pr_worktree.py`). Orphan sweep and D8 settings isolation
+have unit coverage from file 1 but no live-run evidence. **Before relying on
+`sq review pr` against real PRs, run the design's six-step walkthrough.**
+
+At close: 3962 passed, 4 skipped; `ruff format`/`ruff check`/`pyright` clean. The 3
+failures in `tests/documents/test_schema_drift.py` are cf issue #88, pre-existing and
+unrelated.
+
+---
+
 ## 20260913
+
+### Slice 382 task-review findings addressed (Phase 5)
+
+Three task reviews landed CONCERNS against `78ccf3bb`
+(`382-review.tasks.review-a-pr.part-{1,2,3}.md`, claude-sonnet-5). Six concerns and
+five notes actioned across the three task files; each file now carries its own Task
+Review Disposition section.
+
+**The sharpest finding (part 3, F001):** the design's D1 prose and Functional criteria
+name both "the rules directory **and** `CLAUDE.md`" as convention inputs the two-root
+split must source from the checkout, but every task touching the split covered only
+`CLAUDE.md`. Verified directly against `_resolve_review_cwd`
+([review.py:237](src/squadron/cli/commands/review.py#L237)): it resolves both the
+reviewing cwd and the rules directory from one argument, correct for `sq review
+code`'s single root, silently wrong if called with the worktree path on the PR path —
+the same class of risk D8 closes for SDK settings, left open for rules content instead.
+File 3's Task G.5 now states rules resolve from the checkout explicitly; new Task G.6
+adds the isolation test.
+
+**A missing mechanism (part 2, F001):** Task D.3 told the implementer to truncate the
+PR block "through the existing size discipline" without saying how — `builders/code.py`
+is a pure, config-free module and has no path to `review.max_file_size_bytes`. Verified
+the fix has no cost: `review_client.py` never imports `builders/code.py` (the builder
+loads by dotted path from `code.yaml`, not a Python import), so importing `_truncate`
+directly creates a new one-directional edge, not the cycle the original task hedged
+about. `code_review_prompt` now threads a pre-resolved `inputs["pr_max_bytes"]`,
+matching the existing `diff_exclude_patterns` precedent exactly.
+
+**Test-with violations, both restructured:** file 1's Part C (worktree lifecycle) and
+file 3's Part G (`sq review pr` command) each batched several implementation tasks
+before their first test, unlike every other Part. Both split at the same principle —
+test immediately after the piece with the most security/correctness weight, not after
+whatever happens to land last. Part C: create → test → submodule/removal → test → load
+test → commit. Part G: resolve/fetch → test → worktree branch (D5, D8's override calls)
+→ test → scope/rules/files → test → registration → test → commit.
+
+**Two coverage gaps, both closed:** the design's happy-path submodule criterion ("a
+repository with submodules yields a worktree in which submodule paths exist") had no
+test anywhere — both part-1 and part-3 reviews caught this independently as F001/F003.
+And the worktree lifecycle's concurrency and network paths had no `tests/load/` case,
+required by `python.md`'s load-test tier rule and precedented by
+`tests/load/test_grep_timeout.py`. New Task C.8 adds real concurrent worktree creation
+and a real (not scripted) submodule-timeout case.
+
+Five smaller findings also fixed: two broken cross-file references ("file 2's Part C"
+→ Part D; a `pr.py` anchor one line short of the sequence it describes), and the
+closeout task gaining an explicit commit step before merge (flagged identically by both
+part-1 and part-3 reviews). Two notes about implementer-facing placement decisions
+(where `ReviewResult` reports both roots; which module hosts the `--files` intersection
+helper) were left as-is — genuinely low-risk, with a stated decision procedure, and
+better decided at implementation time than guessed at breakdown time.
+
+All three task files remain `status: not_started`; no source file under `src/squadron/`
+has been touched. Committed as a single follow-up to the original breakdown commit.
+
+### Slice 382 task breakdown (Phase 5)
+
+Design converted to `user/tasks/382-tasks.review-a-pr-{1,2,3}.md`. Split into three
+files rather than two: the design carries eight named decisions (D1–D8) with two of
+them — D1 (the two-root split) and D8 (the settings-isolation fix) — security- and
+correctness-critical enough to warrant sequencing and testing in complete isolation
+before anything else in the slice exists. File 1 (398 lines) covers exactly that plus
+the `_SKIP_KEYS` addition and the scratch-worktree lifecycle (D3); file 2 (162 lines)
+covers the PR-metadata block (D4) and the `--files` intersection helper (D7); file 3
+(280 lines) assembles the `sq review pr` subcommand (D2, D5, D6) and closes the slice.
+All three are within the 450-line target with room under the ~100-line tolerance.
+
+**One gap the design's data-flow diagram did not resolve, found during breakdown.**
+The design shows `AgentConfig(cwd=review_root, convention_root=checkout)` as if the CLI
+constructs the config directly, but `run_review_with_profile` takes an `inputs` dict and
+builds `AgentConfig` internally — there was no parameter for a caller to hand it a
+convention root or a settings override. Verified against `review_client.py` at
+`a43d6ec8` before writing tasks. Task 1.1/1.2/1.4 add two new keyword-only parameters,
+`convention_root` and `setting_sources_override`, both defaulting to `None` so every
+existing caller (including `sq review code`) is unaffected; this is recorded as a
+Corrections-table entry rather than a design amendment, since it narrows an
+implementation mechanism rather than changing a decision.
+
+**Confirmed against the installed SDK rather than assumed:** `ClaudeAgentOptions` has a
+direct `env: dict[str, str]` field, so D8's `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` needs no
+indirection through `os.environ` — Task 1.4 names the field directly.
+
+**Sequencing note carried into Task 1.5's isolation test:** it must be written (or
+temporarily run against a reverted fix) to fail first, so the test file itself is
+evidence it would have caught the un-overridden path — the same discipline the design's
+Implementation Notes require of the isolation test generally.
+
+Two verified-but-uncertain points left as implementer choices rather than resolved here,
+each with a real anchor rather than a guess: where `ReviewResult` should report "both
+roots" (task 3, G.2 — `ReviewResult`'s current fields have no slot for it and 383 will
+define persistence-facing shape), and whether `review.py` (already 1263 lines) needs a
+sibling module for the new subcommand (task 3, G.1 — decided yes, a new `review_pr.py`,
+rather than growing the existing file further).
 
 ### Slice 918 Part 3 — receipt-based command install (#65 finding 1)
 

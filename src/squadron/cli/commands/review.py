@@ -24,6 +24,7 @@ from squadron.integrations.context_forge import (
     ContextForgeClient,
     ContextForgeError,
     ContextForgeNotAvailable,
+    cf_project_name,
 )
 from squadron.models.aliases import model_allows_tools, resolve_model_alias
 from squadron.providers.errors import ProviderError
@@ -39,6 +40,7 @@ from squadron.review.git_utils import (
 from squadron.review.models import ReviewResult, Severity, Verdict
 from squadron.review.persistence import (
     TASKS_DIR,
+    SaveTargetProtocol,
     SliceInfo,
     resolve_reviewed_sha,
     resolve_slice_info,
@@ -49,10 +51,12 @@ from squadron.review.resolution import Resolution, ResolutionResult, resolve_rev
 from squadron.review.resolution_evidence import ResolutionError
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
+    RulesSource,
     extract_diff_paths,
     load_review_rules,
     resolve_rules_dir,
 )
+from squadron.review.save_target import ArchTarget, SliceTarget
 from squadron.review.template_inputs import missing_input_files
 from squadron.review.templates import (
     ReviewTemplate,
@@ -234,8 +238,10 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[str, Path | None]:
-    """Resolve the reviewing agent's working directory and its rules directory.
+def _resolve_review_cwd(
+    cwd: str | None, rules_dir_flag: str | None
+) -> tuple[str, Path | None, RulesSource]:
+    """Resolve the reviewing agent's working directory, rules directory, and source.
 
     The cwd half is shared with ``sq pr show`` — see
     :func:`squadron.cli.commands.cwd_resolution.resolve_repo_cwd` for why the
@@ -245,7 +251,8 @@ def _resolve_review_cwd(cwd: str | None, rules_dir_flag: str | None) -> tuple[st
     same root rather than from the configured subdirectory.
     """
     review_cwd = resolve_repo_cwd(cwd)
-    return review_cwd, resolve_rules_dir(review_cwd, None, rules_dir_flag)
+    rules_dir, rules_source = resolve_rules_dir(review_cwd, None, rules_dir_flag)
+    return review_cwd, rules_dir, rules_source
 
 
 class SaveOutcome(StrEnum):
@@ -283,22 +290,29 @@ def _worst_outcome(left: SaveOutcome, right: SaveOutcome) -> SaveOutcome:
     return left if _OUTCOME_SEVERITY[left] >= _OUTCOME_SEVERITY[right] else right
 
 
-def _warn_not_persistable(review_type: str) -> None:
+_DEFAULT_NOT_PERSISTABLE_REASON = "no slice identifier"
+
+
+def _warn_not_persistable(review_type: str, reason: str) -> None:
     """Report that no artifact was written, and how to get one.
 
     A warning that only reports absence leaves the operator where they
-    started, so this names the remedy alongside the fact.
+    started, so this names the remedy alongside the fact. ``reason`` names
+    *why* there is nothing to name an artifact with — distinct callers (a
+    slice-less ``sq review code``, or ``sq review pr`` before 383's
+    persistence lands) have distinct reasons.
     """
     _logger.warning(
-        "%s review was not saved: no slice identifier, so there is no artifact "
+        "%s review was not saved: %s, so there is no artifact "
         "name to write under. Supply a slice number, or use --output file with "
         "--output-path to choose a destination.",
         review_type,
+        reason,
     )
     # stderr, not stdout: --output json must stay machine-parseable, and this
     # warning is operator-facing rather than part of the review payload.
     Console(stderr=True).print(
-        "[yellow]Review not saved: no slice identifier to name an artifact.[/yellow]\n"
+        f"[yellow]Review not saved: {reason}.[/yellow]\n"
         "[yellow]Supply a slice number, or use --output file with --output-path.[/yellow]"
     )
 
@@ -309,6 +323,7 @@ def _resolve_save_outcome[SaveTargetT](
     target: SaveTargetT | None,
     save: Callable[[SaveTargetT], bool],
     review_type: str,
+    not_persistable_reason: str = _DEFAULT_NOT_PERSISTABLE_REASON,
 ) -> SaveOutcome:
     """Decide and perform the save, returning what actually happened.
 
@@ -320,11 +335,15 @@ def _resolve_save_outcome[SaveTargetT](
     It is passed *into* ``save`` rather than captured by it so the non-None
     narrowing reaches the callee: a checker cannot carry a
     ``target is not None`` test across a closure boundary.
+
+    ``not_persistable_reason`` overrides the warning's wording for callers whose
+    "no target" reason isn't the default slice-less case (e.g. ``sq review pr``,
+    which has no target until 383 lands regardless of slice identifier).
     """
     if no_save:
         return SaveOutcome.SUPPRESSED
     if target is None:
-        _warn_not_persistable(review_type)
+        _warn_not_persistable(review_type, not_persistable_reason)
         return SaveOutcome.NOT_PERSISTABLE
     return SaveOutcome.SAVED if save(target) else SaveOutcome.UNSAVED
 
@@ -332,13 +351,19 @@ def _resolve_save_outcome[SaveTargetT](
 def _save_and_report(
     result: ReviewResult,
     review_type: str,
-    slice_info: SliceInfo,
+    target: SaveTargetProtocol,
     *,
     as_json: bool = False,
     input_file: str | None = None,
     name_suffix: str | None = None,
+    project_name: str | None = None,
 ) -> bool:
     """Persist a review, reporting either where it landed or why it did not.
+
+    Takes a save target rather than a ``SliceInfo`` (slice 383, D1). The four
+    review subcommands all persist through here, so this is the one place the
+    contract has to be honoured — a caller that has a slice wraps it in a
+    ``SliceTarget``, and one that does not supplies its own implementation.
 
     Returns whether the file was written. ``save_review_result`` refuses to
     overwrite an existing review whose prior content it could not archive
@@ -352,10 +377,11 @@ def _save_and_report(
         path = save_review_result(
             result,
             review_type,
-            slice_info,
             as_json=as_json,
             input_file=input_file,
             name_suffix=name_suffix,
+            target=target,
+            project_name=project_name,
         )
     except OSError as exc:
         rprint(f"[red]Review not saved: {exc}[/red]")
@@ -549,6 +575,8 @@ def _run_review_command(
     failure_target: SliceInfo | None = None,
     no_save: bool = False,
     failure_name_suffix: str | None = None,
+    convention_root: str | None = None,
+    setting_sources_override: list[str] | None = None,
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
@@ -618,6 +646,8 @@ def _run_review_command(
                 verbosity=verbosity,
                 model_allows_tools=allows_tools,
                 no_tools=no_tools,
+                convention_root=convention_root,
+                setting_sources_override=setting_sources_override,
             )
         )
     except RateLimitError as exc:
@@ -664,6 +694,8 @@ async def _execute_review(
     verbosity: int = 0,
     model_allows_tools: bool = True,
     no_tools: bool = False,
+    convention_root: str | None = None,
+    setting_sources_override: list[str] | None = None,
 ) -> ReviewResult:
     """Execute the review asynchronously."""
     return await run_review_with_profile(
@@ -675,6 +707,8 @@ async def _execute_review(
         verbosity=verbosity,
         model_allows_tools=model_allows_tools,
         no_tools=no_tools,
+        convention_root=convention_root,
+        setting_sources_override=setting_sources_override,
     )
 
 
@@ -726,7 +760,7 @@ def review_slice(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "against": against,
@@ -752,7 +786,12 @@ def review_slice(
         # cannot carry `persistable=... is not None` across the lambda boundary.
         target=slice_info,
         save=lambda info: _save_and_report(
-            result, "slice", info, as_json=use_json, input_file=input_file
+            result,
+            "slice",
+            SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
+            as_json=use_json,
+            input_file=input_file,
+            project_name=info["project"],
         ),
         review_type="slice",
     )
@@ -761,21 +800,18 @@ def review_slice(
 
 
 def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
-    """The minimal SliceInfo an arch review is named and saved under.
+    """The minimal SliceInfo an arch review's *failure* artifact is named under.
 
-    Arch reviews key on an initiative index rather than a slice, so this
-    synthesizes the shape the save and failure paths both need.
+    The save path no longer needs this — it uses ``ArchTarget`` (D1). But
+    ``save_provider_failure`` still takes a ``SliceInfo``, and migrating that
+    path is not in this slice's scope, so the fabrication survives for its one
+    remaining consumer rather than being deleted out from under it.
     """
     arch_name = (
         Path(input_file).stem.split(".", 1)[1]
         if "." in Path(input_file).stem
         else Path(input_file).stem
     )
-    try:
-        project_name = ContextForgeClient().get_project().name
-    except (ContextForgeNotAvailable, ContextForgeError) as exc:
-        _logger.warning("Could not resolve project name from ContextForge: %s", exc)
-        project_name = "unknown"
     return SliceInfo(
         index=index,
         name=arch_name,
@@ -783,7 +819,7 @@ def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
         design_file=None,
         task_files=[],
         arch_file=input_file,
-        project=project_name,
+        project=cf_project_name(),
     )
 
 
@@ -819,7 +855,7 @@ def review_arch(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
     inputs = {
         "input": input_file,
         "cwd": review_cwd,
@@ -843,13 +879,23 @@ def review_arch(
     )
 
     def _save_arch(index: int) -> bool:
-        arch_slice_info = (
-            arch_failure_target
-            if arch_failure_target is not None
-            else _arch_slice_info(index, input_file)
+        # Always ArchTarget, never SliceTarget. The reuse of arch_failure_target
+        # that stood here was unreachable in its SliceTarget branch's negation:
+        # this closure runs only when arch_index is not None, which is exactly
+        # when arch_failure_target is not None, so every persisted arch review
+        # rendered targetKind: slice. _arch_slice_info survives for
+        # save_provider_failure alone (D1); the save path names itself from the
+        # document, which is what ArchTarget is for.
+        arch_target: SaveTargetProtocol = ArchTarget(
+            index, input_file, cwd=review_cwd, rules_source=rules_source
         )
         return _save_and_report(
-            result, "arch", arch_slice_info, as_json=use_json, input_file=input_file
+            result,
+            "arch",
+            arch_target,
+            as_json=use_json,
+            input_file=input_file,
+            project_name=cf_project_name(),
         )
 
     outcome = _resolve_save_outcome(
@@ -916,7 +962,7 @@ def review_tasks(
         output = "json"
 
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, resolved_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
     results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
     # Seeded with the least-serious outcome; each part's own outcome is folded
@@ -965,10 +1011,11 @@ def review_tasks(
             return _save_and_report(
                 part_result,
                 "tasks",
-                info,
+                SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
                 as_json=use_json,
                 input_file=path,
                 name_suffix=suf,
+                project_name=info["project"],
             )
 
         part_outcome = _resolve_save_outcome(
@@ -1024,7 +1071,7 @@ def review_code(
     code_template = get_template("code")
     exclude_patterns = code_template.diff_exclude_patterns if code_template else None
 
-    review_cwd, code_rules_dir = _resolve_review_cwd(cwd, rules_dir_flag)
+    review_cwd, code_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
     # A user-supplied --diff is normalized whether or not a slice number came
     # with it: `sq review code 118 --diff main` overrides the range but keeps
@@ -1135,7 +1182,13 @@ def review_code(
     outcome = _resolve_save_outcome(
         no_save=no_save,
         target=slice_info,
-        save=lambda info: _save_and_report(result, "code", info, as_json=use_json),
+        save=lambda info: _save_and_report(
+            result,
+            "code",
+            SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
+            as_json=use_json,
+            project_name=info["project"],
+        ),
         review_type="code",
     )
 
@@ -1237,7 +1290,7 @@ def review_resolve(
     and UNKNOWN both exit 1 — an answer that could not be reached is not a pass.
     """
     verbosity = _resolve_verbosity(verbose)
-    review_cwd, _ = _resolve_review_cwd(cwd, None)
+    review_cwd, _, _ = _resolve_review_cwd(cwd, None)
 
     model_id, resolved_profile = _resolve_judge_model(model, profile)
 

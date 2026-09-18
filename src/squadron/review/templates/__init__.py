@@ -186,7 +186,7 @@ def clear_registry() -> None:
     _TEMPLATES.clear()
 
 
-_USER_TEMPLATES_DIR = Path.home() / ".config" / "squadron" / "templates"
+USER_TEMPLATES_DIR = Path.home() / ".config" / "squadron" / "templates"
 
 
 def load_all_templates(
@@ -208,7 +208,7 @@ def load_all_templates(
             register_template(template)
 
     # User templates (override built-in by name)
-    user_templates_dir = user_dir or _USER_TEMPLATES_DIR
+    user_templates_dir = user_dir or USER_TEMPLATES_DIR
     if user_templates_dir.is_dir():
         for yaml_file in sorted(user_templates_dir.glob("*.yaml")):
             template = load_template(yaml_file)

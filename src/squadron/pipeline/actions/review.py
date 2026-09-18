@@ -22,13 +22,12 @@ from squadron.review.git_utils import (
     normalize_diff_spec,
 )
 from squadron.review.persistence import (
+    REVIEWS_DIR,
     CfClientProtocol,
     SliceInfo,
-    format_review_markdown,
     resolve_reviewed_sha,
     resolve_slice_info,
     save_provider_failure,
-    save_review_file,
     save_review_result,
 )
 from squadron.review.review_client import run_review_with_profile
@@ -37,6 +36,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
+from squadron.review.save_target import StepTarget
 from squadron.review.template_inputs import missing_input_files, resolve_template_inputs
 from squadron.review.templates import ReviewTemplate, get_template, load_all_templates
 
@@ -250,7 +250,7 @@ class ReviewAction:
         if diff_ref:
             assert_reviewable_scope(diff_ref, cwd, exclude_patterns)
 
-        rules_dir = resolve_rules_dir(cwd, None, None)
+        rules_dir, rules_source = resolve_rules_dir(cwd, None, None)
         file_paths: list[str] = []
         if rules_dir is not None:
             if diff_ref:
@@ -347,9 +347,15 @@ class ReviewAction:
         revision_number = context.iteration if context.iteration >= 1 else None
         review_file_path: str | None = None
         try:
+            # Off-thread for the same reason the provider-failure branch above
+            # is: the save runs a git subprocess bounded at 30s through the
+            # target's reviewed_sha(), plus archive_existing_review's read and
+            # write, and no blocking call belongs on the event loop inside an
+            # async def (project async rule).
             if slice_info is not None:
                 review_file_path = str(
-                    save_review_result(
+                    await asyncio.to_thread(
+                        save_review_result,
                         result,
                         template_name,
                         slice_info,
@@ -359,23 +365,31 @@ class ReviewAction:
                     )
                 )
             else:
-                md_content = format_review_markdown(
-                    result,
-                    template_name,
-                    source_document=inputs.get("input"),
-                    verdict_override=verdict_override,
-                    revision_number=revision_number,
-                    reviewed_sha=resolve_reviewed_sha(cwd),
+                # Through the contract rather than format + save_review_file
+                # directly (slice 383, D2). This is the one save path that
+                # never ran archive_existing_review's guard, so it could
+                # overwrite a review whose prior content could not be
+                # preserved; routing it here closes that gap. The refusal
+                # arrives as OSError where the old call returned None, and the
+                # boundary below keeps it non-fatal to the action exactly as
+                # a write failure was.
+                review_file_path = str(
+                    await asyncio.to_thread(
+                        save_review_result,
+                        result,
+                        template_name,
+                        reviews_dir=Path(cwd) / REVIEWS_DIR,
+                        input_file=inputs.get("input"),
+                        verdict_override=verdict_override,
+                        revision_number=revision_number,
+                        target=StepTarget(
+                            context.step_name,
+                            context.step_index,
+                            cwd=cwd,
+                            rules_source=rules_source,
+                        ),
+                    )
                 )
-                path = save_review_file(
-                    md_content,
-                    template_name,
-                    context.step_name,
-                    context.step_index,
-                    cwd=cwd,
-                )
-                if path is not None:
-                    review_file_path = str(path)
         except Exception:  # noqa: BLE001
             # Boundary by design: this block only persists the review markdown
             # artifact (file write + templating + a git-sha subprocess call);

@@ -68,6 +68,8 @@ async def run_review_with_profile(
     allowed_tools: list[str] | None = None,
     no_tools: bool = False,
     model_allows_tools: bool | None = None,
+    convention_root: str | None = None,
+    setting_sources_override: list[str] | None = None,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
@@ -150,6 +152,7 @@ async def run_review_with_profile(
             allowed_tools=resolved_allowed_tools,
             provider=provider_profile.provider,
         ),
+        convention_root=convention_root,
     )
 
     # Debug output at -vvv (verbosity >= 3)
@@ -185,6 +188,7 @@ async def run_review_with_profile(
         api_key=None,
         base_url=provider_profile.base_url,
         cwd=inputs.get("cwd"),
+        convention_root=convention_root,
         allowed_tools=resolved_allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
         # A document review must not read its own predecessors: they sit inside the tool
@@ -192,7 +196,15 @@ async def run_review_with_profile(
         # the template declares none, so no layer below has to interpret None.
         tool_exclude_patterns=list(template.tool_exclude_patterns or []),
         permission_mode=template.permission_mode,
-        setting_sources=template.setting_sources,
+        # None (the default) preserves today's template-only behavior exactly, including
+        # for sq review code, whose code.yaml sets [project]. A caller may override per
+        # invocation (slice 382, design D8) — the safe value depends on what is being
+        # reviewed, not on the template, so code.yaml itself is never edited for this.
+        setting_sources=(
+            setting_sources_override
+            if setting_sources_override is not None
+            else template.setting_sources
+        ),
         credentials={
             "api_key_env": provider_profile.api_key_env,
             "default_headers": provider_profile.default_headers,
@@ -309,7 +321,10 @@ async def run_review_with_profile(
     return result
 
 
-_SKIP_KEYS = {"cwd", "diff", "files"}
+# "pr" (slice 382, design D4): a pr input value is rendered text from the builder, never a
+# file path; without this, the "is this a real path" check below could read a real file
+# named inside a PR body off disk and inject it (Scope corrections table, design row 3).
+_SKIP_KEYS = {"cwd", "diff", "files", "pr"}
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
 
@@ -346,6 +361,7 @@ def _inject_file_contents(
     exclude_patterns: list[str] | None = None,
     *,
     include_bodies: bool = True,
+    convention_root: str | None = None,
 ) -> str:
     """Inject file contents into the prompt for providers that can't read files.
 
@@ -357,6 +373,11 @@ def _inject_file_contents(
     Size caps are read from config (review.max_file_size_bytes,
     review.max_total_injection_bytes) so they can be raised for
     large-context models rather than hardcoded (issue #19).
+
+    CLAUDE.md is read from convention_root when given (slice 382, design D1) —
+    e.g. a PR review's scratch worktree holds the code under review, but
+    conventions must still come from the trusted checkout. None (the default)
+    preserves today's behavior of reading from inputs["cwd"].
     """
     cwd_for_config = inputs.get("cwd", ".")
     max_file_size = get_config("review.max_file_size_bytes", cwd=cwd_for_config)
@@ -434,7 +455,7 @@ def _inject_file_contents(
     # needing file-read tools (which one-shot API providers don't support).
     # Headings are demoted (H1→H3, H2→H4, etc.) so they fit the same visual
     # hierarchy as the injected rules content and don't dominate the prompt.
-    cwd_for_claude = inputs.get("cwd", ".")
+    cwd_for_claude = convention_root if convention_root is not None else inputs.get("cwd", ".")
     for candidate in ("CLAUDE.md", ".claude/CLAUDE.md"):
         claude_path = Path(cwd_for_claude) / candidate
         if claude_path.is_file():

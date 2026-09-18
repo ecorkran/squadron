@@ -69,6 +69,8 @@ inputs:
       description: "Glob pattern to scope the review"
     - name: diff
       description: "Git ref to diff against (reviews changed files)"
+    - name: pr
+      description: "Pull request metadata (title, body, linked issues, discussions) rendered as a fenced block"
 
 # Exclude non-source files from git diff during code reviews.
 # These patterns are passed as git pathspec exclusions (':!pattern').

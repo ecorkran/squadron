@@ -86,7 +86,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
 
 ## Feature Slices
 
-2. [ ] **(382) Review a PR** — `sq review pr <target>` on top of 381: the adapter-resolved range and
+2. [x] **(382) Review a PR** — `sq review pr <target>` on top of 381: the adapter-resolved range and
    PR record handed to the existing code review; the scratch worktree for tool-enabled reviews
    with its full lifecycle (created under squadron's data directory, named by PR key plus run id,
    registered with git, lock file carrying pid and process start time, orphan sweep on every
@@ -127,7 +127,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
      handling in enterprise repositories.
    - **Relative Effort:** 4/5
 
-3. [ ] **(383) PR-Keyed Review Persistence** — The structural save-target contract on the persistence
+3. [x] **(383) PR-Keyed Review Persistence** — The structural save-target contract on the persistence
    side (filename stem, target-specific frontmatter fields, reviews directory) that a slice target
    and a PR target both satisfy, with the arch review migrated off its minimal-`SliceInfo`
    fabrication and the pipeline action's step-keyed save migrated onto the same contract, so one
@@ -167,7 +167,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
      once.
    - **Relative Effort:** 3/5
 
-4. [ ] **(384) Post Findings to the PR** — The opt-in `--post` on `sq review pr`: the saved review
+4. [x] **(384) Post Findings to the PR** — The opt-in `--post` on `sq review pr`: the saved review
    rendered as one summary comment carrying verdict, findings, model, reviewed head sha, a
    generated-by-squadron statement, and a hidden marker with the PR key; idempotency per
    authenticated login (update the marked comment authored by the current login, report marked
@@ -194,7 +194,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
    - **Risk:** Low — the operations are small and the fake runner covers the branches.
    - **Relative Effort:** 2/5
 
-5. [ ] **(385) Create a PR with a Good Message** — `sq pr create`: base selection in the parent's
+5. [ ] **(385) Create a PR with a Good Message** — Designed: `385-slice.create-a-pr-with-a-good-message.md`. `sq pr create`: base selection in the parent's
    order (`--base`, then the configured integration branch when the adapter confirms it exists on
    the host, else the host default branch, with the chosen base and its source printed and no
    fall-through to `main`); the pushed-branch precondition (head on the host and matching the
@@ -202,9 +202,12 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
    base-to-head range, the slice design and tasks when the branch name matches
    `{index}-slice.{name}` and `cf` resolves it, and the latest review whose reviewed sha lies in
    that range, else none); deterministic assembly of the exact parts (commit list, linked slice,
-   review provenance, reviewed sha); one-shot prose composition through `pipeline/summary_oneshot`
-   with the review model and profile flags, after verifying the `sdk` profile through it and
-   correcting the docstring or the routing; squadron-written section headings (what changed, why,
+   review provenance, reviewed sha); one-shot prose composition with the review model and profile
+   flags (385 design resolved the `sdk`-through-one-shot question: `summary_oneshot` does not
+   refuse `sdk` — its caller `pipeline/actions/summary.py` gates on SDK-session reuse, a pipeline
+   concern the CLI does not have — so the composer performs the one-shot sequence directly, as
+   `run_review_with_profile` already does, and the correction owed is to `summary_oneshot`'s
+   docstring, not its routing); squadron-written section headings (what changed, why,
    how it was verified, known gaps, review provenance) with the model filling prose, sections
    without an input carrying an explicit no-input line, and a presence-and-filled check before
    creation; `--dry-run` printing title and body; and creation through the adapter.

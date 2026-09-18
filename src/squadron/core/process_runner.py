@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -75,7 +76,15 @@ class ProcessRunner(Protocol):
 
 
 class SubprocessRunner:
-    """The production ``ProcessRunner``, backed by :mod:`subprocess`."""
+    """The production ``ProcessRunner``, backed by :mod:`subprocess`.
+
+    Runs every child in its own process group (``start_new_session=True``) so a timeout
+    can kill the whole group, not just the direct child. A command like ``git submodule
+    update`` spawns its own grandchildren (e.g. ``git clone`` per submodule); killing only
+    the direct child on timeout leaves those still running, hung on the network,
+    indefinitely — the exact orphan this exists to prevent. Mirrors the same pattern
+    already used for the ``bash`` tool (``squadron.tools.builtin.bash_tool``).
+    """
 
     def run(
         self,
@@ -90,26 +99,41 @@ class SubprocessRunner:
         # its own config and credentials. Merge over os.environ, never replace.
         merged_env = {**os.environ, **env} if env is not None else None
         try:
-            completed = subprocess.run(
+            proc = subprocess.Popen(
                 list(argv),
-                capture_output=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 **TEXT_DECODING,
                 cwd=cwd,
                 env=merged_env,
-                input=stdin,
-                check=False,
-                timeout=timeout,
+                start_new_session=True,
             )
         except FileNotFoundError as exc:
             _logger.warning("process not found: %s", " ".join(argv))
             raise ProcessNotFoundError(argv[0]) from exc
-        except subprocess.TimeoutExpired as exc:
+
+        try:
+            stdout, stderr = proc.communicate(input=stdin, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_process_group(proc)
             _logger.warning("process timed out after %ss: %s", timeout, " ".join(argv))
-            raise ProcessTimedOutError(argv, timeout) from exc
+            raise ProcessTimedOutError(argv, timeout) from None
         return ProcessResult(
             argv=tuple(argv),
-            returncode=completed.returncode,
-            stdout=completed.stdout,
-            stderr=completed.stderr,
+            returncode=proc.returncode,
+            stdout=stdout,
+            stderr=stderr,
         )
+
+
+def _kill_process_group(proc: subprocess.Popen[str]) -> None:
+    """Kill *proc*'s whole process group and reap it, so no zombie or orphan is left."""
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except ProcessLookupError:
+        # The process exited on its own between the timeout firing and this kill. Nothing
+        # to signal; the wait below still reaps it.
+        pass
+    proc.wait()

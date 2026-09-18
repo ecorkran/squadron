@@ -23,8 +23,27 @@ _FORBIDDEN_FROM_CODEHOST = (
     "squadron.providers",
 )
 
-#: And the reverse direction: the review engine must not depend on the adapter.
-_FORBIDDEN_FROM_REVIEW = ("squadron.codehost",)
+#: And the reverse direction: the review engine must not depend on the adapter,
+#: nor on 385's ``pr/`` package, which sits above it in the CLI's dependency
+#: tier (D6) — the opposite of the direction ``review`` is allowed to depend.
+_FORBIDDEN_FROM_REVIEW = ("squadron.codehost", "squadron.pr")
+
+#: The one permitted exception (384, D2): ``pr_comment.py`` takes a
+#: ``PullRequestRecord`` — a frozen dataclass carrying no host behavior — so
+#: the composer can build a body without the review package learning the
+#: host's other shapes. No other ``codehost`` symbol is exempt.
+_PERMITTED_REVIEW_IMPORT = "squadron.codehost.models"
+
+
+def _is_or_is_under(imported: str, package: str) -> bool:
+    """Whether ``imported`` is ``package`` itself or one of its submodules.
+
+    A plain ``str.startswith`` check would treat ``squadron.pr`` as a match
+    for ``squadron.providers`` — a real false positive this test hit once
+    ``squadron.pr`` (385) was added to the forbidden set, since it is a
+    literal string prefix of ``squadron.providers`` with no boundary check.
+    """
+    return imported == package or imported.startswith(package + ".")
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -39,6 +58,16 @@ def _imported_modules(path: Path) -> set[str]:
     return found
 
 
+def _imported_names_from(path: Path, module: str) -> set[str]:
+    """Names imported via ``from <module> import ...`` in ``path``."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == module and node.level == 0:
+            found.update(alias.name for alias in node.names)
+    return found
+
+
 def _python_files(package: str) -> list[Path]:
     files = sorted((_SRC / package).rglob("*.py"))
     assert files, f"expected python files under {package}"
@@ -49,7 +78,7 @@ def _python_files(package: str) -> list[Path]:
 def test_codehost_does_not_import_upward(path: Path) -> None:
     for imported in _imported_modules(path):
         for forbidden in _FORBIDDEN_FROM_CODEHOST:
-            assert not imported.startswith(forbidden), (
+            assert not _is_or_is_under(imported, forbidden), (
                 f"{path.name} imports {imported}; codehost must not depend on "
                 f"{forbidden} — the direction is cli -> codehost -> core"
             )
@@ -59,10 +88,30 @@ def test_codehost_does_not_import_upward(path: Path) -> None:
 def test_review_does_not_import_codehost(path: Path) -> None:
     for imported in _imported_modules(path):
         for forbidden in _FORBIDDEN_FROM_REVIEW:
-            assert not imported.startswith(forbidden), (
+            if not _is_or_is_under(imported, forbidden):
+                continue
+            if path.name == "pr_comment.py" and imported == _PERMITTED_REVIEW_IMPORT:
+                # 384, D2: the one exception, checked precisely below rather
+                # than merely allowed through here.
+                continue
+            raise AssertionError(
                 f"{path.name} imports {imported}; the review engine must not "
                 "depend on the code-host adapter"
             )
+
+
+def test_pr_comment_imports_only_pull_request_record() -> None:
+    """The one exception is exactly one symbol, from exactly one module (D2).
+
+    A looser exception here would let ``pr_comment.py`` grow a dependency on
+    ``HostComment`` or the error taxonomy without this guard noticing.
+    """
+    path = _SRC / "review" / "pr_comment.py"
+    names = _imported_names_from(path, _PERMITTED_REVIEW_IMPORT)
+    assert names == {"PullRequestRecord"}, (
+        f"pr_comment.py imports {names} from {_PERMITTED_REVIEW_IMPORT}; "
+        "only PullRequestRecord is permitted"
+    )
 
 
 def test_codehost_may_import_core() -> None:

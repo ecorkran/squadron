@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, TypedDict
+from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
@@ -52,6 +53,31 @@ class CfClientProtocol(Protocol):
     def list_slices(self) -> list[Any]: ...
     def list_tasks(self) -> list[Any]: ...
     def get_project(self) -> Any: ...
+
+
+@runtime_checkable
+class SaveTargetProtocol(Protocol):
+    """What persistence asks of the thing being reviewed (slice 383, D1).
+
+    Declared here rather than imported from ``review.save_target``, which is
+    where the implementations live. That module already imports ``SliceInfo``
+    and ``resolve_reviewed_sha`` from this one, so importing the type back
+    would close a cycle. Structural typing is what makes the duplication
+    harmless: an implementation satisfies this by shape, never by inheritance,
+    and ``tests/review/test_save_target.py`` asserts each one still does — so
+    the two declarations fail a test rather than drifting quietly.
+
+    ``reviewed_sha`` is the fourth method beyond the three the design names.
+    The sha has to come from the target: ``save_review_result`` resolves it
+    from the process working directory, which for a PR review is the
+    operator's tree rather than the reviewed one, and still yields a
+    plausible-looking hash.
+    """
+
+    def filename_stem(self, review_type: str) -> str: ...
+    def frontmatter_fields(self) -> dict[str, object]: ...
+    def source_document(self) -> str | None: ...
+    def reviewed_sha(self) -> str | None: ...
 
 
 def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:
@@ -239,10 +265,25 @@ def _render_optional(value: object | None) -> str:
     return str(value)
 
 
+def _render_frontmatter_value(key: str, value: object) -> list[str]:
+    """One frontmatter entry: a scalar on its own line, or an indented mapping.
+
+    Nested mappings render the way ``criteria:`` already does — a bare key
+    followed by two-space-indented pairs — rather than through
+    ``yaml.safe_dump``. Switching serializers would reformat every existing
+    artifact and put this slice's diff through code it has no reason to touch
+    (D2). One level is all any target needs; deeper nesting is not built for.
+    """
+    if isinstance(value, dict):
+        nested = cast(dict[str, object], value)
+        return [f"{key}:", *(f"  {name}: {item}" for name, item in nested.items())]
+    return [f"{key}: {value}"]
+
+
 def _review_frontmatter_lines(
     *,
     review_type: str,
-    slice_name: str,
+    target_fields: Mapping[str, object],
     project_name: str,
     verdict: str,
     source_doc: str,
@@ -260,6 +301,11 @@ def _review_frontmatter_lines(
     — which has no result to render — emits the same keys through the same
     code rather than a second, drifting copy.
 
+    ``target_fields`` carries whatever the save target contributes beyond the
+    common keys — ``{"slice": ...}`` for a slice, a nested ``{"pr": {...}}``
+    for a pull request (D1, D2). It renders in the position ``slice:`` has
+    always occupied, so a slice review's bytes are unchanged by the split.
+
     Optional keys are emitted only when supplied, which is what keeps an
     artifact byte-for-byte unchanged when a feature does not apply:
     ``reviewedSha`` (slice 306), ``revision_number`` (slice 911), the tool
@@ -273,7 +319,10 @@ def _review_frontmatter_lines(
         f"docType: {DocType.REVIEW}",
         "layer: project",
         f"reviewType: {review_type}",
-        f"slice: {slice_name}",
+    ]
+    for key, value in target_fields.items():
+        lines.extend(_render_frontmatter_value(key, value))
+    lines += [
         f"project: {project_name}",
         f"verdict: {verdict}",
         f"sourceDocument: {source_doc}",
@@ -305,16 +354,37 @@ def format_review_markdown(
     verdict_override: str | None = None,
     revision_number: int | None = None,
     reviewed_sha: str | None = None,
+    *,
+    target: SaveTargetProtocol | None = None,
+    project_name: str | None = None,
+    heading_label: str | None = None,
 ) -> str:
     """Format a ReviewResult as markdown with YAML frontmatter.
 
     Args:
         result: The review result to format.
         review_type: Review type label (e.g. ``"slice"``, ``"code"``).
-        slice_info: Optional slice metadata for frontmatter fields.
+        slice_info: Optional slice metadata for frontmatter fields. Superseded
+            by ``target`` where one is supplied; kept for the callers that
+            still pass a raw ``SliceInfo``.
         source_document: Explicit source document path; falls back to
             ``slice_info["design_file"]`` when not provided.
         model: Explicit model name; falls back to ``result.model``.
+        target: The save target contributing this artifact's target-specific
+            frontmatter (slice 383, D1). When supplied, its
+            ``frontmatter_fields()`` replace the unconditional ``slice:`` key.
+        project_name: The ``project:`` value. A caller-supplied parameter
+            rather than a protocol method: ``project`` is a key *every* review
+            carries, so it is not target-specific, and a PR review in a
+            repository squadron never planned has no Context Forge project to
+            ask. Falls back to the slice's project, then to ``"unknown"`` —
+            the same degradation the pipeline step path already writes.
+        heading_label: What follows the review type in the body heading. Slice,
+            arch, and step reviews pass ``"slice {index}"``, preserving today's
+            bytes exactly. A PR review passes ``"PR #42"``: it has no slice
+            index, and emitting ``slice 0`` would be a fabricated identifier —
+            the same refusal ``format_provider_failure_markdown`` already
+            makes for a run with no slice.
         verdict_override: Explicit verdict string; falls back to
             ``result.verdict.value``. Judge templates deliberately omit a
             verdict line from their raw output (the score is the source of
@@ -339,20 +409,29 @@ def format_review_markdown(
     # override, so keying on result.verdict would embed every judge's raw response.
     degraded = resolved_verdict == Verdict.UNKNOWN.value or result.fallback_used
 
-    # Source document resolution
+    # Source document resolution. An explicit argument wins; a target answers
+    # next; a raw SliceInfo last, for the callers not yet migrated.
+    if source_document is None and target is not None:
+        source_document = target.source_document()
     if source_document is None and slice_info is not None:
         source_document = slice_info.get("design_file") or ""
     source_doc = source_document or ""
 
-    # Slice-derived fields
+    # Slice-derived fields. A target supersedes them where one is supplied;
+    # the fallbacks are what the step path (which passes neither) already writes.
     slice_name = slice_info["slice_name"] if slice_info else "unknown"
     slice_index = slice_info["index"] if slice_info else 0
-    project_name = slice_info["project"] if slice_info else "unknown"
+    resolved_project = project_name or (slice_info["project"] if slice_info else "unknown")
+    target_fields = target.frontmatter_fields() if target is not None else {"slice": slice_name}
+    # "slice {index}" preserves today's bytes on every existing path. A target
+    # that names itself differently — a PR, which has no index — supplies its
+    # own label rather than emitting a fabricated one.
+    resolved_heading = heading_label or f"slice {slice_index}"
 
     lines = _review_frontmatter_lines(
         review_type=review_type,
-        slice_name=slice_name,
-        project_name=project_name,
+        target_fields=target_fields,
+        project_name=resolved_project,
         verdict=resolved_verdict,
         source_doc=source_doc,
         model=resolved_model,
@@ -385,7 +464,7 @@ def format_review_markdown(
 
     lines.append("---")
     lines.append("")
-    lines.append(f"# Review: {review_type} — slice {slice_index}")
+    lines.append(f"# Review: {review_type} — {resolved_heading}")
     lines.append("")
     lines.append(f"**Verdict:** {resolved_verdict}")
     lines.append(f"**Model:** {resolved_model}")
@@ -578,13 +657,17 @@ def save_review_file(
 def save_review_result(
     result: ReviewResult,
     review_type: str,
-    slice_info: SliceInfo,
+    slice_info: SliceInfo | None = None,
     as_json: bool = False,
     reviews_dir: Path | None = None,
     input_file: str | None = None,
     name_suffix: str | None = None,
     verdict_override: str | None = None,
     revision_number: int | None = None,
+    *,
+    target: SaveTargetProtocol | None = None,
+    project_name: str | None = None,
+    heading_label: str | None = None,
 ) -> Path:
     """Save a ReviewResult to the reviews directory (CLI compatibility).
 
@@ -614,21 +697,42 @@ def save_review_result(
             could not be archived (see :func:`archive_existing_review`). The
             existing file is left untouched — losing a review to a silent
             overwrite is the failure this refuses to allow.
+        ValueError: If neither ``target`` nor ``slice_info`` is supplied, so
+            there is nothing to name the artifact under. Raising beats
+            inventing a filename the caller never chose.
     """
-    target = reviews_dir or REVIEWS_DIR
-    target.mkdir(parents=True, exist_ok=True)
+    directory = reviews_dir or REVIEWS_DIR
+    directory.mkdir(parents=True, exist_ok=True)
 
-    base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
+    if target is not None:
+        base = target.filename_stem(review_type)
+    elif slice_info is not None:
+        base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
+    else:
+        # Nothing to name the artifact under. Raising beats writing a file
+        # called "None-review.code.None": the caller decides whether that is
+        # NOT_PERSISTABLE (a slice-less `sq review code`) or a bug, and it
+        # cannot decide if persistence has already invented a filename.
+        raise ValueError(
+            f"cannot name a {review_type} review artifact: no save target and no slice info"
+        )
+    # The caller's concern, not the target's: a split tasks review writes each
+    # part to its own slot, and the target answers what it is called rather
+    # than which part of a split this happens to be.
     if name_suffix:
         base = f"{base}.{name_suffix}"
 
     if as_json:
-        path = target / f"{base}.json"
+        path = directory / f"{base}.json"
         content = json.dumps(result.to_dict(verdict_override=verdict_override), indent=2)
     else:
-        path = target / f"{base}.md"
-        # The reviews directory is resolved relative to the process working
-        # directory, so HEAD is resolved against the same root.
+        path = directory / f"{base}.md"
+        # From the target where there is one. The fallback resolves HEAD from
+        # the process working directory, which is the right tree for a slice or
+        # arch review and the wrong one for a PR — where it still yields a
+        # plausible-looking sha, which is what makes it worth taking off this
+        # call site entirely.
+        stamped_sha = target.reviewed_sha() if target is not None else resolve_reviewed_sha(".")
         content = format_review_markdown(
             result,
             review_type,
@@ -636,7 +740,10 @@ def save_review_result(
             source_document=input_file,
             verdict_override=verdict_override,
             revision_number=revision_number,
-            reviewed_sha=resolve_reviewed_sha("."),
+            reviewed_sha=stamped_sha,
+            target=target,
+            project_name=project_name,
+            heading_label=heading_label,
         )
 
     if not archive_existing_review(path):
@@ -682,7 +789,7 @@ def format_provider_failure_markdown(
 
     lines = _review_frontmatter_lines(
         review_type=review_type,
-        slice_name=slice_name,
+        target_fields={"slice": slice_name},
         project_name=project_name,
         verdict=Verdict.UNKNOWN.value,
         source_doc=source_doc,
