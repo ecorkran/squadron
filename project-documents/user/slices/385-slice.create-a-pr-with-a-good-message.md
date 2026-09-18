@@ -570,19 +570,35 @@ and a dry run of a non-write is meaningless, whereas `sq pr create` *is* the wri
 
 ### Verification Walkthrough
 
-Draft — refined at Phase 6 with actual output.
+Confirmed live 20260918 in this checkout of `ecorkran/squadron`, `gh` authenticated. The
+`openrouter` profile needed an explicit `--model`, since that profile carries no default — the
+`sdk` profile could not be exercised live in this session because it cannot nest inside the
+Claude Code session running the walkthrough itself (`CLAUDECODE` blocks it); `sdk`'s one-shot
+dispatch is instead checked directly in
+`tests/pr/test_body.py::test_sdk_profile_resolves_and_dispatches_without_a_session`.
+A reasoning-heavy model (`z-ai/glm-5.2`) hung on one of the six sequential composer calls with no
+client-side timeout to bound it — a pre-existing gap in the provider layer shared with
+`run_review_with_profile` and `summary_oneshot`, not something this slice's design asks for.
+Switching to `openai/gpt-4o-mini` (both via `--profile openrouter`) completed normally; every step
+below uses that pairing unless noted.
 
 **1. Dry run on this slice's own branch, in a planned repository.**
 
 ```bash
 git checkout 385-slice.create-a-pr-with-a-good-message
-sq pr create --dry-run
+sq pr create --dry-run --profile openrouter --model openai/gpt-4o-mini
 ```
 
-Expect: base and source on stderr (`squadron-pr`, source `integration-branch`), then title and
-body on stdout with all five sections. "How it was verified" lists the checked task items; "known
-gaps" lists the unchecked ones; "review provenance" names the review artifact and reviewed sha,
-or the no-input line if no review yet covers the branch.
+Base and source printed to stderr: `base: squadron-pr (source: integration-branch)`. Title and
+body printed to stdout with all five sections, in order, each filled with real prose plus the
+deterministic facts beneath it — commit shas under "what changed", the checked/unchecked task
+items under "how it was verified"/"known gaps", the no-input line under "review provenance"
+(no review yet covered this branch's commits at the time). The first live attempt against this
+step surfaced a real bug: the "why" and "what changed" prompts named the design document's
+*path* without its content, and a composer given no tools (D3's traceability rule) cannot open
+that path itself — the model reliably answered "I don't have access to your files" instead of
+explaining the change. Fixed by reading the design's own text into the prompt directly (commit
+`8c1675f0`); rerunning this step afterward produced coherent, on-topic prose in both sections.
 
 **2. Prove the base refusal.**
 
@@ -592,42 +608,84 @@ sq pr create --dry-run
 cf config set git.integration_branch squadron-pr
 ```
 
-Expect: exit 1 naming `dev/does-not-exist`, with no mention of `main` and no PR created.
+Exit 1, printing exactly:
 
-**3. Prove the push precondition.**
+```
+Configured integration branch 'dev/does-not-exist' does not exist on
+github.com/ecorkran/squadron.
+Push 'dev/does-not-exist' to the host, or correct git.integration_branch.
+```
+
+No mention of `main`, no PR created. Config restored to `squadron-pr` immediately after.
+
+**3. Prove the push precondition — both halves.**
 
 ```bash
 git checkout -b 385-scratch && git commit --allow-empty -m "test: unpushed"
 sq pr create --dry-run
 ```
 
-Expect: exit 1 naming the branch as absent from the host and printing the `git push -u` command.
-Then push it, add another local commit, and rerun: exit 1 for the sha mismatch with the
-`git push` command.
+Exit 1: `Branch '385-scratch' has not been pushed to github.com/ecorkran/squadron.` followed by
+`git push -u origin 385-scratch`.
+
+```bash
+git push -u origin 385-scratch
+git commit --allow-empty -m "test: second unpushed commit"
+sq pr create --dry-run
+```
+
+Exit 1, naming both shas: `Branch '385-scratch' on the host is at '1220cfa4...', but local is at
+'3cecea71...'.` followed by `git push origin 385-scratch` (no `-u`, since the branch already
+exists on the host). Branch and its remote ref deleted afterward; returned to the slice branch.
 
 **4. Unplanned-repository path.**
 
-Run from a clone with no `project-documents/` on a branch whose name does not match the slice
-convention. Expect: five sections, three no-input lines, and a successful dry run.
+```bash
+git worktree add -b scratch-unplanned-test <path> squadron-pr
+cd <path> && rm -rf project-documents
+git push -u origin scratch-unplanned-test
+sq pr create --dry-run --cwd . --profile openrouter --model openai/gpt-4o-mini
+```
+
+Exit 0. Five sections, three no-input lines: "how it was verified" and "known gaps" both read
+"No task records for this branch.", "review provenance" read "No squadron review covers this
+branch's commits." — the branch name does not match the slice convention, so `gather_commits_and_slice`
+made no `cf` call at all, exactly as designed. Worktree and remote branch removed afterward.
 
 **5. Dry-run/real equality, then live creation.**
 
 ```bash
-sq pr create --dry-run > /tmp/dry.txt
-sq pr create
-gh pr view <n> --json title,body
+sq pr create --dry-run --profile openrouter --model openai/gpt-4o-mini > /tmp/dry.txt
+sq pr create --profile openrouter --model openai/gpt-4o-mini
+gh pr view 116 --repo ecorkran/squadron --json title,body,baseRefName,headRefName
 ```
 
-Expect: the created PR's title and body match `/tmp/dry.txt`. Record the URL as evidence.
+Created **`https://github.com/ecorkran/squadron/pull/116`** — base `squadron-pr`, head
+`385-slice.create-a-pr-with-a-good-message`, title `Create a PR with a Good Message` (the design's
+own H1, resolved with zero model calls). Verified *structural* equality rather than byte-for-byte
+text: the dry run and the live create are two separate one-shot model calls (a fresh invocation
+each), so their prose legitimately differs between runs the way any two LLM completions do —
+what D8 guarantees, and what a single invocation's own unit test already asserts
+(`tests/cli/test_pr_create.py::test_dry_run_body_equals_the_next_real_runs_body`), is that the
+title and body are bound once per invocation and shared unmodified between the dry-run and
+real-write paths, not that two independent invocations produce identical text. Confirmed instead
+that both the dry run and the live PR body carry the same five headings in the same order.
 
-**6. Confirm the review can read it back.**
+**6. Confirm the reviewer receives the created body's sections.**
 
 ```bash
-sq review pr <n> --dry-run --post
+sq review pr 116 --no-tools -vvv --no-save
 ```
 
-Expect: the reviewer parses the created body's sections — the two-readers claim, checked rather
-than asserted.
+`sq review pr` reviews the PR's *code diff*, not its description — there is no PR-body-specific
+review path, so this step checks the narrower and real claim: does the reviewer's own prompt
+actually contain the sections squadron wrote? The `-vvv` debug output showed all five headings and
+their content — including the "No squadron review covers this branch's commits." line — verbatim
+inside the injected `Body:` block `assemble_pr_metadata` builds. The two-readers claim, checked
+directly against the debug prompt rather than merely asserted. (The review itself reached verdict
+`UNKNOWN` against the diff, unrelated to this slice — a 492KB diff with `--no-tools` is a known
+degraded-but-safe outcome of the review path, not a defect here; the artifact is kept at
+`project-documents/user/reviews/github.com-ecorkran-squadron-116-review.code.md` as evidence.)
 
 ## Risk Assessment
 

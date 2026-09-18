@@ -358,10 +358,10 @@ Two small corrections the design owes.
   - [x] Record the created PR's URL as evidence
   - [x] Effort: 3
 
-- [ ] **16.3 Rewrite the Verification Walkthrough with observed output**
-  - [ ] Replace the LLD's draft walkthrough in place with the actual commands and their observed output, as 384 did
-  - [ ] Note explicitly any step that could not be exercised live and what covers it instead
-  - [ ] Effort: 2
+- [x] **16.3 Rewrite the Verification Walkthrough with observed output**
+  - [x] Replace the LLD's draft walkthrough in place with the actual commands and their observed output, as 384 did
+  - [x] Note explicitly any step that could not be exercised live and what covers it instead
+  - [x] Effort: 2
 
 - [ ] **16.4 Close the slice**
   - [ ] CHANGELOG: one concise user-facing bullet
