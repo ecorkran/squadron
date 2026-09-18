@@ -54,19 +54,19 @@ Pure function, no dependencies, first consumed by Task 7.1. Landing alone makes 
 
 The first checkbox reader in the codebase. Needed by Tasks 9 and 10.
 
-- [ ] **2.1 Write `parse_task_items`**
-  - [ ] Create `src/squadron/pr/tasks.py` with `parse_task_items(text: str) -> TaskItems`, where `TaskItems` is a frozen dataclass carrying `checked: tuple[str, ...]` and `unchecked: tuple[str, ...]`
-  - [ ] Parse leniently per the project's parsing rules: a list item counts when its marker is `[x]`, `[X]`, or `[ ]`, at **any indent depth**, with any leading list bullet (`-`, `*`, `+`) and any surrounding whitespace
-  - [ ] **Sub-items are attributed to their own state, not their parent's** — a checked parent with an unchecked child yields one of each
-  - [ ] The item's text is what follows the checkbox, stripped; markdown emphasis is left as written
-  - [ ] Items are returned in document order within each group
-  - [ ] Effort: 2
+- [x] **2.1 Write `parse_task_items`**
+  - [x] Create `src/squadron/pr/tasks.py` with `parse_task_items(text: str) -> TaskItems`, where `TaskItems` is a frozen dataclass carrying `checked: tuple[str, ...]` and `unchecked: tuple[str, ...]`
+  - [x] Parse leniently per the project's parsing rules: a list item counts when its marker is `[x]`, `[X]`, or `[ ]`, at **any indent depth**, with any leading list bullet (`-`, `*`, `+`) and any surrounding whitespace
+  - [x] **Sub-items are attributed to their own state, not their parent's** — a checked parent with an unchecked child yields one of each
+  - [x] The item's text is what follows the checkbox, stripped; markdown emphasis is left as written
+  - [x] Items are returned in document order within each group
+  - [x] Effort: 2
 
-- [ ] **2.2 Test `parse_task_items` against a real task file**
-  - [ ] `tests/pr/test_tasks.py`. Unit cases: `[x]`, `[X]`, `[ ]`, nested items at two and three indent levels, mixed parent/child states, trailing whitespace after the text, a line that is not a list item, an empty document
-  - [ ] **Fixture from real input.** Per the project's parsing rules ("the test fixture must include the actual format that parser will consume in production"), include a test reading an actual task file from `project-documents/user/tasks/` — this file once it exists, or `384-tasks.post-findings-to-the-pr.md` until then — and asserting both groups are non-empty and their counts sum to the file's checkbox count
-  - [ ] Success: the real-file test would fail if the parser required one exact indent level or a specific bullet character
-  - [ ] Effort: 2
+- [x] **2.2 Test `parse_task_items` against a real task file**
+  - [x] `tests/pr/test_tasks.py`. Unit cases: `[x]`, `[X]`, `[ ]`, nested items at two and three indent levels, mixed parent/child states, trailing whitespace after the text, a line that is not a list item, an empty document
+  - [x] **Fixture from real input.** Per the project's parsing rules ("the test fixture must include the actual format that parser will consume in production"), include a test reading an actual task file from `project-documents/user/tasks/` — this file once it exists, or `384-tasks.post-findings-to-the-pr.md` until then — and asserting both groups are non-empty and their counts sum to the file's checkbox count
+  - [x] Success: the real-file test would fail if the parser required one exact indent level or a specific bullet character
+  - [x] Effort: 2
 
 ---
 
