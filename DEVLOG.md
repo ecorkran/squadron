@@ -12,6 +12,85 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260917
 
+### Slice 921 — Implementation: Small Fixes Batch (#67, #103)
+
+Phase 6 complete. Two commits, one per fix, each gated independently.
+
+**Part A (#67) — `57a3d771`.** New `_reject_unknown_alias` helper in
+`cli/commands/review.py`, mirroring `_resolve_profile`'s three-channel cascade
+(flag → `template.profile` → `default_review_profile`) *without* its `"sdk"`
+fallback — that fallback was what silently rescued typos. Wired into both
+`_run_review_command` and `_resolve_judge_model`, sharing the one helper per
+design review F004.
+
+Guard placement was the trap the task review (F001) caught in advance:
+`alias_model`/`alias_profile` are `None`-initialized and assigned only inside
+`if raw_model is not None:`, so a guard placed after that block evaluates
+`None == None and None is None` and would reject *every* model-less
+invocation with "unknown model alias 'None'". Guard sits inside the block at
+both call sites, with a comment saying why, and
+`test_no_model_supplied_does_not_reject` guards it directly rather than
+relying on `test_run_review_command_defaults_to_sdk` to catch it by accident.
+
+The error message names `--profile` as the remedy, which is not cosmetic: per
+design review F003, no shipped template declares `profile:`, so a *valid*
+literal model ID with no `--profile` and no config default now fails too.
+That shape is indistinguishable from a typo at the dispatch point, and the
+message is the only place that tells the two apart.
+
+Tests: `test_unknown_model_passes_through` renamed and inverted (it asserted
+the exact behavior this fix removes), plus new `TestUnknownAliasGuard`
+covering both surviving passthrough channels, the message content, and the
+no-model regression; judge path covered in
+`tests/review/test_cli_review_resolve.py`.
+
+**Part B (#103) — `dae9cd97`.** `_sibling_projects` derives sibling checkout
+names from `Path(cwd).resolve().parent.iterdir()`, `_partition_by_sibling`
+splits glob matches into clean/excluded, and the no-key default now selects
+from `clean` only. `_summary_key` is unchanged for every stem, so an excluded
+file keeps its key and stays restorable via `--key` — the disambiguation
+policy the first design review (F001) forced, after the original draft
+required two things that cannot compose. The picker still lists every match,
+marking excluded ones with the owning sibling and the key to use. All-excluded
+with no key raises the same "no summary files found" error rather than falling
+through. `OSError` from `iterdir()` logs at WARNING and degrades to an empty
+sibling set (today's unfiltered behavior), per design review F002 and the
+916 precedent.
+
+The prefix-continuation qualifier in the partition predicate is load-bearing
+in the direction the task review (F005) judged outcome-neutral. From the
+`squadron-pr` worktree, sibling `squadron` is the *shorter* name and prefixes
+every one of `squadron-pr`'s own stems, so the unqualified predicate excludes
+all of them, leaves `clean` empty, and fails in a checkout holding eight
+summaries of its own — the inverse of #103 and worse than the unfixed
+behavior. Verified by direct computation before implementing, and guarded by
+`test_shorter_sibling_does_not_exclude_own_summaries`.
+
+Also updated the existing `TestRestoreFlag`/`TestRestoreKey` invocations to
+pass `--cwd` (task review F002). They omitted it, so under this fix they read
+the real parent of wherever pytest runs — passing on a machine that happens
+to have a same-prefix checkout, failing on CI. Confirmed CWD-independent by
+running the file from a directory whose parent held a `myproject-pr` sibling.
+A first draft of the `_sibling_projects` tests hit the same class of problem
+from the other side: pytest's `tmp_path` is itself nested among sibling temp
+dirs, so the layout needs its own root.
+
+**Verification.** Both fixes smoke-tested live and recorded in the slice
+design's new Verification Walkthrough. Fix 1 needs a scope argument to reach
+the guard at all (task review F003) — `sq review code --model <typo>` alone
+exits 1 at the scope check, and both failures exit 1, so the message is the
+verification. Fix 2 was tested against #103's actual motivating case in this
+repo: `squadron-pr-interactive.md` was still the newest match, still listed,
+now marked excluded, and the default correctly selected
+`squadron-interactive.md`; `--key pr-interactive` still reached it; and the
+`squadron-pr` worktree restored its own summary (exit 0), confirming the
+reversed direction live.
+
+Gate: ruff format/check clean, pyright 0 errors, 3987 passed / 4 skipped
+(baseline 3973; +14 accounted for in the walkthrough). The real command is
+`sq _summary-instructions` — there is no `sq summary` (task review F006).
+
+
 ### Slice 921 — Task Breakdown: Small Fixes Batch (#67, #103)
 
 Phase 5 complete: [921-tasks.small-fixes-batch.md](project-documents/user/tasks/921-tasks.small-fixes-batch.md)
