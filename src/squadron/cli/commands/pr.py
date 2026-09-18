@@ -7,6 +7,7 @@ the range. Read-only against the host and against the working tree. 385 adds
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import typer
@@ -15,13 +16,26 @@ from rich.panel import Panel
 from rich.table import Table
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
-from squadron.codehost.errors import CodeHostError
+from squadron.codehost.errors import CodeHostError, TargetUnresolvableError
 from squadron.codehost.github_cli import build_github_host
 from squadron.codehost.models import FetchedRange, RepositoryLocator, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
-from squadron.codehost.remotes import list_remotes, select_remote
+from squadron.codehost.remotes import GIT_QUERY_TIMEOUT_SECONDS, list_remotes, select_remote
 from squadron.codehost.targets import parse_target
 from squadron.core.process_runner import SubprocessRunner
+from squadron.integrations.context_forge import ContextForgeClient
+from squadron.pr.assembly import PrFacts, assemble_facts
+from squadron.pr.base import select_base
+from squadron.pr.body import (
+    BodyIncompleteError,
+    CompositionError,
+    check_body_complete,
+    compose_body,
+    compose_one_shot,
+    resolve_title,
+)
+from squadron.pr.inputs import find_latest_in_range_review, gather_commits_and_slice
+from squadron.pr.preconditions import check_head_pushed
 
 pr_app = typer.Typer(
     name="pr",
@@ -112,6 +126,124 @@ def show(
         _render_json(resolved, fetched)
         return
     _render_terminal(resolved, fetched)
+
+
+def _current_branch(host: CodeHost, *, cwd: str) -> str:
+    """The branch HEAD is on, read through the host's own runner.
+
+    Matches ``GitHubCli._branch_for``'s pattern for the current-branch
+    target form: reading through ``host.runner`` rather than a second
+    process-execution path keeps this call inside the same seam every other
+    call on this path uses, so a test can fake every process call through
+    one factory (D6, D8).
+    """
+    result = host.runner.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS
+    )
+    branch = result.stdout.strip()
+    if result.returncode != 0 or not branch or branch == "HEAD":
+        raise TargetUnresolvableError(
+            "HEAD is detached, so there is no branch to open a pull request from",
+            fix_hint="Check out a branch first.",
+        )
+    return branch
+
+
+async def _compose_title_and_body(
+    facts: PrFacts, *, title_flag: str | None, model: str | None, profile: str
+) -> tuple[str, str]:
+    """Resolve the title and compose the body through one shared composer.
+
+    Both calls use the same profile-bound composer, and both are resolved
+    before dry-run and the real create path diverge, so the two paths share
+    one title and one body rather than composing twice (D8).
+    """
+
+    async def composer(prompt: str) -> str:
+        return await compose_one_shot(prompt, model=model, profile=profile)
+
+    resolved_title = await resolve_title(
+        title_flag=title_flag,
+        slice_design_file=facts.slice_design_file,
+        commits=facts.commits,
+        compose=composer,
+    )
+    body = await compose_body(facts, compose=composer)
+    return resolved_title, body
+
+
+@pr_app.command("create")
+def create(
+    base: str | None = typer.Option(None, "--base", help="Base branch."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print title and body without creating."),
+    model: str | None = typer.Option(None, "--model", help="Model for the one-shot composer."),
+    profile: str = typer.Option("sdk", "--profile", help="Provider profile for the one-shot composer."),
+    cwd: str | None = typer.Option(None, "--cwd", help="Repository to resolve against."),
+    title: str | None = typer.Option(None, "--title", help="PR title, overriding the slice's name."),
+) -> None:
+    """Open a pull request with a description assembled from the branch's own artifacts.
+
+    Every refusal decidable without a model call happens before the model
+    call (D8): identity, then the pushed-branch precondition, then base
+    selection, all before input gathering, assembly, and composition.
+    """
+    repo_cwd = resolve_repo_cwd(cwd)
+    errors = Console(stderr=True)
+
+    try:
+        host, locator = resolve_locator(None, repo_cwd)
+        head = _current_branch(host, cwd=repo_cwd)
+        host.identify_operator(locator.host)
+
+        local_sha_result = host.runner.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS
+        )
+        local_sha = local_sha_result.stdout.strip()
+        check_head_pushed(host, locator, head=head, local_sha=local_sha, cwd=repo_cwd)
+
+        selection = select_base(host, locator, base_flag=base, cwd=repo_cwd)
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    errors.print(f"[dim]base: {selection.base} (source: {selection.source})[/dim]")
+
+    cf_client = ContextForgeClient()
+    inputs = gather_commits_and_slice(cf_client, base=selection.base, head=head, cwd=repo_cwd)
+    review = find_latest_in_range_review(
+        base=selection.base,
+        head=head,
+        cwd=repo_cwd,
+        host=locator.host,
+        owner=locator.owner,
+        repository=locator.repository,
+    )
+    facts = assemble_facts(inputs, review)
+
+    try:
+        resolved_title, body = asyncio.run(
+            _compose_title_and_body(facts, title_flag=title, model=model, profile=profile)
+        )
+        check_body_complete(body, facts)
+    except (CompositionError, BodyIncompleteError) as exc:
+        errors.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if dry_run:
+        print(resolved_title)
+        print(body)
+        return
+
+    try:
+        record = host.open_pull_request(
+            locator, base=selection.base, head=head, title=resolved_title, body=body
+        )
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    console = Console()
+    console.print(f"[green]{record.url}[/green]")
 
 
 def _render_json(resolved: ResolvedPullRequest, fetched: FetchedRange) -> None:

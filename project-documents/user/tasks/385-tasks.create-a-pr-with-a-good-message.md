@@ -293,22 +293,22 @@ A body that fails this is an error, not a degraded PR.
 
 Thin by construction: orchestration, printing, exit codes.
 
-- [ ] **13.1 Wire the command**
-  - [ ] In `src/squadron/cli/commands/pr.py`, add `@pr_app.command("create")` with `--base`, `--dry-run`, `--model`, `--profile`, `--cwd`, and `--title`
-  - [ ] Order exactly as the design's data flow: resolve locator → preconditions (identity, then pushed) → base selection → input gathering → assembly → compose → check → dry-run return or create
-  - [ ] **Every refusal decidable without a model happens before the model call** (D8)
-  - [ ] `--title` is the first term of D4a's three-term title resolution (Task 10a), not a simple override of a model-composed title
-  - [ ] Print the chosen base and its source before any write (D1)
-  - [ ] `--dry-run` prints title and body to **stdout**, base and source to **stderr**, and returns before the write — the same split 384 chose, so the body can be piped
-  - [ ] **`--dry-run` needs no accompanying flag.** Unlike `sq review pr --dry-run`, which required `--post` because posting was the opt-in, `sq pr create` *is* the write, so `--dry-run` is simply its preview (D8)
-  - [ ] Bind the body **once** to one variable shared by the dry-run and real paths, so their equality is structural (D8)
-  - [ ] On success print the created PR's URL
-  - [ ] Effort: 3
+- [x] **13.1 Wire the command**
+  - [x] In `src/squadron/cli/commands/pr.py`, add `@pr_app.command("create")` with `--base`, `--dry-run`, `--model`, `--profile`, `--cwd`, and `--title`
+  - [x] Order exactly as the design's data flow: resolve locator → preconditions (identity, then pushed) → base selection → input gathering → assembly → compose → check → dry-run return or create
+  - [x] **Every refusal decidable without a model happens before the model call** (D8)
+  - [x] `--title` is the first term of D4a's three-term title resolution (Task 10a), not a simple override of a model-composed title
+  - [x] Print the chosen base and its source before any write (D1)
+  - [x] `--dry-run` prints title and body to **stdout**, base and source to **stderr**, and returns before the write — the same split 384 chose, so the body can be piped
+  - [x] **`--dry-run` needs no accompanying flag.** Unlike `sq review pr --dry-run`, which required `--post` because posting was the opt-in, `sq pr create` *is* the write, so `--dry-run` is simply its preview (D8)
+  - [x] Bind the body **once** to one variable shared by the dry-run and real paths, so their equality is structural (D8)
+  - [x] On success print the created PR's URL
+  - [x] Effort: 3
 
-- [ ] **13.2 Test the command**
-  - [ ] `tests/cli/test_pr_create.py`, against the fake runner with a faked composer. Cases: the full happy path makes exactly one write; `--dry-run` makes **zero** writes and prints the body to stdout; dry-run output equals the body the next real run sends; `--base` is honored; `--title` overrides; identity refusal exits 1 with no write; a failed presence check exits 1 with no write
-  - [ ] Assert the ordering: a precondition failure means the composer was **never called**
-  - [ ] Effort: 3
+- [x] **13.2 Test the command**
+  - [x] `tests/cli/test_pr_create.py`, against the fake runner with a faked composer. Cases: the full happy path makes exactly one write; `--dry-run` makes **zero** writes and prints the body to stdout; dry-run output equals the body the next real run sends; `--base` is honored; `--title` overrides; identity refusal exits 1 with no write; a failed presence check exits 1 with no write
+  - [x] Assert the ordering: a precondition failure means the composer was **never called**
+  - [x] Effort: 3
 
 ---
 
