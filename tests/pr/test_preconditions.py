@@ -32,9 +32,7 @@ def _host(runner: FakeProcessRunner, *, branch_exists: bool) -> MagicMock:
 
 
 def _ls_remote_ok(sha: str) -> ProcessResult:
-    return ProcessResult(
-        argv=(), returncode=0, stdout=f"{sha}\trefs/heads/{HEAD}\n", stderr=""
-    )
+    return ProcessResult(argv=(), returncode=0, stdout=f"{sha}\trefs/heads/{HEAD}\n", stderr="")
 
 
 def test_branch_absent_refuses_naming_push_dash_u() -> None:
@@ -48,9 +46,7 @@ def test_branch_absent_refuses_naming_push_dash_u() -> None:
 
 
 def test_branch_present_and_shas_equal_passes() -> None:
-    runner = FakeProcessRunner(
-        [(["git", "ls-remote"], _ls_remote_ok(LOCAL_SHA))]
-    )
+    runner = FakeProcessRunner([(["git", "ls-remote"], _ls_remote_ok(LOCAL_SHA))])
     host = _host(runner, branch_exists=True)
 
     check_head_pushed(host, LOCATOR, head=HEAD, local_sha=LOCAL_SHA, cwd=".")
@@ -58,9 +54,7 @@ def test_branch_present_and_shas_equal_passes() -> None:
 
 def test_branch_present_and_shas_differ_refuses_naming_push_and_both_shas() -> None:
     remote_sha = "b" * 40
-    runner = FakeProcessRunner(
-        [(["git", "ls-remote"], _ls_remote_ok(remote_sha))]
-    )
+    runner = FakeProcessRunner([(["git", "ls-remote"], _ls_remote_ok(remote_sha))])
     host = _host(runner, branch_exists=True)
 
     with pytest.raises(HeadBranchBehindError) as exc_info:
@@ -98,9 +92,7 @@ def test_ls_remote_timeout_refuses_rather_than_silently_passing() -> None:
 
 
 def test_ls_remote_call_carries_git_query_timeout_not_gh_constant() -> None:
-    runner = FakeProcessRunner(
-        [(["git", "ls-remote"], _ls_remote_ok(LOCAL_SHA))]
-    )
+    runner = FakeProcessRunner([(["git", "ls-remote"], _ls_remote_ok(LOCAL_SHA))])
     host = _host(runner, branch_exists=True)
 
     check_head_pushed(host, LOCATOR, head=HEAD, local_sha=LOCAL_SHA, cwd=".")

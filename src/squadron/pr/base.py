@@ -95,10 +95,7 @@ def select_base(
         raise IntegrationBranchAbsentError(
             f"Configured integration branch {integration_branch!r} does not exist "
             f"on {locator.host}/{locator.owner}/{locator.repository}.",
-            fix_hint=(
-                f"Push {integration_branch!r} to the host, or correct "
-                "git.integration_branch."
-            ),
+            fix_hint=(f"Push {integration_branch!r} to the host, or correct git.integration_branch."),
         )
 
     default = host.default_branch(locator)

@@ -212,21 +212,21 @@ The exact parts, built without a model. Every fact copied, none inferred.
 
 Prompt in, text out, through a profile. Small because it does one thing.
 
-- [ ] **10.1 Write the composer**
-  - [ ] Create `src/squadron/pr/body.py` with the one-shot call: `get_profile` → `ensure_provider_loaded` → `get_provider` → build an `AgentConfig` → `create_agent` → `handle_message`, the same sequence `run_review_with_profile` uses (D3)
-  - [ ] Takes `model: str | None` and `profile: str` exactly as the CLI flags supply them
-  - [ ] **Give the model no tools.** A description-writer with tools can assert things no input supports, which is what the traceability rule forbids (D3)
-  - [ ] Do **not** call `summary_oneshot` or `run_review_with_profile` — the design states why for each (pipeline-shaped parameters; review-shaped template and result parsing)
-  - [ ] The composer is injectable so every other test can fake it
-  - [ ] **Enumerate the model call's failure mode (D8).** A provider that is unreachable, unauthenticated, or times out mid-stream, and any exception from `handle_message`, are caught at the composer's boundary, logged at ERROR with `logger.exception`, and become a non-zero exit that creates nothing. This is a process-boundary handler in the project's exception rules' sense, which is what permits catching broadly *here*; every narrower handler in the slice names its exception type
-  - [ ] Effort: 3
+- [x] **10.1 Write the composer**
+  - [x] Create `src/squadron/pr/body.py` with the one-shot call: `get_profile` → `ensure_provider_loaded` → `get_provider` → build an `AgentConfig` → `create_agent` → `handle_message`, the same sequence `run_review_with_profile` uses (D3)
+  - [x] Takes `model: str | None` and `profile: str` exactly as the CLI flags supply them
+  - [x] **Give the model no tools.** A description-writer with tools can assert things no input supports, which is what the traceability rule forbids (D3)
+  - [x] Do **not** call `summary_oneshot` or `run_review_with_profile` — the design states why for each (pipeline-shaped parameters; review-shaped template and result parsing)
+  - [x] The composer is injectable so every other test can fake it
+  - [x] **Enumerate the model call's failure mode (D8).** A provider that is unreachable, unauthenticated, or times out mid-stream, and any exception from `handle_message`, are caught at the composer's boundary, logged at ERROR with `logger.exception`, and become a non-zero exit that creates nothing. This is a process-boundary handler in the project's exception rules' sense, which is what permits catching broadly *here*; every narrower handler in the slice names its exception type
+  - [x] Effort: 3
 
-- [ ] **10.2 Test the composer's wiring**
-  - [ ] `tests/pr/test_body.py`, against a fake provider. Assert: the profile is resolved through the registry; `model=None` is passed through rather than defaulted locally; no tools are requested; the response text is returned unmodified
-  - [ ] Assert the `sdk` profile resolves and dispatches without requiring a session — the design's D3 claim, checked rather than asserted
-  - [ ] Assert a provider raising during `handle_message` exits non-zero, logs at ERROR, and creates nothing
-  - [ ] No test here calls a real model
-  - [ ] Effort: 2
+- [x] **10.2 Test the composer's wiring**
+  - [x] `tests/pr/test_body.py`, against a fake provider. Assert: the profile is resolved through the registry; `model=None` is passed through rather than defaulted locally; no tools are requested; the response text is returned unmodified
+  - [x] Assert the `sdk` profile resolves and dispatches without requiring a session — the design's D3 claim, checked rather than asserted
+  - [x] Assert a provider raising during `handle_message` exits non-zero, logs at ERROR, and creates nothing
+  - [x] No test here calls a real model
+  - [x] Effort: 2
 
 ---
 

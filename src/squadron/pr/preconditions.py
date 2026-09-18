@@ -56,8 +56,7 @@ def check_head_pushed(
     remote_sha = _remote_head_sha(host, locator, head=head, cwd=cwd)
     if remote_sha != local_sha:
         raise HeadBranchBehindError(
-            f"Branch {head!r} on the host is at {remote_sha!r}, but local is "
-            f"at {local_sha!r}.",
+            f"Branch {head!r} on the host is at {remote_sha!r}, but local is at {local_sha!r}.",
             fix_hint=f"git push {locator.remote_name} {head}",
         )
 
