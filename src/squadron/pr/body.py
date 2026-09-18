@@ -213,6 +213,34 @@ def _why_block(facts: PrFacts) -> str:
     return f"Slice design: {facts.slice_design_file}" if facts.slice_design_file else ""
 
 
+#: A bound on how much of the design document reaches the prompt. The model
+#: gets facts only (D3's traceability rule) — the full document, not a
+#: guess at its content, but capped so one large design doesn't dominate
+#: the one-shot budget the way an unbounded read would.
+_DESIGN_EXCERPT_MAX_CHARS = 6000
+
+
+def _read_design_excerpt(facts: PrFacts) -> str:
+    """The design document's own text, or "" when absent or unreadable.
+
+    Without this, a prompt that only *names* the design's path gives the
+    model nothing to read — it has no tools (D3) and no way to open the
+    file itself, so a path-only prompt reliably produces a refusal
+    ("I don't have access to your files") instead of prose about the
+    change. The model must be handed the content directly.
+    """
+    if facts.slice_design_file is None:
+        return ""
+    try:
+        text = Path(facts.slice_design_file).read_text(encoding="utf-8")
+    except OSError:
+        _logger.warning(
+            "sq pr create: could not read slice design %s for composition", facts.slice_design_file
+        )
+        return ""
+    return text[:_DESIGN_EXCERPT_MAX_CHARS]
+
+
 def _verified_block(facts: PrFacts) -> str:
     return "\n".join(f"- [x] {item}" for item in facts.checked_items)
 
@@ -225,29 +253,37 @@ def _provenance_block(facts: PrFacts) -> str:
     return f"Review: {facts.review_path} (verdict: {facts.review_verdict}, sha: {facts.reviewed_sha})"
 
 
+def _what_changed_prompt(facts: PrFacts) -> str:
+    prompt = "Summarize what changed in this PR, in a short paragraph, given these commits:\n\n"
+    prompt += "\n".join(f"- {c.subject}" for c in facts.commits)
+    excerpt = _read_design_excerpt(facts)
+    if excerpt:
+        prompt += f"\n\nSlice design document:\n\n{excerpt}"
+    return prompt
+
+
+def _why_prompt(facts: PrFacts) -> str:
+    excerpt = _read_design_excerpt(facts)
+    if excerpt:
+        return f"Explain why this change was made, given this slice design document:\n\n{excerpt}"
+    subjects = "\n".join(f"- {c.subject}" for c in facts.commits)
+    return f"Explain why this change was made, given only these commit subjects:\n\n{subjects}"
+
+
 _SECTIONS: tuple[_Section, ...] = (
     _Section(
         heading="What changed",
         no_input_line="",  # never — commits always exist
         has_input=lambda facts: True,
         deterministic_block=_what_changed_block,
-        prompt=lambda facts: (
-            "Summarize what changed in this PR, in a short paragraph, given these commits:\n\n"
-            + "\n".join(f"- {c.subject}" for c in facts.commits)
-            + (f"\n\nSlice design: {facts.slice_design_file}" if facts.slice_design_file else "")
-        ),
+        prompt=_what_changed_prompt,
     ),
     _Section(
         heading="Why",
         no_input_line="",  # never — falls back to commits
         has_input=lambda facts: True,
         deterministic_block=_why_block,
-        prompt=lambda facts: (
-            f"Explain why this change was made, given the slice design at {facts.slice_design_file}."
-            if facts.slice_design_file
-            else "Explain why this change was made, given only these commit subjects:\n\n"
-            + "\n".join(f"- {c.subject}" for c in facts.commits)
-        ),
+        prompt=_why_prompt,
     ),
     _Section(
         heading="How it was verified",

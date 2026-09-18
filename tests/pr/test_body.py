@@ -368,6 +368,38 @@ async def test_full_inputs_produce_five_sections_no_no_input_lines() -> None:
 
 
 @pytest.mark.asyncio
+async def test_what_changed_and_why_prompts_carry_the_designs_own_text(tmp_path: Path) -> None:
+    """A model with no tools cannot open the path itself (D3) — naming the
+    path in the prompt without its content reliably produces a refusal
+    ("I don't have access to your files") instead of prose. The prompt
+    must embed the design's own text, not merely point at it.
+    """
+    design = tmp_path / "design.md"
+    design.write_text("# Slice Design: Some Slice\n\nThe reason this exists is UNIQUE_MARKER_TEXT.\n")
+    facts = PrFacts(
+        commits=BODY_COMMITS,
+        slice_design_file=str(design),
+        checked_items=(),
+        unchecked_items=(),
+        review_path=None,
+        review_verdict=None,
+        reviewed_sha=None,
+    )
+    prompts_seen: list[str] = []
+
+    async def _recording_composer(prompt: str) -> str:
+        prompts_seen.append(prompt)
+        return "Some prose."
+
+    await compose_body(facts, compose=_recording_composer)
+
+    # First two calls are "what changed" and "why" (has_input=True for both,
+    # in section order); the marker text must reach both prompts verbatim.
+    assert any("UNIQUE_MARKER_TEXT" in prompt for prompt in prompts_seen[:2])
+    assert all("UNIQUE_MARKER_TEXT" in prompt for prompt in prompts_seen[:2])
+
+
+@pytest.mark.asyncio
 async def test_no_slice_the_two_task_sections_carry_the_no_input_line() -> None:
     facts = _no_slice_facts()
 
