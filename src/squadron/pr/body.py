@@ -307,3 +307,69 @@ async def compose_body(facts: PrFacts, *, compose: Composer) -> str:
             parts.append(block)
         parts.append("")
     return "\n\n".join(parts).strip() + "\n"
+
+
+# --- The presence-and-filled check (D5) -------------------------------------
+
+
+class BodyIncompleteError(Exception):
+    """The assembled body fails the presence-and-filled check.
+
+    Raised rather than retried — a retry loop would make the command's
+    token cost unbounded, and the operator can rerun having seen why (D5).
+    """
+
+
+def check_body_complete(body: str, facts: PrFacts) -> None:
+    """Raise unless all five headings are present, in order, and filled.
+
+    Runs on the **assembled** body — after squadron's own headings and
+    deterministic facts are inserted — so it validates what would be
+    posted, not the model's raw response. "Filled" is structural: content
+    non-empty after stripping the squadron-written deterministic block and
+    whitespace, and not solely a restatement of the heading. It does not
+    judge prose quality, which is not checkable (D5).
+    """
+    sections = _split_sections(body)
+    expected = [section.heading for section in _SECTIONS]
+
+    found_headings = [heading for heading, _ in sections]
+    if found_headings != expected:
+        raise BodyIncompleteError(
+            f"PR body sections are missing or out of order: expected {expected}, found {found_headings}"
+        )
+
+    for section, (heading, content) in zip(_SECTIONS, sections, strict=True):
+        if not _section_is_filled(section, content, facts):
+            raise BodyIncompleteError(f"PR body section {heading!r} is empty or unfilled")
+
+
+def _split_sections(body: str) -> list[tuple[str, str]]:
+    """Split *body* into ``(heading, content)`` pairs at each ``## `` marker."""
+    pattern = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+    matches = list(pattern.finditer(body))
+    sections: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        heading = match.group(1)
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(body)
+        sections.append((heading, body[start:end].strip()))
+    return sections
+
+
+def _section_is_filled(section: _Section, content: str, facts: PrFacts) -> bool:
+    """Whether *content* counts as filled for *section*, per D5's structural test."""
+    if not section.has_input(facts):
+        return content.strip() == section.no_input_line
+
+    block = section.deterministic_block(facts)
+    remainder = content
+    if block and block in remainder:
+        remainder = remainder.replace(block, "", 1)
+    remainder = remainder.strip()
+
+    if not remainder:
+        return False
+    if remainder.strip().lower() == section.heading.strip().lower():
+        return False
+    return True

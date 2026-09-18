@@ -12,7 +12,14 @@ import pytest
 
 from squadron.core.models import Message
 from squadron.pr.assembly import PrFacts
-from squadron.pr.body import CompositionError, compose_body, compose_one_shot, resolve_title
+from squadron.pr.body import (
+    BodyIncompleteError,
+    CompositionError,
+    check_body_complete,
+    compose_body,
+    compose_one_shot,
+    resolve_title,
+)
 from squadron.providers.base import AgentProvider, ProviderCapabilities
 from squadron.review.git_utils import CommitRecord
 from squadron.review.models import Verdict
@@ -412,3 +419,86 @@ async def test_model_headings_do_not_duplicate_or_reorder_sections() -> None:
 
     for heading in SECTION_HEADINGS:
         assert body.count(f"## {heading}") == 1
+
+
+# --- check_body_complete (D5) -----------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_complete_body_passes() -> None:
+    facts = _full_facts()
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    check_body_complete(body, facts)  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_body_missing_one_section_fails_naming_it() -> None:
+    facts = _full_facts()
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+    body_missing_why = body.replace("## Why", "## Renamed Section")
+
+    with pytest.raises(BodyIncompleteError) as exc_info:
+        check_body_complete(body_missing_why, facts)
+
+    assert "Why" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_section_containing_only_the_heading_fails() -> None:
+    facts = _full_facts()
+    body = (
+        "## What changed\n\n## Why\n\n"
+        "## How it was verified\n\n## Known gaps\n\n## Review provenance\n\n"
+    )
+
+    with pytest.raises(BodyIncompleteError):
+        check_body_complete(body, facts)
+
+
+@pytest.mark.asyncio
+async def test_section_containing_only_whitespace_fails() -> None:
+    facts = _full_facts()
+    body = (
+        "## What changed\n   \n\n## Why\n\n"
+        "## How it was verified\n\n## Known gaps\n\n## Review provenance\n\n"
+    )
+
+    with pytest.raises(BodyIncompleteError):
+        check_body_complete(body, facts)
+
+
+@pytest.mark.asyncio
+async def test_section_containing_exactly_its_no_input_line_passes() -> None:
+    facts = _no_slice_facts()
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    check_body_complete(body, facts)  # must not raise
+
+
+def test_sections_present_but_out_of_order_fails() -> None:
+    facts = _full_facts()
+    body = (
+        "## Why\n\nSome prose about why.\n\n"
+        "## What changed\n\nSome prose about what changed.\n\n"
+        "## How it was verified\n\nprose\n\n"
+        "## Known gaps\n\nprose\n\n"
+        "## Review provenance\n\nprose\n\n"
+    )
+
+    with pytest.raises(BodyIncompleteError):
+        check_body_complete(body, facts)
+
+
+@pytest.mark.asyncio
+async def test_check_raises_rather_than_returning_a_falsy_result() -> None:
+    """The failure path is a raise, never a return value a caller could ignore
+    and proceed to create the PR anyway — this is what makes "no host call on
+    failure" true of every caller by construction, not by caller discipline.
+    """
+    facts = _full_facts()
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+    body_missing_why = body.replace("## Why", "## Renamed Section")
+
+    with pytest.raises(BodyIncompleteError):
+        check_body_complete(body_missing_why, facts)

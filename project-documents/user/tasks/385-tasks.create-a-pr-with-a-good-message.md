@@ -275,17 +275,17 @@ Five headings, squadron's. The model writes only prose.
 
 A body that fails this is an error, not a degraded PR.
 
-- [ ] **12.1 Write the check**
-  - [ ] In `src/squadron/pr/body.py`, add the check: all five headings present, **in order**, each section either containing prose or containing exactly its no-input line
-  - [ ] **"Filled" is structural:** content non-empty after stripping whitespace and the squadron-written deterministic block, and not solely a restatement of the heading. It does not judge prose quality, which is not checkable and would be a false promise (D5)
-  - [ ] The check runs on the **assembled** body, after squadron's headings and facts are inserted — so it validates what would be posted, not the model's raw response
-  - [ ] Failure raises. **No retry** — a retry loop makes the command's token cost unbounded, and the operator can rerun having seen the reason (D5)
-  - [ ] Effort: 2
+- [x] **12.1 Write the check**
+  - [x] In `src/squadron/pr/body.py`, add the check: all five headings present, **in order**, each section either containing prose or containing exactly its no-input line
+  - [x] **"Filled" is structural:** content non-empty after stripping whitespace and the squadron-written deterministic block, and not solely a restatement of the heading. It does not judge prose quality, which is not checkable and would be a false promise (D5)
+  - [x] The check runs on the **assembled** body, after squadron's headings and facts are inserted — so it validates what would be posted, not the model's raw response
+  - [x] Failure raises. **No retry** — a retry loop makes the command's token cost unbounded, and the operator can rerun having seen the reason (D5)
+  - [x] Effort: 2
 
-- [ ] **12.2 Test the check**
-  - [ ] Add to `tests/pr/test_body.py`. Cases: a complete body passes; a body missing one section fails naming it; a section containing only its heading fails; a section containing only whitespace fails; a section containing exactly its no-input line **passes**; sections present but out of order fails
-  - [ ] Assert the failure path creates nothing — no host call is made
-  - [ ] Effort: 2
+- [x] **12.2 Test the check**
+  - [x] Add to `tests/pr/test_body.py`. Cases: a complete body passes; a body missing one section fails naming it; a section containing only its heading fails; a section containing only whitespace fails; a section containing exactly its no-input line **passes**; sections present but out of order fails
+  - [x] Assert the failure path creates nothing — no host call is made
+  - [x] Effort: 2
 
 ---
 
