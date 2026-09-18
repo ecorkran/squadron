@@ -316,13 +316,13 @@ Thin by construction: orchestration, printing, exit codes.
 
 Mirrors 384's Task 7 matrix. The five call sites are `identify_operator`, `branch_exists`, `default_branch`, the `ls-remote` sha read, and `open_pull_request`.
 
-- [ ] **14.1 Cover the failure matrix**
-  - [ ] `tests/cli/test_pr_create_failures.py`, parametrized over all five call sites for both a classified transport failure and a scripted `ProcessTimedOutError`
-  - [ ] Each asserts exit 1 and **no effective write** — distinguishing "zero attempts" at the four read sites from "exactly one failed, non-duplicating attempt" at the write site itself, as 384's helper does
-  - [ ] Assert the four `gh` calls carry `HOST_COMMAND_TIMEOUT_SECONDS` and the `ls-remote` call carries `GIT_QUERY_TIMEOUT_SECONDS` (D2, F007)
-  - [ ] Assert `PullRequestCreationRejectedError` (HTTP 422 from `open_pull_request`) is reported with the host's reason and its fix hint, and is **not retried** — a retried create after a network error that actually landed would open two PRs (D8)
-  - [ ] Every one of the five uses the `except CodeHostError` → `render_code_host_error` → `typer.Exit(code=1)` pattern `review_pr.py` set
-  - [ ] Effort: 3
+- [x] **14.1 Cover the failure matrix**
+  - [x] `tests/cli/test_pr_create_failures.py`, parametrized over all five call sites for both a classified transport failure and a scripted `ProcessTimedOutError`
+  - [x] Each asserts exit 1 and **no effective write** — distinguishing "zero attempts" at the four read sites from "exactly one failed, non-duplicating attempt" at the write site itself, as 384's helper does
+  - [x] Assert the four `gh` calls carry `HOST_COMMAND_TIMEOUT_SECONDS` and the `ls-remote` call carries `GIT_QUERY_TIMEOUT_SECONDS` (D2, F007)
+  - [x] Assert `PullRequestCreationRejectedError` (HTTP 422 from `open_pull_request`) is reported with the host's reason and its fix hint, and is **not retried** — a retried create after a network error that actually landed would open two PRs (D8)
+  - [x] Every one of the five uses the `except CodeHostError` → `render_code_host_error` → `typer.Exit(code=1)` pattern `review_pr.py` set
+  - [x] Effort: 3
 
 ---
 
