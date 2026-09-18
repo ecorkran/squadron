@@ -254,20 +254,20 @@ Three terms, only the third of which reaches the model. The slice's one degradat
 
 Five headings, squadron's. The model writes only prose.
 
-- [ ] **11.1 Write the body assembly**
-  - [ ] In `src/squadron/pr/body.py`, add `compose_body(facts: PrFacts, *, composer) -> str`
-  - [ ] Define the five sections once, in order, as a module-level structure — heading text, which fact feeds it, and its no-input line. **One definition, referenced everywhere**, per the project's rule against scattering comparison values across code
-  - [ ] Implement D4's table: what changed (commits, + design when present); why (design, else commits); how it was verified (checked items); known gaps (unchecked items); review provenance (the in-range review)
-  - [ ] **Squadron emits the headings and writes the deterministic facts directly beneath the prose they support** — the commit list under "what changed", the design path under "why", the artifact path, verdict, and reviewed sha under "review provenance". The model's own headings, if it emits any, are discarded
-  - [ ] A section with no input carries its no-input line **verbatim** and the model is not asked for prose there (D4)
-  - [ ] "How it was verified" and "known gaps" share a no-input line because both derive from the task file
-  - [ ] Effort: 3
+- [x] **11.1 Write the body assembly**
+  - [x] In `src/squadron/pr/body.py`, add `compose_body(facts: PrFacts, *, composer) -> str`
+  - [x] Define the five sections once, in order, as a module-level structure — heading text, which fact feeds it, and its no-input line. **One definition, referenced everywhere**, per the project's rule against scattering comparison values across code
+  - [x] Implement D4's table: what changed (commits, + design when present); why (design, else commits); how it was verified (checked items); known gaps (unchecked items); review provenance (the in-range review)
+  - [x] **Squadron emits the headings and writes the deterministic facts directly beneath the prose they support** — the commit list under "what changed", the design path under "why", the artifact path, verdict, and reviewed sha under "review provenance". The model's own headings, if it emits any, are discarded
+  - [x] A section with no input carries its no-input line **verbatim** and the model is not asked for prose there (D4)
+  - [x] "How it was verified" and "known gaps" share a no-input line because both derive from the task file
+  - [x] Effort: 3
 
-- [ ] **11.2 Test the section contract**
-  - [ ] Add to `tests/pr/test_body.py` with a fake composer. Cases: full inputs → five sections, no no-input lines; no slice → the two task sections carry their line; no review → provenance carries its line; unplanned repository (no slice, no review) → five sections with three no-input lines
-  - [ ] Assert the deterministic facts appear verbatim — a commit sha from the input appears in the output
-  - [ ] Assert a model response containing its own `##` headings does not produce duplicate or reordered sections
-  - [ ] Effort: 3
+- [x] **11.2 Test the section contract**
+  - [x] Add to `tests/pr/test_body.py` with a fake composer. Cases: full inputs → five sections, no no-input lines; no slice → the two task sections carry their line; no review → provenance carries its line; unplanned repository (no slice, no review) → five sections with three no-input lines
+  - [x] Assert the deterministic facts appear verbatim — a commit sha from the input appears in the output
+  - [x] Assert a model response containing its own `##` headings does not produce duplicate or reordered sections
+  - [x] Effort: 3
 
 ---
 

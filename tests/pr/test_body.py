@@ -1,4 +1,6 @@
-"""Tests for the one-shot composer's wiring (D3) and title resolution (D4a)."""
+"""Tests for the composer's wiring (D3), title resolution (D4a), and the
+section contract (D4).
+"""
 
 from __future__ import annotations
 
@@ -9,9 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squadron.core.models import Message
-from squadron.pr.body import CompositionError, compose_one_shot, resolve_title
+from squadron.pr.assembly import PrFacts
+from squadron.pr.body import CompositionError, compose_body, compose_one_shot, resolve_title
 from squadron.providers.base import AgentProvider, ProviderCapabilities
 from squadron.review.git_utils import CommitRecord
+from squadron.review.models import Verdict
 
 _FAKE_PROFILE = "fake-pr-body"
 _FAKE_PROVIDER_TYPE = "fake-pr-body-provider"
@@ -310,3 +314,101 @@ async def test_valid_60_character_response_is_used() -> None:
     )
 
     assert title == valid_response
+
+
+# --- compose_body / the section contract (D4) -------------------------------
+
+BODY_COMMITS = (CommitRecord(sha="abc123def456", subject="feat: do the thing"),)
+
+
+def _full_facts() -> PrFacts:
+    return PrFacts(
+        commits=BODY_COMMITS,
+        slice_design_file="project-documents/user/slices/385-slice.foo.md",
+        checked_items=("did a thing",),
+        unchecked_items=("gap remains",),
+        review_path="project-documents/user/reviews/385-review.slice.foo.md",
+        review_verdict=Verdict.PASS,
+        reviewed_sha="deadbeef",
+    )
+
+
+def _no_slice_facts() -> PrFacts:
+    return PrFacts(
+        commits=BODY_COMMITS,
+        slice_design_file=None,
+        checked_items=(),
+        unchecked_items=(),
+        review_path=None,
+        review_verdict=None,
+        reviewed_sha=None,
+    )
+
+
+SECTION_HEADINGS = ("What changed", "Why", "How it was verified", "Known gaps", "Review provenance")
+
+
+@pytest.mark.asyncio
+async def test_full_inputs_produce_five_sections_no_no_input_lines() -> None:
+    facts = _full_facts()
+
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    for heading in SECTION_HEADINGS:
+        assert f"## {heading}" in body
+    assert "No task records for this branch." not in body
+    assert "No squadron review covers this branch's commits." not in body
+
+
+@pytest.mark.asyncio
+async def test_no_slice_the_two_task_sections_carry_the_no_input_line() -> None:
+    facts = _no_slice_facts()
+
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    assert body.count("No task records for this branch.") == 2
+
+
+@pytest.mark.asyncio
+async def test_no_review_provenance_carries_its_no_input_line() -> None:
+    facts = _no_slice_facts()
+
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    assert "No squadron review covers this branch's commits." in body
+
+
+@pytest.mark.asyncio
+async def test_unplanned_repository_has_five_sections_three_no_input_lines() -> None:
+    facts = _no_slice_facts()
+
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    for heading in SECTION_HEADINGS:
+        assert f"## {heading}" in body
+    assert body.count("No task records for this branch.") == 2
+    assert body.count("No squadron review covers this branch's commits.") == 1
+
+
+@pytest.mark.asyncio
+async def test_deterministic_facts_appear_verbatim() -> None:
+    facts = _full_facts()
+
+    body = await compose_body(facts, compose=_fixed_composer("Some prose."))
+
+    assert facts.commits[0].sha[:12] in body
+    assert facts.slice_design_file is not None
+    assert facts.slice_design_file in body
+    assert facts.reviewed_sha is not None
+    assert facts.reviewed_sha in body
+
+
+@pytest.mark.asyncio
+async def test_model_headings_do_not_duplicate_or_reorder_sections() -> None:
+    facts = _full_facts()
+    model_response_with_headings = "## What changed\nBogus model heading.\n## Why\nMore bogus text."
+
+    body = await compose_body(facts, compose=_fixed_composer(model_response_with_headings))
+
+    for heading in SECTION_HEADINGS:
+        assert body.count(f"## {heading}") == 1
