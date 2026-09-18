@@ -346,10 +346,10 @@ Two small corrections the design owes.
 
 ## Task 16 — Verification, evidence, and close
 
-- [ ] **16.1 Run the full gate**
-  - [ ] `ruff format`, `ruff check`, `pyright` — zero errors is the merge blocker
-  - [ ] Full test suite. The 3 pre-existing schema-drift failures (context-forge issue #88) are expected and must be unchanged by this slice
-  - [ ] Effort: 1
+- [x] **16.1 Run the full gate**
+  - [x] `ruff format`, `ruff check`, `pyright` — zero errors is the merge blocker
+  - [x] Full test suite. The 3 pre-existing schema-drift failures (context-forge issue #88) are expected and must be unchanged by this slice
+  - [x] Effort: 1
 
 - [ ] **16.2 Walk the design's verification steps live**
   - [ ] Execute the LLD's Verification Walkthrough, all six steps: dry run on a slice branch; the base refusal with a nonexistent integration branch; both push preconditions; the unplanned-repository path; dry-run/real equality followed by a live creation; and `sq review pr --dry-run --post` reading the created body back
