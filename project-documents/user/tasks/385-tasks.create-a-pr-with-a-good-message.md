@@ -194,17 +194,17 @@ The rule that keeps a neighboring slice's review off this PR.
 
 The exact parts, built without a model. Every fact copied, none inferred.
 
-- [ ] **9.1 Write `assemble_facts`**
-  - [ ] Create `src/squadron/pr/assembly.py` with `assemble_facts(inputs: PrInputs) -> PrFacts`
-  - [ ] `PrFacts` is a frozen dataclass carrying the commit list, the slice design path, the checked and unchecked task items, the review artifact path, its verdict, and its reviewed sha — each either present or explicitly absent
-  - [ ] **Every field is copied from an input. Nothing is derived, inferred, or defaulted.** Initiative 360's traceability rule is the constraint: assert nothing an input does not support
-  - [ ] Absent inputs are represented as `None` or empty tuples, never as placeholder text — the no-input lines are the body layer's job (Task 11), not assembly's
-  - [ ] Effort: 2
+- [x] **9.1 Write `assemble_facts`**
+  - [x] Create `src/squadron/pr/assembly.py` with `assemble_facts(inputs: PrInputs) -> PrFacts`
+  - [x] `PrFacts` is a frozen dataclass carrying the commit list, the slice design path, the checked and unchecked task items, the review artifact path, its verdict, and its reviewed sha — each either present or explicitly absent
+  - [x] **Every field is copied from an input. Nothing is derived, inferred, or defaulted.** Initiative 360's traceability rule is the constraint: assert nothing an input does not support
+  - [x] Absent inputs are represented as `None` or empty tuples, never as placeholder text — the no-input lines are the body layer's job (Task 11), not assembly's
+  - [x] Effort: 2
 
-- [ ] **9.2 Test assembly**
-  - [ ] `tests/pr/test_assembly.py`. Cases: full inputs → every field populated; no slice → slice fields absent, commits present; no review → review fields absent; no task items → both item tuples empty
-  - [ ] Assert no field is ever a placeholder string
-  - [ ] Effort: 1
+- [x] **9.2 Test assembly**
+  - [x] `tests/pr/test_assembly.py`. Cases: full inputs → every field populated; no slice → slice fields absent, commits present; no review → review fields absent; no task items → both item tuples empty
+  - [x] Assert no field is ever a placeholder string
+  - [x] Effort: 1
 
 ---
 
