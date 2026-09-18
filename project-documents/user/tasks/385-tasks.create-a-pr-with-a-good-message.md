@@ -74,18 +74,18 @@ The first checkbox reader in the codebase. Needed by Tasks 9 and 10.
 
 Two helpers `git_utils.py` lacks. Both go beside the existing ones and use the module's `run_git` and its timeout.
 
-- [ ] **3.1 Write the helpers**
-  - [ ] In `src/squadron/review/git_utils.py`, add `current_branch(cwd: str) -> str` — `git rev-parse --abbrev-ref HEAD`
-  - [ ] A detached HEAD (git returns `HEAD`) raises, naming the condition: there is no branch to open a PR from. Match `github_cli._branch_for`'s existing behavior for the same situation (D2)
-  - [ ] Add `commits_in_range(base: str, head: str, *, cwd: str) -> list[CommitRecord]` — `git log` over `base..head` returning sha and subject per commit, newest first
-  - [ ] `CommitRecord` is a frozen dataclass with `sha: str` and `subject: str`
-  - [ ] Both go through the module's existing `run_git`, so both are bounded by `GIT_COMMAND_TIMEOUT_SECONDS`. Neither swallows a git failure: `run_git` returning `None` (git could not answer) and a non-zero return code (git ran and refused) are distinguished, per the module's own contract
-  - [ ] Effort: 2
+- [x] **3.1 Write the helpers**
+  - [x] In `src/squadron/review/git_utils.py`, add `current_branch(cwd: str) -> str` — `git rev-parse --abbrev-ref HEAD`
+  - [x] A detached HEAD (git returns `HEAD`) raises, naming the condition: there is no branch to open a PR from. Match `github_cli._branch_for`'s existing behavior for the same situation (D2)
+  - [x] Add `commits_in_range(base: str, head: str, *, cwd: str) -> list[CommitRecord]` — `git log` over `base..head` returning sha and subject per commit, newest first
+  - [x] `CommitRecord` is a frozen dataclass with `sha: str` and `subject: str`
+  - [x] Both go through the module's existing `run_git`, so both are bounded by `GIT_COMMAND_TIMEOUT_SECONDS`. Neither swallows a git failure: `run_git` returning `None` (git could not answer) and a non-zero return code (git ran and refused) are distinguished, per the module's own contract
+  - [x] Effort: 2
 
-- [ ] **3.2 Test the helpers**
-  - [ ] Add to `tests/review/test_git_utils.py` (or a new file if that one is near its size limit). Cases: current branch on a normal checkout; detached HEAD raises; commits in a range with several commits; an empty range returns `[]`; git unavailable and git-refuses are distinguished
-  - [ ] Success: the empty-range case returns a list, not `None`, and does not raise
-  - [ ] Effort: 1
+- [x] **3.2 Test the helpers**
+  - [x] Add to `tests/review/test_git_utils.py` (or a new file if that one is near its size limit). Cases: current branch on a normal checkout; detached HEAD raises; commits in a range with several commits; an empty range returns `[]`; git unavailable and git-refuses are distinguished
+  - [x] Success: the empty-range case returns a list, not `None`, and does not raise
+  - [x] Effort: 1
 
 ---
 
