@@ -34,7 +34,7 @@ Test tasks follow their implementation task directly. No test in this slice call
 
 ## Task 1 — The slice-branch name parser (D7)
 
-Pure function, no dependencies, needed by Task 9. Landing alone makes a regression here unambiguous.
+Pure function, no dependencies, first consumed by Task 7.1. Landing alone makes a regression here unambiguous.
 
 - [ ] **1.1 Write `parse_slice_branch`**
   - [ ] Create `src/squadron/pr/__init__.py` and `src/squadron/pr/branch.py`
@@ -372,3 +372,15 @@ Two small corrections the design owes.
   - [ ] Code review is required before the slice closes. **Ask the Project Manager how they want it run** (pipeline and which model, direct `sq review code`, or the `/code-review` skill) rather than choosing a command
   - [ ] Merge `385-slice.create-a-pr-with-a-good-message` into `squadron-pr`. **Never into `main`** — the integration branch is set for this initiative
   - [ ] Effort: 2
+
+---
+
+## Task Review Response
+
+Tasks review at `385-review.tasks.create-a-pr-with-a-good-message.md` (`moonshotai/kimi-k3`, reviewed sha `da018715`): **PASS**, four PASS and two notes.
+
+**F004 — Task 1's header cited the wrong downstream consumer.** Correct. `parse_slice_branch`'s only consumer is Task 7.1 (slice input gathering); the header said Task 9. Fixed. Sequencing was unaffected either way — Task 1 lands first regardless — but a header that misstates its own dependency is exactly what a later reader would trust.
+
+**F005 — commit checkpoints are implicit rather than explicit.** No change. The reviewer correctly identified that this file relies on CLAUDE.md's global rule ("git add and commit from project root at least once per task") rather than embedding per-task commit items, and left open whether the project expects them embedded. It does not: `384-tasks.post-findings-to-the-pr.md` carries no commit checkpoints either and closed successfully. Embedding them here would add ~17 checkbox items restating a rule that already applies, against the project's own instruction to resist unnecessary additions.
+
+The four PASS findings covered functional and technical success-criteria coverage (including all three design-review findings), dependency sequencing with the test-with pattern, and the absence of scope creep or an NFR/load-test obligation.
