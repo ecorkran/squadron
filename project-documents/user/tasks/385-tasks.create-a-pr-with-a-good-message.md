@@ -93,16 +93,16 @@ Two helpers `git_utils.py` lacks. Both go beside the existing ones and use the m
 
 `create` needs host + remotes + locator, which are that helper's first three steps. `show` must be unchanged.
 
-- [ ] **4.1 Extract the shared prefix**
-  - [ ] In `src/squadron/cli/commands/pr.py`, extract the first three steps of `resolve_and_fetch_pull_request` into `resolve_locator(target: str | None, repo_cwd: str) -> tuple[CodeHost, RepositoryLocator]`
-  - [ ] `resolve_and_fetch_pull_request` calls it and keeps its own signature and behavior exactly
-  - [ ] Success: `sq pr show` behaves identically — its existing tests pass unchanged, with no edits to them
-  - [ ] Effort: 1
+- [x] **4.1 Extract the shared prefix**
+  - [x] In `src/squadron/cli/commands/pr.py`, extract the first three steps of `resolve_and_fetch_pull_request` into `resolve_locator(target: str | None, repo_cwd: str) -> tuple[CodeHost, RepositoryLocator]`
+  - [x] `resolve_and_fetch_pull_request` calls it and keeps its own signature and behavior exactly
+  - [x] Success: `sq pr show` behaves identically — its existing tests pass unchanged, with no edits to them
+  - [x] Effort: 1
 
-- [ ] **4.2 Test the extraction**
-  - [ ] Assert `resolve_locator` returns the locator for each target form that `show` supports, against the fake runner
-  - [ ] Assert the existing `sq pr show` tests still pass without modification — this is the real criterion
-  - [ ] Effort: 1
+- [x] **4.2 Test the extraction**
+  - [x] Assert `resolve_locator` returns the locator for each target form that `show` supports, against the fake runner
+  - [x] Assert the existing `sq pr show` tests still pass without modification — this is the real criterion
+  - [x] Effort: 1
 
 ---
 

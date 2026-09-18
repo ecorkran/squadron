@@ -17,7 +17,7 @@ from rich.table import Table
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.codehost.errors import CodeHostError
 from squadron.codehost.github_cli import build_github_host
-from squadron.codehost.models import FetchedRange, ResolvedPullRequest
+from squadron.codehost.models import FetchedRange, RepositoryLocator, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
 from squadron.codehost.remotes import list_remotes, select_remote
 from squadron.codehost.targets import parse_target
@@ -28,6 +28,28 @@ pr_app = typer.Typer(
     help="Inspect and review pull requests.",
     no_args_is_help=True,
 )
+
+
+def resolve_locator(target: str | None, repo_cwd: str) -> tuple[CodeHost, RepositoryLocator]:
+    """Build the host and resolve *target* to the repository it names.
+
+    The first three steps ``resolve_and_fetch_pull_request`` performs before
+    it resolves an *existing* pull request. ``create`` (385) needs only
+    these — host, remotes, locator — not an existing PR's refs, so this is
+    extracted as the shared prefix rather than duplicated (D6).
+
+    Raises ``CodeHostError`` on any adapter failure.
+    """
+    host = build_github_host(SubprocessRunner())
+    # Git work goes through the host's own runner, not a second one: the
+    # factory is the single seam, so substituting the host has to redirect
+    # every process call a caller makes, not only the gh ones.
+    runner = host.runner
+
+    parsed = parse_target(target)
+    remotes = list_remotes(runner, repo_cwd)
+    locator = select_remote(parsed, remotes, host.serves_host)
+    return host, locator
 
 
 def resolve_and_fetch_pull_request(
@@ -44,16 +66,8 @@ def resolve_and_fetch_pull_request(
     Raises ``CodeHostError`` on any adapter failure; callers render it the
     same way ``pr show`` does.
     """
-    host = build_github_host(SubprocessRunner())
-    # Git work goes through the host's own runner, not a second one: the
-    # factory is the single seam, so substituting the host has to redirect
-    # every process call a caller makes, not only the gh ones.
-    runner = host.runner
-
-    parsed = parse_target(target)
-    remotes = list_remotes(runner, repo_cwd)
-    locator = select_remote(parsed, remotes, host.serves_host)
-    resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
+    host, locator = resolve_locator(target, repo_cwd)
+    resolved = host.resolve_pull_request(locator, parse_target(target), cwd=repo_cwd)
     fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
     return host, resolved, fetched
 
