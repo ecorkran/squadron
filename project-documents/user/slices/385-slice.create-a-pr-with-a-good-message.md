@@ -262,11 +262,15 @@ which no reader of the PR can see. The check compares the local head sha against
 reports for that branch. The fix is `git push <remote> <head>`.
 
 The remote sha comes from `git ls-remote <remote> refs/heads/<head>` through the adapter's
-process-runner seam, bounded by the same timeout. This is a git call, not a `gh` call, and it is
-deliberately not a new protocol operation: the protocol's operation list is fixed by the
-architecture and adding an operation requires a reason. "What sha does the remote have for this
-branch" is answerable with git against a remote the locator already names, the way 381 fetches
-refs with git rather than through `gh`.
+process-runner seam, bounded by `GIT_QUERY_TIMEOUT_SECONDS` — the constant `codehost/refs.py` and
+`codehost/remotes.py` already use for git queries, *not* `HOST_COMMAND_TIMEOUT_SECONDS`, which is
+for `gh` invocations. Both are 30 seconds today, so the practical bound is the same and the
+distinction is about which constant a future change to either would move.
+
+This is a git call, not a `gh` call, and it is deliberately not a new protocol operation: the
+protocol's operation list is fixed by the architecture and adding an operation requires a reason.
+"What sha does the remote have for this branch" is answerable with git against a remote the
+locator already names, the way 381 fetches refs with git rather than through `gh`.
 
 A detached HEAD refuses before either check, naming the condition — there is no branch to open a
 PR from. `github_cli._branch_for` already raises `TargetUnresolvableError` for exactly this, and
@@ -346,6 +350,39 @@ own state rather than their parent's.
 
 A section with no input carries its line verbatim and the model is not asked for prose there. The
 architecture is explicit: "never a guess and never a silent omission."
+
+### D4a — The title
+
+The body gets five sections and a presence check; the title got named in the flag list and
+nowhere else. It needs its own rule, because "produces a title and a body" is all the
+architecture says.
+
+The title is resolved in three terms, in order:
+
+| Term | Title | Source |
+|---|---|---|
+| `--title` given | use it verbatim | flag |
+| slice branch, `cf` resolved it | the design's `# Slice Design: {name}` H1, minus the prefix | slice |
+| otherwise | the model composes it, constrained to the commit subjects | model |
+
+The middle term is the common case on this initiative and it is deterministic. The frontmatter's
+`slice` field is the kebab-case slug (`create-a-pr-with-a-good-message`), not a title, so the
+human-readable name comes from the design's H1 — `# Slice Design: Create a PR with a Good Message`
+— with the `Slice Design: ` prefix stripped. Asking a model to invent a title when the slice is
+literally named already would be spending tokens to lose information. A design whose H1 does not
+match that shape falls through to the third term rather than emitting a malformed title.
+
+The third term is the only one that reaches the model, and it is bounded: the model is asked for
+one line under 72 characters, given the commit subjects and nothing else. That length is the
+project's own commit-summary convention, applied to the same kind of object — the one-line
+summary a reader scans. A response that is empty, multi-line, or over the bound falls back to the
+first commit's subject, which is always present and always truthful. This is the one place in the
+slice where a model failure degrades rather than refuses, and the reason is proportion: a
+mediocre title on a PR whose body is correct is not worth failing a creation over, where a
+missing body *section* is.
+
+The title participates in the dry-run equality guarantee exactly as the body does — resolved
+once, bound to one variable, shared by both paths (D8).
 
 ### D5 — The presence-and-filled check, and what "filled" means
 
@@ -427,13 +464,14 @@ raises on ambiguity rather than ordering, both correct for its own callers.
 
 ### D8 — Every host call is bounded; the write is last and happens once
 
-Following 384's D8. The host calls on this path are `identify_operator`, `branch_exists`,
-`default_branch`, the `git ls-remote` sha read, and `open_pull_request`. The first four are reads
-and all precede the model call; the fifth is the only write and is the last thing the command
-does.
+Following 384's D8. The calls on this path are four `gh` calls — `identify_operator`,
+`branch_exists`, `default_branch`, `open_pull_request` — and one git call, the `ls-remote` sha
+read. All but `open_pull_request` are reads and all precede the model call; `open_pull_request` is
+the only write and is the last thing the command does.
 
-All of them go through the adapter's process-runner seam bounded by
-`HOST_COMMAND_TIMEOUT_SECONDS`, and every one is wrapped in the pattern `review_pr.py` set:
+All five go through the adapter's process-runner seam, the `gh` calls bounded by
+`HOST_COMMAND_TIMEOUT_SECONDS` and the git call by `GIT_QUERY_TIMEOUT_SECONDS` (D2), and every one
+is wrapped in the pattern `review_pr.py` set:
 `except CodeHostError as exc: render_code_host_error(exc); raise typer.Exit(code=1) from exc`.
 A transport failure or timeout at any read refuses before the model runs. A failure at the write
 is reported with the host's reason — notably `PullRequestCreationRejectedError`, which
@@ -443,6 +481,19 @@ open PR.
 The write is not retried. A 422 for "PR already exists" is the operator's to resolve, and a
 retried create that succeeds on the second attempt after a network error that actually landed
 would open two PRs.
+
+**The model call is the sixth I/O path, and it fails differently.** The composer is a new I/O path
+— provider dispatch through `create_agent` and `handle_message` — so the failure-mode enumeration
+rule applies to it too, and its failures are not `CodeHostError`. A provider that is unreachable,
+unauthenticated, or times out mid-stream, and any exception raised during `handle_message`, are
+caught at the composer's boundary, logged at ERROR with `logger.exception`, and become a non-zero
+exit that creates nothing. This is a process-boundary handler in the project's exception rules'
+sense, which is what permits catching broadly there; every narrower handler in the slice names its
+exception type.
+
+The consequence of position is worth stating: because the model call sits after every read and
+before the only write, a composition failure costs tokens but writes nothing, and there is no
+state to unwind. That is the same reason the presence check (D5) can refuse without cleanup.
 
 `--dry-run` returns before the write, printing title and body to stdout with the base and its
 source on stderr — the same stdout/stderr split 384 chose, so the body can be piped. Because the
@@ -495,6 +546,9 @@ and a dry run of a non-write is meaningless, whereas `sq pr create` *is* the wri
   host sha differs from local fails the same way with the same command.
 - A composed body missing a section fails the presence check, exits non-zero, and creates
   nothing — verified by the fake runner recording zero write calls.
+- On a resolved slice branch the title is the slice's human name with no model call; `--title`
+  overrides it; on a non-slice branch a model title over 72 characters or empty falls back to the
+  first commit's subject.
 - `--dry-run` title and body equal what the next real run creates.
 - With the adapter unable to identify the operator, the command exits non-zero, names the reason,
   and makes no write.
@@ -502,8 +556,10 @@ and a dry run of a non-write is meaningless, whereas `sq pr create` *is* the wri
 
 ### Technical
 
-- Every host call on the path carries `HOST_COMMAND_TIMEOUT_SECONDS`; a scripted timeout at each
-  call site exits non-zero with no effective write.
+- Every `gh` call on the path carries `HOST_COMMAND_TIMEOUT_SECONDS` and the `ls-remote` call
+  carries `GIT_QUERY_TIMEOUT_SECONDS`; a scripted timeout at each of the five call sites exits
+  non-zero with no effective write.
+- A provider failure during composition exits non-zero, logs at ERROR, and creates nothing.
 - The default path (no flags) makes exactly one host write, and only after every read succeeds.
 - `review/` does not import `pr/`, asserted by the import-boundary test.
 - The checkbox parser handles nested items, `[x]`/`[X]`, and trailing whitespace, with a test
@@ -615,3 +671,37 @@ exercised once, live, in step 10.
 
 The dry-run/real equality test asserts the body object is bound once and passed to both paths,
 structurally, rather than comparing two separately composed strings.
+
+## Design Review Response
+
+Slice review at `385-review.slice.create-a-pr-with-a-good-message.md` (`z-ai/glm-5.2`, reviewed
+sha `2c138d42`): **CONCERNS**, six PASS and three concerns. All three addressed; none required a
+change of approach.
+
+**F007 — wrong timeout constant for `git ls-remote`.** Correct, and the kind of error that
+propagates: D8 called all five calls "host calls bounded by `HOST_COMMAND_TIMEOUT_SECONDS`", but
+`ls-remote` is a git query, and `codehost/refs.py` and `codehost/remotes.py` bound those with
+`GIT_QUERY_TIMEOUT_SECONDS`. Both constants are 30 seconds today, so the practical bound was never
+wrong — what was wrong is which constant a future change would move. Fixed in D2, in D8's call-site
+list (now four `gh` calls and one git call), and in the technical success criterion that had
+repeated the same conflation.
+
+**F008 — the model call's failure mode was not enumerated.** Correct, and it is the project's own
+design-principles rule (failure-mode enumeration for each new I/O path) applied to the one path
+the design had treated as neutral. D8 gains the sixth path: provider errors during composition are
+caught at the composer's process boundary, logged at ERROR with `logger.exception`, and exit
+non-zero creating nothing — with the note that because composition sits after every read and
+before the only write, that failure costs tokens but leaves no state to unwind.
+
+**F009 — the title mechanism was under-specified.** Correct, and a real hole: `--title` appeared in
+the flag list, the data flow, and the `open_pull_request` call, and the design never said where a
+title comes from without the flag. Added as **D4a**, a three-term rule — the flag, else the slice's
+human name from the design's frontmatter (deterministic, and the common case here), else a
+model-composed line bounded at 72 characters falling back to the first commit's subject. That
+fallback is the slice's one degradation rather than refusal, and D4a states the proportionality
+argument for the asymmetry against D5's hard failure on a missing body section.
+
+The six PASS findings covered D1's refusal-not-fall-through, the D4/D5 section contract, D3's
+one-shot correction, D6's import-boundary placement, D7's range-membership scan, and D8's host-call
+enumeration. No finding disputed a decision; the three concerns were a wrong constant, a missing
+enumeration, and a gap.

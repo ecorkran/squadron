@@ -14,6 +14,65 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260917
 
+### Slice 385 task breakdown (Phase 5)
+
+`385-tasks.create-a-pr-with-a-good-message.md` written — 16 tasks, 350 lines, no split needed.
+
+Order follows the design's implementation order, which is itself the command's execution order:
+the two new parsers first and alone (branch name, task checkboxes), then git helpers, then the
+`resolve_locator` extraction, then each stage of the command in the sequence it runs — base
+selection, preconditions, input gathering, assembly, composition, the section contract, the
+presence check — and the command wiring last, thin by construction. Test tasks sit immediately
+after their implementation task; no test in the slice calls a model, which is exercised once,
+live, in Task 16.
+
+Three tasks carry criteria that would pass a plausible-but-wrong implementation, so each names
+the failure it is there to catch. Task 5.2's base-selection refusal asserts `default_branch` was
+*never called*, which is what distinguishes a refusal from a fall-through. Task 8.2's review scan
+builds a review whose sha is an ancestor of head but outside `base..head` and asserts it is not
+selected — the case that fails if the implementation uses ancestry or file mtime instead of range
+membership. Task 13.2 asserts a precondition failure means the composer was never called, which
+is the token-cost ordering the design specifies.
+
+Task 2.2 follows the project's parsing rule that a fixture must include the format the parser
+consumes in production: the checkbox parser gets a test reading a real task file, not only
+synthetic cases, because a parser that silently requires one indent level would otherwise pass.
+
+Task 16.4 leaves the code-review command choice to the PM rather than picking one, per the
+standing preference.
+
+### Slice 385 design review response
+
+Slice-design review run against the committed design (`z-ai/glm-5.2`, reviewed sha `2c138d42`):
+CONCERNS, six PASS and three concerns, all three correct and all three addressed. `responseStatus:
+addressed` on the review; the response section is in the LLD.
+
+F007 caught a wrong constant: D8 described all five calls as "host calls bounded by
+`HOST_COMMAND_TIMEOUT_SECONDS`", but `git ls-remote` is a git query, and `codehost/refs.py` and
+`codehost/remotes.py` bound those with `GIT_QUERY_TIMEOUT_SECONDS`. Both are 30 seconds, so nothing
+was practically wrong — what was wrong is which constant a future change would move. The
+conflation had propagated into a success criterion as well.
+
+F008 found the model call unenumerated. The project's own design principles require failure-mode
+enumeration for each new I/O path, and the composer is one; its failures are not `CodeHostError`
+and needed their own handling statement. Now a process-boundary handler logging at ERROR and
+exiting non-zero, with the note that composition's position (after every read, before the only
+write) means the failure leaves no state to unwind.
+
+F009 found a genuine gap. `--title` appeared in the flag list, the data-flow diagram, and the
+`open_pull_request` call, and the design never said where a title comes from when the flag is
+absent — the implementer would have had to invent one. Now **D4a**: the flag, else the slice's
+human name from the design's H1 (the frontmatter `slice` field is the kebab-case slug, not a
+title), else a model-composed line under 72 characters falling back to the first commit's subject.
+The middle term is the common case here and is deterministic —
+asking a model to invent a title for a slice literally named "Create a PR with a Good Message"
+spends tokens to lose information. D4a is also the slice's one degradation rather than refusal, and
+states the proportionality argument against D5's hard failure: a mediocre title over a correct body
+is not worth failing a creation, where a missing body section is.
+
+Task file updated in the same pass — Tasks 6 and 14 for the constant, Task 10 for the failure mode,
+and a new Task 10a for the title.
+
 ### Slice 385 design (Phase 4)
 
 `385-slice.create-a-pr-with-a-good-message.md` written. `sq pr create` is the initiative's
