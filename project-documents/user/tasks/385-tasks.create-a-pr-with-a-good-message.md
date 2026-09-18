@@ -172,21 +172,21 @@ Two checks, two different fixes. Both before any model call and any write.
 
 The rule that keeps a neighboring slice's review off this PR.
 
-- [ ] **8.1 Write the review scan**
-  - [ ] Add `find_latest_in_range_review(...)` to `src/squadron/pr/inputs.py`
-  - [ ] Enumerate `*-review.*.md` in the reviews directory — both the project's and, for an unplanned repository, the configured external directory 383 established. Reuse 383's `resolve_reviews_dir` rather than re-deriving the location
-  - [ ] Read each file's frontmatter for `reviewedSha` via the existing `read_frontmatter`
-  - [ ] **Keep those whose sha is in `git rev-list <base>..<head>` — membership in the range, not ancestry of head.** This is what excludes a merged ancestor's review (D7)
-  - [ ] Of the survivors, take the one whose reviewed sha is newest in the range
-  - [ ] An artifact with no `reviewedSha`, an unparseable sha, or a sha git does not recognize is **skipped with a WARNING naming the file** — not fatal, and not silent: silently dropping a review that should have been cited is the failure the provenance section exists to prevent
-  - [ ] Do not reuse `locate_review` — it is index-keyed and raises on ambiguity rather than ordering, both correct for its own callers
-  - [ ] Effort: 3
+- [x] **8.1 Write the review scan**
+  - [x] Add `find_latest_in_range_review(...)` to `src/squadron/pr/inputs.py`
+  - [x] Enumerate `*-review.*.md` in the reviews directory — both the project's and, for an unplanned repository, the configured external directory 383 established. Reuse 383's `resolve_reviews_dir` rather than re-deriving the location
+  - [x] Read each file's frontmatter for `reviewedSha` via the existing `read_frontmatter`
+  - [x] **Keep those whose sha is in `git rev-list <base>..<head>` — membership in the range, not ancestry of head.** This is what excludes a merged ancestor's review (D7)
+  - [x] Of the survivors, take the one whose reviewed sha is newest in the range
+  - [x] An artifact with no `reviewedSha`, an unparseable sha, or a sha git does not recognize is **skipped with a WARNING naming the file** — not fatal, and not silent: silently dropping a review that should have been cited is the failure the provenance section exists to prevent
+  - [x] Do not reuse `locate_review` — it is index-keyed and raises on ambiguity rather than ordering, both correct for its own callers
+  - [x] Effort: 3
 
-- [ ] **8.2 Test the review scan**
-  - [ ] Add to `tests/pr/test_inputs.py`. **The load-bearing case:** a review whose reviewed sha is an ancestor of head but outside `base..head` is **not** selected, while an in-range review is. Build both in a fixture repository
-  - [ ] Further cases: no reviews at all → `None`; two in-range reviews → the newer sha wins; a review with no `reviewedSha` → skipped with a WARNING, scan continues; a malformed frontmatter file → skipped with a WARNING, scan continues; the external reviews directory is used when the repository has no `project-documents/`
-  - [ ] Success: the ancestor case would fail if the implementation used ancestry or file mtime
-  - [ ] Effort: 3
+- [x] **8.2 Test the review scan**
+  - [x] Add to `tests/pr/test_inputs.py`. **The load-bearing case:** a review whose reviewed sha is an ancestor of head but outside `base..head` is **not** selected, while an in-range review is. Build both in a fixture repository
+  - [x] Further cases: no reviews at all → `None`; two in-range reviews → the newer sha wins; a review with no `reviewedSha` → skipped with a WARNING, scan continues; a malformed frontmatter file → skipped with a WARNING, scan continues; the external reviews directory is used when the repository has no `project-documents/`
+  - [x] Success: the ancestor case would fail if the implementation used ancestry or file mtime
+  - [x] Effort: 3
 
 ---
 
