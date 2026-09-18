@@ -1,15 +1,17 @@
-"""Tests for the one-shot composer's wiring (D3)."""
+"""Tests for the one-shot composer's wiring (D3) and title resolution (D4a)."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from squadron.core.models import Message
-from squadron.pr.body import CompositionError, compose_one_shot
+from squadron.pr.body import CompositionError, compose_one_shot, resolve_title
 from squadron.providers.base import AgentProvider, ProviderCapabilities
+from squadron.review.git_utils import CommitRecord
 
 _FAKE_PROFILE = "fake-pr-body"
 _FAKE_PROVIDER_TYPE = "fake-pr-body-provider"
@@ -179,3 +181,132 @@ async def test_provider_raising_exits_via_composition_error(
         await compose_one_shot("write a PR body", model=None, profile=_FAKE_PROFILE)
 
     agent.shutdown.assert_called_once()
+
+
+# --- resolve_title (D4a) ----------------------------------------------------
+
+TITLE_COMMITS = (
+    CommitRecord(sha="def456", subject="feat: second commit"),
+    CommitRecord(sha="abc123", subject="feat: first commit"),
+)
+
+
+class _FailIfCalledComposer:
+    """A composer that fails the test if the model is ever asked."""
+
+    async def __call__(self, prompt: str) -> str:
+        raise AssertionError("the model must not be called")
+
+
+def _fixed_composer(response: str):
+    async def _compose(prompt: str) -> str:
+        return response
+
+    return _compose
+
+
+@pytest.mark.asyncio
+async def test_title_flag_wins_over_both_other_terms(tmp_path: Path) -> None:
+    design = tmp_path / "design.md"
+    design.write_text("# Slice Design: Some Slice\n")
+
+    title = await resolve_title(
+        title_flag="Custom Title",
+        slice_design_file=str(design),
+        commits=TITLE_COMMITS,
+        compose=_FailIfCalledComposer(),
+    )
+
+    assert title == "Custom Title"
+
+
+@pytest.mark.asyncio
+async def test_resolved_slice_branch_uses_h1_and_never_calls_the_composer(tmp_path: Path) -> None:
+    design = tmp_path / "design.md"
+    design.write_text("# Slice Design: Create a PR with a Good Message\n\nBody text.\n")
+
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=str(design),
+        commits=TITLE_COMMITS,
+        compose=_FailIfCalledComposer(),
+    )
+
+    assert title == "Create a PR with a Good Message"
+
+
+@pytest.mark.asyncio
+async def test_design_with_non_matching_h1_falls_through_to_the_model(tmp_path: Path) -> None:
+    design = tmp_path / "design.md"
+    design.write_text("# Something Else Entirely\n")
+
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=str(design),
+        commits=TITLE_COMMITS,
+        compose=_fixed_composer("A composed title"),
+    )
+
+    assert title == "A composed title"
+
+
+@pytest.mark.asyncio
+async def test_non_slice_branch_composes() -> None:
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=None,
+        commits=TITLE_COMMITS,
+        compose=_fixed_composer("A composed title"),
+    )
+
+    assert title == "A composed title"
+
+
+@pytest.mark.asyncio
+async def test_empty_model_response_falls_back_to_first_commit_subject() -> None:
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=None,
+        commits=TITLE_COMMITS,
+        compose=_fixed_composer("   "),
+    )
+
+    assert title == TITLE_COMMITS[0].subject
+
+
+@pytest.mark.asyncio
+async def test_multiline_response_falls_back() -> None:
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=None,
+        commits=TITLE_COMMITS,
+        compose=_fixed_composer("line one\nline two"),
+    )
+
+    assert title == TITLE_COMMITS[0].subject
+
+
+@pytest.mark.asyncio
+async def test_response_over_72_characters_falls_back() -> None:
+    long_response = "x" * 100
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=None,
+        commits=TITLE_COMMITS,
+        compose=_fixed_composer(long_response),
+    )
+
+    assert title == TITLE_COMMITS[0].subject
+
+
+@pytest.mark.asyncio
+async def test_valid_60_character_response_is_used() -> None:
+    valid_response = "y" * 60
+    title = await resolve_title(
+        title_flag=None,
+        slice_design_file=None,
+        commits=TITLE_COMMITS,
+        compose=_fixed_composer(valid_response),
+    )
+
+    assert title == valid_response

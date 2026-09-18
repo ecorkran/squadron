@@ -234,19 +234,19 @@ Prompt in, text out, through a profile. Small because it does one thing.
 
 Three terms, only the third of which reaches the model. The slice's one degradation rather than refusal.
 
-- [ ] **10a.1 Write `resolve_title`**
-  - [ ] In `src/squadron/pr/body.py`, implement D4a's three-term table: `--title` verbatim → else the slice's human name → else a model-composed line
-  - [ ] The human name comes from the design's H1 (`# Slice Design: {name}`, prefix stripped), **not** the frontmatter `slice` field, which is the kebab-case slug. A design whose H1 does not match that shape falls through to the third term rather than emitting a malformed title
-  - [ ] The second term is deterministic and **makes no model call** — the slice is already named, and spending tokens to reinvent it loses information
-  - [ ] The third term asks for one line under 72 characters, given the commit subjects and nothing else. 72 is the project's commit-summary convention applied to the same kind of object
-  - [ ] **A response that is empty, multi-line, or over the bound falls back to the first commit's subject** — always present, always truthful. This is the slice's one place where a model failure degrades instead of refusing; D4a states the proportionality argument
-  - [ ] The title is resolved once and bound to one variable shared by the dry-run and real paths, as the body is (D8)
-  - [ ] Effort: 2
+- [x] **10a.1 Write `resolve_title`**
+  - [x] In `src/squadron/pr/body.py`, implement D4a's three-term table: `--title` verbatim → else the slice's human name → else a model-composed line
+  - [x] The human name comes from the design's H1 (`# Slice Design: {name}`, prefix stripped), **not** the frontmatter `slice` field, which is the kebab-case slug. A design whose H1 does not match that shape falls through to the third term rather than emitting a malformed title
+  - [x] The second term is deterministic and **makes no model call** — the slice is already named, and spending tokens to reinvent it loses information
+  - [x] The third term asks for one line under 72 characters, given the commit subjects and nothing else. 72 is the project's commit-summary convention applied to the same kind of object
+  - [x] **A response that is empty, multi-line, or over the bound falls back to the first commit's subject** — always present, always truthful. This is the slice's one place where a model failure degrades instead of refusing; D4a states the proportionality argument
+  - [x] The title is resolved once and bound to one variable shared by the dry-run and real paths, as the body is (D8)
+  - [x] Effort: 2
 
-- [ ] **10a.2 Test the title**
-  - [ ] Add to `tests/pr/test_body.py` with a fake composer. Cases: `--title` wins over both other terms; a resolved slice branch uses the H1 name and the composer is **never called**; a design with a non-matching H1 falls through to the model; a non-slice branch composes; an empty model response falls back to the first commit subject; a multi-line response falls back; a 100-character response falls back; a valid 60-character response is used
-  - [ ] Success: the slice-branch case would fail if the implementation always called the model
-  - [ ] Effort: 2
+- [x] **10a.2 Test the title**
+  - [x] Add to `tests/pr/test_body.py` with a fake composer. Cases: `--title` wins over both other terms; a resolved slice branch uses the H1 name and the composer is **never called**; a design with a non-matching H1 falls through to the model; a non-slice branch composes; an empty model response falls back to the first commit subject; a multi-line response falls back; a 100-character response falls back; a valid 60-character response is used
+  - [x] Success: the slice-branch case would fail if the implementation always called the model
+  - [x] Effort: 2
 
 ---
 
