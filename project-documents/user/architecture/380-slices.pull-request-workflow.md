@@ -194,7 +194,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
    - **Risk:** Low — the operations are small and the fake runner covers the branches.
    - **Relative Effort:** 2/5
 
-5. [ ] **(385) Create a PR with a Good Message** — Designed: `385-slice.create-a-pr-with-a-good-message.md`. `sq pr create`: base selection in the parent's
+5. [x] **(385) Create a PR with a Good Message** — Designed: `385-slice.create-a-pr-with-a-good-message.md`. `sq pr create`: base selection in the parent's
    order (`--base`, then the configured integration branch when the adapter confirms it exists on
    the host, else the host default branch, with the chosen base and its source printed and no
    fall-through to `main`); the pushed-branch precondition (head on the host and matching the

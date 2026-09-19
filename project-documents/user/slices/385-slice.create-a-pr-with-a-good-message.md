@@ -6,8 +6,8 @@ parent: user/architecture/380-slices.pull-request-workflow.md
 dependencies: [381]
 interfaces: [386]
 dateCreated: 20260917
-dateUpdated: 20260917
-status: not_started
+dateUpdated: 20260918
+status: complete
 ---
 
 # Slice Design: Create a PR with a Good Message

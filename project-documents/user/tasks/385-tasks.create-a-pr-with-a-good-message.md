@@ -6,8 +6,8 @@ lld: user/slices/385-slice.create-a-pr-with-a-good-message.md
 dependencies: [381]
 projectState: "384 merged to `squadron-pr`; `sq review pr --post` writes findings to a PR. 381's authoring operations (`open_pull_request`, `default_branch`, `branch_exists`, `identify_operator`) are implemented over `gh` and fake-runner tested, with no production caller — this slice is their first. Design committed at 2c138d42; the plan entry's `sdk`-through-one-shot risk was resolved during design (D3) and the entry amended. Design reviewed (CONCERNS, all three findings addressed) — see the LLD's Design Review Response."
 dateCreated: 20260917
-dateUpdated: 20260917
-status: not_started
+dateUpdated: 20260918
+status: complete
 ---
 
 ## Context Summary
