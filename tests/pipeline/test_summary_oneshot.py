@@ -200,3 +200,55 @@ async def test_capture_summary_shutdown_called_on_exception(
         )
 
     agent.shutdown.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_routes_a_registered_profile_without_reference_to_sdk_ness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """385, D3: the module dispatches any registered profile, ``sdk`` included.
+
+    Registers a fake profile literally named ``sdk`` and confirms it
+    dispatches through the ordinary one-shot path with no session and no
+    SDK-specific branch — the restriction to non-SDK profiles is the
+    pipeline caller's rule, not this module's.
+    """
+    from squadron.providers import loader as loader_mod
+    from squadron.providers import profiles as profiles_mod
+    from squadron.providers import registry as registry_mod
+    from squadron.providers.profiles import ProviderProfile
+
+    fake_sdk_provider_type = "fake-sdk-oneshot-provider"
+    fake_profile = ProviderProfile(
+        name="sdk",
+        provider=fake_sdk_provider_type,
+        api_key_env=None,
+        description="Fake sdk-named profile for the routing test",
+    )
+    original_get_all = profiles_mod.get_all_profiles
+    monkeypatch.setattr(
+        profiles_mod,
+        "get_all_profiles",
+        lambda: {**original_get_all(), "sdk": fake_profile},
+    )
+    monkeypatch.setattr(loader_mod, "ensure_provider_loaded", lambda name: None)
+
+    agent = _make_fake_agent([_make_fake_message("SDK-PROFILE OUTPUT")])
+    provider = _make_fake_provider(agent)
+    provider.provider_type = fake_sdk_provider_type
+    original_provider = registry_mod._REGISTRY.get(fake_sdk_provider_type)
+    registry_mod._REGISTRY[fake_sdk_provider_type] = provider
+    try:
+        result = await capture_summary_via_profile(
+            instructions="summarize",
+            model_id=None,
+            profile="sdk",
+        )
+    finally:
+        if original_provider is not None:
+            registry_mod._REGISTRY[fake_sdk_provider_type] = original_provider
+        else:
+            registry_mod._REGISTRY.pop(fake_sdk_provider_type, None)
+
+    assert result == "SDK-PROFILE OUTPUT"
+    agent.shutdown.assert_called_once()

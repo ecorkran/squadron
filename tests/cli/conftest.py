@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from squadron.core.models import AgentInfo, AgentState, Message
+
+if TYPE_CHECKING:
+    from tests.cli.pr_create_support import HostHarness
 
 
 @pytest.fixture
@@ -127,3 +132,91 @@ def isolate_reviews_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     reviews = tmp_path / "cli-reviews"
     reviews.mkdir()
     monkeypatch.setattr("squadron.review.persistence.REVIEWS_DIR", reviews)
+
+
+# --- ``sq pr create`` fixtures (opt in with ``pytest.mark.usefixtures``) -----
+
+
+@pytest.fixture
+def isolated_cf(monkeypatch: pytest.MonkeyPatch) -> None:
+    """cf is never actually installed in tests: treat it as unavailable everywhere."""
+    from squadron.integrations.context_forge import ContextForgeClient, ContextForgeNotAvailable
+
+    def _raise(self: object, *args: object) -> object:
+        raise ContextForgeNotAvailable("cf not on PATH")
+
+    monkeypatch.setattr(ContextForgeClient, "get_config", _raise)
+    monkeypatch.setattr(ContextForgeClient, "list_slices", _raise)
+
+
+@pytest.fixture
+def pr_create_repo(tmp_path: Path) -> Path:
+    """A real git repo, one commit ahead of ``main`` on the head branch.
+
+    ``commits_in_range`` and the review scan shell out directly rather than
+    through the fakeable host runner, so they need real history.
+    """
+    from tests.cli.pr_create_support import HEAD_BRANCH, git
+
+    git(tmp_path, "init", "-b", "main")
+    git(tmp_path, "config", "user.email", "test@test.com")
+    git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "README.md").write_text("init")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-m", "init")
+    git(tmp_path, "checkout", "-b", HEAD_BRANCH)
+    (tmp_path / "feature.txt").write_text("a feature")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-m", "feat: do the thing")
+    return tmp_path
+
+
+@pytest.fixture
+def pr_create_host() -> Iterator[HostHarness]:
+    """Substitute the host factory; the harness carries the script and runner."""
+    from squadron.codehost.github_cli import GitHubCli
+    from tests.cli.pr_create_support import GITHUB, HostHarness
+
+    harness = HostHarness()
+
+    def _build(_runner: object) -> GitHubCli:
+        return GitHubCli(harness.build_runner(), frozenset({GITHUB}))
+
+    with patch("squadron.cli.commands.pr.build_github_host", _build):
+        yield harness
+
+
+@pytest.fixture
+def fake_composer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every model call returns fixed prose; no test calls a real model."""
+    from squadron.providers import loader as loader_mod
+    from squadron.providers import profiles as profiles_mod
+    from squadron.providers import registry as registry_mod
+    from squadron.providers.base import AgentProvider, ProviderCapabilities
+    from squadron.providers.profiles import ProviderProfile
+    from tests.cli.pr_create_support import (
+        FAKE_PROFILE,
+        FAKE_PROSE,
+        FAKE_PROVIDER_TYPE,
+        make_fake_agent,
+    )
+
+    fake_profile = ProviderProfile(
+        name=FAKE_PROFILE,
+        provider=FAKE_PROVIDER_TYPE,
+        api_key_env=None,
+        description="Fake profile for pr-create tests",
+    )
+    original_get_all = profiles_mod.get_all_profiles
+    monkeypatch.setattr(
+        profiles_mod,
+        "get_all_profiles",
+        lambda: {**original_get_all(), FAKE_PROFILE: fake_profile},
+    )
+    monkeypatch.setattr(loader_mod, "ensure_provider_loaded", lambda name: None)
+
+    provider = MagicMock(spec=AgentProvider)
+    provider.provider_type = FAKE_PROVIDER_TYPE
+    provider.capabilities = ProviderCapabilities()
+    provider.create_agent = AsyncMock(side_effect=lambda config: make_fake_agent(FAKE_PROSE))
+    monkeypatch.setitem(registry_mod._REGISTRY, FAKE_PROVIDER_TYPE, provider)

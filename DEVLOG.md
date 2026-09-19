@@ -2,13 +2,122 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260917
+dateUpdated: 20260918
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260919
+
+### Slice 385 code re-review response
+
+- Re-review (z-ai/glm-5.3, `35d2cde8`) returned CONCERNS: 3 concerns, 4 notes, no fails. All fixed.
+- **Split `pr/body.py`** into `pr/composer.py` (one-shot composer), `pr/title.py` (D4a), and
+  `pr/body.py` (section contract + presence check); tests split to match. The tool-gate's
+  sanctioned-site list now names `pr/composer.py`.
+- **Design document read once, relative to `--cwd`.** The three prior reads resolved the
+  path against the process working directory, so `--cwd` from another directory would have
+  dropped the design silently. `inputs._read_design_text` reads it; `PrFacts` carries it.
+- Title bound built from `_TITLE_MAX_CHARS`; composer tests restore `_REGISTRY` via
+  `monkeypatch.setitem`; `select_base` lost its unused `cwd`; `_local_head_sha` checks git's
+  return code; `create` shed `_gather_facts`.
+- Gate: ruff/pyright clean; suite 3 failed (cf #88 schema drift, pre-existing) / 4206 passed.
+
+### Slice 385 code review response
+
+`sq review code 385` (z-ai/glm-5.3) returned FAIL: one fail, six concerns, four notes. All
+eleven accepted and fixed; responses are in the review file. The fail (F001) was real:
+`compose_one_shot` kept the SDK's duplicate ResultMessage and tool narration, which both sibling
+one-shot consumers filter. On `--profile sdk` — the default — that doubles every section's prose
+and makes a model-composed title multi-line, so it always fell back to the first commit subject.
+Invisible to the suite (single-message fakes) and to live verification (the sdk profile cannot
+run inside a Claude Code session). Also: a base absent from the local clone and an empty commit
+range are now rendered refusals before any model call; `_shas_in_range` raises instead of
+returning `[]`; `_strip_model_headings` drops only ATX headings outside code fences; the unused
+`git_utils.current_branch` is gone; the two CLI test files share fixtures through
+`tests/cli/conftest.py` and `pr_create_support.py`, and the dry-run/real-run equality test now
+compares the POST payload. Gate: ruff and pyright clean; 4205 passed, 6 skipped, 3 failed
+(cf #88 schema-drift, unchanged).
+
+## 20260918
+
+### Slice 385 implementation (Phase 6) — `sq pr create`
+
+All 17 tasks complete. New package `src/squadron/pr/` (branch.py, tasks.py, base.py,
+preconditions.py, inputs.py, assembly.py, body.py), plus `create` wired into
+`cli/commands/pr.py` beside `show`. The command orchestrates, in order: identity → the
+pushed-branch precondition → base selection (D8's ordering — every refusal decidable without
+a model call happens first) → input gathering → deterministic assembly → title and body
+composition through one shared composer → the presence-and-filled check → dry-run or the
+single write.
+
+Two parsers landed first and alone: `parse_slice_branch` (the `{index}-slice.{name}` forward
+lookup the tree lacked) and `parse_task_items` (the first checkbox reader in the codebase,
+lenient per the project's parsing rules — any indent, any bullet, sub-items attributed to
+their own state). `select_base` implements D1's three-outcome table exactly: a configured
+integration branch absent from the host is a refusal, never a silent fall-through to the
+host default. `find_latest_in_range_review` implements D7's range-membership scan — the case
+that would fail under ancestry-of-head or file-mtime instead is a dedicated test building a
+review whose sha is an ancestor of head but outside `base..head`.
+
+The composer (`compose_one_shot`) performs the same one-shot sequence
+`run_review_with_profile` uses, built directly rather than through either existing one-shot
+function (D3) — the design's own scope correction against the plan entry, worked out during
+Phase 4. `resolve_title` implements D4a's three-term chain; the common case (a resolved slice
+branch) makes zero model calls, reading the human name straight from the design's own H1.
+`compose_body` assembles the five-section contract (D4) with squadron's headings and
+deterministic facts written directly beneath the model's prose; `check_body_complete`
+implements D5's structural presence check with no retry.
+
+Three real bugs were caught and fixed along the way, two of them only by running the full
+test suite or the live verification rather than the new/targeted tests alone:
+
+- **The composer's design-document prompts named a path, not its content.** Found live in
+  Task 16.2: a composer given no tools (the traceability rule) cannot open a path itself, so
+  the "why" and "what changed" sections reliably drew a refusal ("I don't have access to your
+  files") from the model instead of prose about the change. Fixed by reading the design
+  document's own text into both prompts directly, bounded to 6000 characters.
+- **`pr/body.py` bypassed the project's tool-passing gate.** `AgentConfig(allowed_tools=...)`
+  was constructed with a raw hardcoded empty list rather than routed through
+  `resolve_effective_tools` first, which every other such call site in the codebase must do
+  (`tests/tools/test_effective_tools.py`'s SC1a enumeration guard, caught only on a full-suite
+  run). Semantically a no-op since the declared list is always empty, but the mechanical
+  enforcement doesn't know that without the call.
+- **The import-boundary guard's own membership check was a false-positive risk.** Adding
+  `"squadron.pr"` to the forbidden-imports set for `review/` exposed that the existing check
+  used a bare `str.startswith()`, which treats `"squadron.pr"` as a prefix match for
+  `"squadron.providers"` too — a real false positive against three files that legitimately
+  import `squadron.providers.*`. Fixed with a package-boundary-aware comparison.
+
+A fourth issue surfaced only during the live walkthrough and was not fixed, since it is
+outside this slice's scope: the composer (like `run_review_with_profile` and
+`summary_oneshot`, which it deliberately does not call) has no client-side network timeout
+around the one-shot provider call. A slow reasoning model (`z-ai/glm-5.2`) hung indefinitely
+on one of the six sequential composer calls during live verification and had to be killed
+manually; switching to a faster model completed normally. Worth a future slice if it recurs.
+
+Live verification (Task 16.2) ran all six of the design's walkthrough steps against
+`ecorkran/squadron`, `gh` authenticated: the dry run on this slice's own branch, the base
+refusal against a nonexistent integration branch, both push-precondition refusals (missing
+and behind), the unplanned-repository path (a throwaway worktree with `project-documents/`
+removed), a live creation, and a check — via `-vvv` debug output rather than an assertion —
+that the PR's own five-section body reaches `sq review pr`'s injected prompt verbatim. The
+live creation opened **`https://github.com/ecorkran/squadron/pull/116`**, title `Create a PR
+with a Good Message` resolved from the design's own H1 with zero model calls, base
+`squadron-pr`.
+
+The `sdk` profile's one-shot dispatch could not be exercised live in this session — it cannot
+nest inside the Claude Code session running the walkthrough itself — and is instead checked
+directly by a unit test that resolves the real `sdk` profile type and asserts it dispatches
+without a session.
+
+Full gate: `ruff format`/`ruff check`/`pyright` clean; full suite 4198 passed with only the 3
+pre-existing schema-drift failures (context-forge issue #88), unchanged by this slice.
 
 ---
 
