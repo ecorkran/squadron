@@ -2,13 +2,39 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260917
+dateUpdated: 20260919
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260919
+
+### Slice 922 — Design: Small Fixes Batch 2 (#65, #117, #112, #108, #57, #100)
+
+Phase 4 complete. `user/slices/922-slice.small-fixes-batch-2.md`; validator PASS.
+
+Slice 907 was split: its #65 dependency-cleanup half became 922, widened to a
+six-item batch; its `[serve]` half stays deferred as #118, expected to close
+unimplemented once Amoeba's resident process makes the daemon redundant. #30
+closed — delivered by slice 920, close missed at closeout.
+
+Decisions worth carrying forward:
+- **D2 (#117).** The gate keeps passing every staged path to cf; a
+  squadron-side "under `project-documents/user/`" predicate is consulted only
+  to interpret `filesChecked: 0`. Filtering *before* calling cf was rejected —
+  it would make squadron's predicate the authority and fail open on any drift
+  from cf's real scope. cf scope was probed empirically, not assumed.
+- **D1 (#65).** `mcp` stays — it is now imported, contrary to the issue text.
+  The three docstring-only stub packages (`providers/anthropic/`, `adk/`,
+  `mcp/`) are deleted; nothing references them.
+- **D6 (#100).** Only policy exclusions drop to DEBUG; jail escapes stay WARNING.
+- #108's `dispatch.py:174` site is stale; `translation.py` (the producer) was
+  missing from the issue's list.
+
+**Next:** Phase 5 task breakdown.
 
 ## 20260917
 
