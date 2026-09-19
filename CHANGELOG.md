@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.5] - 20260919
+
 ### Fixed
 - A typo'd `--model` alias now fails immediately with the list of known aliases instead of dispatching and producing an UNKNOWN verdict that overwrites your previous review. Applies to reviews and the resolve judge. If you pass a real model ID rather than an alias, add `--profile` (#67)
 - `/sq:summary --restore` with no key no longer restores a summary belonging to a sibling worktree whose name extends yours (e.g. `squadron` picking up `squadron-pr`'s). Sibling summaries are still listed and still restorable with `--key` (#103)
