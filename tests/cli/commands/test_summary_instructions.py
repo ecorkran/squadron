@@ -396,15 +396,31 @@ class TestRestoreSiblingExclusion:
         assert "--key 'pr-p5a'" in result.output
 
     def test_all_matches_excluded_errors_rather_than_falling_back(self, tmp_path: Path) -> None:
-        """No own summary: refuse, don't silently restore a sibling's."""
+        """No own summary: refuse, don't silently restore a sibling's.
+
+        The message must not claim the files do not exist, and must carry the
+        --key remedy even in the single-match case, where the picker listing
+        (which only prints for >1 match) would not otherwise supply it.
+        """
         cwd, summaries = self._layout(tmp_path, project="squadron", sibling="squadron-pr")
         _write_summary(summaries, "squadron-pr-p5a.md", "sibling summary", 2000.0)
 
         result = self._run(summaries, cwd, "squadron")
 
         assert result.exit_code == 1
-        assert "no summary files found for project 'squadron'" in result.output
         assert "sibling summary" not in result.output
+        assert "no summary files found" not in result.output
+        assert "belongs to sibling projects" in result.output
+        assert "--key 'pr-p5a'" in result.output
+
+    def test_genuinely_empty_project_keeps_the_no_files_message(self, tmp_path: Path) -> None:
+        """The two absences stay distinguishable: nothing exists vs. all excluded."""
+        cwd, summaries = self._layout(tmp_path, project="squadron", sibling="squadron-pr")
+
+        result = self._run(summaries, cwd, "squadron")
+
+        assert result.exit_code == 1
+        assert "no summary files found for project 'squadron'" in result.output
 
     def test_shorter_sibling_does_not_exclude_own_summaries(self, tmp_path: Path) -> None:
         """Reversed roles: from squadron-pr, sibling `squadron` prefixes every own stem.

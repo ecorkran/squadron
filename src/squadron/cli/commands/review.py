@@ -82,6 +82,11 @@ _RESOLUTION_COLORS: dict[Resolution, str] = {
     Resolution.UNKNOWN: "dim",
 }
 
+_MODEL_OPTION_HELP = (
+    "Model override (e.g. opus, sonnet). A name that is not a known alias is "
+    "rejected unless --profile is also given."
+)
+
 _SEVERITY_COLORS: dict[Severity, str] = {
     Severity.PASS: "bright_green",
     Severity.NOTE: "cyan",
@@ -539,6 +544,34 @@ def _reject_unknown_alias(
     raise typer.Exit(code=1)
 
 
+def _resolve_model_and_profile(
+    model_flag: str | None,
+    profile_flag: str | None,
+    template: ReviewTemplate | None = None,
+    template_name: str | None = None,
+) -> tuple[str | None, str]:
+    """Resolve the model and profile every review command dispatches with.
+
+    The one place alias resolution and the unknown-alias guard live together,
+    so the two cannot drift apart and no call site has to re-derive the guard's
+    placement. Returns ``(model, profile)``.
+
+    The guard runs only when a model was actually supplied: ``alias_model`` and
+    ``alias_profile`` are ``None`` when ``raw_model`` is, and a guard outside
+    this branch would read ``None == None and None is None`` as a typo and
+    reject every model-less invocation.
+    """
+    raw_model = _resolve_model(model_flag, template, template_name)
+    alias_model: str | None = None
+    alias_profile: str | None = None
+    if raw_model is not None:
+        alias_model, alias_profile = resolve_model_alias(raw_model)
+        if alias_model == raw_model and alias_profile is None:
+            _reject_unknown_alias(raw_model, profile_flag, template)
+
+    return alias_model or raw_model, _resolve_profile(profile_flag or alias_profile, template)
+
+
 def _resolve_model(
     flag: str | None,
     template: ReviewTemplate | None = None,
@@ -627,23 +660,13 @@ def _run_review_command(
         )
 
     # Resolve model from flag → per-template config → config → template default
-    raw_model = _resolve_model(model_flag, template, template_name)
-    alias_model: str | None = None
-    alias_profile: str | None = None
-    # Read the tool_use capability here, while the alias name is still known:
-    # resolve_model_alias below collapses it to a model id, after which the alias
-    # metadata is unrecoverable (slice 266).
-    allows_tools = model_allows_tools(raw_model)
-    if raw_model is not None:
-        alias_model, alias_profile = resolve_model_alias(raw_model)
-        # Guard stays inside this block: alias_* are None when no model was
-        # supplied at all, and `None == None and None is None` would reject
-        # every model-less invocation.
-        if alias_model == raw_model and alias_profile is None:
-            _reject_unknown_alias(raw_model, profile_flag, template)
-
-    resolved_model = alias_model or raw_model
-    resolved_profile = _resolve_profile(profile_flag or alias_profile, template)
+    # Read the tool_use capability from the alias name before resolution
+    # collapses it to a model id, after which the alias metadata is
+    # unrecoverable (slice 266).
+    allows_tools = model_allows_tools(_resolve_model(model_flag, template, template_name))
+    resolved_model, resolved_profile = _resolve_model_and_profile(
+        model_flag, profile_flag, template, template_name
+    )
 
     try:
         result = asyncio.run(
@@ -728,7 +751,7 @@ def review_slice(
         None, "--against", help="Architecture document to review against"
     ),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
-    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
+    model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -829,7 +852,7 @@ def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
 def review_arch(
     input_file: str = typer.Argument(help="Architecture document to review (path or initiative index)"),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
-    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
+    model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -905,7 +928,7 @@ def review_tasks(
     input_file: str = typer.Argument(help="Task breakdown file to review (or slice number)"),
     against: str | None = typer.Option(None, "--against", help="Parent slice design to review against"),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
-    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
+    model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -1031,7 +1054,7 @@ def review_code(
     rules: str | None = typer.Option(None, "--rules", help="Path to additional rules file"),
     rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
     no_rules: bool = typer.Option(False, "--no-rules", help="Suppress all rule injection"),
-    model: str | None = typer.Option(None, "--model", help="Model override (e.g. opus, sonnet)"),
+    model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -1204,18 +1227,7 @@ def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tu
     """
     load_all_templates()
     template = get_template(JUDGE_TEMPLATE_NAME)
-    raw_model = _resolve_model(model_flag, template, JUDGE_TEMPLATE_NAME)
-
-    alias_model: str | None = None
-    alias_profile: str | None = None
-    if raw_model is not None:
-        alias_model, alias_profile = resolve_model_alias(raw_model)
-        # Same placement constraint as _run_review_command's guard: inside the
-        # block, or a model-less judge resolution rejects on None == None.
-        if alias_model == raw_model and alias_profile is None:
-            _reject_unknown_alias(raw_model, profile_flag, template)
-
-    return alias_model or raw_model, _resolve_profile(profile_flag or alias_profile, template)
+    return _resolve_model_and_profile(model_flag, profile_flag, template, JUDGE_TEMPLATE_NAME)
 
 
 def _display_resolution(result: ResolutionResult, verbosity: int) -> None:

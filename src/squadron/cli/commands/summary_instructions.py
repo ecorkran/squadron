@@ -112,49 +112,48 @@ def _sibling_projects(cwd: str, project: str) -> set[str]:
         return set()
 
 
-def _partition_by_sibling(
-    matches: list[Path], project: str, siblings: set[str]
-) -> tuple[list[Path], list[Path]]:
-    """Split ``matches`` into (clean, excluded) by sibling-project ownership.
+def _owning_siblings(matches: list[Path], project: str, siblings: set[str]) -> dict[Path, str]:
+    """Map each sibling-owned match to the sibling project that owns it.
 
     A stem starting with ``{sibling}-`` belongs to that sibling, *unless*
     ``project`` itself starts with ``{sibling}-``. That qualifier is
     load-bearing in the shorter-sibling direction: from the ``squadron-pr``
     checkout, sibling ``squadron`` prefixes every one of this project's own
     stems, and without it every file would be excluded.
+
+    One pass decides both selection and display, so the picker can never mark a
+    file excluded that the default would actually select. Longest owner first,
+    so a match is attributed to the most specific sibling that claims it.
     """
-    owners = {s for s in siblings if not project.startswith(f"{s}-")}
-    clean: list[Path] = []
-    excluded: list[Path] = []
+    owners = sorted(
+        (s for s in siblings if not project.startswith(f"{s}-")),
+        key=len,
+        reverse=True,
+    )
+    found: dict[Path, str] = {}
     for match in matches:
-        if any(match.stem.startswith(f"{owner}-") for owner in owners):
-            excluded.append(match)
-        else:
-            clean.append(match)
-    return clean, excluded
-
-
-def _sibling_owner(path: Path, project: str, siblings: set[str]) -> str | None:
-    """Return the sibling project a match belongs to, for the picker listing."""
-    owners = {s for s in siblings if not project.startswith(f"{s}-")}
-    for owner in sorted(owners, key=len, reverse=True):
-        if path.stem.startswith(f"{owner}-"):
-            return owner
-    return None
+        for owner in owners:
+            if match.stem.startswith(f"{owner}-"):
+                found[match] = owner
+                break
+    return found
 
 
 def _handle_restore(cwd: str, key: str | None = None) -> None:
     """Find and print a saved summary file for the current project.
 
     Resolves the project name via CF and globs the summaries directory. Without
-    ``key``, prints the most recently modified match. With ``key``, prints the
-    summary saved under that key, matched case-insensitively so the same
-    argument resolves identically on case-sensitive and case-insensitive
-    filesystems. If multiple summaries exist, lists them on stderr.
+    ``key``, prints the most recently modified match that is *not* owned by a
+    sibling project whose name extends this one (#103). With ``key``, prints the
+    summary saved under that key — sibling-owned files included — matched
+    case-insensitively so the same argument resolves identically on
+    case-sensitive and case-insensitive filesystems. If multiple summaries
+    exist, lists them on stderr, marking the sibling-owned ones.
 
     Exit codes:
         0 — success; file contents printed to stdout.
-        1 — no project resolved, no matching summary files, or unknown key.
+        1 — no project resolved, no matching summary files, no file selectable
+            by default, or unknown key.
     """
     params = gather_cf_params(cwd)
     project = params.get("project")
@@ -176,13 +175,14 @@ def _handle_restore(cwd: str, key: str | None = None) -> None:
         raise typer.Exit(code=1)
 
     siblings = _sibling_projects(cwd, project)
-    clean, _excluded = _partition_by_sibling(matches, project, siblings)
+    owned = _owning_siblings(matches, project, siblings)
+    clean = [match for match in matches if match not in owned]
 
     if len(matches) > 1:
         print(f"Found {len(matches)} summaries for '{project}':", file=sys.stderr)
         for match in matches:
             match_key = _summary_key(match, project)
-            owner = _sibling_owner(match, project, siblings)
+            owner = owned.get(match)
             suffix = (
                 ""
                 if owner is None
@@ -196,8 +196,15 @@ def _handle_restore(cwd: str, key: str | None = None) -> None:
     # Default selection draws from `clean` only; `--key` still reaches every
     # match, so an excluded file stays restorable by its exact key (#103).
     if not key and not clean:
+        # Distinct from the no-files case above: files exist, they just all
+        # belong to siblings. Reporting absence without the remedy would leave
+        # the operator stuck, so name the keys that would work.
+        keys = ", ".join(f"--key '{_summary_key(m, project)}'" for m in matches)
         print(
-            f"Error: no summary files found for project '{project}'.",
+            f"Error: no summaries for project '{project}' selectable by default "
+            f"({len(matches)} matching "
+            f"{'file belongs' if len(matches) == 1 else 'files belong'} to sibling "
+            f"projects). Restore one explicitly: {keys}.",
             file=sys.stderr,
         )
         raise typer.Exit(code=1)
