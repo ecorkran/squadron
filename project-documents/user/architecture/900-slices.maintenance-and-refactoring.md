@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260916
+dateUpdated: 20260919
 status: in_progress
 ---
 
@@ -397,6 +397,8 @@ Risk: Low (each fix is localized — an error-path message and a restore key-sel
 **Slice design:** `user/slices/921-slice.small-fixes-batch.md`
 **Status:** Complete (20260917) — commits `57a3d771` (#67), `dae9cd97` (#103).
 
+20. [ ] **(922) Declared Dependency Cleanup** — Make `[project.dependencies]` match what `src/` imports, closing [issue #65](https://github.com/ecorkran/squadron/issues/65) (findings 2–3; finding 1 was fixed in `9c0d7a37`). Remove `anthropic` and `google-adk`: both have zero imports under `src/`, and `google-adk` pulls a large transitive tree into every install. Declare `rich`, which is imported in 21 files but arrives only transitively via typer. Keep `mcp`: #65 listed it as unimported, but it is now imported by `tools/mcp_bridge.py` and `tools/cf_tools.py` (verified 20260919). Decide the fate of the docstring-only stub packages `providers/anthropic/` and `adk/` that the removed dependencies were declared for. Verify with a clean-venv base install running `sq doctor`, `sq run --help`, and `sq review --help`. Split out of 907, whose `[serve]` half stays deferred. Dependencies: none. Risk: Low. Effort: 1/5
+
 ---
 
 ## Future Slices
@@ -404,7 +406,9 @@ Risk: Low (each fix is localized — an error-path message and a restore key-sel
 Deferred work — not scheduled, kept for reference. Promote back into
 Maintenance Slices when picked up.
 
-1. [ ] **(907) Optional Dependency Split — `serve` and `codex` Extras** — Move `fastapi` and `uvicorn` out of mandatory dependencies into an optional `[serve]` extra (`pip install squadron-ai[serve]`), since they are only needed for `sq serve` (the daemon). Add a runtime check in `sq serve` that fails fast with an actionable install hint if the extras are absent. Similarly, define a `[codex]` extra noting the manual GitHub install requirement for the Codex SDK, and add a runtime check in codex-profile dispatch that produces a clear "run this to install" error rather than a raw `ImportError`. Scope: `pyproject.toml` restructure + two runtime guards. No behavior change for users who have the full install. Also fold in [issue #65](https://github.com/ecorkran/squadron/issues/65) findings 2 and 3, routed here by slice 918: `anthropic`, `google-adk`, and `mcp` are declared runtime dependencies with zero imports under `src/` (`google-adk` pulls a large transitive tree into every install; the `providers/anthropic/`, `adk/`, and `mcp/` packages are docstring-only stubs), and `rich` is imported throughout `cli/` but not declared, arriving transitively via typer. Risk: Low. Effort: 1/5. Dependencies: none.
+1. [ ] **(907) Optional Dependency Split — `serve` and `codex` Extras** — Move `fastapi` and `uvicorn` out of mandatory dependencies into an optional `[serve]` extra (`pip install squadron-ai[serve]`), since they are only needed for `sq serve` (the daemon). Add a runtime check in `sq serve` that fails fast with an actionable install hint if the extras are absent. Similarly, define a `[codex]` extra noting the manual GitHub install requirement for the Codex SDK, and add a runtime check in codex-profile dispatch that produces a clear "run this to install" error rather than a raw `ImportError`. Scope: `pyproject.toml` restructure + two runtime guards. No behavior change for users who have the full install. Risk: Low. Effort: 1/5. Dependencies: none.
+
+**Note (20260919) — split; `[serve]` half tracked in [issue #118](https://github.com/ecorkran/squadron/issues/118).** The #65 dependency cleanup formerly folded in here moved to slice 922. What remains is the `[serve]` extra, and it will probably be closed without implementation: Amoeba is building its own resident substrate (it evaluated reusing this daemon and declined, 20260913), and once that exists squadron's daemon becomes mostly redundant and will probably be dropped — taking `fastapi`/`uvicorn` with it. The codex guard and `server/pid.py` extraction already landed in `07bc50ee`.
 
 **Note (20260711) — premise needs re-verification before implementation.** Confirmed via `grep` that `fastapi`/`uvicorn` usage is genuinely confined to `src/squadron/server/` (no surprise indirect callers), and the codex SDK is already imported lazily/function-locally everywhere (`providers/auth.py:167`) — so codex already behaves the way this slice wants. But `serve` does not: [cli/app.py](src/squadron/cli/app.py) imports `squadron.cli.commands.serve` at module top level unconditionally (line ~24, `from squadron.cli.commands.serve import serve`), and [cli/commands/serve.py:12-14](src/squadron/cli/commands/serve.py#L12-L14) imports `squadron.server.daemon`/`.engine`/`.pid` at module scope — which themselves import `fastapi`/`uvicorn` at module scope. That means **every** `sq` invocation (`sq --help`, `sq run`, anything) currently imports fastapi/uvicorn into the process regardless of whether `serve` is ever used. Splitting the pyproject dependency alone, as scoped above, would make `sq` itself uninstallable/broken for any user without the `[serve]` extra — the import would need to become lazy (deferred inside the `serve` command function or behind a local import in `cli/app.py`'s registration) as a prerequisite, which is more than "two runtime guards." Re-scope and re-verify the actual blast radius (does this affect startup latency today? is lazy-loading `serve`'s registration in `cli/app.py` itself safe with Typer's command registration model?) before treating this as Effort 1/5.
 
