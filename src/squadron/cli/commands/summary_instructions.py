@@ -6,6 +6,7 @@ template-driven summary instructions for the current Claude Code session.
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from squadron.pipeline.summary_render import (
     resolve_template_instructions,
     resolve_template_suffix,
 )
+
+_logger = logging.getLogger(__name__)
 
 # Conventional directory where pipeline summary files are stored.
 _SUMMARIES_DIR = Path.home() / ".config" / "squadron" / "runs" / "summaries"
@@ -88,18 +91,69 @@ def _summary_key(path: Path, project: str) -> str:
     return path.stem.removeprefix(f"{project}-")
 
 
+def _sibling_projects(cwd: str, project: str) -> set[str]:
+    """Return names of sibling checkouts next to ``cwd``, excluding ``project``.
+
+    Used to spot summary files that belong to a sibling project whose name
+    extends this one (``squadron`` vs ``squadron-pr``), since the
+    ``{project}-*.md`` glob cannot tell a sibling's name from a pipeline key.
+
+    Heuristic, deliberately: it only sees projects checked out next to the
+    current one on this machine, so a same-prefix project living elsewhere is
+    not caught.
+    """
+    parent = Path(cwd).resolve().parent
+    try:
+        return {entry.name for entry in parent.iterdir() if entry.is_dir()} - {project}
+    except OSError:
+        # Unreadable/removed parent, or a root cwd with nothing above it.
+        # Degrade to today's unfiltered behavior rather than failing the restore.
+        _logger.warning("cannot enumerate siblings of %s", parent, exc_info=True)
+        return set()
+
+
+def _owning_siblings(matches: list[Path], project: str, siblings: set[str]) -> dict[Path, str]:
+    """Map each sibling-owned match to the sibling project that owns it.
+
+    A stem starting with ``{sibling}-`` belongs to that sibling, *unless*
+    ``project`` itself starts with ``{sibling}-``. That qualifier is
+    load-bearing in the shorter-sibling direction: from the ``squadron-pr``
+    checkout, sibling ``squadron`` prefixes every one of this project's own
+    stems, and without it every file would be excluded.
+
+    One pass decides both selection and display, so the picker can never mark a
+    file excluded that the default would actually select. Longest owner first,
+    so a match is attributed to the most specific sibling that claims it.
+    """
+    owners = sorted(
+        (s for s in siblings if not project.startswith(f"{s}-")),
+        key=len,
+        reverse=True,
+    )
+    found: dict[Path, str] = {}
+    for match in matches:
+        for owner in owners:
+            if match.stem.startswith(f"{owner}-"):
+                found[match] = owner
+                break
+    return found
+
+
 def _handle_restore(cwd: str, key: str | None = None) -> None:
     """Find and print a saved summary file for the current project.
 
     Resolves the project name via CF and globs the summaries directory. Without
-    ``key``, prints the most recently modified match. With ``key``, prints the
-    summary saved under that key, matched case-insensitively so the same
-    argument resolves identically on case-sensitive and case-insensitive
-    filesystems. If multiple summaries exist, lists them on stderr.
+    ``key``, prints the most recently modified match that is *not* owned by a
+    sibling project whose name extends this one (#103). With ``key``, prints the
+    summary saved under that key — sibling-owned files included — matched
+    case-insensitively so the same argument resolves identically on
+    case-sensitive and case-insensitive filesystems. If multiple summaries
+    exist, lists them on stderr, marking the sibling-owned ones.
 
     Exit codes:
         0 — success; file contents printed to stdout.
-        1 — no project resolved, no matching summary files, or unknown key.
+        1 — no project resolved, no matching summary files, no file selectable
+            by default, or unknown key.
     """
     params = gather_cf_params(cwd)
     project = params.get("project")
@@ -120,26 +174,58 @@ def _handle_restore(cwd: str, key: str | None = None) -> None:
         )
         raise typer.Exit(code=1)
 
+    siblings = _sibling_projects(cwd, project)
+    owned = _owning_siblings(matches, project, siblings)
+    clean = [match for match in matches if match not in owned]
+
     if len(matches) > 1:
         print(f"Found {len(matches)} summaries for '{project}':", file=sys.stderr)
         for match in matches:
-            print(f"  {_summary_key(match, project)}  ({match.name})", file=sys.stderr)
+            match_key = _summary_key(match, project)
+            owner = owned.get(match)
+            suffix = (
+                ""
+                if owner is None
+                else (
+                    f"  (excluded from default — matches sibling project "
+                    f"'{owner}'; use --key '{match_key}' to restore)"
+                )
+            )
+            print(f"  {match_key}  ({match.name}){suffix}", file=sys.stderr)
 
-    selected = _select_summary(matches, project, key)
+    # Default selection draws from `clean` only; `--key` still reaches every
+    # match, so an excluded file stays restorable by its exact key (#103).
+    if not key and not clean:
+        # Distinct from the no-files case above: files exist, they just all
+        # belong to siblings. Reporting absence without the remedy would leave
+        # the operator stuck, so name the keys that would work.
+        keys = ", ".join(f"--key '{_summary_key(m, project)}'" for m in matches)
+        print(
+            f"Error: no summaries for project '{project}' selectable by default "
+            f"({len(matches)} matching "
+            f"{'file belongs' if len(matches) == 1 else 'files belong'} to sibling "
+            f"projects). Restore one explicitly: {keys}.",
+            file=sys.stderr,
+        )
+        raise typer.Exit(code=1)
+
+    selected = _select_summary(matches, clean, project, key)
 
     print(f"Using: {selected.name}", file=sys.stderr)
     print(selected.read_text(encoding="utf-8"), end="")
 
 
-def _select_summary(matches: list[Path], project: str, key: str | None) -> Path:
-    """Pick the summary to restore: the keyed one, else the most recent.
+def _select_summary(matches: list[Path], clean: list[Path], project: str, key: str | None) -> Path:
+    """Pick the summary to restore: the keyed one, else the most recent clean one.
 
-    ``matches`` is ordered most-recent-first. Key comparison is
-    case-insensitive; when several files differ only by case, the most recent
-    wins, consistent with the no-key default.
+    Both lists are ordered most-recent-first. The no-key default selects from
+    ``clean`` (sibling-owned files excluded, #103); ``--key`` searches the full
+    ``matches`` list so an excluded file remains reachable by its exact key.
+    Key comparison is case-insensitive; when several files differ only by case,
+    the most recent wins, consistent with the no-key default.
     """
     if not key:
-        return matches[0]
+        return clean[0]
 
     wanted = key.casefold()
     for match in matches:

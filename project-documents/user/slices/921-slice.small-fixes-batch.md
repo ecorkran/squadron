@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260916
 dateUpdated: 20260917
-status: not_started
+status: complete
 ---
 
 # Slice Design: Small Fixes Batch
@@ -206,3 +206,121 @@ never worse.
 - Issue #60 (`sq models check`, validating alias references across pools/
   pipelines statically) overlaps conceptually but is a separate command-level
   feature, not this runtime dispatch-path fix.
+
+## Verification Walkthrough
+
+Commands and observed output from the implementation session (20260917,
+commits `57a3d771` Part A, `dae9cd97` Part B). Externally re-runnable: each
+step states what to expect and what a failure looks like.
+
+### Fix 1 (#67) — unknown alias rejected before dispatch
+
+A **scope argument is required**. `sq review code` validates scope before
+reaching model resolution, so without one the command exits 1 at the scope
+check and never touches the guard. Both failures exit 1, so the *message* is
+the verification, not the exit code.
+
+```
+$ uv run sq review code --files "**/*.py" --model definitely-not-a-real-alias
+Error: unknown model alias 'definitely-not-a-real-alias'; known: ['codex',
+'codex-agent', 'codex-spark', 'deepseek4', ..., 'sonnet', 'sonnet4',
+'trinity']. If this is a literal model ID, pass --profile to dispatch it
+directly.
+$ echo $?
+1
+```
+
+Contrast — the same invocation with no scope argument never reaches the guard:
+
+```
+$ uv run sq review code --model definitely-not-a-real-alias
+Error: provide a slice number, --diff, or --files.
+$ echo $?
+1
+```
+
+Expected behavior changes (both intentional, recorded under "Collateral
+effects"): a stale `default_model` config with no profile anywhere now fails
+loudly; and a *valid literal model ID* with no `--profile` and no
+`default_review_profile` now fails too, which is why the message names
+`--profile` as the remedy. Supplying a profile through any of the three
+channels (flag, `template.profile`, `default_review_profile`) preserves
+today's passthrough exactly.
+
+The judge path (`sq review resolve --model <typo>`) is guarded by the same
+helper; covered by
+`tests/review/test_cli_review_resolve.py::TestReviewResolveFlagPassthrough::test_unknown_model_alias_is_rejected_on_the_judge_path`.
+
+### Fix 2 (#103) — default selection skips sibling-owned summaries
+
+Run from the `squadron` checkout with a `squadron-pr` sibling present. This is
+#103's exact motivating case: `squadron-pr-interactive.md` was the
+most-recently-modified match and used to win the no-key default.
+
+```
+$ uv run sq _summary-instructions --restore
+Found 8 summaries for 'squadron':
+  pr-interactive  (squadron-pr-interactive.md)  (excluded from default — matches sibling project 'squadron-pr'; use --key 'pr-interactive' to restore)
+  interactive  (squadron-interactive.md)
+  P45  (squadron-P45.md)
+  ...
+Using: squadron-interactive.md
+$ echo $?
+0
+```
+
+Every match is still listed; only the default-selection pool is restricted.
+The escape hatch works:
+
+```
+$ uv run sq _summary-instructions --restore --key pr-interactive
+Using: squadron-pr-interactive.md
+```
+
+**Reversed roles — the regression this fix must not introduce.** Run from the
+`squadron-pr` worktree, whose sibling `squadron` is the *shorter* name and
+prefixes every one of `squadron-pr`'s own stems:
+
+```
+$ uv run sq _summary-instructions --restore --cwd /path/to/squadron-pr
+Using: squadron-pr-interactive.md
+$ echo $?
+0
+```
+
+Without the prefix-continuation qualifier in the partition predicate, `clean`
+is empty here and this exits 1 with "no summary files found" in a checkout
+holding its own summaries — the inverse of #103 and strictly worse than the
+unfixed behavior. Guarded by
+`tests/cli/commands/test_summary_instructions.py::TestRestoreSiblingExclusion::test_shorter_sibling_does_not_exclude_own_summaries`.
+
+Note the real command is `sq _summary-instructions` (hidden, `_`-prefixed).
+There is no `sq summary` command; the issue and design prose use that as
+shorthand for the `/sq:summary` slash command's underlying call.
+
+### Gate
+
+```
+$ uv run ruff format --check   # 527 files already formatted
+$ uv run ruff check            # All checks passed!
+$ uv run pyright               # 0 errors, 0 warnings, 0 informations
+$ uv run pytest -q             # 3987 passed, 4 skipped
+```
+
+Baseline before the slice was 3973 passed / 4 skipped. The +14 delta is
+accounted for: Part A +6 (one existing test renamed and inverted, plus five
+new: explicit-profile passthrough, two profile channels, message assertion,
+no-model regression, judge-path rejection), Part B +8 (three
+`_sibling_projects` cases, five end-to-end selection cases).
+
+### Caveat discovered during implementation
+
+`_sibling_projects` reads the real filesystem, so any test exercising it must
+pass `--cwd` pointing into a directory layout the test controls. pytest's
+`tmp_path` is itself nested among sibling temp dirs, so the layout needs its
+own root (`tmp_path / "checkouts" / <project>`) rather than `tmp_path`
+directly. The existing `TestRestoreFlag`/`TestRestoreKey` invocations were
+updated to pass `--cwd` for this reason; without it they read the parent of
+wherever pytest runs and pass or fail based on the developer's checkout
+layout. Verified CWD-independent by running the file from a directory whose
+parent contained a same-prefix `myproject-pr` sibling: 19 passed.

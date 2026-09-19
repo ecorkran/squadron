@@ -389,12 +389,13 @@ Two further consequences follow from `RateLimitEvent` being a new type. Message-
 
 **Status:** not started · **Risk:** Medium (touches every SDK-backed path — review, dispatch, pipeline, metrology — and the failure mode of getting the rate-limit re-keying wrong is silent: no backoff under real throttling, observable only as degraded behavior under load) · **Effort:** 3/5 · **Dependencies:** none — the compatibility probe found no blocking API breakage, so this can be picked up independently
 
-19. [ ] **(921) Small Fixes Batch — Alias Errors, Summary Restore Scoping** — Two independently small, root-caused bugs bundled into one slice:
+19. [x] **(921) Small Fixes Batch — Alias Errors, Summary Restore Scoping** — Two independently small, root-caused bugs bundled into one slice:
 [Issue #67](https://github.com/ecorkran/squadron/issues/67): an unknown model alias (e.g. `glm53`) yields a misleading trust-warning cascade instead of a clear "unknown alias" error. [Issue #103](https://github.com/ecorkran/squadron/issues/103): `sq summary --restore` with no key defaults to the most recent summary file across *all* sibling-worktree projects rather than scoping to the current project, so a restore can silently seed context from the wrong project.
 Originally scoped to include [issue #78](https://github.com/ecorkran/squadron/issues/78) (review CLI verbosity leaking global logger state across tests) and [issue #65](https://github.com/ecorkran/squadron/issues/65) finding 1 (destructive `install-commands` delete) — both were found already fixed on `main` during design (0aae0c8c and 9c0d7a37 respectively) and closed/updated rather than redesigned. #65 was reopened since findings 2–3 (dependency cleanup) remain open, routed to 907.
 Risk: Low (each fix is localized — an error-path message and a restore key-selection default — neither touches a shared parse/dispatch hot path). Effort: 1/5. Dependencies: none.
 
 **Slice design:** `user/slices/921-slice.small-fixes-batch.md`
+**Status:** Complete (20260917) — commits `57a3d771` (#67), `dae9cd97` (#103).
 
 ---
 

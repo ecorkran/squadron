@@ -32,6 +32,37 @@ def _isolated_user_config(tmp_path: Path) -> Iterator[Path]:
 
 
 @pytest.fixture(autouse=True)
+def _isolated_model_registry(tmp_path: Path) -> Iterator[Path]:
+    """Redirect the alias registry to an empty temp file.
+
+    ``resolve_model_alias``/``get_all_aliases`` read the developer's real
+    ``~/.config/squadron/models.toml`` (no caching), so without this the
+    unknown-alias guard tests depend on a name like ``llama-3-70b`` happening
+    not to be defined locally — a machine that defines it fails the suite.
+    Mirrors ``_isolated_user_config`` in ``tests/review/conftest.py``.
+    """
+    registry = tmp_path / "model-registry" / "models.toml"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    registry.write_text("", encoding="utf-8")
+    with patch("squadron.models.aliases.models_toml_path", return_value=registry):
+        yield registry
+
+
+@pytest.fixture(autouse=True)
+def _isolated_user_templates(tmp_path: Path) -> Iterator[Path]:
+    """Redirect user template overrides to an empty temp dir.
+
+    ``load_all_templates`` merges ``~/.config/squadron/templates``; a developer
+    override that sets ``profile:`` on a template would legitimately suppress
+    the unknown-alias guard and fail these tests for the wrong reason.
+    """
+    templates = tmp_path / "user-templates"
+    templates.mkdir(parents=True, exist_ok=True)
+    with patch("squadron.review.templates._USER_TEMPLATES_DIR", templates):
+        yield templates
+
+
+@pytest.fixture(autouse=True)
 def _pinned_diff_base() -> Iterator[str]:
     """Pin the slice diff base so tests never read live CF config.
 
