@@ -20,6 +20,7 @@ class PrFacts:
 
     commits: tuple[CommitRecord, ...]
     slice_design_file: str | None
+    slice_design_text: str | None
     checked_items: tuple[str, ...]
     unchecked_items: tuple[str, ...]
     review_path: str | None
@@ -39,6 +40,7 @@ def assemble_facts(inputs: PrInputs, review: ReviewProvenance | None) -> PrFacts
     return PrFacts(
         commits=inputs.commits,
         slice_design_file=slice_inputs.design_file,
+        slice_design_text=slice_inputs.design_text,
         checked_items=task_items.checked if task_items is not None else (),
         unchecked_items=task_items.unchecked if task_items is not None else (),
         review_path=str(review.path) if review is not None else None,

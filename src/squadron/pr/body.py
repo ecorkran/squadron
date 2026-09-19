@@ -1,201 +1,16 @@
-"""The one-shot composer and body assembly for ``sq pr create`` (D3, D4, D5).
+"""Body assembly and the presence-and-filled check for ``sq pr create`` (D4, D5).
 
-Prompt in, text out, through a profile. The composer is small because it
-does one thing: it is not shaped like ``summary_oneshot`` (pipeline-shaped
-parameters) or ``run_review_with_profile`` (review-shaped template and
-result parsing) — PR composition wants neither.
+Squadron's headings and deterministic facts, the model's prose between them.
 """
 
 from __future__ import annotations
 
-import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
-from squadron.core.models import SDK_RESULT_TYPE
 from squadron.pr.assembly import PrFacts
-from squadron.review.git_utils import CommitRecord
-
-_logger = logging.getLogger(__name__)
-
-#: ``sdk_type`` values whose messages are not response prose: the SDK's
-#: duplicate ResultMessage and its tool-call narration. The same set
-#: ``run_review_with_profile`` and ``summary_oneshot`` skip.
-_NON_PROSE_SDK_TYPES = (SDK_RESULT_TYPE, "tool_use", "tool_result")
-
-#: The design document's own heading: ``# Slice Design: {name}``. Only this
-#: exact shape yields a title (D4a); anything else falls through to the
-#: model rather than emitting a malformed title.
-_DESIGN_H1_RE = re.compile(r"^#\s+Slice Design:\s*(.+?)\s*$", re.MULTILINE)
-
-#: The bound on a model-composed title — the project's own commit-summary
-#: convention, applied to the same kind of object (D4a).
-_TITLE_MAX_CHARS = 72
-
-Composer = Callable[[str], Awaitable[str]]
-
-#: The model is given facts only, per initiative 360's traceability rule: a
-#: description-writer with tools could assert things no input supports.
-_NO_TOOLS: list[str] = []
-
-
-class CompositionError(Exception):
-    """The one-shot model call failed.
-
-    Not a ``CodeHostError`` — the composer is its own I/O path, not a
-    host call, and its failures are enumerated separately (D8's sixth path).
-    """
-
-
-async def compose_one_shot(prompt: str, *, model: str | None, profile: str) -> str:
-    """Run one prompt through *profile* and return the response text.
-
-    Performs the same sequence ``run_review_with_profile`` uses —
-    ``get_profile`` → ``ensure_provider_loaded`` → ``get_provider`` → an
-    ``AgentConfig`` → ``create_agent`` → ``handle_message`` — without any of
-    that function's review-shaped parameters, and without
-    ``summary_oneshot``'s pipeline-shaped ones (D3).
-
-    Every failure — an unreachable or unauthenticated provider, a mid-stream
-    timeout, or any exception from ``handle_message`` — is caught at this
-    boundary, logged at ERROR, and re-raised as ``CompositionError``: the
-    sixth I/O path D8 enumerates, distinct from the five ``CodeHostError``
-    paths. This is a process-boundary handler in the project's exception
-    rules' sense, which is what permits catching broadly here.
-    """
-    from squadron.core.models import AgentConfig, Message, MessageType
-    from squadron.providers.loader import ensure_provider_loaded
-    from squadron.providers.profiles import get_profile
-    from squadron.providers.registry import get_provider
-    from squadron.tools import resolve_effective_tools
-
-    try:
-        provider_profile = get_profile(profile)
-        ensure_provider_loaded(provider_profile.provider)
-        provider = get_provider(provider_profile.provider)
-
-        # Declares no tools, so the gate always answers ([], None) here — but
-        # every AgentConfig site with an allowed_tools keyword must route
-        # through it regardless, per the project's tool-passing enforcement
-        # (tests/tools/test_effective_tools.py, SC1a): a raw list bypasses the
-        # model's tool_use capability check on any other path that changes.
-        effective_tools, tools_suppressed_reason = resolve_effective_tools(
-            _NO_TOOLS, model_allows_tools=True, suppressed=False
-        )
-
-        config = AgentConfig(
-            name="pr-create-body",
-            agent_type=provider_profile.provider,
-            provider=provider_profile.provider,
-            model=model,
-            instructions="",
-            api_key=None,
-            base_url=provider_profile.base_url,
-            cwd=None,
-            allowed_tools=effective_tools,
-            tools_suppressed_reason=tools_suppressed_reason,
-            permission_mode="default",
-            setting_sources=[],
-            credentials={
-                "api_key_env": provider_profile.api_key_env,
-                "default_headers": provider_profile.default_headers,
-                "hooks": [],
-                "mode": "client",
-            },
-        )
-
-        agent = await provider.create_agent(config)
-        output_parts: list[str] = []
-        try:
-            message = Message(
-                sender="pr-create-system",
-                recipients=[config.name],
-                content=prompt,
-                message_type=MessageType.chat,
-            )
-            async for response in agent.handle_message(message):
-                # SDK providers emit both an AssistantMessage and a
-                # ResultMessage with identical content (skip the duplicate),
-                # plus tool_use/tool_result narration that is not prose —
-                # non-SDK providers never set sdk_type and are unaffected.
-                if response.metadata.get("sdk_type") in _NON_PROSE_SDK_TYPES:
-                    continue
-                output_parts.append(response.content)
-        finally:
-            await agent.shutdown()
-    except Exception as exc:
-        _logger.exception("sq pr create: composition failed via profile %r", profile)
-        raise CompositionError(f"Failed to compose the PR body via profile {profile!r}: {exc}") from exc
-
-    return "\n".join(output_parts)
-
-
-async def resolve_title(
-    *,
-    title_flag: str | None,
-    slice_design_file: str | None,
-    commits: tuple[CommitRecord, ...],
-    compose: Composer,
-) -> str:
-    """Resolve the PR title per D4a's three-term table.
-
-    1. ``--title`` given: use it verbatim.
-    2. A resolved slice branch whose design carries a matching H1: the
-       design's own human name, minus the ``Slice Design: `` prefix. Makes
-       no model call — the slice is already named.
-    3. Otherwise: the model composes one line under 72 characters from the
-       commit subjects alone. A response that is empty, multi-line, or over
-       the bound falls back to the first commit's subject — always present,
-       always truthful, and the slice's one deliberate degradation.
-    """
-    if title_flag is not None:
-        return title_flag
-
-    if slice_design_file is not None:
-        human_name = _read_design_h1(slice_design_file)
-        if human_name is not None:
-            return human_name
-
-    return await _compose_title(commits, compose)
-
-
-def _read_design_h1(design_file: str) -> str | None:
-    """The design's ``# Slice Design: {name}`` heading, or None if absent/mismatched."""
-    try:
-        text = Path(design_file).read_text(encoding="utf-8")
-    except OSError:
-        _logger.warning(
-            "sq pr create: could not read slice design %s for the title; "
-            "falling through to a model-composed title",
-            design_file,
-        )
-        return None
-    match = _DESIGN_H1_RE.search(text)
-    if match is None:
-        return None
-    name = match.group(1).strip()
-    return name or None
-
-
-async def _compose_title(commits: tuple[CommitRecord, ...], compose: Composer) -> str:
-    """The model-composed title, falling back to the first commit's subject.
-
-    *commits* is never empty here: input gathering refuses an empty range.
-    """
-    fallback = commits[0].subject
-    subjects = "\n".join(f"- {commit.subject}" for commit in commits)
-    prompt = (
-        "Write one pull-request title, under 72 characters, for a PR whose "
-        f"commits are:\n\n{subjects}\n\nRespond with only the title line."
-    )
-    response = await compose(prompt)
-    candidate = response.strip()
-    if not candidate or "\n" in candidate or len(candidate) > _TITLE_MAX_CHARS:
-        return fallback
-    return candidate
-
+from squadron.pr.composer import Composer
 
 # --- The section contract (D4) ----------------------------------------------
 
@@ -240,8 +55,8 @@ def _why_block(facts: PrFacts) -> str:
 _DESIGN_EXCERPT_MAX_CHARS = 6000
 
 
-def _read_design_excerpt(facts: PrFacts) -> str:
-    """The design document's own text, or "" when absent or unreadable.
+def _design_excerpt(facts: PrFacts) -> str:
+    """The design document's own text, capped, or "" when absent.
 
     Without this, a prompt that only *names* the design's path gives the
     model nothing to read — it has no tools (D3) and no way to open the
@@ -249,16 +64,7 @@ def _read_design_excerpt(facts: PrFacts) -> str:
     ("I don't have access to your files") instead of prose about the
     change. The model must be handed the content directly.
     """
-    if facts.slice_design_file is None:
-        return ""
-    try:
-        text = Path(facts.slice_design_file).read_text(encoding="utf-8")
-    except OSError:
-        _logger.warning(
-            "sq pr create: could not read slice design %s for composition", facts.slice_design_file
-        )
-        return ""
-    return text[:_DESIGN_EXCERPT_MAX_CHARS]
+    return (facts.slice_design_text or "")[:_DESIGN_EXCERPT_MAX_CHARS]
 
 
 def _verified_block(facts: PrFacts) -> str:
@@ -276,14 +82,14 @@ def _provenance_block(facts: PrFacts) -> str:
 def _what_changed_prompt(facts: PrFacts) -> str:
     prompt = "Summarize what changed in this PR, in a short paragraph, given these commits:\n\n"
     prompt += "\n".join(f"- {c.subject}" for c in facts.commits)
-    excerpt = _read_design_excerpt(facts)
+    excerpt = _design_excerpt(facts)
     if excerpt:
         prompt += f"\n\nSlice design document:\n\n{excerpt}"
     return prompt
 
 
 def _why_prompt(facts: PrFacts) -> str:
-    excerpt = _read_design_excerpt(facts)
+    excerpt = _design_excerpt(facts)
     if excerpt:
         return f"Explain why this change was made, given this slice design document:\n\n{excerpt}"
     subjects = "\n".join(f"- {c.subject}" for c in facts.commits)

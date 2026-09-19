@@ -137,6 +137,22 @@ def test_detached_head_is_refused_with_no_host_call(
     assert all(call.argv[0] == "git" for call in pr_create_host.runner.calls)
 
 
+def test_unreadable_local_head_is_its_own_refusal(
+    cli_runner: CliRunner, pr_create_host: HostHarness, pr_create_repo: Path
+) -> None:
+    """A failed ``git rev-parse HEAD`` must not reach the pushed-branch check as ``""``."""
+    script = [
+        *script_through("identify_operator", local_sha=""),
+        (["git", "rev-parse", "HEAD"], fail(stderr="fatal: bad revision 'HEAD'")),
+    ]
+
+    result = _run(cli_runner, pr_create_host, script, pr_create_repo)
+
+    assert result.exit_code == 1
+    assert "local HEAD" in result.output
+    assert pr_create_host.runner.write_calls() == []
+
+
 def test_identity_refusal_exits_1_with_no_write(
     cli_runner: CliRunner, pr_create_host: HostHarness, pr_create_repo: Path
 ) -> None:

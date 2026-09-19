@@ -44,6 +44,10 @@ def test_slice_branch_with_design_and_tasks(tmp_path: Path) -> None:
     tasks_dir.mkdir(parents=True)
     task_file = tasks_dir / "385-tasks.create-a-pr-with-a-good-message.md"
     task_file.write_text("- [x] done\n- [ ] not done\n")
+    slices_dir = tmp_path / "project-documents" / "user" / "slices"
+    slices_dir.mkdir(parents=True)
+    design_text = "# Slice Design: Create a PR with a Good Message\n\nWhy it exists.\n"
+    (slices_dir / "385-slice.create-a-pr-with-a-good-message.md").write_text(design_text)
 
     cf_client = _cf_client(
         slices=[
@@ -61,6 +65,8 @@ def test_slice_branch_with_design_and_tasks(tmp_path: Path) -> None:
 
     assert result.slice.index == 385
     assert result.slice.design_file is not None
+    # Read relative to ``cwd``, not the process's own working directory.
+    assert result.slice.design_text == design_text
     assert result.slice.task_items is not None
     assert result.slice.task_items.checked == ("done",)
     assert result.slice.task_items.unchecked == ("not done",)
@@ -113,6 +119,30 @@ def test_task_file_absent_leaves_design_present_and_items_empty(
     assert result.slice.design_file is not None
     assert result.slice.task_items is None
     assert any("task file" in record.message for record in caplog.records)
+
+
+def test_unreadable_design_degrades_to_absent_text_with_a_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    design_file = "project-documents/user/slices/385-slice.gone.md"
+    cf_client = _cf_client(
+        slices=[
+            SliceEntry(
+                index=385,
+                name="Create a PR with a Good Message",
+                design_file=design_file,
+                status="not_started",
+            )
+        ],
+        tasks=[],
+    )
+
+    with caplog.at_level("WARNING", logger="squadron.pr.inputs"):
+        result = gather_commits_and_slice(cf_client, base="main", head=SLICE_BRANCH, cwd=str(tmp_path))
+
+    assert result.slice.design_file == design_file
+    assert result.slice.design_text is None
+    assert any(design_file in record.getMessage() for record in caplog.records)
 
 
 def test_ancestor_of_head_but_outside_range_is_not_selected(git_repo: Path) -> None:

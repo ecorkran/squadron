@@ -44,6 +44,7 @@ class SliceInputs:
 
     index: int | None
     design_file: str | None
+    design_text: str | None
     task_items: TaskItems | None
 
 
@@ -80,7 +81,7 @@ def gather_commits_and_slice(
 
     index = parse_slice_branch(head)
     if index is None:
-        no_slice = SliceInputs(index=None, design_file=None, task_items=None)
+        no_slice = SliceInputs(index=None, design_file=None, design_text=None, task_items=None)
         return PrInputs(commits=commits, slice=no_slice)
 
     try:
@@ -92,14 +93,16 @@ def gather_commits_and_slice(
             index,
             exc,
         )
-        unresolved = SliceInputs(index=index, design_file=None, task_items=None)
+        unresolved = SliceInputs(index=index, design_file=None, design_text=None, task_items=None)
         return PrInputs(commits=commits, slice=unresolved)
 
-    task_items = _read_task_items(info, cwd)
-    return PrInputs(
-        commits=commits,
-        slice=SliceInputs(index=index, design_file=info["design_file"], task_items=task_items),
+    slice_inputs = SliceInputs(
+        index=index,
+        design_file=info["design_file"],
+        design_text=_read_design_text(info, cwd),
+        task_items=_read_task_items(info, cwd),
     )
+    return PrInputs(commits=commits, slice=slice_inputs)
 
 
 @dataclass(frozen=True)
@@ -195,6 +198,26 @@ def _shas_in_range(base: str, head: str, *, cwd: str) -> list[str]:
         detail = result.stderr.strip() if result is not None else "git could not run"
         raise GitRangeUnavailableError(f"Cannot list shas in {base}..{head}: {detail}.")
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def _read_design_text(info: SliceInfo, cwd: str) -> str | None:
+    """Read the slice's design document once, or None when absent/unreadable.
+
+    The title (D4a) and both design-fed prompts (D4) share this one read.
+    """
+    if not info["design_file"]:
+        return None
+    path = Path(cwd) / info["design_file"]
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        _logger.warning(
+            "sq pr create: slice %d's design file %s could not be read; "
+            "the title and prose fall back to the commit subjects",
+            info["index"],
+            path,
+        )
+        return None
 
 
 def _read_task_items(info: SliceInfo, cwd: str) -> TaskItems | None:

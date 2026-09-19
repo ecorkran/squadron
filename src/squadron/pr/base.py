@@ -42,7 +42,7 @@ class IntegrationBranchAbsentError(CodeHostError):
     """
 
 
-def _read_integration_branch(cwd: str, cf_client: object | None = None) -> str:
+def _read_integration_branch(cf_client: object | None = None) -> str:
     """Return the configured integration branch, or ``""`` when unset or unreadable.
 
     Unlike ``resolve_diff_base``, this never degrades a *found* value — only
@@ -74,7 +74,6 @@ def select_base(
     locator: RepositoryLocator,
     *,
     base_flag: str | None,
-    cwd: str,
     cf_client: object | None = None,
 ) -> BaseSelection:
     """Choose the PR base per D1's table.
@@ -88,7 +87,7 @@ def select_base(
     if base_flag is not None:
         return BaseSelection(base=base_flag, source=BaseSource.FLAG)
 
-    integration_branch = _read_integration_branch(cwd, cf_client)
+    integration_branch = _read_integration_branch(cf_client)
     if integration_branch:
         if host.branch_exists(locator, integration_branch):
             return BaseSelection(base=integration_branch, source=BaseSource.INTEGRATION_BRANCH)

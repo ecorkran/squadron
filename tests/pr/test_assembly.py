@@ -19,6 +19,7 @@ def test_full_inputs_populate_every_field() -> None:
         slice=SliceInputs(
             index=385,
             design_file="project-documents/user/slices/385-slice.foo.md",
+            design_text="# Slice Design: Foo\n",
             task_items=TaskItems(checked=("done",), unchecked=("not done",)),
         ),
     )
@@ -32,6 +33,7 @@ def test_full_inputs_populate_every_field() -> None:
 
     assert facts.commits == COMMITS
     assert facts.slice_design_file == "project-documents/user/slices/385-slice.foo.md"
+    assert facts.slice_design_text == "# Slice Design: Foo\n"
     assert facts.checked_items == ("done",)
     assert facts.unchecked_items == ("not done",)
     assert facts.review_path == "project-documents/user/reviews/385-review.slice.foo.md"
@@ -42,7 +44,7 @@ def test_full_inputs_populate_every_field() -> None:
 def test_no_slice_leaves_slice_fields_absent_but_commits_present() -> None:
     inputs = PrInputs(
         commits=COMMITS,
-        slice=SliceInputs(index=None, design_file=None, task_items=None),
+        slice=SliceInputs(index=None, design_file=None, design_text=None, task_items=None),
     )
 
     facts = assemble_facts(inputs, review=None)
@@ -56,7 +58,12 @@ def test_no_slice_leaves_slice_fields_absent_but_commits_present() -> None:
 def test_no_review_leaves_review_fields_absent() -> None:
     inputs = PrInputs(
         commits=COMMITS,
-        slice=SliceInputs(index=385, design_file="path/to/design.md", task_items=None),
+        slice=SliceInputs(
+            index=385,
+            design_file="path/to/design.md",
+            design_text="# Slice Design: Foo\n",
+            task_items=None,
+        ),
     )
 
     facts = assemble_facts(inputs, review=None)
@@ -69,7 +76,12 @@ def test_no_review_leaves_review_fields_absent() -> None:
 def test_no_task_items_both_tuples_empty() -> None:
     inputs = PrInputs(
         commits=COMMITS,
-        slice=SliceInputs(index=385, design_file="path/to/design.md", task_items=None),
+        slice=SliceInputs(
+            index=385,
+            design_file="path/to/design.md",
+            design_text="# Slice Design: Foo\n",
+            task_items=None,
+        ),
     )
 
     facts = assemble_facts(inputs, review=None)
@@ -81,7 +93,7 @@ def test_no_task_items_both_tuples_empty() -> None:
 def test_no_field_is_ever_a_placeholder_string() -> None:
     inputs = PrInputs(
         commits=COMMITS,
-        slice=SliceInputs(index=None, design_file=None, task_items=None),
+        slice=SliceInputs(index=None, design_file=None, design_text=None, task_items=None),
     )
 
     facts = assemble_facts(inputs, review=None)

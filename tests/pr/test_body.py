@@ -1,238 +1,13 @@
-"""Tests for the composer's wiring (D3), title resolution (D4a), and the
-section contract (D4).
-"""
+"""Tests for the section contract (D4) and the presence-and-filled check (D5)."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
-from squadron.core.models import SDK_RESULT_TYPE, Message
 from squadron.pr.assembly import PrFacts
-from squadron.pr.body import (
-    BodyIncompleteError,
-    CompositionError,
-    check_body_complete,
-    compose_body,
-    compose_one_shot,
-    resolve_title,
-)
-from squadron.providers.base import AgentProvider, ProviderCapabilities
+from squadron.pr.body import BodyIncompleteError, check_body_complete, compose_body
 from squadron.review.git_utils import CommitRecord
 from squadron.review.models import Verdict
-
-_FAKE_PROFILE = "fake-pr-body"
-_FAKE_PROVIDER_TYPE = "fake-pr-body-provider"
-
-
-def _make_fake_message(content: str, sdk_type: str | None = None) -> Message:
-    msg = MagicMock(spec=Message)
-    msg.content = content
-    msg.metadata = {"sdk_type": sdk_type} if sdk_type else {}
-    return msg
-
-
-def _make_fake_agent(messages: list[Message], *, raises: Exception | None = None) -> MagicMock:
-    async def _handle(message: Message) -> AsyncIterator[Message]:
-        if raises is not None:
-            raise raises
-        for m in messages:
-            yield m
-
-    agent = MagicMock()
-    agent.handle_message = _handle
-    agent.shutdown = AsyncMock()
-    return agent
-
-
-def _make_fake_provider(agent: MagicMock) -> AgentProvider:
-    provider = MagicMock(spec=AgentProvider)
-    provider.provider_type = _FAKE_PROVIDER_TYPE
-    provider.capabilities = ProviderCapabilities()
-    provider.create_agent = AsyncMock(return_value=agent)
-    return provider
-
-
-@pytest.fixture
-def fake_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Register a fake profile and provider for the duration of the test."""
-    from squadron.providers import loader as loader_mod
-    from squadron.providers import profiles as profiles_mod
-    from squadron.providers.profiles import ProviderProfile
-
-    fake_profile = ProviderProfile(
-        name=_FAKE_PROFILE,
-        provider=_FAKE_PROVIDER_TYPE,
-        api_key_env=None,
-        description="Fake profile for unit tests",
-    )
-
-    original_get_all = profiles_mod.get_all_profiles
-    monkeypatch.setattr(
-        profiles_mod,
-        "get_all_profiles",
-        lambda: {**original_get_all(), _FAKE_PROFILE: fake_profile},
-    )
-    monkeypatch.setattr(loader_mod, "ensure_provider_loaded", lambda name: None)
-
-
-@pytest.mark.asyncio
-async def test_composer_resolves_profile_through_the_registry(
-    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
-) -> None:
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent([_make_fake_message("the body")])
-    provider = _make_fake_provider(agent)
-    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
-
-    result = await compose_one_shot("write a PR body", model="model-x", profile=_FAKE_PROFILE)
-
-    assert result == "the body"
-    provider.create_agent.assert_awaited_once()
-    config = provider.create_agent.await_args.args[0]
-    assert config.provider == _FAKE_PROVIDER_TYPE
-    assert config.model == "model-x"
-
-
-@pytest.mark.asyncio
-async def test_model_none_is_passed_through_not_defaulted(
-    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
-) -> None:
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent([_make_fake_message("the body")])
-    provider = _make_fake_provider(agent)
-    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
-
-    await compose_one_shot("write a PR body", model=None, profile=_FAKE_PROFILE)
-
-    config = provider.create_agent.await_args.args[0]
-    assert config.model is None
-
-
-@pytest.mark.asyncio
-async def test_no_tools_are_requested(monkeypatch: pytest.MonkeyPatch, fake_provider_env: None) -> None:
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent([_make_fake_message("the body")])
-    provider = _make_fake_provider(agent)
-    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
-
-    await compose_one_shot("write a PR body", model=None, profile=_FAKE_PROFILE)
-
-    config = provider.create_agent.await_args.args[0]
-    assert config.allowed_tools == []
-
-
-@pytest.mark.asyncio
-async def test_response_text_is_returned_unmodified(
-    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
-) -> None:
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent([_make_fake_message("Part A"), _make_fake_message("Part B")])
-    provider = _make_fake_provider(agent)
-    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
-
-    result = await compose_one_shot("write a PR body", model=None, profile=_FAKE_PROFILE)
-
-    assert result == "Part A\nPart B"
-
-
-@pytest.mark.asyncio
-async def test_sdk_duplicate_result_and_tool_messages_are_skipped(
-    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
-) -> None:
-    """The SDK's stream shape: prose, tool narration, then a duplicate result.
-
-    A title composed over this stream must stay one line — the unfiltered
-    duplicate made it ``"title\\ntitle"``, which D4a's multi-line rule rejects.
-    """
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent(
-        [
-            _make_fake_message("the title", sdk_type="assistant_text"),
-            _make_fake_message("Using tool: Bash", sdk_type="tool_use"),
-            _make_fake_message("<bash stdout>", sdk_type="tool_result"),
-            _make_fake_message("the title", sdk_type=SDK_RESULT_TYPE),
-        ]
-    )
-    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = _make_fake_provider(agent)
-
-    result = await compose_one_shot("write a title", model=None, profile=_FAKE_PROFILE)
-
-    assert result == "the title"
-
-
-@pytest.mark.asyncio
-async def test_sdk_profile_resolves_and_dispatches_without_a_session(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The design's D3 claim, checked rather than asserted.
-
-    ``ensure_provider_loaded`` is patched to a no-op: unpatched, it imports
-    the real SDK provider module, which re-registers the genuine provider
-    over the fake this test installs.
-    """
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent([_make_fake_message("the body")])
-    provider = MagicMock(spec=AgentProvider)
-    provider.provider_type = "sdk"
-    provider.capabilities = ProviderCapabilities()
-    provider.create_agent = AsyncMock(return_value=agent)
-
-    from squadron.providers import loader as loader_mod
-
-    monkeypatch.setattr(loader_mod, "ensure_provider_loaded", lambda name: None)
-    original = registry_mod._REGISTRY.get("sdk")
-    registry_mod._REGISTRY["sdk"] = provider
-    try:
-        result = await compose_one_shot("write a PR body", model=None, profile="sdk")
-    finally:
-        if original is not None:
-            registry_mod._REGISTRY["sdk"] = original
-        else:
-            registry_mod._REGISTRY.pop("sdk", None)
-
-    assert result == "the body"
-    provider.create_agent.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_provider_raising_exits_via_composition_error(
-    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
-) -> None:
-    from squadron.providers import registry as registry_mod
-
-    agent = _make_fake_agent([], raises=RuntimeError("provider exploded"))
-    provider = _make_fake_provider(agent)
-    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = provider
-
-    with pytest.raises(CompositionError):
-        await compose_one_shot("write a PR body", model=None, profile=_FAKE_PROFILE)
-
-    agent.shutdown.assert_called_once()
-
-
-# --- resolve_title (D4a) ----------------------------------------------------
-
-TITLE_COMMITS = (
-    CommitRecord(sha="def456", subject="feat: second commit"),
-    CommitRecord(sha="abc123", subject="feat: first commit"),
-)
-
-
-class _FailIfCalledComposer:
-    """A composer that fails the test if the model is ever asked."""
-
-    async def __call__(self, prompt: str) -> str:
-        raise AssertionError("the model must not be called")
 
 
 def _fixed_composer(response: str):
@@ -240,113 +15,6 @@ def _fixed_composer(response: str):
         return response
 
     return _compose
-
-
-@pytest.mark.asyncio
-async def test_title_flag_wins_over_both_other_terms(tmp_path: Path) -> None:
-    design = tmp_path / "design.md"
-    design.write_text("# Slice Design: Some Slice\n")
-
-    title = await resolve_title(
-        title_flag="Custom Title",
-        slice_design_file=str(design),
-        commits=TITLE_COMMITS,
-        compose=_FailIfCalledComposer(),
-    )
-
-    assert title == "Custom Title"
-
-
-@pytest.mark.asyncio
-async def test_resolved_slice_branch_uses_h1_and_never_calls_the_composer(tmp_path: Path) -> None:
-    design = tmp_path / "design.md"
-    design.write_text("# Slice Design: Create a PR with a Good Message\n\nBody text.\n")
-
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=str(design),
-        commits=TITLE_COMMITS,
-        compose=_FailIfCalledComposer(),
-    )
-
-    assert title == "Create a PR with a Good Message"
-
-
-@pytest.mark.asyncio
-async def test_design_with_non_matching_h1_falls_through_to_the_model(tmp_path: Path) -> None:
-    design = tmp_path / "design.md"
-    design.write_text("# Something Else Entirely\n")
-
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=str(design),
-        commits=TITLE_COMMITS,
-        compose=_fixed_composer("A composed title"),
-    )
-
-    assert title == "A composed title"
-
-
-@pytest.mark.asyncio
-async def test_non_slice_branch_composes() -> None:
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=None,
-        commits=TITLE_COMMITS,
-        compose=_fixed_composer("A composed title"),
-    )
-
-    assert title == "A composed title"
-
-
-@pytest.mark.asyncio
-async def test_empty_model_response_falls_back_to_first_commit_subject() -> None:
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=None,
-        commits=TITLE_COMMITS,
-        compose=_fixed_composer("   "),
-    )
-
-    assert title == TITLE_COMMITS[0].subject
-
-
-@pytest.mark.asyncio
-async def test_multiline_response_falls_back() -> None:
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=None,
-        commits=TITLE_COMMITS,
-        compose=_fixed_composer("line one\nline two"),
-    )
-
-    assert title == TITLE_COMMITS[0].subject
-
-
-@pytest.mark.asyncio
-async def test_response_over_72_characters_falls_back() -> None:
-    long_response = "x" * 100
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=None,
-        commits=TITLE_COMMITS,
-        compose=_fixed_composer(long_response),
-    )
-
-    assert title == TITLE_COMMITS[0].subject
-
-
-@pytest.mark.asyncio
-async def test_valid_60_character_response_is_used() -> None:
-    valid_response = "y" * 60
-    title = await resolve_title(
-        title_flag=None,
-        slice_design_file=None,
-        commits=TITLE_COMMITS,
-        compose=_fixed_composer(valid_response),
-    )
-
-    assert title == valid_response
 
 
 # --- compose_body / the section contract (D4) -------------------------------
@@ -358,6 +26,7 @@ def _full_facts() -> PrFacts:
     return PrFacts(
         commits=BODY_COMMITS,
         slice_design_file="project-documents/user/slices/385-slice.foo.md",
+        slice_design_text="# Slice Design: Foo\n\nWhy foo exists.\n",
         checked_items=("did a thing",),
         unchecked_items=("gap remains",),
         review_path="project-documents/user/reviews/385-review.slice.foo.md",
@@ -370,6 +39,7 @@ def _no_slice_facts() -> PrFacts:
     return PrFacts(
         commits=BODY_COMMITS,
         slice_design_file=None,
+        slice_design_text=None,
         checked_items=(),
         unchecked_items=(),
         review_path=None,
@@ -394,17 +64,16 @@ async def test_full_inputs_produce_five_sections_no_no_input_lines() -> None:
 
 
 @pytest.mark.asyncio
-async def test_what_changed_and_why_prompts_carry_the_designs_own_text(tmp_path: Path) -> None:
+async def test_what_changed_and_why_prompts_carry_the_designs_own_text() -> None:
     """A model with no tools cannot open the path itself (D3) — naming the
     path in the prompt without its content reliably produces a refusal
     ("I don't have access to your files") instead of prose. The prompt
     must embed the design's own text, not merely point at it.
     """
-    design = tmp_path / "design.md"
-    design.write_text("# Slice Design: Some Slice\n\nThe reason this exists is UNIQUE_MARKER_TEXT.\n")
     facts = PrFacts(
         commits=BODY_COMMITS,
-        slice_design_file=str(design),
+        slice_design_file="project-documents/user/slices/385-slice.foo.md",
+        slice_design_text="# Slice Design: Some Slice\n\nThe reason is UNIQUE_MARKER_TEXT.\n",
         checked_items=(),
         unchecked_items=(),
         review_path=None,
@@ -507,24 +176,6 @@ async def test_the_provenance_block_renders_the_verdicts_value() -> None:
     body = await compose_body(_full_facts(), compose=_fixed_composer("Some prose."))
 
     assert "(verdict: PASS, sha: deadbeef)" in body
-
-
-@pytest.mark.asyncio
-async def test_unreadable_design_warns_before_falling_through_to_the_model(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
-    missing_design = str(tmp_path / "385-slice.gone.md")
-
-    with caplog.at_level("WARNING", logger="squadron.pr.body"):
-        title = await resolve_title(
-            title_flag=None,
-            slice_design_file=missing_design,
-            commits=BODY_COMMITS,
-            compose=_fixed_composer("A composed title"),
-        )
-
-    assert title == "A composed title"
-    assert any(missing_design in record.getMessage() for record in caplog.records)
 
 
 # --- check_body_complete (D5) -----------------------------------------------

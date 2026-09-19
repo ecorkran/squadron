@@ -26,20 +26,15 @@ from squadron.core.process_runner import SubprocessRunner
 from squadron.integrations.context_forge import ContextForgeClient
 from squadron.pr.assembly import PrFacts, assemble_facts
 from squadron.pr.base import select_base
-from squadron.pr.body import (
-    BodyIncompleteError,
-    CompositionError,
-    check_body_complete,
-    compose_body,
-    compose_one_shot,
-    resolve_title,
-)
+from squadron.pr.body import BodyIncompleteError, check_body_complete, compose_body
+from squadron.pr.composer import CompositionError, compose_one_shot
 from squadron.pr.inputs import (
     EmptyCommitRangeError,
     find_latest_in_range_review,
     gather_commits_and_slice,
 )
 from squadron.pr.preconditions import check_head_pushed
+from squadron.pr.title import resolve_title
 from squadron.providers.base import ProfileName
 from squadron.review.git_utils import GitRangeUnavailableError
 
@@ -160,6 +155,49 @@ def _current_branch(host: CodeHost, *, cwd: str) -> str:
     return branch
 
 
+def _local_head_sha(host: CodeHost, *, cwd: str) -> str:
+    """The local HEAD commit, or a refusal when git cannot name one.
+
+    Checked here so an unreadable HEAD is its own failure, not a confusing
+    "local is at ''" from the pushed-branch precondition.
+    """
+    result = host.runner.run(["git", "rev-parse", "HEAD"], cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
+    sha = result.stdout.strip()
+    if result.returncode != 0 or not sha:
+        raise TargetUnresolvableError(
+            f"Could not read the local HEAD commit: {result.stderr.strip()}",
+            fix_hint="Check that the branch has at least one commit.",
+        )
+    return sha
+
+
+def _gather_facts(locator: RepositoryLocator, *, base: str, head: str, cwd: str) -> PrFacts:
+    """Gather and assemble the body's facts, rendering a range refusal as exit 1.
+
+    The host confirmed the base exists there, not in this clone — and
+    ``--base`` is taken verbatim — so the local range is its own refusal.
+    """
+    errors = Console(stderr=True)
+    try:
+        inputs = gather_commits_and_slice(ContextForgeClient(), base=base, head=head, cwd=cwd)
+        review = find_latest_in_range_review(
+            base=base,
+            head=head,
+            cwd=cwd,
+            host=locator.host,
+            owner=locator.owner,
+            repository=locator.repository,
+        )
+    except GitRangeUnavailableError as exc:
+        errors.print(f"[red]{exc}[/red]")
+        errors.print(f"[dim]Fetch {base} into this clone, or pass --base.[/dim]")
+        raise typer.Exit(code=1) from exc
+    except EmptyCommitRangeError as exc:
+        errors.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    return assemble_facts(inputs, review)
+
+
 async def _compose_title_and_body(
     facts: PrFacts, *, title_flag: str | None, model: str | None, profile: str
 ) -> tuple[str, str]:
@@ -175,7 +213,7 @@ async def _compose_title_and_body(
 
     resolved_title = await resolve_title(
         title_flag=title_flag,
-        slice_design_file=facts.slice_design_file,
+        design_text=facts.slice_design_text,
         commits=facts.commits,
         compose=composer,
     )
@@ -208,41 +246,17 @@ def create(
         head = _current_branch(host, cwd=repo_cwd)
         host.identify_operator(locator.host)
 
-        local_sha_result = host.runner.run(
-            ["git", "rev-parse", "HEAD"], cwd=repo_cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS
-        )
-        local_sha = local_sha_result.stdout.strip()
+        local_sha = _local_head_sha(host, cwd=repo_cwd)
         check_head_pushed(host, locator, head=head, local_sha=local_sha, cwd=repo_cwd)
 
-        selection = select_base(host, locator, base_flag=base, cwd=repo_cwd)
+        selection = select_base(host, locator, base_flag=base)
     except CodeHostError as exc:
         render_code_host_error(exc)
         raise typer.Exit(code=1) from exc
 
     errors.print(f"[dim]base: {selection.base} (source: {selection.source})[/dim]")
 
-    # The host confirmed the base exists there, not in this clone — and
-    # ``--base`` is taken verbatim — so the local range is its own refusal.
-    try:
-        inputs = gather_commits_and_slice(
-            ContextForgeClient(), base=selection.base, head=head, cwd=repo_cwd
-        )
-        review = find_latest_in_range_review(
-            base=selection.base,
-            head=head,
-            cwd=repo_cwd,
-            host=locator.host,
-            owner=locator.owner,
-            repository=locator.repository,
-        )
-    except GitRangeUnavailableError as exc:
-        errors.print(f"[red]{exc}[/red]")
-        errors.print(f"[dim]Fetch {selection.base} into this clone, or pass --base.[/dim]")
-        raise typer.Exit(code=1) from exc
-    except EmptyCommitRangeError as exc:
-        errors.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1) from exc
-    facts = assemble_facts(inputs, review)
+    facts = _gather_facts(locator, base=selection.base, head=head, cwd=repo_cwd)
 
     try:
         resolved_title, body = asyncio.run(

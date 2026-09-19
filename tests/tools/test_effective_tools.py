@@ -412,7 +412,7 @@ _SANCTIONED_TOOL_PASSING_SITES = {
     "pipeline/actions/dispatch.py",
     "pipeline/summary_oneshot.py",
     "metrology/audit.py",
-    "pr/body.py",
+    "pr/composer.py",
 }
 
 _SC1A_FAILURE_HELP = """
