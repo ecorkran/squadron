@@ -291,34 +291,6 @@ def find_git_root(cwd: str) -> str | None:
     return None
 
 
-class DetachedHeadError(Exception):
-    """Raised when HEAD is detached and there is no branch to open a PR from.
-
-    Matches ``github_cli._branch_for``'s existing behavior for the same
-    condition.
-    """
-
-
-def current_branch(cwd: str) -> str:
-    """Return the current branch name.
-
-    Raises ``DetachedHeadError`` on a detached HEAD (git reports the
-    literal string ``HEAD``) or when git cannot answer at all.
-    """
-    result = run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd)
-    if result is None or result.returncode != 0:
-        raise DetachedHeadError(
-            f"Cannot determine the current branch in {cwd!r}: git could not answer."
-        )
-    branch = result.stdout.strip()
-    if not branch or branch == "HEAD":
-        raise DetachedHeadError(
-            "HEAD is detached: there is no branch to open a pull request from. "
-            "Check out a branch first."
-        )
-    return branch
-
-
 class GitRangeUnavailableError(Exception):
     """Raised when git cannot answer for a commit-range query at all.
 

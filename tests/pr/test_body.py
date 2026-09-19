@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from squadron.core.models import Message
+from squadron.core.models import SDK_RESULT_TYPE, Message
 from squadron.pr.assembly import PrFacts
 from squadron.pr.body import (
     BodyIncompleteError,
@@ -28,10 +28,10 @@ _FAKE_PROFILE = "fake-pr-body"
 _FAKE_PROVIDER_TYPE = "fake-pr-body-provider"
 
 
-def _make_fake_message(content: str) -> Message:
+def _make_fake_message(content: str, sdk_type: str | None = None) -> Message:
     msg = MagicMock(spec=Message)
     msg.content = content
-    msg.metadata = {}
+    msg.metadata = {"sdk_type": sdk_type} if sdk_type else {}
     return msg
 
 
@@ -141,6 +141,32 @@ async def test_response_text_is_returned_unmodified(
     result = await compose_one_shot("write a PR body", model=None, profile=_FAKE_PROFILE)
 
     assert result == "Part A\nPart B"
+
+
+@pytest.mark.asyncio
+async def test_sdk_duplicate_result_and_tool_messages_are_skipped(
+    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
+) -> None:
+    """The SDK's stream shape: prose, tool narration, then a duplicate result.
+
+    A title composed over this stream must stay one line — the unfiltered
+    duplicate made it ``"title\\ntitle"``, which D4a's multi-line rule rejects.
+    """
+    from squadron.providers import registry as registry_mod
+
+    agent = _make_fake_agent(
+        [
+            _make_fake_message("the title", sdk_type="assistant_text"),
+            _make_fake_message("Using tool: Bash", sdk_type="tool_use"),
+            _make_fake_message("<bash stdout>", sdk_type="tool_result"),
+            _make_fake_message("the title", sdk_type=SDK_RESULT_TYPE),
+        ]
+    )
+    registry_mod._REGISTRY[_FAKE_PROVIDER_TYPE] = _make_fake_provider(agent)
+
+    result = await compose_one_shot("write a title", model=None, profile=_FAKE_PROFILE)
+
+    assert result == "the title"
 
 
 @pytest.mark.asyncio
@@ -451,6 +477,54 @@ async def test_model_headings_do_not_duplicate_or_reorder_sections() -> None:
 
     for heading in SECTION_HEADINGS:
         assert body.count(f"## {heading}") == 1
+
+
+@pytest.mark.asyncio
+async def test_only_heading_syntax_outside_fences_is_stripped() -> None:
+    """A ``#`` line that is not a heading — or sits in a code fence — survives."""
+    model_response = (
+        "# A model heading\n"
+        "Fixes #123 as described.\n"
+        "#123 is the issue.\n"
+        "```sh\n"
+        "# install first\n"
+        "## not a heading either\n"
+        "uv sync\n"
+        "```\n"
+        "### Another model heading"
+    )
+
+    body = await compose_body(_full_facts(), compose=_fixed_composer(model_response))
+
+    assert "# install first\n## not a heading either\nuv sync" in body
+    assert "#123 is the issue." in body
+    assert "A model heading" not in body
+    assert "Another model heading" not in body
+
+
+@pytest.mark.asyncio
+async def test_the_provenance_block_renders_the_verdicts_value() -> None:
+    body = await compose_body(_full_facts(), compose=_fixed_composer("Some prose."))
+
+    assert "(verdict: PASS, sha: deadbeef)" in body
+
+
+@pytest.mark.asyncio
+async def test_unreadable_design_warns_before_falling_through_to_the_model(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    missing_design = str(tmp_path / "385-slice.gone.md")
+
+    with caplog.at_level("WARNING", logger="squadron.pr.body"):
+        title = await resolve_title(
+            title_flag=None,
+            slice_design_file=missing_design,
+            commits=BODY_COMMITS,
+            compose=_fixed_composer("A composed title"),
+        )
+
+    assert title == "A composed title"
+    assert any(missing_design in record.getMessage() for record in caplog.records)
 
 
 # --- check_body_complete (D5) -----------------------------------------------

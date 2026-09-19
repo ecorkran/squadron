@@ -13,6 +13,7 @@ import pytest
 
 from squadron.cli.commands.pr import resolve_locator
 from squadron.codehost.github_cli import GitHubCli
+from squadron.codehost.targets import parse_target
 from squadron.core.process_runner import ProcessResult
 from tests.codehost.fake_runner import FakeProcessRunner
 
@@ -57,8 +58,9 @@ def test_resolve_locator_for_every_target_form(
 ) -> None:
     patched_host["script"] = list(_REMOTE_SCRIPT)
 
-    host, locator = resolve_locator(target, ".")
+    host, locator, parsed = resolve_locator(target, ".")
 
+    assert parsed == parse_target(target)
     assert locator.host == GITHUB
     assert locator.owner == "ecorkran"
     assert locator.repository == "squadron"

@@ -9,44 +9,11 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from squadron.review.git_utils import (
-    DetachedHeadError,
     GitRangeUnavailableError,
     commits_in_range,
-    current_branch,
 )
 
 _GIT_UTILS_SUBPROCESS = "squadron.review.git_utils.subprocess.run"
-
-
-class TestCurrentBranch:
-    def test_normal_checkout(self) -> None:
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "385-slice.create-a-pr-with-a-good-message\n"
-
-        with patch(_GIT_UTILS_SUBPROCESS, return_value=mock_result):
-            result = current_branch(".")
-        assert result == "385-slice.create-a-pr-with-a-good-message"
-
-    def test_detached_head_raises(self) -> None:
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "HEAD\n"
-
-        with patch(_GIT_UTILS_SUBPROCESS, return_value=mock_result):
-            try:
-                current_branch(".")
-                raise AssertionError("expected DetachedHeadError")
-            except DetachedHeadError:
-                pass
-
-    def test_git_unavailable_raises(self) -> None:
-        with patch(_GIT_UTILS_SUBPROCESS, side_effect=FileNotFoundError("git not found")):
-            try:
-                current_branch(".")
-                raise AssertionError("expected DetachedHeadError")
-            except DetachedHeadError:
-                pass
 
 
 class TestCommitsInRange:

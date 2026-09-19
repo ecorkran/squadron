@@ -21,7 +21,7 @@ from squadron.codehost.github_cli import build_github_host
 from squadron.codehost.models import FetchedRange, RepositoryLocator, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
 from squadron.codehost.remotes import GIT_QUERY_TIMEOUT_SECONDS, list_remotes, select_remote
-from squadron.codehost.targets import parse_target
+from squadron.codehost.targets import PullRequestTarget, parse_target
 from squadron.core.process_runner import SubprocessRunner
 from squadron.integrations.context_forge import ContextForgeClient
 from squadron.pr.assembly import PrFacts, assemble_facts
@@ -34,8 +34,14 @@ from squadron.pr.body import (
     compose_one_shot,
     resolve_title,
 )
-from squadron.pr.inputs import find_latest_in_range_review, gather_commits_and_slice
+from squadron.pr.inputs import (
+    EmptyCommitRangeError,
+    find_latest_in_range_review,
+    gather_commits_and_slice,
+)
 from squadron.pr.preconditions import check_head_pushed
+from squadron.providers.base import ProfileName
+from squadron.review.git_utils import GitRangeUnavailableError
 
 pr_app = typer.Typer(
     name="pr",
@@ -44,8 +50,13 @@ pr_app = typer.Typer(
 )
 
 
-def resolve_locator(target: str | None, repo_cwd: str) -> tuple[CodeHost, RepositoryLocator]:
+def resolve_locator(
+    target: str | None, repo_cwd: str
+) -> tuple[CodeHost, RepositoryLocator, PullRequestTarget]:
     """Build the host and resolve *target* to the repository it names.
+
+    Returns the parsed target too, so a caller that goes on to resolve a
+    pull request does not parse it a second time.
 
     The first three steps ``resolve_and_fetch_pull_request`` performs before
     it resolves an *existing* pull request. ``create`` (385) needs only
@@ -63,7 +74,7 @@ def resolve_locator(target: str | None, repo_cwd: str) -> tuple[CodeHost, Reposi
     parsed = parse_target(target)
     remotes = list_remotes(runner, repo_cwd)
     locator = select_remote(parsed, remotes, host.serves_host)
-    return host, locator
+    return host, locator, parsed
 
 
 def resolve_and_fetch_pull_request(
@@ -80,8 +91,8 @@ def resolve_and_fetch_pull_request(
     Raises ``CodeHostError`` on any adapter failure; callers render it the
     same way ``pr show`` does.
     """
-    host, locator = resolve_locator(target, repo_cwd)
-    resolved = host.resolve_pull_request(locator, parse_target(target), cwd=repo_cwd)
+    host, locator, parsed = resolve_locator(target, repo_cwd)
+    resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
     fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
     return host, resolved, fetched
 
@@ -177,7 +188,9 @@ def create(
     base: str | None = typer.Option(None, "--base", help="Base branch."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print title and body without creating."),
     model: str | None = typer.Option(None, "--model", help="Model for the one-shot composer."),
-    profile: str = typer.Option("sdk", "--profile", help="Provider profile for the one-shot composer."),
+    profile: str = typer.Option(
+        ProfileName.SDK, "--profile", help="Provider profile for the one-shot composer."
+    ),
     cwd: str | None = typer.Option(None, "--cwd", help="Repository to resolve against."),
     title: str | None = typer.Option(None, "--title", help="PR title, overriding the slice's name."),
 ) -> None:
@@ -191,7 +204,7 @@ def create(
     errors = Console(stderr=True)
 
     try:
-        host, locator = resolve_locator(None, repo_cwd)
+        host, locator, _parsed = resolve_locator(None, repo_cwd)
         head = _current_branch(host, cwd=repo_cwd)
         host.identify_operator(locator.host)
 
@@ -208,16 +221,27 @@ def create(
 
     errors.print(f"[dim]base: {selection.base} (source: {selection.source})[/dim]")
 
-    cf_client = ContextForgeClient()
-    inputs = gather_commits_and_slice(cf_client, base=selection.base, head=head, cwd=repo_cwd)
-    review = find_latest_in_range_review(
-        base=selection.base,
-        head=head,
-        cwd=repo_cwd,
-        host=locator.host,
-        owner=locator.owner,
-        repository=locator.repository,
-    )
+    # The host confirmed the base exists there, not in this clone — and
+    # ``--base`` is taken verbatim — so the local range is its own refusal.
+    try:
+        inputs = gather_commits_and_slice(
+            ContextForgeClient(), base=selection.base, head=head, cwd=repo_cwd
+        )
+        review = find_latest_in_range_review(
+            base=selection.base,
+            head=head,
+            cwd=repo_cwd,
+            host=locator.host,
+            owner=locator.owner,
+            repository=locator.repository,
+        )
+    except GitRangeUnavailableError as exc:
+        errors.print(f"[red]{exc}[/red]")
+        errors.print(f"[dim]Fetch {selection.base} into this clone, or pass --base.[/dim]")
+        raise typer.Exit(code=1) from exc
+    except EmptyCommitRangeError as exc:
+        errors.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
     facts = assemble_facts(inputs, review)
 
     try:

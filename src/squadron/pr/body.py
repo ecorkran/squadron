@@ -14,10 +14,16 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from squadron.core.models import SDK_RESULT_TYPE
 from squadron.pr.assembly import PrFacts
 from squadron.review.git_utils import CommitRecord
 
 _logger = logging.getLogger(__name__)
+
+#: ``sdk_type`` values whose messages are not response prose: the SDK's
+#: duplicate ResultMessage and its tool-call narration. The same set
+#: ``run_review_with_profile`` and ``summary_oneshot`` skip.
+_NON_PROSE_SDK_TYPES = (SDK_RESULT_TYPE, "tool_use", "tool_result")
 
 #: The design document's own heading: ``# Slice Design: {name}``. Only this
 #: exact shape yields a title (D4a); anything else falls through to the
@@ -110,6 +116,12 @@ async def compose_one_shot(prompt: str, *, model: str | None, profile: str) -> s
                 message_type=MessageType.chat,
             )
             async for response in agent.handle_message(message):
+                # SDK providers emit both an AssistantMessage and a
+                # ResultMessage with identical content (skip the duplicate),
+                # plus tool_use/tool_result narration that is not prose —
+                # non-SDK providers never set sdk_type and are unaffected.
+                if response.metadata.get("sdk_type") in _NON_PROSE_SDK_TYPES:
+                    continue
                 output_parts.append(response.content)
         finally:
             await agent.shutdown()
@@ -154,6 +166,11 @@ def _read_design_h1(design_file: str) -> str | None:
     try:
         text = Path(design_file).read_text(encoding="utf-8")
     except OSError:
+        _logger.warning(
+            "sq pr create: could not read slice design %s for the title; "
+            "falling through to a model-composed title",
+            design_file,
+        )
         return None
     match = _DESIGN_H1_RE.search(text)
     if match is None:
@@ -163,8 +180,11 @@ def _read_design_h1(design_file: str) -> str | None:
 
 
 async def _compose_title(commits: tuple[CommitRecord, ...], compose: Composer) -> str:
-    """The model-composed title, falling back to the first commit's subject."""
-    fallback = commits[0].subject if commits else ""
+    """The model-composed title, falling back to the first commit's subject.
+
+    *commits* is never empty here: input gathering refuses an empty range.
+    """
+    fallback = commits[0].subject
     subjects = "\n".join(f"- {commit.subject}" for commit in commits)
     prompt = (
         "Write one pull-request title, under 72 characters, for a PR whose "
@@ -318,15 +338,38 @@ _SECTIONS: tuple[_Section, ...] = (
 )
 
 
+#: An ATX heading: up to three spaces, one to six ``#``, then whitespace or
+#: end of line. ``#123`` and ``#!/bin/sh`` are not headings.
+_HEADING_RE = re.compile(r"^ {0,3}#{1,6}(?:\s|$)")
+
+#: A code-fence delimiter line; group 1 is the run of backticks or tildes.
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+
+
 def _strip_model_headings(prose: str) -> str:
     """Discard any markdown heading line the model's own prose might contain.
 
     Squadron's headings are the only ones that reach the body (D4) — a model
     that echoes ``## What changed`` into its own response must not duplicate
     or displace the heading squadron already emitted for that section.
+
+    Only heading syntax is dropped, and never inside a fenced code block: a
+    ``# comment`` line in a quoted snippet is content, not a heading.
     """
-    lines = [line for line in prose.splitlines() if not line.lstrip().startswith("#")]
-    return "\n".join(lines).strip()
+    kept: list[str] = []
+    open_fence: str | None = None
+    for line in prose.splitlines():
+        fence = _FENCE_RE.match(line)
+        if fence is not None:
+            marker = fence.group(1)
+            if open_fence is None:
+                open_fence = marker[0]
+            elif marker[0] == open_fence:
+                open_fence = None
+        elif open_fence is None and _HEADING_RE.match(line):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
 
 
 async def compose_body(facts: PrFacts, *, compose: Composer) -> str:

@@ -9,8 +9,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from squadron.integrations.context_forge import ContextForgeNotAvailable, SliceEntry, TaskEntry
-from squadron.pr.inputs import find_latest_in_range_review, gather_commits_and_slice
-from squadron.review.git_utils import CommitRecord
+from squadron.pr.inputs import (
+    EmptyCommitRangeError,
+    find_latest_in_range_review,
+    gather_commits_and_slice,
+)
+from squadron.review.git_utils import CommitRecord, GitRangeUnavailableError
 from squadron.review.models import Verdict
 from tests.pr.conftest import commit
 
@@ -271,3 +275,30 @@ def test_cf_unavailable_entirely_degrades_with_warning(
     assert result.slice.design_file is None
     assert result.slice.task_items is None
     assert any("385" in record.message for record in caplog.records)
+
+
+def test_empty_commit_range_is_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A head with nothing the base lacks has no PR to open — refused, not degraded."""
+    monkeypatch.setattr("squadron.pr.inputs.commits_in_range", lambda base, head, *, cwd: [])
+    cf_client = _cf_client(slices=[], tasks=[])
+
+    with pytest.raises(EmptyCommitRangeError, match=NON_SLICE_BRANCH):
+        gather_commits_and_slice(cf_client, base="main", head=NON_SLICE_BRANCH, cwd=str(tmp_path))
+
+    cf_client.list_slices.assert_not_called()
+
+
+def test_review_scan_raises_when_the_range_does_not_resolve(git_repo: Path) -> None:
+    """An unresolvable base must not read as "no review covers these commits"."""
+    reviews_dir = git_repo / "project-documents" / "user" / "reviews"
+    reviews_dir.mkdir(parents=True)
+
+    with pytest.raises(GitRangeUnavailableError, match="no-such-base"):
+        find_latest_in_range_review(
+            base="no-such-base",
+            head="main",
+            cwd=str(git_repo),
+            host=HOST,
+            owner=OWNER,
+            repository=REPOSITORY,
+        )

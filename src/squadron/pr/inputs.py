@@ -16,12 +16,26 @@ from squadron.documents.frontmatter import read_frontmatter
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
 from squadron.pr.branch import parse_slice_branch
 from squadron.pr.tasks import TaskItems, parse_task_items
-from squadron.review.git_utils import CommitRecord, commits_in_range, run_git
+from squadron.review.git_utils import (
+    CommitRecord,
+    GitRangeUnavailableError,
+    commits_in_range,
+    run_git,
+)
 from squadron.review.models import Verdict
 from squadron.review.persistence import TASKS_DIR, CfClientProtocol, SliceInfo, resolve_slice_info
 from squadron.review.reviews_dir import resolve_reviews_dir
 
 _logger = logging.getLogger(__name__)
+
+
+class EmptyCommitRangeError(Exception):
+    """``base..head`` holds no commits, so there is nothing to open a PR for.
+
+    A branch pushed at the base's own commit passes every precondition, so
+    this is refused here — before any model call (D8) — rather than left to
+    surface as an empty title and the host's own rejection.
+    """
 
 
 @dataclass(frozen=True)
@@ -54,8 +68,15 @@ def gather_commits_and_slice(
     inputs and makes no ``cf`` call. A slice index ``cf`` cannot resolve, or
     a missing/unreadable task file, degrades to absent with a WARNING
     naming the condition — not fatal, because a PR should still open.
+
+    Raises ``GitRangeUnavailableError`` when git cannot resolve the range in
+    the local clone, and ``EmptyCommitRangeError`` when the range is empty.
     """
     commits = tuple(commits_in_range(base, head, cwd=cwd))
+    if not commits:
+        raise EmptyCommitRangeError(
+            f"{head} has no commits that {base} lacks, so there is no pull request to open."
+        )
 
     index = parse_slice_branch(head)
     if index is None:
@@ -165,10 +186,14 @@ def _shas_in_range(base: str, head: str, *, cwd: str) -> list[str]:
 
     An unparseable or unrecognized sha in a review simply never appears
     here, which correctly excludes it without a separate check.
+
+    Raises ``GitRangeUnavailableError`` when git cannot answer: an empty
+    list there would let the body claim no review covers these commits.
     """
     result = run_git(["rev-list", "--reverse", f"{base}..{head}"], cwd=cwd)
     if result is None or result.returncode != 0:
-        return []
+        detail = result.stderr.strip() if result is not None else "git could not run"
+        raise GitRangeUnavailableError(f"Cannot list shas in {base}..{head}: {detail}.")
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
