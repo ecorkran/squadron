@@ -363,15 +363,15 @@ Two small corrections the design owes.
   - [x] Note explicitly any step that could not be exercised live and what covers it instead
   - [x] Effort: 2
 
-- [ ] **16.4 Close the slice**
-  - [ ] CHANGELOG: one concise user-facing bullet
-  - [ ] DEVLOG: a full dated entry covering the code tasks and the live verification
-  - [ ] Set `status: complete` in both this file's and the LLD's frontmatter
-  - [ ] Check entry 5 in `380-slices.pull-request-workflow.md`
-  - [ ] **Mark any dropped or skipped item above `[x]` before closing** — the visualizer reads checkbox state
-  - [ ] Code review is required before the slice closes. **Ask the Project Manager how they want it run** (pipeline and which model, direct `sq review code`, or the `/code-review` skill) rather than choosing a command
-  - [ ] Merge `385-slice.create-a-pr-with-a-good-message` into `squadron-pr`. **Never into `main`** — the integration branch is set for this initiative
-  - [ ] Effort: 2
+- [x] **16.4 Close the slice**
+  - [x] CHANGELOG: one concise user-facing bullet
+  - [x] DEVLOG: a full dated entry covering the code tasks and the live verification
+  - [x] Set `status: complete` in both this file's and the LLD's frontmatter
+  - [x] Check entry 5 in `380-slices.pull-request-workflow.md`
+  - [x] **Mark any dropped or skipped item above `[x]` before closing** — the visualizer reads checkbox state
+  - [x] Code review is required before the slice closes. **Ask the Project Manager how they want it run** (pipeline and which model, direct `sq review code`, or the `/code-review` skill) rather than choosing a command
+  - [x] Merge `385-slice.create-a-pr-with-a-good-message` into `squadron-pr`. **Never into `main`** — the integration branch is set for this initiative
+  - [x] Effort: 2
 
 ---
 
