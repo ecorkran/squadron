@@ -14,6 +14,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260919
 
+### Slice 385 code re-review response
+
+- Re-review (z-ai/glm-5.3, `35d2cde8`) returned CONCERNS: 3 concerns, 4 notes, no fails. All fixed.
+- **Split `pr/body.py`** into `pr/composer.py` (one-shot composer), `pr/title.py` (D4a), and
+  `pr/body.py` (section contract + presence check); tests split to match. The tool-gate's
+  sanctioned-site list now names `pr/composer.py`.
+- **Design document read once, relative to `--cwd`.** The three prior reads resolved the
+  path against the process working directory, so `--cwd` from another directory would have
+  dropped the design silently. `inputs._read_design_text` reads it; `PrFacts` carries it.
+- Title bound built from `_TITLE_MAX_CHARS`; composer tests restore `_REGISTRY` via
+  `monkeypatch.setitem`; `select_base` lost its unused `cwd`; `_local_head_sha` checks git's
+  return code; `create` shed `_gather_facts`.
+- Gate: ruff/pyright clean; suite 3 failed (cf #88 schema drift, pre-existing) / 4206 passed.
+
 ### Slice 385 code review response
 
 `sq review code 385` (z-ai/glm-5.3) returned FAIL: one fail, six concerns, four notes. All
