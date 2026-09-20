@@ -2,13 +2,37 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260919
+dateUpdated: 20260920
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+---
+
+## 20260920
+
+### Slice 386 task breakdown (Phase 5)
+
+- Tasks at `386-tasks.slash-command-parity-documentation-and-live-evidence.md` — 11 tasks,
+  412 lines, following the LLD's implementation order.
+- Tasks 1–8 need no host access and no PM action: the two command files, the D2 drift test
+  (with a test that proves the drift test can fail), the install count 9 → 10, the D4
+  observation, the four documents, and the D5 example-parse test in a new `tests/docs/`.
+- **Task 9 (live run) carries the precondition** — `squadron-pr` pushed to `origin` — as a
+  precondition, not a step, per the standing rule that a task never depends on a resource the
+  work cannot produce. If it has not happened, the task stops and reports.
+- The three PR option surfaces were read from `--help` and recorded in the Context Summary as
+  orientation, with an explicit instruction not to copy them into the test — the test
+  introspects the live command objects.
+- Task 5 (D4) records the fallback rule: if the default `sdk` profile fails inside a session,
+  that is a CLI defect logged as an issue, never patched over by injecting a profile in the
+  command file.
+- Task 11 closes initiative 380 and logs the drift-test retrofit for the pre-existing
+  subcommands as a GitHub issue.
+- Next: Phase 6 implementation on branch `386-slice.slash-command-parity-documentation-and-live-evidence`.
 
 ---
 
