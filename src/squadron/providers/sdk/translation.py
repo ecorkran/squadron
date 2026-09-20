@@ -13,7 +13,14 @@ from claude_agent_sdk import (
     ToolUseBlock,
 )
 
-from squadron.core.models import RATE_LIMIT_EVENT_TYPE, SDK_RESULT_TYPE, Message, MessageType
+from squadron.core.models import (
+    RATE_LIMIT_EVENT_TYPE,
+    SDK_RESULT_TYPE,
+    TOOL_RESULT_TYPE,
+    TOOL_USE_TYPE,
+    Message,
+    MessageType,
+)
 
 
 def translate_sdk_message(sdk_msg: Any, sender: str) -> list[Message]:
@@ -59,7 +66,7 @@ def _translate_assistant(msg: AssistantMessage, sender: str) -> list[Message]:
                     content=f"Using tool: {block.name}",
                     message_type=MessageType.system,
                     metadata={
-                        "sdk_type": "tool_use",
+                        "sdk_type": TOOL_USE_TYPE,
                         "tool_name": block.name,
                         "tool_input": block.input,
                     },
@@ -75,7 +82,7 @@ def _translate_tool_result(block: ToolResultBlock, sender: str) -> Message:
         recipients=["all"],
         content=str(block.content),
         message_type=MessageType.system,
-        metadata={"sdk_type": "tool_result"},
+        metadata={"sdk_type": TOOL_RESULT_TYPE},
     )
 
 
