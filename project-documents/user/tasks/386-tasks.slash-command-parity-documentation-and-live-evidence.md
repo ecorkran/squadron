@@ -63,68 +63,68 @@ commit, separate from the task's.
 
 New file. Written first because Task 3's test is written against it.
 
-- [ ] **1.1 Create the file with the input-parsing preamble**
-  - [ ] Create `commands/sq/pr.md`, following the shape of `commands/sq/review.md`: a one-line
+- [x] **1.1 Create the file with the input-parsing preamble**
+  - [x] Create `commands/sq/pr.md`, following the shape of `commands/sq/review.md`: a one-line
         purpose, an `## Input parsing` section, a valid-subcommand list, and a usage block
-  - [ ] First word of `$ARGUMENTS` is the subcommand; valid subcommands are `show` and `create`
-  - [ ] A missing or unrecognized subcommand shows the usage block and stops
-  - [ ] State the delegation rule plainly: the remainder is passed to the CLI **unchanged**, with
+  - [x] First word of `$ARGUMENTS` is the subcommand; valid subcommands are `show` and `create`
+  - [x] A missing or unrecognized subcommand shows the usage block and stops
+  - [x] State the delegation rule plainly: the remainder is passed to the CLI **unchanged**, with
         nothing appended, substituted, or removed (D1)
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
-- [ ] **1.2 Write the `## Subcommand: show` section**
-  - [ ] Delegation line: `sq pr show {remainder}`
-  - [ ] Document every option `sq pr show` registers, and no option it does not register. Read
+- [x] **1.2 Write the `## Subcommand: show` section**
+  - [x] Delegation line: `sq pr show {remainder}`
+  - [x] Document every option `sq pr show` registers, and no option it does not register. Read
         them from `sq pr show --help` at authoring time rather than from this task file
-  - [ ] Describe the four target forms the positional accepts (number, `owner/repo#number` and
+  - [x] Describe the four target forms the positional accepts (number, `owner/repo#number` and
         `repo#number`, URL, branch) and that omitting it uses the current branch
-  - [ ] Note that an absent remainder is valid and passes through as absent (D1)
-  - [ ] Effort: 1
+  - [x] Note that an absent remainder is valid and passes through as absent (D1)
+  - [x] Effort: 1
 
-- [ ] **1.3 Write the `## Subcommand: create` section, including the D3 rules**
-  - [ ] Delegation line: `sq pr create {remainder}`
-  - [ ] Document every option `sq pr create` registers, read from `--help`, and no other
-  - [ ] State the four D3 instructions as instructions to the session, not as prose about them:
-    - [ ] `--dry-run` is offered but never substituted for a real create, nor a create for a dry run
-    - [ ] The command runs **once**; on a non-zero exit, show the output and stop — no retry
+- [x] **1.3 Write the `## Subcommand: create` section, including the D3 rules**
+  - [x] Delegation line: `sq pr create {remainder}`
+  - [x] Document every option `sq pr create` registers, read from `--help`, and no other
+  - [x] State the four D3 instructions as instructions to the session, not as prose about them:
+    - [x] `--dry-run` is offered but never substituted for a real create, nor a create for a dry run
+    - [x] The command runs **once**; on a non-zero exit, show the output and stop — no retry
           (a create that failed after landing opens a second PR when retried, 385 D8)
-    - [ ] Printed remediation — the `git push` line from an unpushed-branch refusal — is **shown,
+    - [x] Printed remediation — the `git push` line from an unpushed-branch refusal — is **shown,
           not executed**: squadron does not push, and a session that pushes has made it push by proxy
-    - [ ] A refused base is not worked around by passing `--base` on the operator's behalf
-  - [ ] Note that `sq pr create` writes to the host, and that the CLI is the only thing that writes
-  - [ ] Effort: 2
+    - [x] A refused base is not worked around by passing `--base` on the operator's behalf
+  - [x] Note that `sq pr create` writes to the host, and that the CLI is the only thing that writes
+  - [x] Effort: 2
 
-- [ ] **1.4 Verify the file parses as a command and installs**
-  - [ ] `sq install-commands` reports ten files and `~/.claude/commands/sq/pr.md` exists
-  - [ ] `sq uninstall-commands` (or the documented uninstall path) removes it
-  - [ ] No change to `src/squadron/cli/commands/install.py` is needed or made — it copies every
+- [x] **1.4 Verify the file parses as a command and installs**
+  - [x] `sq install-commands` reports ten files and `~/.claude/commands/sq/pr.md` exists
+  - [x] `sq uninstall-commands` (or the documented uninstall path) removes it
+  - [x] No change to `src/squadron/cli/commands/install.py` is needed or made — it copies every
         `*.md` under the bundle subdirectory
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 ---
 
 ## Task 2 — The `pr` section of `commands/sq/review.md` (D1, D3)
 
-- [ ] **2.1 Add `pr` to the preamble**
-  - [ ] Add `pr` to the valid-subcommand list in `## Input parsing`
-  - [ ] Add a usage line for it to the usage block, matching the existing lines' shape
-  - [ ] Effort: 1
+- [x] **2.1 Add `pr` to the preamble**
+  - [x] Add `pr` to the valid-subcommand list in `## Input parsing`
+  - [x] Add a usage line for it to the usage block, matching the existing lines' shape
+  - [x] Effort: 1
 
-- [ ] **2.2 Write the `## Subcommand: pr` section**
-  - [ ] Delegation line: `sq review pr {remainder}` — **no number shorthand and no appended `-v`**,
+- [x] **2.2 Write the `## Subcommand: pr` section**
+  - [x] Delegation line: `sq review pr {remainder}` — **no number shorthand and no appended `-v`**,
         unlike the `code`/`slice`/`tasks`/`arch` sections. D1 gives both reasons: a bare number is
         already a complete PR target, and an injected flag is a difference between transports
-  - [ ] Document every option `sq review pr` registers, read from `sq review pr --help`, and no
+  - [x] Document every option `sq review pr` registers, read from `sq review pr --help`, and no
         option it does not register
-  - [ ] Describe the four target forms and the omit-for-current-branch behavior
-  - [ ] Name where the artifact is written, including the unplanned-repository path: `--reviews-dir`,
+  - [x] Describe the four target forms and the omit-for-current-branch behavior
+  - [x] Name where the artifact is written, including the unplanned-repository path: `--reviews-dir`,
         `review.external_reviews_dir`, and that the CLI prints the chosen location and its source
-  - [ ] State the D3 rules that apply to a review: `--post` is passed **only** when the operator
+  - [x] State the D3 rules that apply to a review: `--post` is passed **only** when the operator
         typed it; the section never suggests adding it after a review and never re-runs a finished
         review with it; on a non-zero exit from `--post`, show the output and stop
-  - [ ] Keep the closing convention of the other sections: show the results, and on FAIL or
+  - [x] Keep the closing convention of the other sections: show the results, and on FAIL or
         CONCERNS highlight the key findings
-  - [ ] Effort: 2
+  - [x] Effort: 2
 
 ---
 
@@ -133,64 +133,64 @@ New file. Written first because Task 3's test is written against it.
 Written after Tasks 1 and 2 so its first run either proves the files agree with the CLI or names
 exactly what is missing.
 
-- [ ] **3.1 Write `tests/cli/test_command_surface.py`**
-  - [ ] Locate the bundled files through `_get_commands_source()` from
+- [x] **3.1 Write `tests/cli/test_command_surface.py`**
+  - [x] Locate the bundled files through `_get_commands_source()` from
         `squadron.cli.commands.install` — the real bundled file is the fixture, not a synthetic one
-  - [ ] Define the commands under test as **one module-level list** of (command path, command
+  - [x] Define the commands under test as **one module-level list** of (command path, command
         file, section heading) entries, so adding a subcommand later is an added entry, not a new
         test: `review pr` / `review.md` / `## Subcommand: pr`; `pr show` and `pr create` /
         `pr.md` / their headings
-  - [ ] Extract a section by heading: from the heading line to the next `## ` at the same level or
+  - [x] Extract a section by heading: from the heading line to the next `## ` at the same level or
         end of file
-  - [ ] Extract flags with a lenient token scan — `--[a-z][a-z-]*` anywhere in the section, inside
+  - [x] Extract flags with a lenient token scan — `--[a-z][a-z-]*` anywhere in the section, inside
         or outside backticks (project parsing rules: parse the semantic content, not the formatting)
-  - [ ] Introspect the real Typer/Click command from the `sq` app for its registered long options
-  - [ ] Define the excluded-flag set (`--help`) **once**, as a module constant
-  - [ ] Effort: 3
+  - [x] Introspect the real Typer/Click command from the `sq` app for its registered long options
+  - [x] Define the excluded-flag set (`--help`) **once**, as a module constant
+  - [x] Effort: 3
 
-- [ ] **3.2 Assert surface agreement**
-  - [ ] For each entry: assert set equality between the CLI's registered long options and the
+- [x] **3.2 Assert surface agreement**
+  - [x] For each entry: assert set equality between the CLI's registered long options and the
         flags found in the file's section
-  - [ ] The failure message must distinguish the two directions — a flag in the CLI but not the
+  - [x] The failure message must distinguish the two directions — a flag in the CLI but not the
         file is an undocumented capability; a flag in the file but not the CLI is an instruction to
         pass something the CLI will reject
-  - [ ] Effort: 2
+  - [x] Effort: 2
 
-- [ ] **3.3 Assert the delegation line**
-  - [ ] For each entry, assert the section contains its delegation command with the remainder
+- [x] **3.3 Assert the delegation line**
+  - [x] For each entry, assert the section contains its delegation command with the remainder
         placeholder and nothing appended (D1) — in particular that the `pr` section of `review.md`
         does not append `-v`
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
-- [ ] **3.4 Prove the test can fail**
-  - [ ] Add a test that runs the comparison logic against a deliberately incomplete section string
+- [x] **3.4 Prove the test can fail**
+  - [x] Add a test that runs the comparison logic against a deliberately incomplete section string
         and asserts it fails — this is the Success Criteria "Technical" item, and without it the
         drift test's value is unproven
-  - [ ] Refactor the comparison into a function the real test and this test both call, so the
+  - [x] Refactor the comparison into a function the real test and this test both call, so the
         proof exercises the production path rather than a copy
-  - [ ] Effort: 2
+  - [x] Effort: 2
 
-- [ ] **3.5 Run it**
-  - [ ] `pytest tests/cli/test_command_surface.py -q` passes
-  - [ ] If it fails, the fix is in the command file (Tasks 1-2), not in the test's expectations
-  - [ ] Effort: 1
+- [x] **3.5 Run it**
+  - [x] `pytest tests/cli/test_command_surface.py -q` passes
+  - [x] If it fails, the fix is in the command file (Tasks 1-2), not in the test's expectations
+  - [x] Effort: 1
 
 ---
 
 ## Task 4 — Update the install-commands test for the tenth file
 
-- [ ] **4.1 Update counts and the expected map**
-  - [ ] `tests/cli/test_install_commands.py`: the bundled-file count `9` appears in three
+- [x] **4.1 Update counts and the expected map**
+  - [x] `tests/cli/test_install_commands.py`: the bundled-file count `9` appears in three
         assertions (the deep-target install, the custom-target install, and
         `test_get_commands_source_returns_valid_dir`) — update each to `10`
-  - [ ] Add `pr.md` to `EXPECTED_COMMANDS` with its expected delegation command, matching how the
+  - [x] Add `pr.md` to `EXPECTED_COMMANDS` with its expected delegation command, matching how the
         other entries express theirs
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
-- [ ] **4.2 Run it**
-  - [ ] `pytest tests/cli/test_install_commands.py -q` passes, including the receipt-driven
+- [x] **4.2 Run it**
+  - [x] `pytest tests/cli/test_install_commands.py -q` passes, including the receipt-driven
         uninstall test — `pr.md` is recorded in the receipt and removed on uninstall
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 ---
 
