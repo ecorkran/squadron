@@ -309,79 +309,79 @@ Every step below is run by the operator's explicit command, and each write is pr
 `--dry-run`. Record each step's command, exit code, and identifying output (PR URL, comment URL,
 artifact paths, shas) as you go — Task 10 writes them up.
 
-- [ ] **9.1 Push this slice's branch and create the PR**
-  - [ ] Push `386-slice.slash-command-parity-documentation-and-live-evidence`
-  - [ ] `sq pr create --dry-run`, inspect the title and body, then `sq pr create`
-  - [ ] Confirm stderr names the base as `squadron-pr` with source `integration-branch`
-  - [ ] Record the PR number and URL; `<n>` below is that number
-  - [ ] Effort: 1
+- [x] **9.1 Push this slice's branch and create the PR**
+  - [x] Push `386-slice.slash-command-parity-documentation-and-live-evidence`
+  - [x] `sq pr create --dry-run`, inspect the title and body, then `sq pr create`
+  - [x] Confirm stderr names the base as `squadron-pr` with source `integration-branch`
+  - [x] Record the PR number and URL; `<n>` below is that number
+  - [x] Effort: 1
 
-- [ ] **9.2 Deterministic parity: `sq pr show --json` across both transports (D2 tier one)**
-  - [ ] `sq pr show <n> --json` from a terminal, saved to a file
-  - [ ] `/sq:pr show <n> --json` in a Claude Code session, output saved to a second file
-  - [ ] `diff` prints nothing — byte-identical. If it does not, the difference is the finding:
+- [x] **9.2 Deterministic parity: `sq pr show --json` across both transports (D2 tier one)**
+  - [x] `sq pr show <n> --json` from a terminal, saved to a file
+  - [x] `/sq:pr show <n> --json` in a Claude Code session, output saved to a second file
+  - [x] `diff` prints nothing — byte-identical. If it does not, the difference is the finding:
         record it and stop rather than editing either output
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
-- [ ] **9.3 Review and post from the CLI**
-  - [ ] `sq review pr <n> --reviews-dir <cli-dir> --post --dry-run` — confirm it prints the comment
+- [x] **9.3 Review and post from the CLI**
+  - [x] `sq review pr <n> --reviews-dir <cli-dir> --post --dry-run` — confirm it prints the comment
         and writes nothing to the host
-  - [ ] Then the same command without `--dry-run` — one comment posted
-  - [ ] Record the comment URL and the artifact path
-  - [ ] Effort: 1
+  - [x] Then the same command without `--dry-run` — one comment posted
+  - [x] Record the comment URL and the artifact path
+  - [x] Effort: 1
 
-- [ ] **9.4 Review and post from the slash command**
-  - [ ] `/sq:review pr <n> --reviews-dir <slash-dir> --post` in a session, same model and profile
+- [x] **9.4 Review and post from the slash command**
+  - [x] `/sq:review pr <n> --reviews-dir <slash-dir> --post` in a session, same model and profile
         as 9.3
-  - [ ] Confirm the session ran that exact `sq` command, once
-  - [ ] `gh pr view <n> --json comments` shows **one** squadron comment, updated rather than
+  - [x] Confirm the session ran that exact `sq` command, once
+  - [x] `gh pr view <n> --json comments` shows **one** squadron comment, updated rather than
         duplicated (384's idempotency, now across transports)
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
-- [ ] **9.5 Compare the two review artifacts (D2 tier two)**
-  - [ ] Same filename in both directories
-  - [ ] Same frontmatter keys, and equal values for every deterministic field: the `pr` record,
+- [x] **9.5 Compare the two review artifacts (D2 tier two)**
+  - [x] Same filename in both directories
+  - [x] Same frontmatter keys, and equal values for every deterministic field: the `pr` record,
         `reviewedSha`, `sourceDocument`, `reviewType`, `aiModel`, rules source
-  - [ ] Verdict and findings are model output: **record them, do not compare them**
-  - [ ] Keep both artifacts under `project-documents/user/reviews/` as 385's was
-  - [ ] Effort: 1
+  - [x] Verdict and findings are model output: **record them, do not compare them**
+  - [x] Keep both artifacts under `project-documents/user/reviews/` as 385's was
+  - [x] Effort: 1
 
-- [ ] **9.6 The four target forms through `sq pr show`**
-  - [ ] Number, URL, `owner/repo#n`, and branch — all four against the now-open PR, closing the
+- [x] **9.6 The four target forms through `sq pr show`**
+  - [x] Number, URL, `owner/repo#n`, and branch — all four against the now-open PR, closing the
         success-path gap 381's tasks deferred to this slice for want of an open PR
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
-- [ ] **9.7 Refusal is shown, not worked around (D3)**
-  - [ ] On a scratch branch with an unpushed commit, run `/sq:pr create --dry-run` in a session
-  - [ ] The session shows the refusal and the printed `git push` line and runs nothing further
-  - [ ] `git ls-remote` confirms the branch is still absent from the host
-  - [ ] Delete the scratch branch afterward
-  - [ ] Effort: 1
+- [x] **9.7 Refusal is shown, not worked around (D3)**
+  - [x] On a scratch branch with an unpushed commit, run `/sq:pr create --dry-run` in a session
+  - [x] The session shows the refusal and the printed `git push` line and runs nothing further
+  - [x] `git ls-remote` confirms the branch is still absent from the host
+  - [x] Delete the scratch branch afterward
+  - [x] Effort: 1
 
-- [ ] **9.8 Record the final host state**
-  - [ ] `gh pr view <n> --json body,comments` — the body has all five sections; exactly one
+- [x] **9.8 Record the final host state**
+  - [x] `gh pr view <n> --json body,comments` — the body has all five sections; exactly one
         squadron comment
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 ---
 
 ## Task 10 — CHANGELOG and DEVLOG
 
-- [ ] **10.1 `CHANGELOG.md`**
-  - [ ] One user-facing bullet under `### Added` for the slash-command transports: `/sq:review pr`
+- [x] **10.1 `CHANGELOG.md`**
+  - [x] One user-facing bullet under `### Added` for the slash-command transports: `/sq:review pr`
         and `/sq:pr` with `show` and `create`. 381-385 already wrote the bullets for the
         capabilities themselves — do not restate them
-  - [ ] Keep it short and user-facing; technical detail belongs in the DEVLOG
-  - [ ] Effort: 1
+  - [x] Keep it short and user-facing; technical detail belongs in the DEVLOG
+  - [x] Effort: 1
 
-- [ ] **10.2 `DEVLOG.md`**
-  - [ ] An entry recording the live run step by step: each command, its exit code, and its
+- [x] **10.2 `DEVLOG.md`**
+  - [x] An entry recording the live run step by step: each command, its exit code, and its
         identifying output (PR URL, comment URL, artifact paths, shas)
-  - [ ] Record D4's observation (Task 5) and link any GitHub issue it produced
-  - [ ] Record any CLI defect found during the run or the documentation pass, with its commit
-  - [ ] Note that after the merge is pushed the host marks the PR merged, which is its correct
+  - [x] Record D4's observation (Task 5) and link any GitHub issue it produced
+  - [x] Record any CLI defect found during the run or the documentation pass, with its commit
+  - [x] Note that after the merge is pushed the host marks the PR merged, which is its correct
         final state (D6, "Landing")
-  - [ ] Effort: 2
+  - [x] Effort: 2
 
 ---
 
