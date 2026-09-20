@@ -71,7 +71,19 @@ partial `filesChecked` mismatch comparison.
 Design decision **D2**. Do this first: it unblocks committing the rest of the
 slice without `--no-verify`.
 
-### A1. Add the document-root scope predicate
+### A1. File the upstream context-forge issue
+
+Do this **first**: task A2's predicate comment cites the issue number, and
+filing it up front means the comment is written once rather than revisited.
+
+- [ ] File an issue on context-forge asking `cf validate frontmatter --json`
+      to report paths it skipped as out of scope, so the gate can distinguish
+      "skipped" from "wrong checkout" without a squadron-side predicate.
+- [ ] Note the issue number — task **A2** links it from the predicate comment.
+- **Effort:** 1
+- **Success:** issue exists; its number is in hand before A2 starts.
+
+### A2. Add the document-root scope predicate
 
 - [ ] Open `src/squadron/events/builtin/frontmatter_gate.py`.
 - [ ] Define the cf user-document root **once** as a module-level constant
@@ -87,12 +99,12 @@ slice without `--no-verify`.
         `setup_install.py` passes `git diff --cached --name-only` output).
 - [ ] Add a comment at the predicate recording its removal condition: it goes
       away when `cf validate frontmatter --json` reports skipped-as-out-of-scope
-      paths. Link the context-forge issue filed in task **A4**.
+      paths. Cite the context-forge issue number from task **A1**.
 - **Effort:** 2
 - **Success:** the constant is defined once; the predicate classifies both
   path spellings above the same way.
 
-### A2. Use the predicate only in the zero branch
+### A3. Use the predicate only in the zero branch
 
 - [ ] Locate the D12 zero-of-N branch at
       [frontmatter_gate.py:137](src/squadron/events/builtin/frontmatter_gate.py#L137)
@@ -113,7 +125,7 @@ slice without `--no-verify`.
 - **Effort:** 2
 - **Success:** criteria 4–6 of the design's Functional Requirements hold.
 
-### A3. Test Fix 2
+### A4. Test Fix 2
 
 - [ ] Add tests to `tests/events/builtin/test_frontmatter_gate.py`, alongside
       the existing slice-919 D10–D12 class near
@@ -141,16 +153,6 @@ slice without `--no-verify`.
 - **Effort:** 2
 - **Success:** all tests pass; no existing gate test is weakened to
   accommodate the change.
-
-### A4. File the upstream context-forge issue
-
-- [ ] File an issue on context-forge asking `cf validate frontmatter --json`
-      to report paths it skipped as out of scope, so the gate can distinguish
-      "skipped" from "wrong checkout" without a squadron-side predicate.
-- [ ] Reference the issue number from the comment added in task **A1**.
-- **Effort:** 1
-- **Success:** issue exists; the predicate has a recorded removal condition
-  pointing at it.
 
 ### A5. Verify Fix 2 against the real hook
 
@@ -366,8 +368,23 @@ policy-exclusion case only; the silent-to-the-model half of D3 is untouched.
   - [ ] `jail_violation`, exclusion → exactly one DEBUG record, nothing at
         INFO+.
   - [ ] `jail_violation`, escape → exactly one WARNING record.
-- [ ] Check `tests/tools/test_jail.py` and `tests/tools/test_jail_symlinks.py`
-      for further WARNING-pinned exclusion assertions and update any found.
+- [ ] `tests/tools/test_jail.py` has **two** more tests that will fail once
+      exclusions drop to DEBUG. Update both:
+  - [ ] `test_an_exclusion_refusal_emits_exactly_one_warning`
+        ([line 201](tests/tools/test_jail.py#L201)) — filters
+        `levelno == logging.WARNING` and asserts exactly one record for an
+        exclusion through `jail_violation`. After D1 that filter finds zero.
+  - [ ] `test_an_exclusion_refusal_is_worded_distinguishably_from_a_jail_escape`
+        ([line 246](tests/tools/test_jail.py#L246)) — asserts
+        `len(messages) == 2` at WARNING for an exclusion plus an escape
+        through `contained_in_jail`. After D1 only the escape remains at
+        WARNING. Keep what this test exists to prove — that the two refusals
+        are worded distinguishably — by capturing at DEBUG and asserting the
+        wording across both levels, not by deleting the exclusion half.
+- [ ] Leave [line 194](tests/tools/test_jail.py#L194) alone — it asserts the
+      walk predicate emits *nothing* at WARNING, which stays true.
+- [ ] Check `tests/tools/test_jail_symlinks.py` for further WARNING-pinned
+      exclusion assertions and update any found.
 - **Effort:** 2
 - **Success:** the whole `tests/tools/` suite passes; no test asserts a
   WARNING for a policy exclusion.

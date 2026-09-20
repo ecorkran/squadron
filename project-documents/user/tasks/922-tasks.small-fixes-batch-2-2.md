@@ -77,7 +77,21 @@ Design decision **D1**. **Last**, because it regenerates `uv.lock`.
 - **Effort:** 1
 - **Success:** the lockfile matches the corrected dependency set.
 
-### F4. Verify Fix 1 in a clean virtualenv
+### F4. Test Fix 1
+
+- [ ] Add the test to `tests/test_smoke.py` — package-level, where
+      `test_package_importable` already lives. There is no packaging-specific
+      test module and this slice does not create one.
+- [ ] Assert the declared dependency set: `rich` and `mcp` present,
+      `anthropic` and `google-adk` absent. Read the declared requirements via
+      `importlib.metadata` (as `tests/cli/test_version.py:17` does for the
+      version) rather than parsing `pyproject.toml` by hand.
+- [ ] Confirm the full suite passes with the stub packages deleted — any
+      collection error names an overlooked reference.
+- **Effort:** 1
+- **Success:** the dependency set is pinned by a test, not only by review.
+
+### F5. Verify Fix 1 in a clean virtualenv
 
 - [ ] Run the design's Verification Walkthrough for Fix 1:
 
@@ -98,15 +112,6 @@ Design decision **D1**. **Last**, because it regenerates `uv.lock`.
       (criterion 3).
 - **Effort:** 2
 - **Success:** criteria 1–3 hold against a real clean install.
-
-### F5. Test Fix 1
-
-- [ ] Add or extend a test asserting the declared dependency set: `rich` and
-      `mcp` present, `anthropic` and `google-adk` absent.
-- [ ] Confirm the full suite passes with the stub packages deleted — any
-      collection error names an overlooked reference.
-- **Effort:** 1
-- **Success:** the dependency set is pinned by a test, not only by review.
 
 ### F6. CHANGELOG and commit
 
@@ -134,10 +139,35 @@ Design decision **D1**. **Last**, because it regenerates `uv.lock`.
 
 ### G2. Walk the success criteria
 
-- [ ] Walk all **11** Functional Requirements in the design and confirm each
-      holds. Do not assume — check each one.
-- [ ] Confirm the Integration Requirement: a release-shaped commit passes the
-      installed pre-commit hook without `--no-verify`.
+Check each one against running code. Do not assume; do not batch. The wording
+below is the design's — consult it for the full statement where one is
+abbreviated.
+
+- [ ] **1.** `[project.dependencies]` has `rich` and `mcp`, not `anthropic` or
+      `google-adk`; `uv.lock` regenerated.
+- [ ] **2.** `providers/anthropic/`, `adk/`, and `mcp/` no longer exist.
+- [ ] **3.** A clean-venv base install runs `sq doctor`, `sq run --help`, and
+      `sq review --help` without `ImportError`.
+- [ ] **4.** Gate **passes** when every staged path is outside
+      `project-documents/user/` and cf reports `filesChecked: 0`.
+- [ ] **5.** Gate still **fails closed**, with the D10 message, when ≥1 staged
+      path is under `project-documents/user/` and cf reports `filesChecked: 0`.
+- [ ] **6.** Gate unchanged for `filesChecked > 0`, unreadable count, timeout,
+      and missing `cf`.
+- [ ] **7.** `SubprocessRunner.run` with a nonexistent `cwd` raises
+      `ProcessCwdNotFoundError` naming the directory; missing executable with
+      a valid or `None` `cwd` still raises `ProcessNotFoundError`.
+- [ ] **8.** `GitHubCli` does not report "gh is not on PATH" for a nonexistent
+      `cwd`, and logs at WARNING.
+- [ ] **9.** No `"tool_use"` / `"tool_result"` literal in `translation.py`,
+      `sdk_session.py`, `summary_oneshot.py`, `review_client.py`, or
+      `metrology/audit.py`.
+- [ ] **10.** `_ICON[StepKind.INSTALL]` differs from `_ICON[StepKind.CONFIGURE]`
+      in both glyph and color, and is not red.
+- [ ] **11.** A policy-exclusion refusal emits no record at INFO or above; a
+      jail-escape refusal still emits exactly one WARNING.
+- [ ] **Integration.** A release-shaped commit passes the installed pre-commit
+      hook without `--no-verify`.
 - **Effort:** 2
 - **Success:** every criterion verified against running code.
 
