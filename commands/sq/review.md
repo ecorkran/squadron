@@ -4,7 +4,7 @@ Run a review using squadron.
 
 The first word of `$ARGUMENTS` is the subcommand. The remainder is passed to the CLI unchanged.
 
-Valid subcommands: `code`, `slice`, `tasks`, `arch`, `resolve`
+Valid subcommands: `code`, `slice`, `tasks`, `arch`, `resolve`, `pr`
 
 If the subcommand is missing or unrecognized, show the usage below and stop.
 
@@ -15,6 +15,7 @@ If the subcommand is missing or unrecognized, show the usage below and stop.
 /sq:review tasks [NUMBER | FLAGS]    — task plan review
 /sq:review arch [NUMBER | FLAGS]     — architecture review
 /sq:review resolve NUMBER [TYPE]     — were a review's findings addressed?
+/sq:review pr [TARGET | FLAGS]       — pull request review
 ```
 
 ---
@@ -244,3 +245,52 @@ Exit codes: `0` for `ADDRESSED`, `1` for `UNADDRESSED` or `UNKNOWN`.
 Example: `sq review resolve 305 code -v`
 
 Show the resolution value, the per-finding table, and the artifact path. If the resolution is `UNADDRESSED` or `UNKNOWN`, highlight which findings are unsettled and why.
+
+---
+
+## Subcommand: pr
+
+Review a pull request's code over its fetched merge-base range.
+
+Pass the remainder of `$ARGUMENTS` (after stripping the leading `pr` word) directly to:
+
+`sq review pr {remainder}`
+
+Unlike `code`/`slice`/`tasks`/`arch`, there is **no number shorthand and nothing is appended**.
+A bare number is already a complete pull-request target (`sq review pr 116`), so there is no
+shorthand to expand — and appending a flag such as `-v` would be a difference between this
+transport and the CLI itself. An absent remainder is valid and passes through as absent:
+`sq review pr` with no target reviews the current branch's pull request.
+
+Optional arguments:
+- Positional: pull request to review — a number, `owner/repo#number`, `repo#number`, a
+  pull-request URL, or a branch. Omit to use the current branch.
+
+Optional flags:
+- `--cwd TEXT`: repository to resolve against
+- `--rules PATH`: path to additional rules file
+- `--rules-dir DIR`: rules directory override
+- `--no-rules`: suppress all rule injection
+- `--model TEXT`: model override (e.g. `opus`, `sonnet`)
+- `--no-tools`: run this review without tools, even if the template declares them
+- `--profile TEXT`: provider profile (e.g. `openrouter`, `openai`, `local`, `sdk`)
+- `-v`/`-vv`: verbosity level
+- `--output TEXT`: output format — `terminal`, `json`, `file` (default: `terminal`)
+- `--output-path TEXT`: file path for `--output file` (a JSON dump, not the review artifact)
+- `--reviews-dir DIR`: directory for the saved review artifact. Overrides the project's reviews
+  directory and `review.external_reviews_dir`. Distinct from `--output-path`. The CLI prints the
+  chosen location and its source.
+- `--json`: output and save as JSON instead of markdown
+- `--no-save`: suppress review file save
+- `--post`: post the review to the pull request as one comment
+- `--dry-run`: print the comment that `--post` would write, without writing it (requires
+  `--post`)
+
+`--post` writes to the host. Rules for running it from a session:
+- **Pass `--post` only when the operator typed it.** Never suggest adding it after a review, and
+  never re-run a finished review with it.
+- **On a non-zero exit from `--post`, show the output and stop.** No retry.
+
+Example: `sq review pr 116 --model glm-5.3 --post`
+
+Show the review results. If the verdict is FAIL or CONCERNS, highlight the key findings.
