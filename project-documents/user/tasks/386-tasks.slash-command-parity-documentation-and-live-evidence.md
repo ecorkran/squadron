@@ -199,103 +199,103 @@ exactly what is missing.
 The result is input to Tasks 6 and 7, so it happens before them. This task **records a fact**; it
 does not change behavior.
 
-- [ ] **5.1 Run `sq review pr` with the default profile from inside a Claude Code session**
-  - [ ] This task runs before Task 9.1 creates this slice's own PR, so it needs an existing
+- [x] **5.1 Run `sq review pr` with the default profile from inside a Claude Code session**
+  - [x] This task runs before Task 9.1 creates this slice's own PR, so it needs an existing
         target. Use PR **#116** (slice 385), open on `ecorkran/squadron` at the time of writing.
         Confirm it resolves first with `sq pr show 116`; if it has been merged or closed, use any
         open PR on the repository — the observation is about the profile, not about the PR
-  - [ ] Pass no `--profile` flag, so the `sdk` default applies
-  - [ ] Record the outcome verbatim: success, or the exact error text and exit code
-  - [ ] Do the same for `sq pr create --dry-run` (dry run only — no host write in this task)
-  - [ ] Effort: 1
+  - [x] Pass no `--profile` flag, so the `sdk` default applies
+  - [x] Record the outcome verbatim: success, or the exact error text and exit code
+  - [x] Do the same for `sq pr create --dry-run` (dry run only — no host write in this task)
+  - [x] Effort: 1
 
-- [ ] **5.2 Decide what the record obliges**
-  - [ ] If the default works inside a session: Tasks 6-7 say so, and no fallback is documented
-  - [ ] If it fails: Tasks 6-7 state the observed behavior and the working invocation
+- [x] **5.2 Decide what the record obliges**
+  - [x] If the default works inside a session: Tasks 6-7 say so, and no fallback is documented
+  - [x] If it fails: Tasks 6-7 state the observed behavior and the working invocation
         (385's walkthrough used `--profile openrouter`), and the failure is logged as a **GitHub
         issue** against the CLI and linked from the DEVLOG entry (Task 10). It is **not** patched
         over by having the command file inject a profile — that would violate D1
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 ---
 
 ## Task 6 — `README.md`: the "Pull requests" section (D5)
 
-- [ ] **6.1 Write the section**
-  - [ ] Place it after `## Reviews in depth`
-  - [ ] Cover, per the D5 table: reviewing a PR and its target forms; `--post` with `--dry-run`;
+- [x] **6.1 Write the section**
+  - [x] Place it after `## Reviews in depth`
+  - [x] Cover, per the D5 table: reviewing a PR and its target forms; `--post` with `--dry-run`;
         `sq pr create` with `--dry-run`; base selection in one sentence; the five body sections
         named; and the unplanned-repository path — where the artifact goes, `--reviews-dir`,
         `review.external_reviews_dir`, and that the chosen location and its source are printed
-  - [ ] State the two host writes (`--post` and `sq pr create`) and that squadron never pushes
-  - [ ] Mention the `/sq:review pr` and `/sq:pr` transports and that they pass arguments through
+  - [x] State the two host writes (`--post` and `sq pr create`) and that squadron never pushes
+  - [x] Mention the `/sq:review pr` and `/sq:pr` transports and that they pass arguments through
         unchanged
-  - [ ] State D4's observed profile behavior (from Task 5)
-  - [ ] Effort: 3
+  - [x] State D4's observed profile behavior (from Task 5)
+  - [x] Effort: 3
 
-- [ ] **6.2 Constrain the examples**
-  - [ ] Every example in this section must be one of the invocations Task 9's live run executes —
+- [x] **6.2 Constrain the examples**
+  - [x] Every example in this section must be one of the invocations Task 9's live run executes —
         the examples and the evidence are then the same commands (D5, "Live")
-  - [ ] Use a placeholder target only where the grammar requires showing a form (`owner/repo#n`);
+  - [x] Use a placeholder target only where the grammar requires showing a form (`owner/repo#n`);
         hardcode no value the reader is meant to look up
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 ---
 
 ## Task 7 — `docs/COMMANDS.md` and `docs/QUICKSTART.md` (D5)
 
-- [ ] **7.1 `docs/COMMANDS.md` — `### review pr`**
-  - [ ] Add under the existing `## review` section, following the shape of `### review code`
-  - [ ] Full option table, read from `sq review pr --help`; positional target and its four forms
-  - [ ] Effort: 2
+- [x] **7.1 `docs/COMMANDS.md` — `### review pr`**
+  - [x] Add under the existing `## review` section, following the shape of `### review code`
+  - [x] Full option table, read from `sq review pr --help`; positional target and its four forms
+  - [x] Effort: 2
 
-- [ ] **7.2 `docs/COMMANDS.md` — a new `## pr` section**
-  - [ ] `### pr show` and `### pr create`, each with its full option table read from `--help`
-  - [ ] Place it consistently with the file's existing top-level ordering
-  - [ ] Effort: 2
+- [x] **7.2 `docs/COMMANDS.md` — a new `## pr` section**
+  - [x] `### pr show` and `### pr create`, each with its full option table read from `--help`
+  - [x] Place it consistently with the file's existing top-level ordering
+  - [x] Effort: 2
 
-- [ ] **7.3 `docs/COMMANDS.md` — `review.external_reviews_dir`**
-  - [ ] Document it under `## config` alongside the other keys, with its default tree
-  - [ ] Effort: 1
+- [x] **7.3 `docs/COMMANDS.md` — `review.external_reviews_dir`**
+  - [x] Document it under `## config` alongside the other keys, with its default tree
+  - [x] Effort: 1
 
-- [ ] **7.4 `docs/QUICKSTART.md` — the `gh` doctor rows**
-  - [ ] Explain the `gh CLI` and `gh hosts file` rows: what each checks, and that doctor makes no
+- [x] **7.4 `docs/QUICKSTART.md` — the `gh` doctor rows**
+  - [x] Explain the `gh CLI` and `gh hosts file` rows: what each checks, and that doctor makes no
         subprocess or network call — so an OK row means the CLI is **present**, not that it is
         **authenticated**. Verify this claim against `src/squadron/cli/commands/doctor_checks.py`
         before writing it
-  - [ ] Include each row's fix hint as doctor prints it
-  - [ ] Effort: 2
+  - [x] Include each row's fix hint as doctor prints it
+  - [x] Effort: 2
 
-- [ ] **7.5 `docs/QUICKSTART.md` — correct the command count**
-  - [ ] The sample output reads `9 command(s)`; with `pr.md` it is ten
-  - [ ] Paste the doctor sample from a real `sq doctor -v` run rather than editing the number by
+- [x] **7.5 `docs/QUICKSTART.md` — correct the command count**
+  - [x] The sample output reads `9 command(s)`; with `pr.md` it is ten
+  - [x] Paste the doctor sample from a real `sq doctor -v` run rather than editing the number by
         hand, so the rest of the block is true too (D5)
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 ---
 
 ## Task 8 — The documentation-example parse test (D5)
 
-- [ ] **8.1 Create `tests/docs/` and write `test_pr_doc_examples.py`**
-  - [ ] Create the package (`tests/docs/__init__.py`) — it does not exist yet
-  - [ ] Collect every line beginning `sq review pr` or `sq pr` from fenced code blocks in
+- [x] **8.1 Create `tests/docs/` and write `test_pr_doc_examples.py`**
+  - [x] Create the package (`tests/docs/__init__.py`) — it does not exist yet
+  - [x] Collect every line beginning `sq review pr` or `sq pr` from fenced code blocks in
         `README.md`, `docs/COMMANDS.md`, and `docs/QUICKSTART.md`, reading the repository files
-  - [ ] Extraction is lenient: tolerate a leading `$ ` prompt, trailing comments, and a trailing
+  - [x] Extraction is lenient: tolerate a leading `$ ` prompt, trailing comments, and a trailing
         line-continuation backslash joining a wrapped example
-  - [ ] Split with `shlex`
-  - [ ] Effort: 2
+  - [x] Split with `shlex`
+  - [x] Effort: 2
 
-- [ ] **8.2 Parse each example against the real command without invoking it**
-  - [ ] Resolve the Click command from the `sq` app and parse the argument list against it, so an
+- [x] **8.2 Parse each example against the real command without invoking it**
+  - [x] Resolve the Click command from the `sq` app and parse the argument list against it, so an
         unknown flag or a flag missing its required value fails the test
-  - [ ] Nothing is executed: no model call, no subprocess, no network, no host write
-  - [ ] Assert at least one example was collected — an extractor that silently finds nothing must
+  - [x] Nothing is executed: no model call, no subprocess, no network, no host write
+  - [x] Assert at least one example was collected — an extractor that silently finds nothing must
         fail rather than pass vacuously (project parsing rules)
-  - [ ] Effort: 2
+  - [x] Effort: 2
 
-- [ ] **8.3 Run both new test modules**
-  - [ ] `pytest tests/docs/test_pr_doc_examples.py tests/cli/test_command_surface.py -q` passes
-  - [ ] Effort: 1
+- [x] **8.3 Run both new test modules**
+  - [x] `pytest tests/docs/test_pr_doc_examples.py tests/cli/test_command_surface.py -q` passes
+  - [x] Effort: 1
 
 ---
 
