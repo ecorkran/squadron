@@ -7,7 +7,7 @@ dependencies: [381, 382, 383, 384, 385]
 projectState: "381-385 all merged into `squadron-pr`; the three PR capabilities (`sq pr show`, `sq review pr` with `--post`, `sq pr create`) are built, tested against the fake runner, and each has had one live run. None is reachable from a slash command and none appears in README, QUICKSTART, or COMMANDS. Design committed at 13bd1269, reviewed PASS (two notes, both answered — see the LLD's Response section). `squadron-pr` is ahead of `origin/squadron-pr` and has not been pushed; that push is a PM-authorized precondition of the live run, not a task here."
 dateCreated: 20260920
 dateUpdated: 20260920
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -408,13 +408,13 @@ artifact paths, shas) as you go — Task 10 writes them up.
         and named in the DEVLOG
   - [x] Effort: 1
 
-- [ ] **11.4 Mark everything complete**
-  - [ ] `status: complete` in this task file and in the slice design
-  - [ ] Check slice plan entry 6 in `user/architecture/380-slices.pull-request-workflow.md`
-  - [ ] Update the slice plan's and architecture document's `status` — 386 is the last slice, so
+- [x] **11.4 Mark everything complete**
+  - [x] `status: complete` in this task file and in the slice design
+  - [x] Check slice plan entry 6 in `user/architecture/380-slices.pull-request-workflow.md`
+  - [x] Update the slice plan's and architecture document's `status` — 386 is the last slice, so
         this closes initiative 380
-  - [ ] Every item in this file is checked, including any deliberately dropped, before the merge
-  - [ ] Effort: 1
+  - [x] Every item in this file is checked, including any deliberately dropped, before the merge
+  - [x] Effort: 1
 
 - [ ] **11.5 Land it**
   - [ ] Local `--no-ff` merge into `squadron-pr`, as every slice of this initiative landed. The

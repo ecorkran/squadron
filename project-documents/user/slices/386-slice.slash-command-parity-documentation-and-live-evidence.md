@@ -6,8 +6,8 @@ parent: user/architecture/380-slices.pull-request-workflow.md
 dependencies: [381, 382, 383, 384, 385]
 interfaces: []
 dateCreated: 20260919
-dateUpdated: 20260919
-status: not_started
+dateUpdated: 20260920
+status: complete
 ---
 
 # Slice Design: Slash-Command Parity, Documentation, and Live Evidence
