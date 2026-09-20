@@ -84,7 +84,7 @@ def assert_surface_agreement(cli_flags: set[str], file_flags: set[str], label: s
 
 
 def test_pr_command_sections_exist() -> None:
-    for command_path, filename, heading in _COMMANDS_UNDER_TEST:
+    for _command_path, filename, heading in _COMMANDS_UNDER_TEST:
         text = _command_file_path(filename).read_text()
         assert heading in text, f"{filename} is missing heading {heading!r}"
 
@@ -114,9 +114,7 @@ def test_delegation_line_has_no_injected_flags() -> None:
         )
         # The pr section of review.md must not append -v, unlike code/slice/tasks/arch (D1).
         if command_path == ("review", "pr"):
-            delegation_lines = [
-                line for line in section.splitlines() if delegation in line
-            ]
+            delegation_lines = [line for line in section.splitlines() if delegation in line]
             assert delegation_lines, f"no line in {filename} {heading} contains {delegation!r}"
             for line in delegation_lines:
                 assert "-v" not in line.split(delegation, 1)[1].split("{remainder}")[0], (
