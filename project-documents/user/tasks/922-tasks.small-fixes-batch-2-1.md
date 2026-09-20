@@ -76,28 +76,28 @@ slice without `--no-verify`.
 Do this **first**: task A2's predicate comment cites the issue number, and
 filing it up front means the comment is written once rather than revisited.
 
-- [ ] File an issue on context-forge asking `cf validate frontmatter --json`
+- [x] File an issue on context-forge asking `cf validate frontmatter --json`
       to report paths it skipped as out of scope, so the gate can distinguish
       "skipped" from "wrong checkout" without a squadron-side predicate.
-- [ ] Note the issue number — task **A2** links it from the predicate comment.
+- [x] Note the issue number — task **A2** links it from the predicate comment.
 - **Effort:** 1
 - **Success:** issue exists; its number is in hand before A2 starts.
 
 ### A2. Add the document-root scope predicate
 
-- [ ] Open `src/squadron/events/builtin/frontmatter_gate.py`.
-- [ ] Define the cf user-document root **once** as a module-level constant
+- [x] Open `src/squadron/events/builtin/frontmatter_gate.py`.
+- [x] Define the cf user-document root **once** as a module-level constant
       (the design requires a single definition; do not inline the path
       string at the use site).
-- [ ] Add a predicate that answers "is this staged path under the cf
+- [x] Add a predicate that answers "is this staged path under the cf
       user-document root".
-  - [ ] Compare **normalized path parts**, not string prefixes, so that
+  - [x] Compare **normalized path parts**, not string prefixes, so that
         `./project-documents/user/x.md` and `project-documents/user/x.md`
         classify identically. A `startswith` comparison is explicitly
         insufficient.
-  - [ ] Staged paths arrive repository-root-relative (the hook in
+  - [x] Staged paths arrive repository-root-relative (the hook in
         `setup_install.py` passes `git diff --cached --name-only` output).
-- [ ] Add a comment at the predicate recording its removal condition: it goes
+- [x] Add a comment at the predicate recording its removal condition: it goes
       away when `cf validate frontmatter --json` reports skipped-as-out-of-scope
       paths. Cite the context-forge issue number from task **A1**.
 - **Effort:** 2
@@ -106,49 +106,49 @@ filing it up front means the comment is written once rather than revisited.
 
 ### A3. Use the predicate only in the zero branch
 
-- [ ] Locate the D12 zero-of-N branch at
+- [x] Locate the D12 zero-of-N branch at
       [frontmatter_gate.py:137](src/squadron/events/builtin/frontmatter_gate.py#L137)
       (`staged_count > 0 and files_checked == 0`).
-- [ ] Keep passing **all** staged paths to cf. Do **not** pre-filter the
+- [x] Keep passing **all** staged paths to cf. Do **not** pre-filter the
       paths sent to cf — D2 rejects that alternative explicitly, because it
       would make squadron's predicate the authority and let in-scope files go
       unvalidated if cf's scope is ever broader.
-- [ ] Inside the zero branch only, count how many staged paths are in scope:
-  - [ ] in-scope count `== 0` → **PASS** (nothing cf would have checked).
-  - [ ] in-scope count `> 0` → **FAIL CLOSED**, keeping the existing D10
+- [x] Inside the zero branch only, count how many staged paths are in scope:
+  - [x] in-scope count `== 0` → **PASS** (nothing cf would have checked).
+  - [x] in-scope count `> 0` → **FAIL CLOSED**, keeping the existing D10
         worktree message, now reporting the **in-scope** count rather than
         the total staged count. Update `_worktree_cause_message`
         ([frontmatter_gate.py:42](src/squadron/events/builtin/frontmatter_gate.py#L42))
         accordingly.
-- [ ] Leave every other posture untouched: `files_checked > 0`, unreadable
+- [x] Leave every other posture untouched: `files_checked > 0`, unreadable
       count (D11), timeout, and missing `cf` behave exactly as today.
 - **Effort:** 2
 - **Success:** criteria 4–6 of the design's Functional Requirements hold.
 
 ### A4. Test Fix 2
 
-- [ ] Add tests to `tests/events/builtin/test_frontmatter_gate.py`, alongside
+- [x] Add tests to `tests/events/builtin/test_frontmatter_gate.py`, alongside
       the existing slice-919 D10–D12 class near
       [line 95](tests/events/builtin/test_frontmatter_gate.py#L95).
-- [ ] Use the **real cf JSON shape** shown in the design's Technical Scope
+- [x] Use the **real cf JSON shape** shown in the design's Technical Scope
       table — not an invented shape. The design records probed values:
       `CHANGELOG.md`, `README.md`, `docs/QUICKSTART.md`, `.claude/rules/python.md`,
       `project-documents/DEVLOG.md`, and
       `project-documents/ai-project-guide/readme.md` each yield
       `filesChecked: 0`; `project-documents/user/slices/921-slice.small-fixes-batch.md`
       yields `filesChecked: 1`.
-- [ ] Test (criterion 4): release-shaped staging — `CHANGELOG.md`,
+- [x] Test (criterion 4): release-shaped staging — `CHANGELOG.md`,
       `pyproject.toml`, `uv.lock` — with `filesChecked: 0` → **passes**.
-- [ ] Test (criterion 5): at least one staged path under
+- [x] Test (criterion 5): at least one staged path under
       `project-documents/user/` with `filesChecked: 0` → **fails closed**,
       and the error still carries the D10 worktree wording.
-- [ ] Test (criterion 6): `filesChecked > 0`, unreadable count, timeout, and
+- [x] Test (criterion 6): `filesChecked > 0`, unreadable count, timeout, and
       missing `cf` are each unchanged. Confirm the existing tests at
       [lines 201](tests/events/builtin/test_frontmatter_gate.py#L201) and
       [267](tests/events/builtin/test_frontmatter_gate.py#L267) — which assert
       the worktree, unreadable-count, and timeout messages stay
       distinguishable — still pass.
-- [ ] Test: the mixed case — some staged paths in scope, some out, with
+- [x] Test: the mixed case — some staged paths in scope, some out, with
       `filesChecked: 0` → fails closed (in-scope count is non-zero).
 - **Effort:** 2
 - **Success:** all tests pass; no existing gate test is weakened to
@@ -156,7 +156,7 @@ filing it up front means the comment is written once rather than revisited.
 
 ### A5. Verify Fix 2 against the real hook
 
-- [ ] On a scratch branch, run the design's Verification Walkthrough for Fix 2:
+- [x] On a scratch branch, run the design's Verification Walkthrough for Fix 2:
 
   ```bash
   echo "" >> CHANGELOG.md && git add CHANGELOG.md
@@ -164,9 +164,9 @@ filing it up front means the comment is written once rather than revisited.
   git reset --hard HEAD~1
   ```
 
-- [ ] The fail-closed side needs a sibling worktree and is covered by the A3
+- [x] The fail-closed side needs a sibling worktree and is covered by the A3
       unit test for criterion 5; do **not** attempt to reproduce it live.
-- [ ] Commit Fix 2 on its own.
+- [x] Commit Fix 2 on its own.
 - **Effort:** 1
 - **Success:** a release-shaped commit passes the installed pre-commit hook
   without `--no-verify`.
