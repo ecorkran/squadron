@@ -56,6 +56,7 @@ from squadron.codehost.models import (
 from squadron.codehost.refs import fetch_and_range
 from squadron.codehost.targets import PullRequestTarget
 from squadron.core.process_runner import (
+    ProcessCwdNotFoundError,
     ProcessNotFoundError,
     ProcessResult,
     ProcessRunner,
@@ -487,6 +488,15 @@ class GitHubCli:
                 env=_GH_ENV,
                 stdin=stdin,
             )
+        except ProcessCwdNotFoundError:
+            # D3 (squadron#112): a missing cwd is a configuration error, not a
+            # missing gh install — let it propagate rather than reporting
+            # "gh is not on PATH" for the wrong cause. Does not subclass
+            # ProcessNotFoundError, so the handler below would not catch it
+            # even without this explicit clause; kept explicit for clarity
+            # and so this WARNING is logged before it surfaces.
+            _logger.warning("gh invoked with a nonexistent cwd: %s", cwd)
+            raise
         except ProcessNotFoundError as exc:
             _logger.warning("gh is not on PATH")
             raise GitHubCliMissingError(

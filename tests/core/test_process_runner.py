@@ -8,10 +8,12 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
 from squadron.core.process_runner import (
+    ProcessCwdNotFoundError,
     ProcessNotFoundError,
     ProcessTimedOutError,
     SubprocessRunner,
@@ -65,6 +67,33 @@ def test_timeout_raises_naming_the_bound(
             )
     assert excinfo.value.timeout == 0.2
     assert any(record.levelno == logging.WARNING for record in caplog.records)
+
+
+def test_nonexistent_cwd_raises_naming_the_directory(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = SubprocessRunner()
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(ProcessCwdNotFoundError) as excinfo:
+            runner.run(["git", "status"], cwd="/nonexistent-922", timeout=30)
+    assert excinfo.value.cwd == "/nonexistent-922"
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+
+
+def test_missing_executable_with_valid_cwd_still_raises_process_not_found(
+    tmp_path: Path,
+) -> None:
+    runner = SubprocessRunner()
+    with pytest.raises(ProcessNotFoundError) as excinfo:
+        runner.run(["squadron-no-such-executable"], cwd=str(tmp_path), timeout=30)
+    assert excinfo.value.executable == "squadron-no-such-executable"
+
+
+def test_missing_executable_with_none_cwd_still_raises_process_not_found() -> None:
+    runner = SubprocessRunner()
+    with pytest.raises(ProcessNotFoundError) as excinfo:
+        runner.run(["squadron-no-such-executable"], cwd=None, timeout=30)
+    assert excinfo.value.executable == "squadron-no-such-executable"
 
 
 def test_env_merges_over_os_environ_rather_than_replacing_it() -> None:
