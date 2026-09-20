@@ -3,7 +3,7 @@ docType: slice-design
 slice: slash-command-parity-documentation-and-live-evidence
 project: squadron
 parent: user/architecture/380-slices.pull-request-workflow.md
-dependencies: [382, 384, 385]
+dependencies: [381, 382, 383, 384, 385]
 interfaces: []
 dateCreated: 20260919
 dateUpdated: 20260919
@@ -89,7 +89,9 @@ updated; after this slice, something does, for the PR surface.
 
 ### Prerequisites
 
-- **382, 384, 385** merged into `squadron-pr` — all three are.
+- **381 through 385** merged into `squadron-pr` — all five are. 382, 384, and 385 are the plan
+  entry's stated dependencies; 381 (`sq pr show --json`, doctor checks) and 383 (`--reviews-dir`,
+  `review.external_reviews_dir`) are consumed directly and listed for that reason.
 - **`squadron-pr` pushed to `origin`** before the live run (D6). This is an outward-facing
   action awaiting PM direction; it is a precondition of the live-run tasks, not one of them.
 - `gh` authenticated for `github.com` on the operator machine.
