@@ -119,7 +119,8 @@ the normal first-run state.
 `tools/builtin/_shared.py` logs two distinct refusals at WARNING, at two sites
 each (the walk filter near line 85 and `jail_violation` near line 173):
 a **jail escape** (path resolves outside the root) and a **policy exclusion**
-(path is inside an excluded subtree, slice 917 D6). `-v` maps to `INFO`, so
+(path is inside an excluded subtree, slice 918 D3 — issue #100 attributes this
+to slice 917, which is incorrect). `-v` maps to `INFO`, so
 every WARNING prints. A `grep` over a tree containing the excluded `reviews/`
 directory emits one line per excluded file.
 
@@ -218,6 +219,11 @@ and is not a directory; otherwise raise `ProcessNotFoundError` as today.
 Classifying in the handler rather than pre-checking before `Popen` keeps the
 success path free of an extra stat and avoids a check-then-use gap. The
 `ProcessRunner` protocol docstring documents the new exception.
+`SubprocessRunner` is the only production implementation. The one other
+implementation, `tests/codehost/fake_runner.py::FakeProcessRunner`, raises
+whatever `Exception` a test scripts and so needs no change — tests produce the
+condition by scripting a `ProcessCwdNotFoundError`. The protocol obliges no
+caller to handle it: it signals a configuration error and is meant to surface.
 `github_cli.py` must not convert it to "gh is not on PATH": it lets
 `ProcessCwdNotFoundError` propagate, after logging at WARNING. A missing
 working directory is a configuration error, not a code-host condition, so it
@@ -238,8 +244,10 @@ wording is accurate diagnostic output — they are not changed.
 **D6 — Fix 6: exclusions log at DEBUG; escapes stay at WARNING.**
 At both sites, the *policy exclusion* record drops to DEBUG (visible at `-vv`);
 the *jail escape* record stays WARNING. An escape means something reached for
-the trust boundary; an exclusion is slice 917's policy working as designed and
-is not a failure mode. The "one refusal, one record" property of
+the trust boundary; an exclusion is slice 918's policy working as designed and
+is not a failure mode. This deliberately amends 918 D3 ("Silent to the model,
+WARNING to the operator") for the policy-exclusion case only; the
+silent-to-the-model half of D3 is untouched. The "one refusal, one record" property of
 `jail_violation` and the distinguishable wording are preserved. The docstrings
 that state "both are logged at WARNING" are corrected.
 
@@ -253,7 +261,7 @@ that state "both are logged at WARNING" are corrected.
 ### Consumes from Other Slices
 
 - Slice 919's gate postures (D10–D14) are preserved; only D12's zero branch gains a condition.
-- Slice 917's exclusion semantics (D6: silent to the model) are unchanged; only operator log level moves.
+- Slice 918's exclusion semantics (D3: silent to the model) are unchanged; only the operator log level for exclusions moves.
 
 ## Success Criteria
 
@@ -360,12 +368,12 @@ so the predicate has a recorded removal condition.
 ### Special Considerations
 
 - **Fix 1 is a user-visible install change.** Add a CHANGELOG entry: two dependencies dropped, `rich` declared.
-- **Fix 6 changes what slice 917's tests assert.** Expect existing tests pinned to WARNING for exclusions; update them rather than adding parallel ones.
+- **Fix 6 changes what slice 918's tests assert.** Expect existing tests pinned to WARNING for exclusions; update them rather than adding parallel ones.
 
 ### Non-goals
 
 - The `[serve]` extra and lazy `serve` import — deferred, [#118](https://github.com/ecorkran/squadron/issues/118).
 - Consolidating the scattered `project-documents/user/...` path constants across `review/`, `metrology/`, `pipeline/`, and `events/`. Fix 2 adds one constant and does not touch the others.
-- Pruning excluded subtrees at walk descent so they are never visited. It would remove the per-file refusals at the source, but changes where exclusion is enforced (917 deliberately enforces at candidate production).
+- Pruning excluded subtrees at walk descent so they are never visited. It would remove the per-file refusals at the source, but changes where exclusion is enforced (the walk filter's docstring records enforcing at candidate production as deliberate).
 - Rewording `doctor_checks.py` detail strings.
 - Comparing `filesChecked` against the in-scope count for partial mismatches; the gate's check remains zero-of-N.
