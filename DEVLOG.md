@@ -108,6 +108,16 @@ subcommands (`code`, `slice`, `tasks`, `arch`, `resolve`) is
 [issue #120](https://github.com/ecorkran/squadron/issues/120) — their command-file sections
 predate the test and were not authored against it.
 
+**Full suite gate**: 4204 passed, 6 skipped, 4 failed (472s, `tests/load` excluded per its own
+tier). Three failures are the known `tests/documents/test_schema_drift.py` ones (context-forge
+issue #88). The fourth, `tests/pr/test_tasks.py::test_real_task_file_fixture`, is also
+pre-existing and unrelated to this slice: its fixture selector picks
+`385-tasks.create-a-pr-with-a-good-message.md`, which slice 385 finished checking off on
+2026-09-19 (`e534525d`), a day before this slice's work began — the test requires the fixture to
+have unchecked items, which stopped being true once that slice closed. Logged as
+[issue #121](https://github.com/ecorkran/squadron/issues/121); no file under `src/squadron/` or
+`tests/pr/` changed by 386.
+
 ---
 
 ## 20260919
