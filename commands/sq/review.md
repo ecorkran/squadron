@@ -274,7 +274,7 @@ Optional flags:
 - `--model TEXT`: model override (e.g. `opus`, `sonnet`)
 - `--no-tools`: run this review without tools, even if the template declares them
 - `--profile TEXT`: provider profile (e.g. `openrouter`, `openai`, `local`, `sdk`)
-- `-v`/`-vv`: verbosity level
+- `--verbose`/`-v`/`-vv`: verbosity level
 - `--output TEXT`: output format — `terminal`, `json`, `file` (default: `terminal`)
 - `--output-path TEXT`: file path for `--output file` (a JSON dump, not the review artifact)
 - `--reviews-dir DIR`: directory for the saved review artifact. Overrides the project's reviews
