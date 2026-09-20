@@ -392,12 +392,13 @@ artifact paths, shas) as you go — Task 10 writes them up.
         including the actual PR number
   - [ ] Effort: 1
 
-- [ ] **11.2 Log the deferred work as issues**
-  - [ ] Open a GitHub issue for retrofitting the drift test to the pre-existing subcommands
+- [x] **11.2 Log the deferred work as issues**
+  - [x] Open a GitHub issue for retrofitting the drift test to the pre-existing subcommands
         (`code`, `slice`, `tasks`, `arch`, `resolve`) — the test's command list is the extension
         point, but their sections were not authored against it (LLD, Excluded)
-  - [ ] Link the issue number from this task file and from the DEVLOG entry
-  - [ ] Effort: 1
+  - [x] Link the issue number from this task file and from the DEVLOG entry — issue
+        [#120](https://github.com/ecorkran/squadron/issues/120)
+  - [x] Effort: 1
 
 - [ ] **11.3 Gate**
   - [ ] `ruff format`, `ruff check`, `pyright` — zero errors

@@ -339,8 +339,13 @@ pre-existing subcommands.
 
 ### Verification Walkthrough
 
-Draft; refined with real output at the end of Phase 6. `<n>` is the number of the PR that step
-2 creates — read it from that step's printed URL.
+Run for real at the end of Phase 6 against **PR #119**
+(https://github.com/ecorkran/squadron/pull/119), created from this slice's own branch. `<n>` is
+`119` throughout. One caveat found along the way: `sq pr create` with the default `sdk` profile
+fails inside a Claude Code session (nested-session guard on the one-shot composer's subprocess
+launch) — every `sq pr create` invocation below uses `--profile openrouter --model
+openai/gpt-4o-mini`, the same fallback 385's walkthrough used. `sq review pr` is unaffected; its
+default profile works inside a session (see DEVLOG, "Slice 386 implementation and live run").
 
 **1. Transports installed.**
 
@@ -360,46 +365,66 @@ sq pr create --dry-run --profile openrouter --model openai/gpt-4o-mini
 sq pr create --profile openrouter --model openai/gpt-4o-mini
 ```
 
-stderr names `base: squadron-pr (source: integration-branch)`; stdout ends with the PR URL.
+stderr named `base: squadron-pr (source: integration-branch)`; stdout ended with
+`https://github.com/ecorkran/squadron/pull/119`. Confirmed independently via
+`gh pr view 119 --json baseRefName` → `squadron-pr`.
 
 **3. Deterministic parity.**
 
 ```bash
-sq pr show <n> --json > /tmp/cli-show.json
+sq pr show 119 --json > /tmp/cli-show.json
 ```
 
-In a Claude Code session: `/sq:pr show <n> --json`, output saved to `/tmp/slash-show.json`.
-`diff /tmp/cli-show.json /tmp/slash-show.json` prints nothing.
+In a Claude Code session: `/sq:pr show 119 --json`, output saved to `/tmp/slash-show.json`.
+`diff /tmp/cli-show.json /tmp/slash-show.json` printed nothing — byte-identical.
 
 **4. Review and post, CLI.**
 
 ```bash
-sq review pr <n> --profile openrouter --model openai/gpt-4o-mini \
+sq review pr 119 --profile openrouter --model openai/gpt-4o-mini \
   --reviews-dir /tmp/parity-cli --post --dry-run
-sq review pr <n> --profile openrouter --model openai/gpt-4o-mini \
+sq review pr 119 --profile openrouter --model openai/gpt-4o-mini \
   --reviews-dir /tmp/parity-cli --post
 ```
 
-The dry run prints the comment and writes nothing to the host; the second posts it.
+The dry run printed the comment and wrote nothing to the host. The second call posted
+[issuecomment-5751705564](https://github.com/ecorkran/squadron/pull/119#issuecomment-5751705564).
 
 **5. Review and post, slash command.** In a session:
 
 ```
-/sq:review pr <n> --profile openrouter --model openai/gpt-4o-mini --reviews-dir /tmp/parity-slash --post
+/sq:review pr 119 --profile openrouter --model openai/gpt-4o-mini --reviews-dir /tmp/parity-slash --post
 ```
 
-The session runs that exact `sq` command, once. Then:
+The session ran that exact `sq review pr` command once, and posted to the **same** comment
+(`#issuecomment-5751705564`) rather than a new one — 384's idempotency held across transports.
+Then:
 
 ```bash
-gh pr view <n> --json comments --jq '[.comments[] | select(.body | contains("squadron"))] | length'
+gh pr view 119 --json comments --jq '[.comments[] | select(.body | contains("squadron"))] | length'
 ls /tmp/parity-cli /tmp/parity-slash
 ```
 
-One comment. Same artifact filename in both directories; frontmatter compared field by field.
+Output: `1`. Same artifact filename (`github.com-ecorkran-squadron-119-review.code.md`) in both
+directories; frontmatter compared field by field — `pr`, `reviewedSha`, `sourceDocument`,
+`reviewType`, `aiModel`, `rulesSource` all equal; `toolCallsMade` and `findings` differed, as
+expected for two calls to a non-deterministic model (recorded, not compared).
+
+All four target forms resolved PR 119 identically via `sq pr show`: `119`, the full PR URL,
+`ecorkran/squadron#119`, and the branch name.
 
 **6. Refusal is shown, not worked around.** On a scratch branch with an unpushed commit, in a
-session: `/sq:pr create --dry-run`. The session shows the refusal and the `git push` line and
-runs nothing further; `git ls-remote` confirms the branch is still absent from the host.
+session: `/sq:pr create --dry-run`. The session showed the refusal and the printed remediation
+(`git push -u origin scratch-386-refusal-test`) and ran nothing further; `git ls-remote origin
+scratch-386-refusal-test` confirmed the branch never reached the host. Scratch branch deleted
+afterward.
+
+```bash
+gh pr view 119 --json body,comments
+```
+
+All five body sections present (`## What changed`, `## Why`, `## How it was verified`,
+`## Known gaps`, `## Review provenance`); exactly one squadron comment.
 
 **7. Documentation.**
 
@@ -408,7 +433,8 @@ pytest tests/docs/test_pr_doc_examples.py tests/cli/test_command_surface.py -q
 sq doctor -v
 ```
 
-Both test modules pass; doctor's `gh CLI` and `gh hosts file` rows match the QUICKSTART text.
+Both test modules pass (6 passed); doctor's `gh CLI` and `gh hosts file` rows match the
+QUICKSTART text, and the install count reads `10 command(s)`.
 
 ## Implementation Notes
 

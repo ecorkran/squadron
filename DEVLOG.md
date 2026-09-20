@@ -103,6 +103,11 @@ No file under `src/squadron/` changed in this slice. This closes initiative 380 
 Workflow): 381–385 built and proved the three capabilities individually; 386 made them
 discoverable and proved them together on one real PR.
 
+**Deferred work logged**: retrofitting the D2 drift test to the pre-existing `review`
+subcommands (`code`, `slice`, `tasks`, `arch`, `resolve`) is
+[issue #120](https://github.com/ecorkran/squadron/issues/120) — their command-file sections
+predate the test and were not authored against it.
+
 ---
 
 ## 20260919
