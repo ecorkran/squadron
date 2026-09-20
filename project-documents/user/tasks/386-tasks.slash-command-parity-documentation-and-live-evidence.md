@@ -387,10 +387,10 @@ artifact paths, shas) as you go — Task 10 writes them up.
 
 ## Task 11 — Close the slice and the initiative
 
-- [ ] **11.1 Refine the verification walkthrough**
-  - [ ] Replace the LLD's draft walkthrough with the real commands and real output from Task 9,
+- [x] **11.1 Refine the verification walkthrough**
+  - [x] Replace the LLD's draft walkthrough with the real commands and real output from Task 9,
         including the actual PR number
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 - [x] **11.2 Log the deferred work as issues**
   - [x] Open a GitHub issue for retrofitting the drift test to the pre-existing subcommands
@@ -400,13 +400,13 @@ artifact paths, shas) as you go — Task 10 writes them up.
         [#120](https://github.com/ecorkran/squadron/issues/120)
   - [x] Effort: 1
 
-- [ ] **11.3 Gate**
-  - [ ] `ruff format`, `ruff check`, `pyright` — zero errors
-  - [ ] Full suite: no new failures. The three `tests/documents/test_schema_drift.py` failures are
+- [x] **11.3 Gate**
+  - [x] `ruff format`, `ruff check`, `pyright` — zero errors
+  - [x] Full suite: no new failures. The three `tests/documents/test_schema_drift.py` failures are
         pre-existing (context-forge issue #88) and are not this slice's
-  - [ ] Confirm no file under `src/squadron/` changed, except any defect fix committed separately
+  - [x] Confirm no file under `src/squadron/` changed, except any defect fix committed separately
         and named in the DEVLOG
-  - [ ] Effort: 1
+  - [x] Effort: 1
 
 - [ ] **11.4 Mark everything complete**
   - [ ] `status: complete` in this task file and in the slice design
