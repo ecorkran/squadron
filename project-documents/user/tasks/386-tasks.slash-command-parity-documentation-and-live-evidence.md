@@ -50,6 +50,13 @@ Task order follows the LLD's Implementation Notes → Order.
 Test tasks follow their implementation task directly. No test in this slice calls a model, makes
 a network call, or writes to a pull request.
 
+**Commits.** Each numbered task ends in one semantic commit from the project root, typed per the
+project's git rules — `docs:` for the command files and the four documents (Tasks 1, 2, 6, 7, 10),
+`test:` for the test modules (Tasks 3, 4, 8), `chore:` for the close-out (Task 11). Task 5 records
+an observation and commits nothing on its own; its result lands with Task 6. Task 9 is a live run
+against the host and commits only its captured artifacts. A defect found along the way is its own
+commit, separate from the task's.
+
 ---
 
 ## Task 1 — `commands/sq/pr.md`, the `/sq:pr` transport (D1, D3)
@@ -193,7 +200,11 @@ The result is input to Tasks 6 and 7, so it happens before them. This task **rec
 does not change behavior.
 
 - [ ] **5.1 Run `sq review pr` with the default profile from inside a Claude Code session**
-  - [ ] Use a real, reachable PR target and no `--profile` flag, so the `sdk` default applies
+  - [ ] This task runs before Task 9.1 creates this slice's own PR, so it needs an existing
+        target. Use PR **#116** (slice 385), open on `ecorkran/squadron` at the time of writing.
+        Confirm it resolves first with `sq pr show 116`; if it has been merged or closed, use any
+        open PR on the repository — the observation is about the profile, not about the PR
+  - [ ] Pass no `--profile` flag, so the `sdk` default applies
   - [ ] Record the outcome verbatim: success, or the exact error text and exit code
   - [ ] Do the same for `sq pr create --dry-run` (dry run only — no host write in this task)
   - [ ] Effort: 1
