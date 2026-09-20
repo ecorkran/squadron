@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The run digest now records why the model stopped, how much it spent reasoning, how many tool calls failed, and whether its response arrived with no line breaks. A review that returns a substantial answer but yields no findings used to leave nothing on disk explaining it; the artifact alone now distinguishes output that was never emitted from output that was emitted but unparseable, with no re-run and no `-vv` (#92)
 - `sq review --output json` now carries `stop_reason`, `reasoning_chars`, and `failed_tool_calls` (null when the provider reports none), so a runner can tell a failed review from a healthy one and retry rather than escalating (#92)
 - Committing a review artifact whose `verdict:` is missing or is not one of the review verdicts is now rejected. An unrecognized verdict used to reach a pipeline gate as `UNKNOWN` and trip a checkpoint indistinguishably from a real one. Disable with `squadron.review-verdict-gate` in `events.yaml` (#77)
+- `sq review pr`, `sq pr show`, and `sq pr create` are now reachable from inside a Claude Code session as `/sq:review pr` and `/sq:pr show|create`, alongside the existing CLI commands
 
 ### Fixed
 - A review that was offered tools and made none now reports `0` in its digest and frontmatter instead of reading as though nothing was measured (#92)

@@ -347,6 +347,83 @@ sq review code --diff main --output json
 sq review code --diff main --output file --output-path result.json
 ```
 
+## Pull requests
+
+Squadron can resolve a pull request, review it, post the review as a comment, and open a pull
+request from your current branch. Reachable from the CLI (`sq pr`, `sq review pr`) and from
+inside a Claude Code session (`/sq:pr`, `/sq:review pr`) — both transports pass your arguments
+through to the same CLI command, unchanged.
+
+### Reviewing a pull request
+
+`sq review pr` targets a pull request instead of a local diff. Accepts a number,
+`owner/repo#number`, `repo#number`, a pull-request URL, or a branch; omit the target to use the
+current branch's pull request:
+
+```bash
+sq review pr <n>
+```
+
+Post the review as a single comment on the pull request. Preview what would be posted first —
+`--dry-run` prints the comment and writes nothing to the host:
+
+```bash
+sq review pr <n> --post --dry-run
+sq review pr <n> --post
+```
+
+Posting again on the same pull request updates that one comment rather than adding a second.
+
+From inside a session, the same review runs as:
+
+```
+/sq:review pr <n> --post
+```
+
+The session runs that exact `sq review pr` command once — no shorthand is injected, so
+`/sq:review pr <n> [flags]` and `sq review pr <n> [flags]` are the same invocation.
+
+### Creating a pull request
+
+`sq pr create` opens a pull request from your current branch, with a title and body assembled
+from the branch's own artifacts (slice design, task file, commits). Preview before creating:
+
+```bash
+sq pr create --dry-run
+sq pr create
+```
+
+The base branch defaults to your project's configured integration branch (or `main`), printed
+along with where that choice came from. `sq pr create` refuses — and never works around — an
+unpushed branch or an unresolvable base; it prints the remediation (e.g. the `git push` to run)
+rather than running it for you.
+
+The resulting pull request body has five sections: summary, changes, testing, and two more
+assembled from the branch's slice and task artifacts. See
+[docs/COMMANDS.md](docs/COMMANDS.md#pr) for the full section list and every flag.
+
+From a session:
+
+```
+/sq:pr create --dry-run
+```
+
+Squadron never pushes a branch on your behalf. If `/sq:pr create` shows a refusal with a printed
+`git push` line, that command is shown for you to run yourself — the session does not run it.
+
+### Where the review artifact goes
+
+A pull-request review is saved like any other: under the project's reviews directory, or
+`review.external_reviews_dir` when the repository being reviewed isn't the current project
+(useful when reviewing a pull request in a different checkout). Override either with
+`--reviews-dir`. The CLI prints the chosen location and its source.
+
+### Provider profile
+
+`sq review pr` and `sq pr create` default to the `sdk` provider profile. Verified from inside a
+Claude Code session: the default profile runs correctly with no `--profile` override needed —
+pass `--profile` only to use a different provider (e.g. `openrouter`).
+
 ## Configuration
 
 Avoid repeating flags with persistent config. Two levels with clear precedence:

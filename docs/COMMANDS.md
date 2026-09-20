@@ -100,6 +100,49 @@ sq review code --diff main --output json > review.json
 
 **Review files are overwritten in place, but the prior content is archived first.** A second `sq review code 305` replaces `project-documents/user/reviews/305-review.code.<slice>.md` with no revision suffix and no prompt — but before the write, the existing file is copied to `project-documents/user/reviews/archive/` under its original name, the copy is read back and compared byte-for-byte, and only then is the overwrite allowed. If the archive cannot be written or does not verify, the review is **not saved** and the command says so; the original is left untouched. Hand edits therefore survive as an archived copy, not in place.
 
+### review pr
+
+Review a pull request's code over its fetched merge-base range.
+
+```
+sq review pr [OPTIONS] [TARGET]
+```
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `TARGET` | string | no | Pull request to review: a number, `owner/repo#number`, `repo#number`, a pull-request URL, or a branch. Omit to use the current branch. |
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--cwd` | string | no | config or `.` | Repository to resolve against |
+| `--rules` | string | no | config `default_rules` | Path to additional rules file |
+| `--rules-dir` | string | no | — | Rules directory override |
+| `--no-rules` | flag | no | off | Suppress all rule injection |
+| `--model` | string | no | config or template default | Model override (e.g. `opus`, `sonnet`) |
+| `--no-tools` | flag | no | off | Run this review without tools, even if the template declares them |
+| `--profile` | string | no | config | Provider profile (`sdk`, `openrouter`, `openai`, `local`, …) |
+| `-v`, `--verbose` | count | no | config or `0` | Verbosity level |
+| `--output` | string | no | `terminal` | Output format: `terminal`, `json`, `file` |
+| `--output-path` | string | no | — | File path for `--output file` (a JSON dump, not the review artifact) |
+| `--reviews-dir` | string | no | project reviews dir or `review.external_reviews_dir` | Directory for the saved review artifact. Distinct from `--output-path`. |
+| `--json` | flag | no | off | Output and save as JSON instead of markdown |
+| `--no-save` | flag | no | off | Do not write a review file |
+| `--post` | flag | no | off | Post the review to the pull request as one comment |
+| `--dry-run` | flag | no | off | Print the comment that `--post` would write, without writing it. Requires `--post`. |
+
+```bash
+# Review the current branch's pull request
+sq review pr
+
+# Review a specific pull request and post the result as a comment
+sq review pr 116 --post
+
+# Preview the comment without posting
+sq review pr 116 --post --dry-run
+```
+
+The CLI prints the chosen reviews-directory location and its source (`--reviews-dir`, `review.external_reviews_dir`, or the project default). `--post` writes to the host; a second `--post` on the same pull request updates the existing squadron comment rather than adding a new one.
+
 ### review resolve
 
 Record whether a prior review's findings were addressed by the work done since.
@@ -187,6 +230,63 @@ sq review list
 
 No options. Outputs template names and descriptions.
 
+## pr
+
+### pr show
+
+Resolve a pull request, fetch its endpoints, and report the range.
+
+```
+sq pr show [OPTIONS] [TARGET]
+```
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `TARGET` | string | no | Pull request to show: a number, `owner/repo#number`, `repo#number`, a pull-request URL, or a branch. Omit to use the current branch. |
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--cwd` | string | no | config or `.` | Repository to resolve against |
+| `--json` | flag | no | off | Emit machine-readable JSON |
+
+```bash
+# Show the current branch's pull request
+sq pr show
+
+# Show a specific pull request as JSON
+sq pr show 116 --json
+```
+
+### pr create
+
+Open a pull request with a description assembled from the branch's own artifacts.
+
+```
+sq pr create [OPTIONS]
+```
+
+Every refusal decidable without a model call happens before the model call: identity, then the
+pushed-branch precondition, then base selection, all before input gathering, assembly, and
+composition. A refusal prints its remediation (e.g. the `git push` command) rather than acting
+on the operator's behalf.
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--base` | string | no | `git.integration_branch` or `main` | Base branch |
+| `--dry-run` | flag | no | off | Print title and body without creating |
+| `--model` | string | no | config or template default | Model for the one-shot composer |
+| `--profile` | string | no | `sdk` | Provider profile for the one-shot composer |
+| `--cwd` | string | no | config or `.` | Repository to resolve against |
+| `--title` | string | no | the slice's name | PR title, overriding the slice's name |
+
+```bash
+# Preview the title and body
+sq pr create --dry-run
+
+# Create the pull request
+sq pr create
+```
+
 ## config
 
 Manage persistent configuration.
@@ -267,6 +367,21 @@ $ sq config path
   User:    ~/.config/squadron/config.toml  exists
   Project: ./.squadron.toml                not found
 ```
+
+### Review keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `review.external_reviews_dir` | string | *(unset)* | Where a review artifact is saved when the checkout being reviewed has no `project-documents/user/reviews/` of its own — the common case for `sq review pr` against a repository squadron never planned. |
+
+**How the reviews directory is chosen**, in order:
+
+1. `--reviews-dir` — this invocation only.
+2. the checkout's own `project-documents/user/reviews/`, when it already exists (never created as a side effect of reviewing a pull request).
+3. `review.external_reviews_dir`.
+4. the built-in default: `~/.config/squadron/reviews/<host>/<owner>/<repo>/`.
+
+The CLI prints the directory it chose and which rule chose it.
 
 ### Metrology keys
 

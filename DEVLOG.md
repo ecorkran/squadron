@@ -34,6 +34,90 @@ A lightweight, append-only record of development activity. Newest entries first.
   subcommands as a GitHub issue.
 - Next: Phase 6 implementation on branch `386-slice.slash-command-parity-documentation-and-live-evidence`.
 
+### Slice 386 implementation and live run (Phase 6) — closes initiative 380
+
+**Tasks 1–8** (`commands/sq/pr.md`, the `pr` section of `review.md`, the D2 drift test, the
+install-count update, the D4 observation, README/COMMANDS/QUICKSTART, the D5 example-parse
+test) — implemented and committed as planned, ten commits on the slice branch.
+
+**Task 3's first run found a real gap**: `review.md`'s `pr` section documented `-v`/`-vv` but not
+the long form `--verbose` that `sq review pr` actually registers. Fixed in the command file, not
+the test, per the task's own rule.
+
+**Task 5 (D4 observation) — two different results, not one.** `sq review pr 116` with no
+`--profile` (default `sdk`) ran successfully inside this Claude Code session — a full review,
+verdict PASS, real model call, exit 0 (it hit a 20-iteration agentic-loop cap on a large diff and
+had to finalize; unrelated to the profile — normal provider-agent behavior on a big diff, not a
+session-vs-terminal difference). But `sq pr create --dry-run` with the default profile **failed**
+inside the session: `sq pr create`'s one-shot composer launches a nested Claude Code CLI
+subprocess, which the CLI refuses — "Claude Code cannot be launched inside another Claude Code
+session." `sq review pr` uses the SDK's client mode within the existing session; `sq pr create`'s
+composer spawns a new CLI process, which the nested-session guard blocks. The working invocation,
+matching 385's walkthrough, is `--profile openrouter --model openai/gpt-4o-mini`. README states
+this: the default profile works for `sq review pr` inside a session; `sq pr create` needs a
+non-`sdk` profile there. Not logged as a CLI defect — the nested-session guard is correct
+behavior, and the composer using a subprocess rather than client mode is a design fact for a
+future slice to address if it matters, not a defect this slice's Excluded scope covers.
+
+**Task 9 (live run), after `squadron-pr` was pushed to `origin` (PM-authorized, 84 commits,
+`fdb46f40..a0466b92`):**
+
+1. Pushed `386-slice.slash-command-parity-documentation-and-live-evidence`; `sq pr create
+   --dry-run --profile openrouter --model openai/gpt-4o-mini` previewed the title and body, then
+   `sq pr create --profile openrouter --model openai/gpt-4o-mini` opened
+   **[PR #119](https://github.com/ecorkran/squadron/pull/119)**. stderr confirmed `base:
+   squadron-pr (source: integration-branch)`; `gh pr view 119 --json baseRefName` confirmed
+   `squadron-pr`.
+2. `sq pr show 119 --json` from the CLI and `/sq:pr show 119 --json` from a session: `diff`
+   printed nothing — byte-identical (D2 tier one).
+3. CLI: `sq review pr 119 --profile openrouter --model openai/gpt-4o-mini --reviews-dir
+   /tmp/parity-cli --post --dry-run` printed the comment and wrote nothing; the same command
+   without `--dry-run` posted [issuecomment-5751705564](https://github.com/ecorkran/squadron/pull/119#issuecomment-5751705564).
+   Artifact: `/tmp/parity-cli/github.com-ecorkran-squadron-119-review.code.md`.
+4. Slash command: `/sq:review pr 119 --profile openrouter --model openai/gpt-4o-mini
+   --reviews-dir /tmp/parity-slash --post` ran that exact `sq review pr` command once and posted
+   to the **same comment** (`#issuecomment-5751705564`) — 384's idempotency held across
+   transports. `gh pr view 119 --json comments` confirmed exactly one squadron comment.
+   Artifact: `/tmp/parity-slash/github.com-ecorkran-squadron-119-review.code.md`.
+5. The two artifacts share filename and every deterministic frontmatter field (`pr` record,
+   `reviewedSha` `1708d359831c6a30b941fa2baf943ccdd722b40f`, `sourceDocument`, `reviewType`,
+   `aiModel: openai/gpt-4o-mini`, `rulesSource: project`). `toolCallsMade` and `findings` differ,
+   as expected — two calls to a non-deterministic model, recorded rather than compared (D2 tier
+   two).
+6. `sq pr show` resolved PR #119 through all four target forms: `119`, the full URL,
+   `ecorkran/squadron#119`, and the branch name — all four returned the identical record.
+7. On a throwaway scratch branch with an unpushed commit, `/sq:pr create --dry-run` (session)
+   showed the refusal and the printed remediation (`git push -u origin
+   scratch-386-refusal-test`) and ran nothing further; `git ls-remote origin
+   scratch-386-refusal-test` confirmed the branch never reached the host. Scratch branch deleted
+   afterward.
+8. `gh pr view 119 --json body,comments`: all five body sections present (`## What changed`,
+   `## Why`, `## How it was verified`, `## Known gaps`, `## Review provenance`); exactly one
+   squadron comment.
+
+**Gate**: `ruff format`/`ruff check` clean (one formatting fix and one unused-loop-variable
+rename applied to `test_command_surface.py` along the way); `pyright` clean — no file under
+`src/squadron/` changed. Full test suite run for regressions.
+
+No file under `src/squadron/` changed in this slice. This closes initiative 380 (Pull Request
+Workflow): 381–385 built and proved the three capabilities individually; 386 made them
+discoverable and proved them together on one real PR.
+
+**Deferred work logged**: retrofitting the D2 drift test to the pre-existing `review`
+subcommands (`code`, `slice`, `tasks`, `arch`, `resolve`) is
+[issue #120](https://github.com/ecorkran/squadron/issues/120) — their command-file sections
+predate the test and were not authored against it.
+
+**Full suite gate**: 4204 passed, 6 skipped, 4 failed (472s, `tests/load` excluded per its own
+tier). Three failures are the known `tests/documents/test_schema_drift.py` ones (context-forge
+issue #88). The fourth, `tests/pr/test_tasks.py::test_real_task_file_fixture`, is also
+pre-existing and unrelated to this slice: its fixture selector picks
+`385-tasks.create-a-pr-with-a-good-message.md`, which slice 385 finished checking off on
+2026-09-19 (`e534525d`), a day before this slice's work began — the test requires the fixture to
+have unchecked items, which stopped being true once that slice closed. Logged as
+[issue #121](https://github.com/ecorkran/squadron/issues/121); no file under `src/squadron/` or
+`tests/pr/` changed by 386.
+
 ---
 
 ## 20260919

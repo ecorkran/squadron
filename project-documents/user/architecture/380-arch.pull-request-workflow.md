@@ -3,8 +3,8 @@ docType: architecture
 project: squadron
 initiative: 380
 dateCreated: 20260912
-dateUpdated: 20260912
-status: not_started
+dateUpdated: 20260920
+status: complete
 archIndex: 380
 component: pull-request-workflow
 ---
