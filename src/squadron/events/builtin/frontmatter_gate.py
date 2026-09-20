@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import PurePosixPath
 from typing import Any, cast
 
 from squadron.core.process_group import kill_process_group
@@ -28,6 +29,26 @@ from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.tools import limits
 
 _logger = logging.getLogger(__name__)
+
+# cf's user-document root, defined once. Consulted only in the zero-of-N branch
+# below (D2) — never used to pre-filter what gets sent to cf. Removal condition:
+# this predicate goes away once cf validate frontmatter --json reports which
+# staged paths it skipped as out of scope (filed upstream as
+# ecorkran/context-forge#96).
+_CF_DOCUMENT_ROOT = ("project-documents", "user")
+
+
+def _is_under_cf_document_root(staged_path: str) -> bool:
+    """Is `staged_path` (repo-root-relative, as the pre-commit hook passes it)
+    under cf's user-document root?
+
+    Compares normalized path parts rather than string prefixes, so
+    `./project-documents/user/x.md` and `project-documents/user/x.md`
+    classify identically.
+    """
+    parts = PurePosixPath(staged_path).parts
+    return parts[: len(_CF_DOCUMENT_ROOT)] == _CF_DOCUMENT_ROOT
+
 
 _MISSING_CF_MESSAGE = (
     "'cf' is not on PATH — cannot run cf validate frontmatter. "
@@ -39,11 +60,11 @@ _COULD_NOT_RUN_MESSAGE = (
 )
 
 
-def _worktree_cause_message(staged_count: int) -> str:
+def _worktree_cause_message(in_scope_count: int) -> str:
     return (
-        f"cf validated 0 of {staged_count} staged file(s); in a git worktree this "
-        "usually means cf resolved in-root against a different checkout, so the "
-        "gate cannot confirm frontmatter and is failing closed."
+        f"cf validated 0 of {in_scope_count} in-scope staged file(s); in a git "
+        "worktree this usually means cf resolved in-root against a different "
+        "checkout, so the gate cannot confirm frontmatter and is failing closed."
     )
 
 
@@ -133,9 +154,16 @@ class FrontmatterGateAction:
 
         # D12: zero-checked is only a failure against non-empty staged input — a commit
         # staging no markdown gives cf nothing to check, and filesChecked: 0 is correct.
+        # D2: cf silently skips paths outside its document scope, so filesChecked: 0
+        # alone can't distinguish "wrong checkout" from "nothing staged was in scope".
+        # All staged paths are still sent to cf above — this predicate is consulted
+        # only here, to interpret the zero case.
         staged_count = len(context.staged_paths)
         if staged_count > 0 and files_checked == 0:
-            message = _worktree_cause_message(staged_count)
+            in_scope_count = sum(1 for path in context.staged_paths if _is_under_cf_document_root(path))
+            if in_scope_count == 0:
+                return ActionResult(success=True, action_type=self.name, outputs={"stdout": stdout})
+            message = _worktree_cause_message(in_scope_count)
             _logger.warning("frontmatter-gate: %s", message)
             return ActionResult(success=False, action_type=self.name, outputs={}, error=message)
 

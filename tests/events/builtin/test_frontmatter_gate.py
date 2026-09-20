@@ -101,6 +101,8 @@ class TestFilesCheckedFailClosed:
     async def test_zero_checked_against_nonempty_staged_fails_with_worktree_message(
         self, tmp_path: Path
     ) -> None:
+        # Both paths are under the cf document root (D2), so the in-scope count
+        # is 2 — this must still fail closed with the worktree message.
         with patch(
             "asyncio.create_subprocess_exec",
             new=AsyncMock(
@@ -108,7 +110,10 @@ class TestFilesCheckedFailClosed:
             ),
         ):
             result = await FrontmatterGateAction().execute(
-                _commit_context(str(tmp_path), staged_paths=("a.md", "b.md"))
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=("project-documents/user/a.md", "project-documents/user/b.md"),
+                )
             )
 
         assert result.success is False
@@ -202,6 +207,7 @@ class TestFilesCheckedFailClosed:
         self, tmp_path: Path
     ) -> None:
         """The two D10/D11 messages must not collapse to the same text."""
+        # In-scope path (D2), so the worktree case still fails closed here.
         with patch(
             "asyncio.create_subprocess_exec",
             new=AsyncMock(
@@ -209,7 +215,7 @@ class TestFilesCheckedFailClosed:
             ),
         ):
             worktree_result = await FrontmatterGateAction().execute(
-                _commit_context(str(tmp_path), staged_paths=("a.md",))
+                _commit_context(str(tmp_path), staged_paths=("project-documents/user/a.md",))
             )
         with patch(
             "asyncio.create_subprocess_exec",
@@ -220,6 +226,99 @@ class TestFilesCheckedFailClosed:
             )
 
         assert worktree_result.error != unreadable_result.error
+
+
+class TestScopePredicateInterpretsZeroChecked:
+    """Slice 922 D2: ``filesChecked: 0`` alone can't tell "nothing staged was
+    in scope" from "cf resolved against the wrong checkout". These tests use
+    the real cf JSON shape probed in the design (filesChecked: 0 for
+    CHANGELOG.md et al., filesChecked: 1 for a project-documents/user/ path).
+    """
+
+    @pytest.mark.asyncio
+    async def test_release_shaped_commit_with_zero_checked_passes(self, tmp_path: Path) -> None:
+        """Criterion 4: CHANGELOG.md + pyproject.toml + uv.lock, all outside
+        cf's document scope, with filesChecked: 0 — must pass, not fail closed."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=("CHANGELOG.md", "pyproject.toml", "uv.lock"),
+                )
+            )
+
+        assert result.success is True
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_in_scope_path_with_zero_checked_fails_closed(self, tmp_path: Path) -> None:
+        """Criterion 5: at least one staged path under project-documents/user/
+        with filesChecked: 0 — fails closed, with the D10 worktree wording,
+        reporting the in-scope count."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=("project-documents/user/slices/921-slice.small-fixes-batch.md",),
+                )
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "0 of 1" in result.error
+        assert "worktree" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_dot_slash_prefixed_in_scope_path_still_fails_closed(self, tmp_path: Path) -> None:
+        """The predicate compares normalized path parts, not string prefixes."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("./project-documents/user/x.md",))
+            )
+
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_mixed_in_scope_and_out_of_scope_fails_closed_on_in_scope_count(
+        self, tmp_path: Path
+    ) -> None:
+        """Some staged paths in scope, some out, filesChecked: 0 — fails
+        closed, and the reported count is the in-scope count, not the total."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=(
+                        "CHANGELOG.md",
+                        "pyproject.toml",
+                        "project-documents/user/slices/921-slice.small-fixes-batch.md",
+                    ),
+                )
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "0 of 1" in result.error
 
 
 class TestSubprocessTimeout:
@@ -290,6 +389,7 @@ class TestSubprocessTimeout:
                 _commit_context(str(tmp_path), staged_paths=("a.md",))
             )
 
+        # In-scope path (D2), so the worktree case still fails closed here.
         with patch(
             "asyncio.create_subprocess_exec",
             new=AsyncMock(
@@ -297,7 +397,7 @@ class TestSubprocessTimeout:
             ),
         ):
             worktree_result = await FrontmatterGateAction().execute(
-                _commit_context(str(tmp_path), staged_paths=("a.md",))
+                _commit_context(str(tmp_path), staged_paths=("project-documents/user/a.md",))
             )
 
         with patch(
