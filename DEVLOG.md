@@ -2,13 +2,48 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260919
+dateUpdated: 20260920
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260920
+
+### Slice 922 — Task breakdown: Small Fixes Batch 2
+
+Phase 5 complete. Split across two files at the ~450-line convention:
+`user/tasks/922-tasks.small-fixes-batch-2-1.md` (Parts A–E, 437 lines) and
+`-2.md` (Parts F–G, 175 lines). 118 checklist items.
+
+Task order follows the design's Development Approach rather than issue
+number: **Fix 2 (#117) first**, because the gate fix is what lets the rest of
+the slice commit without `--no-verify`, then 3, 4, 6, 5, and **Fix 1 (#65)
+last** since it regenerates `uv.lock`. One commit per fix. The file split
+falls on that seam — the five code fixes in part 1, the packaging change and
+closeout in part 2.
+
+Every site named in the design was re-verified against the code while writing
+the tasks; all confirmed. Two things the tasks pin down that the design left
+implicit:
+
+- `models/aliases.py` (lines 67, 69, 207) also contains `"tool_use"`, but as a
+  TOML config key, not an sdk_type — explicitly out of Fix 4's scope, recorded
+  so it is not swept up.
+- Fix 6's test update is three specific tests in
+  `tests/tools/test_jail_exclusions.py` (lines 90, 112, 140) pinned to
+  WARNING. The design predicted they existed; the tasks name them.
+
+Fix 3's task carries a trap worth noting: `ProcessCwdNotFoundError` must not
+subclass `ProcessNotFoundError`, or `github_cli.py:490`'s existing handler
+swallows it and the fix silently does nothing.
+
+Stale slice-plan text corrected: entry 20 still posed the stub packages as an
+open question ("decide the fate of"), which D1 had already decided.
+
+**Next:** Phase 6 implementation, branch `922-slice.small-fixes-batch-2`.
 
 ## 20260919
 
