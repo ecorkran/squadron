@@ -179,20 +179,20 @@ Design decision **D3**.
 
 ### B1. Add `ProcessCwdNotFoundError` and classify in the handler
 
-- [ ] Open `src/squadron/core/process_runner.py`.
-- [ ] Add `ProcessCwdNotFoundError(cwd)` beside `ProcessNotFoundError`
+- [x] Open `src/squadron/core/process_runner.py`.
+- [x] Add `ProcessCwdNotFoundError(cwd)` beside `ProcessNotFoundError`
       ([line 40](src/squadron/core/process_runner.py#L40)). It carries the
       offending directory. It does **not** join the `CodeHostError`
       hierarchy — a missing working directory is a configuration error, not a
       code-host condition.
-- [ ] In the **existing** `except FileNotFoundError` handler
+- [x] In the **existing** `except FileNotFoundError` handler
       ([line 104](src/squadron/core/process_runner.py#L104)), raise
       `ProcessCwdNotFoundError` when `cwd` is not `None` and is not a
       directory; otherwise raise `ProcessNotFoundError` as today.
-- [ ] Do **not** pre-check `cwd` before `Popen`. D3 classifies inside the
+- [x] Do **not** pre-check `cwd` before `Popen`. D3 classifies inside the
       handler deliberately: it keeps the success path free of an extra stat
       and avoids a check-then-use gap.
-- [ ] Document the new exception in the `ProcessRunner` protocol docstring
+- [x] Document the new exception in the `ProcessRunner` protocol docstring
       ([line 57](src/squadron/core/process_runner.py#L57)). Record that the
       protocol obliges no caller to handle it — it signals a configuration
       error and is meant to surface.
@@ -201,14 +201,14 @@ Design decision **D3**.
 
 ### B2. Stop `github_cli` converting it to "gh is not on PATH"
 
-- [ ] Open `src/squadron/codehost/github_cli.py`, the `except
+- [x] Open `src/squadron/codehost/github_cli.py`, the `except
       ProcessNotFoundError` handler at
       [line 490](src/squadron/codehost/github_cli.py#L490).
-- [ ] Let `ProcessCwdNotFoundError` **propagate** rather than converting it
+- [x] Let `ProcessCwdNotFoundError` **propagate** rather than converting it
       to `GitHubCliMissingError`. Log the condition at WARNING first.
-- [ ] Confirm `ProcessCwdNotFoundError` does not subclass
+- [x] Confirm `ProcessCwdNotFoundError` does not subclass
       `ProcessNotFoundError`, or the existing handler will still swallow it.
-- [ ] No change needed at the git call sites in `codehost/remotes.py` and
+- [x] No change needed at the git call sites in `codehost/remotes.py` and
       `codehost/refs.py` — they do not catch `ProcessNotFoundError`.
 - **Effort:** 1
 - **Success:** criterion 8 holds — no "gh is not on PATH" for a nonexistent
@@ -216,21 +216,21 @@ Design decision **D3**.
 
 ### B3. Test Fix 3
 
-- [ ] Add tests to `tests/core/test_process_runner.py`:
-  - [ ] nonexistent `cwd` → `ProcessCwdNotFoundError` **naming the
+- [x] Add tests to `tests/core/test_process_runner.py`:
+  - [x] nonexistent `cwd` → `ProcessCwdNotFoundError` **naming the
         directory**.
-  - [ ] missing executable with a valid `cwd` → `ProcessNotFoundError`
+  - [x] missing executable with a valid `cwd` → `ProcessNotFoundError`
         (unchanged).
-  - [ ] missing executable with `cwd=None` → `ProcessNotFoundError`
+  - [x] missing executable with `cwd=None` → `ProcessNotFoundError`
         (unchanged).
-- [ ] Add a test for the `github_cli` path: a scripted
+- [x] Add a test for the `github_cli` path: a scripted
       `ProcessCwdNotFoundError` propagates rather than becoming
       `GitHubCliMissingError`, and a WARNING record is emitted.
-  - [ ] Produce the condition by scripting the exception through
+  - [x] Produce the condition by scripting the exception through
         `tests/codehost/fake_runner.py::FakeProcessRunner`, which raises
         whatever `Exception` a test gives it. **`FakeProcessRunner` needs no
         change.**
-- [ ] Confirm the exact `run` keyword arguments against the protocol
+- [x] Confirm the exact `run` keyword arguments against the protocol
       signature ([line 60](src/squadron/core/process_runner.py#L60)) — the
       design flags these as to-be-confirmed.
 - **Effort:** 2
@@ -239,7 +239,7 @@ Design decision **D3**.
 
 ### B4. Verify and commit Fix 3
 
-- [ ] Run the design's Verification Walkthrough for Fix 3:
+- [x] Run the design's Verification Walkthrough for Fix 3:
 
   ```bash
   uv run python -c "
@@ -248,7 +248,7 @@ Design decision **D3**.
   # expect: ProcessCwdNotFoundError naming /nonexistent-922
   ```
 
-- [ ] Commit Fix 3 on its own.
+- [x] Commit Fix 3 on its own.
 - **Effort:** 1
 - **Success:** the error names the directory, not `executable not found: git`.
 
