@@ -416,9 +416,9 @@ artifact paths, shas) as you go — Task 10 writes them up.
   - [x] Every item in this file is checked, including any deliberately dropped, before the merge
   - [x] Effort: 1
 
-- [ ] **11.5 Land it**
-  - [ ] Local `--no-ff` merge into `squadron-pr`, as every slice of this initiative landed. The
+- [x] **11.5 Land it**
+  - [x] Local `--no-ff` merge into `squadron-pr`, as every slice of this initiative landed. The
         live PR is evidence, not the merge route (D6, "Landing")
-  - [ ] **Never merge to `main`** — `git.integration_branch` is set. Syncing or merging
+  - [x] **Never merge to `main`** — `git.integration_branch` is set. Syncing or merging
         `squadron-pr` into `main` is PM-only and comes after this slice plus further testing
-  - [ ] Effort: 1
+  - [x] Effort: 1
