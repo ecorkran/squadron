@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260918
+dateUpdated: 20260919
 
 ---
 
@@ -13,6 +13,23 @@ A lightweight, append-only record of development activity. Newest entries first.
 ---
 
 ## 20260919
+
+### Slice 386 design (Phase 4)
+
+- Design at `386-slice.slash-command-parity-documentation-and-live-evidence.md`. Integration
+  slice: no file under `src/squadron/` changes.
+- **D1:** PR transports pass the remainder verbatim, no injected `-v` — parity by construction.
+- **D2:** parity tested as surface agreement (Click options vs `--flag` tokens in the command
+  file's section, real bundled file as fixture) plus a two-tier live comparison:
+  `sq pr show --json` byte-identical; review artifacts equal on deterministic fields only.
+- **D3:** agent transport in front of a host write — no unrequested `--post`, writes run
+  once, printed remediation (`git push`) is shown and never executed by the session.
+- **D4:** default `sdk` profile inside a session is observed and documented, not decided.
+- **D6:** live run on the 386 slice branch. **Precondition:** `squadron-pr` pushed to
+  `origin` (80 commits ahead today) — awaiting PM direction. Lands by local `--no-ff` merge
+  like 381–385.
+- MCP transport excluded: `src/squadron/mcp/` is empty, nothing to bring to parity.
+- Next: Phase 5 task breakdown for 386.
 
 ### Slice 385 code re-review response
 

@@ -239,7 +239,7 @@ Slice indices follow the initiative base, 381 onward. Work forks from and merges
 
 ## Integration Work
 
-6. [ ] **(386) Slash-Command Parity, Documentation, and Live Evidence** — `/sq:review pr` and
+6. [ ] **(386) Slash-Command Parity, Documentation, and Live Evidence** — Designed: `386-slice.slash-command-parity-documentation-and-live-evidence.md`. `/sq:review pr` and
    `/sq:pr` transports producing the same artifacts as the CLI; README and quickstart coverage for
    review, post, and create, including the unplanned-repository path and the `--reviews-dir`
    and `review.external_reviews_dir` surface; `sq doctor` output documented; and a recorded
