@@ -30,7 +30,7 @@ _COMMANDS_UNDER_TEST = [
     (("pr", "create"), "pr.md", "## Subcommand: create"),
 ]
 
-_FLAG_TOKEN_RE = re.compile(r"--[a-z][a-z-]*")
+_FLAG_TOKEN_RE = re.compile(r"--[a-z][a-z0-9-]*")
 
 
 def _extract_section(text: str, heading: str) -> str:

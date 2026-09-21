@@ -13,6 +13,7 @@ import re
 import shlex
 from pathlib import Path
 
+import click
 from typer.main import get_command
 
 from squadron.cli.app import app
@@ -24,7 +25,7 @@ _DOCS = [
     _REPO_ROOT / "docs" / "QUICKSTART.md",
 ]
 
-_BASH_FENCE_RE = re.compile(r"```bash\n(.*?)```", re.DOTALL)
+_BASH_FENCE_RE = re.compile(r"```bash(?:[^\S\r\n]+[^\n]*)?\r?\n(.*?)```", re.DOTALL)
 _EXAMPLE_PREFIXES = ("sq review pr", "sq pr")
 
 
@@ -63,20 +64,23 @@ def _collect_all_examples() -> list[str]:
     return examples
 
 
-def _resolve_command(example: str) -> tuple[object, list[str]]:
+def _resolve_command(example: str) -> tuple[click.Command, list[str]]:
     """Resolve the Click command an example names, and its remaining args."""
     root = get_command(app)
+    assert isinstance(root, click.Group)
     tokens = shlex.split(example)
     assert tokens[0] == "sq", f"example does not start with sq: {example!r}"
 
     if tokens[1] == "review":
         # sq review pr {args...}
-        command = root.commands["review"].commands["pr"]  # type: ignore[attr-defined]
-        return command, tokens[3:]
+        review = root.commands["review"]
+        assert isinstance(review, click.Group)
+        return review.commands["pr"], tokens[3:]
 
     # sq pr show|create {args...}
-    command = root.commands["pr"].commands[tokens[2]]  # type: ignore[attr-defined]
-    return command, tokens[3:]
+    pr = root.commands["pr"]
+    assert isinstance(pr, click.Group)
+    return pr.commands[tokens[2]], tokens[3:]
 
 
 def test_at_least_one_example_collected() -> None:
@@ -89,7 +93,7 @@ def test_every_example_parses_against_the_real_command() -> None:
     for example in _collect_all_examples():
         command, args = _resolve_command(example)
         try:
-            with command.make_context("test", list(args)):  # type: ignore[attr-defined]
+            with command.make_context("test", list(args)):
                 pass
-        except Exception as exc:  # noqa: BLE001 - re-raised as an assertion naming the example
+        except click.ClickException as exc:
             raise AssertionError(f"example failed to parse: {example!r} ({exc})") from exc
