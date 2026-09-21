@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import importlib.metadata
-import re
+
+from packaging.requirements import Requirement
 
 import squadron
 
@@ -21,15 +22,20 @@ def _declared_dependency_names() -> set[str]:
     as tests/cli/test_version.py:17 does for the version, rather than
     hand-parsing pyproject.toml — this is what a real install actually
     resolved against, not just what the source file says.
+
+    Each requirement string is parsed with packaging.requirements.Requirement
+    (review 922, F004) rather than a hand-rolled regex and substring check —
+    that parses the semantic content (name, marker) regardless of formatting,
+    where a substring check on "extra ==" would silently pass unusual marker
+    spacing through as a base dependency.
     """
     requires = importlib.metadata.requires("squadron-ai") or []
     names: set[str] = set()
     for requirement in requires:
-        if "extra ==" in requirement:
+        parsed = Requirement(requirement)
+        if parsed.marker is not None:
             continue  # skip optional-extra deps (e.g. the dev group)
-        match = re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*", requirement)
-        if match is not None:
-            names.add(match.group(0).lower())
+        names.add(parsed.name.lower())
     return names
 
 
