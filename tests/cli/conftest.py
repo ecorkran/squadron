@@ -15,6 +15,10 @@ from squadron.core.models import AgentInfo, AgentState, Message
 if TYPE_CHECKING:
     from tests.cli.pr_create_support import HostHarness
 
+#: The pull request the `sq review pr` tests resolve. Their fixtures, their
+#: scripted host responses, and `pr_review_repo`'s refs all key off this one value.
+PR_NUMBER = 83
+
 
 @pytest.fixture(autouse=True)
 def _isolated_model_registry(tmp_path: Path) -> Iterator[Path]:
@@ -199,6 +203,54 @@ def pr_create_repo(tmp_path: Path) -> Path:
     (tmp_path / "feature.txt").write_text("a feature")
     git(tmp_path, "add", "-A")
     git(tmp_path, "commit", "-m", "feat: do the thing")
+    return tmp_path
+
+
+@pytest.fixture
+def pr_review_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A real git repo carrying the PR refs ``sq review pr`` resolves its range from.
+
+    The host runner is faked in these tests, so the scripted ``git fetch`` never
+    writes ``refs/squadron/pr/<remote>/<number>/{base,head}``. The review step
+    downstream still shells out to real git for the range, so without this the
+    tests only pass in a checkout where a previous live run happened to leave
+    those refs behind — and fail in any clean clone, CI included.
+    """
+    from squadron.codehost.models import RefRole
+    from squadron.codehost.refs import local_ref
+    from tests.cli.pr_create_support import git
+
+    git(tmp_path, "init", "-b", "main")
+    git(tmp_path, "config", "user.email", "test@test.com")
+    git(tmp_path, "config", "user.name", "Test")
+    (tmp_path / "README.md").write_text("init")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-m", "init")
+    base = git(tmp_path, "rev-parse", "HEAD")
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("a = 1\n")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-m", "feat: a")
+    head = git(tmp_path, "rev-parse", "HEAD")
+
+    git(tmp_path, "update-ref", local_ref("origin", PR_NUMBER, RefRole.BASE), base)
+    git(tmp_path, "update-ref", local_ref("origin", PR_NUMBER, RefRole.HEAD), head)
+
+    # The command resolves its cwd through review.get_config("cwd"), which the
+    # real project config points at ./project-documents/user. Anchor it here so
+    # the range resolves against this repo rather than the surrounding checkout.
+    from squadron.cli.commands import review
+
+    real_get_config = review.get_config
+
+    def _get_config(key: str, *args: object, **kwargs: object) -> object:
+        if key == "cwd":
+            return str(tmp_path)
+        return real_get_config(key, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(review, "get_config", _get_config)
+    monkeypatch.chdir(tmp_path)
     return tmp_path
 
 

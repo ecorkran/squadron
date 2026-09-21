@@ -30,6 +30,16 @@ HEAD_SHA = "b67cf55495f01bc2da843d8f96c767a11770e330"
 MERGE_BASE = "1111111111111111111111111111111111111111"
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_pr_repo(pr_review_repo: Path) -> None:
+    """Every test here runs `sq review pr`, whose range resolution is real git.
+
+    Without this the tests read whatever refs the surrounding checkout happens
+    to carry, so they pass on a developer machine that has run a live review and
+    fail in a clean clone.
+    """
+
+
 def _fixture(name: str) -> str:
     return (_FIXTURES / name).read_text(encoding="utf-8")
 
