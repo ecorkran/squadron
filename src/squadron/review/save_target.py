@@ -83,6 +83,14 @@ class SaveTarget(Protocol):
         """
         ...
 
+    def heading_label(self) -> str | None:
+        """What follows the review type in the body heading, e.g. ``slice 146``.
+
+        ``None`` when the target has no identifier worth printing; the heading
+        is then the review type alone rather than a fabricated ``slice 0``.
+        """
+        ...
+
 
 class TargetKind(StrEnum):
     """What a review is *about*, written to frontmatter as ``targetKind`` (D4).
@@ -141,6 +149,9 @@ class SliceTarget:
     def reviewed_sha(self) -> str | None:
         return resolve_reviewed_sha(self._cwd)
 
+    def heading_label(self) -> str | None:
+        return f"slice {self._info['index']}"
+
 
 class ArchTarget:
     """A review of an initiative's architecture document.
@@ -189,6 +200,10 @@ class ArchTarget:
     def reviewed_sha(self) -> str | None:
         return resolve_reviewed_sha(self._cwd)
 
+    def heading_label(self) -> str | None:
+        # The index is the initiative's; an arch review belongs to no slice.
+        return f"initiative {self._index}"
+
 
 class StepTarget:
     """A review produced by a pipeline step that resolved no slice.
@@ -233,6 +248,10 @@ class StepTarget:
 
     def reviewed_sha(self) -> str | None:
         return resolve_reviewed_sha(self._cwd)
+
+    def heading_label(self) -> str | None:
+        # A step review resolved no slice, so there is no index to print.
+        return None
 
 
 __all__ = ["ArchTarget", "SaveTarget", "SliceTarget", "StepTarget"]

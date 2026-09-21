@@ -206,3 +206,36 @@ class TestPreMigrationFilenames:
         step_index, step_name = 3, "review-code"
         stem = f"{step_index}-review.code.{step_name}"
         assert stem == "3-review.code.review-code"
+
+
+class TestHeadingComesFromTheTarget:
+    """The production call shape: a target, and no ``heading_label``.
+
+    The byte-identity tests above pass ``heading_label`` by hand, which no CLI
+    save path does — so they stayed green while every targeted save rendered
+    ``slice 0``.
+    """
+
+    def _heading(self, rendered: str) -> str:
+        return next(line for line in rendered.splitlines() if line.startswith("# Review:"))
+
+    def test_slice_target_names_its_slice(self) -> None:
+        rendered = format_review_markdown(
+            _migration_result(), "code", target=SliceTarget(_slice_info())
+        )
+        assert self._heading(rendered) == "# Review: code — slice 146"
+
+    def test_arch_target_is_not_a_slice(self) -> None:
+        arch_info = _arch_slice_info()
+        rendered = format_review_markdown(
+            _migration_result(),
+            "arch",
+            target=ArchTarget(arch_info["index"], arch_info["arch_file"]),
+        )
+        assert self._heading(rendered) == "# Review: arch — initiative 380"
+
+    def test_step_target_prints_no_fabricated_index(self) -> None:
+        rendered = format_review_markdown(
+            _migration_result(), "code", target=StepTarget("review-step", 0)
+        )
+        assert self._heading(rendered) == "# Review: code"

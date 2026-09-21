@@ -174,6 +174,9 @@ class PrTarget:
         """
         return self._record.head_sha
 
+    def heading_label(self) -> str | None:
+        return f"PR #{self._record.number}"
+
 
 #: Placeholder for ``RepositoryLocator.remote_name`` when reconstructing one
 #: to re-resolve a PR already identified by number. ``resolve_pull_request``
@@ -450,7 +453,6 @@ def review_pr(
                 input_file=resolved.record.url,
                 target=target,
                 project_name=cf_project_name(),
-                heading_label=f"PR #{resolved.record.number}",
             )
         except OSError as exc:
             # Never a fall-through to the next precedence rule: writing

@@ -78,6 +78,7 @@ class SaveTargetProtocol(Protocol):
     def frontmatter_fields(self) -> dict[str, object]: ...
     def source_document(self) -> str | None: ...
     def reviewed_sha(self) -> str | None: ...
+    def heading_label(self) -> str | None: ...
 
 
 def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:
@@ -399,12 +400,13 @@ def format_review_markdown(
             repository squadron never planned has no Context Forge project to
             ask. Falls back to the slice's project, then to ``"unknown"`` —
             the same degradation the pipeline step path already writes.
-        heading_label: What follows the review type in the body heading. Slice,
-            arch, and step reviews pass ``"slice {index}"``, preserving today's
-            bytes exactly. A PR review passes ``"PR #42"``: it has no slice
-            index, and emitting ``slice 0`` would be a fabricated identifier —
-            the same refusal ``format_provider_failure_markdown`` already
-            makes for a run with no slice.
+        heading_label: Overrides what follows the review type in the body
+            heading. Normally omitted: the target answers ``heading_label()``
+            (``slice 146``, ``initiative 380``, ``PR #42``), and a target with
+            no identifier yields the review type alone. Emitting ``slice 0``
+            would be a fabricated identifier — the same refusal
+            ``format_provider_failure_markdown`` already makes for a run with
+            no slice.
         verdict_override: Explicit verdict string; falls back to
             ``result.verdict.value``. Judge templates deliberately omit a
             verdict line from their raw output (the score is the source of
@@ -440,13 +442,15 @@ def format_review_markdown(
     # Slice-derived fields. A target supersedes them where one is supplied;
     # the fallbacks are what the step path (which passes neither) already writes.
     slice_name = slice_info["slice_name"] if slice_info else "unknown"
-    slice_index = slice_info["index"] if slice_info else 0
     resolved_project = project_name or (slice_info["project"] if slice_info else "unknown")
     target_fields = target.frontmatter_fields() if target is not None else {"slice": slice_name}
-    # "slice {index}" preserves today's bytes on every existing path. A target
-    # that names itself differently — a PR, which has no index — supplies its
-    # own label rather than emitting a fabricated one.
-    resolved_heading = heading_label or f"slice {slice_index}"
+    # The target names itself. The `slice_info` fallback is the pipeline path
+    # that passes no target. With neither, the heading carries no identifier:
+    # the "slice 0" that stood here was written on every targeted save, because
+    # the CLI passes a target and no slice_info (a fabricated index reads as real).
+    resolved_heading = heading_label or (target.heading_label() if target is not None else None)
+    if resolved_heading is None and slice_info is not None:
+        resolved_heading = f"slice {slice_info['index']}"
 
     lines = _review_frontmatter_lines(
         review_type=review_type,
@@ -490,7 +494,11 @@ def format_review_markdown(
 
     lines.append("---")
     lines.append("")
-    lines.append(f"# Review: {review_type} — {resolved_heading}")
+    lines.append(
+        f"# Review: {review_type} — {resolved_heading}"
+        if resolved_heading
+        else f"# Review: {review_type}"
+    )
     lines.append("")
     lines.append(f"**Verdict:** {resolved_verdict}")
     lines.append(f"**Model:** {resolved_model}")

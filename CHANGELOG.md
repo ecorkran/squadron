@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Saved reviews no longer say `slice 0` in their heading: slice reviews name their slice again, and architecture reviews say `initiative N` instead of claiming a slice
+
 ### Changed
 - The README and quickstart explain that `cf init` now installs the guides as plain, committed files (Context Forge 0.16+) rather than a git submodule, and how to switch an existing submodule install over
 
