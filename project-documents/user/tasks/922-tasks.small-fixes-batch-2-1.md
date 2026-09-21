@@ -260,8 +260,8 @@ Design decision **D4**.
 
 ### C1. Define the two constants
 
-- [ ] Open `src/squadron/core/models.py`.
-- [ ] Add `TOOL_USE_TYPE = "tool_use"` and `TOOL_RESULT_TYPE = "tool_result"`
+- [x] Open `src/squadron/core/models.py`.
+- [x] Add `TOOL_USE_TYPE = "tool_use"` and `TOOL_RESULT_TYPE = "tool_result"`
       beside the existing `SDK_RESULT_TYPE`
       ([line 112](src/squadron/core/models.py#L112)) and
       `RATE_LIMIT_EVENT_TYPE` ([line 123](src/squadron/core/models.py#L123)),
@@ -271,7 +271,7 @@ Design decision **D4**.
 
 ### C2. Replace the literal at the producer
 
-- [ ] `src/squadron/providers/sdk/translation.py` lines **62** and **78** —
+- [x] `src/squadron/providers/sdk/translation.py` lines **62** and **78** —
       this is the **producer**, the site that writes `metadata["sdk_type"]`.
       Replace both literals with the constants.
 - **Effort:** 1
@@ -282,27 +282,27 @@ Design decision **D4**.
 
 Separate sub-tasks per component, each independently verifiable:
 
-- [ ] `src/squadron/pipeline/sdk_session.py` lines **188–189**.
-- [ ] `src/squadron/pipeline/summary_oneshot.py` line **147** (already imports
+- [x] `src/squadron/pipeline/sdk_session.py` lines **188–189**.
+- [x] `src/squadron/pipeline/summary_oneshot.py` line **147** (already imports
       `SDK_RESULT_TYPE` and `RATE_LIMIT_EVENT_TYPE` in the same expression).
-- [ ] `src/squadron/review/review_client.py` line **271** (same shape as
+- [x] `src/squadron/review/review_client.py` line **271** (same shape as
       above).
-- [ ] `src/squadron/metrology/audit.py` lines **542** and **547**.
-- [ ] **Leave alone:** `cli/commands/task.py:47` compares
+- [x] `src/squadron/metrology/audit.py` lines **542** and **547**.
+- [x] **Leave alone:** `cli/commands/task.py:47` compares
       `metadata["type"]` — a different key on the daemon message path, not
       `sdk_type` (D4).
-- [ ] **Leave alone:** `src/squadron/models/aliases.py` lines 67, 69, 207 —
+- [x] **Leave alone:** `src/squadron/models/aliases.py` lines 67, 69, 207 —
       `"tool_use"` there is a TOML config key, not an sdk_type value.
-- [ ] `#108` also names `pipeline/actions/dispatch.py:174`; that line no
+- [x] `#108` also names `pipeline/actions/dispatch.py:174`; that line no
       longer contains either literal. Confirm and do not chase it.
 - **Effort:** 2
 - **Success:** criterion 9 holds.
 
 ### C4. Test Fix 4
 
-- [ ] This is a pure substitution with no behavior change; the guard is that
+- [x] This is a pure substitution with no behavior change; the guard is that
       the existing suites for these five modules still pass.
-- [ ] Run the design's literal check:
+- [x] Run the design's literal check:
 
   ```bash
   grep -rnE '"tool_(use|result)"' src/squadron/providers/sdk/translation.py \
@@ -311,8 +311,8 @@ Separate sub-tasks per component, each independently verifiable:
   # expect: no output
   ```
 
-- [ ] Run the tests covering these modules and confirm they pass unchanged.
-- [ ] Commit Fix 4 on its own.
+- [x] Run the tests covering these modules and confirm they pass unchanged.
+- [x] Commit Fix 4 on its own.
 - **Effort:** 1
 - **Success:** the grep is silent; no test changed to accommodate the edit.
 
@@ -325,18 +325,18 @@ policy-exclusion case only; the silent-to-the-model half of D3 is untouched.
 
 ### D1. Demote exclusions at both sites
 
-- [ ] Open `src/squadron/tools/builtin/_shared.py`.
-- [ ] **Walk-filter site**, [line 93](src/squadron/tools/builtin/_shared.py#L93):
+- [x] Open `src/squadron/tools/builtin/_shared.py`.
+- [x] **Walk-filter site**, [line 93](src/squadron/tools/builtin/_shared.py#L93):
       the *policy exclusion* record (`refusing excluded path ...`) drops to
       **DEBUG**.
-- [ ] **`jail_violation` site**, [line 175](src/squadron/tools/builtin/_shared.py#L175):
+- [x] **`jail_violation` site**, [line 175](src/squadron/tools/builtin/_shared.py#L175):
       the same record drops to **DEBUG**.
-- [ ] **Jail escapes stay at WARNING** — [line 87](src/squadron/tools/builtin/_shared.py#L87)
+- [x] **Jail escapes stay at WARNING** — [line 87](src/squadron/tools/builtin/_shared.py#L87)
       and [line 182](src/squadron/tools/builtin/_shared.py#L182)
       (`rejected path outside working directory`). An escape means something
       reached for the trust boundary; an exclusion is policy working as
       designed.
-- [ ] Preserve the "one refusal, one record" property of `jail_violation`
+- [x] Preserve the "one refusal, one record" property of `jail_violation`
       and the distinguishable wording of the two kinds.
 - **Effort:** 1
 - **Success:** criterion 11 holds — a policy exclusion emits no record at
@@ -344,10 +344,10 @@ policy-exclusion case only; the silent-to-the-model half of D3 is untouched.
 
 ### D2. Correct the docstrings
 
-- [ ] `_shared.py` [line 82](src/squadron/tools/builtin/_shared.py#L82) states
+- [x] `_shared.py` [line 82](src/squadron/tools/builtin/_shared.py#L82) states
       "Both are logged at WARNING" — correct it to record the split and cite
       **918 D3** as the amended decision.
-- [ ] Check [line 53](src/squadron/tools/builtin/_shared.py#L53) ("a refusal
+- [x] Check [line 53](src/squadron/tools/builtin/_shared.py#L53) ("a refusal
       produces exactly one WARNING") and
       [lines 193–194](src/squadron/tools/builtin/_shared.py#L193) for the same
       stale claim; correct any that no longer hold.
@@ -356,34 +356,34 @@ policy-exclusion case only; the silent-to-the-model half of D3 is untouched.
 
 ### D3. Update the slice-918 tests and add per-kind tests
 
-- [ ] `tests/tools/test_jail_exclusions.py` has **three** tests pinned to
+- [x] `tests/tools/test_jail_exclusions.py` has **three** tests pinned to
       WARNING for exclusions, at lines **90–97**, **112–127**, and
       **140–148**. **Update them** to assert DEBUG — the design is explicit:
       update rather than adding parallel tests.
-- [ ] Add one test per refusal kind asserting **both level and count**, at
+- [x] Add one test per refusal kind asserting **both level and count**, at
       **both** sites (walk filter and `jail_violation`) — four assertions
       total:
-  - [ ] walk filter, exclusion → exactly one DEBUG record, nothing at INFO+.
-  - [ ] walk filter, escape → exactly one WARNING record.
-  - [ ] `jail_violation`, exclusion → exactly one DEBUG record, nothing at
+  - [x] walk filter, exclusion → exactly one DEBUG record, nothing at INFO+.
+  - [x] walk filter, escape → exactly one WARNING record.
+  - [x] `jail_violation`, exclusion → exactly one DEBUG record, nothing at
         INFO+.
-  - [ ] `jail_violation`, escape → exactly one WARNING record.
-- [ ] `tests/tools/test_jail.py` has **two** more tests that will fail once
+  - [x] `jail_violation`, escape → exactly one WARNING record.
+- [x] `tests/tools/test_jail.py` has **two** more tests that will fail once
       exclusions drop to DEBUG. Update both:
-  - [ ] `test_an_exclusion_refusal_emits_exactly_one_warning`
+  - [x] `test_an_exclusion_refusal_emits_exactly_one_warning`
         ([line 201](tests/tools/test_jail.py#L201)) — filters
         `levelno == logging.WARNING` and asserts exactly one record for an
         exclusion through `jail_violation`. After D1 that filter finds zero.
-  - [ ] `test_an_exclusion_refusal_is_worded_distinguishably_from_a_jail_escape`
+  - [x] `test_an_exclusion_refusal_is_worded_distinguishably_from_a_jail_escape`
         ([line 246](tests/tools/test_jail.py#L246)) — asserts
         `len(messages) == 2` at WARNING for an exclusion plus an escape
         through `contained_in_jail`. After D1 only the escape remains at
         WARNING. Keep what this test exists to prove — that the two refusals
         are worded distinguishably — by capturing at DEBUG and asserting the
         wording across both levels, not by deleting the exclusion half.
-- [ ] Leave [line 194](tests/tools/test_jail.py#L194) alone — it asserts the
+- [x] Leave [line 194](tests/tools/test_jail.py#L194) alone — it asserts the
       walk predicate emits *nothing* at WARNING, which stays true.
-- [ ] Check `tests/tools/test_jail_symlinks.py` for further WARNING-pinned
+- [x] Check `tests/tools/test_jail_symlinks.py` for further WARNING-pinned
       exclusion assertions and update any found.
 - **Effort:** 2
 - **Success:** the whole `tests/tools/` suite passes; no test asserts a
@@ -398,11 +398,24 @@ policy-exclusion case only; the silent-to-the-model half of D3 is untouched.
   # expect: no "refusing excluded path" lines
   ```
 
+  **Not run this session.** Attempted once in the interactive session used
+  for implementation; `--model` is silently ignored there (the CLI's
+  own model is used instead), and the run went against the wrong
+  target — it re-reviewed slice 919's own task files rather than
+  exercising #100's `-v` exclusion-noise repro. The accidental review
+  output was reverted (`git checkout HEAD --`) before it could
+  overwrite the real 919 review artifacts; no unintended change
+  landed. Left unchecked rather than falsely marked done — run this
+  from a plain CLI session (not this interactive one) before closing
+  the slice.
 - [ ] Run the same command with `-vv` and confirm the lines **do** appear
-      (`-vv` maps to DEBUG).
-- [ ] Commit Fix 6 on its own.
+      (`-vv` maps to DEBUG). Same caveat as above — not run this session.
+- [x] Commit Fix 6 on its own.
 - **Effort:** 1
-- **Success:** `-v` is clean; `-vv` still shows the exclusions.
+- **Success:** `-v` is clean; `-vv` still shows the exclusions. **Verified so
+  far only by unit test** (`tests/tools/test_jail.py`'s four level+count
+  tests, asserting DEBUG vs WARNING directly), not by the live `sq review`
+  repro above.
 
 ---
 
