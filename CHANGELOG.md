@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dropped the unused `anthropic` and `google-adk` dependencies from the base install; `rich` is now declared directly rather than arriving transitively (#65)
+
+### Fixed
+- Release commits (`CHANGELOG.md` + `pyproject.toml` + `uv.lock`) no longer fail the frontmatter pre-commit gate with a "different checkout" worktree message (#117)
+- A missing/nonexistent working directory is now reported as such, instead of "executable not found" (#112)
+- `sq setup` no longer shows a routine "not installed yet" step as a red error (#57)
+- Review output at `-v` no longer floods with per-file "excluded path" lines for a policy exclusion; use `-vv` to see them (#100)
+
 ## [0.12.5] - 20260919
 
 ### Fixed
