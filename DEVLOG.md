@@ -52,6 +52,21 @@ the command's cwd to it via the documented `review.get_config` seam, so the test
 reading ambient state. **Verified by reproducing CI's condition rather than trusting
 the fix**: a detached-HEAD clone with zero `refs/squadron/**` — 71 passed there.
 
+**A second CI run cut 24 down to 2, and those two were a different bug wearing the
+same clothes.** `test_worktree.py`'s sweep tests wrote a lock claiming a live owner,
+then watched the sweep remove the worktree anyway. The lock's `started_at` was the
+literal `1789388838.0` while `ps` returned `"Mon Sep 14 06:27:18 2026"` — and
+`_process_start_time` parses that as **local** time. The literal is that instant in
+Mountain Time, this machine's zone; in CI's UTC it is off by six hours, the owner
+reads as dead, and the worktree gets swept. `_LSTART_EPOCH` now derives from the
+same string the fake `ps` returns, so the two agree in any zone. Checked under
+`TZ=UTC` and `TZ=Asia/Tokyo` as well as locally.
+
+The other, in `test_review_pr_worktree.py`: a fixture ran bare `git init` and then
+`git checkout main`, so the branch name came from the runner's `init.defaultBranch`.
+Set explicitly with `-b main`. Both were the same class of defect as the refs above —
+a test reading the developer's environment and calling it a fixture.
+
 A full suite in that same sandbox clone showed 11 further failures
 (`test_schema_drift`, `test_pr_review_frontmatter`, `test_cf_contract_live`,
 `test_cli_review`). Checked against CI's own log rather than assumed: all 11 are dots

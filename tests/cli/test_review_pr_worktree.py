@@ -143,7 +143,9 @@ def real_checkout(tmp_path: Path) -> Path:
     """A real, throwaway git repository the CLI resolves as the trusted checkout."""
     checkout = tmp_path / "checkout"
     checkout.mkdir()
-    _run_git(["init", "-q"], checkout)
+    # -b main explicitly: the default branch name otherwise comes from the
+    # runner's init.defaultBranch, and this fixture checks out `main` by name.
+    _run_git(["init", "-q", "-b", "main"], checkout)
     _run_git(["config", "user.email", "test@example.com"], checkout)
     _run_git(["config", "user.name", "Test"], checkout)
     (checkout / "CLAUDE.md").write_text("# Checkout conventions\nTrusted.")
