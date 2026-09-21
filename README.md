@@ -62,22 +62,20 @@ sq install-commands   # refresh /sq:* commands (sq uninstall-commands removes th
 Then, inside a project you want to work on:
 
 ```bash
-cf init --strategy tarball   # per-project: installs AI project guides and IDE config
+cf init           # per-project: installs AI project guides and IDE config
 ```
 
-`--strategy tarball` installs the guides as plain files with no git wiring, which is what most projects and nearly every team want. Without it, `cf init` installs them as a git submodule: version-pinned, but every teammate and CI job then has to handle submodule checkout, and the guides live in a second repository inside yours. To make tarball the choice for everyone on the project, commit it:
-
-```bash
-cf config set guide.git_strategy tarball
-```
+The guides install as plain files in your repo and are committed for you (never pushed), so teammates and CI get them like any other file. That is the default from Context Forge 0.16; on an older `cf`, a bare `cf init` installs a git submodule instead — update with `npm i -g @context-forge/cli`, or pass `--strategy tarball`. If you want the submodule (the exact guide commit pinned in your repo), ask for it with `cf init --strategy submodule`.
 
 Already installed as a submodule? Switch over:
 
 ```bash
 cf guides uninstall                     # removes the submodule and commits the removal
-cf guides install --strategy tarball
-git add project-documents && git commit -m "docs: install ai-project-guide as tarball"
+cf guides install --strategy tarball    # installs as plain files and commits
+git add .context-forge.toml && git commit -m "chore: set guide strategy to tarball"
 ```
+
+The last line commits the saved strategy so a teammate's install uses it too.
 
 New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
 

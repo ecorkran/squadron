@@ -97,7 +97,7 @@ exit "$status"
 #: Closing suggestion printed once at the end of setup. Global setup cannot
 #: do this step for the user: it is per-project by nature.
 CF_INIT_HINT = (
-    "Next: run [bold]cf init --strategy tarball[/bold] in your project to install the AI project "
+    "Next: run [bold]cf init[/bold] in your project to install the AI project "
     "guides and IDE configuration for that repo."
 )
 

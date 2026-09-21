@@ -30,7 +30,7 @@ If you installed via `pipx`/`uv` instead, you have Squadron but not Context Forg
 sq setup
 ```
 
-It installs `cf`, both sets of slash commands (`/sq:` and `/cf:`), and then checks your providers. Finally, run `cf init --strategy tarball` inside each project you work on to install that repo's guides and IDE config. Tarball installs the guides as plain files; the default, a git submodule, adds checkout steps for every teammate and CI job (see the README for switching an existing project).
+It installs `cf`, both sets of slash commands (`/sq:` and `/cf:`), and then checks your providers. Finally, run `cf init` inside each project you work on to install that repo's guides and IDE config. The guides land as plain files and are committed for you (Context Forge 0.16+; see the README for older versions and for switching an existing submodule install).
 
 ## Verify your install
 
