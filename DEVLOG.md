@@ -12,6 +12,57 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260921
 
+### Release 0.13.0 — initiative 380 merged to main
+
+`squadron-pr` and `main` had diverged 104/78. Merged main into `squadron-pr` first
+(the initiative's own worktree), then `squadron-pr` into `main`; both branches and
+both worktrees now sit at the same commit. Minor bump rather than patch: the base
+install lost two dependencies (`anthropic`, `google-adk`, #65), which is a packaging
+change users can observe.
+
+**The merge conflicted only in CHANGELOG and DEVLOG**, both append-only and both
+resolved as the union of the two sides. DEVLOG needed more than concatenation — the
+two streams (920–922 on main, the 380 slices on `squadron-pr`) ran on overlapping
+dates, so seven day headings appeared twice and the newest-first ordering broke
+across the seam. Day sections were merged by date and re-sorted; section count went
+342 + 350 → 358, the exact union, with nothing dropped.
+
+**Two breakages the merge produced silently, neither of which git flagged.** Both
+sides edited files that auto-merged cleanly into something that did not work:
+
+1. `conftest` patched `squadron.review.templates._USER_TEMPLATES_DIR`, renamed public
+   on main's side when `templates` became a package — 1473 collection errors.
+2. `tests/pr/test_tasks.py` asserted its real task-file fixture contains unchecked
+   items. That only held while slice 380 was unfinished; closing the slice checked
+   everything off and the assertion expired. The test's real contract is that the
+   parser sees every checkbox line regardless of indent or bullet, which is kept.
+
+**The CI failure was the interesting one.** 24 tests across `test_review_pr.py`,
+`test_review_pr_post*.py`, and `test_worktree.py` failed on CI while passing locally.
+They resolve a PR range through *real* git — the host runner is faked, so the scripted
+`git fetch` never writes `refs/squadron/pr/origin/83/{base,head}`, but the review step
+downstream still shells out for the range. They passed on this machine because a real
+`sq review pr` against PR #83 had left those refs in the checkout months earlier; they
+would have failed in any clean clone. CI's detached-HEAD checkout was simply the first
+environment to say so — the merge did not break these tests, it moved them onto a
+branch CI runs.
+
+Fixed with `pr_review_repo`, which builds a real repo carrying those refs and anchors
+the command's cwd to it via the documented `review.get_config` seam, so the tests stop
+reading ambient state. **Verified by reproducing CI's condition rather than trusting
+the fix**: a detached-HEAD clone with zero `refs/squadron/**` — 71 passed there.
+
+A full suite in that same sandbox clone showed 11 further failures
+(`test_schema_drift`, `test_pr_review_frontmatter`, `test_cf_contract_live`,
+`test_cli_review`). Checked against CI's own log rather than assumed: all 11 are dots
+there. They need cf project registration and full history, which the shallow sandbox
+lacks and CI has. CI's failure list was exactly the 24, all now fixed.
+
+Main worktree at close: 4307 passed, 4 skipped; `ruff format`, `ruff check`, `pyright`
+clean. The three `test_schema_drift` failures seen in the `squadron-pr` worktree are
+cf issue #88 (cf validates 0 files from a worktree) and do not occur in the default
+checkout.
+
 ### Slice 922 — Implementation complete: Small Fixes Batch 2
 
 Phase 6 complete on branch `922-slice.small-fixes-batch-2` (no integration

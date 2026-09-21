@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 20260921
+
 ### Changed
 - Dropped the unused `anthropic` and `google-adk` dependencies from the base install; `rich` is now declared directly rather than arriving transitively (#65)
 
