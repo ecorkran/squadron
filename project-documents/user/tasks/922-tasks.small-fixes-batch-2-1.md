@@ -425,17 +425,17 @@ Design decision **D5**.
 
 ### E1. Give INSTALL its own neutral icon
 
-- [ ] Open `src/squadron/cli/commands/setup.py`, the `_ICON` map at
+- [x] Open `src/squadron/cli/commands/setup.py`, the `_ICON` map at
       [line 30](src/squadron/cli/commands/setup.py#L30). Today
       `StepKind.INSTALL` and `StepKind.CONFIGURE` both map to `("✗", "red")`.
-- [ ] Map `StepKind.INSTALL` to a **non-error glyph and color**, distinct
+- [x] Map `StepKind.INSTALL` to a **non-error glyph and color**, distinct
       from all three other kinds (`ALREADY_DONE` is `("✓", "green")`,
       `CONFIGURE` is `("✗", "red")`, `OPTIONAL` is `("!", "yellow")`).
-- [ ] `StepKind.CONFIGURE` keeps the red ✗.
-- [ ] Do **not** change the `missing_count` logic at
+- [x] `StepKind.CONFIGURE` keeps the red ✗.
+- [x] Do **not** change the `missing_count` logic at
       [line 51](src/squadron/cli/commands/setup.py#L51) — INSTALL still
       counts as a step needing action; only its rendering changes.
-- [ ] Do **not** touch the `detail="not on PATH"` strings — they live in
+- [x] Do **not** touch the `detail="not on PATH"` strings — they live in
       `doctor_checks.py`, are shared with `sq doctor`, and are accurate
       diagnostic output there (D5, and a Non-goal).
 - **Effort:** 1
@@ -444,11 +444,11 @@ Design decision **D5**.
 
 ### E2. Test Fix 5
 
-- [ ] Add a test to `tests/cli/test_setup.py` asserting `_ICON` gives INSTALL
+- [x] Add a test to `tests/cli/test_setup.py` asserting `_ICON` gives INSTALL
       a glyph and color distinct from CONFIGURE, and that its color is not
       `"red"`.
-- [ ] Assert the icon is also distinct from `ALREADY_DONE` and `OPTIONAL`.
-- [ ] Confirm existing `tests/cli/test_setup.py` and
+- [x] Assert the icon is also distinct from `ALREADY_DONE` and `OPTIONAL`.
+- [x] Confirm existing `tests/cli/test_setup.py` and
       `tests/cli/test_setup_steps.py` still pass — in particular any test
       asserting the missing-step count.
 - **Effort:** 1
@@ -456,11 +456,11 @@ Design decision **D5**.
 
 ### E3. Verify and commit Fix 5
 
-- [ ] Confirm the flag name against `sq setup --help` (the design flags
+- [x] Confirm the flag name against `sq setup --help` (the design flags
       `--check` as to-be-confirmed), then run setup in check mode on a
       machine or PATH lacking one integration.
-- [ ] Confirm the missing step shows the new neutral icon, not a red ✗.
-- [ ] Commit Fix 5 on its own.
+- [x] Confirm the missing step shows the new neutral icon, not a red ✗.
+- [x] Commit Fix 5 on its own.
 - **Effort:** 1
 - **Success:** a routine first-run state no longer reads as an error.
 
