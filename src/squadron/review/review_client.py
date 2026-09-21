@@ -19,6 +19,8 @@ from squadron.config.manager import get_config
 from squadron.core.models import (
     RATE_LIMIT_EVENT_TYPE,
     SDK_RESULT_TYPE,
+    TOOL_RESULT_TYPE,
+    TOOL_USE_TYPE,
     AgentConfig,
     Message,
     MessageType,
@@ -268,7 +270,7 @@ async def run_review_with_profile(
             stamped_failures = response.metadata.get("failed_tool_calls")
             if stamped_failures is not None:
                 failed_tool_calls = stamped_failures
-            if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result", RATE_LIMIT_EVENT_TYPE):
+            if sdk_type in (SDK_RESULT_TYPE, TOOL_USE_TYPE, TOOL_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
                 continue
             output_parts.append(response.content)
     finally:

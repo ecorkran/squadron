@@ -122,6 +122,13 @@ SDK_RESULT_TYPE = "result"
 # the same way they skip SDK_RESULT_TYPE.
 RATE_LIMIT_EVENT_TYPE = "rate_limit_event"
 
+# The two sdk_type values a tool-use turn produces: the model's tool call and
+# the tool's own result, written by providers/sdk/translation.py and read by
+# every downstream consumer that needs to tell them apart (#108 — these were
+# previously scattered string literals).
+TOOL_USE_TYPE = "tool_use"
+TOOL_RESULT_TYPE = "tool_result"
+
 
 class TopologyConfig(BaseModel):
     """Configuration for the agent communication topology."""

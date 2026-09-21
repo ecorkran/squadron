@@ -62,6 +62,8 @@ async def capture_summary_via_profile_with_telemetry(
     from squadron.core.models import (
         RATE_LIMIT_EVENT_TYPE,
         SDK_RESULT_TYPE,
+        TOOL_RESULT_TYPE,
+        TOOL_USE_TYPE,
         AgentConfig,
         Message,
         MessageType,
@@ -144,7 +146,7 @@ async def capture_summary_via_profile_with_telemetry(
             if given is not None:
                 telemetry["tools_given"] = given
                 telemetry["tool_calls_made"] = response.metadata.get("tool_calls_made", 0)
-            if sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result", RATE_LIMIT_EVENT_TYPE):
+            if sdk_type in (SDK_RESULT_TYPE, TOOL_USE_TYPE, TOOL_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
                 continue
             output_parts.append(response.content)
     finally:

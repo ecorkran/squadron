@@ -25,7 +25,12 @@ from claude_agent_sdk import (
     ResultMessage,
 )
 
-from squadron.core.models import RATE_LIMIT_EVENT_TYPE, SDK_RESULT_TYPE
+from squadron.core.models import (
+    RATE_LIMIT_EVENT_TYPE,
+    SDK_RESULT_TYPE,
+    TOOL_RESULT_TYPE,
+    TOOL_USE_TYPE,
+)
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -185,8 +190,8 @@ class SDKExecutionSession:
                             # is excluded here the same way.
                             if sdk_type not in (
                                 SDK_RESULT_TYPE,
-                                "tool_use",
-                                "tool_result",
+                                TOOL_USE_TYPE,
+                                TOOL_RESULT_TYPE,
                                 RATE_LIMIT_EVENT_TYPE,
                             ):
                                 response_parts.append(translated.content)

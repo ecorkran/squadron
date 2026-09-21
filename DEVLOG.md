@@ -2,13 +2,75 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260920
+dateUpdated: 20260921
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260921
+
+### Slice 922 — Implementation complete: Small Fixes Batch 2
+
+Phase 6 complete on branch `922-slice.small-fixes-batch-2` (no integration
+branch configured; forked from and merging to `main`). All six fixes
+implemented, tested, and committed one at a time in the design's order
+(Fix 2 first — unblocks hook-clean commits for the rest — then 3, 4, 6, 5,
+Fix 1 last):
+
+- **#117 (D2, `c1fbbcd3`).** Frontmatter gate now consults a scope predicate
+  — is a staged path under `project-documents/user/` — only inside the
+  zero-of-N branch, so a release-shaped commit (`CHANGELOG.md` +
+  `pyproject.toml` + `uv.lock`) passes instead of failing closed. Filed
+  `ecorkran/context-forge#96` asking cf to report skipped-as-out-of-scope
+  paths, which would remove the predicate.
+- **#112 (D3, `29740334`).** Added `ProcessCwdNotFoundError`, classified
+  inside the existing `FileNotFoundError` handler in `SubprocessRunner.run`
+  — a bad `cwd` is now named as such rather than reported as a missing
+  executable. `github_cli.py` lets it propagate instead of converting it to
+  "gh is not on PATH".
+- **#108 (D4, `2e5c1c13`).** `TOOL_USE_TYPE` / `TOOL_RESULT_TYPE` centralized
+  in `core/models.py`, replacing five scattered literal sites. Pure
+  substitution, no behavior change.
+- **#100 (D6, `f456ee70`).** Policy-exclusion refusals in the tool jail now
+  log at DEBUG instead of WARNING; jail escapes stay WARNING. Amends slice
+  **918 D3** (not 917, as the issue's text claimed) for the exclusion case
+  only.
+- **#57 (D5, `0fd46b40`).** `sq setup`'s `StepKind.INSTALL` now renders a
+  neutral cyan arrow instead of the same red X as `CONFIGURE` — a routine
+  first-run state no longer reads as an error.
+- **#65 findings 2–3 (D1, `bf2dd705`).** Removed `anthropic` and
+  `google-adk` (zero importers; `google-adk` alone pulled 67 transitive
+  packages), declared `rich` (21 importers, previously only transitive).
+  Deleted the three docstring-only stub packages. `mcp` kept — the issue's
+  claim that it is unimported is stale; it is used by `tools/mcp_bridge.py`
+  and `tools/cf_tools.py`.
+
+One thing worth recording for whoever reads this next: attempting Fix 6's
+live verification repro (`sq review tasks 919 -v --model deepseek4-flash`)
+from this interactive session silently ignored `--model` and ran the review
+against the wrong target, overwriting the two real 919 review artifacts in
+place. They were restored from `git checkout HEAD --` before anything was
+committed — no data was lost — but the live repro for #100 was never
+actually run this session; only the unit tests (which directly assert
+DEBUG-vs-WARNING level and count at both refusal sites) verify it. Run the
+live repro from a plain CLI session before treating that criterion as fully
+closed.
+
+All 11 functional success criteria plus the pre-commit-hook integration
+criterion re-verified against running code (G2). Full gate clean: `ruff
+format --check`, `ruff check`, `pyright` (0 errors), `pytest` (4003 passed,
+4 skipped). Issues #65, #117, #112, #108, #57, #100 closed, each citing its
+fixing commit; #65's closing comment notes `mcp` was kept; #100's notes the
+918 attribution correction. #118 (`[serve]` extra) left open — Non-goal.
+
+**Commits this phase:** `c1fbbcd3` (#117), `16ad02ee` (docs), `29740334`
+(#112), `d739115c` (docs), `2e5c1c13` (#108), `f456ee70` (#100), `02fde5b4`
+(docs), `0fd46b40` (#57), `ee83c554` (docs), `bf2dd705` (#65).
+
+**Next:** merge `922-slice.small-fixes-batch-2` into `main`.
 
 ## 20260920
 

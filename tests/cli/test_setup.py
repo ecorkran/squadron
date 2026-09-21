@@ -78,6 +78,32 @@ _ALL_MISSING_RESULTS = [
 
 
 # ---------------------------------------------------------------------------
+# #57 (D5) -- INSTALL gets its own neutral icon, distinct from every other kind
+# ---------------------------------------------------------------------------
+
+
+def test_install_icon_differs_from_configure_in_glyph_and_color() -> None:
+    from squadron.cli.commands.setup import _ICON
+    from squadron.cli.commands.setup_steps import StepKind
+
+    install_icon, install_color = _ICON[StepKind.INSTALL]
+    configure_icon, configure_color = _ICON[StepKind.CONFIGURE]
+
+    assert install_icon != configure_icon
+    assert install_color != configure_color
+    assert install_color != "red"
+
+
+def test_install_icon_differs_from_already_done_and_optional() -> None:
+    from squadron.cli.commands.setup import _ICON
+    from squadron.cli.commands.setup_steps import StepKind
+
+    install = _ICON[StepKind.INSTALL]
+    assert install != _ICON[StepKind.ALREADY_DONE]
+    assert install != _ICON[StepKind.OPTIONAL]
+
+
+# ---------------------------------------------------------------------------
 # T18a -- check-only mode with mixed fixture (MISSING present -> exit 1)
 # ---------------------------------------------------------------------------
 
