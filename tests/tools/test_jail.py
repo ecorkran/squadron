@@ -198,17 +198,21 @@ def test_resolve_in_jail_does_not_log_its_own_refusals(
     assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
 
 
-def test_an_exclusion_refusal_emits_exactly_one_warning(
+def test_an_exclusion_refusal_emits_exactly_one_debug_record(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """Slice 922 D6: a policy exclusion logs at DEBUG, not WARNING — it is policy
+    working as designed, not a failure mode."""
     spec, _ = _jail_with_reviews(tmp_path)
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.DEBUG):
         jail_violation("read_file", spec, "docs/reviews/380-review.arch.md")
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warnings) == 1
-    assert "excluded" in warnings[0].getMessage()
+    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    assert warnings == []
+    assert len(debugs) == 1
+    assert "excluded" in debugs[0].getMessage()
 
 
 def test_an_exclusion_refusal_tells_the_model_only_that_the_file_is_absent(
@@ -246,15 +250,88 @@ def test_a_jail_escape_still_reports_the_trust_boundary(tmp_path: Path) -> None:
 def test_an_exclusion_refusal_is_worded_distinguishably_from_a_jail_escape(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """An operator reading a log must be able to tell the two refusals apart."""
+    """An operator reading a log must be able to tell the two refusals apart —
+    by wording, regardless of which level they land at (slice 922 D6: the
+    exclusion is DEBUG, the escape is WARNING)."""
     spec, reviews = _jail_with_reviews(tmp_path)
     outside = tmp_path.parent / "outside"
 
-    with caplog.at_level(logging.WARNING):
+    with caplog.at_level(logging.DEBUG):
         contained_in_jail(spec, reviews / "380-review.arch.md", tool="list_files")
         contained_in_jail(spec, outside, tool="list_files")
 
-    messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(messages) == 2
-    assert "excluded" in messages[0] and "jail escape" not in messages[0]
-    assert "jail escape" in messages[1] and "excluded" not in messages[1]
+    exclusion_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    escape_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(exclusion_records) == 1
+    assert len(escape_records) == 1
+
+    exclusion_message = exclusion_records[0].getMessage()
+    escape_message = escape_records[0].getMessage()
+    assert "excluded" in exclusion_message and "jail escape" not in exclusion_message
+    assert "jail escape" in escape_message and "excluded" not in escape_message
+
+
+# --- Slice 922 D6: exclusion/escape level and count, at both sites --------------------
+#
+# jail_violation (above) and contained_in_jail are the two sites that log a refusal.
+# Each refusal kind must produce exactly one record, at the level D6 assigns it.
+
+
+def test_walk_filter_exclusion_emits_exactly_one_debug_record_and_nothing_at_info_plus(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    spec, reviews = _jail_with_reviews(tmp_path)
+    target = reviews / "380-review.arch.md"
+
+    with caplog.at_level(logging.DEBUG):
+        result = contained_in_jail(spec, target, tool="list_files")
+
+    assert result is False
+    info_plus = [r for r in caplog.records if r.levelno >= logging.INFO]
+    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    assert info_plus == []
+    assert len(debugs) == 1
+    assert "excluded" in debugs[0].getMessage()
+
+
+def test_walk_filter_escape_emits_exactly_one_warning_record(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    spec, _ = _jail_with_reviews(tmp_path)
+    outside = tmp_path.parent / "outside"
+
+    with caplog.at_level(logging.DEBUG):
+        result = contained_in_jail(spec, outside, tool="list_files")
+
+    assert result is False
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "jail escape" in warnings[0].getMessage()
+
+
+def test_jail_violation_exclusion_emits_exactly_one_debug_record_and_nothing_at_info_plus(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    spec, _ = _jail_with_reviews(tmp_path)
+
+    with caplog.at_level(logging.DEBUG):
+        jail_violation("read_file", spec, "docs/reviews/380-review.arch.md")
+
+    info_plus = [r for r in caplog.records if r.levelno >= logging.INFO]
+    debugs = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    assert info_plus == []
+    assert len(debugs) == 1
+    assert "excluded" in debugs[0].getMessage()
+
+
+def test_jail_violation_escape_emits_exactly_one_warning_record(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    spec, _ = _jail_with_reviews(tmp_path)
+
+    with caplog.at_level(logging.DEBUG):
+        jail_violation("read_file", spec, "../escape")
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "outside working directory" in warnings[0].getMessage()

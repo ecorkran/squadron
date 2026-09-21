@@ -89,7 +89,8 @@ def arch_tools(review_tree: Path) -> dict[str, object]:
 def test_read_file_refuses_a_review_artifact(
     arch_tools: dict[str, object], path: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with caplog.at_level(logging.WARNING):
+    # Slice 922 D6: a policy exclusion logs at DEBUG, not WARNING.
+    with caplog.at_level(logging.DEBUG):
         result = _call(arch_tools[READ_FILE_NAME], {"path": path})
 
     assert result.is_error
@@ -117,7 +118,8 @@ def test_list_files_does_not_enumerate_the_excluded_directory(
     tells the model its own predecessors exist and what they are called. Asserted on the
     content, not on ``is_error``.
     """
-    with caplog.at_level(logging.WARNING):
+    # Slice 922 D6: a policy exclusion logs at DEBUG, not WARNING.
+    with caplog.at_level(logging.DEBUG):
         result = _call(arch_tools[LIST_FILES_NAME], {"path": ".", "recursive": True})
 
     assert DOCUMENT_STEM + ".review.md" not in result.content
@@ -140,7 +142,8 @@ def test_grep_returns_no_match_from_an_excluded_file(
     arch_tools: dict[str, object], caplog: pytest.LogCaptureFixture
 ) -> None:
     """The pattern matches the archived content; the exclusion is what suppresses the hit."""
-    with caplog.at_level(logging.WARNING):
+    # Slice 922 D6: a policy exclusion logs at DEBUG, not WARNING.
+    with caplog.at_level(logging.DEBUG):
         result = _call(arch_tools[GREP_NAME], {"pattern": STALE_PHRASE})
 
     assert STALE_PHRASE not in result.content

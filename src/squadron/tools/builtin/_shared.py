@@ -50,8 +50,8 @@ def resolve_in_jail(spec: JailSpec, path: str) -> Path | None:
 
     Neither refusal is logged here. Every caller turns the None into a result through
     :func:`jail_violation`, which is the single place a refusal is both worded and logged —
-    so a refusal produces exactly one WARNING, and the two kinds cannot drift into
-    contradicting each other.
+    so a refusal produces exactly one record (WARNING for a jail escape, DEBUG for a policy
+    exclusion — slice 922 D6), and the two kinds cannot drift into contradicting each other.
 
     String prefix comparison is deliberately not used: it is wrong across path-component
     boundaries (``/tmp/jail_evil`` starts with ``/tmp/jail`` but is not inside it). The same
@@ -79,8 +79,12 @@ def contained_in_jail(spec: JailSpec, entry: Path, *, tool: str) -> bool:
     from one that did not match, whereas "you were denied" invites probing for the jail
     boundary. That rationale covers exclusions too, and more sharply: an excluded review
     artifact is named after the document under review, so leaking the *name* leaks the fact.
-    Both are logged at WARNING, worded distinguishably, so a refusal is observable to an
-    operator.
+
+    The two are worded distinguishably but no longer logged at the same level (slice 922
+    D6, amending this decision's operator-log half): a jail escape still logs at WARNING —
+    it means something reached for the trust boundary — while a policy exclusion drops to
+    DEBUG, since it is policy working as designed, not a failure mode. Both remain
+    observable; only the exclusion's default visibility changed.
     """
     resolved = entry.resolve(strict=False)
     if not resolved.is_relative_to(spec.root):
@@ -90,7 +94,10 @@ def contained_in_jail(spec: JailSpec, entry: Path, *, tool: str) -> bool:
         return False
     excluded = _excluding(spec, resolved)
     if excluded is not None:
-        _logger.warning("%s: refusing excluded path %s (inside excluded %s)", tool, resolved, excluded)
+        # Slice 918 D3, amended by slice 922 D6: a policy exclusion is not a
+        # failure mode — it drops to DEBUG so -v review output is not flooded
+        # by policy working as designed. Jail escapes (above) stay WARNING.
+        _logger.debug("%s: refusing excluded path %s (inside excluded %s)", tool, resolved, excluded)
         return False
     return True
 
@@ -157,12 +164,14 @@ def jail_violation(tool: str, spec: JailSpec, path: str) -> ToolResult:
     """Build the error result for a path :func:`resolve_in_jail` refused, and log it once.
 
     The single wording-and-logging site for both refusals, which is what keeps one refusal
-    to one WARNING. It re-resolves to classify, which costs nothing in practice: this runs
+    to one record. It re-resolves to classify, which costs nothing in practice: this runs
     only on the refusal path.
 
-    The two are logged distinguishably — an escape means someone reached for the trust
-    boundary, an exclusion means a legitimate path was deliberately withheld — and an
-    operator has to be able to tell them apart.
+    The two are logged distinguishably, at different levels (slice 922 D6) — a jail escape
+    stays at WARNING, since it means someone reached for the trust boundary; a policy
+    exclusion drops to DEBUG, since a legitimate path was deliberately withheld and that is
+    policy working as designed, not a failure. An operator still has to be able to tell them
+    apart by wording, whichever level they are watching at.
 
     What the **model** sees does not distinguish them, and for an exclusion it deliberately
     does not mention the exclusion at all: it gets the same "not found" a path that was never
@@ -172,7 +181,9 @@ def jail_violation(tool: str, spec: JailSpec, path: str) -> ToolResult:
     """
     candidate = (spec.root / path).resolve(strict=False)
     if candidate.is_relative_to(spec.root) and (excluded := _excluding(spec, candidate)) is not None:
-        _logger.warning("%s: refusing excluded path %s (inside excluded %s)", tool, candidate, excluded)
+        # Slice 918 D3, amended by slice 922 D6: a policy exclusion drops to
+        # DEBUG (see contained_in_jail). The jail-escape branch below keeps WARNING.
+        _logger.debug("%s: refusing excluded path %s (inside excluded %s)", tool, candidate, excluded)
         # Built directly rather than via error(), which would add a second (INFO) record
         # for a refusal specified to log exactly once. The text reproduces exactly what
         # error() emits for a genuine FileNotFoundError — that message carries
