@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `sq setup`, the README, and the quickstart now recommend `cf init --strategy tarball`, which installs the guides as plain files instead of a git submodule. The README also covers switching an existing submodule install over
+
 ## [0.13.0] - 20260921
 
 ### Changed

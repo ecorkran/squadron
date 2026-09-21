@@ -62,7 +62,21 @@ sq install-commands   # refresh /sq:* commands (sq uninstall-commands removes th
 Then, inside a project you want to work on:
 
 ```bash
-cf init           # per-project: installs AI project guides and IDE config
+cf init --strategy tarball   # per-project: installs AI project guides and IDE config
+```
+
+`--strategy tarball` installs the guides as plain files with no git wiring, which is what most projects and nearly every team want. Without it, `cf init` installs them as a git submodule: version-pinned, but every teammate and CI job then has to handle submodule checkout, and the guides live in a second repository inside yours. To make tarball the choice for everyone on the project, commit it:
+
+```bash
+cf config set guide.git_strategy tarball
+```
+
+Already installed as a submodule? Switch over:
+
+```bash
+cf guides uninstall                     # removes the submodule and commits the removal
+cf guides install --strategy tarball
+git add project-documents && git commit -m "docs: install ai-project-guide as tarball"
 ```
 
 New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
