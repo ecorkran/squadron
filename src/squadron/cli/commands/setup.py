@@ -29,7 +29,9 @@ logger = logging.getLogger(__name__)
 
 _ICON: dict[StepKind, tuple[str, str]] = {
     StepKind.ALREADY_DONE: ("✓", "green"),
-    StepKind.INSTALL: ("✗", "red"),
+    # A routine first-run state — nothing installed yet — is not an error, so it
+    # gets a neutral glyph/color distinct from every other kind (#57, D5).
+    StepKind.INSTALL: ("→", "cyan"),
     StepKind.CONFIGURE: ("✗", "red"),
     StepKind.OPTIONAL: ("!", "yellow"),
 }

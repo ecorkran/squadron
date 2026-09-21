@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -40,9 +41,13 @@ class TestExitMapping:
 
     @pytest.mark.asyncio
     async def test_exit_0_succeeds(self, tmp_path: Path) -> None:
+        # staged_paths is empty (D12) and filesChecked: 0 matches it, so this is a
+        # legitimate pass, not the D10/D11 fail-closed cases.
         with patch(
             "asyncio.create_subprocess_exec",
-            new=AsyncMock(return_value=_fake_process(0, stdout=b'{"totalFindings":0}')),
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
         ):
             result = await FrontmatterGateAction().execute(_commit_context(str(tmp_path)))
 
@@ -50,12 +55,16 @@ class TestExitMapping:
 
     @pytest.mark.asyncio
     async def test_exit_1_fails_with_findings_passed_through(self, tmp_path: Path) -> None:
-        findings = b'{"totalFindings":1,"findings":[{"message":"bad status"}]}'
+        # filesChecked matches the one staged path, so this exercises cf's own
+        # findings-based failure, not the D10 worktree or D11 unreadable-count paths.
+        findings = b'{"totalFindings":1,"findings":[{"message":"bad status"}],"filesChecked":1}'
         with patch(
             "asyncio.create_subprocess_exec",
             new=AsyncMock(return_value=_fake_process(1, stdout=findings)),
         ):
-            result = await FrontmatterGateAction().execute(_commit_context(str(tmp_path)))
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("doc.md",))
+            )
 
         assert result.success is False
         assert result.error is not None and "bad status" in result.error
@@ -80,6 +89,327 @@ class TestExitMapping:
         assert result.success is False
         assert result.error is not None
         assert "not on PATH" in result.error
+
+
+class TestFilesCheckedFailClosed:
+    """Slice 919 Part 3 (#98): D10 worktree cause, D11 unreadable count, D12
+    zero-staged-is-fine, and the three failure messages must be pairwise
+    distinguishable by content, not merely by ``success is False``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_zero_checked_against_nonempty_staged_fails_with_worktree_message(
+        self, tmp_path: Path
+    ) -> None:
+        # Both paths are under the cf document root (D2), so the in-scope count
+        # is 2 — this must still fail closed with the worktree message.
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=("project-documents/user/a.md", "project-documents/user/b.md"),
+                )
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "0 of 2" in result.error
+        assert "worktree" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_empty_staged_list_with_zero_checked_passes(self, tmp_path: Path) -> None:
+        """D12: a commit staging no markdown gives cf nothing to check."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(_commit_context(str(tmp_path)))
+
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_matching_checked_count_with_findings_fails_with_cfs_own_message(
+        self, tmp_path: Path
+    ) -> None:
+        """Design criterion 2: the default-checkout, everything-worked-as-
+        cf-intended failure case must still carry cf's own finding text, not
+        one of the fail-closed messages this part adds."""
+        findings = b'{"totalFindings":1,"findings":[{"message":"bad status"}],"filesChecked":1}'
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_fake_process(1, stdout=findings)),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "bad status" in result.error
+        assert "worktree" not in result.error.lower()
+        assert "could not be read" not in result.error
+
+    @pytest.mark.asyncio
+    async def test_matching_checked_count_with_no_findings_passes(self, tmp_path: Path) -> None:
+        """Design criterion 2's positive half: the default-checkout case that
+        actually worked must still pass, unchanged from today."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":1}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_missing_files_checked_key_fails_with_unreadable_count_message(
+        self, tmp_path: Path
+    ) -> None:
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_fake_process(0, stdout=b'{"totalFindings":0}')),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "could not be read" in result.error
+
+    @pytest.mark.asyncio
+    async def test_unparseable_json_fails_with_unreadable_count_message(self, tmp_path: Path) -> None:
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_fake_process(0, stdout=b"not json at all")),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "could not be read" in result.error
+
+    @pytest.mark.asyncio
+    async def test_worktree_and_unreadable_count_messages_are_distinguishable(
+        self, tmp_path: Path
+    ) -> None:
+        """The two D10/D11 messages must not collapse to the same text."""
+        # In-scope path (D2), so the worktree case still fails closed here.
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            worktree_result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("project-documents/user/a.md",))
+            )
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_fake_process(0, stdout=b"garbage")),
+        ):
+            unreadable_result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert worktree_result.error != unreadable_result.error
+
+
+class TestScopePredicateInterpretsZeroChecked:
+    """Slice 922 D2: ``filesChecked: 0`` alone can't tell "nothing staged was
+    in scope" from "cf resolved against the wrong checkout". These tests use
+    the real cf JSON shape probed in the design (filesChecked: 0 for
+    CHANGELOG.md et al., filesChecked: 1 for a project-documents/user/ path).
+    """
+
+    @pytest.mark.asyncio
+    async def test_release_shaped_commit_with_zero_checked_passes(self, tmp_path: Path) -> None:
+        """Criterion 4: CHANGELOG.md + pyproject.toml + uv.lock, all outside
+        cf's document scope, with filesChecked: 0 — must pass, not fail closed."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=("CHANGELOG.md", "pyproject.toml", "uv.lock"),
+                )
+            )
+
+        assert result.success is True
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_in_scope_path_with_zero_checked_fails_closed(self, tmp_path: Path) -> None:
+        """Criterion 5: at least one staged path under project-documents/user/
+        with filesChecked: 0 — fails closed, with the D10 worktree wording,
+        reporting the in-scope count."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=("project-documents/user/slices/921-slice.small-fixes-batch.md",),
+                )
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "0 of 1" in result.error
+        assert "worktree" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_dot_slash_prefixed_in_scope_path_still_fails_closed(self, tmp_path: Path) -> None:
+        """The predicate compares normalized path parts, not string prefixes."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("./project-documents/user/x.md",))
+            )
+
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_mixed_in_scope_and_out_of_scope_fails_closed_on_in_scope_count(
+        self, tmp_path: Path
+    ) -> None:
+        """Some staged paths in scope, some out, filesChecked: 0 — fails
+        closed, and the reported count is the in-scope count, not the total."""
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(
+                    str(tmp_path),
+                    staged_paths=(
+                        "CHANGELOG.md",
+                        "pyproject.toml",
+                        "project-documents/user/slices/921-slice.small-fixes-batch.md",
+                    ),
+                )
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "0 of 1" in result.error
+
+
+class TestSubprocessTimeout:
+    """Slice 919 Part 3, D14: a hung ``cf`` is killed, reaped, logged at
+    WARNING, and fails the gate with its own distinct message — the
+    Failure-Mode Enumeration rule's required observable signal.
+    """
+
+    @pytest.mark.asyncio
+    async def test_hung_process_is_killed_and_gate_fails(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.tools import limits
+
+        monkeypatch.setattr(limits, "FRONTMATTER_GATE_TIMEOUT_S", 0.05)
+
+        proc = MagicMock()
+
+        async def _hang(*args: object, **kwargs: object) -> tuple[bytes, bytes]:
+            await asyncio.sleep(10)
+            return (b"", b"")  # pragma: no cover - never reached, timeout fires first
+
+        proc.communicate = _hang
+        proc.returncode = None
+        proc.pid = 99999
+        proc.wait = AsyncMock(return_value=None)
+
+        kill_mock = AsyncMock()
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=proc)),
+            patch("squadron.events.builtin.frontmatter_gate.kill_process_group", new=kill_mock),
+            caplog.at_level("WARNING", logger="squadron.events.builtin.frontmatter_gate"),
+        ):
+            result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert result.success is False
+        assert result.error is not None
+        assert "timed out" in result.error
+        kill_mock.assert_awaited_once_with(proc)
+        assert any("timed out" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_timeout_message_is_distinguishable_from_worktree_and_unreadable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from squadron.tools import limits
+
+        monkeypatch.setattr(limits, "FRONTMATTER_GATE_TIMEOUT_S", 0.05)
+
+        proc = MagicMock()
+
+        async def _hang(*args: object, **kwargs: object) -> tuple[bytes, bytes]:
+            await asyncio.sleep(10)
+            return (b"", b"")  # pragma: no cover
+
+        proc.communicate = _hang
+        proc.returncode = None
+        proc.pid = 99999
+        proc.wait = AsyncMock(return_value=None)
+
+        with (
+            patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=proc)),
+            patch("squadron.events.builtin.frontmatter_gate.kill_process_group", new=AsyncMock()),
+        ):
+            timeout_result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        # In-scope path (D2), so the worktree case still fails closed here.
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(
+                return_value=_fake_process(0, stdout=b'{"totalFindings":0,"filesChecked":0}')
+            ),
+        ):
+            worktree_result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("project-documents/user/a.md",))
+            )
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_fake_process(0, stdout=b"garbage")),
+        ):
+            unreadable_result = await FrontmatterGateAction().execute(
+                _commit_context(str(tmp_path), staged_paths=("a.md",))
+            )
+
+        assert timeout_result.error != worktree_result.error
+        assert timeout_result.error != unreadable_result.error
 
 
 @pytest.mark.skipif(shutil.which("cf") is None, reason="handled by _require_cf below")
@@ -134,3 +464,41 @@ class TestRealCfIntegration:
             await _run_cf(["project", "rm", tmp_path.name, "--yes"], cwd=str(tmp_path))
 
         assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_real_cf_json_output_carries_an_int_files_checked_key(self, tmp_path: Path) -> None:
+        """Drift guard (code review F001): the gate's fail-closed logic hard-
+        depends on cf's ``--json`` output carrying an int ``filesChecked``
+        key. If cf ever renames or restructures it, every commit gate would
+        fail with the "could not be read" message and nothing would catch it
+        before shipping — this test is that catch, matching
+        test_schema_drift.py's fail-not-skip posture for the same reason.
+        """
+        self._require_cf()
+        doc_root = tmp_path / "project-documents" / "user" / "reviews"
+        doc_root.mkdir(parents=True)
+        clean_doc = doc_root / "zz-test-drift.md"
+        clean_doc.write_text(
+            "---\ndocType: review\nproject: test-project\nstatus: complete\n"
+            "dateCreated: 20260101\ndateUpdated: 20260101\n---\nbody\n"
+        )
+        await _run_cf(["init", "--lite", "--no-ide"], cwd=str(tmp_path))
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "cf",
+                "validate",
+                "frontmatter",
+                "--json",
+                str(clean_doc),
+                cwd=str(tmp_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout_bytes, _stderr_bytes = await proc.communicate()
+        finally:
+            await _run_cf(["project", "rm", tmp_path.name, "--yes"], cwd=str(tmp_path))
+
+        payload = json.loads(stdout_bytes.decode())
+        assert "filesChecked" in payload
+        assert isinstance(payload["filesChecked"], int)
+        assert payload["filesChecked"] == 1

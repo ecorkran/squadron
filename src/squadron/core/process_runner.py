@@ -18,6 +18,7 @@ import signal
 import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from squadron.core.subprocess_text import TEXT_DECODING
@@ -46,6 +47,20 @@ class ProcessNotFoundError(Exception):
         self.executable = executable
 
 
+class ProcessCwdNotFoundError(Exception):
+    """The requested working directory does not exist.
+
+    Deliberately does not subclass ``ProcessNotFoundError`` — a missing
+    working directory is a configuration error, not a code-host condition,
+    and callers that catch ``ProcessNotFoundError`` (e.g. ``github_cli.py``)
+    must not silently swallow this one too (D3, squadron#112).
+    """
+
+    def __init__(self, cwd: str) -> None:
+        super().__init__(f"working directory not found: {cwd}")
+        self.cwd = cwd
+
+
 class ProcessTimedOutError(Exception):
     """The process was invoked but did not finish within its bound."""
 
@@ -69,8 +84,11 @@ class ProcessRunner(Protocol):
     ) -> ProcessResult:
         """Run ``argv``, returning its result even when it exits non-zero.
 
-        Raises ``ProcessNotFoundError`` if the executable is missing and
-        ``ProcessTimedOutError`` if it outlives ``timeout``.
+        Raises ``ProcessNotFoundError`` if the executable is missing,
+        ``ProcessCwdNotFoundError`` if ``cwd`` is given and does not exist,
+        and ``ProcessTimedOutError`` if it outlives ``timeout``.
+        ``ProcessCwdNotFoundError`` signals a configuration error and is
+        meant to surface — no caller is obliged to handle it.
         """
         ...
 
@@ -111,6 +129,13 @@ class SubprocessRunner:
                 start_new_session=True,
             )
         except FileNotFoundError as exc:
+            # Popen raises FileNotFoundError for both a missing executable and a
+            # missing cwd (D3, squadron#112) — classify here rather than pre-checking
+            # cwd before Popen, which would add a stat to the success path and a
+            # check-then-use gap.
+            if cwd is not None and not Path(cwd).is_dir():
+                _logger.warning("process cwd not found: %s", cwd)
+                raise ProcessCwdNotFoundError(cwd) from exc
             _logger.warning("process not found: %s", " ".join(argv))
             raise ProcessNotFoundError(argv[0]) from exc
 

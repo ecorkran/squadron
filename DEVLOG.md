@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260920
+dateUpdated: 20260921
 
 ---
 
@@ -10,9 +10,102 @@ dateUpdated: 20260920
 
 A lightweight, append-only record of development activity. Newest entries first.
 
----
+## 20260921
+
+### Slice 922 — Implementation complete: Small Fixes Batch 2
+
+Phase 6 complete on branch `922-slice.small-fixes-batch-2` (no integration
+branch configured; forked from and merging to `main`). All six fixes
+implemented, tested, and committed one at a time in the design's order
+(Fix 2 first — unblocks hook-clean commits for the rest — then 3, 4, 6, 5,
+Fix 1 last):
+
+- **#117 (D2, `c1fbbcd3`).** Frontmatter gate now consults a scope predicate
+  — is a staged path under `project-documents/user/` — only inside the
+  zero-of-N branch, so a release-shaped commit (`CHANGELOG.md` +
+  `pyproject.toml` + `uv.lock`) passes instead of failing closed. Filed
+  `ecorkran/context-forge#96` asking cf to report skipped-as-out-of-scope
+  paths, which would remove the predicate.
+- **#112 (D3, `29740334`).** Added `ProcessCwdNotFoundError`, classified
+  inside the existing `FileNotFoundError` handler in `SubprocessRunner.run`
+  — a bad `cwd` is now named as such rather than reported as a missing
+  executable. `github_cli.py` lets it propagate instead of converting it to
+  "gh is not on PATH".
+- **#108 (D4, `2e5c1c13`).** `TOOL_USE_TYPE` / `TOOL_RESULT_TYPE` centralized
+  in `core/models.py`, replacing five scattered literal sites. Pure
+  substitution, no behavior change.
+- **#100 (D6, `f456ee70`).** Policy-exclusion refusals in the tool jail now
+  log at DEBUG instead of WARNING; jail escapes stay WARNING. Amends slice
+  **918 D3** (not 917, as the issue's text claimed) for the exclusion case
+  only.
+- **#57 (D5, `0fd46b40`).** `sq setup`'s `StepKind.INSTALL` now renders a
+  neutral cyan arrow instead of the same red X as `CONFIGURE` — a routine
+  first-run state no longer reads as an error.
+- **#65 findings 2–3 (D1, `bf2dd705`).** Removed `anthropic` and
+  `google-adk` (zero importers; `google-adk` alone pulled 67 transitive
+  packages), declared `rich` (21 importers, previously only transitive).
+  Deleted the three docstring-only stub packages. `mcp` kept — the issue's
+  claim that it is unimported is stale; it is used by `tools/mcp_bridge.py`
+  and `tools/cf_tools.py`.
+
+One thing worth recording for whoever reads this next: attempting Fix 6's
+live verification repro (`sq review tasks 919 -v --model deepseek4-flash`)
+from this interactive session silently ignored `--model` and ran the review
+against the wrong target, overwriting the two real 919 review artifacts in
+place. They were restored from `git checkout HEAD --` before anything was
+committed — no data was lost — but the live repro for #100 was never
+actually run this session; only the unit tests (which directly assert
+DEBUG-vs-WARNING level and count at both refusal sites) verify it. Run the
+live repro from a plain CLI session before treating that criterion as fully
+closed.
+
+All 11 functional success criteria plus the pre-commit-hook integration
+criterion re-verified against running code (G2). Full gate clean: `ruff
+format --check`, `ruff check`, `pyright` (0 errors), `pytest` (4003 passed,
+4 skipped). Issues #65, #117, #112, #108, #57, #100 closed, each citing its
+fixing commit; #65's closing comment notes `mcp` was kept; #100's notes the
+918 attribution correction. #118 (`[serve]` extra) left open — Non-goal.
+
+**Commits this phase:** `c1fbbcd3` (#117), `16ad02ee` (docs), `29740334`
+(#112), `d739115c` (docs), `2e5c1c13` (#108), `f456ee70` (#100), `02fde5b4`
+(docs), `0fd46b40` (#57), `ee83c554` (docs), `bf2dd705` (#65).
+
+**Next:** merge `922-slice.small-fixes-batch-2` into `main`.
 
 ## 20260920
+
+### Slice 922 — Task breakdown: Small Fixes Batch 2
+
+Phase 5 complete. Split across two files at the ~450-line convention:
+`user/tasks/922-tasks.small-fixes-batch-2-1.md` (Parts A–E, 437 lines) and
+`-2.md` (Parts F–G, 175 lines). 118 checklist items.
+
+Task order follows the design's Development Approach rather than issue
+number: **Fix 2 (#117) first**, because the gate fix is what lets the rest of
+the slice commit without `--no-verify`, then 3, 4, 6, 5, and **Fix 1 (#65)
+last** since it regenerates `uv.lock`. One commit per fix. The file split
+falls on that seam — the five code fixes in part 1, the packaging change and
+closeout in part 2.
+
+Every site named in the design was re-verified against the code while writing
+the tasks; all confirmed. Two things the tasks pin down that the design left
+implicit:
+
+- `models/aliases.py` (lines 67, 69, 207) also contains `"tool_use"`, but as a
+  TOML config key, not an sdk_type — explicitly out of Fix 4's scope, recorded
+  so it is not swept up.
+- Fix 6's test update is three specific tests in
+  `tests/tools/test_jail_exclusions.py` (lines 90, 112, 140) pinned to
+  WARNING. The design predicted they existed; the tasks name them.
+
+Fix 3's task carries a trap worth noting: `ProcessCwdNotFoundError` must not
+subclass `ProcessNotFoundError`, or `github_cli.py:490`'s existing handler
+swallows it and the fix silently does nothing.
+
+Stale slice-plan text corrected: entry 20 still posed the stub packages as an
+open question ("decide the fate of"), which D1 had already decided.
+
+**Next:** Phase 6 implementation, branch `922-slice.small-fixes-batch-2`.
 
 ### Slice 386 task breakdown (Phase 5)
 
@@ -121,6 +214,30 @@ have unchecked items, which stopped being true once that slice closed. Logged as
 ---
 
 ## 20260919
+
+### Slice 922 — Design: Small Fixes Batch 2 (#65, #117, #112, #108, #57, #100)
+
+Phase 4 complete. `user/slices/922-slice.small-fixes-batch-2.md`; validator PASS.
+
+Slice 907 was split: its #65 dependency-cleanup half became 922, widened to a
+six-item batch; its `[serve]` half stays deferred as #118, expected to close
+unimplemented once Amoeba's resident process makes the daemon redundant. #30
+closed — delivered by slice 920, close missed at closeout.
+
+Decisions worth carrying forward:
+- **D2 (#117).** The gate keeps passing every staged path to cf; a
+  squadron-side "under `project-documents/user/`" predicate is consulted only
+  to interpret `filesChecked: 0`. Filtering *before* calling cf was rejected —
+  it would make squadron's predicate the authority and fail open on any drift
+  from cf's real scope. cf scope was probed empirically, not assumed.
+- **D1 (#65).** `mcp` stays — it is now imported, contrary to the issue text.
+  The three docstring-only stub packages (`providers/anthropic/`, `adk/`,
+  `mcp/`) are deleted; nothing references them.
+- **D6 (#100).** Only policy exclusions drop to DEBUG; jail escapes stay WARNING.
+- #108's `dispatch.py:174` site is stale; `translation.py` (the producer) was
+  missing from the issue's list.
+
+**Next:** Phase 5 task breakdown.
 
 ### Slice 386 design (Phase 4)
 
@@ -247,6 +364,115 @@ pre-existing schema-drift failures (context-forge issue #88), unchanged by this 
 ---
 
 ## 20260917
+
+### Slice 921 — Implementation: Small Fixes Batch (#67, #103)
+
+Phase 6 complete. Two commits, one per fix, each gated independently.
+
+**Part A (#67) — `57a3d771`.** New `_reject_unknown_alias` helper in
+`cli/commands/review.py`, mirroring `_resolve_profile`'s three-channel cascade
+(flag → `template.profile` → `default_review_profile`) *without* its `"sdk"`
+fallback — that fallback was what silently rescued typos. Wired into both
+`_run_review_command` and `_resolve_judge_model`, sharing the one helper per
+design review F004.
+
+Guard placement was the trap the task review (F001) caught in advance:
+`alias_model`/`alias_profile` are `None`-initialized and assigned only inside
+`if raw_model is not None:`, so a guard placed after that block evaluates
+`None == None and None is None` and would reject *every* model-less
+invocation with "unknown model alias 'None'". Guard sits inside the block at
+both call sites, with a comment saying why, and
+`test_no_model_supplied_does_not_reject` guards it directly rather than
+relying on `test_run_review_command_defaults_to_sdk` to catch it by accident.
+
+The error message names `--profile` as the remedy, which is not cosmetic: per
+design review F003, no shipped template declares `profile:`, so a *valid*
+literal model ID with no `--profile` and no config default now fails too.
+That shape is indistinguishable from a typo at the dispatch point, and the
+message is the only place that tells the two apart.
+
+Tests: `test_unknown_model_passes_through` renamed and inverted (it asserted
+the exact behavior this fix removes), plus new `TestUnknownAliasGuard`
+covering both surviving passthrough channels, the message content, and the
+no-model regression; judge path covered in
+`tests/review/test_cli_review_resolve.py`.
+
+**Part B (#103) — `dae9cd97`.** `_sibling_projects` derives sibling checkout
+names from `Path(cwd).resolve().parent.iterdir()`, `_partition_by_sibling`
+splits glob matches into clean/excluded, and the no-key default now selects
+from `clean` only. `_summary_key` is unchanged for every stem, so an excluded
+file keeps its key and stays restorable via `--key` — the disambiguation
+policy the first design review (F001) forced, after the original draft
+required two things that cannot compose. The picker still lists every match,
+marking excluded ones with the owning sibling and the key to use. All-excluded
+with no key raises the same "no summary files found" error rather than falling
+through. `OSError` from `iterdir()` logs at WARNING and degrades to an empty
+sibling set (today's unfiltered behavior), per design review F002 and the
+916 precedent.
+
+The prefix-continuation qualifier in the partition predicate is load-bearing
+in the direction the task review (F005) judged outcome-neutral. From the
+`squadron-pr` worktree, sibling `squadron` is the *shorter* name and prefixes
+every one of `squadron-pr`'s own stems, so the unqualified predicate excludes
+all of them, leaves `clean` empty, and fails in a checkout holding eight
+summaries of its own — the inverse of #103 and worse than the unfixed
+behavior. Verified by direct computation before implementing, and guarded by
+`test_shorter_sibling_does_not_exclude_own_summaries`.
+
+Also updated the existing `TestRestoreFlag`/`TestRestoreKey` invocations to
+pass `--cwd` (task review F002). They omitted it, so under this fix they read
+the real parent of wherever pytest runs — passing on a machine that happens
+to have a same-prefix checkout, failing on CI. Confirmed CWD-independent by
+running the file from a directory whose parent held a `myproject-pr` sibling.
+A first draft of the `_sibling_projects` tests hit the same class of problem
+from the other side: pytest's `tmp_path` is itself nested among sibling temp
+dirs, so the layout needs its own root.
+
+**Verification.** Both fixes smoke-tested live and recorded in the slice
+design's new Verification Walkthrough. Fix 1 needs a scope argument to reach
+the guard at all (task review F003) — `sq review code --model <typo>` alone
+exits 1 at the scope check, and both failures exit 1, so the message is the
+verification. Fix 2 was tested against #103's actual motivating case in this
+repo: `squadron-pr-interactive.md` was still the newest match, still listed,
+now marked excluded, and the default correctly selected
+`squadron-interactive.md`; `--key pr-interactive` still reached it; and the
+`squadron-pr` worktree restored its own summary (exit 0), confirming the
+reversed direction live.
+
+Gate: ruff format/check clean, pyright 0 errors, 3987 passed / 4 skipped
+(baseline 3973; +14 accounted for in the walkthrough). The real command is
+`sq _summary-instructions` — there is no `sq summary` (task review F006).
+
+
+### Slice 921 — Task Breakdown: Small Fixes Batch (#67, #103)
+
+Phase 5 complete: [921-tasks.small-fixes-batch.md](project-documents/user/tasks/921-tasks.small-fixes-batch.md)
+(355 lines), converted from the design that landed two review rounds earlier
+today (FAIL → CONCERNS, both addressed). Two independent fixes, each its own
+part ending in a gate/commit task:
+
+- **Part A (#67)** — a shared `_reject_unknown_alias` helper wired into both
+  `_run_review_command` and `_resolve_judge_model`, firing only when alias
+  resolution is a no-op *and* none of the three profile channels (flag,
+  template, config) supplies a value — matching the design's corrected
+  rationale, not the flag-only guard an earlier draft proposed. Task 1.4
+  flags that this fix invalidates an existing test
+  (`test_unknown_model_passes_through` in `test_review_profile.py`) that
+  currently asserts the opposite of the new intended behavior — updating it
+  is a task, not an afterthought.
+- **Part B (#103)** — a new `_sibling_projects` helper (filesystem-derived,
+  `OSError`-guarded per review F002) partitions `--restore` matches into
+  clean/excluded; only the no-`--key` default is scoped to `clean`, while
+  `--key` and the picker listing still see everything, per the
+  non-composable-requirement fix from review F001/F001-followup.
+
+Also fixed en route: entry 19 in `900-slices.maintenance-and-refactoring.md`
+already existed and needed no changes; task file references it directly
+rather than duplicating its content.
+
+Not yet done: Phase 6 implementation. No branch created — per project git
+rules, Phase 5 stays on `main` (`git.integration_branch` unset, verified via
+`cf config get`).
 
 ### Slice 385 task breakdown (Phase 5)
 
@@ -492,6 +718,95 @@ unrelated to this slice). `ruff format`, `ruff check`, `pyright` all clean.
 
 ## 20260915
 
+### Slice 920 — Implementation: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
+
+Phase 6 complete on branch `920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement`.
+13 of 14 tasks done; Task 13 blocked by a pre-existing, unrelated bug.
+
+Throttle detection was re-keyed onto typed `RateLimitEvent` across all three dispatch paths —
+`agent.py`'s shared `_skip_unparseable` and `sdk_session.dispatch`'s inline loop, which has no
+such wrapper and needed its own inspection (the asymmetry the design flagged as the likeliest
+half-landing point). `translation.py` now makes an informational event observable instead of
+silently dropping it. The shim (`install_rate_limit_parser_shim`, `is_rate_limit_event`) and its
+now-dead dict-based sibling `rate_limit_event_blocks` are deleted.
+
+Task 8's grep for other `sdk_type` exclusion lists found three more consumers of
+`agent.handle_message()` with the same issue-#23-class gap — `summary_oneshot.py`,
+`review_client.py`, `pipeline/actions/dispatch.py` — fixed the same way. Moved
+`RATE_LIMIT_EVENT_TYPE` to `core/models.py` (alongside `SDK_RESULT_TYPE`) so
+`review_client.py`'s "no provider-specific imports" boundary held. Also fixed:
+`test_translation.py`'s bare-`dict` fixture (42 pre-existing pyright errors, `TypedDict` now),
+and renamed `_is_throttle` → `is_throttle` since it's a genuine cross-module contract, not
+module-private.
+
+Every test fabricating `MessageParseError`/`ClaudeSDKError("rate_limit_event: ...")` now
+constructs a real `RateLimitEvent`, landed in the same commit as the production change it
+covers (Success Criterion 9). Success Criterion 10 (informational ≠ throttle) is covered in
+every consumer. `test_provider.py` and `test_audit_cli.py` needed no changes — confirmed both
+pass unmodified (Task 10), since neither fabricates an SDK parser exception. `test_agent.py`
+under `providers/openai/` was correctly left untouched — its only rate-limit test is on an
+independent, non-SDK path.
+
+**Task 12 (live review), passed.** `sq review code --diff main...HEAD -v` completed cleanly
+against the real SDK/CLI: verdict produced, no `Unknown message type` warning, no leaked
+`rate_limit_event` text, no live throttle observed. Returned CONCERNS with two real findings
+against this slice's own diff — both fixed in a follow-up commit.
+
+**Task 13 (live metrology audit), blocked.** `sq metrology audit run` fails before reaching any
+SDK code: a pre-existing, unrelated bug in `_AUDIT_ALLOWED_TOOLS` (Claude-native tool names
+never updated for a separate canonical-name translation commit). Confirmed unchanged on `main`.
+Filed as [issue #107](https://github.com/ecorkran/squadron/issues/107) with Task 13's
+verification intent recorded there. Task 12's live review stands as this slice's live-path
+evidence in its place.
+
+Full suite green: 3965 passed, 4 skipped (pre-existing). `ruff format`, `ruff check`, `pyright`
+(src-only per project config, tests tracked separately as issue #50) all clean.
+
+### Slice 920 — Slice Design: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
+
+Phase 4 (Slice Design) complete. Design at
+`project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`.
+No code changed; slice is not started.
+
+**The upgrade is not the slice.** The compatibility probe was rebuilt against
+`claude-agent-sdk==0.2.152` and confirmed the prior session's finding: all 14 public names,
+all 9 `ClaudeAgentOptions` fields, and all three private modules squadron touches survive the
+bump. What the probe added this round is the shape of the thing that actually changes —
+`RateLimitEvent(rate_limit_info: RateLimitInfo, uuid, session_id)`, with
+`RateLimitStatus = Literal['allowed', 'allowed_warning', 'rejected']` and a `raw` field
+preserving the original payload. Both a `rejected` and an `allowed_warning` payload now parse
+cleanly; **neither raises**.
+
+That last fact is the whole design. Throttle detection is currently keyed off a *parse
+failure* — `MessageParseError` → dead generator → `ClaudeSDKError` → `"rate_limit" in
+str(exc)` → backoff. After the upgrade that chain's first link never fires, the event parses
+into a type `translate_sdk_message` returns `[]` for, and the throttle disappears with no
+error, no log, and no backoff. Squadron would keep hammering a limiter that is rejecting it —
+the exact defect the backoff was added to fix, now silent.
+
+**Decisions.** D1 deletes the shim outright rather than keeping a version-guarded no-op: the
+floor pin makes it unreachable by construction, and the stale-lockfile hedge is not real. D2
+keeps `>=` rather than a ceiling — the CLI ships *inside* the package, so pinning the SDK back
+pins the CLI back and recreates the original bug. D4 raises a `RateLimitRejected(ClaudeSDKError)`
+at dispatch so all three existing `except ClaudeSDKError` loops need no restructuring, and
+retains the substring path as a second signal for genuine 429s surfaced as plain errors.
+
+**Two findings the plan entry did not have.** `set_model` is already in use at
+`sdk_session.py:125`, so the entry's note about the pipeline working around its absence is
+stale. And `sdk_session.dispatch` iterates `receive_response()` **directly**, with no
+`_skip_unparseable` wrapper — unlike both agent paths — so it needs its own inline inspection.
+That asymmetry is the most likely place for this slice to half-land.
+
+**The test suite cannot close this slice.** Every existing throttle test fabricates the
+`MessageParseError`/`ClaudeSDKError` the SDK will no longer raise, so the suite stays green
+against a completely broken implementation. Rewriting those onto real `RateLimitEvent` objects
+is a non-negotiable success criterion, and the walkthrough requires a live review, a live
+metrology audit, and a forced-throttle observation — the original failure appeared only ~30
+tool calls into an audit, and the dangerous mode produces nothing to assert on.
+
+
+---
+
 ### Slice 383 task breakdown (Phase 5)
 
 `383-tasks.pr-keyed-review-persistence.md` written and committed (`7c0d5825`). Nine tasks, 328
@@ -606,6 +921,127 @@ have unit coverage from file 1 but no live-run evidence. **Before relying on
 At close: 3962 passed, 4 skipped; `ruff format`/`ruff check`/`pyright` clean. The 3
 failures in `tests/documents/test_schema_drift.py` are cf issue #88, pre-existing and
 unrelated.
+
+### Slice 919 — Verification That Verified Nothing (#96, #97, #98)
+
+Committed as `ee5e01eb` (Part 1), `e183ef70` (Part 2), `afe341af` (Part 3). Slice 919 is
+complete.
+
+One theme across three layers: a check that verified nothing must not report success.
+Sequenced 1 → 2 → 3 per the design (inverting the plan entry's C → A → B) — Part 1 is the
+highest-severity defect and the trigger for Part 2's derived-verdict shape, so settling its
+leniency story first told Part 2 how many distinct degradation shapes the provenance flag
+needed to describe.
+
+**Part 1 — newline-free responses parse (#96).** A provider response with zero newlines
+broke seven line-structure-dependent constructs in `review/parsers.py`, collapsing four
+findings into one and losing the verdict. Fixed with a normalization pass
+(`_normalize_line_structure`) that restores line structure before the existing parser runs
+unchanged, applied only when a response is detected as newline-free (D5) — every other
+response takes the same byte-identical path it always has.
+
+Three named traps, each independently guarded and tested: mid-run hash insertion (`###`
+must never split at its second `#`), fused heading text (`## SummaryPASSThe rest...` needs
+a break after the recognized heading word, not an unconditional one), and a `#` inside a
+`location:` markdown anchor being mistaken for a heading (would truncate the findings
+section at the first anchor). A fourth trap surfaced during implementation, beyond the
+three named in the design: once the anchor `#` is correctly *not* treated as a heading, its
+kebab-case slug still runs directly into the following prose with no terminator, which
+would make `_LOCATION_RE`'s `$`-bounded capture swallow the rest of the finding body as the
+location value — fixed with a companion break inserted after the anchor's slug ends.
+
+The subtlest part of the fix: `_extract_verdict` used an unbounded `.*?` scan between the
+`## Summary` heading and the verdict keyword. With only a newline inserted after "Summary"
+(no other change), a fused `PASSThe` has no word boundary after `PASS`, so the scan ran
+forward and matched a `CONCERN` belonging to a later finding — a confidently wrong verdict,
+worse than the UNKNOWN it replaced. Fixed by replacing the scanning search with a
+fixed-position match (`re.match`, not `.search`) immediately after the heading — genuinely
+bounded, not merely newline-patched, so the same fix also closes the bug for other
+malformed-but-line-broken text.
+
+A second, unplanned fix was needed for design success criterion 5 (fence masking, #91,
+does not reopen): a genuinely newline-free response cannot contain a real fence before
+normalization runs (`_FENCE_OPEN_RE` requires a trailing `\n` the raw text never has), so
+without special handling a quoted `### [FAIL] Title` inside backtick markers would leak
+through as a fabricated finding. Fixed by isolating fence markers onto their own line as
+the first normalization pass, before anything else can insert a break inside what should
+become a masked fence body.
+
+**Discovered, filed, not fixed:** `_locate_section`'s self-closing guard (written for a
+`### Findings` heading that sits at its own findings' level) also misfires for `"summary"`
+whenever the document holds findings elsewhere — `summary_section_located` is `False` for
+essentially every well-formed review with both a stated verdict and findings, predating
+this slice (confirmed via `git stash` against pre-919 `main`). Out of Part 1's scope; filed
+as [squadron#101](https://github.com/ecorkran/squadron/issues/101).
+
+**Part 2 — verdict provenance in frontmatter (#97).** A verdict derived from findings after
+a failed summary parse (the #96 shape, recovery mechanism from #28) was indistinguishable
+in frontmatter from one the model actually stated — `fallback_used` already reached the
+artifact body and JSON, but `_review_frontmatter_lines` had no degradation parameter, so
+Context Forge's review gate (which reads frontmatter) could not tell a recovered PASS from
+a real one.
+
+Added `VerdictSource(StrEnum)` — `STATED | DERIVED`, a closed two-value vocabulary per D7
+— threaded through `parse_review_output` independently at each branch (never computed from
+`fallback_used`, since one branch — verdict genuinely stated but findings unparseable —
+sets `fallback_used=True` for a verdict that is nonetheless `STATED`, the one place the two
+fields diverge). Emitted as `verdictSource: stated|derived` in frontmatter adjacent to
+`verdict:`, at both call sites (the normal review path and the provider-failure path, which
+correctly omits the key — no `ReviewResult` exists there to attribute provenance to). Also
+added to `to_dict()` so the JSON and frontmatter surfaces can be compared for agreement
+(design SC6), verified directly by test.
+
+Filed the cross-repo coordination issue this slice's design called for:
+[context-forge#89](https://github.com/ecorkran/context-forge/issues/89), asking cf's review
+gate to read the key and decline to auto-clear on `derived`. Not a blocking precondition —
+verified `cf validate frontmatter` tolerates the unknown key today — but #97 stays only
+half-closed until a consumer acts on the value.
+
+**Part 3 — frontmatter gate fails closed (#98).** `frontmatter_gate.py` handed `cf` the
+staged paths and read only the exit code. In a sibling git worktree, `cf` silently resolves
+in-root against the registered default checkout, checks none of the paths handed to it, and
+exits 0 — the gate reported `ok` having verified nothing. Reproduced directly (throwaway
+invalid-frontmatter file in the `squadron-pr` worktree, never actually committed): `cf
+validate frontmatter --json` there reports `filesChecked: 0`, exit 0.
+
+Fixed by passing `--json` and reading `filesChecked`: zero-checked against a non-empty
+staged-path list now fails with a message naming the worktree cause (D10); an absent or
+unparseable count fails closed with its own distinct message, never a silent fallback to
+exit-code-only behavior (D11); zero-checked against an *empty* staged list still passes,
+since that's a legitimate "nothing to check" (D12). Also bounded the subprocess with a
+timeout (`FRONTMATTER_GATE_TIMEOUT_S = 20.0`, new constant in `tools/limits.py`) mirroring
+`bash_tool.py`'s `_kill_process_group` / `asyncio.wait_for` pattern exactly — added after
+the design's own slice review flagged the missing hang-handling as a Failure-Mode
+Enumeration gap. All three fail-closed messages (worktree, unreadable-count, timeout) are
+pairwise distinguishable by content, not just by `success is False`, since the operator's
+next action differs for each.
+
+This is a deliberate behavior change (D13): a worktree commit that passed vacuously before
+now fails, and will look like a new bug to whoever hits it first. CHANGELOG entry added
+naming the workaround (commit markdown from the default checkout, or register the worktree
+with `cf`).
+
+**Two review rounds, both CONCERNS, all findings addressed before implementation began**
+(prior session, `5b66a10e` / `29f35fd5`) — F001 on the Part 1 task breakdown caught a task
+telling the implementer to duplicate an already-committed fixture; F001/F002 on Part 2/3
+caught an untested design success criterion and a test gap that would have let
+`VerdictSource` silently be computed from `fallback_used` instead of set independently,
+exactly the divergent branch above.
+
+**Verification walkthrough refined from what was actually run**, per this phase's own
+instruction — corrections stated rather than the draft quietly amended: Part 1's baseline
+command (calling `_extract_verdict`/`_extract_findings` directly) still reproduces pre-fix
+numbers even after the fix landed, because normalization only ever runs inside
+`parse_review_output`, never inside those two functions themselves — expected, not a
+regression, and the walkthrough now uses the real entry point for the "after" measurement.
+Part 3's reproduction used the existing `squadron-pr` worktree (holding real, unrelated
+in-progress work for initiative 380) — a throwaway file was added and removed there without
+ever staging or committing it, confirmed via `git status --short` before and after.
+
+Full suite: 3941 passed, 4 skipped (design baseline was 3698 passed, 4 skipped; the +243 is
+this slice's own new tests, skip count unchanged). `ruff format`, `ruff check`, `pyright`
+all clean. Four pre-existing `RuntimeWarning`s in unrelated CLI test mocks, confirmed via
+`git log` to predate this slice's commits.
 
 ---
 
@@ -1546,8 +1982,6 @@ every part landed here, so it is left for a follow-up rather than absorbed into 
 
 ---
 
-## 20260911
-
 ### Slice 916 task breakdown (Phase 5)
 
 Converted the 916 design into `916-tasks.review-scope-correctness.md` — 545 lines, 31 tasks
@@ -1916,8 +2350,6 @@ all of them behaved correctly, yet the first live run still found two problems �
 tool *chooses to read* and in how two independently-correct limits compose.
 
 ---
-
-## 20260905
 
 ### Slice 266: Design Review Resolved, Phase 5 Task Breakdown Complete
 
@@ -3264,8 +3696,6 @@ Next free analysis index is **945** (`940`–`944` taken).
 No Python; no test added (`tests/skills/` runs as a regression guard only).
 
 ---
-
-## 20260823
 
 ### Slice 364: Initiative Candidates — Design Complete
 

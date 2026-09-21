@@ -83,8 +83,8 @@ def test_real_task_file_fixture() -> None:
 
     items = parse_task_items(text)
 
-    assert items.checked
-    assert items.unchecked
-
+    # Not asserted per-state: a completed slice's task file is all-checked, so
+    # requiring unchecked items would fail once the work it tracks is done.
     expected_total = len(_CHECKBOX_LINE_RE.findall(text))
+    assert expected_total
     assert len(items.checked) + len(items.unchecked) == expected_total

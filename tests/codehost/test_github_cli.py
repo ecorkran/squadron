@@ -41,6 +41,7 @@ from squadron.codehost.models import (
 )
 from squadron.codehost.targets import parse_target
 from squadron.core.process_runner import (
+    ProcessCwdNotFoundError,
     ProcessNotFoundError,
     ProcessResult,
     ProcessTimedOutError,
@@ -273,6 +274,19 @@ def test_missing_gh_becomes_cli_missing_error() -> None:
     with pytest.raises(GitHubCliMissingError) as excinfo:
         cli.default_branch(_locator())
     assert excinfo.value.fix_hint is not None
+
+
+def test_nonexistent_cwd_propagates_rather_than_becoming_cli_missing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """D3 (squadron#112): a missing cwd is a configuration error, not a
+    missing gh install — it must not become "gh is not on PATH"."""
+    cli, _ = _host([(["gh", "api"], ProcessCwdNotFoundError("/nonexistent-922"))])
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.github_cli"):
+        with pytest.raises(ProcessCwdNotFoundError) as excinfo:
+            cli.default_branch(_locator())
+    assert excinfo.value.cwd == "/nonexistent-922"
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
 
 
 def test_timeout_becomes_host_timeout_naming_the_bound() -> None:

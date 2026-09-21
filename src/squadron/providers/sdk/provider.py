@@ -9,7 +9,6 @@ from claude_agent_sdk import ClaudeAgentOptions
 from squadron.core.models import AgentConfig
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
-from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
 from squadron.providers.sdk.tool_names import translate_tool_names
 
 if TYPE_CHECKING:
@@ -38,10 +37,6 @@ class ClaudeSDKProvider:
 
     async def create_agent(self, config: AgentConfig) -> ClaudeSDKAgent:
         """Build ``ClaudeAgentOptions`` from *config* and return agent."""
-        # Must precede any streaming: the pinned parser dies on the CLI's
-        # rate-limit status event, and that kills the whole stream.
-        install_rate_limit_parser_shim()
-
         kwargs: dict[str, object] = {}
 
         # The preset form is the only way to get the CLI's default system
@@ -110,6 +105,10 @@ class ClaudeSDKProvider:
         cap_s = config.credentials.get("rate_limit_cap_s")
         if cap_s is not None:
             agent_kwargs["rate_limit_cap_s"] = float(cap_s)  # pyright: ignore[reportArgumentType]
+        # Canonical names (pre-translation), so tool telemetry (issue #110) is stamped in
+        # the same vocabulary the OpenAI agent uses — callers never see Claude's names.
+        if config.allowed_tools is not None:
+            agent_kwargs["tools_given"] = list(config.allowed_tools)
         return ClaudeSDKAgent(name=config.name, options=options, mode=mode, **agent_kwargs)  # pyright: ignore[reportArgumentType]
 
     async def validate_credentials(self) -> bool:

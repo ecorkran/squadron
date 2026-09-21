@@ -117,3 +117,10 @@ MAX_PATTERN_CHARS = 1_000
 # walk before the search is abandoned. Bounds catastrophic backtracking on
 # model-supplied patterns; the ``regex`` package enforces it at the engine level.
 GREP_TIMEOUT_S = 5.0
+
+# Wall-clock seconds ``squadron.frontmatter-gate`` waits for ``cf validate frontmatter``
+# before killing its process group (slice 919 Part 3, #98, D14). Set well below
+# BASH_TIMEOUT_S: validating a handful of staged files is fast, and a gate blocking a
+# commit is more disruptive than a long-running interactive command, so it gets a much
+# tighter bound rather than inheriting the general-purpose one.
+FRONTMATTER_GATE_TIMEOUT_S = 20.0

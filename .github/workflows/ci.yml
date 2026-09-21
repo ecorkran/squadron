@@ -17,6 +17,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
+          fetch-depth: 0
+      # A tag checkout leaves HEAD detached with no local `main` ref
+      # (full history via fetch-depth:0 covers commits, not branch refs).
+      # Tests resolve --diff against real refs like `main`, so ensure it
+      # exists locally regardless of what triggered this run.
+      - run: git fetch origin main:main || true
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

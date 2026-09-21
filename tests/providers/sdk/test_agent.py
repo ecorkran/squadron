@@ -14,7 +14,14 @@ from claude_agent_sdk import (
     CLIJSONDecodeError,
     CLINotFoundError,
     ProcessError,
+    RateLimitEvent,
+    RateLimitInfo,
+    RateLimitStatus,
+    ResultMessage,
     TextBlock,
+    ThinkingBlock,
+    ToolResultBlock,
+    ToolUseBlock,
 )
 
 from squadron.core.models import AgentState, Message, MessageType
@@ -42,6 +49,30 @@ def options() -> ClaudeAgentOptions:
 @pytest.fixture
 def query_agent(options: ClaudeAgentOptions) -> ClaudeSDKAgent:
     return ClaudeSDKAgent(name="query-bot", options=options, mode="query")
+
+
+@pytest.fixture
+def tooled_query_agent(options: ClaudeAgentOptions) -> ClaudeSDKAgent:
+    return ClaudeSDKAgent(
+        name="query-bot",
+        options=options,
+        mode="query",
+        tools_given=["read_file", "grep"],
+    )
+
+
+def _make_result(**overrides: object) -> ResultMessage:
+    base: dict[str, object] = {
+        "subtype": "success",
+        "duration_ms": 100,
+        "duration_api_ms": 80,
+        "is_error": False,
+        "num_turns": 1,
+        "session_id": "sess-1",
+        "result": "done",
+    }
+    base.update(overrides)
+    return ResultMessage(**base)  # type: ignore[arg-type]
 
 
 @pytest.fixture
@@ -186,6 +217,27 @@ def _make_error_gen(exc: Exception):
     ) -> AsyncIterator[AssistantMessage]:
         raise exc
         yield  # make it an async generator  # noqa: F401
+
+    return gen
+
+
+def _make_rejected_event_gen(uuid: str = "evt"):
+    """Return an async generator that yields one ``rejected`` RateLimitEvent.
+
+    Used as ``side_effect`` for the patched query function: called fresh on
+    each retry, so it reproduces the same rejection every attempt — the
+    real SDK's stream stays alive on a ``RateLimitEvent`` (it parses like
+    any other message), unlike the pre-upgrade fabricated-exception tests.
+    """
+
+    async def gen(  # type: ignore[override]
+        *, prompt: str, options: object = None
+    ) -> AsyncIterator[RateLimitEvent]:
+        yield RateLimitEvent(
+            rate_limit_info=RateLimitInfo(status="rejected"),
+            uuid=uuid,
+            session_id="sess-1",
+        )
 
     return gen
 
@@ -490,6 +542,44 @@ class TestUnparseableMessages:
             assert query_agent.state == AgentState.failed
 
 
+class TestRateLimitClassification:
+    """Typed classification of a real ``RateLimitEvent`` — not a fabrication.
+
+    Success criterion 9: fabricating the exception the SDK no longer raises
+    tests a dead path. These tests construct the real SDK dataclasses.
+    """
+
+    @pytest.mark.parametrize(
+        ("status", "expected"),
+        [
+            ("rejected", True),
+            ("allowed", False),
+            ("allowed_warning", False),
+        ],
+    )
+    def test_event_blocks_only_on_rejected(self, status: RateLimitStatus, expected: bool) -> None:
+        from squadron.providers.sdk.rate_limit import event_blocks
+
+        event = RateLimitEvent(
+            rate_limit_info=RateLimitInfo(status=status),
+            uuid="evt-1",
+            session_id="sess-1",
+        )
+        assert event_blocks(event) is expected
+
+    def test_is_throttle_true_for_rate_limit_rejected(self) -> None:
+        from squadron.providers.sdk.rate_limit import RateLimitRejected, is_throttle
+
+        assert is_throttle(RateLimitRejected("x")) is True
+
+    def test_is_throttle_retains_the_substring_path(self) -> None:
+        """A genuine 429 can still surface as a plain ClaudeSDKError."""
+        from squadron.providers.sdk.rate_limit import is_throttle
+
+        assert is_throttle(ClaudeSDKError("rate_limit_event: slow down")) is True
+        assert is_throttle(ClaudeSDKError("some other error")) is False
+
+
 class TestRateLimitBackoff:
     """Rate-limit retries must wait, not hammer.
 
@@ -515,7 +605,14 @@ class TestRateLimitBackoff:
     async def test_retries_actually_sleep(
         self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
-        """Each retry awaits a delay — asserted on the calls, not wall-clock."""
+        """Each retry awaits a delay — asserted on the calls, not wall-clock.
+
+        This is the slice's only integration-level coverage (through the
+        real retry loop, not just the ``is_throttle`` unit test) of Success
+        Criterion 7: a genuine 429 surfaced as a plain ``ClaudeSDKError``
+        (no ``rate_limit_event`` payload) must still trigger backoff via the
+        retained substring path.
+        """
         from claude_agent_sdk import ClaudeSDKError
 
         slept: list[float] = []
@@ -523,7 +620,7 @@ class TestRateLimitBackoff:
         async def fake_sleep(seconds: float) -> None:
             slept.append(seconds)
 
-        gen = _make_error_gen(ClaudeSDKError("rate_limit_event: slow down"))
+        gen = _make_error_gen(ClaudeSDKError("rate_limit: slow down"))
         with (
             patch(_QUERY, side_effect=gen),
             patch("squadron.providers.sdk.agent.asyncio.sleep", fake_sleep),
@@ -549,17 +646,19 @@ class TestRateLimitBackoff:
         Here every attempt delivers a message before throttling, so the run
         survives far more than ``max_rate_limit_retries`` throttles.
         """
-        from claude_agent_sdk import ClaudeSDKError
-
         throttles = 0
         max_throttles = 25  # > the budget of 3 below
 
-        async def receive_response() -> AsyncIterator[AssistantMessage]:
+        async def receive_response() -> AsyncIterator[AssistantMessage | RateLimitEvent]:
             nonlocal throttles
             yield AssistantMessage(content=[TextBlock(text="progress")], model="m")
             if throttles < max_throttles:
                 throttles += 1
-                raise ClaudeSDKError("rate_limit_event: slow down")
+                yield RateLimitEvent(
+                    rate_limit_info=RateLimitInfo(status="rejected"),
+                    uuid=f"evt-{throttles}",
+                    session_id="sess-1",
+                )
 
         async def no_sleep(seconds: float) -> None:
             return None
@@ -571,7 +670,7 @@ class TestRateLimitBackoff:
             async def query(self, prompt: str) -> None:
                 return None
 
-            def receive_response(self) -> AsyncIterator[AssistantMessage]:
+            def receive_response(self) -> AsyncIterator[AssistantMessage | RateLimitEvent]:
                 return receive_response()
 
         client_agent._max_rate_limit_retries = 3  # pyright: ignore[reportPrivateUsage]
@@ -604,12 +703,10 @@ class TestRateLimitBackoff:
     async def test_stats_accumulate_across_retries(
         self, query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:
-        from claude_agent_sdk import ClaudeSDKError
-
         async def no_sleep(seconds: float) -> None:
             return None
 
-        gen = _make_error_gen(ClaudeSDKError("rate_limit_event: slow down"))
+        gen = _make_rejected_event_gen()
         with (
             patch(_QUERY, side_effect=gen),
             patch("squadron.providers.sdk.agent.asyncio.sleep", no_sleep),
@@ -629,14 +726,12 @@ class TestRateLimitBackoff:
         A campaign should pause on this rather than burn its remaining work
         on requests that will fail the same way.
         """
-        from claude_agent_sdk import ClaudeSDKError
-
         from squadron.providers.errors import ProviderRateLimitError
 
         async def no_sleep(seconds: float) -> None:
             return None
 
-        gen = _make_error_gen(ClaudeSDKError("rate_limit_event: quota"))
+        gen = _make_rejected_event_gen()
         with (
             patch(_QUERY, side_effect=gen),
             patch("squadron.providers.sdk.agent.asyncio.sleep", no_sleep),
@@ -650,25 +745,18 @@ class TestRateLimitBackoff:
     ) -> None:
         """Only a ``rejected`` status is a real throttle — that one backs off.
 
-        A rate_limit_event arrives as MessageParseError only because this
-        SDK version lacks a case for it. When its payload says requests are
-        being rejected, skipping it would disable the backoff entirely — the
-        run would continue into a stream that had stopped producing work.
+        A ``RateLimitEvent`` parses natively at the pinned floor. When its
+        status says requests are being rejected, ``_skip_unparseable`` must
+        raise so the retry loop backs off — yielding it through instead
+        would disable the backoff entirely and let the run continue into a
+        limiter that keeps rejecting it.
         """
-        from claude_agent_sdk._errors import MessageParseError
-
         slept: list[float] = []
 
         async def fake_sleep(seconds: float) -> None:
             slept.append(seconds)
 
-        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
-            raise MessageParseError(
-                "Unknown message type: rate_limit_event",
-                {"type": "rate_limit_event", "rate_limit_info": {"status": "rejected"}},
-            )
-            yield  # pragma: no cover - unreachable, defines the generator
-
+        gen = _make_rejected_event_gen()
         with (
             patch(_QUERY, side_effect=gen),
             patch("squadron.providers.sdk.agent.asyncio.sleep", fake_sleep),
@@ -680,86 +768,31 @@ class TestRateLimitBackoff:
 
         assert len(slept) == 10, "a rejected event must back off, not be skipped"
 
-    @pytest.mark.parametrize("status", ["allowed", "allowed_warning"])
-    def test_the_shim_absorbs_informational_events(self, status: str) -> None:
-        """Usage-meter updates must never reach the stream as an error.
+    @pytest.mark.asyncio
+    async def test_allowed_warning_event_does_not_throttle(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """An informational event must not be treated as a throttle.
 
-        The CLI emits rate_limit_event whenever rate-limit *info* changes —
-        its own SDK adapter ignores the type, and an interactive session
-        shows nothing. A heavily-used account emits these constantly.
-
-        Absorbing them in the parser is the only workable place. The SDK
-        parses inside the ``async for`` driving its message generator, so a
-        raised MessageParseError terminates that generator permanently: a
-        consumer that catches it and continues gets StopAsyncIteration and
-        the run ends with zero messages. Observed exactly that — a 471s
-        audit that wrote its file, reported as "0 bytes of narration".
+        Success Criterion 10: the regression that would re-break issue
+        #23's stream-restart behavior. It must reach the caller translated,
+        not be dropped or mistaken for a rejection.
         """
-        from claude_agent_sdk._internal import message_parser
-        from claude_agent_sdk.types import SystemMessage
 
-        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
-
-        install_rate_limit_parser_shim()
-        payload = {
-            "type": "rate_limit_event",
-            "rate_limit_info": {"status": status, "rateLimitType": "five_hour"},
-            "uuid": "u",
-            "session_id": "s",
-        }
-        parsed = message_parser.parse_message(payload)
-
-        assert isinstance(parsed, SystemMessage), "must parse, not raise"
-        assert parsed.subtype == "rate_limit_event"
-
-    def test_the_shim_lets_a_rejected_event_raise(self) -> None:
-        """A genuine throttle must still reach the backoff path."""
-        from claude_agent_sdk._errors import MessageParseError
-        from claude_agent_sdk._internal import message_parser
-
-        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
-
-        install_rate_limit_parser_shim()
-        with pytest.raises(MessageParseError):
-            message_parser.parse_message(
-                {
-                    "type": "rate_limit_event",
-                    "rate_limit_info": {"status": "rejected"},
-                    "uuid": "u",
-                    "session_id": "s",
-                }
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield RateLimitEvent(
+                rate_limit_info=RateLimitInfo(status="allowed_warning"),
+                uuid="evt-1",
+                session_id="sess-1",
             )
+            yield _make_sdk_assistant("still going")
 
-    def test_the_shim_patches_both_sdk_call_sites(self) -> None:
-        """Both bindings must be patched, and re-installing must be safe.
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
 
-        ``ClaudeSDKClient`` (client mode) imports parse_message inside its
-        receive loop; ``_internal.client`` (query mode) binds it at module
-        scope and so holds the original by value. Patching only the
-        defining module left query mode still dying on the event.
-        """
-        from claude_agent_sdk._internal import client, message_parser
-
-        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
-
-        install_rate_limit_parser_shim()
-        install_rate_limit_parser_shim()  # idempotent
-
-        for module in (message_parser, client):
-            assert getattr(module.parse_message, "_squadron_rate_limit_shim", False), (
-                f"{module.__name__} still holds an unpatched parse_message"
-            )
-
-    def test_the_shim_leaves_other_parse_failures_alone(self) -> None:
-        """Only rate-limit events are absorbed — real errors still raise."""
-        from claude_agent_sdk._errors import MessageParseError
-        from claude_agent_sdk._internal import message_parser
-
-        from squadron.providers.sdk.rate_limit import install_rate_limit_parser_shim
-
-        install_rate_limit_parser_shim()
-        with pytest.raises(MessageParseError):
-            message_parser.parse_message({"type": "telemetry_ping"})
+        assert query_agent.rate_limit_stats.throttles == 0
+        assert any(msg.metadata.get("sdk_type") == "rate_limit_event" for msg in messages)
+        assert any("still going" in msg.content for msg in messages)
 
     @pytest.mark.asyncio
     async def test_other_unknown_messages_are_still_skipped(
@@ -787,3 +820,125 @@ class TestRateLimitBackoff:
             messages = await _collect(query_agent.handle_message(input_message))
 
         assert any("work" in msg.content for msg in messages)
+
+
+# ---------------------------------------------------------------------------
+# Tool-use telemetry (issue #110)
+# ---------------------------------------------------------------------------
+
+
+class TestToolTelemetry:
+    """The SDK path must report tools_given/tool_calls_made like the OpenAI agent does.
+
+    Before this, the SDK provider never stamped this telemetry at all, so every
+    SDK-path review reported "not offered"/"not computed" regardless of whether
+    tools were actually given to or used by the model.
+    """
+
+    @pytest.mark.asyncio
+    async def test_no_tools_configured_stamps_no_tool_keys(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield _make_result()
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert "tools_given" not in messages[-1].metadata
+        assert "tool_calls_made" not in messages[-1].metadata
+
+    @pytest.mark.asyncio
+    async def test_tools_given_but_unused_reports_zero_calls(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="no tools needed")], model="claude")
+            yield _make_result(result="no tools needed")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == ["read_file", "grep"]
+        assert messages[-1].metadata["tool_calls_made"] == 0
+
+    @pytest.mark.asyncio
+    async def test_tool_calls_made_matches_actual_tool_use_blocks(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[
+                    ToolUseBlock(id="t1", name="Read", input={"path": "a.py"}),
+                    ToolUseBlock(id="t2", name="Grep", input={"pattern": "foo"}),
+                ],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="file contents", is_error=False)
+            yield ToolResultBlock(tool_use_id="t2", content="match", is_error=False)
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == ["read_file", "grep"]
+        assert messages[-1].metadata["tool_calls_made"] == 2
+        assert messages[-1].metadata["failed_tool_calls"] == 0
+
+    @pytest.mark.asyncio
+    async def test_failed_tool_result_increments_failed_tool_calls(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[ToolUseBlock(id="t1", name="Read", input={"path": "missing.py"})],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="No such file", is_error=True)
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["failed_tool_calls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_reason_and_reasoning_chars_stamped_from_result(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[ThinkingBlock(thinking="hmm", signature="sig")], model="claude"
+            )
+            yield _make_result(result="done", stop_reason="end_turn")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["stop_reason"] == "end_turn"
+        assert messages[-1].metadata["reasoning_chars"] == len("hmm")
+
+    @pytest.mark.asyncio
+    async def test_client_mode_stamps_telemetry_too(
+        self, options: ClaudeAgentOptions, input_message: Message
+    ) -> None:
+        client_agent = ClaudeSDKAgent(
+            name="client-bot", options=options, mode="client", tools_given=["read_file"]
+        )
+        mock_client = AsyncMock()
+
+        async def mock_receive():
+            yield AssistantMessage(
+                content=[ToolUseBlock(id="t1", name="Read", input={"path": "a.py"})],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="ok", is_error=False)
+            yield _make_result(result="done")
+
+        mock_client.receive_response = mock_receive
+
+        with patch(_CLIENT, return_value=mock_client):
+            messages = await _collect(client_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == ["read_file"]
+        assert messages[-1].metadata["tool_calls_made"] == 1

@@ -15,11 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Dropped the unused `anthropic` and `google-adk` dependencies from the base install; `rich` is now declared directly rather than arriving transitively (#65)
+
+### Fixed
+- Release commits (`CHANGELOG.md` + `pyproject.toml` + `uv.lock`) no longer fail the frontmatter pre-commit gate with a "different checkout" worktree message (#117)
+- A missing/nonexistent working directory is now reported as such, instead of "executable not found" (#112)
+- `sq setup` no longer shows a routine "not installed yet" step as a red error (#57)
+- Review output at `-v` no longer floods with per-file "excluded path" lines for a policy exclusion; use `-vv` to see them (#100)
+
+## [0.12.5] - 20260919
+
+### Fixed
+- A typo'd `--model` alias now fails immediately with the list of known aliases instead of dispatching and producing an UNKNOWN verdict that overwrites your previous review. Applies to reviews and the resolve judge. If you pass a real model ID rather than an alias, add `--profile` (#67)
+- `/sq:summary --restore` with no key no longer restores a summary belonging to a sibling worktree whose name extends yours (e.g. `squadron` picking up `squadron-pr`'s). Sibling summaries are still listed and still restorable with `--key` (#103)
+
+## [0.12.4] - 20260915
+
+### Fixed
+- SDK-backed reviews (any Claude Agent SDK model — haiku, sonnet, etc.) now report `tools_given`, `tool_calls_made`, `failed_tool_calls`, `stop_reason`, and `reasoning_chars` in the run digest. Previously these always read as not-offered/not-computed on the SDK path regardless of whether tools were actually given to or used by the model (#110)
+
+## [0.12.3] - 20260915
+
 ### Added
 - `sq pr create` opens a pull request with a title and description assembled from your branch's own artifacts: its commits, its slice design and task checklist when the branch names one, and the most recent squadron review covering its commits. Five sections, each backed by an exact fact or an explicit statement that none was available — never a guess. `--dry-run` previews the title and body before anything is written; `--base`, `--model`, `--profile`, and `--title` override the defaults
 - `sq review pr` reviews a pull request without disturbing your checkout: resolve it by number, URL, `owner/repo#number`, `repo#number`, a branch, or nothing at all for the current branch, and the review runs over the PR's merge-base range in a scratch worktree. Your working tree and branches are never touched, the PR's title, body, linked issues, and unresolved discussions come along as context, and the project's own conventions are read from your checkout rather than from the PR under review. Takes the same flags as `sq review code`
 - `sq review pr` results are now saved under a PR-keyed filename, alongside your other reviews when run from a planned project, or under a per-repo location in `~/.config/squadron/reviews/` otherwise. Override the location for one run with `--reviews-dir`
 - `sq review pr --post` writes the review back to the pull request as one comment, attributed to you and updated in place on a repeat run rather than stacking a duplicate. See exactly what would be posted first with `--dry-run`; a comment posted against a PR whose head has since moved says so, naming both commits
+- Review artifacts now carry a `verdictSource: stated | derived` frontmatter key naming whether the verdict was the model's own stated `## Summary`, or recovered from finding severities after a failed summary parse. A recovered verdict was previously indistinguishable from a stated one to anything reading frontmatter — including the pipeline gates that clear a slice on `PASS` (#97)
 - `sq pr show` reports a pull request without leaving your checkout: resolve it by number, URL, `owner/repo#number`, `repo#number`, a branch, or nothing at all for the current branch, and see its record, both fetched endpoints, the merge base, the range, and the changed paths. Read-only — it never checks anything out, so it works in a dirty working tree. Add `--json` for machine-readable output
 - `sq doctor` now reports whether the GitHub CLI is installed and whether its hosts file is readable, with install and login hints when either is missing. Neither is required, so a squadron install without pull-request workflows still reports healthy
 - Every review artifact now carries a run digest recording what the parse saw: response length, tool calls, whether the summary and findings sections were found, and how many finding-shaped matches were seen versus kept. Previously only a degraded review kept any evidence, so a confident PASS was the least auditable artifact on disk (#93)
@@ -29,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq review pr`, `sq pr show`, and `sq pr create` are now reachable from inside a Claude Code session as `/sq:review pr` and `/sq:pr show|create`, alongside the existing CLI commands
 
 ### Fixed
+- A review whose response arrives with no line breaks at all now parses correctly instead of collapsing every finding into one and losing the verdict. Previously, a naive fix to this could report a wrong verdict (e.g. `CONCERNS` instead of the model's actual `PASS`) rather than the honest "could not parse" outcome (#96)
+- **Behavior change:** committing markdown from a git worktree other than your project's default checkout is now rejected by `squadron.frontmatter-gate` if `cf` cannot confirm your staged files' frontmatter there — previously it silently reported `ok` without checking anything. If you hit this, commit markdown from the default checkout, or register the worktree with `cf` (#98)
 - A review that was offered tools and made none now reports `0` in its digest and frontmatter instead of reading as though nothing was measured (#92)
 - Review artifacts no longer report the template's own example as findings. A model that restated the required format before using it produced findings titled "Finding title" citing `src/module.py`, and the finding count tracked how much the model echoed the format rather than what it found (#91)
 - A review whose model returns nothing now leaves an artifact naming the provider failure and why the model stopped, instead of no artifact at all. The previous run's verdict is archived rather than left in the live slot, where a pipeline gate would read it as this run's result (#84)
@@ -41,6 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`allowed_tools` now limits which tools an SDK agent has at all, not just which are pre-approved.** This affects every SDK agent — spawn and pipeline dispatch as well as reviews. A config that previously listed a few tools in `allowed_tools` and relied on the rest staying available (permission-gated) will now find the rest absent. List every tool an agent needs. Tool names must be squadron's canonical ones (`read_file`, `list_files`, `grep`, `write_file`, `bash`); an unrecognized name fails loudly rather than being ignored
+- Minimum supported `claude-agent-sdk` version raised to 0.2.152
+
+### Fixed
+- A pipeline step could retry a rejected rate-limit response forever with no timeout, hanging indefinitely, if the rejection was the first message received. It now correctly exhausts its retry budget and fails (#30)
 
 ## [0.12.2] - 20260909
 

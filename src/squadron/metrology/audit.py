@@ -27,6 +27,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from squadron.config.manager import get_config, get_typed_config
+from squadron.core.models import TOOL_RESULT_TYPE, TOOL_USE_TYPE
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.metrology.audit_parse import parse_audit_findings
 from squadron.metrology.errors import (
@@ -527,7 +528,7 @@ async def _collect_audit_output(
     ``on_progress`` rather than simply discarded: an unattended run that
     prints nothing for twenty minutes is indistinguishable from a hang.
     """
-    from squadron.core.models import SDK_RESULT_TYPE, Message, MessageType
+    from squadron.core.models import RATE_LIMIT_EVENT_TYPE, SDK_RESULT_TYPE, Message, MessageType
 
     message = Message(
         sender="metrology-audit",
@@ -539,12 +540,12 @@ async def _collect_audit_output(
     tool_events = 0
     async for response in agent.handle_message(message):  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType, reportUnknownVariableType]
         sdk_type = response.metadata.get("sdk_type")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-        if sdk_type in ("tool_use", "tool_result"):
+        if sdk_type in (TOOL_USE_TYPE, TOOL_RESULT_TYPE):
             # Count only the calls, not their results. Every tool_use is
             # followed by a matching tool_result, so counting both doubled
             # the reported figure and made a normal audit (63 calls,
             # measured) look like a runaway one.
-            if sdk_type == "tool_use":
+            if sdk_type == TOOL_USE_TYPE:
                 tool_events += 1
                 if on_progress is not None and tool_events % _PROGRESS_EVERY_N_TOOL_EVENTS == 0:
                     on_progress(
@@ -554,7 +555,9 @@ async def _collect_audit_output(
                         )
                     )
             continue
-        if sdk_type == SDK_RESULT_TYPE:
+        if sdk_type in (SDK_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
+            # An informational RateLimitEvent is a usage-meter notice, not
+            # audit prose, and is excluded the same way (issue #23 class).
             continue
         parts.append(response.content)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
     return "\n".join(parts)

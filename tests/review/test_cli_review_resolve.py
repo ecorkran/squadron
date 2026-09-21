@@ -254,6 +254,35 @@ class TestReviewResolveFlagPassthrough:
         assert transport.call_args.kwargs["profile"] == "sdk"
         assert _artifact_frontmatter(git_repo, 1)["judgeModel"] == "claude-sonnet-5"
 
+    def test_unknown_model_alias_is_rejected_on_the_judge_path(
+        self, cli_runner: CliRunner, git_repo: Path
+    ) -> None:
+        """The #67 guard covers ``_resolve_judge_model``, not just reviews.
+
+        Without ``--profile`` and with no config default, a name that resolves to
+        no alias is a typo, so the judge refuses before dispatching.
+        """
+        _repo_with_review(git_repo)
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed"))
+        with patch(_JUDGE_TRANSPORT, transport):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "review",
+                    "resolve",
+                    "305",
+                    "--cwd",
+                    str(git_repo),
+                    "--model",
+                    "definitely-not-a-real-alias",
+                ],
+            )
+
+        assert result.exit_code == 1, result.output
+        assert "unknown model alias" in _flat(result.output)
+        transport.assert_not_awaited()
+
     def test_verbose_adds_the_note_column(self, cli_runner: CliRunner, git_repo: Path) -> None:
         _repo_with_review(git_repo)
 

@@ -287,10 +287,41 @@ class TestAliasWiring:
         assert call_args[0][3] == "gpt-5.4-nano"  # resolved model
         assert call_args[0][4] == "openai"  # resolved profile
 
-    def test_unknown_model_passes_through(
+    def test_unknown_model_with_no_profile_source_raises(
         self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
     ) -> None:
-        """Unknown model passes through unchanged, profile falls to sdk."""
+        """Unknown model with no profile from any channel is rejected (#67).
+
+        Before the fix this passed through and dispatched, producing an UNKNOWN
+        verdict that overwrote a prior valid review.
+        """
+        import typer
+
+        from squadron.cli.commands.review import _run_review_command
+
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
+
+        with pytest.raises(typer.Exit) as exc_info:
+            _run_review_command(
+                "slice",
+                doc_inputs,
+                "terminal",
+                None,
+                0,
+                model_flag="llama-3-70b",
+            )
+
+        assert exc_info.value.exit_code == 1
+
+    def test_unknown_model_with_explicit_profile_passes_through(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
+        """An explicit --profile is the signal the name is a literal model ID."""
         from unittest.mock import AsyncMock, patch
 
         from squadron.cli.commands.review import _run_review_command
@@ -324,11 +355,12 @@ class TestAliasWiring:
                 None,
                 0,
                 model_flag="llama-3-70b",
+                profile_flag="sdk",
             )
 
         call_args = mock_exec.call_args
         assert call_args[0][3] == "llama-3-70b"  # unchanged
-        assert call_args[0][4] == "sdk"  # default fallback
+        assert call_args[0][4] == "sdk"
 
     def test_explicit_profile_overrides_alias(
         self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
@@ -373,3 +405,173 @@ class TestAliasWiring:
         call_args = mock_exec.call_args
         assert call_args[0][3] == "gpt-5.4-nano"  # alias-resolved model
         assert call_args[0][4] == "local"  # explicit flag wins
+
+
+class TestUnknownAliasGuard:
+    """The #67 guard: reject a no-op alias resolution with no profile signal.
+
+    `_resolve_profile` consults three channels — flag, template, config — before
+    its "sdk" fallback. A value from any of them means the caller meant a literal
+    model ID, so passthrough is preserved; only the all-absent case is rejected.
+    """
+
+    def test_template_profile_permits_passthrough(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
+        """Channel 2: template.profile set, no flag, no config."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "f.md"},
+            model="llama-3-70b",
+        )
+
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(profile="openrouter"),
+        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "slice",
+                doc_inputs,
+                "terminal",
+                None,
+                0,
+                model_flag="llama-3-70b",
+            )
+
+        assert mock_exec.call_args[0][3] == "llama-3-70b"
+        assert mock_exec.call_args[0][4] == "openrouter"
+
+    def test_config_default_review_profile_permits_passthrough(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
+        """Channel 3: default_review_profile config set, no flag, no template."""
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "f.md"},
+            model="llama-3-70b",
+        )
+
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_config",
+            lambda k: "openrouter" if k == "default_review_profile" else None,
+        )
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command(
+                "slice",
+                doc_inputs,
+                "terminal",
+                None,
+                0,
+                model_flag="llama-3-70b",
+            )
+
+        assert mock_exec.call_args[0][3] == "llama-3-70b"
+        assert mock_exec.call_args[0][4] == "openrouter"
+
+    def test_error_message_names_alias_and_profile_remedy(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        doc_inputs: dict[str, str],
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """The message must say what was rejected and how to dispatch a real ID."""
+        import typer
+
+        from squadron.cli.commands.review import _run_review_command
+
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
+
+        with pytest.raises(typer.Exit):
+            _run_review_command(
+                "slice",
+                doc_inputs,
+                "terminal",
+                None,
+                0,
+                model_flag="definitely-not-a-real-alias",
+            )
+
+        out = capsys.readouterr().out
+        assert "unknown model alias" in out
+        assert "definitely-not-a-real-alias" in out
+        assert "--profile" in out
+
+    def test_no_model_supplied_does_not_reject(
+        self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
+    ) -> None:
+        """Regression: the guard must not fire when no model is supplied at all.
+
+        `alias_model`/`alias_profile` are None-initialized and only assigned
+        inside `if raw_model is not None:`. A guard placed after that block
+        evaluates `None == None and None is None` and rejects every model-less
+        invocation with "unknown model alias 'None'".
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.review.models import ReviewResult, Verdict
+
+        mock_result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="raw",
+            template_name="slice",
+            input_files={"input": "f.md"},
+            model=None,
+        )
+
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
+
+        with patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_exec:
+            _run_review_command("slice", doc_inputs, "terminal", None, 0)
+
+        assert mock_exec.call_args[0][3] is None
+        assert mock_exec.call_args[0][4] == "sdk"
