@@ -7,6 +7,7 @@ the range. Read-only against the host and against the working tree. 385 adds
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import typer
@@ -15,18 +16,93 @@ from rich.panel import Panel
 from rich.table import Table
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
-from squadron.codehost.errors import CodeHostError
+from squadron.codehost.errors import CodeHostError, TargetUnresolvableError
 from squadron.codehost.github_cli import build_github_host
-from squadron.codehost.models import FetchedRange, ResolvedPullRequest
-from squadron.codehost.remotes import list_remotes, select_remote
-from squadron.codehost.targets import parse_target
+from squadron.codehost.models import FetchedRange, RepositoryLocator, ResolvedPullRequest
+from squadron.codehost.protocol import CodeHost
+from squadron.codehost.remotes import GIT_QUERY_TIMEOUT_SECONDS, list_remotes, select_remote
+from squadron.codehost.targets import PullRequestTarget, parse_target
 from squadron.core.process_runner import SubprocessRunner
+from squadron.integrations.context_forge import ContextForgeClient
+from squadron.pr.assembly import PrFacts, assemble_facts
+from squadron.pr.base import select_base
+from squadron.pr.body import BodyIncompleteError, check_body_complete, compose_body
+from squadron.pr.composer import CompositionError, compose_one_shot
+from squadron.pr.inputs import (
+    EmptyCommitRangeError,
+    find_latest_in_range_review,
+    gather_commits_and_slice,
+)
+from squadron.pr.preconditions import check_head_pushed
+from squadron.pr.title import resolve_title
+from squadron.providers.base import ProfileName
+from squadron.review.git_utils import GitRangeUnavailableError
 
 pr_app = typer.Typer(
     name="pr",
     help="Inspect and review pull requests.",
     no_args_is_help=True,
 )
+
+
+def resolve_locator(
+    target: str | None, repo_cwd: str
+) -> tuple[CodeHost, RepositoryLocator, PullRequestTarget]:
+    """Build the host and resolve *target* to the repository it names.
+
+    Returns the parsed target too, so a caller that goes on to resolve a
+    pull request does not parse it a second time.
+
+    The first three steps ``resolve_and_fetch_pull_request`` performs before
+    it resolves an *existing* pull request. ``create`` (385) needs only
+    these — host, remotes, locator — not an existing PR's refs, so this is
+    extracted as the shared prefix rather than duplicated (D6).
+
+    Raises ``CodeHostError`` on any adapter failure.
+    """
+    host = build_github_host(SubprocessRunner())
+    # Git work goes through the host's own runner, not a second one: the
+    # factory is the single seam, so substituting the host has to redirect
+    # every process call a caller makes, not only the gh ones.
+    runner = host.runner
+
+    parsed = parse_target(target)
+    remotes = list_remotes(runner, repo_cwd)
+    locator = select_remote(parsed, remotes, host.serves_host)
+    return host, locator, parsed
+
+
+def resolve_and_fetch_pull_request(
+    target: str | None, repo_cwd: str
+) -> tuple[CodeHost, ResolvedPullRequest, FetchedRange]:
+    """Resolve *target* to a pull request and fetch its base/head endpoints.
+
+    The exact sequence ``sq pr show`` established: parse the target, pick the
+    serving remote, resolve the pull request, fetch its refs. Shared with
+    ``sq review pr`` (slice 382, Task G.1) so the two commands stay provably
+    identical up to the point their behavior diverges — this is not a second
+    implementation of ``pr show``'s resolution, it is the same one.
+
+    Raises ``CodeHostError`` on any adapter failure; callers render it the
+    same way ``pr show`` does.
+    """
+    host, locator, parsed = resolve_locator(target, repo_cwd)
+    resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
+    fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
+    return host, resolved, fetched
+
+
+def render_code_host_error(exc: CodeHostError) -> None:
+    """Print a CodeHostError the way every code-host command reports one.
+
+    Errors go to stderr so a command piped into a parser (e.g. ``--json``)
+    stays parseable when the command fails. Shared so ``sq review pr``
+    reports adapter failures identically to ``sq pr show`` (Task G.7).
+    """
+    errors = Console(stderr=True)
+    errors.print(f"[red]{exc}[/red]")
+    if exc.fix_hint:
+        errors.print(f"[dim]{exc.fix_hint}[/dim]")
 
 
 @pr_app.command("show")
@@ -43,33 +119,169 @@ def show(
 ) -> None:
     """Resolve a pull request, fetch its endpoints, and report the range."""
     repo_cwd = resolve_repo_cwd(cwd)
-    host = build_github_host(SubprocessRunner())
-    # Git work goes through the host's own runner, not a second one: the
-    # factory is the single seam, so substituting the host has to redirect
-    # every process call this command makes, not only the gh ones.
-    runner = host.runner
 
     try:
-        parsed = parse_target(target)
-        remotes = list_remotes(runner, repo_cwd)
-        locator = select_remote(parsed, remotes, host.serves_host)
-        resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
-        fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
+        _host, resolved, fetched = resolve_and_fetch_pull_request(target, repo_cwd)
     except CodeHostError as exc:
         # Every adapter failure has already been logged once at WARNING or
         # above by the layer that raised it; this is the operator-facing half.
-        # Errors go to stderr so `sq pr show --json` piped into a parser stays
-        # parseable when the command fails.
-        errors = Console(stderr=True)
-        errors.print(f"[red]{exc}[/red]")
-        if exc.fix_hint:
-            errors.print(f"[dim]{exc.fix_hint}[/dim]")
+        render_code_host_error(exc)
         raise typer.Exit(code=1) from exc
 
     if json_output:
         _render_json(resolved, fetched)
         return
     _render_terminal(resolved, fetched)
+
+
+def _current_branch(host: CodeHost, *, cwd: str) -> str:
+    """The branch HEAD is on, read through the host's own runner.
+
+    Matches ``GitHubCli._branch_for``'s pattern for the current-branch
+    target form: reading through ``host.runner`` rather than a second
+    process-execution path keeps this call inside the same seam every other
+    call on this path uses, so a test can fake every process call through
+    one factory (D6, D8).
+    """
+    result = host.runner.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS
+    )
+    branch = result.stdout.strip()
+    if result.returncode != 0 or not branch or branch == "HEAD":
+        raise TargetUnresolvableError(
+            "HEAD is detached, so there is no branch to open a pull request from",
+            fix_hint="Check out a branch first.",
+        )
+    return branch
+
+
+def _local_head_sha(host: CodeHost, *, cwd: str) -> str:
+    """The local HEAD commit, or a refusal when git cannot name one.
+
+    Checked here so an unreadable HEAD is its own failure, not a confusing
+    "local is at ''" from the pushed-branch precondition.
+    """
+    result = host.runner.run(["git", "rev-parse", "HEAD"], cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
+    sha = result.stdout.strip()
+    if result.returncode != 0 or not sha:
+        raise TargetUnresolvableError(
+            f"Could not read the local HEAD commit: {result.stderr.strip()}",
+            fix_hint="Check that the branch has at least one commit.",
+        )
+    return sha
+
+
+def _gather_facts(locator: RepositoryLocator, *, base: str, head: str, cwd: str) -> PrFacts:
+    """Gather and assemble the body's facts, rendering a range refusal as exit 1.
+
+    The host confirmed the base exists there, not in this clone — and
+    ``--base`` is taken verbatim — so the local range is its own refusal.
+    """
+    errors = Console(stderr=True)
+    try:
+        inputs = gather_commits_and_slice(ContextForgeClient(), base=base, head=head, cwd=cwd)
+        review = find_latest_in_range_review(
+            base=base,
+            head=head,
+            cwd=cwd,
+            host=locator.host,
+            owner=locator.owner,
+            repository=locator.repository,
+        )
+    except GitRangeUnavailableError as exc:
+        errors.print(f"[red]{exc}[/red]")
+        errors.print(f"[dim]Fetch {base} into this clone, or pass --base.[/dim]")
+        raise typer.Exit(code=1) from exc
+    except EmptyCommitRangeError as exc:
+        errors.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    return assemble_facts(inputs, review)
+
+
+async def _compose_title_and_body(
+    facts: PrFacts, *, title_flag: str | None, model: str | None, profile: str
+) -> tuple[str, str]:
+    """Resolve the title and compose the body through one shared composer.
+
+    Both calls use the same profile-bound composer, and both are resolved
+    before dry-run and the real create path diverge, so the two paths share
+    one title and one body rather than composing twice (D8).
+    """
+
+    async def composer(prompt: str) -> str:
+        return await compose_one_shot(prompt, model=model, profile=profile)
+
+    resolved_title = await resolve_title(
+        title_flag=title_flag,
+        design_text=facts.slice_design_text,
+        commits=facts.commits,
+        compose=composer,
+    )
+    body = await compose_body(facts, compose=composer)
+    return resolved_title, body
+
+
+@pr_app.command("create")
+def create(
+    base: str | None = typer.Option(None, "--base", help="Base branch."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print title and body without creating."),
+    model: str | None = typer.Option(None, "--model", help="Model for the one-shot composer."),
+    profile: str = typer.Option(
+        ProfileName.SDK, "--profile", help="Provider profile for the one-shot composer."
+    ),
+    cwd: str | None = typer.Option(None, "--cwd", help="Repository to resolve against."),
+    title: str | None = typer.Option(None, "--title", help="PR title, overriding the slice's name."),
+) -> None:
+    """Open a pull request with a description assembled from the branch's own artifacts.
+
+    Every refusal decidable without a model call happens before the model
+    call (D8): identity, then the pushed-branch precondition, then base
+    selection, all before input gathering, assembly, and composition.
+    """
+    repo_cwd = resolve_repo_cwd(cwd)
+    errors = Console(stderr=True)
+
+    try:
+        host, locator, _parsed = resolve_locator(None, repo_cwd)
+        head = _current_branch(host, cwd=repo_cwd)
+        host.identify_operator(locator.host)
+
+        local_sha = _local_head_sha(host, cwd=repo_cwd)
+        check_head_pushed(host, locator, head=head, local_sha=local_sha, cwd=repo_cwd)
+
+        selection = select_base(host, locator, base_flag=base)
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    errors.print(f"[dim]base: {selection.base} (source: {selection.source})[/dim]")
+
+    facts = _gather_facts(locator, base=selection.base, head=head, cwd=repo_cwd)
+
+    try:
+        resolved_title, body = asyncio.run(
+            _compose_title_and_body(facts, title_flag=title, model=model, profile=profile)
+        )
+        check_body_complete(body, facts)
+    except (CompositionError, BodyIncompleteError) as exc:
+        errors.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    if dry_run:
+        print(resolved_title)
+        print(body)
+        return
+
+    try:
+        record = host.open_pull_request(
+            locator, base=selection.base, head=head, title=resolved_title, body=body
+        )
+    except CodeHostError as exc:
+        render_code_host_error(exc)
+        raise typer.Exit(code=1) from exc
+
+    console = Console()
+    console.print(f"[green]{record.url}[/green]")
 
 
 def _render_json(resolved: ResolvedPullRequest, fetched: FetchedRange) -> None:

@@ -1,8 +1,14 @@
-"""One-shot summary execution for non-SDK provider profiles.
+"""One-shot summary execution through any registered provider profile.
 
 Provides `capture_summary_via_profile()` (mirrors the pattern from
-`run_review_with_profile()`) used to dispatch summary actions through
-non-SDK providers. Profile-routing predicates live in
+`run_review_with_profile()`) to dispatch summary actions through a
+provider profile, one-shot — including `sdk`, which this module does not
+special-case or refuse. The restriction to non-SDK profiles is the
+pipeline's own rule (`pipeline/actions/summary.py` routes the SDK arm
+through `context.sdk_session.capture_summary` to reuse a live session
+rather than opening a second one), not this module's: a caller with no
+SDK session, such as a CLI command, dispatches `sdk` through here exactly
+like any other profile (385, D3). Profile-routing predicates live in
 `squadron.providers.profiles`.
 """
 

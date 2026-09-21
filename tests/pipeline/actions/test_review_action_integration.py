@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -78,8 +79,7 @@ def _make_review_result() -> ReviewResult:
 
 class TestCodeReviewDiffInjectionIntegration:
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch("squadron.review.template_inputs.resolve_slice_diff_range")
     @patch(f"{_P}.resolve_slice_info")
     @patch(f"{_P}.run_review_with_profile")
@@ -92,7 +92,6 @@ class TestCodeReviewDiffInjectionIntegration:
         mock_run_review: MagicMock,
         mock_rsi: MagicMock,
         mock_diff: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """With template=code and slice=194, run_review_with_profile receives inputs
@@ -116,8 +115,7 @@ class TestCodeReviewDiffInjectionIntegration:
         assert call_inputs["diff"] == _DIFF_RANGE
 
     @pytest.mark.asyncio
-    @patch(f"{_P}.save_review_file", return_value=None)
-    @patch(f"{_P}.format_review_markdown", return_value="# Review")
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
@@ -126,7 +124,6 @@ class TestCodeReviewDiffInjectionIntegration:
         mock_load: MagicMock,
         mock_get_template: MagicMock,
         mock_run_review: MagicMock,
-        mock_format: MagicMock,
         mock_save: MagicMock,
     ) -> None:
         """When 'slice' is absent from params, inputs['diff'] is not set (no crash)."""

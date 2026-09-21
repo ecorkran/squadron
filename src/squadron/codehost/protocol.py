@@ -92,7 +92,16 @@ class CodeHost(Protocol):
 
     def list_unresolved_discussions(self, record: PullRequestRecord) -> list[ReviewDiscussion]: ...
 
-    def find_own_comment(self, record: PullRequestRecord, *, marker: str) -> HostComment | None: ...
+    def find_marked_comments(self, record: PullRequestRecord, *, marker: str) -> list[HostComment]:
+        """Every comment on the pull request whose body contains ``marker``.
+
+        Every match regardless of author, ordered oldest-first by
+        ``created_at``, with ``author_login`` populated from the payload
+        rather than assumed. Partitioning by author — and choosing which of
+        the operator's own matches is canonical — is the caller's job,
+        because the caller is what reports the non-own matches (D1).
+        """
+        ...
 
     def update_comment(self, record: PullRequestRecord, comment_id: str, body: str) -> HostComment: ...
 

@@ -83,8 +83,7 @@ async def _run_judge_cycle(
     with (
         patch(f"{_P}.resolve_slice_info", return_value=_slice_info(str(design_file), str(arch_file))),
         patch(f"{_P}.run_review_with_profile", return_value=_make_review_result(score)),
-        patch(f"{_P}.save_review_file", return_value=None),
-        patch(f"{_P}.format_review_markdown", return_value="# Review"),
+        patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md")),
     ):
         return await execute_pipeline(
             definition,

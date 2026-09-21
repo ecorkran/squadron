@@ -20,6 +20,7 @@ from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
 from squadron.review.git_utils import EmptyScopeCase, EmptyScopeError
 from squadron.review.models import ReviewResult, Verdict
+from squadron.review.rules import RulesSource
 
 _PIPELINE = "squadron.pipeline.actions.review"
 
@@ -181,7 +182,10 @@ class TestCLIRefusesEmptyScope:
                 "squadron.cli.commands.review.get_config",
                 side_effect=_config_reader(str(md_only_repo)),
             ),
-            patch("squadron.cli.commands.review.resolve_rules_dir", return_value=None),
+            patch(
+                "squadron.cli.commands.review.resolve_rules_dir",
+                return_value=(None, RulesSource.NONE),
+            ),
         ):
             with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
                 result = cli_runner.invoke(app, ["review", "code", "--diff", "main"])
@@ -239,7 +243,7 @@ class TestPipelineRefusesEmptyScope:
         self, md_only_repo: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         with (
-            patch(f"{_PIPELINE}.resolve_rules_dir", return_value=None),
+            patch(f"{_PIPELINE}.resolve_rules_dir", return_value=(None, RulesSource.NONE)),
             patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
         ):
             with caplog.at_level("WARNING", logger="squadron.review.git_utils"):
@@ -276,8 +280,7 @@ class TestPipelineNormalizesDiff:
 
         with (
             patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
-            patch(f"{_PIPELINE}.save_review_file", return_value=None),
-            patch(f"{_PIPELINE}.format_review_markdown", return_value="# Review"),
+            patch(f"{_PIPELINE}.save_review_result", return_value=Path("/tmp/reviews/review.md")),
         ):
             mock_review.return_value = ReviewResult(
                 verdict=Verdict.PASS,
@@ -328,8 +331,7 @@ class TestPipelineExplicitDiffWins:
 
         with (
             patch(f"{_PIPELINE}.run_review_with_profile") as mock_review,
-            patch(f"{_PIPELINE}.save_review_file", return_value=None),
-            patch(f"{_PIPELINE}.format_review_markdown", return_value="# Review"),
+            patch(f"{_PIPELINE}.save_review_result", return_value=Path("/tmp/reviews/review.md")),
             patch(f"{_PIPELINE}.resolve_slice_info", return_value=slice_info),
             # Would otherwise replace the step's value with a slice-derived range.
             patch(

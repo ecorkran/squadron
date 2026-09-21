@@ -606,7 +606,7 @@ def test_write_calls_is_empty_across_the_whole_read_pipeline() -> None:
     assert runner.write_calls() == [], "the read path must not mutate the host"
 
 
-# --- find_own_comment -------------------------------------------------------
+# --- find_marked_comments ----------------------------------------------------
 
 _MARKER = "<!-- squadron-review -->"
 
@@ -625,43 +625,56 @@ def _comment(comment_id: int, login: str, body: str, created_at: str) -> dict[st
     }
 
 
-def _find_own(script_comments: str) -> HostComment | None:
-    cli, _ = _host(
-        [
-            (["gh", "api", "user"], _ok(_fixture("user.json"))),
-            (["gh", "api", "--paginate"], _ok(script_comments)),
-        ]
-    )
-    return cli.find_own_comment(_record(), marker=_MARKER)
+def _find_marked(script_comments: str) -> list[HostComment]:
+    cli, _ = _host([(["gh", "api", "--paginate"], _ok(script_comments))])
+    return cli.find_marked_comments(_record(), marker=_MARKER)
 
 
-def test_find_own_comment_returns_none_when_no_match() -> None:
+def test_find_marked_comments_returns_empty_when_no_match() -> None:
     page = _comments_page(_comment(1, "ecorkran", "no marker here", "2026-01-01T00:00:00Z"))
-    assert _find_own(page) is None
+    assert _find_marked(page) == []
 
 
-def test_find_own_comment_takes_the_earliest_by_created_at() -> None:
+def test_find_marked_comments_orders_oldest_first_by_created_at() -> None:
+    """Supplied out of chronological order; passing by input order is impossible."""
     page = _comments_page(
         _comment(2, "ecorkran", f"later {_MARKER}", "2026-03-01T00:00:00Z"),
         _comment(1, "ecorkran", f"earlier {_MARKER}", "2026-01-01T00:00:00Z"),
     )
-    found = _find_own(page)
-    assert found is not None
-    assert found.id == "1"
+    found = _find_marked(page)
+    assert [comment.id for comment in found] == ["1", "2"]
 
 
-def test_find_own_comment_ignores_another_authors_marker() -> None:
-    """A marker quoted by someone else is not ours."""
+def test_find_marked_comments_returns_another_authors_marker() -> None:
+    """A marker quoted by someone else is returned, with its own author_login."""
     page = _comments_page(_comment(9, "someone-else", f"quoting {_MARKER}", "2026-01-01T00:00:00Z"))
-    assert _find_own(page) is None
+    found = _find_marked(page)
+    assert len(found) == 1
+    assert found[0].author_login == "someone-else"
 
 
-def test_find_own_comment_uses_paginate() -> None:
-    cli, runner = _host(
-        [
-            (["gh", "api", "user"], _ok(_fixture("user.json"))),
-            (["gh", "api", "--paginate"], _ok(_comments_page())),
-        ]
+def test_find_marked_comments_missing_created_at_sorts_first() -> None:
+    page = _comments_page(
+        _comment(2, "ecorkran", f"has date {_MARKER}", "2026-01-01T00:00:00Z"),
+        {
+            "id": 1,
+            "user": {"login": "ecorkran"},
+            "body": f"no date {_MARKER}",
+            "html_url": "https://example/1",
+        },
     )
-    cli.find_own_comment(_record(), marker=_MARKER)
-    assert "--paginate" in runner.calls[1].argv
+    found = _find_marked(page)
+    assert [comment.id for comment in found] == ["1", "2"]
+
+
+def test_find_marked_comments_uses_paginate() -> None:
+    cli, runner = _host([(["gh", "api", "--paginate"], _ok(_comments_page()))])
+    cli.find_marked_comments(_record(), marker=_MARKER)
+    assert "--paginate" in runner.calls[0].argv
+
+
+def test_find_marked_comments_records_no_identity_call() -> None:
+    """The author filter — and the identify_operator call that served it — is gone (D1)."""
+    cli, runner = _host([(["gh", "api", "--paginate"], _ok(_comments_page()))])
+    cli.find_marked_comments(_record(), marker=_MARKER)
+    assert all("user" not in call.argv for call in runner.calls)

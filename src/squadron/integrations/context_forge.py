@@ -7,6 +7,7 @@ with typed return values, replacing scattered subprocess.run() calls.
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
@@ -64,6 +65,29 @@ class ProjectInfo:
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
+
+
+_logger = logging.getLogger(__name__)
+
+
+def cf_project_name() -> str:
+    """The ``project:`` frontmatter value, from Context Forge.
+
+    Lives beside the client rather than in the review CLI, where it was a
+    private helper that a second command then had to reach across a module
+    boundary to import (383 review, F007). It is a Context-Forge integration
+    concern, and both review commands are its callers rather than its owner.
+
+    The degradation is deliberate and pre-existing: a review authored where cf
+    cannot answer writes ``project: unknown`` rather than guessing a name from
+    the directory, which is the behaviour issue fixed in ``ac01838c`` (the value
+    used to be hardcoded ``squadron``).
+    """
+    try:
+        return ContextForgeClient().get_project().name
+    except (ContextForgeNotAvailable, ContextForgeError) as exc:
+        _logger.warning("Could not resolve project name from ContextForge: %s", exc)
+        return "unknown"
 
 
 class ContextForgeClient:

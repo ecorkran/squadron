@@ -22,6 +22,12 @@ from squadron.cli.commands.models import models_app
 from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.pr import pr_app
 from squadron.cli.commands.review import review_app
+
+# Imported for its side effect only: registers "pr" on review_app via
+# @review_app.command("pr"). Must run before review_app is added to `app` below.
+from squadron.cli.commands.review_pr import (
+    review_pr as _review_pr,  # noqa: F401  # pyright: ignore[reportUnusedImport]
+)
 from squadron.cli.commands.run import run as run_command
 from squadron.cli.commands.serve import serve
 from squadron.cli.commands.setup import setup

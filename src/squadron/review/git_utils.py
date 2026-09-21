@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from dataclasses import dataclass
 from enum import StrEnum
 
 from squadron.core.subprocess_text import TEXT_DECODING
@@ -288,6 +289,48 @@ def find_git_root(cwd: str) -> str | None:
     if result is not None and result.returncode == 0 and result.stdout.strip():
         return result.stdout.strip()
     return None
+
+
+class GitRangeUnavailableError(Exception):
+    """Raised when git cannot answer for a commit-range query at all.
+
+    Distinct from an empty-but-valid range, which returns ``[]`` rather than
+    raising, per this module's ``run_git`` contract.
+    """
+
+
+@dataclass(frozen=True)
+class CommitRecord:
+    """One commit's sha and subject line."""
+
+    sha: str
+    subject: str
+
+
+def commits_in_range(base: str, head: str, *, cwd: str) -> list[CommitRecord]:
+    """Return the commits in ``base..head``, newest first.
+
+    An empty range returns ``[]``, not ``None`` — it does not raise.
+    ``GitRangeUnavailableError`` is raised when git could not answer at all
+    (missing binary, unresolvable ref) — distinguished from an empty-but-
+    valid range per this module's own contract for ``run_git``.
+    """
+    result = run_git(["log", "--format=%H %s", f"{base}..{head}"], cwd=cwd)
+    if result is None:
+        raise GitRangeUnavailableError(
+            f"Cannot list commits in {base}..{head}: git could not answer in {cwd!r}."
+        )
+    if result.returncode != 0:
+        raise GitRangeUnavailableError(
+            f"Cannot list commits in {base}..{head}: git refused ({result.stderr.strip()})."
+        )
+    records: list[CommitRecord] = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        sha, _, subject = line.partition(" ")
+        records.append(CommitRecord(sha=sha, subject=subject))
+    return records
 
 
 def resolve_diff_base(cwd: str, cf_client: object | None = None) -> str:

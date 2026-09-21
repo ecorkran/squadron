@@ -45,6 +45,16 @@ from squadron.codehost.models import (
 from squadron.codehost.protocol import CodeHost
 from squadron.codehost.remotes import list_remotes, parse_remote_url, select_remote
 from squadron.codehost.targets import PullRequestTarget, TargetForm, parse_target
+from squadron.codehost.worktree import (
+    ProcessIdentityUnresolvableError,
+    ScratchWorktree,
+    SubmoduleTimeoutError,
+    SubmoduleUnfetchableError,
+    WorktreeCreationError,
+    WorktreeError,
+    WorktreeLock,
+    sweep_orphans,
+)
 
 __all__ = [
     "AmbiguousBranchPullRequestsError",
@@ -67,6 +77,7 @@ __all__ = [
     "NoOpenPullRequestForBranchError",
     "OperatorIdentity",
     "OperatorUnidentifiedError",
+    "ProcessIdentityUnresolvableError",
     "PullRequestCreationRejectedError",
     "PullRequestNotFoundError",
     "PullRequestRecord",
@@ -78,13 +89,20 @@ __all__ = [
     "RepositoryLocator",
     "ResolvedPullRequest",
     "ReviewDiscussion",
+    "ScratchWorktree",
+    "SubmoduleTimeoutError",
+    "SubmoduleUnfetchableError",
     "TargetForm",
     "TargetSyntaxError",
     "TargetUnresolvableError",
+    "WorktreeCreationError",
+    "WorktreeError",
+    "WorktreeLock",
     # Sorted uppercase-first above; the functions trail by convention.
     "build_github_host",
     "list_remotes",
     "parse_remote_url",
     "parse_target",
     "select_remote",
+    "sweep_orphans",
 ]

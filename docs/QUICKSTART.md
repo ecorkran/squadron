@@ -55,8 +55,8 @@ Squadron Environment Diagnostic
 ────────────────────────────────────────────────────────────────
 
 Install
-  ✓ squadron                    version 0.6.2
-  ✓ slash commands              9 command(s) at ~/.claude/commands/sq
+  ✓ squadron                    version 0.12.2
+  ✓ slash commands              10 command(s) at ~/.claude/commands/sq
 
 Providers and Auth
   ✓ gemini                      GEMINI_API_KEY
@@ -72,6 +72,8 @@ Integrations
   ! codex CLI                   not on PATH
     fix: npm i -g @openai/codex
   ✓ Claude Code CLI             SDK provider available
+  ✓ gh CLI                      gh at /opt/homebrew/bin/gh
+  ✓ gh hosts file               hosts file at ~/.config/gh/hosts.yml
 
 Skill Packs
   ✓ analysis                    installed at ~/.claude/commands/analysis
@@ -86,6 +88,8 @@ Configuration
 ```
 
 Every `!` or missing row prints a `fix:` line with the exact command to run.
+
+**`gh CLI` and `gh hosts file`.** Both checks report *presence*, not *authentication* — neither makes a subprocess or network call. `gh CLI` checks whether `gh` is on `PATH` (`shutil.which("gh")`); its fix hint is `brew install gh — or see https://cli.github.com`. `gh hosts file` checks whether `gh`'s own hosts file exists and is readable, without parsing it; its fix hint is `gh auth login`. An OK row on either means the tool or file is there — `sq pr create` and `sq review pr --post` can still fail at invocation if `gh` is not actually authenticated for the host being used.
 
 ### `sq setup --check-only`
 

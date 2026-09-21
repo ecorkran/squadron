@@ -44,12 +44,25 @@ class PullRequestRecord:
 
     @property
     def key(self) -> str:
-        """Stable, filesystem-safe identifier.
+        """Stable identifier for this pull request.
 
-        383 uses this as a filename prefix, so it must not acquire characters
-        that a path cannot carry.
+        **Not** safe for a path: it carries ``/`` and ``#`` deliberately, so it
+        reads the way a PR is written (``github.com/acme/widgets#83``). Use
+        :attr:`path_key` for anything that becomes a filename or directory
+        name.
         """
         return f"{self.host}/{self.owner}/{self.repository}#{self.number}"
+
+    @property
+    def path_key(self) -> str:
+        """:attr:`key` with path-hostile characters flattened.
+
+        One definition, because two consumers derive names from it — the
+        scratch worktree's directory (382) and the review artifact's filename
+        (383). Two copies of this rule would drift, and the pair would stop
+        agreeing about which PR a directory and its review belong to.
+        """
+        return self.key.replace("/", "-").replace("#", "-")
 
 
 @dataclass(frozen=True)
