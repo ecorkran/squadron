@@ -12,6 +12,28 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260921
 
+### Slice 925 designed — command install target parity (Codex)
+
+Found while testing squadron under Codex: `cf`'s commands appear, no `sq` command does.
+`install-commands` has no target kind — a raw `--target` defaulting to `~/.claude/commands`
+([#123](https://github.com/ecorkran/squadron/issues/123)). Plan entry and design written
+the same day; `validate-slice-design` PASS.
+
+**Two facts settled by reading Codex's source rather than `cf`'s design.** First, Codex
+skills receive no argument substitution — the user's text goes to the model verbatim and
+`SKILL.md` is appended as a `<skill>` block — so every `commands/sq/*.md` that parses
+`$ARGUMENTS` needs an authored twin under `commands/agents/<name>/SKILL.md`, not a
+generated one. Second, `~/.codex/skills`, where `cf` slice 924 installs, is marked
+deprecated in Codex's `host_roots.rs`; the documented root is `~/.agents/skills`. Squadron
+uses the documented one and the design calls for a `cf` issue so the two converge.
+
+Vocabulary is `cf`'s verbatim (`claude`, `agents`; `codex`/`openai` aliases) so the flag
+reads identically across both tools. Receipts stay schema-free: target and scope fold into
+the receipt name, and the Claude machine receipt keeps its existing name so nothing
+written since #65 stops reading. The #123 scope note overstated the work — squadron's
+commands use no output injection, so the per-file delta is frontmatter, one argument
+sentence, and the invocation name; corrected on the issue.
+
 ### Release 0.13.0 — initiative 380 merged to main
 
 `squadron-pr` and `main` had diverged 104/78. Merged main into `squadron-pr` first
