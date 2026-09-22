@@ -1,0 +1,137 @@
+---
+name: sq-summary
+description: Generates a clipboard summary of the current conversation for a manual context reset, or restores a previously saved summary back into context with --restore. Use when the user asks to summarize the session, save context before a reset, or restore earlier context.
+---
+
+# sq summary
+
+Generate a clipboard summary of this conversation for manual context reset.
+
+## Input parsing
+
+Everything the user typed after `$sq-summary` is this skill's argument text. Where a step below
+shows `{arguments}`, substitute that text; where it is empty, substitute nothing.
+
+If the argument text starts with `--restore`:
+- Run the restore flow (Steps R1–R2 below).
+- Skip the normal summary generation flow entirely.
+- If a word follows `--restore`, that word is the **key** of the summary to restore. Pass it to the CLI as `--key <word>` in Step R1. If no word follows, omit `--key` entirely so the most recent summary is used.
+
+Otherwise: the first word of the argument text is an optional template name. If empty, no template argument is passed to the CLI (it will use the configured default).
+
+---
+
+## Step R1: Get restore content
+
+Run via Bash — without a key:
+
+```bash
+sq _summary-instructions --restore
+```
+
+With a key, append `--key` and the key parsed in "Input parsing" above:
+
+```bash
+sq _summary-instructions --restore --key <key>
+```
+
+Substitute the parsed word for `<key>`. Do not invent a key: if no word followed `--restore`, use the first form.
+
+**CRITICAL: Run this command exactly as written — no redirects (`2>…`, `2>&1`, `2>/dev/null`), no stderr capture, no appended `;`/`&&` suffixes or compound wrappers.** Two reasons: (1) the skill needs stdout (the summary content) and stderr (the `Using:` line, and the picker listing) kept on **separate** channels — merging or discarding either breaks filename extraction in R2; (2) decorating the command changes its literal text, which misses Bash allowlist matching and triggers permission prompts.
+
+If the command exits non-zero, show the error output to the user and **stop** — do not continue. An unknown key exits non-zero and lists the available keys on stderr; surface that list to the user rather than retrying with a guessed key.
+
+---
+
+## Step R2: Seed context
+
+Output the returned summary text directly as a context block for the conversation.
+
+**Do NOT copy to clipboard** — this is a context restore, not a clipboard operation.
+
+After outputting the context block, print exactly one line:
+
+```
+Context restored from {filename} (N chars).
+```
+
+Where `{filename}` is extracted from the stderr line prefixed with `Using: ` emitted by Step R1, and `N` is the character count of the restored text. If no such line is present, stop with an error.
+
+---
+
+## Step 1: Get summary instructions, suffix, and project name
+
+Run all three commands via Bash, substituting the user's argument text for `{arguments}` (and
+nothing at all when it is empty):
+
+```bash
+sq _summary-instructions {arguments}
+sq _summary-instructions {arguments} --suffix
+sq _summary-instructions --project
+```
+
+**CRITICAL: Run each `sq _summary-instructions` command exactly as written — no redirects (`2>…`, `2>&1`, `2>/dev/null`), no stderr capture, no appended `;`/`&&` suffixes or compound wrappers.** Two reasons: (1) the skill needs stdout and stderr kept on **separate** channels — merging or discarding either breaks output capture (the `Using:` line and picker listing are on stderr, the content on stdout); (2) decorating the command changes its literal text, which misses Bash allowlist matching and triggers permission prompts.
+
+Capture the first command's stdout as the **instruction text**.
+Capture the second command's stdout as the **suffix text** (may be empty).
+Capture the third command's stdout (trimmed) as the **project name** (may be empty if CF is not configured; non-fatal).
+
+If the first or second command exits non-zero, show the error output to the user and **stop** — do not continue. A non-zero exit from the third command is non-fatal; treat project name as empty.
+
+---
+
+## Step 2: Generate the summary
+
+Using the instruction text from Step 1 as your guide, generate a summary of the **current conversation**.
+
+Follow the instructions exactly. Output ONLY the summary text — no preface, no explanation, no follow-up questions, no markdown fences around the summary.
+
+---
+
+## Step 3: Copy to clipboard
+
+Pipe the summary text (followed by the suffix text, if any) to the system clipboard via Bash. Use a heredoc to handle special characters. If the suffix is non-empty, append it after the summary with a newline separator:
+
+```bash
+cat << '__SQ_END__' | pbcopy 2>/dev/null || cat << '__SQ_END__' | xclip -selection clipboard 2>/dev/null || cat << '__SQ_END__' | wl-copy 2>/dev/null || { echo "No clipboard tool found (install xclip or wl-clipboard on Linux)" >&2; exit 1; }
+SUMMARY_TEXT
+SUFFIX_TEXT
+__SQ_END__
+```
+
+Replace `SUMMARY_TEXT` with the actual summary and `SUFFIX_TEXT` with the suffix (omit the suffix line entirely if it is empty).
+
+---
+
+## Step 4: Write to file
+
+If the project name from Step 1 is non-empty, write the summary text (without suffix) to the conventional summaries location via Bash:
+
+```bash
+mkdir -p ~/.config/squadron/runs/summaries
+cat << '__SQ_END__' > ~/.config/squadron/runs/summaries/{project}-interactive.md
+SUMMARY_TEXT
+__SQ_END__
+```
+
+Replace `{project}` with the project name and `SUMMARY_TEXT` with the actual summary text.
+
+If the project name is empty, skip this step silently.
+
+---
+
+## Step 5: Confirm
+
+Print exactly one line:
+
+```
+Summary copied to clipboard (N chars, template: T).
+```
+
+Where `N` is the character count of the full clipboard content (summary + suffix) and `T` is the template name used (from arguments or default).
+
+If Step 4 wrote a file, append the filename on the same line, separated by a space:
+
+```
+Summary copied to clipboard (N chars, template: T). Saved: {project}-interactive.md
+```
