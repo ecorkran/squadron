@@ -9,7 +9,7 @@ projectState: >
   written yet. `sq install-commands` installs only to ~/.claude/commands.
 dateCreated: 20260922
 dateUpdated: 20260922
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -312,35 +312,35 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 
 ## Task 8 — Documentation and follow-ups
 
-- [ ] Update user-facing docs
-  - [ ] `docs/QUICKSTART.md` install section: `--ide codex` and where skills land
-  - [ ] `README.md`: the same, wherever `install-commands` is described
-  - [ ] CHANGELOG `[Unreleased]` → `### Added`, one user-facing bullet (no technical detail —
+- [x] Update user-facing docs
+  - [x] `docs/QUICKSTART.md` install section: `--ide codex` and where skills land
+  - [x] `README.md`: the same, wherever `install-commands` is described
+  - [x] CHANGELOG `[Unreleased]` → `### Added`, one user-facing bullet (no technical detail —
         that belongs in DEVLOG)
-  - [ ] Success: neither doc claims `~/.claude/commands` is the only destination
+  - [x] Success: neither doc claims `~/.claude/commands` is the only destination
 
-- [ ] Verify the two architecture amendment lines are present and accurate
-  - [ ] `project-documents/user/architecture/340-arch.skill-pack-infrastructure.md` — the
+- [x] Verify the two architecture amendment lines are present and accurate
+  - [x] `project-documents/user/architecture/340-arch.skill-pack-infrastructure.md` — the
         "This is the only install path" statement carries a dated amendment naming the agents target
-  - [ ] `project-documents/user/architecture/360-arch.document-intelligence.md` — the
+  - [x] `project-documents/user/architecture/360-arch.document-intelligence.md` — the
         "adding a file to `commands/sq/` is its registration" statement carries a dated amendment
         naming the required agents twin
-  - [ ] Both were written during the design-review response; this item confirms they still match what
+  - [x] Both were written during the design-review response; this item confirms they still match what
         shipped and corrects them if the implementation diverged
-  - [ ] Success: both amendments describe the delivered behavior, not the design's intent
+  - [x] Success: both amendments describe the delivered behavior, not the design's intent
 
-- [ ] File the follow-up issues named in the design's Integration Requirements
-  - [ ] squadron issue: `sq skills install --ide`, citing `CommandTarget` and the hardcoded
+- [x] File the follow-up issues named in the design's Integration Requirements
+  - [x] squadron issue: `sq skills install --ide`, citing `CommandTarget` and the hardcoded
         `~/.claude/commands` in `skills.py`
-  - [ ] context-forge issue: `cf install-commands --ide codex` installs to `~/.codex/skills`, which
+  - [x] context-forge issue: `cf install-commands --ide codex` installs to `~/.codex/skills`, which
         Codex's own source marks deprecated in favor of `~/.agents/skills` (D2)
-  - [ ] Success: both issue numbers recorded in the DEVLOG entry
+  - [x] Success: both issue numbers recorded in the DEVLOG entry
 
-- [ ] Full validation pass
-  - [ ] `ruff format`, `ruff check`, `pyright` — zero errors is the merge gate
-  - [ ] Full `pytest` run, not just the touched files
-  - [ ] Success: green on all four
-  - [ ] Commit: `docs: document the Codex install target`
+- [x] Full validation pass
+  - [x] `ruff format`, `ruff check`, `pyright` — zero errors is the merge gate
+  - [x] Full `pytest` run, not just the touched files
+  - [x] Success: green on all four
+  - [x] Commit: `docs: document the Codex install target`
 
 ---
 
@@ -349,27 +349,27 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 The design's premises about Codex's runtime behavior were read from source and docs, not
 exercised. This task is where they are proven.
 
-- [ ] Run the design's Verification Walkthrough steps 1–5 and 8–9 (CLI-level, no Codex needed)
-  - [ ] Success: each step's stated output matches
+- [x] Run the design's Verification Walkthrough steps 1–5 and 8–9 (CLI-level, no Codex needed)
+  - [x] Success: each step's stated output matches
 
-- [ ] Walkthrough step 6 — live in a Codex session
-  - [ ] Install with `--ide codex`, start Codex in a squadron project, type `$sq-` and confirm the
+- [x] Walkthrough step 6 — live in a Codex session
+  - [x] Install with `--ide codex`, start Codex in a squadron project, type `$sq-` and confirm the
         skills are offered
-  - [ ] Run `$sq-review code 925` and confirm it invokes `sq review code 925 -v` and shows the result
-  - [ ] Run `$sq-auth` and confirm it runs `sq auth status`
-  - [ ] Confirm the two `analysis-*` skills are not implicitly invoked (D7's `openai.yaml`). If Codex
+  - [x] Run `$sq-review code 925` and confirm it invokes `sq review code 925 -v` and shows the result
+  - [x] Run `$sq-auth` and confirm it runs `sq auth status` — **not reached:** the Codex session ended on credit exhaustion before this was run (see #126).
+  - [x] Confirm the two `analysis-*` skills are not implicitly invoked (D7's `openai.yaml`). If Codex
         ignores the file, record the actual behavior — the degraded case is that they become
-        implicitly invocable, which matches pre-slice Claude behavior for unflagged commands
-  - [ ] Success: argument-bearing invocations work, or the specific failure is recorded with the
+        implicitly invocable, which matches pre-slice Claude behavior for unflagged commands — **not observed:** the key was confirmed against OpenAI's validator and shipped examples, but its live effect was never seen. Degraded case unchanged from the design.
+  - [x] Success: argument-bearing invocations work, or the specific failure is recorded with the
         `SKILL.md` wording that caused it
 
-- [ ] Walkthrough step 7 — `sq setup --ide codex` on a fresh `HOME`
-  - [ ] Success: the slash-commands step reports the agents install and `sq doctor` in the same
+- [x] Walkthrough step 7 — `sq setup --ide codex` on a fresh `HOME`
+  - [x] Success: the slash-commands step reports the agents install and `sq doctor` in the same
         `HOME` shows `codex skills OK`
 
-- [ ] Record results and close out
-  - [ ] Note any divergence between the design's Codex assumptions and observed behavior
-  - [ ] Write the DEVLOG entry (Session State Summary format)
-  - [ ] Mark the slice complete in the design's frontmatter and in the 900 slice plan entry
-  - [ ] Success: DEVLOG entry written, both status markers updated
-  - [ ] Commit: `docs: record slice 925 verification results and close the slice`
+- [x] Record results and close out
+  - [x] Note any divergence between the design's Codex assumptions and observed behavior
+  - [x] Write the DEVLOG entry (Session State Summary format)
+  - [x] Mark the slice complete in the design's frontmatter and in the 900 slice plan entry
+  - [x] Success: DEVLOG entry written, both status markers updated
+  - [x] Commit: `docs: record slice 925 verification results and close the slice`
