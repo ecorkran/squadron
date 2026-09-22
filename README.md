@@ -77,6 +77,24 @@ as prose — `$sq-review code 925` works the same way `/sq:review code 925` does
 `sq setup --ide codex` walks the same setup pass with the Codex target selected, and
 `sq doctor` reports a `codex skills` row on any machine that has the Codex CLI.
 
+**Run long commands from the terminal, not from a Codex session.** `sq review` and `sq run`
+take minutes, and a Codex session polls while they run — one review can consume a whole
+session allowance in the time the review itself takes
+([#126](https://github.com/ecorkran/squadron/issues/126)). Run those two from a shell and
+point Codex at the saved output. The short commands (`$sq-list`, `$sq-auth`, `$sq-spawn`)
+return immediately and are fine to invoke directly.
+
+Codex's sandbox also needs an explicit rule before `sq review` may reach a provider, or it
+fails with a misleading "provider connection failed"
+([#127](https://github.com/ecorkran/squadron/issues/127)). Add to `~/.codex/rules/default.rules`:
+
+```
+prefix_rule(
+    pattern = ["sq", "review"],
+    decision = "allow",
+)
+```
+
 Then, inside a project you want to work on:
 
 ```bash

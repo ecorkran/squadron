@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260921
 dateUpdated: 20260922
-status: in_progress
+status: complete
 ---
 
 # Slice Design: command-install-target-parity-codex-via-the-agents-skill-layout
@@ -230,8 +230,19 @@ see the notes on steps 3 and 4.*
 5. **Project-local.**
    From a project root: `sq install-commands --ide codex --local` → 14 files under `./.agents/skills/`, receipt `squadron-commands-agents-local.toml` whose `destination` is that absolute path. `cd` elsewhere, `sq uninstall-commands --ide codex --local` → `Removed 14 command(s) from <the project path>`, and the project's `.agents/skills/` is empty. This is D6: the removal follows the receipt, not the new cwd.
 
-6. **Live in Codex.**
-   In a squadron project with Codex CLI: type `$sq-` — the completer lists `sq-review`, `sq-run`, `sq-summary`, …. Send `$sq-review code 925`. Codex runs `sq review code 925 -v` and shows the review. Send `$sq-auth` → runs `sq auth status`.
+6. **Live in Codex.** *Run 20260922. The skill layer passed; two defects were found beyond it.*
+
+   **What passed — the premise this slice rested on.** In a squadron project with the Codex CLI, `$sq-review code 925` was offered, and Codex parsed `code 925` from prose and invoked `sq review code 925`. D3 holds: an authored skill with no argument substitution carries a subcommand plus a slice-number shorthand correctly. This was the assumption read from Codex's source at design time and never exercised; it is now exercised.
+
+   **Defect 1 — hot polling burns a session in minutes ([#126](https://github.com/ecorkran/squadron/issues/126)).** The review consumed an entire 5-hour Codex session allowance in 10–15 minutes of wall clock, roughly the time the review itself takes. Codex appeared to poll continuously for completion, generating tokens never surfaced to the user. The cause is a porting gap this design did not anticipate: D3 rewrote **arguments** for a runtime with no substitution, but the skills also inherited their twins' **control flow**, which assumes a harness where a blocking `Bash` call is one free turn. Under Codex the model stays in a billed loop while the command runs. `sq-run` is structurally worse — it carries an explicit `loop back to the Main Loop` — though it was not reached. A developer elsewhere hit the same wall on Astra in GitHub Copilot with no squadron involved, so this is general agent-harness behavior, not a squadron bug, but squadron's skills invite it.
+
+   *Until #126 is fixed, run `sq review` from the terminal and point Codex at the saved review file.*
+
+   **Defect 2 — Codex refuses the provider call unauthorized ([#127](https://github.com/ecorkran/squadron/issues/127)).** The first attempt failed with `the provider connection failed` and a note that automatic approval rejected the network-enabled retry. Codex's sandbox needs an explicit `prefix_rule` for `["sq", "review"]` in `~/.codex/rules/default.rules`. Undocumented, and the error text points at the provider rather than the sandbox, so it sends users to the wrong place.
+
+   `$sq-auth` was not reached — the session ended on credit exhaustion.
+
+   **Not yet observed:** whether `agents/openai.yaml` actually keeps the two `analysis-*` skills out of implicit invocation (D7). The key was confirmed against OpenAI's own validator and shipped examples, but its effect has not been seen live. The degraded case remains as the design stated: they become implicitly invocable, matching pre-slice Claude behavior for unflagged commands.
 
 7. **Setup path.** *Verified 20260922.*
    On a fresh `HOME`, run setup **interactively and with `-v`** — `printf '\n' | HOME=$H sq setup --ide codex -v`:
