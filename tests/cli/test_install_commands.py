@@ -697,6 +697,117 @@ def test_no_test_touches_the_real_receipts_directory() -> None:
     assert DEFAULT_RECEIPTS_DIR not in _receipts_dir(Path("/tmp/pytest-example/target")).parents
 
 
+# ---------------------------------------------------------------------------
+# Slice 925 (D6): uninstall acts on the receipt's recorded destination
+# ---------------------------------------------------------------------------
+
+
+def test_local_uninstall_from_another_directory_still_removes_the_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug D6 fixes: a --local receipt records an absolute path.
+
+    Resolving the destination from the flags instead would look under directory B's
+    ``.claude/commands``, find nothing, and report a successful removal of zero files
+    while everything stayed in place under A.
+    """
+    project_a = tmp_path / "a"
+    project_b = tmp_path / "b"
+    project_a.mkdir()
+    project_b.mkdir()
+    receipts = tmp_path / "receipts"
+
+    monkeypatch.chdir(project_a)
+    result = runner.invoke(app, ["install-commands", "--local", "--receipts-dir", str(receipts)])
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    installed = project_a / ".claude" / "commands" / "sq" / "review.md"
+    assert installed.is_file()
+
+    monkeypatch.chdir(project_b)
+    result = runner.invoke(app, ["uninstall-commands", "--local", "--receipts-dir", str(receipts)])
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert not installed.exists()
+    assert "Removed 0 command(s)" not in result.output  # type: ignore[attr-defined]
+
+
+def test_target_disagreeing_with_the_receipt_exits_one_and_removes_nothing(
+    tmp_path: Path,
+) -> None:
+    installed_at = tmp_path / "installed"
+    elsewhere = tmp_path / "elsewhere"
+    _install(runner, installed_at)
+    assert (installed_at / "sq" / "review.md").is_file()
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(elsewhere),
+            "--receipts-dir",
+            str(_receipts_dir(installed_at)),
+        ],
+    )
+    assert result.exit_code == 1  # type: ignore[attr-defined]
+
+    # Rich wraps long paths across lines, so match on the distinguishing final
+    # component rather than the whole path.
+    output = result.output  # type: ignore[attr-defined]
+    assert elsewhere.name in output
+    assert installed_at.name in output
+
+    # Nothing removed, and the receipt survives so a correct uninstall still works.
+    assert (installed_at / "sq" / "review.md").is_file()
+    assert _receipt_path(installed_at).is_file()
+
+
+def test_agents_uninstall_prunes_nested_skill_directories(tmp_path: Path) -> None:
+    """A skill's ``agents/`` subdirectory must not be left behind as an empty shell."""
+    _install_with(runner, tmp_path, "--ide", "codex")
+    assert (tmp_path / "analysis-understand" / "agents" / "openai.yaml").is_file()
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--ide",
+            "codex",
+            "--target",
+            str(tmp_path),
+            "--receipts-dir",
+            str(_receipts_dir(tmp_path)),
+        ],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert not (tmp_path / "analysis-understand").exists()
+    assert not (tmp_path / "sq-review").exists()
+
+
+def test_a_directory_holding_a_user_file_is_not_pruned(tmp_path: Path) -> None:
+    _install_with(runner, tmp_path, "--ide", "codex")
+    keeper = tmp_path / "sq-review" / "notes.md"
+    keeper.write_text("my own notes")
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--ide",
+            "codex",
+            "--target",
+            str(tmp_path),
+            "--receipts-dir",
+            str(_receipts_dir(tmp_path)),
+        ],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert keeper.read_text() == "my own notes"
+    assert not (tmp_path / "sq-review" / "SKILL.md").exists()
+
+
 @pytest.mark.parametrize("target", list(CommandTarget))
 def test_no_test_writes_under_a_real_machine_root(
     target: CommandTarget, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

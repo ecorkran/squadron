@@ -180,12 +180,7 @@ def uninstall_commands(
 ) -> None:
     """Remove squadron's commands from Claude Code or an agent-skills runtime."""
     command_target = _parse_target(ide)
-    delivery = DELIVERIES[command_target]
-
-    target_dir, local_honored = _resolve_destination(delivery, target, local=local)
-    if local and not local_honored:
-        rprint(f"[yellow]--local ignored: --target {target_dir} takes precedence.[/yellow]")
-    pack_name = receipt_name(command_target, local=local_honored)
+    pack_name = receipt_name(command_target, local=local)
 
     try:
         receipt = read_receipt(pack_name, receipts_dir)
@@ -202,23 +197,47 @@ def uninstall_commands(
         )
         return
 
+    # The receipt's own destination is where the files are, which is not necessarily
+    # where this invocation's flags resolve to: a --local install records an absolute
+    # path, so uninstalling from a different working directory would otherwise look for
+    # the files somewhere they were never written and report success having removed
+    # nothing (D6).
+    destination = receipt.destination
+    if target is not None:
+        requested = Path(target).expanduser()
+        if requested != destination:
+            rprint(
+                f"[red]--target {requested} does not match the recorded install "
+                f"destination {destination}.[/red]\n"
+                "[red]Nothing was removed. Re-run without --target to uninstall from "
+                "the recorded destination.[/red]"
+            )
+            raise typer.Exit(code=1)
+
     # Every subdirectory the install touched, not just sq/ (issue #65 finding 1: the old
     # rmtree of sq/ left analysis/ and any other subdirectory behind).
     removed = 0
     touched_dirs: set[Path] = set()
     for relative in receipt.files_written:
-        path = target_dir / relative
+        path = destination / relative
         touched_dirs.add(path.parent)
         if path.exists():
             path.unlink()
             removed += 1
 
     # Never rmtree: these directories are shared with the user's own commands. Remove one
-    # only once it holds nothing.
-    for directory in sorted(touched_dirs, reverse=True):
-        if directory.is_dir() and directory != target_dir and not any(directory.iterdir()):
+    # only once it holds nothing. Deepest first, so a skill's agents/ subdirectory is
+    # gone before its parent is tested for emptiness.
+    for directory in sorted(touched_dirs, key=lambda p: len(p.parts), reverse=True):
+        while (
+            directory.is_dir()
+            and directory != destination
+            and destination in directory.parents
+            and not any(directory.iterdir())
+        ):
             directory.rmdir()
+            directory = directory.parent
 
     (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
 
-    rprint(f"[green]Removed {removed} command(s) from {target_dir}.[/green]")
+    rprint(f"[green]Removed {removed} command(s) from {destination}.[/green]")

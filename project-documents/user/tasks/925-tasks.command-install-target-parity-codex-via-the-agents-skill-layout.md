@@ -185,34 +185,34 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 
 ## Task 4 — `--ide` and `--local` on install
 
-- [ ] Add the flags to `install_commands`
-  - [ ] `--ide` (default `claude`) parsed through `normalize_target`; on `ValueError` raise
+- [x] Add the flags to `install_commands`
+  - [x] `--ide` (default `claude`) parsed through `normalize_target`; on `ValueError` raise
         `typer.BadParameter` so Typer exits 2 with the accepted values in the message
-  - [ ] `--local` selects `delivery.local_root` resolved against cwd; otherwise `machine_root`
-  - [ ] `--target DIR` still wins over both. When `--target` and `--local` are both given, use
+  - [x] `--local` selects `delivery.local_root` resolved against cwd; otherwise `machine_root`
+  - [x] `--target DIR` still wins over both. When `--target` and `--local` are both given, use
         `--target` and print that `--local` was ignored — never silently (project rule: no silent
         fallbacks)
-  - [ ] Receipt name from `receipt_name(target, local)` so the four scopes never share a receipt
-  - [ ] Success: `sq install-commands --ide codex` writes skill directories under `~/.agents/skills`
-  - [ ] Success: `sq install-commands --ide copilot` exits 2 naming the accepted values
+  - [x] Receipt name from `receipt_name(target, local)` so the four scopes never share a receipt
+  - [x] Success: `sq install-commands --ide codex` writes skill directories under `~/.agents/skills`
+  - [x] Success: `sq install-commands --ide copilot` exits 2 naming the accepted values
 
-- [ ] Mirror the flags on `uninstall_commands` (resolution only; D6 semantics in Task 5)
+- [x] Mirror the flags on `uninstall_commands` (resolution only; D6 semantics in Task 5)
 
-- [ ] **Test** `tests/cli/test_install_commands.py`
-  - [ ] Agents install into `tmp_path`: every authored skill directory is written, `SKILL.md` and
+- [x] **Test** `tests/cli/test_install_commands.py`
+  - [x] Agents install into `tmp_path`: every authored skill directory is written, `SKILL.md` and
         `openai.yaml` both land, output lists them, receipt `squadron-commands-agents` written
-  - [ ] `--ide codex`, `--ide openai` and `--ide agents` produce identical results
-  - [ ] `--ide copilot` and `--ide nonsense` exit 2 with the accepted values in the message
-  - [ ] `--local` writes under the cwd-relative root and uses the `-local` receipt name
-  - [ ] `--target` with `--local` uses `--target` and says `--local` was ignored
-  - [ ] Receipt isolation: install Claude then agents into the same `tmp_path` receipts dir; both
+  - [x] `--ide codex`, `--ide openai` and `--ide agents` produce identical results
+  - [x] `--ide copilot` and `--ide nonsense` exit 2 with the accepted values in the message
+  - [x] `--local` writes under the cwd-relative root and uses the `-local` receipt name
+  - [x] `--target` with `--local` uses `--target` and says `--local` was ignored
+  - [x] Receipt isolation: install Claude then agents into the same `tmp_path` receipts dir; both
         receipts exist, and uninstalling one leaves the other's files intact
-  - [ ] Claude default unchanged: same file set, receipt name and output as before the flag existed
-  - [ ] Extend `test_no_test_touches_the_real_receipts_directory` (`tests/cli/test_install_commands.py:375`)
+  - [x] Claude default unchanged: same file set, receipt name and output as before the flag existed
+  - [x] Extend `test_no_test_touches_the_real_receipts_directory` (`tests/cli/test_install_commands.py:375`)
         to also assert no test writes under the real `~/.agents/skills` — this is exactly where an
         agents install with no `--target` would resolve against the real `HOME` (#47 / slice 923)
-  - [ ] Success: all new and existing tests in the file pass; `pyright` clean
-  - [ ] Commit: `feat: add --ide and --local to install-commands`
+  - [x] Success: all new and existing tests in the file pass; `pyright` clean
+  - [x] Commit: `feat: add --ide and --local to install-commands`
 
 ---
 
