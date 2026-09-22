@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import re
+import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.cli.commands import install as install_module
 from squadron.cli.commands.install import _get_commands_source
+from squadron.skills.targets import DELIVERIES, CommandTarget
 
 runner = CliRunner()
 
@@ -404,6 +409,142 @@ def test_agents_tree_is_not_installed_for_claude(
 
     receipt = tomllib.loads(_receipt_path(target).read_text())
     assert receipt["files_written"] == ["sq/review.md", "analysis/understand.md"]
+
+
+# ---------------------------------------------------------------------------
+# Slice 925: the agents asset tree must not drift from the Claude tree
+# ---------------------------------------------------------------------------
+#
+# The two trees are authored separately by necessity — Codex performs no argument
+# substitution, so an agents skill cannot be generated from its Claude twin (D3).
+# Separately authored means they can silently diverge: a command added to
+# commands/sq/ simply never appears for Codex users. These tests are the only thing
+# that makes that divergence loud.
+
+SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
+
+def _agents_root() -> Path:
+    # Resolved through the module rather than the name imported at the top of this
+    # file, so the teeth test below can point the tree elsewhere with monkeypatch.
+    return install_module._get_commands_source() / "agents"  # type: ignore[attr-defined]
+
+
+def _skill_frontmatter(skill_md: Path) -> dict[str, object]:
+    """Parse the YAML frontmatter of a SKILL.md.
+
+    Tolerates a leading HTML comment: the forked analysis skills carry an attribution
+    line above the frontmatter, and a parser requiring the fence on line 1 would report
+    those two skills as having no frontmatter at all.
+    """
+    text = skill_md.read_text()
+    fence_start = text.find("---\n")
+    assert fence_start != -1, f"{skill_md} has no frontmatter"
+    body = text[fence_start + 4 :]
+    fence_end = body.find("\n---")
+    assert fence_end != -1, f"{skill_md} has an unterminated frontmatter block"
+    parsed = yaml.safe_load(body[:fence_end])
+    assert isinstance(parsed, dict), f"{skill_md} frontmatter is not a mapping"
+    return parsed  # type: ignore[return-value]
+
+
+def _claude_twins() -> list[tuple[str, Path]]:
+    """Every Claude command file, paired with the agents skill name it requires."""
+    source = install_module._get_commands_source()  # type: ignore[attr-defined]
+    pairs: list[tuple[str, Path]] = []
+    for sub in DELIVERIES[CommandTarget.CLAUDE].bundle_subdirs:
+        for md_file in sorted((source / sub).glob("*.md")):
+            pairs.append((f"{sub}-{md_file.stem}", md_file))
+    return pairs
+
+
+def test_every_claude_command_has_an_agents_twin() -> None:
+    for skill_name, claude_file in _claude_twins():
+        expected = _agents_root() / skill_name / "SKILL.md"
+        assert expected.is_file(), (
+            f"{claude_file} has no agents twin — expected {expected}. "
+            f"Every command in the Claude tree must be authored for the agents tree too."
+        )
+
+
+def test_every_agents_skill_has_a_claude_twin() -> None:
+    required = {name for name, _ in _claude_twins()}
+    for skill_dir in sorted(_agents_root().iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        assert skill_dir.name in required, (
+            f"{skill_dir} has no Claude twin. Either add the Claude command or remove "
+            f"this skill — the two trees are a bijection."
+        )
+
+
+def test_agents_skill_name_matches_its_directory() -> None:
+    for skill_dir in sorted(_agents_root().iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        frontmatter = _skill_frontmatter(skill_dir / "SKILL.md")
+        name = frontmatter.get("name")
+        # Codex requires only non-empty and <=64 chars, but the agentskills.io spec
+        # requires the directory and the name to agree (D4).
+        assert name == skill_dir.name, f"{skill_dir}/SKILL.md declares name {name!r}"
+        assert isinstance(name, str) and SKILL_NAME_PATTERN.match(name), (
+            f"{skill_dir} name {name!r} is not lowercase-hyphenated"
+        )
+        assert len(name) <= 64, f"{skill_dir} name exceeds Codex's 64-character limit"
+
+
+def test_agents_skill_has_a_nonempty_description() -> None:
+    for skill_dir in sorted(_agents_root().iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        frontmatter = _skill_frontmatter(skill_dir / "SKILL.md")
+        description = frontmatter.get("description")
+        # Codex selects skills on the description, so an empty one is unreachable.
+        assert isinstance(description, str) and description.strip(), (
+            f"{skill_dir}/SKILL.md has no usable description"
+        )
+
+
+def test_openai_yaml_mirrors_disable_model_invocation() -> None:
+    """``openai.yaml`` appears exactly where the Claude twin disables model invocation.
+
+    Claude's ``disable-model-invocation: true`` has no frontmatter equivalent in Codex;
+    the nearest behavior is ``policy.allow_implicit_invocation: false`` in a sibling
+    YAML (D7).
+    """
+    for skill_name, claude_file in _claude_twins():
+        twin_disables = "disable-model-invocation: true" in claude_file.read_text()
+        policy_file = _agents_root() / skill_name / "agents" / "openai.yaml"
+        assert policy_file.is_file() == twin_disables, (
+            f"{claude_file} disable-model-invocation={twin_disables} but "
+            f"{policy_file} exists={policy_file.is_file()}"
+        )
+        if twin_disables:
+            policy = yaml.safe_load(policy_file.read_text())
+            assert policy["policy"]["allow_implicit_invocation"] is False
+
+
+def test_no_agents_skill_uses_claude_argument_substitution() -> None:
+    """Codex performs no argument substitution, so these tokens never resolve (D3)."""
+    for skill_md in sorted(_agents_root().rglob("SKILL.md")):
+        text = skill_md.read_text()
+        for token in ("$ARGUMENTS", "$1", "$2"):
+            assert token not in text, (
+                f"{skill_md} contains {token}, which Codex passes through literally"
+            )
+
+
+def test_drift_guard_fails_on_a_command_with_no_twin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The guard has teeth — verified against a copy, never the real bundle."""
+    bundle = tmp_path / "commands"
+    shutil.copytree(_get_commands_source(), bundle)
+    (bundle / "sq" / "newcommand.md").write_text("a command with no agents twin")
+
+    monkeypatch.setattr("squadron.cli.commands.install._get_commands_source", lambda: bundle)
+    with pytest.raises(AssertionError, match="no agents twin"):
+        test_every_claude_command_has_an_agents_twin()
 
 
 def test_no_test_touches_the_real_receipts_directory() -> None:

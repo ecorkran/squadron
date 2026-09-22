@@ -94,28 +94,28 @@ status: in_progress
 
 This task changes only *how* the existing behavior is produced. No user-visible change.
 
-- [ ] Rewrite `install_commands` to resolve a `TargetDelivery` and drive it
-  - [ ] `install.py` imports `CommandTarget`, `DELIVERIES`, `receipt_name` and the layout writers
+- [x] Rewrite `install_commands` to resolve a `TargetDelivery` and drive it
+  - [x] `install.py` imports `CommandTarget`, `DELIVERIES`, `receipt_name` and the layout writers
         from `squadron.skills.targets` at module scope — the import goes CLI → skills, never back
-  - [ ] Hardcode `CommandTarget.CLAUDE` for now (the flag arrives in Task 4)
-  - [ ] Iterate `delivery.bundle_subdirs` explicitly instead of walking every directory under the
+  - [x] Hardcode `CommandTarget.CLAUDE` for now (the flag arrives in Task 4)
+  - [x] Iterate `delivery.bundle_subdirs` explicitly instead of walking every directory under the
         bundle source — this is the one behavioral change, and it is what keeps `commands/agents/`
         out of `~/.claude/commands/` once it exists (D8)
-  - [ ] Receipt name from `receipt_name(target, local=False)`; stale-removal logic unchanged
-  - [ ] Success: `install.py` contains no literal `~/.claude/commands` outside the delivery table
-  - [ ] Success: the `--target` option's default is now derived from the delivery, not a literal
+  - [x] Receipt name from `receipt_name(target, local=False)`; stale-removal logic unchanged
+  - [x] Success: `install.py` contains no literal `~/.claude/commands` outside the delivery table
+  - [x] Success: the `--target` option's default is now derived from the delivery, not a literal
 
-- [ ] Apply the same treatment to `uninstall_commands` (receipt name from the delivery; behavior
+- [x] Apply the same treatment to `uninstall_commands` (receipt name from the delivery; behavior
       otherwise unchanged — D6 arrives in Task 5)
 
-- [ ] **Test** — the existing suite is the test for this task
-  - [ ] `pytest tests/cli/test_install_commands.py` passes with **no modifications to the test file**
-  - [ ] Add `test_agents_tree_is_not_installed_for_claude`: create a fake bundle with `sq/`,
+- [x] **Test** — the existing suite is the test for this task
+  - [x] `pytest tests/cli/test_install_commands.py` passes with **no modifications to the test file**
+  - [x] Add `test_agents_tree_is_not_installed_for_claude`: create a fake bundle with `sq/`,
         `analysis/` and `agents/` subdirectories, install with the Claude default, assert nothing
         from `agents/` is written and it is absent from the receipt
-  - [ ] Success: `pytest tests/cli/test_install_commands.py tests/skills tests/metrology` all pass —
+  - [x] Success: `pytest tests/cli/test_install_commands.py tests/skills tests/metrology` all pass —
         the last two prove D8 (the analysis pack still resolves)
-  - [ ] Commit: `refactor: drive command install from a target delivery table`
+  - [x] Commit: `refactor: drive command install from a target delivery table`
 
 ---
 
@@ -125,28 +125,28 @@ Ten skills, one per file under `commands/sq/`. Each is authored against its Clau
 mechanically converted (D3). This is the slice's effort center — `review.md` (~277 lines) and
 `run.md` (~161) are the largest.
 
-- [ ] Author `commands/agents/sq-<name>/SKILL.md`, one sub-item per source file
-  - [ ] `sq-analysis` ← `commands/sq/analysis.md`
-  - [ ] `sq-auth` ← `commands/sq/auth.md`
-  - [ ] `sq-list` ← `commands/sq/list.md`
-  - [ ] `sq-pr` ← `commands/sq/pr.md`
-  - [ ] `sq-review` ← `commands/sq/review.md` (largest; subcommand dispatch plus the slice-number
+- [x] Author `commands/agents/sq-<name>/SKILL.md`, one sub-item per source file
+  - [x] `sq-analysis` ← `commands/sq/analysis.md`
+  - [x] `sq-auth` ← `commands/sq/auth.md`
+  - [x] `sq-list` ← `commands/sq/list.md`
+  - [x] `sq-pr` ← `commands/sq/pr.md`
+  - [x] `sq-review` ← `commands/sq/review.md` (largest; subcommand dispatch plus the slice-number
         shorthand must both survive the argument rewrite)
-  - [ ] `sq-run` ← `commands/sq/run.md` (multi-step pipeline loop)
-  - [ ] `sq-shutdown` ← `commands/sq/shutdown.md`
-  - [ ] `sq-spawn` ← `commands/sq/spawn.md`
-  - [ ] `sq-summary` ← `commands/sq/summary.md` (keep its CRITICAL no-redirect instruction verbatim)
-  - [ ] `sq-task` ← `commands/sq/task.md`
-  - [ ] Frontmatter for each: `name` equal to the directory name; `description` one sentence stating
+  - [x] `sq-run` ← `commands/sq/run.md` (multi-step pipeline loop)
+  - [x] `sq-shutdown` ← `commands/sq/shutdown.md`
+  - [x] `sq-spawn` ← `commands/sq/spawn.md`
+  - [x] `sq-summary` ← `commands/sq/summary.md` (keep its CRITICAL no-redirect instruction verbatim)
+  - [x] `sq-task` ← `commands/sq/task.md`
+  - [x] Frontmatter for each: `name` equal to the directory name; `description` one sentence stating
         what it does and when the user would ask for it (Codex selects skills on description)
-  - [ ] Body: the Claude command's steps, with every `$ARGUMENTS` reference rewritten as prose
+  - [x] Body: the Claude command's steps, with every `$ARGUMENTS` reference rewritten as prose
         describing what the user typed after `$sq-<name>` (D3). Preserve each command's CLI
         invocations, flags and output instructions exactly
-  - [ ] Where the Claude file tells the model to ask rather than guess a missing value, keep that
+  - [x] Where the Claude file tells the model to ask rather than guess a missing value, keep that
         instruction — Codex has no argument slot to fall back on
-  - [ ] Success: no `$ARGUMENTS`, `$1`, or `` !`cmd` `` appears in any of the ten files
-  - [ ] Success: each file's CLI commands match its Claude twin's (same subcommands and flags)
-  - [ ] Commit: `feat: add sq agent skills for the Codex install target`
+  - [x] Success: no `$ARGUMENTS`, `$1`, or `` !`cmd` `` appears in any of the ten files
+  - [x] Success: each file's CLI commands match its Claude twin's (same subcommands and flags)
+  - [x] Commit: `feat: add sq agent skills for the Codex install target`
 
 ---
 
