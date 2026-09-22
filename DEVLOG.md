@@ -10,6 +10,32 @@ dateUpdated: 20260921
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20260922
+
+### Slice 925 — design review answered, tasks broken out
+
+Review came back CONCERNS with two concerns, both real. **F001 was the one that mattered:**
+the design had moved `commands/{sq,analysis}/` under `commands/claude/`, and the review found
+two resolvers of `commands/analysis/` by pack name that the Migration Plan never listed —
+`skills/resolver.py::_resolve_bundled` (behind `sq skills install analysis`, via the shipped
+`skills.toml`) and `metrology/audit.py::resolve_audit_skill` (behind `sq metrology audit
+run`). The move would have broken two production commands and CI. Resolved by deleting the
+move entirely (new D8): `commands/agents/` becomes a sibling tree and each `TargetDelivery`
+names its bundle subdirectories explicitly, so the only behavioral change left in `install.py`
+is that the Claude install stops walking every directory under `commands/`.
+
+F002 was under-specification of where `--ide` lands in setup; answered with D9 — the commands
+check stays single-result (`setup_steps.py` types recheck as `Callable[[], CheckResult]`) and
+the target threads through `run_all_checks(ide=...)`. Writing the task breakdown turned up an
+error in D9's own text: it named all five name-keyed tables as living in `setup_steps.py`, but
+`_INSTALLERS` is in `setup_install.py`. Corrected in the design rather than annotated in the
+tasks. F003 (D6's failed-check disposition: exit 1, both paths, remove nothing) and F004
+(amendment lines in 340-arch and 360-arch) were both straightforward.
+
+Nine tasks, test-with throughout. Task 3 (authoring twelve `SKILL.md` files) is the effort
+center, not the Python. Task 9 exists because every Codex runtime premise in this design was
+read from source and docs rather than exercised — the live session is where they get proven.
+
 ## 20260921
 
 ### Slice 925 designed — command install target parity (Codex)
