@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -15,16 +16,17 @@ from squadron.cli.commands.doctor_checks import (
     CheckStatus,
     check_at_least_one_provider,
     check_codex_cli,
+    check_commands_installed,
     check_context_forge,
     check_git_hooks,
     check_models_toml,
     check_project_env,
     check_provider_profiles,
     check_providers_toml,
-    check_slash_commands,
     check_squadron_install,
 )
 from squadron.providers.profiles import get_all_profiles
+from squadron.skills.targets import DELIVERIES, CommandTarget
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,9 @@ class SetupStep:
 # Per-profile rows are NOT pre-populated; build_steps synthesises a lambda per row.
 _RECHECK_MAP: dict[str, Callable[[], CheckResult]] = {
     "squadron": check_squadron_install,
-    "slash commands": check_slash_commands,
+    DELIVERIES[CommandTarget.CLAUDE].check_name: functools.partial(
+        check_commands_installed, CommandTarget.CLAUDE
+    ),
     "context-forge": check_context_forge,
     "codex CLI": check_codex_cli,
     # "Claude Code CLI" is intentionally absent: it is informational only
