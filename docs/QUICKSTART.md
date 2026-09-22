@@ -32,6 +32,19 @@ sq setup
 
 It installs `cf`, both sets of slash commands (`/sq:` and `/cf:`), and then checks your providers. Finally, run `cf init` inside each project you work on to install that repo's guides and IDE config. The guides land as plain files and are committed for you (Context Forge 0.16+; see the README for older versions and for switching an existing submodule install).
 
+### Codex
+
+Squadron's commands install for Codex too, as agent skills rather than slash commands:
+
+```bash
+sq install-commands --ide codex   # aliases: --ide agents, --ide openai
+sq setup --ide codex              # the full setup pass, Codex target selected
+```
+
+Skills land in `~/.agents/skills` (add `--local` for `.agents/skills` in the current project),
+one directory per skill. Invoke them by name in a Codex session: `$sq-review`, `$sq-run`,
+`$sq-auth`. `sq doctor` reports a `codex skills` row wherever the Codex CLI is present.
+
 ## Verify your install
 
 Two commands report on your environment. Both read the same checks; they differ in presentation.

@@ -16,7 +16,7 @@ import click
 from typer.main import get_command
 
 from squadron.cli.app import app
-from squadron.cli.commands.install import _get_commands_source
+from squadron.cli.commands.install import get_commands_source
 
 # Flags excluded from the comparison. `--help` is registered on every Click command
 # but never documented in a command file's section, so it is not a drift signal.
@@ -62,7 +62,7 @@ def _cli_long_options(command_path: tuple[str, ...]) -> set[str]:
 
 
 def _command_file_path(filename: str) -> Path:
-    return _get_commands_source() / "sq" / filename
+    return get_commands_source() / "sq" / filename
 
 
 def assert_surface_agreement(cli_flags: set[str], file_flags: set[str], label: str) -> None:

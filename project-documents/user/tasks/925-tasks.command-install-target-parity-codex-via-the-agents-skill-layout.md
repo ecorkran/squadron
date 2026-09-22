@@ -9,7 +9,7 @@ projectState: >
   written yet. `sq install-commands` installs only to ~/.claude/commands.
 dateCreated: 20260922
 dateUpdated: 20260922
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -34,59 +34,59 @@ status: not_started
 
 ## Task 1 — Target vocabulary and delivery table
 
-- [ ] Create `src/squadron/skills/targets.py` with the target vocabulary (D1)
-  - [ ] `CommandTarget(StrEnum)` with exactly two members: `CLAUDE = "claude"`, `AGENTS = "agents"`
-  - [ ] `TARGET_ALIASES: dict[str, CommandTarget]` mapping `"codex"` and `"openai"` to `AGENTS`
-  - [ ] `normalize_target(raw: str) -> CommandTarget` — strip and lowercase, check enum members
+- [x] Create `src/squadron/skills/targets.py` with the target vocabulary (D1)
+  - [x] `CommandTarget(StrEnum)` with exactly two members: `CLAUDE = "claude"`, `AGENTS = "agents"`
+  - [x] `TARGET_ALIASES: dict[str, CommandTarget]` mapping `"codex"` and `"openai"` to `AGENTS`
+  - [x] `normalize_target(raw: str) -> CommandTarget` — strip and lowercase, check enum members
         first then aliases, raise `ValueError` naming every accepted spelling when neither matches
-  - [ ] Success: `normalize_target` accepts `claude`, `agents`, `codex`, `openai` in any case and
+  - [x] Success: `normalize_target` accepts `claude`, `agents`, `codex`, `openai` in any case and
         with surrounding whitespace; `copilot`, `cursor`, `""` and arbitrary text all raise
-  - [ ] Success: no other module in `src/` compares a target string literal (grep proves it)
+  - [x] Success: no other module in `src/` compares a target string literal (grep proves it)
 
-- [ ] Add the two layout writers to `targets.py`, each `(source: Path, destination: Path) -> list[str]`
-  - [ ] They live here, not in `cli/commands/install.py`: `DELIVERIES` holds references to them, and
+- [x] Add the two layout writers to `targets.py`, each `(source: Path, destination: Path) -> list[str]`
+  - [x] They live here, not in `cli/commands/install.py`: `DELIVERIES` holds references to them, and
         `src/squadron/skills/` must not import from `cli/` — that direction is a cycle (`install.py`
         imports `skills.receipts` today) and inverts the layering the codebase already guards
         (`doctor_checks.py` keeps a local default "to keep the pure check layer free of CLI coupling")
-  - [ ] `write_flat_markdown` — the current Claude behavior: for each `*.md` directly under `source`,
+  - [x] `write_flat_markdown` — the current Claude behavior: for each `*.md` directly under `source`,
         copy to `destination/<source.name>/<file>.md`; return paths relative to `destination`
-  - [ ] `write_skill_dirs` — for each directory under `source`, copy the whole directory (`SKILL.md`
+  - [x] `write_skill_dirs` — for each directory under `source`, copy the whole directory (`SKILL.md`
         plus any nested files such as `agents/openai.yaml`) to `destination/<dir>/`; return paths
         relative to `destination`
-  - [ ] Success: both create parent directories; neither mentions `.claude` or `.agents`; neither
+  - [x] Success: both create parent directories; neither mentions `.claude` or `.agents`; neither
         imports anything from `squadron.cli`
 
-- [ ] Add `TargetDelivery` and the `DELIVERIES` table to the same module
-  - [ ] Frozen dataclass fields: `machine_root: Path`, `local_root: Path`, `bundle_subdirs: tuple[str, ...]`,
+- [x] Add `TargetDelivery` and the `DELIVERIES` table to the same module
+  - [x] Frozen dataclass fields: `machine_root: Path`, `local_root: Path`, `bundle_subdirs: tuple[str, ...]`,
         `check_name: str`, `fix_hint: str`, `receipt_base: str`, `layout: Callable[[Path, Path], list[str]]`
-  - [ ] Claude entry: machine `~/.claude/commands`, local `.claude/commands`, subdirs `("sq", "analysis")`,
+  - [x] Claude entry: machine `~/.claude/commands`, local `.claude/commands`, subdirs `("sq", "analysis")`,
         check name `slash commands`, fix hint `sq install-commands`, receipt base `squadron-commands`
         (D5 — the existing name, unchanged), layout `write_flat_markdown`
-  - [ ] Agents entry: machine `~/.agents/skills`, local `.agents/skills`, subdirs `("agents",)`,
+  - [x] Agents entry: machine `~/.agents/skills`, local `.agents/skills`, subdirs `("agents",)`,
         check name `codex skills`, fix hint `sq install-commands --ide codex`, receipt base
         `squadron-commands-agents` (D2), layout `write_skill_dirs`
-  - [ ] `receipt_name(target, local: bool) -> str` — `delivery.receipt_base`, plus `-local` when
+  - [x] `receipt_name(target, local: bool) -> str` — `delivery.receipt_base`, plus `-local` when
         `local` is true. The four names are exactly `squadron-commands`, `squadron-commands-local`,
         `squadron-commands-agents`, `squadron-commands-agents-local` (the design's State Management
         section was corrected to match this rule; the earlier `squadron-commands-claude-local` is void)
-  - [ ] Module-level assertion that `DELIVERIES.keys() == set(CommandTarget)` so a new member cannot
+  - [x] Module-level assertion that `DELIVERIES.keys() == set(CommandTarget)` so a new member cannot
         be added without a delivery
-  - [ ] Success: `~` is expanded at use, not at import — the module must be importable under a patched
+  - [x] Success: `~` is expanded at use, not at import — the module must be importable under a patched
         `HOME` and resolve against it (per #47 / slice 923 isolation discipline)
 
-- [ ] **Test** `tests/skills/test_targets.py`
-  - [ ] Parametrized accept cases: every member and alias, mixed case, leading/trailing whitespace
-  - [ ] Reject cases: `copilot`, `cursor`, empty string, `claude-code`; assert the message lists the
+- [x] **Test** `tests/skills/test_targets.py`
+  - [x] Parametrized accept cases: every member and alias, mixed case, leading/trailing whitespace
+  - [x] Reject cases: `copilot`, `cursor`, empty string, `claude-code`; assert the message lists the
         accepted values
-  - [ ] `DELIVERIES` covers every enum member; the two entries have distinct roots, check names and
+  - [x] `DELIVERIES` covers every enum member; the two entries have distinct roots, check names and
         receipt bases
-  - [ ] `receipt_name` returns exactly the four names listed above, and the Claude machine name is
+  - [x] `receipt_name` returns exactly the four names listed above, and the Claude machine name is
         exactly `squadron-commands`
-  - [ ] Roots resolve under a monkeypatched `HOME`, not the real one
-  - [ ] Both layout writers against `tmp_path` fixtures: flat markdown produces `<sub>/<name>.md`,
+  - [x] Roots resolve under a monkeypatched `HOME`, not the real one
+  - [x] Both layout writers against `tmp_path` fixtures: flat markdown produces `<sub>/<name>.md`,
         skill dirs copy nested files (`agents/openai.yaml`), both return destination-relative paths
-  - [ ] Success: `pytest tests/skills/test_targets.py` passes; `pyright` clean
-  - [ ] Commit: `feat: add command target vocabulary and delivery table`
+  - [x] Success: `pytest tests/skills/test_targets.py` passes; `pyright` clean
+  - [x] Commit: `feat: add command target vocabulary and delivery table`
 
 ---
 
@@ -94,28 +94,28 @@ status: not_started
 
 This task changes only *how* the existing behavior is produced. No user-visible change.
 
-- [ ] Rewrite `install_commands` to resolve a `TargetDelivery` and drive it
-  - [ ] `install.py` imports `CommandTarget`, `DELIVERIES`, `receipt_name` and the layout writers
+- [x] Rewrite `install_commands` to resolve a `TargetDelivery` and drive it
+  - [x] `install.py` imports `CommandTarget`, `DELIVERIES`, `receipt_name` and the layout writers
         from `squadron.skills.targets` at module scope — the import goes CLI → skills, never back
-  - [ ] Hardcode `CommandTarget.CLAUDE` for now (the flag arrives in Task 4)
-  - [ ] Iterate `delivery.bundle_subdirs` explicitly instead of walking every directory under the
+  - [x] Hardcode `CommandTarget.CLAUDE` for now (the flag arrives in Task 4)
+  - [x] Iterate `delivery.bundle_subdirs` explicitly instead of walking every directory under the
         bundle source — this is the one behavioral change, and it is what keeps `commands/agents/`
         out of `~/.claude/commands/` once it exists (D8)
-  - [ ] Receipt name from `receipt_name(target, local=False)`; stale-removal logic unchanged
-  - [ ] Success: `install.py` contains no literal `~/.claude/commands` outside the delivery table
-  - [ ] Success: the `--target` option's default is now derived from the delivery, not a literal
+  - [x] Receipt name from `receipt_name(target, local=False)`; stale-removal logic unchanged
+  - [x] Success: `install.py` contains no literal `~/.claude/commands` outside the delivery table
+  - [x] Success: the `--target` option's default is now derived from the delivery, not a literal
 
-- [ ] Apply the same treatment to `uninstall_commands` (receipt name from the delivery; behavior
+- [x] Apply the same treatment to `uninstall_commands` (receipt name from the delivery; behavior
       otherwise unchanged — D6 arrives in Task 5)
 
-- [ ] **Test** — the existing suite is the test for this task
-  - [ ] `pytest tests/cli/test_install_commands.py` passes with **no modifications to the test file**
-  - [ ] Add `test_agents_tree_is_not_installed_for_claude`: create a fake bundle with `sq/`,
+- [x] **Test** — the existing suite is the test for this task
+  - [x] `pytest tests/cli/test_install_commands.py` passes with **no modifications to the test file**
+  - [x] Add `test_agents_tree_is_not_installed_for_claude`: create a fake bundle with `sq/`,
         `analysis/` and `agents/` subdirectories, install with the Claude default, assert nothing
         from `agents/` is written and it is absent from the receipt
-  - [ ] Success: `pytest tests/cli/test_install_commands.py tests/skills tests/metrology` all pass —
+  - [x] Success: `pytest tests/cli/test_install_commands.py tests/skills tests/metrology` all pass —
         the last two prove D8 (the analysis pack still resolves)
-  - [ ] Commit: `refactor: drive command install from a target delivery table`
+  - [x] Commit: `refactor: drive command install from a target delivery table`
 
 ---
 
@@ -125,222 +125,222 @@ Ten skills, one per file under `commands/sq/`. Each is authored against its Clau
 mechanically converted (D3). This is the slice's effort center — `review.md` (~277 lines) and
 `run.md` (~161) are the largest.
 
-- [ ] Author `commands/agents/sq-<name>/SKILL.md`, one sub-item per source file
-  - [ ] `sq-analysis` ← `commands/sq/analysis.md`
-  - [ ] `sq-auth` ← `commands/sq/auth.md`
-  - [ ] `sq-list` ← `commands/sq/list.md`
-  - [ ] `sq-pr` ← `commands/sq/pr.md`
-  - [ ] `sq-review` ← `commands/sq/review.md` (largest; subcommand dispatch plus the slice-number
+- [x] Author `commands/agents/sq-<name>/SKILL.md`, one sub-item per source file
+  - [x] `sq-analysis` ← `commands/sq/analysis.md`
+  - [x] `sq-auth` ← `commands/sq/auth.md`
+  - [x] `sq-list` ← `commands/sq/list.md`
+  - [x] `sq-pr` ← `commands/sq/pr.md`
+  - [x] `sq-review` ← `commands/sq/review.md` (largest; subcommand dispatch plus the slice-number
         shorthand must both survive the argument rewrite)
-  - [ ] `sq-run` ← `commands/sq/run.md` (multi-step pipeline loop)
-  - [ ] `sq-shutdown` ← `commands/sq/shutdown.md`
-  - [ ] `sq-spawn` ← `commands/sq/spawn.md`
-  - [ ] `sq-summary` ← `commands/sq/summary.md` (keep its CRITICAL no-redirect instruction verbatim)
-  - [ ] `sq-task` ← `commands/sq/task.md`
-  - [ ] Frontmatter for each: `name` equal to the directory name; `description` one sentence stating
+  - [x] `sq-run` ← `commands/sq/run.md` (multi-step pipeline loop)
+  - [x] `sq-shutdown` ← `commands/sq/shutdown.md`
+  - [x] `sq-spawn` ← `commands/sq/spawn.md`
+  - [x] `sq-summary` ← `commands/sq/summary.md` (keep its CRITICAL no-redirect instruction verbatim)
+  - [x] `sq-task` ← `commands/sq/task.md`
+  - [x] Frontmatter for each: `name` equal to the directory name; `description` one sentence stating
         what it does and when the user would ask for it (Codex selects skills on description)
-  - [ ] Body: the Claude command's steps, with every `$ARGUMENTS` reference rewritten as prose
+  - [x] Body: the Claude command's steps, with every `$ARGUMENTS` reference rewritten as prose
         describing what the user typed after `$sq-<name>` (D3). Preserve each command's CLI
         invocations, flags and output instructions exactly
-  - [ ] Where the Claude file tells the model to ask rather than guess a missing value, keep that
+  - [x] Where the Claude file tells the model to ask rather than guess a missing value, keep that
         instruction — Codex has no argument slot to fall back on
-  - [ ] Success: no `$ARGUMENTS`, `$1`, or `` !`cmd` `` appears in any of the ten files
-  - [ ] Success: each file's CLI commands match its Claude twin's (same subcommands and flags)
-  - [ ] Commit: `feat: add sq agent skills for the Codex install target`
+  - [x] Success: no `$ARGUMENTS`, `$1`, or `` !`cmd` `` appears in any of the ten files
+  - [x] Success: each file's CLI commands match its Claude twin's (same subcommands and flags)
+  - [x] Commit: `feat: add sq agent skills for the Codex install target`
 
 ---
 
 ## Task 3b — Author the two `analysis-*` skills and the drift guard
 
-- [ ] Confirm the `agents/openai.yaml` key for implicit invocation before authoring (D7)
-  - [ ] Check the current Codex skills documentation for the exact key path. The design records a
+- [x] Confirm the `agents/openai.yaml` key for implicit invocation before authoring (D7)
+  - [x] Check the current Codex skills documentation for the exact key path. The design records a
         candidate, but the documentation is the authority
-  - [ ] Success: the key is confirmed against current docs, or — if it cannot be confirmed — the
+  - [x] Success: the key is confirmed against current docs, or — if it cannot be confirmed — the
         task stops and asks the Project Manager rather than guessing
 
-- [ ] Author `commands/agents/analysis-<name>/` for the two `commands/analysis/*.md` files
-  - [ ] `analysis-tech-debt-audit/SKILL.md` ← `commands/analysis/tech-debt-audit.md`
-  - [ ] `analysis-understand/SKILL.md` ← `commands/analysis/understand.md` (~1,260 lines — the
+- [x] Author `commands/agents/analysis-<name>/` for the two `commands/analysis/*.md` files
+  - [x] `analysis-tech-debt-audit/SKILL.md` ← `commands/analysis/tech-debt-audit.md`
+  - [x] `analysis-understand/SKILL.md` ← `commands/analysis/understand.md` (~1,260 lines — the
         largest single authoring job in the slice; budget a context session for it alone)
-  - [ ] Each gets a sibling `agents/openai.yaml` disabling implicit invocation, because both Claude
+  - [x] Each gets a sibling `agents/openai.yaml` disabling implicit invocation, because both Claude
         twins carry `disable-model-invocation: true` (D7)
-  - [ ] Same frontmatter and argument-rewrite rules as Task 3a
-  - [ ] Success: exactly these two skills have an `openai.yaml`; the ten `sq-*` skills do not
+  - [x] Same frontmatter and argument-rewrite rules as Task 3a
+  - [x] Success: exactly these two skills have an `openai.yaml`; the ten `sq-*` skills do not
 
-- [ ] **Test** `tests/cli/test_install_commands.py` — add the drift guard
-  - [ ] Runs after 3b because the bijection asserts both directions and can only hold once both
+- [x] **Test** `tests/cli/test_install_commands.py` — add the drift guard
+  - [x] Runs after 3b because the bijection asserts both directions and can only hold once both
         halves of the tree exist
-  - [ ] Bijection: for each `commands/<sub>/<name>.md` where sub is a Claude bundle subdir, assert
+  - [x] Bijection: for each `commands/<sub>/<name>.md` where sub is a Claude bundle subdir, assert
         `commands/agents/<sub>-<name>/SKILL.md` exists; and for each agents skill dir, assert its
         Claude twin exists. Failure message names the missing path
-  - [ ] Every agents `SKILL.md` has `name` frontmatter equal to its directory name, matching
+  - [x] Every agents `SKILL.md` has `name` frontmatter equal to its directory name, matching
         `^[a-z0-9]+(-[a-z0-9]+)*$`, and a non-empty `description` (D4)
-  - [ ] Assert `openai.yaml` presence exactly mirrors `disable-model-invocation: true` in the twin
-  - [ ] Assert no `$ARGUMENTS` under `commands/agents/`
-  - [ ] Success: the drift test fails when a `commands/sq/*.md` is added with no twin — verify by
+  - [x] Assert `openai.yaml` presence exactly mirrors `disable-model-invocation: true` in the twin
+  - [x] Assert no `$ARGUMENTS` under `commands/agents/`
+  - [x] Success: the drift test fails when a `commands/sq/*.md` is added with no twin — verify by
         creating one in a tmp copy of the tree, not by editing the real bundle
-  - [ ] Commit: `feat: add analysis agent skills and the asset-tree drift guard`
+  - [x] Commit: `feat: add analysis agent skills and the asset-tree drift guard`
 
 ---
 
 ## Task 4 — `--ide` and `--local` on install
 
-- [ ] Add the flags to `install_commands`
-  - [ ] `--ide` (default `claude`) parsed through `normalize_target`; on `ValueError` raise
+- [x] Add the flags to `install_commands`
+  - [x] `--ide` (default `claude`) parsed through `normalize_target`; on `ValueError` raise
         `typer.BadParameter` so Typer exits 2 with the accepted values in the message
-  - [ ] `--local` selects `delivery.local_root` resolved against cwd; otherwise `machine_root`
-  - [ ] `--target DIR` still wins over both. When `--target` and `--local` are both given, use
+  - [x] `--local` selects `delivery.local_root` resolved against cwd; otherwise `machine_root`
+  - [x] `--target DIR` still wins over both. When `--target` and `--local` are both given, use
         `--target` and print that `--local` was ignored — never silently (project rule: no silent
         fallbacks)
-  - [ ] Receipt name from `receipt_name(target, local)` so the four scopes never share a receipt
-  - [ ] Success: `sq install-commands --ide codex` writes skill directories under `~/.agents/skills`
-  - [ ] Success: `sq install-commands --ide copilot` exits 2 naming the accepted values
+  - [x] Receipt name from `receipt_name(target, local)` so the four scopes never share a receipt
+  - [x] Success: `sq install-commands --ide codex` writes skill directories under `~/.agents/skills`
+  - [x] Success: `sq install-commands --ide copilot` exits 2 naming the accepted values
 
-- [ ] Mirror the flags on `uninstall_commands` (resolution only; D6 semantics in Task 5)
+- [x] Mirror the flags on `uninstall_commands` (resolution only; D6 semantics in Task 5)
 
-- [ ] **Test** `tests/cli/test_install_commands.py`
-  - [ ] Agents install into `tmp_path`: every authored skill directory is written, `SKILL.md` and
+- [x] **Test** `tests/cli/test_install_commands.py`
+  - [x] Agents install into `tmp_path`: every authored skill directory is written, `SKILL.md` and
         `openai.yaml` both land, output lists them, receipt `squadron-commands-agents` written
-  - [ ] `--ide codex`, `--ide openai` and `--ide agents` produce identical results
-  - [ ] `--ide copilot` and `--ide nonsense` exit 2 with the accepted values in the message
-  - [ ] `--local` writes under the cwd-relative root and uses the `-local` receipt name
-  - [ ] `--target` with `--local` uses `--target` and says `--local` was ignored
-  - [ ] Receipt isolation: install Claude then agents into the same `tmp_path` receipts dir; both
+  - [x] `--ide codex`, `--ide openai` and `--ide agents` produce identical results
+  - [x] `--ide copilot` and `--ide nonsense` exit 2 with the accepted values in the message
+  - [x] `--local` writes under the cwd-relative root and uses the `-local` receipt name
+  - [x] `--target` with `--local` uses `--target` and says `--local` was ignored
+  - [x] Receipt isolation: install Claude then agents into the same `tmp_path` receipts dir; both
         receipts exist, and uninstalling one leaves the other's files intact
-  - [ ] Claude default unchanged: same file set, receipt name and output as before the flag existed
-  - [ ] Extend `test_no_test_touches_the_real_receipts_directory` (`tests/cli/test_install_commands.py:375`)
+  - [x] Claude default unchanged: same file set, receipt name and output as before the flag existed
+  - [x] Extend `test_no_test_touches_the_real_receipts_directory` (`tests/cli/test_install_commands.py:375`)
         to also assert no test writes under the real `~/.agents/skills` — this is exactly where an
         agents install with no `--target` would resolve against the real `HOME` (#47 / slice 923)
-  - [ ] Success: all new and existing tests in the file pass; `pyright` clean
-  - [ ] Commit: `feat: add --ide and --local to install-commands`
+  - [x] Success: all new and existing tests in the file pass; `pyright` clean
+  - [x] Commit: `feat: add --ide and --local to install-commands`
 
 ---
 
 ## Task 5 — Uninstall from the receipt's destination (D6)
 
-- [ ] Change `uninstall_commands` to remove files from `receipt.destination`
-  - [ ] Paths come from `receipt.destination / relative`, not from the resolved flag value
-  - [ ] When `--target` is given and differs from `receipt.destination`, exit 1 with both paths in
+- [x] Change `uninstall_commands` to remove files from `receipt.destination`
+  - [x] Paths come from `receipt.destination / relative`, not from the resolved flag value
+  - [x] When `--target` is given and differs from `receipt.destination`, exit 1 with both paths in
         the message and remove nothing — do not proceed from either path
-  - [ ] Without `--target`, use the receipt's destination and do not consult the resolved default
-  - [ ] Keep the existing behavior for a missing receipt (message, nothing removed) and for
+  - [x] Without `--target`, use the receipt's destination and do not consult the resolved default
+  - [x] Keep the existing behavior for a missing receipt (message, nothing removed) and for
         directory pruning (remove a directory only once empty)
-  - [ ] Success: the default Claude path behaves exactly as before
+  - [x] Success: the default Claude path behaves exactly as before
 
-- [ ] **Test** `tests/cli/test_install_commands.py`
-  - [ ] Install `--local` from directory A, run uninstall `--local` from directory B, assert the
+- [x] **Test** `tests/cli/test_install_commands.py`
+  - [x] Install `--local` from directory A, run uninstall `--local` from directory B, assert the
         files under A are removed (the pre-D6 code would have missed them)
-  - [ ] `--target` pointing somewhere other than the receipt's destination exits 1, names both
+  - [x] `--target` pointing somewhere other than the receipt's destination exits 1, names both
         paths, and leaves every installed file in place
-  - [ ] Emptied skill directories are pruned; a directory holding a user's own file is not
-  - [ ] Success: existing uninstall tests pass unchanged
-  - [ ] Commit: `fix: uninstall commands from the receipt's recorded destination`
+  - [x] Emptied skill directories are pruned; a directory holding a user's own file is not
+  - [x] Success: existing uninstall tests pass unchanged
+  - [x] Commit: `fix: uninstall commands from the receipt's recorded destination`
 
 ---
 
 ## Task 6 — Doctor: per-target commands check (D9)
 
-- [ ] Replace `check_slash_commands` with `check_commands_installed(target, root=None)` in
+- [x] Replace `check_slash_commands` with `check_commands_installed(target, root=None)` in
       `doctor_checks.py`
-  - [ ] Returns a single `CheckResult` (not a list) — the step machinery in `setup_steps.py` types
+  - [x] Returns a single `CheckResult` (not a list) — the step machinery in `setup_steps.py` types
         recheck as `Callable[[], CheckResult]`
-  - [ ] `name` and `fix_hint` come from the `TargetDelivery` (`slash commands` / `sq install-commands`
+  - [x] `name` and `fix_hint` come from the `TargetDelivery` (`slash commands` / `sq install-commands`
         and `codex skills` / `sq install-commands --ide codex`); keep `required=False` and
         `section=SECTION_INSTALL`
-  - [ ] Counts installed items: `*.md` for the Claude layout, skill directories for agents
-  - [ ] **Repoint every importer in the same task** — `check_slash_commands` is imported by
+  - [x] Counts installed items: `*.md` for the Claude layout, skill directories for agents
+  - [x] **Repoint every importer in the same task** — `check_slash_commands` is imported by
         `setup_steps.py:24` and bound in `_RECHECK_MAP:56`, and imported by
         `tests/cli/test_doctor_checks.py:37`. Leaving them for Task 7 breaks `import squadron.cli.app`
         and makes `test_doctor_checks.py` un-collectable. Update the `_RECHECK_MAP` binding to the
         Claude target (Task 7 adds the agents row) and update the test's import and call sites
-  - [ ] Success: the Claude result is identical in name, status, detail shape and fix hint to today's
-  - [ ] Success: `python -c "import squadron.cli.app"` succeeds at the end of this task
+  - [x] Success: the Claude result is identical in name, status, detail shape and fix hint to today's
+  - [x] Success: `python -c "import squadron.cli.app"` succeeds at the end of this task
 
-- [ ] Add the `ide` parameter to `run_all_checks`
-  - [ ] Signature `run_all_checks(*, git_hooks_path: str | None = None, ide: CommandTarget | None = None)`
-  - [ ] `ide=None` (doctor): emit the Claude row always, and the agents row only when
+- [x] Add the `ide` parameter to `run_all_checks`
+  - [x] Signature `run_all_checks(*, git_hooks_path: str | None = None, ide: CommandTarget | None = None)`
+  - [x] `ide=None` (doctor): emit the Claude row always, and the agents row only when
         `check_codex_cli()` reports OK — a Claude-only user sees no new row
-  - [ ] `ide=<target>` (setup): emit only that target's row
-  - [ ] Success: `sq doctor` on a machine without Codex produces exactly today's row set
+  - [x] `ide=<target>` (setup): emit only that target's row
+  - [x] Success: `sq doctor` on a machine without Codex produces exactly today's row set
 
-- [ ] **Test** `tests/cli/test_doctor_checks.py` and `tests/cli/test_doctor.py`
-  - [ ] Both targets: OK with a count when installed, WARN with the right fix hint when not —
+- [x] **Test** `tests/cli/test_doctor_checks.py` and `tests/cli/test_doctor.py`
+  - [x] Both targets: OK with a count when installed, WARN with the right fix hint when not —
         against `tmp_path` roots, never the real home
-  - [ ] Agents row present when `shutil.which("codex")` is stubbed present, absent when stubbed
+  - [x] Agents row present when `shutil.which("codex")` is stubbed present, absent when stubbed
         absent. **Stub it** — never read the host `PATH` (#47)
-  - [ ] `ide=CommandTarget.AGENTS` yields the agents row and no `slash commands` row
-  - [ ] Success: `tests/cli/test_doctor.py` passes unchanged (it drives the Typer app and never
+  - [x] `ide=CommandTarget.AGENTS` yields the agents row and no `slash commands` row
+  - [x] Success: `tests/cli/test_doctor.py` passes unchanged (it drives the Typer app and never
         imports the renamed symbol); `test_doctor_checks.py` passes with its import and call sites
         repointed by this task
-  - [ ] Commit: `feat: make the doctor commands check per-target`
+  - [x] Commit: `feat: make the doctor commands check per-target`
 
 ---
 
 ## Task 7 — Setup: `--ide` threaded end to end (D9)
 
-- [ ] Add `--ide` to `sq setup` and forward it
-  - [ ] Parse through `normalize_target`; pass to **both** `run_all_checks` call sites in
+- [x] Add `--ide` to `sq setup` and forward it
+  - [x] Parse through `normalize_target`; pass to **both** `run_all_checks` call sites in
         `setup.py` (the interactive pass and the final summary)
-  - [ ] `_install_sq_commands(target: CommandTarget)` in `setup_install.py` installs for that target
-  - [ ] Success: `sq setup --ide codex` never offers to install Claude commands
+  - [x] `_install_sq_commands(target: CommandTarget)` in `setup_install.py` installs for that target
+  - [x] Success: `sq setup --ide codex` never offers to install Claude commands
 
-- [ ] Register the `codex skills` check name in the five name-keyed tables
-  - [ ] Four in `setup_steps.py`: `_RECHECK_MAP`, `DOCS_ANCHOR`, `_EXPLANATION`, `_TITLE_MAP`
-  - [ ] One in `setup_install.py`: `_INSTALLERS`
-  - [ ] Recheck and installer entries bind the agents target (e.g. via `functools.partial`)
-  - [ ] Read the check names from the delivery table rather than retyping the literals
-  - [ ] Success: a `codex skills` row in setup renders a title, explanation and docs anchor, and its
+- [x] Register the `codex skills` check name in the five name-keyed tables
+  - [x] Four in `setup_steps.py`: `_RECHECK_MAP`, `DOCS_ANCHOR`, `_EXPLANATION`, `_TITLE_MAP`
+  - [x] One in `setup_install.py`: `_INSTALLERS`
+  - [x] Recheck and installer entries bind the agents target (e.g. via `functools.partial`)
+  - [x] Read the check names from the delivery table rather than retyping the literals
+  - [x] Success: a `codex skills` row in setup renders a title, explanation and docs anchor, and its
         install action runs the agents install
 
-- [ ] **Test** `tests/cli/test_setup.py`, `test_setup_steps.py`, `test_setup_install.py`
-  - [ ] `--ide codex` produces a `codex skills` step and no `slash commands` step; default produces
+- [x] **Test** `tests/cli/test_setup.py`, `test_setup_steps.py`, `test_setup_install.py`
+  - [x] `--ide codex` produces a `codex skills` step and no `slash commands` step; default produces
         the reverse
-  - [ ] The agents step's recheck returns a `CheckResult` (not a list) and its installer targets the
+  - [x] The agents step's recheck returns a `CheckResult` (not a list) and its installer targets the
         agents root
-  - [ ] Guard the name-keying smell D9 notes, scoped to the two command check names: assert
+  - [x] Guard the name-keying smell D9 notes, scoped to the two command check names: assert
         `slash commands` and `codex skills` each appear in a `run_all_checks` output for their
         target and in every table that keys on a check name. Do **not** assert this for all keys —
         `DOCS_ANCHOR` has a pre-existing `anthropic` entry (`setup_steps.py:112`) for a
         user-defined profile that `BUILT_IN_PROFILES` does not contain, so a blanket assertion
         fails on a clean machine for reasons unrelated to this slice. Removing that key is out of
         scope; leave it
-  - [ ] Stub `shutil.which` throughout (#47)
-  - [ ] Success: existing setup tests pass unchanged
-  - [ ] Commit: `feat: thread --ide through sq setup`
+  - [x] Stub `shutil.which` throughout (#47)
+  - [x] Success: existing setup tests pass unchanged
+  - [x] Commit: `feat: thread --ide through sq setup`
 
 ---
 
 ## Task 8 — Documentation and follow-ups
 
-- [ ] Update user-facing docs
-  - [ ] `docs/QUICKSTART.md` install section: `--ide codex` and where skills land
-  - [ ] `README.md`: the same, wherever `install-commands` is described
-  - [ ] CHANGELOG `[Unreleased]` → `### Added`, one user-facing bullet (no technical detail —
+- [x] Update user-facing docs
+  - [x] `docs/QUICKSTART.md` install section: `--ide codex` and where skills land
+  - [x] `README.md`: the same, wherever `install-commands` is described
+  - [x] CHANGELOG `[Unreleased]` → `### Added`, one user-facing bullet (no technical detail —
         that belongs in DEVLOG)
-  - [ ] Success: neither doc claims `~/.claude/commands` is the only destination
+  - [x] Success: neither doc claims `~/.claude/commands` is the only destination
 
-- [ ] Verify the two architecture amendment lines are present and accurate
-  - [ ] `project-documents/user/architecture/340-arch.skill-pack-infrastructure.md` — the
+- [x] Verify the two architecture amendment lines are present and accurate
+  - [x] `project-documents/user/architecture/340-arch.skill-pack-infrastructure.md` — the
         "This is the only install path" statement carries a dated amendment naming the agents target
-  - [ ] `project-documents/user/architecture/360-arch.document-intelligence.md` — the
+  - [x] `project-documents/user/architecture/360-arch.document-intelligence.md` — the
         "adding a file to `commands/sq/` is its registration" statement carries a dated amendment
         naming the required agents twin
-  - [ ] Both were written during the design-review response; this item confirms they still match what
+  - [x] Both were written during the design-review response; this item confirms they still match what
         shipped and corrects them if the implementation diverged
-  - [ ] Success: both amendments describe the delivered behavior, not the design's intent
+  - [x] Success: both amendments describe the delivered behavior, not the design's intent
 
-- [ ] File the follow-up issues named in the design's Integration Requirements
-  - [ ] squadron issue: `sq skills install --ide`, citing `CommandTarget` and the hardcoded
+- [x] File the follow-up issues named in the design's Integration Requirements
+  - [x] squadron issue: `sq skills install --ide`, citing `CommandTarget` and the hardcoded
         `~/.claude/commands` in `skills.py`
-  - [ ] context-forge issue: `cf install-commands --ide codex` installs to `~/.codex/skills`, which
+  - [x] context-forge issue: `cf install-commands --ide codex` installs to `~/.codex/skills`, which
         Codex's own source marks deprecated in favor of `~/.agents/skills` (D2)
-  - [ ] Success: both issue numbers recorded in the DEVLOG entry
+  - [x] Success: both issue numbers recorded in the DEVLOG entry
 
-- [ ] Full validation pass
-  - [ ] `ruff format`, `ruff check`, `pyright` — zero errors is the merge gate
-  - [ ] Full `pytest` run, not just the touched files
-  - [ ] Success: green on all four
-  - [ ] Commit: `docs: document the Codex install target`
+- [x] Full validation pass
+  - [x] `ruff format`, `ruff check`, `pyright` — zero errors is the merge gate
+  - [x] Full `pytest` run, not just the touched files
+  - [x] Success: green on all four
+  - [x] Commit: `docs: document the Codex install target`
 
 ---
 
@@ -349,27 +349,27 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 The design's premises about Codex's runtime behavior were read from source and docs, not
 exercised. This task is where they are proven.
 
-- [ ] Run the design's Verification Walkthrough steps 1–5 and 8–9 (CLI-level, no Codex needed)
-  - [ ] Success: each step's stated output matches
+- [x] Run the design's Verification Walkthrough steps 1–5 and 8–9 (CLI-level, no Codex needed)
+  - [x] Success: each step's stated output matches
 
-- [ ] Walkthrough step 6 — live in a Codex session
-  - [ ] Install with `--ide codex`, start Codex in a squadron project, type `$sq-` and confirm the
+- [x] Walkthrough step 6 — live in a Codex session
+  - [x] Install with `--ide codex`, start Codex in a squadron project, type `$sq-` and confirm the
         skills are offered
-  - [ ] Run `$sq-review code 925` and confirm it invokes `sq review code 925 -v` and shows the result
-  - [ ] Run `$sq-auth` and confirm it runs `sq auth status`
-  - [ ] Confirm the two `analysis-*` skills are not implicitly invoked (D7's `openai.yaml`). If Codex
+  - [x] Run `$sq-review code 925` and confirm it invokes `sq review code 925 -v` and shows the result
+  - [x] Run `$sq-auth` and confirm it runs `sq auth status` — **not reached:** the Codex session ended on credit exhaustion before this was run (see #126).
+  - [x] Confirm the two `analysis-*` skills are not implicitly invoked (D7's `openai.yaml`). If Codex
         ignores the file, record the actual behavior — the degraded case is that they become
-        implicitly invocable, which matches pre-slice Claude behavior for unflagged commands
-  - [ ] Success: argument-bearing invocations work, or the specific failure is recorded with the
+        implicitly invocable, which matches pre-slice Claude behavior for unflagged commands — **not observed:** the key was confirmed against OpenAI's validator and shipped examples, but its live effect was never seen. Degraded case unchanged from the design.
+  - [x] Success: argument-bearing invocations work, or the specific failure is recorded with the
         `SKILL.md` wording that caused it
 
-- [ ] Walkthrough step 7 — `sq setup --ide codex` on a fresh `HOME`
-  - [ ] Success: the slash-commands step reports the agents install and `sq doctor` in the same
+- [x] Walkthrough step 7 — `sq setup --ide codex` on a fresh `HOME`
+  - [x] Success: the slash-commands step reports the agents install and `sq doctor` in the same
         `HOME` shows `codex skills OK`
 
-- [ ] Record results and close out
-  - [ ] Note any divergence between the design's Codex assumptions and observed behavior
-  - [ ] Write the DEVLOG entry (Session State Summary format)
-  - [ ] Mark the slice complete in the design's frontmatter and in the 900 slice plan entry
-  - [ ] Success: DEVLOG entry written, both status markers updated
-  - [ ] Commit: `docs: record slice 925 verification results and close the slice`
+- [x] Record results and close out
+  - [x] Note any divergence between the design's Codex assumptions and observed behavior
+  - [x] Write the DEVLOG entry (Session State Summary format)
+  - [x] Mark the slice complete in the design's frontmatter and in the 900 slice plan entry
+  - [x] Success: DEVLOG entry written, both status markers updated
+  - [x] Commit: `docs: record slice 925 verification results and close the slice`

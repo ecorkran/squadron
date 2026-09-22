@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import typer
 
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
@@ -23,9 +24,11 @@ from squadron.cli.commands.setup_install import (
     AUTO_INSTALL_CHECKS,
     CF_INIT_HINT,
     PRE_COMMIT_HOOK,
+    _install_sq_commands,
     installer_for,
     run_install,
 )
+from squadron.skills.targets import DELIVERIES, CommandTarget
 
 _MODULE = "squadron.cli.commands.setup_install"
 
@@ -155,16 +158,30 @@ def test_cf_commands_failure_still_reports_binary_installed() -> None:
 
 
 def test_sq_commands_install_in_process() -> None:
-    with patch("squadron.cli.commands.install.install_commands") as install:
+    with patch("squadron.cli.commands.install.install_for_target") as install:
         outcome = run_install("slash commands")
 
     assert outcome.succeeded is True
     install.assert_called_once()
 
 
+def test_the_patched_installer_name_still_exists() -> None:
+    """The two tests around this one mock by name, and a stale name writes for real.
+
+    When ``install_commands`` stopped being what setup calls, the mock above silently
+    stopped intercepting anything and the test installed into the developer's own
+    ``~/.claude/commands``. ``patch`` raises on a missing attribute, but these tests
+    patch a module that does still have *some* install entry point, so the failure
+    mode is a live write rather than an error (#47).
+    """
+    from squadron.cli.commands import install as install_module
+
+    assert hasattr(install_module, "install_for_target")
+
+
 def test_sq_commands_oserror_is_caught() -> None:
     with patch(
-        "squadron.cli.commands.install.install_commands",
+        "squadron.cli.commands.install.install_for_target",
         side_effect=OSError("permission denied"),
     ):
         outcome = run_install("slash commands")
@@ -270,3 +287,72 @@ def test_gate_install_outside_repo_fails_with_message(
 
     assert outcome.succeeded is False
     assert "not inside a git repository" in outcome.message
+
+
+# ---------------------------------------------------------------------------
+# Slice 925: per-target command installers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command_target", list(CommandTarget))
+def test_command_installers_run_in_process(
+    command_target: CommandTarget, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Setup installs by calling into Python, not by shelling out to the CLI.
+
+    ``install_commands`` is a Typer command: calling it directly hands every
+    unsupplied parameter an ``OptionInfo`` object rather than its default, so setup
+    goes through ``install_for_target``. Without this test that breakage is invisible —
+    the CLI-driven tests all pass while ``sq setup``'s install action raises.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setattr("squadron.skills.receipts.DEFAULT_RECEIPTS_DIR", tmp_path / "receipts")
+    monkeypatch.setattr("squadron.cli.commands.install.DEFAULT_RECEIPTS_DIR", tmp_path / "receipts")
+
+    outcome = _install_sq_commands(command_target)
+
+    assert outcome.succeeded, outcome.message
+    assert DELIVERIES[command_target].fix_hint in outcome.message
+    installed_root = DELIVERIES[command_target].resolve_root(local=False)
+    assert installed_root.is_dir()
+    assert any(installed_root.iterdir())
+
+
+def test_installer_table_binds_each_target_to_its_own_check_name() -> None:
+    for command_target in CommandTarget:
+        check_name = DELIVERIES[command_target].check_name
+        installer = installer_for(check_name)
+        assert installer is not None, f"no installer registered for {check_name!r}"
+        assert installer.args == (command_target,)  # type: ignore[attr-defined]
+
+
+def test_typer_exit_from_the_installer_is_reported_not_raised() -> None:
+    """`typer.Exit` is click's Exit — a RuntimeError, not a SystemExit.
+
+    `install_for_target` raises it for a missing command bundle and an unreadable
+    receipt. An `except SystemExit` here caught neither, so the exception escaped
+    `run_install` and ended `sq setup` mid-flow, breaking this module's stated
+    contract that a failed install always comes back as an InstallOutcome.
+    """
+    assert not issubclass(typer.Exit, SystemExit)
+
+    with patch(
+        "squadron.cli.commands.install.install_for_target",
+        side_effect=typer.Exit(code=1),
+    ):
+        outcome = run_install("slash commands")
+
+    assert outcome.succeeded is False
+    assert "exited with code 1" in outcome.message
+
+
+def test_typer_exit_zero_is_not_a_failure() -> None:
+    with patch(
+        "squadron.cli.commands.install.install_for_target",
+        side_effect=typer.Exit(code=0),
+    ):
+        outcome = run_install("slash commands")
+
+    assert outcome.succeeded is True

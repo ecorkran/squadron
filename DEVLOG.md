@@ -12,6 +12,52 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260922
 
+### Slice 925 implemented — commands install for Codex
+
+Nine tasks, ten commits, 4379 tests green. `sq install-commands --ide codex` writes twelve
+authored skills to `~/.agents/skills`; `--local` scopes to a project; `sq setup --ide codex`
+and a `codex skills` doctor row follow the same target. Everything that varies per target —
+roots, bundle subdirectories, on-disk layout, receipt name, check name, fix hint — lives in
+one `DELIVERIES` table, so `install.py` no longer names `.claude` anywhere.
+
+**The authoring was the work, not the Python.** Twelve `SKILL.md` files, each rewritten against
+its Claude twin because Codex substitutes no arguments (D3). `analysis-understand` is 1,300 lines
+of precision spec — a `jq` selection table that is a contract against an upstream plugin's output —
+so it was copied and edited in four places rather than re-emitted, which is how you avoid silent
+paraphrase drift in a filter nobody would notice was wrong. A bijection drift test now fails if
+either tree gains a command the other lacks.
+
+**Two bugs found by running things rather than reading them.** Adding `--ide` as a Typer option
+broke `sq setup`'s install action: it called `install_commands()` directly from Python, where an
+unsupplied parameter arrives as an `OptionInfo` rather than its default. Every CLI-driven test
+passed, because they go through the command line. Extracted `install_for_target()` as a plain
+callable. That fix then exposed the older hazard — the two tests covering that path patched
+`install_commands` *by name*, so when it stopped being what setup calls, the mock silently stopped
+intercepting and the test installed into the real `~/.claude/commands`. `patch` raises on a missing
+attribute; it does not raise on a stale-but-present one. Repointed, and guarded.
+
+**The live Codex session cost real money and was worth it.** `$sq-review code 925` worked — Codex
+offered the skill and parsed `code 925` from prose, which is the premise the whole slice rested on
+and had only ever been read from source. Then it burned an entire 5-hour session allowance in
+10–15 minutes by polling for completion while the review ran ([#126](https://github.com/ecorkran/squadron/issues/126)).
+D3 rewrote arguments for a runtime with no substitution; nobody asked whether the *control flow*
+ported, and it does not — a blocking command is one free turn under Claude and a billed loop under
+Codex. `sq-run`, which carries an explicit `loop back to the Main Loop`, is structurally worse and
+was never reached. Someone hit the same wall on Astra in Copilot with no squadron involved, so the
+behavior is the harness, not us; our skills just invite it. Also filed
+[#127](https://github.com/ecorkran/squadron/issues/127): Codex's sandbox refuses the provider call
+without a `prefix_rule`, and the error text blames the provider.
+
+Follow-ups filed for the deferred work: [#125](https://github.com/ecorkran/squadron/issues/125)
+(`sq skills install --ide`, which needs a decision about packs authored only for Claude) and
+[context-forge#99](https://github.com/ecorkran/context-forge/issues/99) (`cf` installs to
+`~/.codex/skills`, which Codex's own source marks deprecated).
+
+Three of the design's verification steps predicted output the implementation does not produce —
+the rejection message wording, and that a bare `sq doctor` or `sq setup --non-interactive` would
+surface a WARN-level row. Behavior was right in all three; WARN rows hide without `-v`, which
+predates this slice. Walkthrough corrected in place with actual output.
+
 ### Slice 925 — design review answered, tasks broken out
 
 Review came back CONCERNS with two concerns, both real. **F001 was the one that mattered:**

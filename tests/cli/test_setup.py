@@ -16,6 +16,7 @@ from squadron.cli.commands.doctor_checks import (
     SECTION_PROVIDERS,
     CheckResult,
     CheckStatus,
+    run_all_checks,
 )
 from squadron.cli.commands.setup_steps import DOCS_ANCHOR
 
@@ -393,3 +394,77 @@ def test_docs_anchors_all_target_quickstart() -> None:
     """Guard the parsing assumption above: every value is a QUICKSTART link."""
     for name, ref in DOCS_ANCHOR.items():
         assert ref.startswith("docs/QUICKSTART.md#"), f"{name} -> {ref}"
+
+
+# ---------------------------------------------------------------------------
+# Slice 925: --ide selects which command target setup offers
+# ---------------------------------------------------------------------------
+
+
+def test_setup_ide_codex_offers_only_the_agents_step() -> None:
+    with patch("shutil.which", return_value="/usr/bin/anything"):
+        result = runner.invoke(app, ["setup", "--check-only", "--ide", "codex"])
+
+    assert result.exit_code in (0, 1)
+    assert "Install Codex skills" in result.output
+    assert "Install slash commands" not in result.output
+
+
+def test_setup_default_offers_only_the_claude_step() -> None:
+    with patch("shutil.which", return_value="/usr/bin/anything"):
+        result = runner.invoke(app, ["setup", "--check-only"])
+
+    assert result.exit_code in (0, 1)
+    assert "slash commands" in result.output
+    assert "Codex skills" not in result.output
+
+
+def test_setup_rejects_an_unknown_ide() -> None:
+    result = runner.invoke(app, ["setup", "--check-only", "--ide", "copilot"])
+
+    assert result.exit_code == 2
+    for accepted in ("claude", "agents", "codex", "openai"):
+        assert accepted in result.output
+
+
+def test_both_command_check_names_are_registered_in_every_name_keyed_table() -> None:
+    """The two command check names must resolve in all five tables (D9).
+
+    Scoped to these two names deliberately: ``DOCS_ANCHOR`` also carries an
+    ``anthropic`` key for a user-defined profile that ``BUILT_IN_PROFILES`` does not
+    contain, so a blanket "every key appears in some check output" assertion fails on a
+    clean machine for reasons unrelated to this slice. Removing that key is out of
+    scope.
+    """
+    from squadron.cli.commands.setup_install import installer_for
+    from squadron.cli.commands.setup_steps import (
+        _EXPLANATION,
+        _RECHECK_MAP,
+        DOCS_ANCHOR,
+        _human_title,
+    )
+    from squadron.skills.targets import DELIVERIES, CommandTarget
+
+    for command_target in CommandTarget:
+        check_name = DELIVERIES[command_target].check_name
+
+        with patch("shutil.which", return_value="/usr/bin/anything"):
+            emitted = {r.name for r in run_all_checks(ide=command_target)}
+        assert check_name in emitted, f"{check_name!r} never appears in a checks run"
+
+        assert check_name in _RECHECK_MAP, f"{check_name!r} missing from _RECHECK_MAP"
+        assert check_name in DOCS_ANCHOR, f"{check_name!r} missing from DOCS_ANCHOR"
+        assert check_name in _EXPLANATION, f"{check_name!r} missing from _EXPLANATION"
+        assert installer_for(check_name) is not None, f"{check_name!r} has no installer"
+
+        # _TITLE_MAP is a function local, so it is probed through its accessor.
+        titled = _human_title(
+            CheckResult(
+                name=check_name,
+                status=CheckStatus.WARN,
+                detail="",
+                section=SECTION_INSTALL,
+                required=False,
+            )
+        )
+        assert titled != check_name, f"{check_name!r} has no entry in _TITLE_MAP"

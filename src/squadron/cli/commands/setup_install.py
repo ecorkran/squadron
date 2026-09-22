@@ -25,10 +25,13 @@ at it instead.
 
 from __future__ import annotations
 
+import functools
 import logging
 import shutil
 import subprocess
 from pathlib import Path
+
+import typer
 
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
@@ -36,6 +39,7 @@ from squadron.cli.commands.doctor_checks import (
     GIT_HOOKS_PATH,
 )
 from squadron.core.subprocess_text import TEXT_DECODING
+from squadron.skills.targets import DELIVERIES, CommandTarget
 
 logger = logging.getLogger(__name__)
 
@@ -160,25 +164,39 @@ def _run_command(argv: list[str], *, label: str) -> InstallOutcome:
     return InstallOutcome(succeeded=False, message=f"{label} failed: {tail}")
 
 
-def _install_sq_commands() -> InstallOutcome:
-    """Install the ``/sq:*`` slash commands in-process."""
+def _install_sq_commands(command_target: CommandTarget = CommandTarget.CLAUDE) -> InstallOutcome:
+    """Install squadron's commands for one target, in-process."""
     # Imported here rather than at module scope: cli.commands.install pulls in
     # the Typer app surface, and this module is imported by the check layer.
-    from squadron.cli.commands.install import install_commands
+    from squadron.cli.commands.install import install_for_target
 
+    # The command a user would run by hand for this target, so a failure message
+    # names something they can actually retype.
+    command = DELIVERIES[command_target].fix_hint
     try:
-        install_commands()
+        install_for_target(command_target=command_target)
+    except typer.Exit as exc:
+        # typer.Exit is click's Exit, which subclasses RuntimeError — not
+        # SystemExit, and it carries exit_code rather than code. Catching
+        # SystemExit here caught nothing, so a missing command bundle or an
+        # unreadable receipt escaped this function and ended `sq setup`
+        # mid-flow, contradicting the contract above that it never raises.
+        if exc.exit_code not in (0, None):
+            return InstallOutcome(
+                succeeded=False,
+                message=f"{command} exited with code {exc.exit_code}.",
+            )
     except SystemExit as exc:
-        # Typer raises SystemExit/Exit on its own error paths.
+        # A genuine SystemExit from deeper down is still a failed install.
         if exc.code not in (0, None):
             return InstallOutcome(
                 succeeded=False,
-                message=f"sq install-commands exited with code {exc.code}.",
+                message=f"{command} exited with code {exc.code}.",
             )
     except OSError as exc:
-        logger.exception("sq install-commands failed")
-        return InstallOutcome(succeeded=False, message=f"sq install-commands failed: {exc}")
-    return InstallOutcome(succeeded=True, message="sq install-commands completed.")
+        logger.exception("%s failed", command)
+        return InstallOutcome(succeeded=False, message=f"{command} failed: {exc}")
+    return InstallOutcome(succeeded=True, message=f"{command} completed.")
 
 
 def _install_context_forge() -> InstallOutcome:
@@ -279,7 +297,12 @@ def _install_git_hook() -> InstallOutcome:
 #: setup falls back to printing its fix command, which is the correct
 #: behavior for anything needing a human decision or a secret.
 _INSTALLERS = {
-    "slash commands": _install_sq_commands,
+    DELIVERIES[CommandTarget.CLAUDE].check_name: functools.partial(
+        _install_sq_commands, CommandTarget.CLAUDE
+    ),
+    DELIVERIES[CommandTarget.AGENTS].check_name: functools.partial(
+        _install_sq_commands, CommandTarget.AGENTS
+    ),
     "context-forge": _install_context_forge,
     "git pre-commit hook": _install_git_hook,
 }

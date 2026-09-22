@@ -10,11 +10,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import typer
+
 from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
 from squadron.providers.profiles import get_all_profiles, providers_toml_path
 from squadron.skills.manifest import load_effective
+from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
 
 logger = logging.getLogger(__name__)
 
@@ -149,26 +152,63 @@ def check_git_hooks(hooks_path: str | None, *, cf_available: bool) -> CheckResul
     )
 
 
-def check_slash_commands(target: Path | None = None) -> CheckResult:
-    """Check if sq slash commands are installed."""
-    if target is None:
-        target = Path("~/.claude/commands/sq").expanduser()
+def _squadron_skill_names() -> set[str]:
+    """Squadron's own agent-skill directory names, or empty if the bundle is unreadable."""
+    from squadron.cli.commands.install import get_commands_source
 
-    if target.exists() and any(target.glob("*.md")):
-        count = sum(1 for _ in target.glob("*.md"))
+    try:
+        return bundled_skill_names(get_commands_source())
+    except (OSError, typer.Exit):
+        # An unreadable bundle is install's problem to report, not doctor's. Falling
+        # back to an empty set makes the check WARN rather than claim a false OK.
+        logger.exception("could not read the bundled agent skills")
+        return set()
+
+
+def _count_installed(target: CommandTarget, root: Path) -> int:
+    """How many of *squadron's* commands the target's layout has at ``root``.
+
+    Claude reads flat markdown from a per-pack subdirectory it owns outright. The
+    agents root is shared with every other agent-skill source, so counting whatever
+    is there reports a confident OK on a machine that has five unrelated skills and
+    none of ours — the exact condition this check exists to catch. Only skills the
+    bundle ships are counted.
+    """
+    if not root.exists():
+        return 0
+    if target is CommandTarget.CLAUDE:
+        return sum(1 for _ in root.glob("*.md"))
+    ours = _squadron_skill_names()
+    return sum(1 for child in root.iterdir() if child.name in ours and (child / "SKILL.md").is_file())
+
+
+def check_commands_installed(
+    target: CommandTarget = CommandTarget.CLAUDE, root: Path | None = None
+) -> CheckResult:
+    """Check whether squadron's commands are installed for one target.
+
+    Returns a single result, not a list: the setup step machinery types a step's
+    recheck as ``Callable[[], CheckResult]`` (D9).
+    """
+    delivery = DELIVERIES[target]
+    if root is None:
+        root = delivery.check_root()
+
+    count = _count_installed(target, root)
+    if count:
         return CheckResult(
-            name="slash commands",
+            name=delivery.check_name,
             status=CheckStatus.OK,
-            detail=f"{count} command(s) at {target}",
+            detail=f"{count} command(s) at {root}",
             section=SECTION_INSTALL,
             required=False,
         )
 
     return CheckResult(
-        name="slash commands",
+        name=delivery.check_name,
         status=CheckStatus.WARN,
-        detail=f"not installed at {target}",
-        fix_hint="sq install-commands",
+        detail=f"not installed at {root}",
+        fix_hint=delivery.fix_hint,
         section=SECTION_INSTALL,
         required=False,
     )
@@ -531,13 +571,34 @@ def check_project_env() -> CheckResult:
     )
 
 
-def run_all_checks(*, git_hooks_path: str | None = None) -> list[CheckResult]:
+def _command_targets_to_check(ide: CommandTarget | None) -> list[CommandTarget]:
+    """Which install targets doctor reports on.
+
+    Setup names one. Doctor names none, and gets the Claude row plus — only where
+    Codex is actually present — the agents row, so the row set on a Claude-only
+    machine is exactly what it was before this existed.
+    """
+    if ide is not None:
+        return [ide]
+    targets = [CommandTarget.CLAUDE]
+    if check_codex_cli().status is CheckStatus.OK:
+        targets.append(CommandTarget.AGENTS)
+    return targets
+
+
+def run_all_checks(
+    *, git_hooks_path: str | None = None, ide: CommandTarget | None = None
+) -> list[CheckResult]:
     """Run all doctor checks in section order; each wrapped in a process-boundary catch.
 
     ``git_hooks_path`` is the resolved ``core.hooksPath`` value (or ``None``
     outside a git repo). Resolving it requires a subprocess, which this pure
     module's docstring forbids, so the caller resolves it via ``run_git`` and
     passes it in.
+
+    ``ide`` selects which command-install rows appear. ``None`` is doctor's view: the
+    Claude row always, and the agents row only on a machine that has Codex, so a
+    Claude-only user sees no new row. A target is setup's view: only that target's row.
     """
     results: list[CheckResult] = []
 
@@ -564,7 +625,8 @@ def run_all_checks(*, git_hooks_path: str | None = None) -> list[CheckResult]:
             )
 
     _run("squadron", check_squadron_install)
-    _run("slash commands", check_slash_commands)
+    for command_target in _command_targets_to_check(ide):
+        _run(DELIVERIES[command_target].check_name, check_commands_installed, command_target)
 
     def _check_git_hooks_with_cf(path: str | None) -> CheckResult:
         return check_git_hooks(path, cf_available=shutil.which("cf") is not None)

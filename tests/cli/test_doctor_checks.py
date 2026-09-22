@@ -25,6 +25,7 @@ from squadron.cli.commands.doctor_checks import (
     check_at_least_one_provider,
     check_claude_code_cli,
     check_codex_cli,
+    check_commands_installed,
     check_context_forge,
     check_git_hooks,
     check_github_cli,
@@ -34,11 +35,11 @@ from squadron.cli.commands.doctor_checks import (
     check_provider_profiles,
     check_providers_toml,
     check_skill_packs,
-    check_slash_commands,
     check_squadron_install,
     run_all_checks,
 )
 from squadron.codehost.github_config import read_gh_hosts
+from squadron.skills.targets import CommandTarget
 
 # --- T3: data model ---
 
@@ -82,30 +83,123 @@ def test_check_squadron_install_dev() -> None:
     assert "(dev install)" in result.detail
 
 
-# --- T7: check_slash_commands ---
+# --- T7: check_commands_installed ---
 
 
 def test_check_slash_commands_present(tmp_path: Path) -> None:
     cmd_dir = tmp_path / "sq"
     cmd_dir.mkdir()
     (cmd_dir / "foo.md").write_text("# foo")
-    result = check_slash_commands(target=cmd_dir)
+    result = check_commands_installed(CommandTarget.CLAUDE, root=cmd_dir)
     assert result.status == CheckStatus.OK
 
 
 def test_check_slash_commands_empty_dir(tmp_path: Path) -> None:
     cmd_dir = tmp_path / "sq"
     cmd_dir.mkdir()
-    result = check_slash_commands(target=cmd_dir)
+    result = check_commands_installed(CommandTarget.CLAUDE, root=cmd_dir)
     assert result.status == CheckStatus.WARN
 
 
 def test_check_slash_commands_missing_dir(tmp_path: Path) -> None:
     missing = tmp_path / "nope"
-    result = check_slash_commands(target=missing)
+    result = check_commands_installed(CommandTarget.CLAUDE, root=missing)
     assert result.status == CheckStatus.WARN
     assert result.fix_hint is not None
     assert "sq install-commands" in result.fix_hint
+
+
+# --- Slice 925: the same check, per target ---
+
+
+def test_check_agents_commands_present(tmp_path: Path) -> None:
+    (tmp_path / "sq-review").mkdir()
+    (tmp_path / "sq-review" / "SKILL.md").write_text("# skill")
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+    assert result.status == CheckStatus.OK
+    assert result.name == "codex skills"
+    assert "1 command(s)" in result.detail
+
+
+def test_check_agents_commands_missing(tmp_path: Path) -> None:
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path / "nope")
+    assert result.status == CheckStatus.WARN
+    assert result.name == "codex skills"
+    assert result.fix_hint == "sq install-commands --ide codex"
+
+
+def test_agents_check_ignores_directories_without_a_skill_file(tmp_path: Path) -> None:
+    """A bare directory is not an installed skill; counting it would report a false OK."""
+    (tmp_path / "not-a-skill").mkdir()
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+    assert result.status == CheckStatus.WARN
+
+
+def test_agents_check_ignores_third_party_skills(tmp_path: Path) -> None:
+    """``~/.agents/skills`` is shared, so foreign skills must not read as ours.
+
+    Counting every directory with a SKILL.md reported a confident OK on a machine
+    with unrelated agent skills and no squadron install — a false negative for the
+    exact condition this check exists to report.
+    """
+    for name in ("audit-analyze", "somebody-elses-skill"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "SKILL.md").write_text("# not squadron")
+
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint == "sq install-commands --ide codex"
+
+
+def test_agents_check_counts_only_squadron_skills_among_foreign_ones(tmp_path: Path) -> None:
+    from squadron.cli.commands.install import get_commands_source
+    from squadron.skills.targets import bundled_skill_names
+
+    ours = sorted(bundled_skill_names(get_commands_source()))
+    assert ours, "the bundle ships no agent skills — this test would pass vacuously"
+    for name in [*ours, "somebody-elses-skill"]:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "SKILL.md").write_text("body")
+
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+
+    assert result.status == CheckStatus.OK
+    assert f"{len(ours)} command(s)" in result.detail
+
+
+def test_claude_check_does_not_count_skill_directories(tmp_path: Path) -> None:
+    """Each target counts its own layout — the shapes are not interchangeable."""
+    (tmp_path / "sq-review").mkdir()
+    (tmp_path / "sq-review" / "SKILL.md").write_text("# skill")
+    result = check_commands_installed(CommandTarget.CLAUDE, root=tmp_path)
+    assert result.status == CheckStatus.WARN
+
+
+def test_doctor_omits_the_agents_row_without_codex(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Claude-only machine sees exactly the row set it saw before this slice."""
+    monkeypatch.setattr(shutil, "which", lambda _: None)
+    names = {r.name for r in run_all_checks()}
+    assert "slash commands" in names
+    assert "codex skills" not in names
+
+
+def test_doctor_includes_the_agents_row_with_codex(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    names = {r.name for r in run_all_checks()}
+    assert "slash commands" in names
+    assert "codex skills" in names
+
+
+def test_setup_view_emits_only_the_named_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    names = {r.name for r in run_all_checks(ide=CommandTarget.AGENTS)}
+    assert "codex skills" in names
+    assert "slash commands" not in names
 
 
 # --- T9: check_provider_profiles ---
