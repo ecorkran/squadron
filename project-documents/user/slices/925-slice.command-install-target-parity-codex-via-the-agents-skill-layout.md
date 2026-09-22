@@ -90,7 +90,7 @@ commands/agents/analysis-<name>/SKILL.md (+ agents/openai.yaml)  NEW  one per co
 
 ### State Management
 
-Receipts under `~/.config/squadron/receipts/` remain the only authority for what squadron owns. Four possible receipts after this slice: `squadron-commands` (Claude machine, the existing name), `squadron-commands-claude-local`, `squadron-commands-agents`, `squadron-commands-agents-local`. Each records its own `destination`, so a local install in one project does not let uninstall in another remove files it did not write.
+Receipts under `~/.config/squadron/receipts/` remain the only authority for what squadron owns. The name is `delivery.receipt_base` plus `-local` for project-local scope, giving four: `squadron-commands` (Claude machine, the existing name), `squadron-commands-local`, `squadron-commands-agents`, `squadron-commands-agents-local`. Each records its own `destination`, so a local install in one project does not let uninstall in another remove files it did not write.
 
 ## Technical Decisions
 
