@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
@@ -370,6 +371,39 @@ def test_uninstall_without_a_receipt_removes_nothing_and_says_so(tmp_path: Path)
     assert "no install receipt" in result.output.lower()  # type: ignore[attr-defined]
     assert (tmp_path / "sq").is_dir()
     assert (tmp_path / "analysis").is_dir()
+
+
+def test_agents_tree_is_not_installed_for_claude(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Claude install takes only the subdirectories its delivery names.
+
+    Before the delivery table, the installer walked every directory under the bundle,
+    which would have swept ``commands/agents/`` into ``~/.claude/commands/`` the moment
+    that tree was added (D8).
+    """
+    bundle = tmp_path / "bundle"
+    for sub, name in (("sq", "review.md"), ("analysis", "understand.md")):
+        (bundle / sub).mkdir(parents=True)
+        (bundle / sub / name).write_text("claude command")
+    skill = bundle / "agents" / "sq-review"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("agents skill")
+
+    monkeypatch.setattr("squadron.cli.commands.install._get_commands_source", lambda: bundle)
+    target = tmp_path / "target"
+    result = _install(runner, target)
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert (target / "sq" / "review.md").exists()
+    assert (target / "analysis" / "understand.md").exists()
+    assert not (target / "agents").exists()
+    assert not (target / "sq-review").exists()
+
+    import tomllib
+
+    receipt = tomllib.loads(_receipt_path(target).read_text())
+    assert receipt["files_written"] == ["sq/review.md", "analysis/understand.md"]
 
 
 def test_no_test_touches_the_real_receipts_directory() -> None:

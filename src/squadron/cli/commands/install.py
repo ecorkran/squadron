@@ -1,8 +1,13 @@
-"""install-commands / uninstall-commands — manage Claude Code slash commands."""
+"""install-commands / uninstall-commands — install squadron's command set.
+
+What differs between install targets — destination roots, which bundle
+subdirectories belong to the target, the on-disk layout, the receipt name —
+lives in `squadron.skills.targets`. This module owns the copy/receipt/stale-
+removal loop and reads all of it from the `TargetDelivery` it is handed.
+"""
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import typer
@@ -10,11 +15,7 @@ from rich import print as rprint
 
 from squadron.skills.models import InstallReceipt
 from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, read_receipt, write_receipt
-
-# Receipt identity for the bundled command set. One receipt spans every subdirectory the
-# install touched, so uninstall can reach them all without guessing which are squadron's.
-# Named once here because it is the key both the write and the read address (#65).
-COMMANDS_RECEIPT_NAME = "squadron-commands"
+from squadron.skills.targets import DELIVERIES, CommandTarget, receipt_name
 
 
 def _get_commands_source() -> Path:
@@ -41,10 +42,10 @@ def _get_commands_source() -> Path:
 
 
 def install_commands(
-    target: str = typer.Option(
-        "~/.claude/commands",
+    target: str | None = typer.Option(
+        None,
         "--target",
-        help="Target directory for command files",
+        help="Target directory for command files (defaults to the target's own root)",
     ),
     receipts_dir: Path = typer.Option(
         DEFAULT_RECEIPTS_DIR,
@@ -53,29 +54,34 @@ def install_commands(
     ),
 ) -> None:
     """Install squadron slash commands for Claude Code."""
+    # The --ide flag arrives in a later task; until then this command delivers to
+    # Claude Code, exactly as it always has.
+    command_target = CommandTarget.CLAUDE
+    delivery = DELIVERIES[command_target]
+
     source = _get_commands_source()
-    target_dir = Path(target).expanduser()
+    target_dir = Path(target).expanduser() if target is not None else delivery.resolve_root(local=False)
+    pack_name = receipt_name(command_target, local=False)
 
     # What the *previous* install wrote, or None on a first install (or one predating
     # receipts). This is the only authority for what squadron owns: the target
     # subdirectories are shared with the user's own commands, so presence in one proves
     # nothing about who put it there.
     try:
-        previous = read_receipt(COMMANDS_RECEIPT_NAME, receipts_dir)
+        previous = read_receipt(pack_name, receipts_dir)
     except ValueError as exc:
         rprint(f"[red]Error reading install receipt: {exc}[/red]")
         raise typer.Exit(code=1) from None
     previously_written: set[str] = set(previous.files_written) if previous else set()
 
+    # Only the subdirectories this target claims. Walking every directory under the
+    # bundle would sweep the agents tree into ~/.claude/commands (D8).
     installed: list[str] = []
-    for sub in sorted(source.iterdir()):
+    for sub_name in delivery.bundle_subdirs:
+        sub = source / sub_name
         if not sub.is_dir():
             continue
-        dest_sub = target_dir / sub.name
-        dest_sub.mkdir(parents=True, exist_ok=True)
-        for md_file in sorted(sub.glob("*.md")):
-            shutil.copy2(md_file, dest_sub / md_file.name)
-            installed.append(f"{sub.name}/{md_file.name}")
+        installed.extend(delivery.layout(sub, target_dir))
 
     # A file is stale only if the previous receipt names it and this bundle no longer
     # does. Anything else in these directories is the user's (issue #65: the old code
@@ -96,7 +102,7 @@ def install_commands(
 
     write_receipt(
         InstallReceipt(
-            pack_name=COMMANDS_RECEIPT_NAME,
+            pack_name=pack_name,
             destination=target_dir,
             files_written=installed,
         ),
@@ -114,10 +120,10 @@ def install_commands(
 
 
 def uninstall_commands(
-    target: str = typer.Option(
-        "~/.claude/commands",
+    target: str | None = typer.Option(
+        None,
         "--target",
-        help="Target directory to remove commands from",
+        help="Directory to remove commands from (defaults to the target's own root)",
     ),
     receipts_dir: Path = typer.Option(
         DEFAULT_RECEIPTS_DIR,
@@ -126,10 +132,14 @@ def uninstall_commands(
     ),
 ) -> None:
     """Remove squadron slash commands from Claude Code."""
-    target_dir = Path(target).expanduser()
+    command_target = CommandTarget.CLAUDE
+    delivery = DELIVERIES[command_target]
+
+    target_dir = Path(target).expanduser() if target is not None else delivery.resolve_root(local=False)
+    pack_name = receipt_name(command_target, local=False)
 
     try:
-        receipt = read_receipt(COMMANDS_RECEIPT_NAME, receipts_dir)
+        receipt = read_receipt(pack_name, receipts_dir)
     except ValueError as exc:
         rprint(f"[red]Error reading install receipt: {exc}[/red]")
         raise typer.Exit(code=1) from None
@@ -160,6 +170,6 @@ def uninstall_commands(
         if directory.is_dir() and directory != target_dir and not any(directory.iterdir()):
             directory.rmdir()
 
-    (receipts_dir / f"{COMMANDS_RECEIPT_NAME}.toml").unlink(missing_ok=True)
+    (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
 
     rprint(f"[green]Removed {removed} command(s) from {target_dir}.[/green]")

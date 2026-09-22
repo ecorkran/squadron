@@ -9,7 +9,7 @@ projectState: >
   written yet. `sq install-commands` installs only to ~/.claude/commands.
 dateCreated: 20260922
 dateUpdated: 20260922
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -34,59 +34,59 @@ status: not_started
 
 ## Task 1 — Target vocabulary and delivery table
 
-- [ ] Create `src/squadron/skills/targets.py` with the target vocabulary (D1)
-  - [ ] `CommandTarget(StrEnum)` with exactly two members: `CLAUDE = "claude"`, `AGENTS = "agents"`
-  - [ ] `TARGET_ALIASES: dict[str, CommandTarget]` mapping `"codex"` and `"openai"` to `AGENTS`
-  - [ ] `normalize_target(raw: str) -> CommandTarget` — strip and lowercase, check enum members
+- [x] Create `src/squadron/skills/targets.py` with the target vocabulary (D1)
+  - [x] `CommandTarget(StrEnum)` with exactly two members: `CLAUDE = "claude"`, `AGENTS = "agents"`
+  - [x] `TARGET_ALIASES: dict[str, CommandTarget]` mapping `"codex"` and `"openai"` to `AGENTS`
+  - [x] `normalize_target(raw: str) -> CommandTarget` — strip and lowercase, check enum members
         first then aliases, raise `ValueError` naming every accepted spelling when neither matches
-  - [ ] Success: `normalize_target` accepts `claude`, `agents`, `codex`, `openai` in any case and
+  - [x] Success: `normalize_target` accepts `claude`, `agents`, `codex`, `openai` in any case and
         with surrounding whitespace; `copilot`, `cursor`, `""` and arbitrary text all raise
-  - [ ] Success: no other module in `src/` compares a target string literal (grep proves it)
+  - [x] Success: no other module in `src/` compares a target string literal (grep proves it)
 
-- [ ] Add the two layout writers to `targets.py`, each `(source: Path, destination: Path) -> list[str]`
-  - [ ] They live here, not in `cli/commands/install.py`: `DELIVERIES` holds references to them, and
+- [x] Add the two layout writers to `targets.py`, each `(source: Path, destination: Path) -> list[str]`
+  - [x] They live here, not in `cli/commands/install.py`: `DELIVERIES` holds references to them, and
         `src/squadron/skills/` must not import from `cli/` — that direction is a cycle (`install.py`
         imports `skills.receipts` today) and inverts the layering the codebase already guards
         (`doctor_checks.py` keeps a local default "to keep the pure check layer free of CLI coupling")
-  - [ ] `write_flat_markdown` — the current Claude behavior: for each `*.md` directly under `source`,
+  - [x] `write_flat_markdown` — the current Claude behavior: for each `*.md` directly under `source`,
         copy to `destination/<source.name>/<file>.md`; return paths relative to `destination`
-  - [ ] `write_skill_dirs` — for each directory under `source`, copy the whole directory (`SKILL.md`
+  - [x] `write_skill_dirs` — for each directory under `source`, copy the whole directory (`SKILL.md`
         plus any nested files such as `agents/openai.yaml`) to `destination/<dir>/`; return paths
         relative to `destination`
-  - [ ] Success: both create parent directories; neither mentions `.claude` or `.agents`; neither
+  - [x] Success: both create parent directories; neither mentions `.claude` or `.agents`; neither
         imports anything from `squadron.cli`
 
-- [ ] Add `TargetDelivery` and the `DELIVERIES` table to the same module
-  - [ ] Frozen dataclass fields: `machine_root: Path`, `local_root: Path`, `bundle_subdirs: tuple[str, ...]`,
+- [x] Add `TargetDelivery` and the `DELIVERIES` table to the same module
+  - [x] Frozen dataclass fields: `machine_root: Path`, `local_root: Path`, `bundle_subdirs: tuple[str, ...]`,
         `check_name: str`, `fix_hint: str`, `receipt_base: str`, `layout: Callable[[Path, Path], list[str]]`
-  - [ ] Claude entry: machine `~/.claude/commands`, local `.claude/commands`, subdirs `("sq", "analysis")`,
+  - [x] Claude entry: machine `~/.claude/commands`, local `.claude/commands`, subdirs `("sq", "analysis")`,
         check name `slash commands`, fix hint `sq install-commands`, receipt base `squadron-commands`
         (D5 — the existing name, unchanged), layout `write_flat_markdown`
-  - [ ] Agents entry: machine `~/.agents/skills`, local `.agents/skills`, subdirs `("agents",)`,
+  - [x] Agents entry: machine `~/.agents/skills`, local `.agents/skills`, subdirs `("agents",)`,
         check name `codex skills`, fix hint `sq install-commands --ide codex`, receipt base
         `squadron-commands-agents` (D2), layout `write_skill_dirs`
-  - [ ] `receipt_name(target, local: bool) -> str` — `delivery.receipt_base`, plus `-local` when
+  - [x] `receipt_name(target, local: bool) -> str` — `delivery.receipt_base`, plus `-local` when
         `local` is true. The four names are exactly `squadron-commands`, `squadron-commands-local`,
         `squadron-commands-agents`, `squadron-commands-agents-local` (the design's State Management
         section was corrected to match this rule; the earlier `squadron-commands-claude-local` is void)
-  - [ ] Module-level assertion that `DELIVERIES.keys() == set(CommandTarget)` so a new member cannot
+  - [x] Module-level assertion that `DELIVERIES.keys() == set(CommandTarget)` so a new member cannot
         be added without a delivery
-  - [ ] Success: `~` is expanded at use, not at import — the module must be importable under a patched
+  - [x] Success: `~` is expanded at use, not at import — the module must be importable under a patched
         `HOME` and resolve against it (per #47 / slice 923 isolation discipline)
 
-- [ ] **Test** `tests/skills/test_targets.py`
-  - [ ] Parametrized accept cases: every member and alias, mixed case, leading/trailing whitespace
-  - [ ] Reject cases: `copilot`, `cursor`, empty string, `claude-code`; assert the message lists the
+- [x] **Test** `tests/skills/test_targets.py`
+  - [x] Parametrized accept cases: every member and alias, mixed case, leading/trailing whitespace
+  - [x] Reject cases: `copilot`, `cursor`, empty string, `claude-code`; assert the message lists the
         accepted values
-  - [ ] `DELIVERIES` covers every enum member; the two entries have distinct roots, check names and
+  - [x] `DELIVERIES` covers every enum member; the two entries have distinct roots, check names and
         receipt bases
-  - [ ] `receipt_name` returns exactly the four names listed above, and the Claude machine name is
+  - [x] `receipt_name` returns exactly the four names listed above, and the Claude machine name is
         exactly `squadron-commands`
-  - [ ] Roots resolve under a monkeypatched `HOME`, not the real one
-  - [ ] Both layout writers against `tmp_path` fixtures: flat markdown produces `<sub>/<name>.md`,
+  - [x] Roots resolve under a monkeypatched `HOME`, not the real one
+  - [x] Both layout writers against `tmp_path` fixtures: flat markdown produces `<sub>/<name>.md`,
         skill dirs copy nested files (`agents/openai.yaml`), both return destination-relative paths
-  - [ ] Success: `pytest tests/skills/test_targets.py` passes; `pyright` clean
-  - [ ] Commit: `feat: add command target vocabulary and delivery table`
+  - [x] Success: `pytest tests/skills/test_targets.py` passes; `pyright` clean
+  - [x] Commit: `feat: add command target vocabulary and delivery table`
 
 ---
 
