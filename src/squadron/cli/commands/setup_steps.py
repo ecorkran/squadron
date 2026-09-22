@@ -58,6 +58,9 @@ _RECHECK_MAP: dict[str, Callable[[], CheckResult]] = {
     DELIVERIES[CommandTarget.CLAUDE].check_name: functools.partial(
         check_commands_installed, CommandTarget.CLAUDE
     ),
+    DELIVERIES[CommandTarget.AGENTS].check_name: functools.partial(
+        check_commands_installed, CommandTarget.AGENTS
+    ),
     "context-forge": check_context_forge,
     "codex CLI": check_codex_cli,
     # "Claude Code CLI" is intentionally absent: it is informational only
@@ -107,7 +110,8 @@ _RECHECK_MAP["git pre-commit hook"] = _recheck_git_hooks
 # in a single comparison table, not per-provider subsections, so pointing
 # each at its own heading would recreate the same dead-link problem.
 DOCS_ANCHOR: dict[str, str] = {
-    "slash commands": "docs/QUICKSTART.md#install",
+    DELIVERIES[CommandTarget.CLAUDE].check_name: "docs/QUICKSTART.md#install",
+    DELIVERIES[CommandTarget.AGENTS].check_name: "docs/QUICKSTART.md#install",
     "context-forge": "docs/QUICKSTART.md#prerequisites",
     "codex CLI": "docs/QUICKSTART.md#configure-a-provider",
     "openai": "docs/QUICKSTART.md#configure-a-provider",
@@ -119,9 +123,13 @@ DOCS_ANCHOR: dict[str, str] = {
 # Explanation strings (1-2 sentences) shown with --verbose in interactive mode.
 _EXPLANATION: dict[str, str] = {
     "squadron": "Squadron is the core CLI tool. If you're running this, it's already installed.",
-    "slash commands": (
+    DELIVERIES[CommandTarget.CLAUDE].check_name: (
         "Slash commands let you invoke Squadron from inside a Claude Code session "
         "with /sq:run, /sq:review, etc."
+    ),
+    DELIVERIES[CommandTarget.AGENTS].check_name: (
+        "Agent skills let you invoke Squadron from inside a Codex session "
+        "with $sq-run, $sq-review, etc."
     ),
     "context-forge": (
         "Squadron uses Context Forge (the cf CLI) to drive pipeline runs. "
@@ -191,7 +199,8 @@ def _human_title(result: CheckResult) -> str:
     """Derive a human-readable step title from a CheckResult."""
     _TITLE_MAP: dict[str, str] = {
         "squadron": "Squadron installed",
-        "slash commands": "Install slash commands",
+        DELIVERIES[CommandTarget.CLAUDE].check_name: "Install slash commands",
+        DELIVERIES[CommandTarget.AGENTS].check_name: "Install Codex skills",
         "git pre-commit hook": "Install frontmatter pre-commit gate",
         "context-forge": "Install Context Forge",
         "codex CLI": "Install Codex CLI",

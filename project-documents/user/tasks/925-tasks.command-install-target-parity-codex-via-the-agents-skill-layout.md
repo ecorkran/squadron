@@ -218,61 +218,61 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 
 ## Task 5 — Uninstall from the receipt's destination (D6)
 
-- [ ] Change `uninstall_commands` to remove files from `receipt.destination`
-  - [ ] Paths come from `receipt.destination / relative`, not from the resolved flag value
-  - [ ] When `--target` is given and differs from `receipt.destination`, exit 1 with both paths in
+- [x] Change `uninstall_commands` to remove files from `receipt.destination`
+  - [x] Paths come from `receipt.destination / relative`, not from the resolved flag value
+  - [x] When `--target` is given and differs from `receipt.destination`, exit 1 with both paths in
         the message and remove nothing — do not proceed from either path
-  - [ ] Without `--target`, use the receipt's destination and do not consult the resolved default
-  - [ ] Keep the existing behavior for a missing receipt (message, nothing removed) and for
+  - [x] Without `--target`, use the receipt's destination and do not consult the resolved default
+  - [x] Keep the existing behavior for a missing receipt (message, nothing removed) and for
         directory pruning (remove a directory only once empty)
-  - [ ] Success: the default Claude path behaves exactly as before
+  - [x] Success: the default Claude path behaves exactly as before
 
-- [ ] **Test** `tests/cli/test_install_commands.py`
-  - [ ] Install `--local` from directory A, run uninstall `--local` from directory B, assert the
+- [x] **Test** `tests/cli/test_install_commands.py`
+  - [x] Install `--local` from directory A, run uninstall `--local` from directory B, assert the
         files under A are removed (the pre-D6 code would have missed them)
-  - [ ] `--target` pointing somewhere other than the receipt's destination exits 1, names both
+  - [x] `--target` pointing somewhere other than the receipt's destination exits 1, names both
         paths, and leaves every installed file in place
-  - [ ] Emptied skill directories are pruned; a directory holding a user's own file is not
-  - [ ] Success: existing uninstall tests pass unchanged
-  - [ ] Commit: `fix: uninstall commands from the receipt's recorded destination`
+  - [x] Emptied skill directories are pruned; a directory holding a user's own file is not
+  - [x] Success: existing uninstall tests pass unchanged
+  - [x] Commit: `fix: uninstall commands from the receipt's recorded destination`
 
 ---
 
 ## Task 6 — Doctor: per-target commands check (D9)
 
-- [ ] Replace `check_slash_commands` with `check_commands_installed(target, root=None)` in
+- [x] Replace `check_slash_commands` with `check_commands_installed(target, root=None)` in
       `doctor_checks.py`
-  - [ ] Returns a single `CheckResult` (not a list) — the step machinery in `setup_steps.py` types
+  - [x] Returns a single `CheckResult` (not a list) — the step machinery in `setup_steps.py` types
         recheck as `Callable[[], CheckResult]`
-  - [ ] `name` and `fix_hint` come from the `TargetDelivery` (`slash commands` / `sq install-commands`
+  - [x] `name` and `fix_hint` come from the `TargetDelivery` (`slash commands` / `sq install-commands`
         and `codex skills` / `sq install-commands --ide codex`); keep `required=False` and
         `section=SECTION_INSTALL`
-  - [ ] Counts installed items: `*.md` for the Claude layout, skill directories for agents
-  - [ ] **Repoint every importer in the same task** — `check_slash_commands` is imported by
+  - [x] Counts installed items: `*.md` for the Claude layout, skill directories for agents
+  - [x] **Repoint every importer in the same task** — `check_slash_commands` is imported by
         `setup_steps.py:24` and bound in `_RECHECK_MAP:56`, and imported by
         `tests/cli/test_doctor_checks.py:37`. Leaving them for Task 7 breaks `import squadron.cli.app`
         and makes `test_doctor_checks.py` un-collectable. Update the `_RECHECK_MAP` binding to the
         Claude target (Task 7 adds the agents row) and update the test's import and call sites
-  - [ ] Success: the Claude result is identical in name, status, detail shape and fix hint to today's
-  - [ ] Success: `python -c "import squadron.cli.app"` succeeds at the end of this task
+  - [x] Success: the Claude result is identical in name, status, detail shape and fix hint to today's
+  - [x] Success: `python -c "import squadron.cli.app"` succeeds at the end of this task
 
-- [ ] Add the `ide` parameter to `run_all_checks`
-  - [ ] Signature `run_all_checks(*, git_hooks_path: str | None = None, ide: CommandTarget | None = None)`
-  - [ ] `ide=None` (doctor): emit the Claude row always, and the agents row only when
+- [x] Add the `ide` parameter to `run_all_checks`
+  - [x] Signature `run_all_checks(*, git_hooks_path: str | None = None, ide: CommandTarget | None = None)`
+  - [x] `ide=None` (doctor): emit the Claude row always, and the agents row only when
         `check_codex_cli()` reports OK — a Claude-only user sees no new row
-  - [ ] `ide=<target>` (setup): emit only that target's row
-  - [ ] Success: `sq doctor` on a machine without Codex produces exactly today's row set
+  - [x] `ide=<target>` (setup): emit only that target's row
+  - [x] Success: `sq doctor` on a machine without Codex produces exactly today's row set
 
-- [ ] **Test** `tests/cli/test_doctor_checks.py` and `tests/cli/test_doctor.py`
-  - [ ] Both targets: OK with a count when installed, WARN with the right fix hint when not —
+- [x] **Test** `tests/cli/test_doctor_checks.py` and `tests/cli/test_doctor.py`
+  - [x] Both targets: OK with a count when installed, WARN with the right fix hint when not —
         against `tmp_path` roots, never the real home
-  - [ ] Agents row present when `shutil.which("codex")` is stubbed present, absent when stubbed
+  - [x] Agents row present when `shutil.which("codex")` is stubbed present, absent when stubbed
         absent. **Stub it** — never read the host `PATH` (#47)
-  - [ ] `ide=CommandTarget.AGENTS` yields the agents row and no `slash commands` row
-  - [ ] Success: `tests/cli/test_doctor.py` passes unchanged (it drives the Typer app and never
+  - [x] `ide=CommandTarget.AGENTS` yields the agents row and no `slash commands` row
+  - [x] Success: `tests/cli/test_doctor.py` passes unchanged (it drives the Typer app and never
         imports the renamed symbol); `test_doctor_checks.py` passes with its import and call sites
         repointed by this task
-  - [ ] Commit: `feat: make the doctor commands check per-target`
+  - [x] Commit: `feat: make the doctor commands check per-target`
 
 ---
 

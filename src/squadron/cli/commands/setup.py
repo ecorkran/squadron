@@ -24,6 +24,7 @@ from squadron.cli.commands.setup_steps import (
     StepKind,
     build_steps,
 )
+from squadron.skills.targets import CommandTarget, normalize_target
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def _render_non_interactive(steps: list[SetupStep], verbose: bool) -> int:
     return missing_count
 
 
-def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
+def _run_interactive(steps: list[SetupStep], verbose: bool, ide: CommandTarget | None = None) -> int:
     """Walk through steps interactively with per-step rechecks.
 
     Returns the final INSTALL+CONFIGURE count (after rechecks).
@@ -191,7 +192,7 @@ def _run_interactive(steps: list[SetupStep], verbose: bool) -> int:
     console.print()
     console.print("[bold]─── Final check ──────────────────────────────────────────────[/bold]")
     try:
-        final_results = run_all_checks(git_hooks_path=resolve_git_hooks_path())
+        final_results = run_all_checks(git_hooks_path=resolve_git_hooks_path(), ide=ide)
     except Exception:
         logger.exception("final run_all_checks failed")
         console.print("[red]Could not run final check — try `sq doctor` directly.[/red]")
@@ -226,10 +227,20 @@ def setup(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Show OPTIONAL steps and explanations."
     ),
+    ide: str = typer.Option(
+        CommandTarget.CLAUDE.value,
+        "--ide",
+        help="Which runtime to set up commands for: claude, agents (aliases: codex, openai)",
+    ),
 ) -> None:
     """Walk through the full Squadron install sequence interactively."""
     try:
-        results = run_all_checks(git_hooks_path=resolve_git_hooks_path())
+        command_target = normalize_target(ide)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
+
+    try:
+        results = run_all_checks(git_hooks_path=resolve_git_hooks_path(), ide=command_target)
     except Exception:
         logger.exception("sq setup: run_all_checks raised unexpectedly")
         typer.echo("sq setup: internal error during checks; try `sq doctor` directly", err=True)
@@ -254,5 +265,5 @@ def setup(
         raise typer.Exit(1 if missing_count else 0)
 
     # Interactive (default)
-    missing_count = _run_interactive(steps, verbose)
+    missing_count = _run_interactive(steps, verbose, command_target)
     raise typer.Exit(1 if missing_count else 0)

@@ -91,8 +91,30 @@ def install_commands(
     ),
 ) -> None:
     """Install squadron's commands for Claude Code or an agent-skills runtime."""
-    command_target = _parse_target(ide)
+    install_for_target(
+        target=target,
+        command_target=_parse_target(ide),
+        local=local,
+        receipts_dir=receipts_dir,
+    )
+
+
+def install_for_target(
+    *,
+    command_target: CommandTarget = CommandTarget.CLAUDE,
+    target: str | None = None,
+    local: bool = False,
+    receipts_dir: Path | None = None,
+) -> None:
+    """Install one target's commands. The Typer command's body, callable in-process.
+
+    ``install_commands`` cannot be called directly from Python: unsupplied Typer
+    parameters arrive as ``OptionInfo`` objects rather than their defaults, so setup's
+    in-process install goes through here instead.
+    """
     delivery = DELIVERIES[command_target]
+    if receipts_dir is None:
+        receipts_dir = DEFAULT_RECEIPTS_DIR
 
     source = _get_commands_source()
     target_dir, local_honored = _resolve_destination(delivery, target, local=local)
