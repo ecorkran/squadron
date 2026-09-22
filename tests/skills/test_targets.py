@@ -9,6 +9,7 @@ import pytest
 from squadron.skills.targets import (
     DELIVERIES,
     CommandTarget,
+    bundled_skill_names,
     normalize_target,
     receipt_name,
     write_flat_markdown,
@@ -143,3 +144,57 @@ def test_layout_writers_create_missing_parents(writer: object, tmp_path: Path) -
     writer(source, destination)
 
     assert destination.is_dir()
+
+
+def test_reinstall_does_not_claim_a_user_file_in_a_skill_directory(tmp_path: Path) -> None:
+    """Ownership comes from the source tree, never the destination.
+
+    The copy merges into an existing directory, so a second install that walked the
+    destination would record the user's own file as squadron's — and uninstall, which
+    trusts the receipt absolutely, would delete it. Issue #65's ownership confusion
+    arriving by a different route, and the reason this walks `skill_dir`.
+    """
+    source = tmp_path / "bundle" / "agents"
+    skill = source / "sq-review"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("skill body")
+    destination = tmp_path / "dest"
+
+    first = write_skill_dirs(source, destination)
+    assert first == ["sq-review/SKILL.md"]
+
+    # The user adds their own file inside the installed skill directory.
+    (destination / "sq-review" / "notes.md").write_text("my notes")
+
+    second = write_skill_dirs(source, destination)
+
+    assert second == ["sq-review/SKILL.md"], "a reinstall claimed a file squadron never wrote"
+    assert (destination / "sq-review" / "notes.md").read_text() == "my notes"
+
+
+def test_check_root_comes_from_the_delivery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Where the doctor check looks is table data, not a branch in the check."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
+    claude = DELIVERIES[CommandTarget.CLAUDE]
+    agents = DELIVERIES[CommandTarget.AGENTS]
+
+    assert claude.check_root() == claude.resolve_root(local=False) / "sq"
+    assert agents.check_root() == agents.resolve_root(local=False)
+
+
+def test_bundled_skill_names_reads_the_agents_tree(tmp_path: Path) -> None:
+    bundle = tmp_path / "commands"
+    for name in ("sq-review", "analysis-understand"):
+        (bundle / "agents" / name).mkdir(parents=True)
+        (bundle / "agents" / name / "SKILL.md").write_text("body")
+    # A directory with no SKILL.md is not a skill.
+    (bundle / "agents" / "not-a-skill").mkdir()
+
+    assert bundled_skill_names(bundle) == {"sq-review", "analysis-understand"}
+
+
+def test_bundled_skill_names_is_empty_without_an_agents_tree(tmp_path: Path) -> None:
+    (tmp_path / "commands" / "sq").mkdir(parents=True)
+    assert bundled_skill_names(tmp_path / "commands") == set()

@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.cli.commands import install as install_module
-from squadron.cli.commands.install import _get_commands_source
+from squadron.cli.commands.install import get_commands_source
 from squadron.skills.targets import DELIVERIES, CommandTarget
 
 runner = CliRunner()
@@ -145,8 +145,8 @@ def test_target_flag_overrides_default(tmp_path: Path) -> None:
 
 
 def test_get_commands_source_returns_valid_dir() -> None:
-    """_get_commands_source returns a directory with sq/ subdirectory."""
-    source = _get_commands_source()
+    """get_commands_source returns a directory with sq/ subdirectory."""
+    source = get_commands_source()
     assert source.is_dir()
     assert (source / "sq").is_dir()
     assert len(list((source / "sq").glob("*.md"))) == 10
@@ -172,7 +172,7 @@ EXPECTED_COMMANDS = {
 
 def test_all_command_files_exist_in_source() -> None:
     """All 10 expected command files exist in commands/sq/."""
-    source = _get_commands_source()
+    source = get_commands_source()
     sq_dir = source / "sq"
     for filename in EXPECTED_COMMANDS:
         assert (sq_dir / filename).is_file(), f"Missing: {filename}"
@@ -180,7 +180,7 @@ def test_all_command_files_exist_in_source() -> None:
 
 def test_command_files_are_nonempty() -> None:
     """Each command file is non-empty."""
-    source = _get_commands_source()
+    source = get_commands_source()
     sq_dir = source / "sq"
     for filename in EXPECTED_COMMANDS:
         content = (sq_dir / filename).read_text()
@@ -189,7 +189,7 @@ def test_command_files_are_nonempty() -> None:
 
 def test_command_files_reference_correct_subcommand() -> None:
     """Each command file references its expected sq subcommand."""
-    source = _get_commands_source()
+    source = get_commands_source()
     sq_dir = source / "sq"
     for filename, expected_cmd in EXPECTED_COMMANDS.items():
         content = (sq_dir / filename).read_text()
@@ -395,7 +395,7 @@ def test_agents_tree_is_not_installed_for_claude(
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("agents skill")
 
-    monkeypatch.setattr("squadron.cli.commands.install._get_commands_source", lambda: bundle)
+    monkeypatch.setattr("squadron.cli.commands.install.get_commands_source", lambda: bundle)
     target = tmp_path / "target"
     result = _install(runner, target)
     assert result.exit_code == 0  # type: ignore[attr-defined]
@@ -427,7 +427,7 @@ SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 def _agents_root() -> Path:
     # Resolved through the module rather than the name imported at the top of this
     # file, so the teeth test below can point the tree elsewhere with monkeypatch.
-    return install_module._get_commands_source() / "agents"  # type: ignore[attr-defined]
+    return install_module.get_commands_source() / "agents"  # type: ignore[attr-defined]
 
 
 def _skill_frontmatter(skill_md: Path) -> dict[str, object]:
@@ -450,7 +450,7 @@ def _skill_frontmatter(skill_md: Path) -> dict[str, object]:
 
 def _claude_twins() -> list[tuple[str, Path]]:
     """Every Claude command file, paired with the agents skill name it requires."""
-    source = install_module._get_commands_source()  # type: ignore[attr-defined]
+    source = install_module.get_commands_source()  # type: ignore[attr-defined]
     pairs: list[tuple[str, Path]] = []
     for sub in DELIVERIES[CommandTarget.CLAUDE].bundle_subdirs:
         for md_file in sorted((source / sub).glob("*.md")):
@@ -539,10 +539,10 @@ def test_drift_guard_fails_on_a_command_with_no_twin(
 ) -> None:
     """The guard has teeth — verified against a copy, never the real bundle."""
     bundle = tmp_path / "commands"
-    shutil.copytree(_get_commands_source(), bundle)
+    shutil.copytree(get_commands_source(), bundle)
     (bundle / "sq" / "newcommand.md").write_text("a command with no agents twin")
 
-    monkeypatch.setattr("squadron.cli.commands.install._get_commands_source", lambda: bundle)
+    monkeypatch.setattr("squadron.cli.commands.install.get_commands_source", lambda: bundle)
     with pytest.raises(AssertionError, match="no agents twin"):
         test_every_claude_command_has_an_agents_twin()
 
@@ -829,3 +829,39 @@ def test_no_test_writes_under_a_real_machine_root(
         f"a test with no --target would write to the user's own machine"
     )
     assert not resolved.is_relative_to(real_home)
+
+
+def test_reinstall_then_uninstall_spares_a_user_file_in_a_skill_dir(tmp_path: Path) -> None:
+    """The full sequence the receipt-ownership bug needed: install, add, reinstall, uninstall.
+
+    The earlier test adds the user's file after a single install and only checks
+    pruning, so it never exercised the reinstall that captured the file into the
+    receipt. This is #65's failure mode reaching the agents tree.
+    """
+    _install_with(runner, tmp_path, "--ide", "codex")
+    keeper = tmp_path / "sq-review" / "notes.md"
+    keeper.write_text("my own notes")
+
+    reinstall = _install_with(runner, tmp_path, "--ide", "codex")
+    assert reinstall.exit_code == 0  # type: ignore[attr-defined]
+    assert "notes.md" not in reinstall.output  # type: ignore[attr-defined]
+
+    import tomllib
+
+    receipt = tomllib.loads((_receipts_dir(tmp_path) / "squadron-commands-agents.toml").read_text())
+    assert not any("notes.md" in entry for entry in receipt["files_written"])
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--ide",
+            "codex",
+            "--target",
+            str(tmp_path),
+            "--receipts-dir",
+            str(_receipts_dir(tmp_path)),
+        ],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert keeper.read_text() == "my own notes"

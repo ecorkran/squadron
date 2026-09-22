@@ -135,6 +135,39 @@ def test_agents_check_ignores_directories_without_a_skill_file(tmp_path: Path) -
     assert result.status == CheckStatus.WARN
 
 
+def test_agents_check_ignores_third_party_skills(tmp_path: Path) -> None:
+    """``~/.agents/skills`` is shared, so foreign skills must not read as ours.
+
+    Counting every directory with a SKILL.md reported a confident OK on a machine
+    with unrelated agent skills and no squadron install — a false negative for the
+    exact condition this check exists to report.
+    """
+    for name in ("audit-analyze", "somebody-elses-skill"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "SKILL.md").write_text("# not squadron")
+
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint == "sq install-commands --ide codex"
+
+
+def test_agents_check_counts_only_squadron_skills_among_foreign_ones(tmp_path: Path) -> None:
+    from squadron.cli.commands.install import get_commands_source
+    from squadron.skills.targets import bundled_skill_names
+
+    ours = sorted(bundled_skill_names(get_commands_source()))
+    assert ours, "the bundle ships no agent skills — this test would pass vacuously"
+    for name in [*ours, "somebody-elses-skill"]:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "SKILL.md").write_text("body")
+
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+
+    assert result.status == CheckStatus.OK
+    assert f"{len(ours)} command(s)" in result.detail
+
+
 def test_claude_check_does_not_count_skill_directories(tmp_path: Path) -> None:
     """Each target counts its own layout — the shapes are not interchangeable."""
     (tmp_path / "sq-review").mkdir()

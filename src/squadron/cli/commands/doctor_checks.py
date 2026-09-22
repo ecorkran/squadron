@@ -10,12 +10,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import typer
+
 from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
 from squadron.providers.profiles import get_all_profiles, providers_toml_path
 from squadron.skills.manifest import load_effective
-from squadron.skills.targets import DELIVERIES, CommandTarget
+from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
 
 logger = logging.getLogger(__name__)
 
@@ -150,18 +152,34 @@ def check_git_hooks(hooks_path: str | None, *, cf_available: bool) -> CheckResul
     )
 
 
-def _count_installed(target: CommandTarget, root: Path) -> int:
-    """How many commands the target's layout has at ``root``.
+def _squadron_skill_names() -> set[str]:
+    """Squadron's own agent-skill directory names, or empty if the bundle is unreadable."""
+    from squadron.cli.commands.install import get_commands_source
 
-    Claude reads flat markdown from a per-pack subdirectory; the agent-skill layout
-    reads a directory per skill. Counting the wrong shape reports zero for an install
-    that is perfectly fine.
+    try:
+        return bundled_skill_names(get_commands_source())
+    except (OSError, typer.Exit):
+        # An unreadable bundle is install's problem to report, not doctor's. Falling
+        # back to an empty set makes the check WARN rather than claim a false OK.
+        logger.exception("could not read the bundled agent skills")
+        return set()
+
+
+def _count_installed(target: CommandTarget, root: Path) -> int:
+    """How many of *squadron's* commands the target's layout has at ``root``.
+
+    Claude reads flat markdown from a per-pack subdirectory it owns outright. The
+    agents root is shared with every other agent-skill source, so counting whatever
+    is there reports a confident OK on a machine that has five unrelated skills and
+    none of ours — the exact condition this check exists to catch. Only skills the
+    bundle ships are counted.
     """
     if not root.exists():
         return 0
     if target is CommandTarget.CLAUDE:
         return sum(1 for _ in root.glob("*.md"))
-    return sum(1 for child in root.iterdir() if (child / "SKILL.md").is_file())
+    ours = _squadron_skill_names()
+    return sum(1 for child in root.iterdir() if child.name in ours and (child / "SKILL.md").is_file())
 
 
 def check_commands_installed(
@@ -174,11 +192,7 @@ def check_commands_installed(
     """
     delivery = DELIVERIES[target]
     if root is None:
-        root = delivery.resolve_root(local=False)
-        # Claude's check has always pointed at the pack subdirectory rather than the
-        # commands root, and its detail line says so; keep that.
-        if target is CommandTarget.CLAUDE:
-            root = root / "sq"
+        root = delivery.check_root()
 
     count = _count_installed(target, root)
     if count:

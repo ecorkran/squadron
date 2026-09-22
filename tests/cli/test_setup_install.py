@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import typer
 
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
@@ -325,3 +326,33 @@ def test_installer_table_binds_each_target_to_its_own_check_name() -> None:
         installer = installer_for(check_name)
         assert installer is not None, f"no installer registered for {check_name!r}"
         assert installer.args == (command_target,)  # type: ignore[attr-defined]
+
+
+def test_typer_exit_from_the_installer_is_reported_not_raised() -> None:
+    """`typer.Exit` is click's Exit — a RuntimeError, not a SystemExit.
+
+    `install_for_target` raises it for a missing command bundle and an unreadable
+    receipt. An `except SystemExit` here caught neither, so the exception escaped
+    `run_install` and ended `sq setup` mid-flow, breaking this module's stated
+    contract that a failed install always comes back as an InstallOutcome.
+    """
+    assert not issubclass(typer.Exit, SystemExit)
+
+    with patch(
+        "squadron.cli.commands.install.install_for_target",
+        side_effect=typer.Exit(code=1),
+    ):
+        outcome = run_install("slash commands")
+
+    assert outcome.succeeded is False
+    assert "exited with code 1" in outcome.message
+
+
+def test_typer_exit_zero_is_not_a_failure() -> None:
+    with patch(
+        "squadron.cli.commands.install.install_for_target",
+        side_effect=typer.Exit(code=0),
+    ):
+        outcome = run_install("slash commands")
+
+    assert outcome.succeeded is True

@@ -31,6 +31,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import typer
+
 from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_INSTALL_CMD,
     CONTEXT_FORGE_PACKAGE,
@@ -173,8 +175,19 @@ def _install_sq_commands(command_target: CommandTarget = CommandTarget.CLAUDE) -
     command = DELIVERIES[command_target].fix_hint
     try:
         install_for_target(command_target=command_target)
+    except typer.Exit as exc:
+        # typer.Exit is click's Exit, which subclasses RuntimeError — not
+        # SystemExit, and it carries exit_code rather than code. Catching
+        # SystemExit here caught nothing, so a missing command bundle or an
+        # unreadable receipt escaped this function and ended `sq setup`
+        # mid-flow, contradicting the contract above that it never raises.
+        if exc.exit_code not in (0, None):
+            return InstallOutcome(
+                succeeded=False,
+                message=f"{command} exited with code {exc.exit_code}.",
+            )
     except SystemExit as exc:
-        # Typer raises SystemExit/Exit on its own error paths.
+        # A genuine SystemExit from deeper down is still a failed install.
         if exc.code not in (0, None):
             return InstallOutcome(
                 succeeded=False,

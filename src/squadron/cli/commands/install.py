@@ -24,7 +24,7 @@ from squadron.skills.targets import (
 )
 
 
-def _get_commands_source() -> Path:
+def get_commands_source() -> Path:
     """Locate the bundled commands directory.
 
     In a wheel install, importlib.resources resolves to the package-internal
@@ -117,7 +117,7 @@ def install_for_target(
     if receipts_dir is None:
         receipts_dir = DEFAULT_RECEIPTS_DIR
 
-    source = _get_commands_source()
+    source = get_commands_source()
     target_dir, local_honored = _resolve_destination(delivery, target, local=local)
     if local and not local_honored:
         rprint(f"[yellow]--local ignored: --target {target_dir} takes precedence.[/yellow]")
