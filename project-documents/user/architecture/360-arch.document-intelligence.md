@@ -407,7 +407,9 @@ alongside `sq:review` and `sq:task`.
 `{index}-analysis.overview.md`. Registration matches capability (a)'s cost: `sq install-commands`
 copies `commands/sq/*.md` wholesale (`src/squadron/cli/commands/install.py`), so adding
 `commands/sq/overview.md` is sufficient — no installer, manifest, or CLI change, exactly as for the
-pack skill. The two capabilities differ in delivery surface, not in registration burden. `brief` was rejected as vague about contents, `presentation` as
+pack skill. The two capabilities differ in delivery surface, not in registration burden.
+*Amendment (20260922, slice 925):* still true for Claude; a new `commands/sq/<name>.md` now also
+needs a `commands/agents/sq-<name>/SKILL.md` twin, enforced by a drift test. `brief` was rejected as vague about contents, `presentation` as
 naming a format squadron does not produce, and `summary` because `commands/sq/summary.md` already
 exists for conversation summaries.
 

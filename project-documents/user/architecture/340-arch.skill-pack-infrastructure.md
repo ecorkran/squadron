@@ -38,6 +38,7 @@ Squadron's first-party slash commands are bundled in the wheel and installed via
 ## Current State
 
 - `sq install-commands` copies `commands/sq/*.md` from the wheel into `~/.claude/commands/sq/`. This is the only install path.
+  *Amendment (20260922, slice 925):* no longer the only path — `--ide agents` (alias `codex`) installs a sibling `commands/agents/` tree of skill directories to `~/.agents/skills/`. The Claude path and `commands/analysis/` resolution are unchanged.
 - No manifest format exists for external skill sources.
 - No `sq skills` subcommand exists.
 - The forked `tech-debt-audit` skill is used manually, outside squadron's install lifecycle.
