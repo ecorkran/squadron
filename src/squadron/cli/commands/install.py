@@ -65,7 +65,11 @@ def _resolve_destination(
     destination from the receipt (D6).
     """
     if target is not None:
-        return Path(target).expanduser(), False
+        # Resolved, not merely expanded: the receipt records this path and
+        # uninstall compares against it, so a relative or symlinked `--target`
+        # would otherwise write a destination that means something different
+        # from another working directory.
+        return Path(target).expanduser().resolve(), False
     return delivery.resolve_root(local=local), local
 
 
@@ -203,7 +207,15 @@ def uninstall_commands(
 ) -> None:
     """Remove squadron's commands from Claude Code or an agent-skills runtime."""
     command_target = _parse_target(ide)
-    pack_name = receipt_name(command_target, local=local)
+
+    # `--target` overrides `--local` on install, and the receipt is named for the
+    # scope that was *honored*. Uninstall has to resolve the name the same way or
+    # the identical flag combination looks up a receipt that was never written,
+    # reports "nothing to remove", and sends the user to re-install.
+    local_honored = local and target is None
+    if local and not local_honored:
+        rprint("[yellow]--local ignored: --target takes precedence, as it did on install.[/yellow]")
+    pack_name = receipt_name(command_target, local=local_honored)
 
     try:
         receipt = read_receipt(pack_name, receipts_dir)
@@ -227,8 +239,11 @@ def uninstall_commands(
     # nothing (D6).
     destination = receipt.destination
     if target is not None:
-        requested = Path(target).expanduser()
-        if requested != destination:
+        # Compare canonical paths. `~/x`, `/abs/x`, `x/`, a relative path and a
+        # symlinked one all name the same directory; a lexical comparison refuses
+        # every spelling but the one originally typed.
+        requested = Path(target).expanduser().resolve()
+        if requested != destination.resolve():
             rprint(
                 f"[red]--target {requested} does not match the recorded install "
                 f"destination {destination}.[/red]\n"

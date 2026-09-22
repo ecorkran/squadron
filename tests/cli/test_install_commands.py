@@ -865,3 +865,100 @@ def test_reinstall_then_uninstall_spares_a_user_file_in_a_skill_dir(tmp_path: Pa
     )
     assert result.exit_code == 0  # type: ignore[attr-defined]
     assert keeper.read_text() == "my own notes"
+
+
+def test_uninstall_finds_the_receipt_an_overridden_local_install_wrote(tmp_path: Path) -> None:
+    """Install and uninstall must agree on which scope the receipt was named for.
+
+    Install names the receipt for the scope it *honored*, so `--target X --local`
+    writes the machine-scope receipt. Uninstall naming it from the flags as given
+    looked up a receipt nobody wrote, said "nothing to remove", and told the user to
+    re-install — with the real receipt sitting beside it.
+    """
+    target = tmp_path / "target"
+    result = _install_with(runner, target, "--local")
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert (_receipts_dir(target) / "squadron-commands.toml").is_file()
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(target),
+            "--receipts-dir",
+            str(_receipts_dir(target)),
+            "--local",
+        ],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    output = result.output  # type: ignore[attr-defined]
+    assert "Nothing to remove" not in output
+    assert "--local ignored" in output
+    assert not (target / "sq" / "review.md").exists()
+
+
+@pytest.mark.parametrize("respell", [lambda p: f"{p}/", lambda p: f"{p}/./", lambda p: f"{p}/x/.."])
+def test_uninstall_accepts_an_equivalent_spelling_of_the_target(
+    respell: object, tmp_path: Path
+) -> None:
+    """The D6 guard compares directories, not strings.
+
+    A lexical comparison refused every spelling but the one originally typed —
+    trailing slash, `..` segments, symlinks — with "nothing was removed", even
+    though the path named the same directory.
+    """
+    target = tmp_path / "target"
+    _install(runner, target)
+    assert callable(respell)
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            respell(target),
+            "--receipts-dir",
+            str(_receipts_dir(target)),
+        ],
+    )
+    assert result.exit_code == 0, result.output  # type: ignore[attr-defined]
+    assert not (target / "sq" / "review.md").exists()
+
+
+def test_uninstall_still_refuses_a_genuinely_different_target(tmp_path: Path) -> None:
+    """Canonicalizing must not weaken the guard it makes usable."""
+    installed_at = tmp_path / "installed"
+    _install(runner, installed_at)
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(tmp_path / "somewhere-else"),
+            "--receipts-dir",
+            str(_receipts_dir(installed_at)),
+        ],
+    )
+    assert result.exit_code == 1  # type: ignore[attr-defined]
+    assert (installed_at / "sq" / "review.md").is_file()
+
+
+def test_a_relative_target_is_recorded_as_an_absolute_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The receipt's destination must mean the same thing from any directory."""
+    monkeypatch.chdir(tmp_path)
+    receipts = tmp_path / "receipts"
+    result = runner.invoke(
+        app,
+        ["install-commands", "--target", "relative-dir", "--receipts-dir", str(receipts)],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    import tomllib
+
+    receipt = tomllib.loads((receipts / "squadron-commands.toml").read_text())
+    assert Path(receipt["destination"]).is_absolute()
