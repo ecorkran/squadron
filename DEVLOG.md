@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260921
+dateUpdated: 20260922
 
 ---
 
@@ -32,9 +32,23 @@ error in D9's own text: it named all five name-keyed tables as living in `setup_
 tasks. F003 (D6's failed-check disposition: exit 1, both paths, remove nothing) and F004
 (amendment lines in 340-arch and 360-arch) were both straightforward.
 
-Nine tasks, test-with throughout. Task 3 (authoring twelve `SKILL.md` files) is the effort
-center, not the Python. Task 9 exists because every Codex runtime premise in this design was
-read from source and docs rather than exercised — the live session is where they get proven.
+The task breakdown drew its own review, CONCERNS with eight concerns, all verified and all
+accepted. Two were breakage: Task 6 renamed `check_slash_commands` but left its three
+importers for Task 7, so the `sq` CLI would not import in between; and `DELIVERIES` in
+`skills/targets.py` referenced layout writers living in `cli/commands/install.py`, an import
+cycle that also inverts layering, since nothing under `src/squadron/skills/` imports from
+`cli/`. Writers moved into `targets.py`. The rest were gaps — no commit checkpoints anywhere
+in the file, no task covering the 340/360 arch amendments, no task extending the
+receipts-directory isolation test to `~/.agents/skills`, and a proposed guard in Task 7 that
+could not have passed because `DOCS_ANCHOR` carries a pre-existing `anthropic` key absent
+from `BUILT_IN_PROFILES`. One design error surfaced too: the enumerated receipt name
+`squadron-commands-claude-local` matched no suffix rule, corrected to `squadron-commands-local`.
+
+Ten task sections after the split, test-with throughout. Task 3 (authoring twelve `SKILL.md`
+files) is the effort center, not the Python, and it split into 3a/3b — `commands/analysis/understand.md`
+alone runs ~1,260 lines and is a context session of its own. Task 9 exists because every Codex
+runtime premise in this design was read from source and docs rather than exercised — the live
+session is where they get proven.
 
 ## 20260921
 
