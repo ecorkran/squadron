@@ -628,3 +628,41 @@ def test_run_all_checks_starts_no_subprocess(monkeypatch: pytest.MonkeyPatch) ->
 
     results = run_all_checks()
     assert results, "expected doctor rows"
+
+
+def test_agents_check_warns_when_the_bundle_cannot_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable bundle must WARN, never claim a confident OK.
+
+    ``_squadron_skill_names`` falls back to an empty set so the count is zero. The
+    alternative — treating "I don't know which skills are ours" as "all of them are" —
+    would report OK on a machine holding only third-party skills.
+    """
+    import typer
+
+    (tmp_path / "sq-review").mkdir()
+    (tmp_path / "sq-review" / "SKILL.md").write_text("body")
+
+    def _unreadable() -> Path:
+        raise typer.Exit(code=1)
+
+    monkeypatch.setattr("squadron.cli.commands.install.get_commands_source", _unreadable)
+
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+
+    assert result.status == CheckStatus.WARN
+    assert result.fix_hint == "sq install-commands --ide codex"
+
+
+def test_agents_check_warns_when_the_bundle_raises_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _unreadable() -> Path:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr("squadron.cli.commands.install.get_commands_source", _unreadable)
+
+    result = check_commands_installed(CommandTarget.AGENTS, root=tmp_path)
+
+    assert result.status == CheckStatus.WARN

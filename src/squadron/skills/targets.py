@@ -131,9 +131,14 @@ class TargetDelivery:
             return Path.cwd() / self.local_root
         return (Path("~") / self.machine_root).expanduser()
 
-    def check_root(self, *, local: bool = False) -> Path:
-        """Where the doctor check looks for this target's installed commands."""
-        root = self.resolve_root(local=local)
+    def check_root(self) -> Path:
+        """Where the doctor check looks for this target's installed commands.
+
+        Machine scope only, which is what doctor has always reported. A project-local
+        install is deliberately not checked: doctor answers "is squadron set up on this
+        machine", and a `--local` install is scoped to one repository.
+        """
+        root = self.resolve_root(local=False)
         return root / self.check_subdir if self.check_subdir else root
 
 

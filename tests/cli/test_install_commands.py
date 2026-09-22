@@ -962,3 +962,101 @@ def test_a_relative_target_is_recorded_as_an_absolute_path(
 
     receipt = tomllib.loads((receipts / "squadron-commands.toml").read_text())
     assert Path(receipt["destination"]).is_absolute()
+
+
+def test_install_to_a_new_destination_spares_a_user_file_of_the_same_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stale-removal applies only where the previous install actually wrote.
+
+    A receipt records its destination, and ``--target`` can move it between runs under
+    the same pack name. Resolving the old receipt's entries against the *new*
+    destination deleted a same-named file belonging to the user and reported removals
+    that never happened — #65's ownership confusion via a destination switch.
+    """
+    bundle = tmp_path / "bundle"
+    (bundle / "sq").mkdir(parents=True)
+    (bundle / "sq" / "review.md").write_text("squadron")
+    (bundle / "sq" / "retired.md").write_text("squadron")
+    monkeypatch.setattr(install_module, "get_commands_source", lambda: bundle)
+
+    first = tmp_path / "first"
+    receipts = tmp_path / "receipts"
+    result = runner.invoke(
+        app,
+        ["install-commands", "--target", str(first), "--receipts-dir", str(receipts)],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    # The bundle drops a file, and the user happens to own one by that name elsewhere.
+    (bundle / "sq" / "retired.md").unlink()
+    second = tmp_path / "second"
+    (second / "sq").mkdir(parents=True)
+    keeper = second / "sq" / "retired.md"
+    keeper.write_text("my own file")
+
+    result = runner.invoke(
+        app,
+        ["install-commands", "--target", str(second), "--receipts-dir", str(receipts)],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert keeper.read_text() == "my own file"
+    # No phantom removal reported, and the first destination is untouched.
+    assert "Removed" not in result.output  # type: ignore[attr-defined]
+    assert (first / "sq" / "retired.md").is_file()
+
+
+def test_install_to_a_new_destination_says_the_old_one_is_orphaned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Leaving files behind silently is the failure this warning exists to prevent."""
+    bundle = tmp_path / "bundle"
+    (bundle / "sq").mkdir(parents=True)
+    (bundle / "sq" / "review.md").write_text("squadron")
+    monkeypatch.setattr(install_module, "get_commands_source", lambda: bundle)
+
+    receipts = tmp_path / "receipts"
+    first = tmp_path / "first"
+    runner.invoke(
+        app,
+        ["install-commands", "--target", str(first), "--receipts-dir", str(receipts)],
+    )
+    result = runner.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(tmp_path / "second"),
+            "--receipts-dir",
+            str(receipts),
+        ],
+    )
+
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert "first" in result.output  # type: ignore[attr-defined]
+    assert "uninstall them there first" in result.output  # type: ignore[attr-defined]
+
+
+def test_reinstalling_to_the_same_destination_still_removes_stale_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The destination guard must not disable stale-removal in the ordinary case."""
+    bundle = tmp_path / "bundle"
+    (bundle / "sq").mkdir(parents=True)
+    (bundle / "sq" / "review.md").write_text("squadron")
+    (bundle / "sq" / "retired.md").write_text("squadron")
+    monkeypatch.setattr(install_module, "get_commands_source", lambda: bundle)
+
+    target = tmp_path / "target"
+    receipts = tmp_path / "receipts"
+    argv = ["install-commands", "--target", str(target), "--receipts-dir", str(receipts)]
+    runner.invoke(app, argv)
+    assert (target / "sq" / "retired.md").is_file()
+
+    (bundle / "sq" / "retired.md").unlink()
+    result = runner.invoke(app, argv)
+
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert not (target / "sq" / "retired.md").exists()
+    assert "Removed 1 stale command(s)" in result.output  # type: ignore[attr-defined]

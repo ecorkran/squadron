@@ -136,7 +136,21 @@ def install_for_target(
     except ValueError as exc:
         rprint(f"[red]Error reading install receipt: {exc}[/red]")
         raise typer.Exit(code=1) from None
-    previously_written: set[str] = set(previous.files_written) if previous else set()
+    # Stale-removal only applies where the previous install actually wrote. A receipt
+    # records its destination, and `--target` can move it between runs under the same
+    # pack name; resolving the old receipt's paths against the *new* destination would
+    # delete a same-named file belonging to the user and report removals that never
+    # happened. This mirrors the guard uninstall applies (D6).
+    same_destination = previous is not None and previous.destination.resolve() == target_dir.resolve()
+    previously_written: set[str] = (
+        set(previous.files_written) if previous and same_destination else set()
+    )
+    if previous is not None and not same_destination:
+        rprint(
+            f"[yellow]Previous install recorded {previous.destination}; installing to "
+            f"{target_dir}. Files at the old destination are left alone — "
+            f"uninstall them there first if you want them gone.[/yellow]"
+        )
 
     # Only the subdirectories this target claims. Walking every directory under the
     # bundle would sweep the agents tree into ~/.claude/commands (D8).
