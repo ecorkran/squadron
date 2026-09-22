@@ -344,6 +344,19 @@ output = 0.00
 cache_read = 0.00
 cache_write = 0.00
 
+[aliases.qwen38-flash]
+profile = "openrouter"
+model = "qwen/qwen3.8-flash"
+private = true
+cost_tier = "cheap"
+notes = "3.8 flash, AliBaba"
+
+[aliases.qwen38-flash.pricing]
+input = 0.15
+output = 0.47
+cache_read = 0.015
+cache_write = 0.47
+
 [aliases.qwen38]
 profile = "openrouter"
 model = "qwen/qwen3.8-2.4t-a95b"
@@ -365,10 +378,10 @@ cost_tier = "cheap"
 notes = "27b model"
 
 [aliases.qwen38-27b.pricing]
-input = 0.45
-output = 3.20
+input = 0.24
+output = 2.20
 cache_read = 0.05
-cache_write = 3.20
+cache_write = 2.20
 
 [aliases.trinity]
 profile = "openrouter"
