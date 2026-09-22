@@ -58,10 +58,11 @@ def _parse_target(ide: str) -> CommandTarget:
 def _resolve_destination(
     delivery: TargetDelivery, target: str | None, *, local: bool
 ) -> tuple[Path, bool]:
-    """Where an install or uninstall acts, and whether ``--local`` was honored.
+    """Where an install writes, and whether ``--local`` was honored.
 
     ``--target`` wins over ``--local``; the caller reports the override rather than
-    letting the ignored flag pass silently.
+    letting the ignored flag pass silently. Uninstall does not use this — it takes its
+    destination from the receipt (D6).
     """
     if target is not None:
         return Path(target).expanduser(), False

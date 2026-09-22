@@ -15,7 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Squadron's commands now install for Codex: `sq install-commands --ide codex` writes them to `~/.agents/skills` as agent skills you invoke with `$sq-review`, `$sq-run`, and so on. `--local` installs into the current project instead, `sq setup --ide codex` runs setup with the Codex target, and `sq doctor` reports a `codex skills` row on machines that have Codex
+
 ### Fixed
+- `sq uninstall-commands` removes the files an install actually wrote: a project-local install uninstalled from a different directory used to report success while leaving every file in place
 - Saved reviews no longer say `slice 0` in their heading: slice reviews name their slice again, and architecture reviews say `initiative N` instead of claiming a slice
 
 ### Changed

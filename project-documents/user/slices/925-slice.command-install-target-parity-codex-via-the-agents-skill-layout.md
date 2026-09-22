@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260921
 dateUpdated: 20260922
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: command-install-target-parity-codex-via-the-agents-skill-layout
@@ -198,32 +198,58 @@ Agents-target file layout written:
 
 ### Verification Walkthrough
 
+*Verified 20260922 during implementation. Steps 1–5 and 8–9 were run against a throwaway
+`HOME` (`export H=$(mktemp -d)` then `HOME=$H sq …`) so nothing touched the developer's own
+install; run them the same way. Output below is what the commands actually print, with paths
+shortened to `$H`. Two predictions in the original draft were wrong and are corrected in place —
+see the notes on steps 3 and 4.*
+
 1. **Baseline unchanged.**
-   `sq install-commands` → `Installed 12 command(s) to ~/.claude/commands:` with the same `sq/…`, `analysis/…` list as before the slice. `cat ~/.config/squadron/receipts/squadron-commands.toml` shows the same entries.
+   `sq install-commands` → `Installed 12 command(s) to $H/.claude/commands:` with the same `sq/…`, `analysis/…` list as before the slice. `ls $H/.config/squadron/receipts/` → `squadron-commands.toml`.
 
 2. **Install for Codex.**
-   `sq install-commands --ide codex` → `Installed N file(s) to ~/.agents/skills:` listing `sq-review/SKILL.md`, …, `analysis-understand/agents/openai.yaml`. `ls ~/.agents/skills/` shows the `sq-*` and `analysis-*` directories. `ls ~/.config/squadron/receipts/` now has `squadron-commands-agents.toml` beside the Claude receipt.
+   `sq install-commands --ide codex` → `Installed 14 command(s) to $H/.agents/skills:` listing `analysis-tech-debt-audit/SKILL.md`, `analysis-tech-debt-audit/agents/openai.yaml`, … through `sq-task/SKILL.md`. `ls $H/.agents/skills/` shows twelve directories: `analysis-tech-debt-audit`, `analysis-understand`, and ten `sq-*`. `ls $H/.config/squadron/receipts/` now has `squadron-commands-agents.toml` beside the Claude receipt.
 
 3. **Aliases and rejects.**
-   `sq install-commands --ide openai` reinstalls the same set (idempotent, nothing removed). `sq install-commands --ide copilot` → exit 2, `Invalid value for '--ide': 'copilot' is not one of claude, agents (aliases: codex, openai)`.
+   `sq install-commands --ide openai` reinstalls the same 14 files and reports no stale removals (idempotent). `sq install-commands --ide copilot` → exit 2:
+   ```
+   Invalid value: Unknown install target 'copilot'. Accepted: agents, claude, codex, openai.
+   ```
+   *Correction:* the design predicted `'copilot' is not one of claude, agents (aliases: codex, openai)`. The message comes from `normalize_target`'s `ValueError` wrapped in `typer.BadParameter`, so it lists every accepted spelling flat rather than separating members from aliases. Same exit code, same information.
 
 4. **Doctor sees it.**
-   `sq doctor` → `codex skills  OK  N skill(s) at ~/.agents/skills`. `sq uninstall-commands --ide codex`, then `sq doctor` → `codex skills  WARN  not installed … fix: sq install-commands --ide codex`. The Claude `slash commands` line is unaffected either way.
+   With the agents install present, `sq doctor` → `✓ codex skills  12 command(s) at $H/.agents/skills`. After `sq uninstall-commands --ide codex`, the WARN state needs **`sq doctor -v`**:
+   ```
+   ! codex skills                not installed at $H/.agents/skills
+     fix: sq install-commands --ide codex
+   ```
+   *Correction:* the design expected the WARN row from a bare `sq doctor`. It is not shown there — `doctor.py:64` hides every WARN row unless `--verbose`, which predates this slice and applies to all optional checks. The row and its fix hint are correct; only the flag was missing from the walkthrough. The Claude `slash commands` line is unaffected either way.
+
+   Note the agents row appears at all only when the Codex CLI is on `PATH` (D9). On a Claude-only machine the row set is exactly what it was before this slice.
 
 5. **Project-local.**
-   From a project root: `sq install-commands --ide codex --local` → files under `./.agents/skills/`, receipt `squadron-commands-agents-local.toml` whose `destination` is that absolute path. `cd` elsewhere, `sq uninstall-commands --ide codex --local` → removes from the recorded destination (D6), not from the new cwd.
+   From a project root: `sq install-commands --ide codex --local` → 14 files under `./.agents/skills/`, receipt `squadron-commands-agents-local.toml` whose `destination` is that absolute path. `cd` elsewhere, `sq uninstall-commands --ide codex --local` → `Removed 14 command(s) from <the project path>`, and the project's `.agents/skills/` is empty. This is D6: the removal follows the receipt, not the new cwd.
 
 6. **Live in Codex.**
    In a squadron project with Codex CLI: type `$sq-` — the completer lists `sq-review`, `sq-run`, `sq-summary`, …. Send `$sq-review code 925`. Codex runs `sq review code 925 -v` and shows the review. Send `$sq-auth` → runs `sq auth status`.
 
-7. **Setup path.**
-   On a fresh `HOME` (`HOME=$(mktemp -d) sq setup --ide codex --non-interactive`) the slash-commands step reports the agents install and `sq doctor` in the same `HOME` shows `codex skills OK`.
+7. **Setup path.** *Verified 20260922.*
+   On a fresh `HOME`, run setup **interactively and with `-v`** — `printf '\n' | HOME=$H sq setup --ide codex -v`:
+   ```
+   ! Step 2/19 — Install Codex skills
+   [Enter] to install, 's' to skip, 'q' to quit:   installing…
+     ✓ sq install-commands --ide codex completed.
+     ✓ detected — moving on
+   ```
+   `sq doctor` in the same `HOME` then shows `✓ codex skills  12 command(s) at $H/.agents/skills`, and no `slash commands` row, because `--ide codex` scopes the run to one target.
+
+   *Correction:* the design named `--non-interactive`, which prints every step without running any, so it reports the step but never installs. And `-v` is required: the step is WARN (optional), and `_run_interactive` skips optional steps without it — the same pre-existing convention as `sq doctor`. This is the path that exercises setup's in-process install, which is worth running because a Typer command cannot be called directly from Python (see Implementation Notes).
 
 8. **Drift guard.**
-   Add `commands/sq/foo.md` with no twin; `pytest tests/cli/test_install_commands.py -k drift` fails naming `sq-foo/SKILL.md` as missing.
+   `pytest tests/cli/test_install_commands.py -k "twin or drift"` → 3 passed. The teeth are asserted by `test_drift_guard_fails_on_a_command_with_no_twin`, which copies the bundle to a tmp directory, adds a command with no twin there, and asserts the guard raises naming the missing path — the real tree is never edited.
 
 9. **Nothing else moved.**
-   `sq skills install analysis --commands-dir $(mktemp -d)` and `pytest tests/skills tests/metrology -q` succeed unchanged.
+   `sq skills install analysis --commands-dir $(mktemp -d)` → `Installed pack 'analysis': 2 file(s)`. `pytest tests/skills tests/metrology -q` → 403 passed, unchanged. Both prove D8: the analysis pack still resolves by name from `commands/analysis/`.
 
 ## Risk Assessment
 
@@ -253,3 +279,11 @@ Agents-target file layout written:
 - The agents-tree authoring is the effort center, not the Python. Each `SKILL.md` must be checked against its Claude twin for every step — the drift test proves existence, not equivalence.
 - `description` frontmatter is how Codex decides whether to suggest a skill; write it as "what it does + when the user would ask for it", per the pattern `cf` used (`Use when the user asks for cf status or where the project stands.`).
 - No test may touch the real `~/.agents/skills` or `~/.config/squadron/receipts` — extend `test_no_test_touches_the_real_receipts_directory` to the new root.
+
+### Found During Implementation (20260922)
+
+**A Typer command is not a callable.** `setup_install._install_sq_commands` called `install_commands()` directly from Python. That worked while every parameter had a plain default, but adding `--ide` as a `typer.Option` meant an unsupplied argument arrived as an `OptionInfo` object, and `normalize_target` raised `AttributeError` on it — `sq setup`'s install action was broken for one task. Every CLI-driven test still passed, because they invoke through the command line where Typer fills the defaults. Resolved by extracting `install_for_target()`, a plain keyword-only function holding the command body, which both `install_commands` and setup call. Any future flag added to a Typer command with in-process callers has this shape.
+
+**A stale mock target is a live write.** The two tests covering that in-process path patched `squadron.cli.commands.install.install_commands` by name. When that stopped being the function setup calls, the patch silently stopped intercepting and the test installed into the developer's real `~/.claude/commands`. `patch` raises on a missing attribute, but the module still had *an* install entry point, so the failure mode was a live write rather than an error — the #47 shape, from a direction the receipts-directory guard does not cover. Both patches were repointed and `test_the_patched_installer_name_still_exists` added.
+
+**Two walkthrough predictions were wrong**, both because the design assumed output rather than running the command: the `--ide` rejection message wording, and that a bare `sq doctor` / `sq setup --non-interactive` would surface the WARN-level agents row. Corrected in place in the Verification Walkthrough above. The underlying behavior was right in both cases; only the expected text was wrong. Worth noting that WARN rows hiding without `-v` is pre-existing and applies to every optional check, not something this slice introduced.

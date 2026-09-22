@@ -278,35 +278,35 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 
 ## Task 7 — Setup: `--ide` threaded end to end (D9)
 
-- [ ] Add `--ide` to `sq setup` and forward it
-  - [ ] Parse through `normalize_target`; pass to **both** `run_all_checks` call sites in
+- [x] Add `--ide` to `sq setup` and forward it
+  - [x] Parse through `normalize_target`; pass to **both** `run_all_checks` call sites in
         `setup.py` (the interactive pass and the final summary)
-  - [ ] `_install_sq_commands(target: CommandTarget)` in `setup_install.py` installs for that target
-  - [ ] Success: `sq setup --ide codex` never offers to install Claude commands
+  - [x] `_install_sq_commands(target: CommandTarget)` in `setup_install.py` installs for that target
+  - [x] Success: `sq setup --ide codex` never offers to install Claude commands
 
-- [ ] Register the `codex skills` check name in the five name-keyed tables
-  - [ ] Four in `setup_steps.py`: `_RECHECK_MAP`, `DOCS_ANCHOR`, `_EXPLANATION`, `_TITLE_MAP`
-  - [ ] One in `setup_install.py`: `_INSTALLERS`
-  - [ ] Recheck and installer entries bind the agents target (e.g. via `functools.partial`)
-  - [ ] Read the check names from the delivery table rather than retyping the literals
-  - [ ] Success: a `codex skills` row in setup renders a title, explanation and docs anchor, and its
+- [x] Register the `codex skills` check name in the five name-keyed tables
+  - [x] Four in `setup_steps.py`: `_RECHECK_MAP`, `DOCS_ANCHOR`, `_EXPLANATION`, `_TITLE_MAP`
+  - [x] One in `setup_install.py`: `_INSTALLERS`
+  - [x] Recheck and installer entries bind the agents target (e.g. via `functools.partial`)
+  - [x] Read the check names from the delivery table rather than retyping the literals
+  - [x] Success: a `codex skills` row in setup renders a title, explanation and docs anchor, and its
         install action runs the agents install
 
-- [ ] **Test** `tests/cli/test_setup.py`, `test_setup_steps.py`, `test_setup_install.py`
-  - [ ] `--ide codex` produces a `codex skills` step and no `slash commands` step; default produces
+- [x] **Test** `tests/cli/test_setup.py`, `test_setup_steps.py`, `test_setup_install.py`
+  - [x] `--ide codex` produces a `codex skills` step and no `slash commands` step; default produces
         the reverse
-  - [ ] The agents step's recheck returns a `CheckResult` (not a list) and its installer targets the
+  - [x] The agents step's recheck returns a `CheckResult` (not a list) and its installer targets the
         agents root
-  - [ ] Guard the name-keying smell D9 notes, scoped to the two command check names: assert
+  - [x] Guard the name-keying smell D9 notes, scoped to the two command check names: assert
         `slash commands` and `codex skills` each appear in a `run_all_checks` output for their
         target and in every table that keys on a check name. Do **not** assert this for all keys —
         `DOCS_ANCHOR` has a pre-existing `anthropic` entry (`setup_steps.py:112`) for a
         user-defined profile that `BUILT_IN_PROFILES` does not contain, so a blanket assertion
         fails on a clean machine for reasons unrelated to this slice. Removing that key is out of
         scope; leave it
-  - [ ] Stub `shutil.which` throughout (#47)
-  - [ ] Success: existing setup tests pass unchanged
-  - [ ] Commit: `feat: thread --ide through sq setup`
+  - [x] Stub `shutil.which` throughout (#47)
+  - [x] Success: existing setup tests pass unchanged
+  - [x] Commit: `feat: thread --ide through sq setup`
 
 ---
 
