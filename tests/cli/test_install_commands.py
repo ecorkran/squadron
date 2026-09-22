@@ -547,6 +547,143 @@ def test_drift_guard_fails_on_a_command_with_no_twin(
         test_every_claude_command_has_an_agents_twin()
 
 
+# ---------------------------------------------------------------------------
+# Slice 925: --ide and --local
+# ---------------------------------------------------------------------------
+
+
+def _install_with(runner_: CliRunner, target: Path, *flags: str) -> object:
+    return runner_.invoke(
+        app,
+        [
+            "install-commands",
+            "--target",
+            str(target),
+            "--receipts-dir",
+            str(_receipts_dir(target)),
+            *flags,
+        ],
+    )
+
+
+def _agents_skill_names() -> set[str]:
+    return {d.name for d in _agents_root().iterdir() if d.is_dir()}
+
+
+def test_agents_install_writes_every_skill_directory(tmp_path: Path) -> None:
+    result = _install_with(runner, tmp_path, "--ide", "codex")
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    for skill_name in _agents_skill_names():
+        assert (tmp_path / skill_name / "SKILL.md").is_file()
+
+    # The nested policy file rides along with its skill directory.
+    assert (tmp_path / "analysis-understand" / "agents" / "openai.yaml").is_file()
+
+    receipt = _receipts_dir(tmp_path) / "squadron-commands-agents.toml"
+    assert receipt.is_file()
+
+
+def test_agents_install_lists_what_it_wrote(tmp_path: Path) -> None:
+    result = _install_with(runner, tmp_path, "--ide", "codex")
+    output = result.output  # type: ignore[attr-defined]
+    assert "sq-review/SKILL.md" in output
+    assert "analysis-understand/agents/openai.yaml" in output
+
+
+@pytest.mark.parametrize("spelling", ["codex", "openai", "agents"])
+def test_agents_aliases_produce_identical_results(spelling: str, tmp_path: Path) -> None:
+    target = tmp_path / spelling
+    result = _install_with(runner, target, "--ide", spelling)
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    written = {str(p.relative_to(target)) for p in target.rglob("*") if p.is_file()}
+    expected = {str(p.relative_to(_agents_root())) for p in _agents_root().rglob("*") if p.is_file()}
+    assert written == expected
+
+
+@pytest.mark.parametrize("spelling", ["copilot", "cursor", "nonsense", ""])
+def test_unknown_ide_exits_two_naming_the_accepted_values(spelling: str, tmp_path: Path) -> None:
+    result = _install_with(runner, tmp_path, "--ide", spelling)
+    assert result.exit_code == 2  # type: ignore[attr-defined]
+    output = result.output  # type: ignore[attr-defined]
+    for accepted in ("claude", "agents", "codex", "openai"):
+        assert accepted in output
+
+
+def test_local_writes_under_the_cwd_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    receipts = tmp_path / "receipts"
+
+    result = runner.invoke(
+        app,
+        ["install-commands", "--local", "--receipts-dir", str(receipts)],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert (project / ".claude" / "commands" / "sq" / "review.md").is_file()
+    assert (receipts / "squadron-commands-local.toml").is_file()
+    # The machine receipt is untouched by a local install.
+    assert not (receipts / "squadron-commands.toml").exists()
+
+
+def test_target_beats_local_and_says_so(tmp_path: Path) -> None:
+    result = _install_with(runner, tmp_path, "--local")
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert (tmp_path / "sq" / "review.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+    assert "--local ignored" in result.output  # type: ignore[attr-defined]
+    # Receipt follows the honored scope, not the ignored flag.
+    assert (_receipts_dir(tmp_path) / "squadron-commands.toml").is_file()
+
+
+def test_claude_and_agents_receipts_coexist(tmp_path: Path) -> None:
+    """Two targets, one receipts directory: neither install erases the other."""
+    claude_dir = tmp_path / "claude"
+    agents_dir = tmp_path / "agents"
+    receipts = tmp_path / "shared-receipts"
+
+    for flags, dest in ((("--ide", "claude"), claude_dir), (("--ide", "codex"), agents_dir)):
+        result = runner.invoke(
+            app,
+            [
+                "install-commands",
+                "--target",
+                str(dest),
+                "--receipts-dir",
+                str(receipts),
+                *flags,
+            ],
+        )
+        assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert (receipts / "squadron-commands.toml").is_file()
+    assert (receipts / "squadron-commands-agents.toml").is_file()
+
+    result = runner.invoke(
+        app,
+        [
+            "uninstall-commands",
+            "--target",
+            str(agents_dir),
+            "--receipts-dir",
+            str(receipts),
+            "--ide",
+            "codex",
+        ],
+    )
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert not (agents_dir / "sq-review").exists()
+    assert (claude_dir / "sq" / "review.md").is_file()
+    assert (receipts / "squadron-commands.toml").is_file()
+
+
 def test_no_test_touches_the_real_receipts_directory() -> None:
     """The helpers must never resolve to ``~/.config/squadron/receipts``.
 
@@ -558,3 +695,26 @@ def test_no_test_touches_the_real_receipts_directory() -> None:
 
     assert _receipts_dir(Path("/tmp/pytest-example/target")) != DEFAULT_RECEIPTS_DIR
     assert DEFAULT_RECEIPTS_DIR not in _receipts_dir(Path("/tmp/pytest-example/target")).parents
+
+
+@pytest.mark.parametrize("target", list(CommandTarget))
+def test_no_test_writes_under_a_real_machine_root(
+    target: CommandTarget, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A default-destination install lands under ``HOME`` — so ``HOME`` must be fake.
+
+    An install with no ``--target`` resolves under the real home directory: for agents
+    that is ``~/.agents/skills``, a path this slice introduced and #47 is about. This
+    asserts the resolution is genuinely home-relative (so a patched ``HOME`` redirects
+    it) and that the real one is never what a test reaches.
+    """
+    real_home = Path.home()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
+    resolved = DELIVERIES[target].resolve_root(local=False)
+    assert resolved.is_relative_to(tmp_path), (
+        f"{target} resolves to {resolved}, which a patched HOME does not redirect — "
+        f"a test with no --target would write to the user's own machine"
+    )
+    assert not resolved.is_relative_to(real_home)

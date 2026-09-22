@@ -15,7 +15,13 @@ from rich import print as rprint
 
 from squadron.skills.models import InstallReceipt
 from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, read_receipt, write_receipt
-from squadron.skills.targets import DELIVERIES, CommandTarget, receipt_name
+from squadron.skills.targets import (
+    DELIVERIES,
+    CommandTarget,
+    TargetDelivery,
+    normalize_target,
+    receipt_name,
+)
 
 
 def _get_commands_source() -> Path:
@@ -41,11 +47,42 @@ def _get_commands_source() -> Path:
     raise typer.Exit(code=1)
 
 
+def _parse_target(ide: str) -> CommandTarget:
+    """Resolve the ``--ide`` value, or exit 2 naming the accepted spellings."""
+    try:
+        return normalize_target(ide)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
+
+
+def _resolve_destination(
+    delivery: TargetDelivery, target: str | None, *, local: bool
+) -> tuple[Path, bool]:
+    """Where an install or uninstall acts, and whether ``--local`` was honored.
+
+    ``--target`` wins over ``--local``; the caller reports the override rather than
+    letting the ignored flag pass silently.
+    """
+    if target is not None:
+        return Path(target).expanduser(), False
+    return delivery.resolve_root(local=local), local
+
+
 def install_commands(
     target: str | None = typer.Option(
         None,
         "--target",
         help="Target directory for command files (defaults to the target's own root)",
+    ),
+    ide: str = typer.Option(
+        CommandTarget.CLAUDE.value,
+        "--ide",
+        help="Which runtime to install for: claude, agents (aliases: codex, openai)",
+    ),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Install into this project rather than for the whole machine",
     ),
     receipts_dir: Path = typer.Option(
         DEFAULT_RECEIPTS_DIR,
@@ -53,15 +90,15 @@ def install_commands(
         help="Directory holding the install receipt",
     ),
 ) -> None:
-    """Install squadron slash commands for Claude Code."""
-    # The --ide flag arrives in a later task; until then this command delivers to
-    # Claude Code, exactly as it always has.
-    command_target = CommandTarget.CLAUDE
+    """Install squadron's commands for Claude Code or an agent-skills runtime."""
+    command_target = _parse_target(ide)
     delivery = DELIVERIES[command_target]
 
     source = _get_commands_source()
-    target_dir = Path(target).expanduser() if target is not None else delivery.resolve_root(local=False)
-    pack_name = receipt_name(command_target, local=False)
+    target_dir, local_honored = _resolve_destination(delivery, target, local=local)
+    if local and not local_honored:
+        rprint(f"[yellow]--local ignored: --target {target_dir} takes precedence.[/yellow]")
+    pack_name = receipt_name(command_target, local=local_honored)
 
     # What the *previous* install wrote, or None on a first install (or one predating
     # receipts). This is the only authority for what squadron owns: the target
@@ -125,18 +162,30 @@ def uninstall_commands(
         "--target",
         help="Directory to remove commands from (defaults to the target's own root)",
     ),
+    ide: str = typer.Option(
+        CommandTarget.CLAUDE.value,
+        "--ide",
+        help="Which runtime to uninstall from: claude, agents (aliases: codex, openai)",
+    ),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="Uninstall from this project rather than from the whole machine",
+    ),
     receipts_dir: Path = typer.Option(
         DEFAULT_RECEIPTS_DIR,
         "--receipts-dir",
         help="Directory holding the install receipt",
     ),
 ) -> None:
-    """Remove squadron slash commands from Claude Code."""
-    command_target = CommandTarget.CLAUDE
+    """Remove squadron's commands from Claude Code or an agent-skills runtime."""
+    command_target = _parse_target(ide)
     delivery = DELIVERIES[command_target]
 
-    target_dir = Path(target).expanduser() if target is not None else delivery.resolve_root(local=False)
-    pack_name = receipt_name(command_target, local=False)
+    target_dir, local_honored = _resolve_destination(delivery, target, local=local)
+    if local and not local_honored:
+        rprint(f"[yellow]--local ignored: --target {target_dir} takes precedence.[/yellow]")
+    pack_name = receipt_name(command_target, local=local_honored)
 
     try:
         receipt = read_receipt(pack_name, receipts_dir)

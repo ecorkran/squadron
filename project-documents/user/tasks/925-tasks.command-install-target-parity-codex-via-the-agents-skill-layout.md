@@ -152,34 +152,34 @@ mechanically converted (D3). This is the slice's effort center — `review.md` (
 
 ## Task 3b — Author the two `analysis-*` skills and the drift guard
 
-- [ ] Confirm the `agents/openai.yaml` key for implicit invocation before authoring (D7)
-  - [ ] Check the current Codex skills documentation for the exact key path. The design records a
+- [x] Confirm the `agents/openai.yaml` key for implicit invocation before authoring (D7)
+  - [x] Check the current Codex skills documentation for the exact key path. The design records a
         candidate, but the documentation is the authority
-  - [ ] Success: the key is confirmed against current docs, or — if it cannot be confirmed — the
+  - [x] Success: the key is confirmed against current docs, or — if it cannot be confirmed — the
         task stops and asks the Project Manager rather than guessing
 
-- [ ] Author `commands/agents/analysis-<name>/` for the two `commands/analysis/*.md` files
-  - [ ] `analysis-tech-debt-audit/SKILL.md` ← `commands/analysis/tech-debt-audit.md`
-  - [ ] `analysis-understand/SKILL.md` ← `commands/analysis/understand.md` (~1,260 lines — the
+- [x] Author `commands/agents/analysis-<name>/` for the two `commands/analysis/*.md` files
+  - [x] `analysis-tech-debt-audit/SKILL.md` ← `commands/analysis/tech-debt-audit.md`
+  - [x] `analysis-understand/SKILL.md` ← `commands/analysis/understand.md` (~1,260 lines — the
         largest single authoring job in the slice; budget a context session for it alone)
-  - [ ] Each gets a sibling `agents/openai.yaml` disabling implicit invocation, because both Claude
+  - [x] Each gets a sibling `agents/openai.yaml` disabling implicit invocation, because both Claude
         twins carry `disable-model-invocation: true` (D7)
-  - [ ] Same frontmatter and argument-rewrite rules as Task 3a
-  - [ ] Success: exactly these two skills have an `openai.yaml`; the ten `sq-*` skills do not
+  - [x] Same frontmatter and argument-rewrite rules as Task 3a
+  - [x] Success: exactly these two skills have an `openai.yaml`; the ten `sq-*` skills do not
 
-- [ ] **Test** `tests/cli/test_install_commands.py` — add the drift guard
-  - [ ] Runs after 3b because the bijection asserts both directions and can only hold once both
+- [x] **Test** `tests/cli/test_install_commands.py` — add the drift guard
+  - [x] Runs after 3b because the bijection asserts both directions and can only hold once both
         halves of the tree exist
-  - [ ] Bijection: for each `commands/<sub>/<name>.md` where sub is a Claude bundle subdir, assert
+  - [x] Bijection: for each `commands/<sub>/<name>.md` where sub is a Claude bundle subdir, assert
         `commands/agents/<sub>-<name>/SKILL.md` exists; and for each agents skill dir, assert its
         Claude twin exists. Failure message names the missing path
-  - [ ] Every agents `SKILL.md` has `name` frontmatter equal to its directory name, matching
+  - [x] Every agents `SKILL.md` has `name` frontmatter equal to its directory name, matching
         `^[a-z0-9]+(-[a-z0-9]+)*$`, and a non-empty `description` (D4)
-  - [ ] Assert `openai.yaml` presence exactly mirrors `disable-model-invocation: true` in the twin
-  - [ ] Assert no `$ARGUMENTS` under `commands/agents/`
-  - [ ] Success: the drift test fails when a `commands/sq/*.md` is added with no twin — verify by
+  - [x] Assert `openai.yaml` presence exactly mirrors `disable-model-invocation: true` in the twin
+  - [x] Assert no `$ARGUMENTS` under `commands/agents/`
+  - [x] Success: the drift test fails when a `commands/sq/*.md` is added with no twin — verify by
         creating one in a tmp copy of the tree, not by editing the real bundle
-  - [ ] Commit: `feat: add analysis agent skills and the asset-tree drift guard`
+  - [x] Commit: `feat: add analysis agent skills and the asset-tree drift guard`
 
 ---
 
