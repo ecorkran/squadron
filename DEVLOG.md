@@ -12,6 +12,35 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260924
 
+### Release 0.13.2 — audit tool names, review recovery turn, Codex waiting rule
+
+**#107 — `sq metrology audit run` never started.** `_AUDIT_ALLOWED_TOOLS` spelled Claude's names,
+which the SDK edge rejects since canonical translation landed. Three of them (Edit, Task,
+TodoWrite) had no canonical name. Added `edit_file`, `task`, `todo_write` to
+`CANONICAL_TO_CLAUDE` as Claude-only capabilities; the OpenAI-compatible agent already rejects
+unknown names, so a non-Claude audit fails loudly (#35) instead of losing tools. Not run live:
+the audit is long and paid, and it spawns the Claude Code CLI, which can't nest in a session.
+
+**#92 — evidence finally selected a mechanism.** Two post-918 UNKNOWN artifacts, both
+minimax-m3, both `Stop reason: stop`: the 925 code review ended with the model's own
+tool-call markup written as text (`<tool_call><invoke name="read_file">`), and PR 116's
+entire reply was a `git diff` it wanted to run. Same shape as the original kimi case ("Let me
+write positive PASS findings…"): the model believed it had another turn. A reply with no
+verdict and no findings now gets one follow-up on the same conversation, bounded to one; the
+result carries `recovery_turn_used`, rendered as a header line only when used so every other
+artifact stays byte-identical. Turn collection moved to `review/turn_capture.py` so telemetry
+sums across turns — which exposed that the SDK agent counted tool calls per agent lifetime
+while the OpenAI agent counted per message. Both are per message now.
+
+**#126 — mechanism read from Codex source, not guessed.** In `codex-rs/core/src/unified_exec/`
+(rust-v0.146.1): `exec_command` returns a session ID after at most 30 s, and the model
+finishes by polling `write_stdin` with empty input, clamped 5–300 s. Each poll is a billed
+turn; at the 5 s floor a 10-minute review is ~120 of them. The four long-command skills now
+carry one identical "Waiting on the command" section (run once, wait with
+`yield_time_ms: 300000`, nothing between waits), pinned by a test. Only the `agents` tree
+changed; Claude commands are untouched. Left open for a live Codex check and the `sq-run`
+loop decision.
+
 ### Release 0.13.1 — Codex install target, PR base lag, guide-tarball gate
 
 Patch release carrying slice 925 (commands install for Codex) plus three fixes found in use.

@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 20260924
+
+### Fixed
+- `sq metrology audit run` works again; it failed before doing any work because its tool list wasn't in the form the Claude provider expects (#107)
+- A review whose model stops before writing its findings now gets one follow-up asking for the review, instead of saving an UNKNOWN verdict with no findings. Reviews recovered this way say so in their header (#92)
+- Codex skills for long commands (`$sq-review`, `$sq-run`, `$sq-task`, `$sq-pr`) now tell Codex to wait for the command instead of checking on it every few seconds, which could use up a whole session's allowance. Rerun `sq install-commands --ide codex` to pick this up (#126)
+
 ## [0.13.1] - 20260924
 
 ### Added
