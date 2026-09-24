@@ -13,6 +13,8 @@ identity in the adapter tests.
 from __future__ import annotations
 
 import logging
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -28,7 +30,7 @@ from squadron.codehost.refs import (
     fetch_and_range,
     local_ref,
 )
-from squadron.core.process_runner import ProcessResult
+from squadron.core.process_runner import ProcessResult, SubprocessRunner
 from tests.codehost.fake_runner import FakeProcessRunner
 
 BASE_SHA = "4edf5f1709489da9494906b2178e27dea6a9ae10"
@@ -185,9 +187,49 @@ def test_fetch_failing_for_head_names_head(caplog: pytest.LogCaptureFixture) -> 
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
+def _is_ancestor_step(result: ProcessResult) -> tuple[list[str], ProcessResult]:
+    """The ancestry probe a moved base triggers. Must precede the generic
+    merge-base entry: the fake answers the first matching prefix."""
+    return (["git", "merge-base", "--is-ancestor", BASE_SHA], result)
+
+
+def _script_with_moved_base(moved: str, ancestry: ProcessResult):
+    script = _script(base_rev=_ok(moved))
+    script.insert(2, _is_ancestor_step(ancestry))
+    return script
+
+
+def test_base_advanced_past_host_report_uses_fetched_tip(caplog: pytest.LogCaptureFixture) -> None:
+    """#131: GitHub's baseRefOid trails the branch after a merge; the fetched
+    tip descends from it. Accepted, observably."""
+    advanced = "7777777777777777777777777777777777777777"
+    runner = FakeProcessRunner(_script_with_moved_base(advanced, _ok()))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        fetched = _run(runner)
+
+    assert fetched.base_sha == advanced
+    assert any(
+        r.levelno == logging.WARNING and "advanced since resolution" in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_base_ancestry_probe_error_fails_closed(caplog: pytest.LogCaptureFixture) -> None:
+    """Exit 128 (e.g. the reported sha absent locally) is not a yes."""
+    advanced = "7777777777777777777777777777777777777777"
+    probe_error = ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object")
+    runner = FakeProcessRunner(_script_with_moved_base(advanced, probe_error))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError):
+            _run(runner)
+
+    assert any("could not test ancestry" in r.getMessage() for r in caplog.records)
+
+
 def test_moved_base_reports_expected_and_actual(caplog: pytest.LogCaptureFixture) -> None:
+    """A base that did not merely advance (rewound, force-pushed) still fails."""
     moved = "9999999999999999999999999999999999999999"
-    runner = FakeProcessRunner(_script(base_rev=_ok(moved)))
+    runner = FakeProcessRunner(_script_with_moved_base(moved, _fail("")))
     with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
         with pytest.raises(RefMovedSinceResolutionError) as excinfo:
             _run(runner)
@@ -199,6 +241,8 @@ def test_moved_base_reports_expected_and_actual(caplog: pytest.LogCaptureFixture
 
 
 def test_moved_head_reports_expected_and_actual() -> None:
+    """Head gets no fast-forward allowance — new commits are different code to
+    review. The fake raises on an unscripted ancestry probe, so none ran."""
     moved = "8888888888888888888888888888888888888888"
     runner = FakeProcessRunner(_script(head_rev=_ok(moved)))
     with pytest.raises(RefMovedSinceResolutionError) as excinfo:
@@ -243,3 +287,63 @@ def test_changed_paths_applies_no_exclusions() -> None:
     runner = FakeProcessRunner(_script(diff=_ok("src/a.py\nuv.lock\ndist/bundle.js\n")))
     fetched = _run(runner)
     assert fetched.changed_paths == ("src/a.py", "uv.lock", "dist/bundle.js")
+
+
+# --- Real git: the #131 scenario ----------------------------------------------
+
+
+def _git(cwd: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", *args],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _commit(repo: Path, name: str) -> str:
+    (repo / name).write_text(name, encoding="utf-8")
+    _git(repo, "add", name)
+    _git(repo, "commit", "-q", "-m", name)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def test_real_git_base_merged_after_resolution(tmp_path: Path) -> None:
+    """Resolution reported base A; another PR then merged, so the remote's main
+    is B. Real git, real ancestry: the review proceeds against B, and a rewound
+    base is still refused."""
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    _git(remote, "init", "-q", "-b", "main")
+    reported_base = _commit(remote, "a.txt")
+    _git(remote, "checkout", "-q", "-b", "feature")
+    head = _commit(remote, "feature.txt")
+    _git(remote, "update-ref", f"refs/pull/{NUMBER}/head", head)
+    _git(remote, "checkout", "-q", "main")
+    merged_base = _commit(remote, "other-pr.txt")
+
+    local = tmp_path / "local"
+    _git(tmp_path, "clone", "-q", str(remote), str(local))
+
+    def fetch(expected_base: str):
+        return fetch_and_range(
+            SubprocessRunner(),
+            cwd=str(local),
+            remote_name=REMOTE,
+            namespace=NUMBER,
+            base_refspec_source="refs/heads/main",
+            head_refspec_source=f"refs/pull/{NUMBER}/head",
+            expected_base_sha=expected_base,
+            expected_head_sha=head,
+        )
+
+    fetched = fetch(reported_base)
+    assert fetched.base_sha == merged_base
+    assert fetched.changed_paths == ("feature.txt",)
+
+    # Rewind: host reports B, but main was reset to A.
+    _git(remote, "reset", "-q", "--hard", reported_base)
+    with pytest.raises(RefMovedSinceResolutionError):
+        fetch(merged_base)

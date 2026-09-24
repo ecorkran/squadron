@@ -264,8 +264,9 @@ class GitHubCli:
         pull requests alike, so a fork head needs no second remote.
 
         Takes the resolved pull request because ``base_sha`` — the base tip at
-        resolution, which makes the post-fetch check exact — is carried there
-        rather than on the record.
+        resolution, which the post-fetch check compares against — is carried
+        there rather than on the record. ``baseRefOid`` can trail the branch
+        after a merge, so a fetched base that descends from it is accepted (#131).
         """
         record = resolved.record
         return fetch_and_range(

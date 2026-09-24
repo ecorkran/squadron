@@ -84,7 +84,8 @@ class CodeHost(Protocol):
 
         Takes the resolved pull request rather than the bare record: the
         post-fetch "base moved since resolution" check compares against
-        ``base_sha``, the base tip the host reported at resolution, and that
+        ``base_sha``, the base tip the host reported at resolution (a fetched
+        base that only advanced past it is accepted, #131), and that
         field lives on ``ResolvedPullRequest`` by design (PM decision
         20260913 — the design fixed both shapes and they disagreed).
         """

@@ -68,8 +68,22 @@ def fetch_and_range(
         ),
     )
 
-    base_sha = _verify(runner, cwd=cwd, ref=base_local, role=RefRole.BASE, expected=expected_base_sha)
-    head_sha = _verify(runner, cwd=cwd, ref=head_local, role=RefRole.HEAD, expected=expected_head_sha)
+    base_sha = _verify(
+        runner,
+        cwd=cwd,
+        ref=base_local,
+        role=RefRole.BASE,
+        expected=expected_base_sha,
+        accept_fast_forward=True,
+    )
+    head_sha = _verify(
+        runner,
+        cwd=cwd,
+        ref=head_local,
+        role=RefRole.HEAD,
+        expected=expected_head_sha,
+        accept_fast_forward=False,
+    )
 
     merge_base = _merge_base(runner, cwd=cwd, base=base_local, head=head_local)
     # The three-dot form: everything head gained since it forked from base.
@@ -132,18 +146,60 @@ def _fetch(
     )
 
 
-def _verify(runner: ProcessRunner, *, cwd: str, ref: str, role: RefRole, expected: str) -> str:
-    """Resolve ``ref`` and confirm it is the sha the host reported."""
+def _verify(
+    runner: ProcessRunner,
+    *,
+    cwd: str,
+    ref: str,
+    role: RefRole,
+    expected: str,
+    accept_fast_forward: bool,
+) -> str:
+    """Resolve ``ref`` and confirm it is the sha the host reported.
+
+    With ``accept_fast_forward``, a fetched sha that descends from ``expected``
+    passes and is returned in its place. GitHub's ``baseRefOid`` can trail the
+    base branch's real tip after a merge, while ``git fetch`` already serves the
+    new tip (#131). A base that only moved forward still yields the same
+    three-dot range, so the fetched tip is the right one to review against. Any
+    other movement (rewind, force-push) still fails.
+    """
     actual = _rev_parse(runner, cwd=cwd, ref=ref)
     if actual is None:
         _logger.warning("%s ref %s is missing after fetch", role.value, ref)
         raise RefNotFetchableError(role, f"{role.value} ref {ref} is missing after fetch")
-    if actual != expected:
+    if actual == expected:
+        return actual
+    if accept_fast_forward and _is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
         _logger.warning(
-            "%s moved since resolution: expected %s, found %s", role.value, expected, actual
+            "%s advanced since resolution: host reported %s, fetched %s (a descendant); "
+            "using the fetched tip",
+            role.value,
+            expected,
+            actual,
         )
-        raise RefMovedSinceResolutionError(role, expected, actual)
-    return actual
+        return actual
+    _logger.warning("%s moved since resolution: expected %s, found %s", role.value, expected, actual)
+    raise RefMovedSinceResolutionError(role, expected, actual)
+
+
+def _is_ancestor(runner: ProcessRunner, *, cwd: str, ancestor: str, descendant: str) -> bool:
+    """Is ``ancestor`` reachable from ``descendant``?
+
+    ``merge-base --is-ancestor`` exits 0 for yes and 1 for no. Anything else
+    (e.g. ``ancestor`` absent locally) is logged and answered no, so the caller
+    fails closed.
+    """
+    result = runner.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=cwd,
+        timeout=GIT_QUERY_TIMEOUT_SECONDS,
+    )
+    if result.returncode not in (0, 1):
+        _logger.warning(
+            "could not test ancestry of %s in %s: %s", ancestor, descendant, result.stderr.strip()
+        )
+    return result.returncode == 0
 
 
 def _rev_parse(runner: ProcessRunner, *, cwd: str, ref: str) -> str | None:
