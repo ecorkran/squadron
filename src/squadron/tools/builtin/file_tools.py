@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 
 from squadron.tools import limits
 from squadron.tools.builtin._shared import (
@@ -44,6 +45,16 @@ READ_FILE_PARAMETERS: dict[str, object] = {
 }
 
 
+#: A trailing line citation: `:12`, `:12-40`, `:12:5` (line:column), or `#L12` / `#L12-L40`.
+_LINE_REFERENCE_RE = re.compile(r"(?::\d+(?:[-:]\d+)?|#L\d+(?:-L?\d+)?)\s*$")
+
+
+def _without_line_reference(path: str) -> str | None:
+    """``path`` with a trailing line citation removed, or ``None`` when it carries none."""
+    stripped = _LINE_REFERENCE_RE.sub("", path)
+    return stripped if stripped and stripped != path else None
+
+
 def _read_file_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
@@ -54,14 +65,29 @@ def _read_file_factory(spec: JailSpec) -> ToolExecutor:
             # stall it on a slow or network filesystem (rules/python.md: synchronous work
             # inside an async def must complete in under 1ms).
             def _read() -> ToolResult:
-                target = resolve_in_jail(spec, path)
+                requested = path
+                target = resolve_in_jail(spec, requested)
                 if target is None:
-                    return jail_violation(READ_FILE_NAME, spec, path)
+                    return jail_violation(READ_FILE_NAME, spec, requested)
+                note = ""
+                stripped = _without_line_reference(requested)
+                if not target.exists() and stripped is not None:
+                    # Models cite locations as `file.ts:1050` and then pass the citation as
+                    # the path. The literal path does not exist; the file does.
+                    fallback = resolve_in_jail(spec, stripped)
+                    if fallback is not None and fallback.is_file():
+                        _logger.info("read_file: read %s for requested %s", stripped, requested)
+                        target = fallback
+                        note = (
+                            f"[read_file: '{requested}' does not exist; read '{stripped}' — "
+                            "the trailing line reference was ignored and the whole file follows]\n"
+                        )
                 rejection = reject_special_file(READ_FILE_NAME, target)
                 if rejection is not None:
                     return rejection
                 data = target.read_bytes()
-                return ToolResult(content=truncate(data, limits.MAX_READ_BYTES, str(target)))
+                content = truncate(data, limits.MAX_READ_BYTES, str(target))
+                return ToolResult(content=note + content)
 
             return await asyncio.to_thread(_read)
 

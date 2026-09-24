@@ -148,3 +148,52 @@ async def test_special_file_refusal_logs_at_info(
     records = [r for r in caplog.records if r.levelno == logging.INFO]
     assert records
     assert "not a regular file" in records[0].getMessage()
+
+
+# --- Trailing line references in the path -----------------------------------------------
+
+
+@pytest.mark.parametrize("suffix", [":1050", ":10-20", ":12:5", "#L12", "#L12-L40"])
+async def test_trailing_line_reference_reads_the_file(
+    tmp_path: Path, read_file: ToolExecutor, suffix: str
+) -> None:
+    """Models pass a citation such as `ConsistencyChecker.ts:1050` as the path (seen live in
+    a glm-5.3-flash review). The file exists; the citation is not part of its name."""
+    target = tmp_path / "src" / "ConsistencyChecker.ts"
+    target.parent.mkdir()
+    target.write_text("export class ConsistencyChecker {}\n")
+
+    result = await read_file({"path": f"{target}{suffix}"})
+
+    assert result.is_error is False
+    assert "export class ConsistencyChecker {}" in result.content
+    assert f"'{target}{suffix}' does not exist" in result.content
+
+
+async def test_a_real_file_with_a_colon_name_is_read_as_named(
+    tmp_path: Path, read_file: ToolExecutor
+) -> None:
+    """The literal path wins when it exists; stripping only applies to a miss."""
+    (tmp_path / "a.txt").write_text("the plain file")
+    (tmp_path / "a.txt:12").write_text("the colon file")
+
+    result = await read_file({"path": "a.txt:12"})
+
+    assert result.content == "the colon file"
+
+
+async def test_line_reference_on_a_missing_file_is_still_not_found(read_file: ToolExecutor) -> None:
+    result = await read_file({"path": "nope.ts:12"})
+
+    assert result.is_error is True
+    assert "not found" in result.content
+
+
+async def test_line_reference_cannot_escape_the_jail(tmp_path: Path, read_file: ToolExecutor) -> None:
+    outside = tmp_path.parent / "outside-ref.txt"
+    outside.write_text("secret")
+
+    result = await read_file({"path": f"{outside}:3"})
+
+    assert result.is_error is True
+    assert "secret" not in result.content
