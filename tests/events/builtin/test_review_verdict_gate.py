@@ -7,9 +7,17 @@ from pathlib import Path
 import pytest
 
 from squadron.events import EventType
+from squadron.events.builtin.document_scope import CF_DOCUMENT_ROOT
 from squadron.events.builtin.review_verdict_gate import ReviewVerdictGateAction
 from squadron.events.contexts import CommitContext
 from squadron.review.models import Verdict
+
+_AGENT_FIXTURE = Path(__file__).parent / "fixtures" / "claude-agent-task-checker.md"
+
+
+def _in_scope(name: str) -> str:
+    """A staged path under cf's user-document root, where unreadable fails closed."""
+    return "/".join((*CF_DOCUMENT_ROOT, "reviews", name))
 
 
 def _commit_context(cwd: str, staged_paths: tuple[str, ...] = ()) -> CommitContext:
@@ -100,9 +108,62 @@ class TestInvalidVerdicts:
 
     @pytest.mark.asyncio
     async def test_unparseable_frontmatter_rejected(self, tmp_path: Path) -> None:
-        """A block that is present but unreadable must not pass: the gate
-        cannot determine validity, so it fails closed."""
-        staged = _write(tmp_path, "broken.md", "docType: review\n  verdict: [unclosed")
+        """A block that is present but unreadable under cf's document root must
+        not pass: the gate cannot determine validity, so it fails closed."""
+        staged = _write(tmp_path, _in_scope("broken.md"), "docType: review\n  verdict: [unclosed")
+
+        result = await _run(tmp_path, staged)
+
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_parseable_review_outside_document_root_still_checked(self, tmp_path: Path) -> None:
+        """Scope limits only the unreadable case; a readable review anywhere is
+        still keyed on its docType."""
+        staged = _write(tmp_path, "elsewhere/bad.md", "docType: review\nverdict: BANANA")
+
+        result = await _run(tmp_path, staged)
+
+        assert result.success is False
+
+
+class TestDocumentScope:
+    """#132: vendored files outside cf's document root carry frontmatter squadron
+    does not own. Unparseable there means skipped, not failed."""
+
+    @pytest.mark.asyncio
+    async def test_real_claude_agent_frontmatter_outside_root_passes(self, tmp_path: Path) -> None:
+        """The tarball-installed guide's agent definition that blocked the
+        v0.18.0 install commit — real content, not a reconstruction."""
+        staged = "project-documents/ai-project-guide/project-guides/agents/task-checker.md"
+        target = tmp_path / staged
+        target.parent.mkdir(parents=True)
+        target.write_text(_AGENT_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+        result = await _run(tmp_path, staged)
+
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_real_claude_agent_frontmatter_inside_root_fails(self, tmp_path: Path) -> None:
+        staged = _in_scope("task-checker.md")
+        target = tmp_path / staged
+        target.parent.mkdir(parents=True)
+        target.write_text(_AGENT_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+        result = await _run(tmp_path, staged)
+
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("spelling", ["absolute", "dot-prefixed"])
+    async def test_non_canonical_in_scope_spelling_still_fails_closed(
+        self, tmp_path: Path, spelling: str
+    ) -> None:
+        """#122: an absolute or ./ spelling of an in-scope path must not
+        classify as out of scope and slip past."""
+        relative = _write(tmp_path, _in_scope("broken.md"), "docType: review\n  verdict: [unclosed")
+        staged = str(tmp_path / relative) if spelling == "absolute" else f"./{relative}"
 
         result = await _run(tmp_path, staged)
 
@@ -165,7 +226,7 @@ class TestValidAndInapplicable:
 
         if os.geteuid() == 0:
             pytest.skip("root reads regardless of mode bits")
-        staged = _write(tmp_path, "locked.md", "docType: review\nverdict: PASS")
+        staged = _write(tmp_path, _in_scope("locked.md"), "docType: review\nverdict: PASS")
         target = tmp_path / staged
         target.chmod(0o000)
         try:

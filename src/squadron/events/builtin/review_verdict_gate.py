@@ -13,8 +13,11 @@ drift the first time a member is added.
 Keyed on ``docType: review``, not on path: the reviews directory is a
 convention, the docType is the document's own declaration. A file with no
 frontmatter is not a review and is skipped. A file whose frontmatter is
-present but unreadable is *not* passed — same posture the frontmatter gate
-holds, that a gate which cannot determine validity must not pass.
+present but unreadable is *not* passed when it sits under cf's user-document
+root — same posture the frontmatter gate holds, that a gate which cannot
+determine validity must not pass. Outside that root it is skipped: vendored
+content such as a tarball-installed guide carries frontmatter squadron does
+not own and that need not be strict YAML (#132).
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ import yaml
 from squadron.documents.frontmatter import split_document
 from squadron.documents.schema import DocType
 from squadron.events import EventType, register_event_action
+from squadron.events.builtin.document_scope import is_under_cf_document_root
 from squadron.events.contexts import CommitContext, EventContext
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.review.models import Verdict
@@ -65,7 +69,11 @@ class ReviewVerdictGateAction:
         for staged in context.staged_paths:
             if not staged.endswith(".md"):
                 continue
-            violation = self._check(Path(context.cwd) / staged, staged)
+            violation = self._check(
+                Path(context.cwd) / staged,
+                staged,
+                fail_unreadable=is_under_cf_document_root(staged, context.cwd),
+            )
             if violation is not None:
                 violations.append(violation)
 
@@ -78,12 +86,21 @@ class ReviewVerdictGateAction:
             success=False, action_type=self.name, outputs={}, error="\n".join(violations)
         )
 
-    def _check(self, path: Path, display: str) -> str | None:
+    def _check(self, path: Path, display: str, *, fail_unreadable: bool) -> str | None:
         """Return a violation message for *path*, or ``None`` when it passes.
 
         A file that is not a review — no frontmatter block, or a docType other
-        than ``review`` — passes by not applying.
+        than ``review`` — passes by not applying. A file that cannot be read or
+        parsed fails only when *fail_unreadable* (it is under cf's document
+        root); otherwise it is not a squadron document and is skipped.
         """
+
+        def unreadable(reason: object) -> str | None:
+            if not fail_unreadable:
+                _logger.debug("review-verdict-gate: skipping out-of-scope %s (%s)", display, reason)
+                return None
+            return _UNREADABLE_TEMPLATE.format(path=display, reason=reason)
+
         if not path.exists():
             # A staged path with nothing at it is a staged deletion. Deleting a
             # review is not committing an invalid verdict, so the gate does not
@@ -99,7 +116,7 @@ class ReviewVerdictGateAction:
             # Present but unreadable: a permission problem or a non-UTF-8 file.
             # We cannot tell whether it is a review, and a gate that cannot
             # determine validity must not pass.
-            return _UNREADABLE_TEMPLATE.format(path=display, reason=exc)
+            return unreadable(exc)
 
         split = split_document(text)
         if split is None:
@@ -110,11 +127,9 @@ class ReviewVerdictGateAction:
         try:
             loaded = yaml.safe_load(raw_block)
         except yaml.YAMLError as exc:
-            return _UNREADABLE_TEMPLATE.format(path=display, reason=exc)
+            return unreadable(exc)
         if not isinstance(loaded, dict):
-            return _UNREADABLE_TEMPLATE.format(
-                path=display, reason="frontmatter did not parse to a mapping"
-            )
+            return unreadable("frontmatter did not parse to a mapping")
 
         frontmatter: dict[str, object] = {
             str(key): value for key, value in cast("dict[object, object]", loaded).items()
