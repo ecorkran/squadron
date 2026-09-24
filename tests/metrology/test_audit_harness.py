@@ -793,11 +793,26 @@ def test_audit_can_write_its_own_product() -> None:
         _AUDIT_ALLOWED_TOOLS,  # pyright: ignore[reportPrivateUsage]
     )
 
-    assert "Write" in _AUDIT_ALLOWED_TOOLS
-    assert "Edit" in _AUDIT_ALLOWED_TOOLS
+    assert "write_file" in _AUDIT_ALLOWED_TOOLS
+    assert "edit_file" in _AUDIT_ALLOWED_TOOLS
     # Read and Bash are load-bearing for the protocol's own steps.
-    assert "Read" in _AUDIT_ALLOWED_TOOLS
-    assert "Bash" in _AUDIT_ALLOWED_TOOLS
+    assert "read_file" in _AUDIT_ALLOWED_TOOLS
+    assert "bash" in _AUDIT_ALLOWED_TOOLS
+
+
+def test_audit_tools_translate_at_the_sdk_edge() -> None:
+    """#107: the audit crashed before any work because its list spelled
+    Claude's names, which the SDK edge rejects. Every entry must translate,
+    and Edit/Task/TodoWrite must survive — dropping them is the silent
+    degradation the audit's design warns about."""
+    from squadron.metrology.audit import (
+        _AUDIT_ALLOWED_TOOLS,  # pyright: ignore[reportPrivateUsage]
+    )
+    from squadron.providers.sdk.tool_names import translate_tool_names
+
+    translated = translate_tool_names(list(_AUDIT_ALLOWED_TOOLS))
+
+    assert {"Read", "Glob", "Grep", "Bash", "Task", "TodoWrite", "Write", "Edit"} == set(translated)
 
 
 def test_resolve_audit_model_precedence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

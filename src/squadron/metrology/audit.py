@@ -158,15 +158,19 @@ def audit_prompt_hash(skill_path: Path) -> str:
 #: fail loudly — the model reached for Bash heredocs instead, turning one
 #: write into many calls. An interactive run of the same skill uses Edit and
 #: finishes in a fraction of the tool calls.
+#:
+#: Canonical names, translated at the SDK provider edge (#107). ``edit_file``,
+#: ``task`` and ``todo_write`` exist only on the Claude SDK provider, so a
+#: non-Claude audit fails on them loudly rather than losing them (#35).
 _AUDIT_ALLOWED_TOOLS = [
-    "Read",
-    "Glob",
-    "Grep",
-    "Bash",
-    "Task",
-    "TodoWrite",
-    "Write",
-    "Edit",
+    "read_file",
+    "list_files",
+    "grep",
+    "bash",
+    "task",
+    "todo_write",
+    "write_file",
+    "edit_file",
 ]
 
 #: The audit runs unattended against an external repo; the skill's protocol

@@ -1,7 +1,8 @@
 """Canonical squadron tool names translated to Claude Code's vocabulary.
 
-Templates and pipeline steps declare tools in the canonical vocabulary defined by
-``squadron.tools.builtin``. The Claude Code CLI behind the SDK provider knows a different set
+Templates and pipeline steps declare tools in the canonical vocabulary: the tools
+``squadron.tools.builtin`` implements, plus a few Claude-only capabilities named below. The
+Claude Code CLI behind the SDK provider knows a different set
 of names for the same capabilities, so the two are reconciled at exactly one place: the point
 where ``AgentConfig`` becomes ``ClaudeAgentOptions``. Nothing upstream of that edge needs to
 know Claude's names, and nothing downstream sees canonical ones.
@@ -15,11 +16,18 @@ from __future__ import annotations
 from squadron.providers.errors import ProviderError
 
 CANONICAL_TO_CLAUDE: dict[str, str] = {
+    # Implemented by squadron.tools.builtin, so every provider can offer them.
     "read_file": "Read",
     "list_files": "Glob",
     "grep": "Grep",
     "write_file": "Write",
     "bash": "Bash",
+    # Claude Code's own tools with no squadron executor. They are canonical names
+    # so callers never spell Claude's vocabulary, but only this provider can offer
+    # them; a non-SDK agent rejects them as unknown rather than dropping them (#107).
+    "edit_file": "Edit",
+    "task": "Task",
+    "todo_write": "TodoWrite",
 }
 
 

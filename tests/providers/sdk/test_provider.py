@@ -312,6 +312,13 @@ class TestToolNameTranslation:
         assert opts.allowed_tools == ["Write", "Bash"]
 
     @pytest.mark.asyncio
+    async def test_claude_only_capabilities_translate(self, provider: ClaudeSDKProvider) -> None:
+        """#107: capabilities with no squadron executor still have canonical names."""
+        opts = await self._build_options(provider, ["edit_file", "task", "todo_write"])
+
+        assert opts.allowed_tools == ["Edit", "Task", "TodoWrite"]
+
+    @pytest.mark.asyncio
     async def test_unmapped_canonical_name_raises_provider_error(
         self, provider: ClaudeSDKProvider
     ) -> None:
