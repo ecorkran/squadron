@@ -212,28 +212,32 @@ _KNOWN_ALIASES_PATCH = "squadron.models.aliases.get_all_aliases"
 
 
 class TestSelectFromPool:
-    def test_random_pool_returns_member(self, tmp_state_file: Path, sample_aliases: dict) -> None:
-        with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
+    """Runs the shipped pools against the shipped aliases, isolated from any
+    user models.toml. A hand-copied alias fixture here went stale on every
+    alias refresh; the shipped file is the real contract."""
+
+    def test_random_pool_returns_member(self, tmp_state_file: Path) -> None:
+        with patch(_KNOWN_ALIASES_PATCH, return_value=load_builtin_aliases()):
             pool = get_pool("high")
             result = select_from_pool(pool)
         assert result in pool.models
 
-    def test_cheapest_pool_returns_member(self, tmp_state_file: Path, sample_aliases: dict) -> None:
-        with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
+    def test_cheapest_pool_returns_member(self, tmp_state_file: Path) -> None:
+        with patch(_KNOWN_ALIASES_PATCH, return_value=load_builtin_aliases()):
             pool = get_pool("cheap")
             result = select_from_pool(pool)
         assert result in pool.models
 
-    def test_round_robin_pool_advances_state(self, tmp_state_file: Path, sample_aliases: dict) -> None:
-        with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
+    def test_round_robin_pool_advances_state(self, tmp_state_file: Path) -> None:
+        with patch(_KNOWN_ALIASES_PATCH, return_value=load_builtin_aliases()):
             pool = get_pool("review")
             r1 = select_from_pool(pool)
             r2 = select_from_pool(pool)
         # Two consecutive calls must differ (pool has ≥4 members)
         assert r1 != r2
 
-    def test_round_robin_state_file_updated(self, tmp_state_file: Path, sample_aliases: dict) -> None:
-        with patch(_KNOWN_ALIASES_PATCH, return_value=sample_aliases):
+    def test_round_robin_state_file_updated(self, tmp_state_file: Path) -> None:
+        with patch(_KNOWN_ALIASES_PATCH, return_value=load_builtin_aliases()):
             pool = get_pool("review")
             select_from_pool(pool)
         assert tmp_state_file.exists()
