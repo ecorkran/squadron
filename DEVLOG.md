@@ -2,13 +2,43 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260922
+dateUpdated: 20260924
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260924
+
+### Release 0.13.1 — Codex install target, PR base lag, guide-tarball gate
+
+Patch release carrying slice 925 (commands install for Codex) plus three fixes found in use.
+
+**#131 — `sq review pr` refused a base that only moved forward.** The post-fetch check compared
+the fetched base against GitHub's GraphQL `baseRefOid` exactly. After a merge into the base
+branch, `baseRefOid` trails while `git fetch` already serves the new tip, so the check failed
+deterministically until GitHub caught up. A fetched base that descends from the reported sha
+(`merge-base --is-ancestor`) is now accepted at WARNING and used for the range; a rewound base,
+any head movement, and an ancestry probe that errors still fail. A real-git test reproduces the
+reported sequence: resolve at A, merge another PR to B, review against B, then rewind and refuse.
+
+**#132 — the review-verdict gate blocked the guide tarball switch.** A submodule reaches the
+commit gates as one gitlink; the tarball install stages every guide file. The verdict gate fails
+closed on unparseable frontmatter anywhere, and two of ai-project-guide's Claude agent
+definitions have `description:` values with a bare `: ` — fine for Claude Code, invalid YAML.
+Fail-closed now applies only under `project-documents/user/`; a readable `docType: review` is
+still checked anywhere. The document-root predicate moved to a shared `document_scope.py` and
+resolves against the repo root, which also closed #122 (absolute and `./` spellings classified
+as out of scope). The fixture is a verbatim copy of the real `task-checker.md`.
+
+**Pool loader tests went stale on the `grok-code` repoint.** `TestSelectFromPool` ran the shipped
+`pools.toml` against a hand-copied alias fixture. It now uses `load_builtin_aliases()`, so only a
+real pool/alias mismatch fails. The strategy tests keep the fixture; they need its fixed pricing.
+
+Housekeeping: merged the last `squadron-pr` commit (slice 926 plan entry), removed that worktree
+and its cf worktree context, and deleted every merged branch, local and remote.
 
 ## 20260922
 
