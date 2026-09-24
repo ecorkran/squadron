@@ -252,6 +252,10 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
             f"- Response line structure was normalized before parsing "
             f"({result.normalized_break_count} break(s) inserted; see #96)"
         )
+    # #92, same only-when-it-ran rule: a degraded review after a recovery turn means the
+    # follow-up did not produce a review either.
+    if result.recovery_turn_used:
+        lines.append("- Recovery turn used: yes (the follow-up reply is included below)")
     lines.append("")
     return lines
 
@@ -502,6 +506,12 @@ def format_review_markdown(
     lines.append("")
     lines.append(f"**Verdict:** {resolved_verdict}")
     lines.append(f"**Model:** {resolved_model}")
+    if result.recovery_turn_used:
+        # #92. Only when used, so every other artifact is byte-for-byte unchanged.
+        lines.append(
+            "**Recovery turn:** used — the first reply ended without a review, "
+            "and this review came from one follow-up prompt"
+        )
     lines.append("")
 
     if result.findings:

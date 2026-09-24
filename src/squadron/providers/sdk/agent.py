@@ -103,6 +103,10 @@ class ClaudeSDKAgent:
 
     async def handle_message(self, message: Message) -> AsyncIterator[Message]:
         """Route to query or client mode based on configuration."""
+        # Per-message, matching the OpenAI-compatible agent: a caller sending a second
+        # message on the same agent (the #92 review recovery turn) sums the two counts.
+        self._tool_calls_made = 0
+        self._failed_tool_calls = 0
         if self._mode == "client":
             async for msg in self._handle_client_mode(message):
                 yield msg

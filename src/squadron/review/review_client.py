@@ -17,13 +17,7 @@ from pathlib import Path
 
 from squadron.config.manager import get_config
 from squadron.core.models import (
-    RATE_LIMIT_EVENT_TYPE,
-    SDK_RESULT_TYPE,
-    TOOL_RESULT_TYPE,
-    TOOL_USE_TYPE,
     AgentConfig,
-    Message,
-    MessageType,
 )
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
@@ -37,6 +31,12 @@ from squadron.review.parsers import parse_review_output
 from squadron.review.template_inputs import FILE_INPUT_KEYS
 from squadron.review.templates import ReviewTemplate
 from squadron.review.tool_support import should_inject_file_bodies
+from squadron.review.turn_capture import (
+    FINISH_REVIEW_PROMPT,
+    TurnCapture,
+    collect_turn,
+    ended_mid_task,
+)
 from squadron.tools import resolve_effective_tools
 
 _logger = logging.getLogger(__name__)
@@ -228,97 +228,65 @@ async def run_review_with_profile(
         resolved_model or "(default)",
     )
 
-    # Create agent, send prompt, collect response, shut down
-    agent = await provider.create_agent(config)
-    output_parts: list[str] = []
-    # Tool-use telemetry rides the final Message's metadata (design D4). Captured from every
-    # response rather than only the ones kept for prose, because the filtered-out SDK result
-    # message can be the last one yielded.
-    tools_given: list[str] | None = None
-    tool_calls_made: int | None = None
-    # Slice 266. Read back from metadata like the fields above so the mechanism stays
-    # uniform, but the gate's own result is authoritative: SDK providers do not stamp it,
-    # and suppression must be recorded there too.
-    suppressed_reason_seen: str | None = None
-    # Slice 918 stop-reason evidence, read back the same way. These are stamped on every
-    # openrouter-path response and on none of the SDK-path ones, so None here survives to
-    # ReviewResult as "not reported" — never fabricated into a plausible-looking value.
-    stop_reason: str | None = None
-    reasoning_chars: int | None = None
-    failed_tool_calls: int | None = None
-    try:
-        review_message = Message(
-            sender="review-system",
-            recipients=[config.name],
-            content=prompt,
-            message_type=MessageType.chat,
-        )
-        async for response in agent.handle_message(review_message):
-            sdk_type = response.metadata.get("sdk_type")
-            # SDK providers emit both an AssistantMessage and a ResultMessage
-            # with identical content (skip the duplicate), plus separate
-            # tool_use/tool_result messages narrating the agent's tool calls
-            # (e.g. "Using tool: Bash", command stdout) that are not part of
-            # the review's actual prose and must not be mixed into it — non-SDK
-            # providers never set sdk_type and are unaffected by this filter.
-            # An informational RateLimitEvent is a usage-meter notice, not
-            # review prose, and is excluded the same way (issue #23 class).
-            given = response.metadata.get("tools_given")
-            if given is not None:
-                tools_given = given
-                tool_calls_made = response.metadata.get("tool_calls_made", 0)
-            stamped_reason = response.metadata.get("tools_suppressed_reason")
-            if stamped_reason is not None:
-                suppressed_reason_seen = stamped_reason
-            # Guarded per key rather than on one of them: a later response that stamps
-            # nothing must not erase what an earlier one reported. `failed_tool_calls` is
-            # checked against None, not truthiness — a stamped 0 is a real answer.
-            stamped_stop = response.metadata.get("stop_reason")
-            if stamped_stop is not None:
-                stop_reason = stamped_stop
-            stamped_reasoning = response.metadata.get("reasoning_chars")
-            if stamped_reasoning is not None:
-                reasoning_chars = stamped_reasoning
-            stamped_failures = response.metadata.get("failed_tool_calls")
-            if stamped_failures is not None:
-                failed_tool_calls = stamped_failures
-            if sdk_type in (SDK_RESULT_TYPE, TOOL_USE_TYPE, TOOL_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
-                continue
-            output_parts.append(response.content)
-    finally:
-        await agent.shutdown()
-    raw_output = "\n".join(output_parts)
-
     # Resolve diff-file set (code-template path-membership check, slice 904)
     # and cwd (path-existence check, all template types).
     cwd_for_checks = Path(inputs.get("cwd", "."))
 
-    result = parse_review_output(
-        raw_output=raw_output,
-        template_name=template.name,
-        input_files=inputs,
-        model=resolved_model,
-        diff_files=diff_files,
-        cwd=cwd_for_checks,
-    )
+    def parse(raw_output: str) -> ReviewResult:
+        return parse_review_output(
+            raw_output=raw_output,
+            template_name=template.name,
+            input_files=inputs,
+            model=resolved_model,
+            diff_files=diff_files,
+            cwd=cwd_for_checks,
+        )
 
-    result.tools_given = tools_given
-    result.tool_calls_made = tool_calls_made
-    result.tools_suppressed_reason = tools_suppressed_reason or suppressed_reason_seen
-    result.stop_reason = stop_reason
-    result.reasoning_chars = reasoning_chars
-    result.failed_tool_calls = failed_tool_calls
+    # Create agent, send prompt, collect response, shut down
+    agent = await provider.create_agent(config)
+    capture = TurnCapture()
+    recovery_turn_used = False
+    try:
+        await collect_turn(agent, content=prompt, recipient=config.name, capture=capture)
+        result = parse(capture.raw_output)
+        if ended_mid_task(result):
+            # #92: the model ended its turn believing it had more to do — a narrated next
+            # step, or its own tool-call markup written as text — and no review was
+            # emitted. One more turn on the same conversation keeps the completed work.
+            _logger.warning(
+                "%s review (model=%s) ended its turn without writing the review "
+                "(stop reason: %s); asking once more for the review",
+                template.name,
+                resolved_model or "(default)",
+                capture.stop_reason or "not reported",
+            )
+            recovery_turn_used = True
+            await collect_turn(
+                agent, content=FINISH_REVIEW_PROMPT, recipient=config.name, capture=capture
+            )
+            result = parse(capture.raw_output)
+    finally:
+        await agent.shutdown()
+
+    result.recovery_turn_used = recovery_turn_used
+    result.tools_given = capture.tools_given
+    result.tool_calls_made = capture.tool_calls_made
+    # Slice 266: the gate's own result is authoritative — SDK providers do not stamp it.
+    result.tools_suppressed_reason = tools_suppressed_reason or capture.suppressed_reason
+    result.stop_reason = capture.stop_reason
+    result.reasoning_chars = capture.reasoning_chars
+    result.failed_tool_calls = capture.failed_tool_calls
 
     # A review that was handed tools and called none produces a verdict from a model
     # that read nothing beyond the prompt — indistinguishable from a healthy review in
     # every other signal, so it gets its own observable one.
-    if tools_given and not tool_calls_made:
+    if capture.tools_given and not capture.tool_calls_made:
         _logger.warning(
             "%s review (model=%s) was given tools %s but made no tool calls; its verdict "
             "rests on the prompt alone.",
             template.name,
             resolved_model or "(default)",
-            ", ".join(tools_given),
+            ", ".join(capture.tools_given),
         )
 
     # Populate prompt capture fields at verbosity >= 2

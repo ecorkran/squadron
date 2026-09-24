@@ -156,6 +156,9 @@ class ReviewResult:
     # the Amoeba orchestrator routes on ``tool_calls_made == failed_tool_calls > 0`` as a
     # retry predicate, which a 0 collapsed into "not reported" would silently defeat.
     failed_tool_calls: int | None = None
+    # #92: the first turn ended without a readable review and one more turn was asked for.
+    # A recovered verdict is real but came from a second prompt, which the digest shows.
+    recovery_turn_used: bool = False
     # Parse-scan facts (slice 917 Part 3). None means "not produced by the
     # parser" — a hand-built result — the same convention provenance uses.
     # These feed the artifact's run digest (Part 6) and nothing else: no gate
@@ -226,6 +229,7 @@ class ReviewResult:
             "stop_reason": self.stop_reason,
             "reasoning_chars": self.reasoning_chars,
             "failed_tool_calls": self.failed_tool_calls,
+            "recovery_turn_used": self.recovery_turn_used,
             # A degraded parse must be visible to JSON consumers too, or an
             # empty findings list reads as "the model found nothing" (issue #72).
             "fallback_used": self.fallback_used,

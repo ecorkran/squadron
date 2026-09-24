@@ -886,6 +886,28 @@ class TestToolTelemetry:
         assert messages[-1].metadata["failed_tool_calls"] == 0
 
     @pytest.mark.asyncio
+    async def test_counts_are_per_message_not_per_agent(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        """A second message on the same agent reports only its own calls, matching the
+        OpenAI-compatible agent — the #92 recovery turn sums the two."""
+
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[ToolUseBlock(id="t1", name="Read", input={"path": "a.py"})],
+                model="claude",
+            )
+            yield ToolResultBlock(tool_use_id="t1", content="boom", is_error=True)
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            await _collect(tooled_query_agent.handle_message(input_message))
+            second = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert second[-1].metadata["tool_calls_made"] == 1
+        assert second[-1].metadata["failed_tool_calls"] == 1
+
+    @pytest.mark.asyncio
     async def test_failed_tool_result_increments_failed_tool_calls(
         self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:

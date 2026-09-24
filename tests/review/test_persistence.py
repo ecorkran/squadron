@@ -1353,3 +1353,20 @@ class TestRunDigestEndToEnd:
         assert "`## Findings` located: no" in markdown
         assert "`## Summary` located: no" in markdown
         assert "surviving validation: 0" in markdown
+
+
+class TestRecoveryTurnRendering:
+    """#92: a recovered review says so; an ordinary one is unchanged."""
+
+    def test_recovered_review_carries_the_header_line(self) -> None:
+        result = _make_result()
+        result.recovery_turn_used = True
+
+        md = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "**Recovery turn:** used" in md
+
+    def test_ordinary_review_has_no_recovery_line(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+
+        assert "Recovery turn" not in md

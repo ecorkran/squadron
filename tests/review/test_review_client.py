@@ -937,3 +937,108 @@ class TestDefaultSystemPromptPreset:
             )
 
         assert result.default_system_prompt_preset_used is False
+
+
+# The tail of a real minimax-m3 reply (925 code review, 20260922): the model wrote its own
+# tool-call markup as text and the turn ended with a clean stop, so no review was emitted.
+_TEXT_TOOL_CALL_REPLY = (
+    "Let me verify it doesn't use `$ARGUMENTS`:]<]minimax[>[<tool_call>\n"
+    ']<]minimax[>[<invoke name="read_file">]<]minimax[>[<path>commands/agents/sq-analysis/'
+    "SKILL.md]<]minimax[>[</path>]<]minimax[>[</invoke>"
+)
+
+
+class TestRecoveryTurn:
+    """#92: a reply that ends mid-task gets exactly one follow-up on the same agent."""
+
+    def _scripted_provider(
+        self, replies: list[str], metadata: list[dict[str, object]] | None = None
+    ) -> tuple[MagicMock, list[str]]:
+        sent: list[str] = []
+        agent = MagicMock()
+        agent.state = AgentState.idle
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            turn = len(sent)
+            sent.append(message.content)
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content=replies[turn],
+                message_type=MessageType.chat,
+                metadata=(metadata or [{}] * len(replies))[turn],
+            )
+
+        agent.handle_message = _handle
+        provider = MagicMock()
+        provider.capabilities = ProviderCapabilities(can_read_files=False)
+        provider.create_agent = AsyncMock(return_value=agent)
+        return provider, sent
+
+    async def _run(self, provider: MagicMock) -> ReviewResult:
+        from squadron.providers.profiles import ProviderProfile
+
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
+            )
+            return await run_review_with_profile(
+                _make_template(), {"input": "file.md"}, profile="openai"
+            )
+
+    @pytest.mark.asyncio
+    async def test_text_tool_call_reply_is_recovered(self, caplog: pytest.LogCaptureFixture) -> None:
+        from squadron.review.models import Verdict
+        from squadron.review.turn_capture import FINISH_REVIEW_PROMPT
+
+        provider, sent = self._scripted_provider(
+            [_TEXT_TOOL_CALL_REPLY, _SAMPLE_REVIEW_OUTPUT],
+            [
+                {"tools_given": ["read_file"], "tool_calls_made": 29, "stop_reason": "stop"},
+                {"tools_given": ["read_file"], "tool_calls_made": 2, "stop_reason": "stop"},
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
+            result = await self._run(provider)
+
+        assert result.verdict is Verdict.PASS
+        assert result.findings
+        assert result.recovery_turn_used is True
+        assert sent[1] == FINISH_REVIEW_PROMPT
+        # Per-turn counts sum; the model did 31 calls' worth of reading in total.
+        assert result.tool_calls_made == 31
+        assert any(
+            "ended its turn without writing the review" in r.getMessage() for r in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_clean_reply_sends_no_follow_up(self) -> None:
+        provider, sent = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+
+        result = await self._run(provider)
+
+        assert len(sent) == 1
+        assert result.recovery_turn_used is False
+
+    @pytest.mark.asyncio
+    async def test_recovery_is_bounded_to_one_turn(self) -> None:
+        """A follow-up that also ends mid-task stays UNKNOWN; nothing loops."""
+        from squadron.review.models import Verdict
+
+        provider, sent = self._scripted_provider(
+            [_TEXT_TOOL_CALL_REPLY, "Let me write the findings now."]
+        )
+
+        result = await self._run(provider)
+
+        assert len(sent) == 2
+        assert result.verdict is Verdict.UNKNOWN
+        assert result.recovery_turn_used is True
+        # Both replies are kept, so the degraded artifact shows what each turn said.
+        assert "<tool_call>" in result.raw_output
+        assert "Let me write the findings now." in result.raw_output
