@@ -534,6 +534,29 @@ def test_no_agents_skill_uses_claude_argument_substitution() -> None:
             )
 
 
+#: Skills whose commands can run for minutes. Under Codex a still-running command returns a
+#: session the model polls, and every poll is a billed turn (#126).
+_LONG_COMMAND_SKILLS = ("sq-review", "sq-run", "sq-task", "sq-pr")
+_WAITING_HEADING = "## Waiting on the command"
+
+
+def _waiting_section(skill_name: str) -> str:
+    text = (_agents_root() / skill_name / "SKILL.md").read_text()
+    assert _WAITING_HEADING in text, f"{skill_name} has no '{_WAITING_HEADING}' section (#126)"
+    section = text.split(_WAITING_HEADING, 1)[1]
+    return section.split("\n---\n", 1)[0].strip()
+
+
+def test_long_command_skills_carry_one_waiting_rule() -> None:
+    """#126: the rule must be in every long-command skill, word for word, and must
+    name Codex's long empty poll — the default 5 s poll is what burned a session."""
+    reference = _waiting_section(_LONG_COMMAND_SKILLS[0])
+    assert "write_stdin" in reference
+    assert "300000" in reference
+    for skill_name in _LONG_COMMAND_SKILLS[1:]:
+        assert _waiting_section(skill_name) == reference, f"{skill_name} waiting rule drifted"
+
+
 def test_drift_guard_fails_on_a_command_with_no_twin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
