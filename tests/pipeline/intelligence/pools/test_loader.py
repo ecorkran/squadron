@@ -203,6 +203,25 @@ class TestAliasValidation:
         )
         _validate_pool_aliases("ok", pool, known)  # must not raise
 
+    def test_every_shipped_pool_member_resolves_against_packaged_aliases(self) -> None:
+        """Guards issue #130: a pools.toml/models.toml drift must fail here,
+        not surface as an opaque PoolValidationError from `sq pools`.
+
+        Checks the packaged alias file specifically (not the user-merged
+        set), so this can't pass locally only because of a local
+        ~/.config/squadron/models.toml that happens to fill the gap.
+        """
+        known = load_builtin_aliases()
+        pools = load_builtin_pools()
+        for name, pool in pools.items():
+            missing = [m for m in pool.models if m not in known]
+            assert not missing, f"pool {name!r} references unknown alias(es): {missing}"
+            if pool.weights is not None:
+                missing_weights = [k for k in pool.weights if k not in known]
+                assert not missing_weights, (
+                    f"pool {name!r} has weight key(s) for unknown alias(es): {missing_weights}"
+                )
+
 
 # ---------------------------------------------------------------------------
 # select_from_pool

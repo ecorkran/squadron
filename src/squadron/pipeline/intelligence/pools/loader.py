@@ -228,14 +228,19 @@ def _validate_pool_aliases(
 
 
 def load_builtin_pools() -> dict[str, ModelPool]:
-    """Load and validate the shipped default pools from ``data/pools.toml``."""
+    """Load and validate the shipped default pools from ``data/pools.toml``.
+
+    Validated against the packaged alias set (``load_builtin_aliases``), not
+    the merged one — a pool shipped in this package must resolve on a clean
+    install, independent of the local user's ``~/.config`` overrides.
+    """
     from squadron.data import data_dir
-    from squadron.models.aliases import get_all_aliases
+    from squadron.models.aliases import load_builtin_aliases
 
     path = data_dir() / _POOLS_FILENAME
     text = path.read_text()
     pools = _parse_pools_from_toml(path, text)
-    aliases = get_all_aliases()
+    aliases = load_builtin_aliases()
     for name, pool in pools.items():
         _validate_pool_aliases(name, pool, aliases)
     return pools
