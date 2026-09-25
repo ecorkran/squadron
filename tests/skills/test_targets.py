@@ -126,6 +126,7 @@ def test_write_skill_dirs_copies_nested_files(tmp_path: Path) -> None:
         "analysis-understand/agents/openai.yaml",
         "sq-auth/SKILL.md",
     ]
+    assert all("\\" not in entry for entry in written)
     assert (destination / "analysis-understand" / "agents" / "openai.yaml").read_text() == (
         "key: value"
     )

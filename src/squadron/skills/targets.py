@@ -100,7 +100,7 @@ def write_skill_dirs(source: Path, destination: Path) -> list[str]:
         shutil.copytree(skill_dir, destination / skill_dir.name, dirs_exist_ok=True)
         for original in sorted(skill_dir.rglob("*")):
             if original.is_file():
-                written.append(str(Path(skill_dir.name) / original.relative_to(skill_dir)))
+                written.append((Path(skill_dir.name) / original.relative_to(skill_dir)).as_posix())
     return written
 
 
