@@ -2,13 +2,53 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260924
+dateUpdated: 20260925
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260925
+
+### Release 0.13.3 — pool/alias drift guard, uninstall containment, Windows receipt paths
+
+**#130 — `load_builtin_pools()` validated against the wrong alias set.** It resolved model
+aliases through `get_all_aliases()` (packaged + user `~/.config` merged), so a shipped pool
+referencing a dropped alias could still resolve on a machine whose local `models.toml`
+happened to cover the gap, and only fail on a clean install — exactly backwards for a
+packaged-file check. Switched to `load_builtin_aliases()` (packaged only); `load_user_pools()`
+correctly keeps the merged set, since user pools may reference user-defined aliases. Added a
+regression test asserting every shipped pool's `models` and `weights` keys resolve against the
+packaged alias file alone.
+
+**#129 — uninstall's unlink loop had no containment check, unlike its sibling rmdir loop.**
+`uninstall_commands` joined `destination / relative` for every `files_written` entry and
+unlinked it with no check that the result stayed under `destination` — a `../`-traversal or
+absolute entry in a hand-edited or corrupted receipt could delete files elsewhere. Defense in
+depth, not an exploitable boundary (the receipt lives at the same trust level as the files it
+names). Now resolves each path and skips-and-warns on any entry that lands outside the
+resolved destination, matching the containment check the rmdir loop already had. Tests cover
+both `..` traversal and an absolute entry.
+
+**Windows receipt paths — found live by a slice 925 code review (kimi-k2.7, CONCERNS).**
+`write_skill_dirs` joined receipt segments with `str(Path(...))`, which serializes with
+OS-native separators; a receipt written on Windows would record `sq-review\SKILL.md`,
+unreadable as a relative path on Unix. `write_flat_markdown`'s sibling entries already used a
+forward-slash literal — `write_skill_dirs` now matches via `.as_posix()`. Notable aside: the
+reviewing model made zero tool calls despite having `read_file`/`list_files`/`grep` available,
+which looked suspicious until checking `review_client.py` confirmed the diff is always
+injected into the prompt directly regardless of the tools path — the tools exist for fetching
+file bodies beyond the diff, and the model correctly judged it didn't need any. The finding
+itself checked out exactly against the code.
+
+Also removed two stale ai-project-guide `setup-ide` leftovers that squadron never referenced:
+`.claude/agents/code-review-agent.md` (deleted upstream at guide v0.17.1, "superseded by
+squadron and Claude Code's built-in review commands," but the installed copy here predated
+that and was never re-synced) and `.claude/skills/analyze` (superseded by squadron's own
+`sq:analysis` → `tech-debt-audit`/`understand`; confirmed with the guide's own PM and now
+removed upstream too, so `setup-ide` won't reinstall it).
 
 ## 20260924
 

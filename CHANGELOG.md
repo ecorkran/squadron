@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 20260925
+
+### Fixed
+- Shipped model pools (`review`, `high`, `cheap`) are now checked against squadron's own bundled model list, not whatever is also on your machine — a broken pool now fails the same way for everyone instead of only on a clean install (#130)
+- `sq uninstall-commands` no longer follows a corrupted or hand-edited install receipt outside the install directory; an entry pointing elsewhere is skipped and reported instead of deleted (#129)
+- Codex/agent-skill installs on Windows now record uninstall receipts with forward slashes, matching Claude Code installs, so they stay readable
+
 ## [0.13.2] - 20260924
 
 ### Fixed
