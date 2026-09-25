@@ -270,8 +270,15 @@ def uninstall_commands(
     # rmtree of sq/ left analysis/ and any other subdirectory behind).
     removed = 0
     touched_dirs: set[Path] = set()
+    resolved_destination = destination.resolve()
     for relative in receipt.files_written:
         path = destination / relative
+        resolved_path = path.resolve()
+        if resolved_path != resolved_destination and resolved_destination not in resolved_path.parents:
+            rprint(
+                f"[yellow]Skipping receipt entry outside the install destination: {relative!r}[/yellow]"
+            )
+            continue
         touched_dirs.add(path.parent)
         if path.exists():
             path.unlink()

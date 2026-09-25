@@ -349,6 +349,57 @@ def test_receipt_entry_for_an_already_deleted_file_is_not_an_error(tmp_path: Pat
     assert uninstalled.exit_code == 0  # type: ignore[attr-defined]
 
 
+def test_uninstall_skips_a_receipt_entry_that_escapes_via_traversal(tmp_path: Path) -> None:
+    """A `../`-prefixed entry must not delete anything outside the destination.
+
+    Guards issue #129: the receipt is user-editable, so a hand-edit or a
+    corrupted entry should be skipped and reported, not followed outside
+    the install destination the way the sibling rmdir loop already refuses to.
+    """
+    _install(runner, tmp_path)
+    escapee = tmp_path.parent / "escaped-by-traversal.md"
+    escapee.write_text("must survive uninstall")
+
+    import tomllib
+
+    import tomli_w
+
+    with open(_receipt_path(tmp_path), "rb") as fh:
+        receipt = tomllib.load(fh)
+    receipt["files_written"].append(f"../{escapee.name}")
+    with open(_receipt_path(tmp_path), "wb") as fh:
+        tomli_w.dump(receipt, fh)
+
+    result = _uninstall(runner, tmp_path)
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert escapee.exists()
+    assert escapee.read_text() == "must survive uninstall"
+
+
+def test_uninstall_skips_a_receipt_entry_that_is_an_absolute_path(tmp_path: Path) -> None:
+    """An absolute entry discards the destination on join; must still be refused."""
+    _install(runner, tmp_path)
+    escapee = tmp_path.parent / "escaped-by-absolute-path.md"
+    escapee.write_text("must survive uninstall")
+
+    import tomllib
+
+    import tomli_w
+
+    with open(_receipt_path(tmp_path), "rb") as fh:
+        receipt = tomllib.load(fh)
+    receipt["files_written"].append(str(escapee))
+    with open(_receipt_path(tmp_path), "wb") as fh:
+        tomli_w.dump(receipt, fh)
+
+    result = _uninstall(runner, tmp_path)
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+
+    assert escapee.exists()
+    assert escapee.read_text() == "must survive uninstall"
+
+
 def test_install_over_a_pre_receipt_installation_deletes_nothing(tmp_path: Path) -> None:
     """Files present, no receipt — squadron cannot tell its own from the user's.
 
