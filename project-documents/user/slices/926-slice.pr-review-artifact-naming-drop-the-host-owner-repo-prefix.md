@@ -125,6 +125,8 @@ This repo has one old-name artifact, already in `user/reviews/archive/`. No migr
 
 `project-documents/ai-project-guide/` is an installed copy, replaced on each guide update. The **Pull-Request Reviews** section is edited in the `ai-project-guide` repo (`/Users/manta/source/repos/manta/ai-project-guide/file-naming-conventions.md`) and pulled in with the next guide update. The edit: both forms, the D1 rule table in one line each, the `pr-` prefix replacing the host prefix in the "non-numeric prefix is load-bearing" paragraph.
 
+**Ordering:** the upstream edit is committed within this slice, and squadron's installed copy lags until the next guide update pulls it in. That window is accepted. Nothing reads the conventions document to find artifacts, and `pr-` keeps the non-numeric property the section calls load-bearing. The slice isn't blocked on a guide release.
+
 ## Implementation Details
 
 ### Migration Plan
@@ -132,6 +134,7 @@ This repo has one old-name artifact, already in `user/reviews/archive/`. No migr
 - **Moved:** the PR artifact stem, from `PullRequestRecord.path_key` to `PrTarget`'s own rule.
 - **Consumers updated:** `PrTarget.filename_stem`, `review_pr`'s save ordering, `tests/cli/test_review_pr_persistence.py` (lines 59, 62, 74, 175).
 - **Unchanged consumers, verified:** `ScratchWorktree.__enter__` (still `path_key`), `pr_comment.marker_for` (uses `key`), `pr/inputs.py` provenance glob (D5), `metrology/capture.py` index glob (D4).
+- **Fixtures that keep the old name on purpose:** `tests/review/test_review_consumers_ignore_pr.py`, `tests/documents/test_pr_review_frontmatter.py`, `tests/review/test_pr_artifact_is_target_agnostic.py` build `github.com-…` artifacts as fixture data. Do not rename them — they are the only coverage of D6's promise that old-name artifacts keep working. `test_review_consumers_ignore_pr.py` gains a `pr-` case beside the existing one, and its docstring is widened from "a stem beginning `github.com-`" to any non-numeric stem.
 - **Data:** none migrated (D6).
 - **Behavior preserved:** everything except the filename — frontmatter, `reviewedSha`, archive-before-overwrite, printed location and rule.
 
