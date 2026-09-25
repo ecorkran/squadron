@@ -124,7 +124,7 @@ class TestModelCLIFlag:
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
         # Alias "opus" resolves to full model ID
-        assert call_kwargs["model"] == "claude-opus-5"
+        assert call_kwargs["model"] == "claude-opus-5-5"
 
     def test_code_model_flag(
         self,

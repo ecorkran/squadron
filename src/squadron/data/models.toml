@@ -23,14 +23,14 @@
 
 [aliases.fable]
 profile = "sdk"
-model = "claude-fable-5"
+model = "claude-fable-5-1"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"
 
 [aliases.opus]
 profile = "sdk"
-model = "claude-opus-5"
+model = "claude-opus-5-5"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"
