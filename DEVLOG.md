@@ -12,6 +12,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260925
 
+### Slice 926 design — PR review artifact naming (Phase 4 complete)
+
+`user/slices/926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md`. The
+plan's open question (how to decide "same repo") is dropped: qualification follows the
+existing `ReviewsDirRule` — PROJECT and DEFAULT directories are already single-repo
+(`select_remote` refuses foreign PRs; the default path carries host/owner/repo), so they get
+`pr-{n}-review.{type}.md`; CONFIG and `--reviews-dir` get `.{owner}-{repo}` appended. Origin
+comparison rejected (keys logic on a remote name, backwards for forks). `path_key` stays the
+worktree's name only. Correction to the plan: `pr/inputs.py`'s `*-review.*.md` glob *does*
+match the new form (verified); it gets a pinning test, not a change. Conventions edit goes to
+the upstream `ai-project-guide` repo. Next: Phase 5 task breakdown.
+
 ### Release 0.13.3 — pool/alias drift guard, uninstall containment, Windows receipt paths
 
 **#130 — `load_builtin_pools()` validated against the wrong alias set.** It resolved model

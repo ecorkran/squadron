@@ -433,6 +433,8 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 **Part C — conventions and existing artifacts.** Record the chosen form in `file-naming-conventions.md`. Decide the disposition of artifacts already written under the old name (rename, leave, or ignore) and whether `archive_existing_review`'s archive copies need the same treatment. Tests asserting the current stem live in `tests/cli/test_review_pr_persistence.py` (lines 59, 62, 74, 175).
 **Not in scope:** [#90](https://github.com/ecorkran/squadron/issues/90) (no naming scheme for slice-less `--diff-only` reviews) — adjacent surface, but a separate question about whether an unanchored review can be persisted at all, not about over-qualification of a name that already works. It stays in Future Slices. Dependencies: none. Risk: Low-Medium (changes the name of an artifact downstream readers discover by glob; the discovery prefilters in Part B are the part that fails quietly rather than loudly). Effort: 2/5
 
+**Slice design:** `user/slices/926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md` — qualification follows the reviews-directory rule rather than an origin-remote comparison (D1). Corrects Part B: the `pr/inputs.py` glob already matches `pr-83-review.code.md`; it gets a pinning test, not a change (D5).
+
 ---
 
 ## Future Slices
