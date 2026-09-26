@@ -52,6 +52,8 @@ These files are managed by Context Forge and should not have project frontmatter
 
 ### Valid Status Values
 
+These five values are the only valid values for `status`, in frontmatter and in the inline `Status:` field on initiative and slice plan entries. Do not invent others. If none fits, ask the Project Manager.
+
 - `not_started` — work has not begun
 - `in_progress` — actively being worked on
 - `complete` — all work finished
@@ -76,6 +78,8 @@ This format:
 ### Per-DocType Schemas
 
 The following are the canonical schemas for each document type. Guides and prompts may include inline YAML examples for self-containedness, but they must agree with these definitions.
+
+Each schema shows `status: not_started`, the value for a new document. As work progresses, `status` may only take a value from **Valid Status Values** above: `not_started | in_progress | complete | deferred | deprecated`.
 
 #### concept
 ```yaml
@@ -442,16 +446,22 @@ Examples:
 A review of a pull request has no slice index and no slice name, so it uses a different filename form:
 
 ```
-{host}-{owner}-{repository}-{number}-review.{reviewType}.md
+pr-{number}-review.{reviewType}.md                        # repository-scoped directory
+pr-{number}-review.{reviewType}.{owner}-{repository}.md   # shared directory
 ```
 
-Example: `github.com-ecorkran-squadron-42-review.code.md`
+Examples: `pr-42-review.code.md`, `pr-42-review.code.ecorkran-squadron.md`
 
-Directory: `user/reviews/`
+Directory: `user/reviews/`, or wherever the reviews-directory rule places it. The rule decides whether the name carries the repository:
 
-The prefix is the PR's identity with path-hostile characters flattened — `github.com/ecorkran/squadron#42` cannot be a filename. The name is never derived from the PR title, which would produce an identifier that changes whenever someone edits the title.
+- Project `user/reviews/` — unqualified. The PR is always from one of the checkout's own remotes.
+- Built-in default (`~/.config/squadron/reviews/<host>/<owner>/<repo>/`) — unqualified. The path already names the repository.
+- `review.external_reviews_dir` config — qualified. It collects reviews from many repositories.
+- `--reviews-dir` flag — qualified. The directory's other contents are unknown.
 
-**The non-numeric prefix is load-bearing.** Consumers that locate a review by slice index build their glob from an integer, so a PR review cannot match one by construction rather than by convention. A PR review of PR 42 and a slice review of slice 42 can sit in the same directory without colliding.
+The name is never derived from the PR title, which would produce an identifier that changes whenever someone edits the title. Reviews written before this form used `{host}-{owner}-{repository}-{number}-review.{reviewType}.md` (e.g. `github.com-ecorkran-squadron-42-review.code.md`); they are not renamed and stay valid.
+
+**The non-numeric prefix is load-bearing.** Consumers that locate a review by slice index build their glob from an integer, so a `pr-` review cannot match one by construction rather than by convention. A PR review of PR 42 and a slice review of slice 42 can sit in the same directory without colliding.
 
 Two optional frontmatter keys distinguish reviews that the filename alone no longer can:
 
