@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 180-arch.pipeline-intelligence.md
 project: squadron
 dateCreated: 20260411
-dateUpdated: 20260425
+dateUpdated: 20260926
 status: not_started
 ---
 
@@ -58,11 +58,13 @@ The initiative follows its own dependency graph — model pools and fan-out deli
 
 14. [x] **(194) Loop Step Type for Multi-Step Bodies** — New top-level `loop:` step type with a `steps:` body, accepting the existing closed-grammar loop config (`max`, `until`, `on_exhaust`, `strategy`). Re-runs its inner step sequence per iteration, evaluating `until` against aggregated `action_results` from the iteration. Symmetric with `each:` — `expand()` returns empty, executor handles directly with its own branch alongside the existing `_execute_loop_step` path. Unblocks the work-then-review convergence pattern (`dispatch:` then `review:` as siblings looped as a unit) that the existing single-step `loop:` sub-field cannot express. Validation bans nested loops in v1: inner steps may not carry their own `loop:` sub-field, and a `loop:` step type may not appear inside another `loop:` body. The existing single-step `loop:` sub-field is unchanged and remains the shorthand for one-step loops; the inline `review:` sub-field on phase steps stays as phase-only sugar. Prerequisite for 184 to drive realistic review-fix-rereview convergence rather than just re-asking a review against an unchanged artifact. Dependencies: [149 executor]. Risk: Low. Effort: 2/5
 
+15. [ ] **(195) Plan Batch Pipelines: Design and Tasks Over a Whole Slice Plan** — Unattended batch that walks a slice plan and runs design + review (Phase 4), or task breakdown + review (Phase 5), on every eligible slice, flags failures instead of stopping, and ends with one report for the PM (issue #136 and its Phase 5 addendum). Engine pieces are general so each phase is a YAML file, not an engine change: a slice-selection source that honors its `plan` argument and filters by status, `designFile`, and task-file presence (Phase 5 also requires the latest design review at or above `accept-threshold`); per-item isolation in `each` so a failed or paused iteration is recorded and the batch continues; a bounded revise-and-re-review loop inside the batch, composed from the 194 `loop:` step; two thresholds (`pass-threshold` ends the loop, `accept-threshold` decides accept vs. flag on exhaust); per-iteration cf slice/phase switching; a flag list and end-of-run report written to the run directory and summarized on stdout. Model and review model (alias or pool) are params; supersedes `design-batch.yaml` rather than shipping a near-duplicate. Also fixes issue #139 so every review the batch writes is traceable: `runId` and `squadronVersion` in frontmatter and JSON, `providerFailure: true` on provider-failure artifacts, `--output json` stdout kept pure JSON, and `to_dict()` gaps closed. Phase 6 batch is out of scope (per-slice branch create/merge needs its own design). Dependencies: [194, 181, 927]. Risk: Med. Effort: 4/5
+
 ---
 
 ## Integration Work
 
-14. [ ] **(190) Pipeline Intelligence Documentation and Examples** — Authoring guide covering model pools, fan-out, convergence strategies, escalation, finding triage, conversation persistence, and ensemble review. Example pipelines in `examples/`: weighted-decay review loop, pool-based model selection, escalation + convergence combined, ensemble review with fan-out. Configuration reference (`pools.toml` schema, convergence parameter matrix, escalation config). Observability and tuning notes: how to read the ledger, how to calibrate decay/threshold from logged data, how to debug pool selections. Dependencies: [all feature slices]. Risk: Low. Effort: 2/5
+16. [ ] **(190) Pipeline Intelligence Documentation and Examples** — Authoring guide covering model pools, fan-out, convergence strategies, escalation, finding triage, conversation persistence, and ensemble review. Example pipelines in `examples/`: weighted-decay review loop, pool-based model selection, escalation + convergence combined, ensemble review with fan-out. Configuration reference (`pools.toml` schema, convergence parameter matrix, escalation config). Observability and tuning notes: how to read the ledger, how to calibrate decay/threshold from logged data, how to debug pool selections. Dependencies: [all feature slices]. Risk: Low. Effort: 2/5
 
 ---
 
@@ -86,6 +88,7 @@ Feature Slices:
   192. Prompt-Only Dispatch for Non-SDK Profiles      (after 182; independent of convergence track)
   193. Rotation Strategy — Authoring Guide            (after 169; doc-only)
   194. Loop Step Type for Multi-Step Bodies           (after 149; prerequisite for 184 to drive work-then-review)
+  195. Plan Batch Pipelines: Design and Tasks         (after 194; absorbs issue #139)
 
 Integration:
   190. Pipeline Intelligence Documentation           (after all prior)
