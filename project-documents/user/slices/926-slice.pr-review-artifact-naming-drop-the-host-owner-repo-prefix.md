@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260925
 dateUpdated: 20260925
-status: not_started
+status: complete
 ---
 
 # Slice Design: PR Review Artifact Naming — Drop the Host/Owner/Repo Prefix
@@ -176,40 +176,46 @@ This repo has one old-name artifact, already in `user/reviews/archive/`. No migr
 
 ### Verification Walkthrough
 
-Run from the squadron checkout (it has `project-documents/user/reviews/`). PR 116 is an existing merged PR; any real PR number works.
+Run from the squadron checkout (it has `project-documents/user/reviews/`), on the slice branch or after merge, using `uv run sq` so the branch code runs. Verified 20260925 with PR 111.
+
+**Choosing a PR:** it must be one whose base branch still exists on the remote. PR 116 no longer works: its base `squadron-pr` was deleted, and the fetch fails with `fatal: couldn't find remote ref refs/heads/squadron-pr`. PR 111 (merged into `main`) works. The PR's diff also needs something outside the code template's exclude patterns, or the run refuses with an empty-scope error.
 
 1. Project directory — unqualified:
    ```
-   sq review pr 116 --no-tools
+   uv run sq review pr 111 --no-tools
    ```
-   stderr ends with `Saved review to .../project-documents/user/reviews/pr-116-review.code.md (project reviews directory)`.
+   stderr ends with `Saved review to .../project-documents/user/reviews/pr-111-review.code.md (project reviews directory)`.
    ```
-   head -12 project-documents/user/reviews/pr-116-review.code.md
+   head -14 project-documents/user/reviews/pr-111-review.code.md
    ```
-   The `pr:` mapping still names `github.com` / `ecorkran` / `squadron` / `116`.
+   The `pr:` mapping names `host: github.com`, `owner: ecorkran`, `repository: squadron`, `number: 111`. The verdict depends on the model; one run came back `UNKNOWN`, which is about parsing the review output, not the file name.
 
 2. Explicit directory — qualified:
    ```
-   sq review pr 116 --no-tools --reviews-dir /tmp/sq-926
+   uv run sq review pr 111 --no-tools --reviews-dir /tmp/sq-926
    ls /tmp/sq-926
    ```
-   Lists `pr-116-review.code.ecorkran-squadron.md`; stderr names `(--reviews-dir)`.
+   Lists `pr-111-review.code.ecorkran-squadron.md`; stderr ends with `(--reviews-dir)`.
 
-3. Worktree name unchanged: run step 1 without `--no-tools`. The printed `worktree:` path ends `github.com-ecorkran-squadron-116-<run_id>`.
+3. Worktree name unchanged. Use `--no-save` so step 1's artifact isn't overwritten:
+   ```
+   uv run sq review pr 111 --no-save
+   ```
+   The printed `worktree:` path is `~/.config/squadron/worktrees/github.com-ecorkran-squadron-111-<run_id>`.
 
 4. Metrology:
    ```
-   sq metrology sample pr-116
+   uv run sq metrology sample pr-111
    ```
-   Refuses with the "PR reviews are always addressed by path" message.
+   Refuses: `Target 'pr-111' is neither an existing review file nor a slice index. Pass a review-file path (PR reviews are always addressed by path), or a slice index with --type.`
    ```
-   sq metrology sample project-documents/user/reviews/pr-116-review.code.md
+   uv run sq metrology sample project-documents/user/reviews/pr-111-review.code.md
    ```
-   Resolves the file.
+   Resolves the file and prints `Artifact: https://github.com/ecorkran/squadron/pull/111`. Run without a terminal, it then stops with `non-interactive stdin — pass --verdict (PASS/CONCERNS/FAIL) to record a sample.` That is expected. Add `--verdict` only if you actually want to record a sample.
 
-5. Discovery glob: `pytest tests/pr -k glob` passes for both forms.
+5. Discovery glob: `uv run pytest tests/pr -k glob` gives 3 passed: the two `pr-` forms and the old `github.com-` form, each found by the real `find_latest_in_range_review`.
 
-6. Clean up the step-1 artifact (`git checkout`/`rm`) unless it's wanted.
+6. Clean up: `rm project-documents/user/reviews/pr-111-review.code.md` and `rm -r /tmp/sq-926`.
 
 ## Implementation Notes
 

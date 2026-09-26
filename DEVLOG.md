@@ -12,6 +12,21 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260925
 
+### Slice 926 implementation — PR review artifact naming (Phase 6 complete)
+
+Closes #124. PR review artifacts are now `pr-{n}-review.{type}.md`, with `.{owner}-{repo}`
+appended only when the reviews directory came from CONFIG or FLAG. The one mapping lives in
+`ReviewsDirRule.repository_scoped` (match + `assert_never`). `review_pr` now resolves the
+directory before building `PrTarget`. `path_key` is the worktree's name only, and its docstring
+says so. The metrology refusal message names the path form. Deviations: the four-rule CLI
+wiring test lives in `test_review_pr.py` (where the host fakes are), and it is mutation-checked
+against FLAG-only wiring. The D5 glob pin drives the real `find_latest_in_range_review` rather
+than a copied pattern. Upstream guide commit `f3a9001` in `ai-project-guide`; squadron's
+installed copy lags until the next guide update (D7). Suite: 4461 passed, pyright clean.
+Walkthrough ran on PR 111, because PR 116's base branch `squadron-pr` is gone. Its step-1
+verdict was UNKNOWN, a parse issue unrelated to this slice. Branch
+`926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix`, not merged.
+
 ### Slice 926 tasks — PR review artifact naming (Phase 5 complete)
 
 `user/tasks/926-tasks.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md`, 7 parts
