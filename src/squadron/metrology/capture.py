@@ -89,7 +89,8 @@ def resolve_target(
     if not target.isdigit():
         raise MetrologyTargetError(
             f"Target {target!r} is neither an existing review file nor a slice "
-            "index. Pass a review-file path, or an index with --type."
+            "index. Pass a review-file path (PR reviews are always addressed by "
+            "path), or a slice index with --type."
         )
 
     reviews_dir = Path(cwd) / REVIEWS_SUBDIR

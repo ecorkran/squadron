@@ -67,6 +67,14 @@ class TestTargetResolution:
         message = str(exc.value)
         assert "code" in message and "judge.slice-vs-arch" in message
 
+    def test_resolve_target_refuses_a_pr_name_and_says_to_pass_a_path(
+        self, capture_project: CaptureProject
+    ) -> None:
+        """A PR review has no index; the refusal names the form that works (926, D4)."""
+        with pytest.raises(MetrologyTargetError) as exc:
+            resolve_target("pr-116", None, str(capture_project.root))
+        assert "PR reviews are always addressed by path" in str(exc.value)
+
 
 class TestRecordSample:
     def test_writes_blind_record_joinable_by_result_ref(
