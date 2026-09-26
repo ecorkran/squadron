@@ -12,6 +12,21 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 927 design — review artifacts state what happened (Phase 4 complete)
+
+Design for #135 and #134: `user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`.
+It also covers a path nobody had filed: `max_total_injection_bytes` can skip the diff
+entirely, and D3 records that as truncation to zero. Frontmatter gets `diffTruncated`, present
+exactly when a diff was reviewed. Counts are in characters, which is what `_truncate` actually
+measures. A truncated diff with no successful tool call caps PASS to CONCERNS, with a synthetic
+`review-coverage` finding and a new `VerdictSource.IMPOSED`. `aiModel` becomes the answering
+model: SDK `AssistantMessage.model` (top-level, not `<synthetic>`), OpenAI `chunk.model`.
+`requestedModel` appears only on a substitution, where a dated snapshot of the requested id does
+not count as one. Codex reports no model and keeps the requested id, with a Run Digest line
+saying so. OpenAI-direct judges will change metrology identity once, to the dated snapshot id.
+Deferred: diff ordering and `--stat` (#137), and truncation of file bodies and `CLAUDE.md` (#138).
+Validator PASS. Next: Phase 5 task breakdown.
+
 ### Release 0.14.0
 
 Minor bump because `sq review pr` artifact names changed (slice 926, #124). Also ships the
