@@ -229,11 +229,13 @@ Anything still depending on either fails there. Fix each failure where it surfac
 
 The hostile values deliberately differ from the D3 to D5 pins. The run passes only if the pins win every time.
 
+**Failure handling.** The script runs under `set -euo pipefail`. Each setup step (clone, checkout, `uv sync --frozen`, both preconditions) prints a labeled `hostile-env: <step> failed` line on stderr before it exits non-zero. A failed setup can therefore never go on to run pytest against a half-built tree. Its CI log also names the step that failed, which distinguishes it from a test failure. The clone is local (`--no-local` copies objects from disk), so only `uv sync` can touch the network, and only on a cache miss. Hangs are bounded by the CI job's `timeout-minutes` (D10).
+
 **Negative control.** Run the script once against the parent of this slice's first commit and record the failures in DEVLOG. This is the measurement #47 never finished, and it proves the hostile environment actually bites. The `ref` argument selects the unisolated tree, so no feature flag is needed.
 
 ### D10 — CI job, not a documented pre-release step
 
-Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Python version. It runs alongside the existing test job, so wall-clock time stays the same. All eight instances were found only by CI, and a manual pre-release step is exactly the step that gets skipped. `host_cf` tests stay covered by the main job, which runs `cf init --lite` against the real checkout.
+Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Python version, with a `timeout-minutes` bound so a hang fails the job instead of stalling it. It runs alongside the existing test job, so wall-clock time stays the same. All eight instances were found only by CI, and a manual pre-release step is exactly the step that gets skipped. `host_cf` tests stay covered by the main job, which runs `cf init --lite` against the real checkout.
 
 ## Implementation Details
 
