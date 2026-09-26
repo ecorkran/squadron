@@ -12,6 +12,36 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 195 design — plan batch pipelines (Phase 4 complete)
+
+Design written for 195 (issue #136 plus its Phase 5 addendum, with #139 folded in):
+`project-documents/user/slices/195-slice.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan.md`.
+It adds two pipelines, `design-plan` and `tasks-plan`, which replace `design-batch`. They run on
+general engine pieces:
+
+- plan-aware `cf.*` sources
+- a `set_plan` cf-op, carried by the phase step's `plan:` key
+- one `_execute_step` router
+- per-item isolation and `on_item_failure: continue` in `each`
+- `accept_if` and `skip_if_met` on `loop`
+- `feedback: review` on dispatch
+- a Markdown batch report next to the run state file
+
+What turned up while reading the code and testing cf:
+
+- A `loop:` inside `each` is a silent no-op today. `each` sends inner steps through
+  `_execute_step_once`, and `LoopStepType.expand()` returns `[]`, so the step completes with zero
+  actions.
+- `each` passes the same pre-step outputs to every item and never isolates them.
+- A revise dispatch after a `design:` step would reuse its "create a design" build prompt instead of
+  the review findings.
+- `cf build --slice` doesn't persist, but it doesn't switch plans either. `cf set plan` leaves
+  `fileArch` unchanged, and review input resolution reads the active plan and arch, so the batch
+  sets both.
+
+Next: Phase 5 task breakdown. `--prompt-only` not rendering `each` or `loop:` steps is out of
+scope and logged as #145.
+
 ### Slice 927 implementation — review artifacts state what happened (Phase 6 complete)
 
 Closes #135 and #134. Four commits on
