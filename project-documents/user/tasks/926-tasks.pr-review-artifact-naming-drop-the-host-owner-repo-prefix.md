@@ -80,13 +80,27 @@ slice: 2/5 per the design.
       D1's table for all four current members.
 - [ ] Run: `pytest tests/review/test_reviews_dir.py -x`.
 
+### Task A.3 — Commit Part A
+
+- [ ] Effort: 1/5
+- [ ] Confirm current working directory is the squadron project root.
+- [ ] `git add` and commit Part A's changes. Per CLAUDE.md, commit at least
+      once per task — do not carry this forward uncommitted into Part B.
+      Suggested message: `feat: add ReviewsDirRule.repository_scoped`.
+
 ---
 
 ## Part B — `PrTarget` stem and qualification
 
-### Task B.1 — Add `qualify` to `PrTarget` and rebuild `filename_stem`
+### Task B.1 — Add `qualify` to `PrTarget`, rebuild `filename_stem`, reorder `review_pr`
 
-- [ ] Effort: 2/5
+This is one unit of work, not three independently-completable steps: the
+`qualify` parameter has no real caller until the directory-resolution
+reordering lands, so splitting it into separate commits would mean shipping
+a `PrTarget` that only works with a placeholder value. Do it and commit it
+together (review finding F005).
+
+- [ ] Effort: 3/5
 - [ ] In [src/squadron/cli/commands/review_pr.py](src/squadron/cli/commands/review_pr.py),
       change `PrTarget.__init__` (currently at line 131, signature
       `(self, record: PullRequestRecord, rules_source: RulesSource)`) to accept
@@ -101,14 +115,19 @@ slice: 2/5 per the design.
 - [ ] Do not touch `PullRequestRecord.path_key` or `.key` in
       [src/squadron/codehost/models.py](src/squadron/codehost/models.py) in
       this task — that's Task D.1.
-- [ ] Update every call site that constructs `PrTarget(...)` in
-      `review_pr.py` to pass `qualify=`. At this point in the sequence there
-      is exactly one call site (line 471,
-      `PrTarget(resolved.record, rules_source)`, inside `_resolve_save_outcome`'s
-      `target=` argument) — Task B.3 changes what value it passes; for this
-      task it's acceptable to pass a literal placeholder if needed to keep
-      the type checker green, but prefer doing Task B.1–B.3 together in one
-      commit since they're tightly coupled.
+- [ ] Move the `resolve_reviews_dir(...)` call (currently inside `_save_pr`,
+      lines 439–445) to run **before** `PrTarget(...)` is constructed
+      (currently line 471). `resolve_reviews_dir` only reads config and
+      checks `is_dir()` (per D-notes in `reviews_dir.py`'s own docstring), so
+      this is side-effect free even on a `--no-save` run.
+- [ ] Pass `qualify=not rule.repository_scoped` into the `PrTarget(...)`
+      construction at (what is currently) line 471 — the only call site.
+- [ ] Update `_save_pr` (lines 432–464) to take the pre-resolved
+      `reviews_dir` and `rule` as parameters (closure capture or explicit
+      args — match the existing style of nested functions in this file)
+      instead of calling `resolve_reviews_dir` itself.
+- [ ] Verify no behavior change to the printed "Saved review to … (<rule>)"
+      line (line 463) or the `OSError` failure path (lines 457–462).
 
 ### Task B.2 — Update `PrTarget` stem tests
 
@@ -127,7 +146,12 @@ slice: 2/5 per the design.
         the new `pr-` prefix; keep the assertion, update the constructed
         stem's expected shape only if the test hardcodes it.
       - `test_stem_varies_only_by_review_type` (~line 175): update the
-        expected f-string.
+        expected f-string. This is the existing coverage for the design's
+        "`--json` produces the same stems with `.json`" requirement — the
+        parametrized `review_type` values include `"json"`-shaped inputs
+        only if you add one. Add an explicit `review_type="json"` case to
+        this test's parametrization rather than relying on `"code"`/`"slice"`/
+        `"arch"` to stand in for it (review finding F006).
 - [ ] Add new tests (do not replace, add) covering:
       - `qualify=False` → stem is exactly `pr-{number}-review.{type}` with
         no owner/repo segment.
@@ -135,36 +159,42 @@ slice: 2/5 per the design.
         `pr-{number}-review.{type}.{owner}-{repository}`.
 - [ ] Run: `pytest tests/cli/test_review_pr_persistence.py -x`.
 
-### Task B.3 — Reorder `review_pr` to resolve the directory first
+### Task B.3 — CLI test: all four `ReviewsDirRule` values wired through to `qualify`
 
-- [ ] Effort: 2/5
-- [ ] In [src/squadron/cli/commands/review_pr.py](src/squadron/cli/commands/review_pr.py),
-      move the `resolve_reviews_dir(...)` call (currently inside `_save_pr`,
-      lines 439–445) to run **before** `PrTarget(...)` is constructed
-      (currently line 471). `resolve_reviews_dir` only reads config and
-      checks `is_dir()` (per D-notes in `reviews_dir.py`'s own docstring), so
-      this is side-effect free even on a `--no-save` run.
-- [ ] Pass `qualify=not rule.repository_scoped` into the `PrTarget(...)`
-      construction at (what is currently) line 471.
-- [ ] Update `_save_pr` (lines 432–464) to take the pre-resolved
-      `reviews_dir` and `rule` as parameters (closure capture or explicit
-      args — match the existing style of nested functions in this file)
-      instead of calling `resolve_reviews_dir` itself.
-- [ ] Verify no behavior change to the printed "Saved review to … (<rule>)"
-      line (line 463) or the `OSError` failure path (lines 457–462).
+Covers every rule the design's Functional Requirements name, not just two —
+a wiring bug isolated to one rule (e.g. branching on `rule == FLAG` instead
+of `rule.repository_scoped`) must be caught here, not left to an indirect
+inference from A.2's unit test on the enum alone (review finding F004).
 
-### Task B.4 — Persistence/CLI test for the reordering
-
-- [ ] Effort: 2/5
-- [ ] In `tests/cli/test_review_pr_persistence.py`, add or extend a
-      CLI-level test (using the existing `CliRunner` + faked code host
-      pattern already in this file) that runs `sq review pr` against:
-      - a project-scoped reviews directory (`PROJECT` rule) → asserts the
-        saved file is named `pr-{number}-review.code.md` with no
-        owner/repo segment.
-      - `--reviews-dir <tmp>` (`FLAG` rule) → asserts the saved file is
-        named `pr-{number}-review.code.{owner}-{repository}.md`.
+- [ ] Effort: 3/5
+- [ ] In `tests/cli/test_review_pr_persistence.py`, add or extend
+      CLI-level tests (using the existing `CliRunner` + faked code host
+      pattern already in this file) that run `sq review pr` against all
+      four rules and assert both the resulting filename **and** which rule
+      qualifies:
+      - `PROJECT` (project-scoped `project-documents/user/reviews/`) →
+        `pr-{number}-review.code.md`, unqualified.
+      - `DEFAULT` (no project reviews dir, no config key, no flag — the
+        built-in `~/.config/squadron/reviews/<host>/<owner>/<repo>/` path;
+        use `tmp_path`/monkeypatch to redirect `user_reviews_root()` rather
+        than touching the real `~/.config`) → `pr-{number}-review.code.md`,
+        unqualified.
+      - `CONFIG` (`review.external_reviews_dir` set via test config
+        fixture/monkeypatch, no flag) →
+        `pr-{number}-review.code.{owner}-{repository}.md`, qualified.
+      - `FLAG` (`--reviews-dir <tmp>`) →
+        `pr-{number}-review.code.{owner}-{repository}.md`, qualified.
+- [ ] Each case must go through the real `review_pr` CLI path (not call
+      `PrTarget` or `resolve_reviews_dir` directly) — the point is proving
+      the two are wired together correctly end to end.
 - [ ] Run: `pytest tests/cli/test_review_pr_persistence.py -x`.
+
+### Task B.4 — Commit Part B
+
+- [ ] Effort: 1/5
+- [ ] Confirm current working directory is the squadron project root.
+- [ ] `git add` and commit Part B's changes.
+      Suggested message: `feat: qualify PR review artifact name by reviews-directory rule`.
 
 ---
 
@@ -195,6 +225,14 @@ slice: 2/5 per the design.
       artifact compatibility — stop and re-check against D6 rather than
       editing these fixtures to make them pass.
 - [ ] Run: `pytest tests/documents/test_pr_review_frontmatter.py tests/review/test_pr_artifact_is_target_agnostic.py -x`.
+
+### Task C.3 — Commit Part C
+
+- [ ] Effort: 1/5
+- [ ] Confirm current working directory is the squadron project root.
+- [ ] `git add` and commit Part C's changes (the widened test only —
+      C.2 makes no file changes).
+      Suggested message: `test: cover pr- stem in consumer-ignores-PR test`.
 
 ---
 
@@ -240,6 +278,13 @@ slice: 2/5 per the design.
       path".
 - [ ] Run: `pytest tests/metrology/ -k resolve_target -x`.
 
+### Task D.4 — Commit Part D
+
+- [ ] Effort: 1/5
+- [ ] Confirm current working directory is the squadron project root.
+- [ ] `git add` and commit Part D's changes.
+      Suggested message: `fix: correct path_key docstring and metrology PR-review message`.
+
 ---
 
 ## Part E — Discovery glob pinning test (D5)
@@ -261,6 +306,13 @@ slice: 2/5 per the design.
       tightening fails loudly instead of silently breaking PR review
       discovery.
 - [ ] Run: `pytest tests/pr/ -k glob -x`.
+
+### Task E.2 — Commit Part E
+
+- [ ] Effort: 1/5
+- [ ] Confirm current working directory is the squadron project root.
+- [ ] `git add` and commit Part E's changes.
+      Suggested message: `test: pin pr/inputs.py discovery glob against pr- and old-form names`.
 
 ---
 
@@ -295,6 +347,15 @@ slice: 2/5 per the design.
       squadron's commits for this slice. Per D7, squadron's installed copy
       lags until the next guide update pulls it in — that's expected, not a
       bug to fix here.
+
+### Task F.3 — Commit Part F (squadron side)
+
+- [ ] Effort: 1/5
+- [ ] Confirm current working directory is the squadron project root
+      (not `ai-project-guide` — F.2's commit already happened there,
+      separately).
+- [ ] `git add` and commit `docs/COMMANDS.md` from F.1.
+      Suggested message: `docs: document pr- review artifact naming in COMMANDS.md`.
 
 ---
 
@@ -333,13 +394,16 @@ slice: 2/5 per the design.
       not a silent adjustment — if something doesn't match, stop and
       report before proceeding.
 
-### Task G.3 — Commit
+### Task G.3 — Confirm everything landed
 
 - [ ] Effort: 1/5
-- [ ] `git add` and commit from the squadron project root, per project
-      Source Control rules. Use a `fix:` prefix (this closes issue #124),
-      e.g. `fix: shorten PR review artifact name, drop host/owner/repo prefix`.
-- [ ] Confirm current working directory before running git commands.
+- [ ] Confirm current working directory is the squadron project root.
+- [ ] `git status` — working tree clean (Parts A–F already committed
+      per-part; nothing should be outstanding except this task file's own
+      completion-marking edits in the Completion section below).
+- [ ] `git log --oneline` over this slice's commits reads as one coherent
+      story (repository_scoped → qualify/reorder → fixture coverage →
+      path_key/metrology → glob pin → docs) — this closes issue #124.
 
 ---
 
