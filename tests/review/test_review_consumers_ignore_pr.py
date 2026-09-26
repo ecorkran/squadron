@@ -5,8 +5,9 @@ artifact in it for the first time (D4).
 
 ``{index}-review.*`` consumers cannot match a PR artifact **by construction**:
 ``locate_review`` builds its pattern from an ``int``, and metrology capture
-guards with ``target.isdigit()`` before globbing. A stem beginning
-``github.com-`` cannot satisfy either. That is a property of how the globs are
+guards with ``target.isdigit()`` before globbing. Any non-numeric stem — the
+``pr-`` forms from slice 926 or the older ``github.com-`` form — cannot
+satisfy either. That is a property of how the globs are
 built rather than a convention anyone follows, so these tests pin it — the
 failure they guard against is a future refactor that starts building the
 pattern from a string.
@@ -76,15 +77,28 @@ No specific findings.
 #: The collision this whole file exists to test: PR 42 and slice 42, one
 #: directory. Nothing prevents an operator from having both.
 _SLICE_NAME = "42-review.code.some-slice.md"
-_PR_NAME = "github.com-ecorkran-squadron-42-review.code.md"
+
+#: Every PR artifact name a reviews directory can hold. The ``github.com-`` form
+#: predates slice 926 and stays on purpose: old-name artifacts are never migrated
+#: (926, D6), so they must keep being ignored alongside the ``pr-`` forms.
+_PR_NAMES = [
+    "github.com-ecorkran-squadron-42-review.code.md",
+    "pr-42-review.code.md",
+    "pr-42-review.code.ecorkran-squadron.md",
+]
+
+
+@pytest.fixture(params=_PR_NAMES)
+def pr_name(request: pytest.FixtureRequest) -> str:
+    return request.param
 
 
 @pytest.fixture
-def both_reviews(tmp_path: Path) -> Path:
+def both_reviews(tmp_path: Path, pr_name: str) -> Path:
     reviews = tmp_path / REVIEWS_DIR
     reviews.mkdir(parents=True)
     (reviews / _SLICE_NAME).write_text(_SLICE_REVIEW, encoding="utf-8")
-    (reviews / _PR_NAME).write_text(_PR_REVIEW, encoding="utf-8")
+    (reviews / pr_name).write_text(_PR_REVIEW, encoding="utf-8")
     return tmp_path
 
 
@@ -135,10 +149,10 @@ class TestMetrologyCaptureSelectsTheSliceReview:
 class TestTargetKindClassifies:
     """The ``*-review.*`` family reads frontmatter, never the filename (D4)."""
 
-    def test_both_artifacts_declare_what_they_are(self, both_reviews: Path) -> None:
+    def test_both_artifacts_declare_what_they_are(self, both_reviews: Path, pr_name: str) -> None:
         reviews = both_reviews / REVIEWS_DIR
         slice_fm = read_review_frontmatter(reviews / _SLICE_NAME)
-        pr_fm = read_review_frontmatter(reviews / _PR_NAME)
+        pr_fm = read_review_frontmatter(reviews / pr_name)
 
         assert slice_fm["targetKind"] == "slice"
         assert pr_fm["targetKind"] == "pr"
