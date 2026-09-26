@@ -57,10 +57,16 @@ class PullRequestRecord:
     def path_key(self) -> str:
         """:attr:`key` with path-hostile characters flattened.
 
-        One definition, because two consumers derive names from it — the
-        scratch worktree's directory (382) and the review artifact's filename
-        (383). Two copies of this rule would drift, and the pair would stop
-        agreeing about which PR a directory and its review belong to.
+        One consumer: the scratch worktree's directory name
+        (``ScratchWorktree.__enter__``, 382). It stays fully qualified because
+        every repository's worktrees share one root.
+
+        The PR review artifact used this too until slice 926, which moved it to
+        its own ``pr-{number}`` stem so a repository-scoped reviews directory
+        does not repeat host/owner/repo in every name. The divergence is
+        deliberate: nothing reads the pairing (the worktree is removed at run
+        end, and ``sweep_orphans`` finds worktrees by lock file), so do not
+        route the artifact back through this property.
         """
         return self.key.replace("/", "-").replace("#", "-")
 

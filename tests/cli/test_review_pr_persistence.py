@@ -43,7 +43,7 @@ class TestPrTargetShape:
 
     def test_it_satisfies_the_persistence_protocol(self) -> None:
         """Structural conformance is the whole reason review/ never names it."""
-        target = PrTarget(_record(), RulesSource.PROJECT)
+        target = PrTarget(_record(), RulesSource.PROJECT, qualify=False)
 
         assert isinstance(target, SaveTargetProtocol)
 
@@ -54,12 +54,34 @@ class TestPrTargetShape:
         changes whenever someone edits the title, silently orphaning the
         previous artifact (D3).
         """
-        target = PrTarget(_record(83), RulesSource.PROJECT)
+        target = PrTarget(_record(83), RulesSource.PROJECT, qualify=False)
 
-        assert target.filename_stem("code") == "github.com-ecorkran-squadron-83-review.code"
+        assert target.filename_stem("code") == "pr-83-review.code"
 
-    def test_stem_carries_no_character_a_path_cannot(self) -> None:
-        stem = PrTarget(_record(), RulesSource.PROJECT).filename_stem("code")
+    def test_unqualified_stem_carries_no_owner_or_repository(self) -> None:
+        """A repository-scoped directory already says whose PR this is (926, D1)."""
+        stem = PrTarget(_record(83), RulesSource.PROJECT, qualify=False).filename_stem("code")
+
+        assert stem == "pr-83-review.code"
+        assert "ecorkran" not in stem
+        assert "squadron" not in stem
+
+    def test_qualified_stem_appends_owner_and_repository(self) -> None:
+        """A shared directory needs the qualifier; host is dropped (926, D2)."""
+        stem = PrTarget(_record(83), RulesSource.PROJECT, qualify=True).filename_stem("code")
+
+        assert stem == "pr-83-review.code.ecorkran-squadron"
+
+    def test_stem_never_uses_the_worktree_path_key(self) -> None:
+        """``path_key`` stays the scratch worktree's name only (926, D3)."""
+        record = _record(83)
+        for qualify in (False, True):
+            stem = PrTarget(record, RulesSource.PROJECT, qualify=qualify).filename_stem("code")
+            assert record.path_key not in stem
+
+    @pytest.mark.parametrize("qualify", [False, True])
+    def test_stem_carries_no_character_a_path_cannot(self, qualify: bool) -> None:
+        stem = PrTarget(_record(), RulesSource.PROJECT, qualify=qualify).filename_stem("code")
 
         assert "/" not in stem
         assert "#" not in stem
@@ -71,12 +93,12 @@ class TestPrTargetShape:
         ``int``, so a non-numeric prefix cannot match by construction. This
         pins the property those consumers rely on.
         """
-        stem = PrTarget(_record(42), RulesSource.PROJECT).filename_stem("code")
-
-        assert not stem[0].isdigit()
+        for qualify in (False, True):
+            stem = PrTarget(_record(42), RulesSource.PROJECT, qualify=qualify).filename_stem("code")
+            assert not stem[0].isdigit()
 
     def test_frontmatter_carries_the_pr_and_no_slice_key(self) -> None:
-        fields = PrTarget(_record(), RulesSource.PROJECT).frontmatter_fields()
+        fields = PrTarget(_record(), RulesSource.PROJECT, qualify=False).frontmatter_fields()
 
         assert "slice" not in fields
         assert fields["pr"] == {
@@ -88,13 +110,13 @@ class TestPrTargetShape:
         }
 
     def test_source_document_is_the_pr_url(self) -> None:
-        target = PrTarget(_record(), RulesSource.PROJECT)
+        target = PrTarget(_record(), RulesSource.PROJECT, qualify=False)
 
         assert target.source_document() == "https://github.com/ecorkran/squadron/pull/42"
 
     def test_rules_source_is_carried_for_the_artifact(self) -> None:
         """Resolved once, during the run that used it — not re-derived later."""
-        target = PrTarget(_record(), RulesSource.TEMPLATE)
+        target = PrTarget(_record(), RulesSource.TEMPLATE, qualify=False)
 
         assert target.rules_source is RulesSource.TEMPLATE
 
@@ -127,7 +149,7 @@ class TestReviewedShaIsThePullRequests:
             ["git", "rev-parse", "HEAD"], cwd=tmp_path, capture_output=True, text=True, check=True
         ).stdout.strip()
 
-        target = PrTarget(_record(), RulesSource.PROJECT)
+        target = PrTarget(_record(), RulesSource.PROJECT, qualify=False)
 
         assert target.reviewed_sha() == _PR_HEAD_SHA
         assert target.reviewed_sha() != operator_head
@@ -139,7 +161,7 @@ class TestReviewedShaIsThePullRequests:
         to git would reintroduce the bug the moment the trees coincided.
         """
         with patch("squadron.review.persistence.resolve_reviewed_sha") as resolver:
-            sha = PrTarget(_record(), RulesSource.PROJECT).reviewed_sha()
+            sha = PrTarget(_record(), RulesSource.PROJECT, qualify=False).reviewed_sha()
 
         assert sha == _PR_HEAD_SHA
         resolver.assert_not_called()
@@ -167,9 +189,15 @@ class TestSliceLessCodeReviewStillRefuses:
         assert result.exit_code != 0
 
 
-@pytest.mark.parametrize("review_type", ["code", "slice", "arch"])
+@pytest.mark.parametrize("review_type", ["code", "slice", "arch", "json"])
 def test_stem_varies_only_by_review_type(review_type: str) -> None:
-    """The type is the only part of the stem the target does not fix."""
-    target = PrTarget(_record(7), RulesSource.PROJECT)
+    """The type is the only part of the stem the target does not fix.
 
-    assert target.filename_stem(review_type) == f"github.com-ecorkran-squadron-7-review.{review_type}"
+    ``json`` stands in for ``--json`` runs: the extension is appended by
+    persistence, so the stem must come out the same shape for them too.
+    """
+    unqualified = PrTarget(_record(7), RulesSource.PROJECT, qualify=False)
+    qualified = PrTarget(_record(7), RulesSource.PROJECT, qualify=True)
+
+    assert unqualified.filename_stem(review_type) == f"pr-7-review.{review_type}"
+    assert qualified.filename_stem(review_type) == f"pr-7-review.{review_type}.ecorkran-squadron"

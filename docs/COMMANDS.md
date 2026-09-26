@@ -141,7 +141,11 @@ sq review pr 116 --post
 sq review pr 116 --post --dry-run
 ```
 
-The CLI prints the chosen reviews-directory location and its source (`--reviews-dir`, `review.external_reviews_dir`, or the project default). `--post` writes to the host; a second `--post` on the same pull request updates the existing squadron comment rather than adding a new one.
+The CLI prints the chosen reviews-directory location and its source (`--reviews-dir`, `review.external_reviews_dir`, or the project default).
+
+The artifact is named `pr-{number}-review.{type}.md` in the project's `project-documents/user/reviews/` or the built-in `~/.config/squadron/reviews/<host>/<owner>/<repo>/`, since both belong to one repository. When the directory comes from `--reviews-dir` or `review.external_reviews_dir`, it can hold reviews from several repositories, so the name gains the repository: `pr-{number}-review.{type}.{owner}-{repo}.md`. `--json` uses the same names with `.json`.
+
+`--post` writes to the host; a second `--post` on the same pull request updates the existing squadron comment rather than adding a new one.
 
 ### review resolve
 

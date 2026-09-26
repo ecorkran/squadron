@@ -43,7 +43,7 @@ def _pr_target(number: int = 42):
     # test reaches for it deliberately rather than by habit.
     from squadron.cli.commands.review_pr import PrTarget
 
-    return PrTarget(_record(number), RulesSource.PROJECT)
+    return PrTarget(_record(number), RulesSource.PROJECT, qualify=False)
 
 
 def _result(verdict: Verdict = Verdict.CONCERNS) -> ReviewResult:

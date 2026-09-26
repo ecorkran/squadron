@@ -126,11 +126,17 @@ class PrTarget:
     The stem carries no slice-name segment: a PR has no slice name, and
     deriving one from the PR title would be a fabricated identifier that
     changes whenever someone edits the title.
+
+    ``qualify`` appends ``{owner}-{repo}`` for a reviews directory that can hold
+    more than one repository's reviews (slice 926, D1/D2). The caller derives it
+    from ``ReviewsDirRule.repository_scoped``; the stem never uses ``path_key``,
+    which stays the scratch worktree's name.
     """
 
-    def __init__(self, record: PullRequestRecord, rules_source: RulesSource) -> None:
+    def __init__(self, record: PullRequestRecord, rules_source: RulesSource, *, qualify: bool) -> None:
         self._record = record
         self._rules_source = rules_source
+        self._qualify = qualify
 
     @property
     def rules_source(self) -> RulesSource:
@@ -142,7 +148,10 @@ class PrTarget:
         return self._rules_source
 
     def filename_stem(self, review_type: str) -> str:
-        return f"{self._record.path_key}-review.{review_type}"
+        stem = f"pr-{self._record.number}-review.{review_type}"
+        if self._qualify:
+            return f"{stem}.{self._record.owner}-{self._record.repository}"
+        return stem
 
     def frontmatter_fields(self) -> dict[str, object]:
         # No slice key — this review is not about one. The nested mapping
@@ -429,6 +438,17 @@ def review_pr(
     roots += "[/dim]"
     Console(stderr=True).print(roots)
 
+    # Resolved before the target is built: the rule decides whether the artifact
+    # name carries an owner/repo qualifier (slice 926, D1). Side-effect free —
+    # it reads config and checks is_dir(), so a --no-save run is unaffected.
+    reviews_dir, rule = resolve_reviews_dir(
+        flag=reviews_dir_flag,
+        cwd=checkout_cwd,
+        host=resolved.record.host,
+        owner=resolved.record.owner,
+        repository=resolved.record.repository,
+    )
+
     def _save_pr(target: PrTarget) -> bool:
         """Persist the review, reporting where it landed and which rule chose there.
 
@@ -436,13 +456,6 @@ def review_pr(
         who does not know where their review went has been failed either way
         (D5), and a failed write names the path they would have to fix.
         """
-        reviews_dir, rule = resolve_reviews_dir(
-            flag=reviews_dir_flag,
-            cwd=checkout_cwd,
-            host=resolved.record.host,
-            owner=resolved.record.owner,
-            repository=resolved.record.repository,
-        )
         console = Console(stderr=True)
         try:
             path = save_review_result(
@@ -468,7 +481,7 @@ def review_pr(
         # A PR review always has a target, so NOT_PERSISTABLE is unreachable
         # here — it survives for the case it actually describes, a slice-less
         # `sq review code` with nothing to name an artifact under (D8).
-        target=PrTarget(resolved.record, rules_source),
+        target=PrTarget(resolved.record, rules_source, qualify=not rule.repository_scoped),
         save=_save_pr,
         review_type="pr",
     )
