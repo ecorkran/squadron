@@ -20,6 +20,8 @@ from squadron.cli.commands.review_pr import assemble_pr_metadata
 from squadron.codehost.github_cli import GitHubCli
 from squadron.codehost.models import PullRequestState, ResolvedPullRequest
 from squadron.core.process_runner import ProcessResult
+from squadron.review.persistence import REVIEWS_DIR
+from squadron.review.reviews_dir import ReviewsDirRule
 from tests.codehost.fake_runner import FakeProcessRunner
 
 GITHUB = "github.com"
@@ -356,6 +358,66 @@ def test_a_failed_pr_save_reports_unsaved_and_exits_one(
     assert save.called, f"persistence was never attempted: {result.output}"
     assert result.exit_code == 1, result.output
     assert "/nonexistent/place" in result.output
+
+
+_UNQUALIFIED = "pr-83-review.code.md"
+_QUALIFIED = "pr-83-review.code.ecorkran-squadron.md"
+
+
+@pytest.mark.parametrize(
+    ("rule", "expected_name"),
+    [
+        (ReviewsDirRule.PROJECT, _UNQUALIFIED),
+        (ReviewsDirRule.DEFAULT, _UNQUALIFIED),
+        (ReviewsDirRule.CONFIG, _QUALIFIED),
+        (ReviewsDirRule.FLAG, _QUALIFIED),
+    ],
+)
+def test_each_reviews_dir_rule_decides_the_artifact_qualifier(
+    cli_runner: CliRunner,
+    patched_host: dict[str, object],
+    captured_review: list[dict[str, object]],
+    pr_review_repo: Path,
+    tmp_path: Path,
+    rule: ReviewsDirRule,
+    expected_name: str,
+) -> None:
+    """The rule that chose the directory reaches ``PrTarget`` as ``qualify`` (slice 926, D1).
+
+    Driven through the real command for every rule, so a wiring bug isolated to one
+    rule — branching on ``rule == FLAG`` rather than ``repository_scoped`` — fails
+    here. ``save_review_result`` is mocked because the fake ``_Result`` cannot render
+    an artifact; the name is rebuilt from the directory and target it was handed.
+    Config is patched in every case so an operator's real
+    ``review.external_reviews_dir`` cannot pick the rule instead.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    home = tmp_path / "home"
+    expected_dir = {
+        ReviewsDirRule.PROJECT: pr_review_repo / REVIEWS_DIR,
+        ReviewsDirRule.DEFAULT: home / ".config/squadron/reviews/github.com/ecorkran/squadron",
+        ReviewsDirRule.CONFIG: elsewhere,
+        ReviewsDirRule.FLAG: elsewhere,
+    }[rule]
+    if rule is ReviewsDirRule.PROJECT:
+        (pr_review_repo / REVIEWS_DIR).mkdir(parents=True)
+    configured = str(elsewhere) if rule is ReviewsDirRule.CONFIG else None
+    flags = ["--reviews-dir", str(elsewhere)] if rule is ReviewsDirRule.FLAG else []
+
+    _arm(patched_host)
+    with (
+        patch("squadron.review.reviews_dir.get_config", return_value=configured),
+        patch("pathlib.Path.home", return_value=home),
+        patch("squadron.cli.commands.review_pr.save_review_result") as save,
+    ):
+        save.return_value = expected_dir / expected_name
+        result = cli_runner.invoke(app, [*_PARITY_BASE, *flags])
+
+    assert save.called, f"persistence was never attempted: {result.output}"
+    kwargs = save.call_args.kwargs
+    assert kwargs["reviews_dir"] == expected_dir
+    assert f"{kwargs['target'].filename_stem('code')}.md" == expected_name
+    assert f"({rule})" in result.output
 
 
 def test_resolution_produces_the_same_record_pr_show_would(
