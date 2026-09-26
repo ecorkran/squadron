@@ -39,8 +39,8 @@ Effort for the slice: 3/5. Commit A+B and C separately so either can be reverted
 ## Setup
 
 - [ ] **S.1 — Create the slice branch**
-  - [ ] Run `cf config get git.integration_branch`. If empty, the target is `main`.
-  - [ ] `git checkout -b 927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered main`
+  - [ ] Run `cf config get git.integration_branch`. Its value is the **target**; if it is empty, the target is `main`.
+  - [ ] `git checkout -b 927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered <target>`, using the target from the previous step. Never hardcode `main`.
   - [ ] `uv run pytest -q` passes on the fresh branch (baseline). Record the pass count for the DEVLOG.
 
 ## Part M — Shared model changes
@@ -106,7 +106,7 @@ Effort for the slice: 3/5. Commit A+B and C separately so either can be reverted
 ## Part B — Cap a truncated, unread PASS
 
 - [ ] **B.1 — Implement `impose_diff_coverage`** in a new `src/squadron/review/coverage.py` (Effort 2/5)
-  - [ ] `impose_diff_coverage(result: ReviewResult) -> None`, mutating in place. Rule per D4: applies when `diff_injection` is truncated, successful calls `(tool_calls_made or 0) - (failed_tool_calls or 0) <= 0`, and `verdict is Verdict.PASS`.
+  - [ ] `impose_diff_coverage(result: ReviewResult) -> None`, mutating in place. Rule per D4: applies when `diff_injection` is truncated, successful calls `(tool_calls_made or 0) - (failed_tool_calls or 0) <= 0`, and `verdict is Verdict.PASS`. The `or 0` is deliberate and an exception to the `is None` rule above: D4 says no tools offered counts as zero calls. Add a one-line code comment citing D4 so nobody "fixes" it.
   - [ ] Effect: `verdict = CONCERNS`, `verdict_source = VerdictSource.IMPOSED`, and prepend a `ReviewFinding(severity=CONCERN, category="review-coverage", ...)` with title `Diff truncated; the omitted part was never read`. The description uses the D4 text with real numbers: the model's stated verdict, the counts, the remedy. `location` None.
   - [ ] Define the category string and title as module constants.
   - [ ] Otherwise, no change.
@@ -120,7 +120,7 @@ Effort for the slice: 3/5. Commit A+B and C separately so either can be reverted
 - [ ] **B.3 — Call the cap and add the exemption digest line** (Effort 1/5)
   - [ ] In `run_review_with_profile`, call `impose_diff_coverage(result)` after `diff_injection`, `tool_calls_made`, and `failed_tool_calls` are all assigned (design, Special Considerations).
   - [ ] In `persistence._run_digest_lines`: when `diff_injection` is truncated and `verdict is PASS` (a kept PASS), append `- Diff coverage: truncated; PASS kept because the model made N successful tool call(s)` (D4). Emit it only in that case.
-  - [ ] Test in `test_review_client.py`: stubbed run, truncated diff, zero tool calls, model says PASS → result verdict CONCERNS. Test in `test_persistence.py`: a truncated PASS with 2 successful calls renders the exemption line; an untruncated PASS does not.
+  - [ ] Test in `test_review_client.py`: stubbed run, truncated diff, zero tool calls, model says PASS → result verdict CONCERNS. Test in `tests/cli/test_cli_review.py` (or the existing CLI exit-code test module): the same stubbed imposed-CONCERNS run exits `sq review code` with the code `_exit_on` in `cli/commands/review.py` assigns to CONCERNS. Read `_exit_on` for the expected value; don't hardcode a guess (SC4). Test in `test_persistence.py`: a truncated PASS with 2 successful calls renders the exemption line; an untruncated PASS does not.
 
 - [ ] **B.4 — Pin that the cap never meets an unparsed-findings review** (D6) (Effort 1/5)
   - [ ] No render change to `format_review_markdown` or `_display_terminal`: the not-parsed notice keeps its current `elif` condition.
@@ -192,6 +192,7 @@ Effort for the slice: 3/5. Commit A+B and C separately so either can be reverted
   - [ ] For each profile with working credentials (sdk, openai, openrouter, local), run `sq review slice 927 --profile <profile> -v --output json --no-save` and record `requested_model` and `answering_models`. List any profile skipped for missing credentials by name.
   - [ ] If any profile reports `model_substituted: true` for its own default model, that is a D9 false positive. Add the observed form to `answers_as_requested` with a test case built from the captured ids, then rerun that profile. Do not widen the rule beyond the observed form.
   - [ ] Success: no profile's default model reports a substitution.
+  - [ ] If this task changed `snapshot.py`: run `uv run ruff format`, `uv run ruff check`, `uv run pyright`, and `uv run pytest tests/models tests/review`, then commit on its own as `fix: accept <profile> answering-model form in answers_as_requested`. Never fold that change into W.3's docs commit.
 
 - [ ] **W.3 — Documentation and close-out** (Effort 1/5)
   - [ ] CHANGELOG: short user-facing bullets under Unreleased. Truncated diffs are recorded and an unread truncated PASS becomes CONCERNS. `aiModel` names the model that answered, and `requestedModel` flags a substitution.
