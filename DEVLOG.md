@@ -2,13 +2,24 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260925
+dateUpdated: 20260926
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260926
+
+### Release 0.14.0
+
+Minor bump because `sq review pr` artifact names changed (slice 926, #124). Also ships the
+`fable`/`opus` alias moves to `claude-fable-5-1`/`claude-opus-5-5`. Guides updated to
+ai-project-guide 0.19.1: `CLAUDE.md` moved to the BEGIN/END managed-block marker, and
+`AGENTS.md` was added for Codex. `.gitignore` now names `.context-forge/` (setup-ide install
+manifests) and `*.pre-context-forge` (conversion backups) directly, rather than relying on
+the PyInstaller `*.manifest` rule.
 
 ## 20260925
 

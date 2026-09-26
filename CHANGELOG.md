@@ -15,7 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 20260926
+
 ### Changed
+- The `fable` and `opus` model aliases now point to `claude-fable-5-1` and `claude-opus-5-5`
 - `sq review pr` saves reviews under shorter names: `pr-83-review.code.md` in a project's own reviews directory or the built-in default. With `--reviews-dir` or `review.external_reviews_dir`, where reviews from several repositories can end up in one place, the name gains the repository: `pr-83-review.code.ecorkran-squadron.md`. Existing reviews keep their old names and still work (#124)
 
 ## [0.13.3] - 20260925
