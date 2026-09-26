@@ -71,8 +71,8 @@ This slice records both facts in the artifact, the findings header, and `--outpu
 | `review/turn_capture.py` | `TurnCapture.answering_models`, folded from the `answering_models` metadata key. |
 | `providers/sdk/agent.py` | Collect distinct `AssistantMessage.model` values per `handle_message`, top-level only, skipping `<synthetic>`. Stamp them on the `ResultMessage` translation next to `stop_reason`. |
 | `providers/openai/agent.py` | `TurnResult.model` from the last non-empty `chunk.model`. Accumulate distinct values across the agentic loop. Stamp in `_stamp_tool_telemetry` before its tools early-return. |
-| `review/persistence.py` | Frontmatter `diffTruncated`, `requestedModel`. Header `**Diff:**` line and `**Model:** X (requested Y)`. Run Digest answering-model line. The not-parsed notice keys on `fallback_used` (D6). |
-| `cli/commands/review.py` | Terminal header shows the substitution. Degraded-parse messages key on `fallback_used`, not on an empty findings list (D6). |
+| `review/persistence.py` | Frontmatter `diffTruncated`, `requestedModel`. Header `**Diff:**` line and `**Model:** X (requested Y)`. Run Digest answering-model and diff-coverage lines. |
+| `cli/commands/review.py` | Terminal header shows the substitution. |
 | `pipeline/actions/review.py` | `metadata["model"]` = `result.model`. Adds `metadata["requested_model"]`. |
 
 ### Data Flow
@@ -157,11 +157,11 @@ It has no `location` because it cites no file. `location_verified` stays `None`.
 
 `verdictSource: stated` would claim the model said CONCERNS. `derived` means derived from findings. Neither is true. A third member, `IMPOSED = "imposed"`, means squadron set the verdict from a measured fact about the run. The vocabulary stays closed (the docstring's concern was open reason strings, not member count). Nothing outside squadron reads `verdictSource`: grep of context-forge on 20260926 found no reader. The parser never produces it. Only `impose_diff_coverage` sets it.
 
-### D6 — A synthetic finding must not hide a degraded parse
+### D6 — The cap cannot hide a degraded parse; no render change
 
-`format_review_markdown` today picks exactly one of: the findings list, the `fallback_used` not-parsed notice, or the UNKNOWN notice. The first branch wins whenever `findings` is non-empty. A PASS parsed with `fallback_used=True` (verdict read, findings not) that then gets the synthetic finding would render as a clean one-finding review and lose the not-parsed notice.
+`format_review_markdown` picks exactly one of: the findings list, the `fallback_used` not-parsed notice, or the UNKNOWN notice. The first branch wins whenever `findings` is non-empty. That would hide the notice if a PASS with unparsed findings got the synthetic finding, but no such PASS exists. The parser sets `fallback_used` in two branches (`parsers.py`): the mismatch branch (CONCERNS/FAIL with no findings, never PASS) and the derived-verdict branch (verdict computed *from* parsed findings, so findings are non-empty). A stated PASS with no findings is a clean review, not a degraded one. So the cap, which only moves PASS, only ever meets a clean PASS or a derived PASS whose findings did parse.
 
-Fix: the `fallback_used` notice renders whenever `fallback_used` is set, after any findings, rather than as an `elif`. Same change in `_display_terminal`. `ended_mid_task` is unaffected because it runs before the cap.
+Rendering the notice whenever `fallback_used` is set would be wrong. It would stamp "Findings Not Parsed" on every derived-verdict review, whose findings parsed fine. The render conditions stay as they are, and a test pins the invariant (derived PASS + cap → synthetic finding, parsed findings, no not-parsed notice).
 
 ### D7 — Diff ordering and `--stat` deferred to #137
 
@@ -291,7 +291,7 @@ Findings header (lines added only when they apply):
 4. Truncated diff + PASS + zero successful tool calls → `verdict: CONCERNS`, `verdictSource: imposed`, the synthetic `review-coverage` finding first, and exit code / checkpoint behavior of CONCERNS. Holds for `tool_calls_made` None, 0, and `== failed_tool_calls`.
 5. Truncated diff + at least one successful tool call → verdict unchanged, no synthetic finding, `diffTruncated: true`. On a kept PASS, the Run Digest carries the `Diff coverage:` exemption line (D4).
 6. Truncated diff + CONCERNS/FAIL/UNKNOWN → verdict and findings unchanged.
-7. A PASS with `fallback_used=True` that gets capped still renders the "Findings Not Parsed" notice, in the artifact and on the terminal.
+7. A derived PASS (`fallback_used=True`, findings parsed) that gets capped renders the synthetic finding and its parsed findings, with no "Findings Not Parsed" notice (D6).
 8. The SDK provider stamps `answering_models` from top-level `AssistantMessage.model`, excluding `<synthetic>` and subagent messages. The OpenAI provider stamps it from `chunk.model` across all loop turns.
 9. A stubbed provider whose reported model differs from the request (not a snapshot) produces `aiModel: <answered>`, `requestedModel: <requested>`, the header suffix, `model_substituted: true` in JSON, and a WARNING. This is #134's stated test.
 10. A dated-snapshot answer (`gpt-5` → `gpt-5-2025-08-07`) produces `aiModel: gpt-5-2025-08-07` with no `requestedModel` and no WARNING. `gpt-5` → `gpt-5-mini` is a substitution.
@@ -370,7 +370,7 @@ Run in this repo on the slice branch. The diff for slice 927 itself is the test 
 
 1. **Models first.** `DiffInjection`, the new `ReviewResult` fields, `model_substituted`, `VerdictSource.IMPOSED`, and `to_dict()`. `models/snapshot.py` with its parametrized tests.
 2. **Part A.** `_inject_file_contents` returns `(prompt, DiffInjection | None)`. Update its two `review_client` call sites and the direct callers in `test_content_injection.py`, `test_convention_root.py`, `test_injection_decision.py`, and `test_review_client.py`. Then persistence rendering and JSON.
-3. **Part B.** `review/coverage.py`, the D6 render change in persistence and the terminal, and the call in `run_review_with_profile` after telemetry assignment.
+3. **Part B.** `review/coverage.py`, the D6 invariant test, and the call in `run_review_with_profile` after telemetry assignment.
 4. **Part C.** OpenAI `TurnResult.model` and stamping, SDK collection and stamping, `TurnCapture` folding, and the `run_review_with_profile` assignment and warnings. Then persistence, terminal, and pipeline metadata.
 5. Walkthrough, capture D9 ids, DEVLOG, CHANGELOG.
 

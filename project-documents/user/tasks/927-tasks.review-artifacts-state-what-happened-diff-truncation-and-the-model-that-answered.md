@@ -122,10 +122,9 @@ Effort for the slice: 3/5. Commit A+B and C separately so either can be reverted
   - [ ] In `persistence._run_digest_lines`: when `diff_injection` is truncated and `verdict is PASS` (a kept PASS), append `- Diff coverage: truncated; PASS kept because the model made N successful tool call(s)` (D4). Emit it only in that case.
   - [ ] Test in `test_review_client.py`: stubbed run, truncated diff, zero tool calls, model says PASS → result verdict CONCERNS. Test in `test_persistence.py`: a truncated PASS with 2 successful calls renders the exemption line; an untruncated PASS does not.
 
-- [ ] **B.4 — Keep the not-parsed notice visible under a synthetic finding** (D6) (Effort 2/5)
-  - [ ] `format_review_markdown`: render the `fallback_used` "Findings Not Parsed" notice whenever `fallback_used` is True, after the findings list, not as an `elif` of it. The UNKNOWN branch and "No specific findings." keep their current conditions.
-  - [ ] `cli/commands/review.py` `_display_terminal`: print the `fallback_used` degraded message even when findings are non-empty.
-  - [ ] Tests: a result with `fallback_used=True`, verdict PASS, and a truncated diff, run through `impose_diff_coverage` then `format_review_markdown`, contains both the synthetic finding and `## Findings Not Parsed`. A terminal test (existing CLI test pattern, captured console) shows the degraded message. All existing degraded-parse tests still pass.
+- [ ] **B.4 — Pin that the cap never meets an unparsed-findings review** (D6) (Effort 1/5)
+  - [ ] No render change to `format_review_markdown` or `_display_terminal`: the not-parsed notice keeps its current `elif` condition.
+  - [ ] Test in `test_coverage.py`: a derived PASS (`fallback_used=True`, `verdict_source=DERIVED`, non-empty findings, truncated diff, zero tool calls) run through `impose_diff_coverage` then `format_review_markdown` shows the synthetic finding plus the parsed findings and no `## Findings Not Parsed`.
   - [ ] Success: `uv run pytest tests/review tests/cli` passes, ruff and pyright clean. Commit: `feat: record diff truncation and cap unread truncated PASS reviews`.
 
 ## Part C — Record the model that answered
