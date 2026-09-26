@@ -185,3 +185,7 @@ cython_debug/
 
 # context-forge per-checkout personal config (git.integration_branch etc.); never shared
 .context-forge.local.toml
+
+# guide setup-ide per-checkout install manifests and one-time conversion backups
+.context-forge/
+*.pre-context-forge
