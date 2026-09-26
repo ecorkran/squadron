@@ -417,7 +417,8 @@ def test_each_reviews_dir_rule_decides_the_artifact_qualifier(
     kwargs = save.call_args.kwargs
     assert kwargs["reviews_dir"] == expected_dir
     assert f"{kwargs['target'].filename_stem('code')}.md" == expected_name
-    assert f"({rule})" in result.output
+    # Rich wraps at the terminal width, so a long tmp path can split the label.
+    assert f"({rule})" in " ".join(result.output.split())
 
 
 def test_resolution_produces_the_same_record_pr_show_would(
