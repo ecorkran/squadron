@@ -223,6 +223,29 @@ class TestRuleIsReportable:
         assert ReviewsDirRule.PROJECT.value == "project reviews directory"
         assert ReviewsDirRule.DEFAULT.value == "built-in default"
 
+
+class TestRepositoryScoped:
+    """Whether a rule's directory holds one repository's reviews (slice 926, D1)."""
+
+    @pytest.mark.parametrize("rule", list(ReviewsDirRule))
+    def test_every_rule_has_an_explicit_answer(self, rule: ReviewsDirRule) -> None:
+        """A rule added without deciding its scoping fails here, not silently."""
+        assert isinstance(rule.repository_scoped, bool)
+
+    @pytest.mark.parametrize(
+        ("rule", "scoped"),
+        [
+            (ReviewsDirRule.PROJECT, True),
+            (ReviewsDirRule.DEFAULT, True),
+            (ReviewsDirRule.CONFIG, False),
+            (ReviewsDirRule.FLAG, False),
+        ],
+    )
+    def test_mapping_matches_design_table(self, rule: ReviewsDirRule, scoped: bool) -> None:
+        assert rule.repository_scoped is scoped
+
+
+class TestUserRoot:
     def test_the_user_root_is_not_the_installed_package(self) -> None:
         """``data_dir()`` is the installed package's read-only directory.
 

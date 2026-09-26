@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
+from typing import assert_never
 
 from squadron.config.manager import get_config
 from squadron.review.persistence import REVIEWS_DIR
@@ -40,6 +41,25 @@ class ReviewsDirRule(StrEnum):
     PROJECT = "project reviews directory"
     CONFIG = "review.external_reviews_dir"
     DEFAULT = "built-in default"
+
+    @property
+    def repository_scoped(self) -> bool:
+        """Whether a directory chosen by this rule holds one repository's reviews only.
+
+        The single place this mapping lives (slice 926, D1). A PR review artifact
+        in a repository-scoped directory drops its ``{owner}-{repo}`` qualifier.
+        ``PROJECT`` is scoped because ``select_remote`` refuses a PR from any
+        repository that is not a remote of the checkout; ``DEFAULT`` because its
+        path already carries host, owner and repository. ``CONFIG`` and ``FLAG``
+        name directories squadron cannot know the contents of.
+        """
+        match self:
+            case ReviewsDirRule.PROJECT | ReviewsDirRule.DEFAULT:
+                return True
+            case ReviewsDirRule.CONFIG | ReviewsDirRule.FLAG:
+                return False
+            case _:
+                assert_never(self)
 
 
 def user_reviews_root() -> Path:
