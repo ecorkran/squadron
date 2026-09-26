@@ -12,6 +12,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 927 tasks (Phase 5 complete)
+
+`user/tasks/927-tasks.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`
+has 201 lines. Setup is S; M covers the shared model changes (`DiffInjection`, `ReviewResult` fields,
+`VerdictSource.IMPOSED`, `models/snapshot.py`); A records truncation; B adds the coverage cap, the
+exemption digest line, and the D6 fallback-notice fix; C records the answering model (OpenAI
+`chunk.model`, SDK top-level `AssistantMessage.model`, `collect_turn` folding, rendering, terminal,
+and pipeline metadata); W runs the walkthrough and captures real ids per profile. Every test task
+comes right after its implementation task. There are three commits: M, A+B, and C. The
+clean-pass snapshot must not be regenerated. Next: Phase 6 on branch
+`927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered`.
+
 ### Slice 927 design — review artifacts state what happened (Phase 4 complete)
 
 Design for #135 and #134: `user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`.
