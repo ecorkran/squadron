@@ -17,13 +17,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 Written first because 914 now depends on it for sequencing. While measuring for the design,
 three live leaks turned up that #47 did not list:
 
-- 25 `src/` constants call `Path.home()` at import time, so a per-test `HOME` monkeypatch
-  cannot reach them. The design uses two layers: a session fake home set before any
-  `squadron` import (guarded by a session-start assertion), plus a per-test home for
-  lookups made at call time.
+- An AST scan found 19 `src/` constants that call `Path.home()` at import time, so a
+  per-test `HOME` cannot reach them. They become functions that look the path up when
+  called, and `tests/test_import_purity.py` fails the suite if a module-level call comes back.
 - `cli/app.py` runs `load_dotenv(cwd/.env)` at import, which puts the real provider keys
-  into every test process.
-- `CLAUDECODE=1` is set in agent-run suites.
+  into every test process. The call moves into the root CLI callback, and tests stub it out.
+- `CLAUDECODE=1` is set in agent-run suites. The product check is correct, so only the
+  tests change: the variable is removed per test.
+
+Fixing the first two in `src/` also removes the need to redirect `HOME` before import.
+All isolation now happens per test through `monkeypatch`. Effort goes from 3/5 to 4/5.
 
 What the design settles:
 

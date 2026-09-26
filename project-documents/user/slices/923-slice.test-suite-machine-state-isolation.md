@@ -14,59 +14,66 @@ status: not_started
 
 ## Overview
 
-Fixes [issue #47](https://github.com/ecorkran/squadron/issues/47). Right now some tests pass only because they pick up state from the developer's machine. Eight instances have been found so far, and each was fixed alone after CI went red:
+Fixes [issue #47](https://github.com/ecorkran/squadron/issues/47): tests that pass only because they inherit the developer's machine. Eight instances so far, each patched alone after CI went red:
 
 | # | Leaked state | Where it was found |
 |---|---|---|
 | 1 | user config `review.max_file_size_bytes` | #39 |
 | 2 | `shutil.which("cf")` on host `PATH` | `test_doctor.py` |
-| 3 | terminal width (Rich wraps a path mid-token) | `test_preemption_cli.py` |
+| 3 | terminal width (Rich wrapping a path mid-token) | `test_preemption_cli.py` |
 | 4 | live `cf config get git.integration_branch` | #32, `test_git_utils.py` |
 | 5 | `refs/squadron/pr/origin/83/*` left by a past live run | 24 tests, `a4d358fe` |
-| 6 | hardcoded epoch that was only correct in Mountain Time | `test_worktree.py`, `21b78861` |
-| 7 | bare `git init`, which assumes `init.defaultBranch=main` | `test_review_pr_worktree.py`, `21b78861` |
+| 6 | hardcoded epoch correct only in Mountain Time | `test_worktree.py`, `21b78861` |
+| 7 | bare `git init` assuming `init.defaultBranch=main` | `test_review_pr_worktree.py`, `21b78861` |
 | 8 | terminal width again | `test_review_pr.py`, `43416df7` |
 
-Eight cases of one class make the argument for fixing the class. This slice makes the test process's environment something the suite sets up itself, not something it inherits. It also adds a repeatable hostile run that proves the isolation holds.
+Eight instances of one class are the case for fixing the class. This slice makes the test process's environment something the suite sets up itself, not something it inherits, and adds a repeatable hostile run to prove it.
 
-Measuring for this design found three leaks that are live now but have not bitten yet. The design covers all three:
+Measuring for this design turned up three more leaks. They are live now but have not bitten yet, and this slice fixes all three:
 
-- **Import-time home paths.** 25 module-level constants in `src/` evaluate `Path.home()` at import, for example `pipeline/state.py:_DEFAULT_RUNS_DIR`, `review/templates:USER_TEMPLATES_DIR`, and `skills/manifest.py:USER_MANIFEST`. A per-test `HOME` monkeypatch cannot reach them, because they are fixed before any fixture runs. So the plan's premise that "`HOME` is the lever" holds only for paths computed at call time.
-- **Real API keys in the test process.** `squadron/cli/app.py:41` runs `load_dotenv(Path.cwd() / ".env")` at import, and the repo root has a `.env` with `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, and `OPENAI_API_KEY`. So once test collection imports the CLI, every test runs with the developer's real provider keys. CI has no `.env`. Any test that assumes a key is absent behaves differently on a developer machine, and a test that slips past a mock would spend real money.
-- **`CLAUDECODE=1`.** This variable is set whenever an agent runs the suite, and `cli/commands/run.py:150` branches on it. Agent-run suites therefore take a code path that CI never takes.
+- **Import-time home paths.** 19 module-level constants in `src/` evaluate `Path.home()` at import, for example `pipeline/state.py:_DEFAULT_RUNS_DIR`, `review/templates:USER_TEMPLATES_DIR` and `skills/manifest.py:USER_MANIFEST`. The list was measured with an AST scan of module-level code. These values are fixed before any fixture runs, so a per-test `HOME` cannot reach them. The fix is in `src/` (D1): make them call-time lookups.
+- **Real API keys in the test process.** `squadron/cli/app.py:41` runs `load_dotenv(Path.cwd() / ".env")` at module import. The repo root has a `.env` carrying `OPENROUTER_API_KEY`, `GEMINI_API_KEY` and `OPENAI_API_KEY`, so once collection imports the CLI, every test has the developer's real provider keys. CI has no `.env`. A test that assumes a key is absent behaves differently here, and a test that slips a mock would spend real money. The fix is in `src/` plus one test seam (D6).
+- **`CLAUDECODE=1`.** It is set whenever an agent runs the suite, and `cli/commands/run.py:150` branches on it, so agent-run suites take a path CI never does. The product check is correct: refusing SDK execution inside Claude Code is intended. So the fix is test-side only, a per-test scrub (D6).
 
 ## Value
 
-- **A local green run becomes evidence again.** A test that passes here passes in CI and on a contributor's machine, because the environment it sees is the same everywhere.
-- **Latent host-dependent tests fail everywhere, right away.** The pinned values (a non-`main` default branch, a non-UTC timezone) are chosen to make hidden assumptions fail on every machine, not only on the one that lacks them.
-- **The whole class is closed, not one more instance.** New tests get isolation without opting in, and the hostile CI job catches the next kind of leak.
+- **A local green run means something again.** A test that passes here passes in CI and on a contributor's machine, because every one of them sees the same environment.
+- **Hidden host-dependent tests fail everywhere, right away.** The pinned values (a non-`main` default branch, a non-UTC timezone) are chosen so that hidden assumptions fail on every machine, not only on the one that happens to lack them.
+- **Importing squadron no longer reads the home directory or `.env`.** Paths are resolved when used and `.env` is loaded when the CLI runs. This is also correct product behavior for library use and for the MCP server.
+- **The class is closed, not the next instance.** New tests get isolation without opting in, and the hostile CI job catches the next kind of leak.
 - **Unblocks 914.** 914 types the conftest fixtures once, after this slice has finished moving them.
 
 ## Technical Scope
 
 **Included**
 
-- Part A: root-level isolation of home paths (both import time and call time), git global/system config, `TZ`, `COLUMNS` and color variables, and a scrub of the credential and squadron env vars. Per-directory fixtures made redundant by this are consolidated.
-- Part B: an explicit opt-out marker for the few tests that must use the host's `cf` registry, and the sweep for tests that run git or `cf` against the project checkout.
-- Part C: a hostile-environment script, a negative-control run of it against the pre-slice commit, and a CI job that runs it on every push.
+- **Part A** covers the root-level test isolation:
+  - a per-test home
+  - git global and system config
+  - `TZ`
+  - `COLUMNS` and the color variables
+  - a scrub of the credential and squadron env vars
+
+  It also includes the two `src/` fixes: call-time home paths (D1) and loading `.env` from the CLI callback instead of at import (D6). Per-directory fixtures made redundant by these are consolidated.
+- **Part B** adds the `host_cf` opt-out marker and the sweep for tests that run git or `cf` against the project checkout.
+- **Part C** adds the hostile-environment script, its negative control against the pre-slice commit, and a CI job.
 
 **Excluded**
 
-- Product-code changes. `load_dotenv` at CLI import is intended product behavior; the tests neutralize its effect and do not change it.
 - `_pinned_diff_base` in `tests/review/conftest.py`. It pins `cf`'s *project* config, which is read from the checkout, not from `HOME`. It stays where it is.
-- Cross-test isolation beyond what already exists. The session-level fake home is shared by all tests in a process. It keeps the machine out; it does not keep tests apart from each other. Existing per-test fixtures that give per-test separation stay.
+- `CLAUDECODE` detection in `run.py`. It is correct product behavior; only the tests are isolated from it.
 - Typing the fixtures. That is 914's job.
 
 ## Dependencies
 
 ### Prerequisites
 
-- None. git ≥ 2.32 is required for `GIT_CONFIG_GLOBAL`; local is 2.50.1, and the CI runners are newer than 2.32.
+- None. `GIT_CONFIG_GLOBAL` needs git 2.32 or later; local is 2.50.1, and CI runners are newer than 2.32.
 
 ### Interfaces Required
 
-- `squadron.providers.profiles` built-in profiles (`api_key_env`) and the `OPENAI_API_KEY` fallback in `providers/auth.py`. The credential scrub list is derived from these, not written out by hand (D6).
-- The `sq config get` command. The hostile script uses it to prove that its hostile config is actually loaded (D9).
+- Built-in provider profiles in `squadron.providers.profiles` (their `api_key_env` fields) and the `OPENAI_API_KEY` fallback in `providers/auth.py`. The credential scrub list is derived from these (D6).
+- `sq config get`, which the hostile script uses to prove its hostile config is live (D9).
 
 ## Architecture
 
@@ -74,226 +81,281 @@ Measuring for this design found three leaks that are live now but have not bitte
 
 | Component | Location | Role |
 |---|---|---|
-| `_hermetic` module | `tests/_hermetic.py` (new) | Defines each pinned value exactly once. Builds the session fake home and git config. Holds the env-scrub logic. |
-| Root conftest | `tests/conftest.py` | Imports `_hermetic` before any `squadron` import. Adds the per-test autouse fixture, the session-start guard, and the `host_cf` opt-out. |
-| Review conftest | `tests/review/conftest.py` | Loses the two call-time isolation fixtures that are now redundant. |
-| Metrology conftest | `tests/metrology/conftest.py` | `isolated_user_config` stays opt-in and returns the per-test home's config path. |
-| Hostile script | `scripts/test-hostile-env` (new) | Clean clone plus hostile machine state, then runs pytest. |
-| CI job | `.github/workflows/ci.yml` | New `hermetic` job that runs the script. |
+| Home-path functions | the 19 `src/` modules | Each import-time constant becomes a zero-argument function that resolves `Path.home()` when called. |
+| `.env` loader | `src/squadron/cli/app.py` | `_load_env_file()` is called from the root `@app.callback`, not at import. |
+| Import-purity guard | `tests/test_import_purity.py` (new) | AST scan that fails if module-level code in `src/` calls `Path.home()` or `load_dotenv`. |
+| `_hermetic` module | `tests/_hermetic.py` (new) | Each pinned value defined once. Also writes the git config file and holds the scrub logic. |
+| Root conftest | `tests/conftest.py` | Per-test autouse isolation fixture, a session fixture that writes the git config, and the `host_cf` opt-out. |
+| Hermetic self-test | `tests/test_hermetic.py` (new) | Asserts the environment a test actually sees. |
+| Review / metrology conftests | `tests/review/`, `tests/metrology/` | Redundant isolation fixtures deleted or simplified (D7). |
+| Hostile script | `scripts/test-hostile-env` (new) | Clean clone plus hostile machine state, then pytest. |
+| CI job | `.github/workflows/ci.yml` | New `hermetic` job. |
 
 ### Data Flow
 
-How a test process gets its environment:
+How a test gets its environment:
 
 ```
-pytest starts
-  └─ imports tests/conftest.py
-       └─ first statement: import tests._hermetic
-            ├─ capture REAL_HOME (needed only by the host_cf opt-out)
-            ├─ mkdtemp → SESSION_HOME; os.environ["HOME"] = SESSION_HOME
-            ├─ write SESSION_HOME/.gitconfig-hermetic; set GIT_CONFIG_GLOBAL, GIT_CONFIG_NOSYSTEM=1
-            ├─ os.environ["TZ"] = PINNED_TZ; time.tzset()
-            └─ os.environ["COLUMNS"] = PINNED_COLUMNS; drop FORCE_COLOR / NO_COLOR
-       └─ then: from squadron... imports   ← import-time Path.home() now resolves under SESSION_HOME
-  └─ collection imports test modules      ← cli.app's load_dotenv runs here and pulls in real keys
-  └─ session-start guard                   ← fails if an import-time constant escaped SESSION_HOME
-  └─ per test (autouse):
-       ├─ monkeypatch HOME → tmp_path/"home"   ← call-time Path.home() gets a per-test home
-       ├─ delenv: credential vars, ORCH_*, SQUADRON_*, CLAUDECODE, GH_CONFIG_DIR
-       └─ if marked host_cf: set HOME back to REAL_HOME instead
+session start (autouse, session scope)
+  └─ tmp_path_factory → hermetic.gitconfig written once (pinned values from _hermetic)
+per test (autouse, function scope, via monkeypatch)
+  ├─ HOME            → tmp_path/"home"          ← every Path.home() in src/ is now call-time, so this reaches all of them
+  ├─ GIT_CONFIG_GLOBAL → session gitconfig; GIT_CONFIG_NOSYSTEM=1
+  ├─ TZ              → PINNED_TZ; time.tzset()
+  ├─ COLUMNS         → PINNED_COLUMNS; delenv FORCE_COLOR, NO_COLOR
+  ├─ delenv          credential vars, ORCH_*, SQUADRON_*, CLAUDECODE, GH_CONFIG_DIR
+  ├─ patch           squadron.cli.app._load_env_file → no-op   ← CliRunner invocations can't read the checkout's .env
+  └─ if marked host_cf: HOME → the real home instead
 ```
 
-The two layers are deliberate. Import-time constants can only be redirected before import, so they go to one shared session home. Call-time lookups get a fresh per-test home. Neither layer ever resolves to the developer's real home.
+Because the `src/` fixes remove every import-time read of the environment, all isolation happens per test through `monkeypatch` and is undone after each one. No setup runs before pytest's fixture system, and no module has to be imported in a particular order.
 
 ### State Management
 
-- `SESSION_HOME` is created with `tempfile.mkdtemp` (pytest's `tmp_path_factory` does not exist yet at conftest import) and removed in `pytest_unconfigure`.
-- All env changes made per test go through `monkeypatch`, so they are undone after each test. The process-wide values set at import are never restored during the run; they *are* the suite's environment.
+- Per-test state lives in `tmp_path` and is undone by `monkeypatch`.
+- Session state is only the git config file, under `tmp_path_factory`.
+- The real home path is captured once by `_hermetic` (`Path.home()` at its import). It is used only by the `host_cf` opt-out.
 
 ## Technical Decisions
 
-### D1 — Two-layer HOME redirection, guarded
+### D1 — Import-time home paths become call-time functions
 
-The session layer is `os.environ["HOME"]`, set in `tests/_hermetic.py`, which `tests/conftest.py` imports as its first statement, before any `squadron` import. The per-test layer is an autouse fixture that sets `HOME` to `tmp_path / "home"` through `monkeypatch`.
+Each of the 19 constants becomes a private zero-argument function that returns the same path, for example `_DEFAULT_RUNS_DIR` → `_default_runs_dir()`. Callers call it. The path each one resolves to in production is unchanged. Several modules already follow this shape (`_config_dir()`, `models_toml_path()`, `worktree.py:102`, `reviews_dir.py:73`), so the change brings the stragglers into line.
 
-The guard is a session-scoped autouse fixture that asserts `squadron.pipeline.state._DEFAULT_RUNS_DIR` is under `SESSION_HOME`. That constant is import-time and is imported by most suites. If an import-order change ever lets `squadron` load first, the suite fails at session start instead of quietly leaking again.
+The 19 sites:
 
-Rejected alternative: patching each of the 25 constants. It repeats their definitions in the tests, and the 26th constant would be missed.
+- `cli/commands/`: `doctor_checks.py:32`, `skills.py:23`, `summary_instructions.py:25`
+- `client/http.py:12`
+- `codehost/github_config.py:24`
+- `events/manifest.py:29`
+- `metrology/store.py:41`
+- `pipeline/`: `compaction_templates.py:20`, `emit.py:28`, `loader.py:25`, `state.py:162`
+- `providers/codex/auth.py:16`
+- `review/`: `parsers.py:122`, `review_client.py:547`, `templates/__init__.py:189`
+- `server/pid.py:10`
+- `skills/`: `manifest.py:11`, `receipts.py:16`, `resolver.py:11`
+
+Where a constant was a default parameter value, for example `DEFAULT_RECEIPTS_DIR`, the parameter becomes `Path | None = None` and is resolved in the body. A path computed at definition time is the same bug.
+
+**Guard.** `tests/test_import_purity.py` walks the AST of every `src/` module and fails on any `Path.home()` or `load_dotenv` call in module-level code. That covers top-level statements, class bodies and default argument values. The 20th import-time site then fails in review instead of leaking into tests. This replaces the earlier plan of redirecting `HOME` before import, which depended on import order and could guard only one sample constant.
+
+About 44 references across 13 test files currently patch these constants by name. Each either switches to the function or, more often, drops the patch because the per-test home now covers it.
 
 ### D2 — `host_cf` marker: the only way back to the real home
 
-Tests that run the real `cf` and need its project registry (`~/.config/context-forge/projects.json`, verified) are marked `@pytest.mark.host_cf`. For those tests the per-test fixture sets `HOME` to `REAL_HOME` instead of a temp home. The marker is registered in `pyproject.toml` next to `network`.
+Some tests run the real `cf` and need its project registry, which lives at `~/.config/context-forge/projects.json` (verified). They are marked `@pytest.mark.host_cf`, and the per-test fixture sets `HOME` to the real home for them. The marker is registered in `pyproject.toml` next to `network`.
 
-Membership starts from the four files known to depend on this (`test_schema_drift.py`, `test_pr_review_frontmatter.py`, `test_cf_contract_live.py`, `test_cli_review.py`). It is then confirmed test by test from the Part C run: a test gets the marker only if it fails under isolation *because* it needs cf's registry. The marker is not a place to park any failing test. The script prints the marked count so that growth is visible.
+Membership starts from the four files known to depend on this: `test_schema_drift.py`, `test_pr_review_frontmatter.py`, `test_cf_contract_live.py` and `test_cli_review.py`. It is then confirmed test by test in the Part C run: a test gets the marker only if it fails under isolation *because* it needs cf's registry. The marker is not a place to park failing tests. The script prints the marked count so growth is visible.
 
 ### D3 — Git config pinned, host config removed
 
-`GIT_CONFIG_GLOBAL` points to a session file that `_hermetic` writes. `GIT_CONFIG_NOSYSTEM=1` removes the system file; Apple git ships one with `credential.helper=osxkeychain`. The pinned file sets:
+`GIT_CONFIG_GLOBAL` points to the session file. `GIT_CONFIG_NOSYSTEM=1` removes the system file; Apple git ships one with `credential.helper=osxkeychain`. The pinned file sets:
 
-- `init.defaultBranch = hermetic-default`. This is deliberately *not* `main`, so a fixture that runs bare `git init` and then assumes `main` fails on every machine, not only on hosts whose default differs (instance 7). Fix any fixture this exposes by passing `-b main` explicitly, the form most fixtures already use.
-- `user.name` and `user.email`, so fixture commits never need host identity.
-- `commit.gpgsign = false` and `tag.gpgsign = false`. A signing host would otherwise prompt or fail inside fixtures.
+- `init.defaultBranch = hermetic-default`. This is deliberately *not* `main`. A fixture that runs bare `git init` and then assumes `main` now fails on every machine, instead of only where the host's default differs (instance 7). The fix is always the explicit form most fixtures already use: `git init -b main`.
+- `user.name` and `user.email`, so fixture commits never need the host's identity.
+- `commit.gpgsign = false` and `tag.gpgsign = false`. On a host that signs commits, fixture commits would otherwise prompt or fail.
 
 ### D4 — `TZ` pinned to a non-UTC, non-DST zone
 
-`TZ = "Asia/Kolkata"` (UTC+05:30, no DST), applied with `time.tzset()` at `_hermetic` import. The zone is non-UTC so that a test which quietly assumes UTC fails everywhere, and not the developer's zone so that instance 6's shape fails everywhere too. The half-hour offset also catches arithmetic that rounds offsets to whole hours. Tests that deliberately exercise other zones keep using `monkeypatch.setenv("TZ", ...)` plus `tzset`, as `test_worktree.py` was verified.
+`TZ = "Asia/Kolkata"` (UTC+05:30, no DST), followed by `time.tzset()`.
 
-### D5 — `COLUMNS` pinned to 80; color variables dropped
+- Not UTC, so a test that silently assumes UTC fails everywhere.
+- Not the developer's zone, so instance 6's shape (a literal that only works in one zone) fails everywhere too.
+- The half-hour offset also catches arithmetic that assumes whole-hour offsets.
 
-This settles #47's open question. With instance 8, a global pin is justified.
+Tests that exercise other zones on purpose keep setting `TZ` themselves with `monkeypatch` and `tzset`; the explicit value wins.
 
-`COLUMNS = "80"` is Rich's width for a non-terminal. That is the width the CI failures showed, so a local run wraps where CI wraps. Because every environment now wraps the same way, a width-sensitive assertion fails locally as well as in CI.
+### D5 — `COLUMNS` pinned to 80; color variables removed
 
-`FORCE_COLOR` and `NO_COLOR` are removed, because a host that sets `FORCE_COLOR` puts ANSI codes into every `CliRunner` capture. Tests that force a terminal (`test_verbosity.py` builds `Console(force_terminal=True, width=120)`) are unaffected, since their explicit arguments win. The existing unwrap helpers stay.
+This settles #47's open question, and instance 8 is what justifies a global pin.
 
-### D6 — Per-test env scrub, list derived from its sources
+Rich asks the real terminal for its size (`os.get_terminal_size` on stdin, stdout and stderr, `rich/console.py:1027-1030`) and then lets `COLUMNS` override it (`:1036`). A test run in a wide local terminal renders long paths on one line. CI has no terminal and renders at 80, wrapping the same path mid-token. `COLUMNS = "80"` makes every run wrap where CI wraps.
 
-The per-test fixture runs `delenv(..., raising=False)` on:
+`FORCE_COLOR` and `NO_COLOR` are removed, since a host with `FORCE_COLOR` set puts ANSI codes into every `CliRunner` capture. Tests that pass an explicit width or `force_terminal` (such as `test_verbosity.py`) are unaffected. The existing unwrap helpers stay.
 
-- **credential vars:** every `api_key_env` among the built-in provider profiles, plus the auth fallback `OPENAI_API_KEY`. The list is computed from `squadron.providers.profiles` when the fixture runs, so a new provider is covered without editing tests. It is not a hand-written list.
-- **every var with prefix `ORCH_`** (the `Settings` env prefix) **or `SQUADRON_`** (`SQUADRON_APP_NAME`, `SQUADRON_NO_INTERACTIVE`).
-- **`CLAUDECODE`** and **`GH_CONFIG_DIR`**. With `GH_CONFIG_DIR` gone, `codehost/github_config.py` falls back to its import-time default, which is under `SESSION_HOME`.
+### D6 — `.env` loaded when the CLI runs; per-test env scrub
 
-The scrub has to run per test rather than once at import. `load_dotenv` runs during collection, after `_hermetic` has already run, and puts the `.env` keys back. Tests that need a variable set it with `monkeypatch.setenv`. Autouse fixtures run before the test body, so the explicit value wins.
+**`src/` fix.** `cli/app.py` moves `load_dotenv(dotenv_path=Path.cwd() / ".env")` into `_load_env_file()`, which is called from the root `@app.callback`. Importing `squadron.cli.app` no longer touches the environment. Running `sq` still loads `.env` from the current directory, as today.
+
+**Test seam.** `CliRunner` invocations run the callback with cwd at the repo root, so they would still read the checkout's `.env`. The per-test fixture patches `squadron.cli.app._load_env_file` to a no-op, and one unit test calls the real `_load_env_file()` against a temp `.env`. This is a single named seam, not a mock of dotenv internals.
+
+**Scrub.** The per-test fixture runs `delenv(..., raising=False)` on:
+- Credential vars: every `api_key_env` among the built-in provider profiles, plus the auth fallback `OPENAI_API_KEY`. The list is computed from `squadron.providers.profiles` when the fixture runs, not hand-listed, so a new provider is covered without editing tests.
+- Every var with the prefix `ORCH_` (the `Settings` env prefix) or `SQUADRON_`.
+- `CLAUDECODE` and `GH_CONFIG_DIR`.
+
+Tests that need one of these set it with `monkeypatch.setenv`. Autouse fixtures run before the test body, so the explicit value wins.
 
 ### D7 — Consolidate per-directory fixtures
 
-Delete a per-directory fixture only when D1 fully covers what it guarded:
+D1 makes every home-derived path call-time, so the per-test home covers them all:
 
-- **Delete** `_isolated_user_config` and `_isolated_model_registry` from `tests/review/conftest.py`. `user_config_path()` and `models_toml_path()` resolve `Path.home()` at call time, so the per-test home covers both.
-- **Keep** `_isolated_user_templates`. `USER_TEMPLATES_DIR` is an import-time constant, so it resolves to the *shared* session home, and this fixture keeps review tests from seeing each other's template writes.
-- **Keep** `_pinned_diff_base` (out of scope; see Technical Scope), the root `patch_config_paths` (it also redirects *project* config), and `isolate_review_debug_log` (per-test separation).
-- **Metrology** `isolated_user_config` stays opt-in (the plan's requirement: some tests need the path returned). It now creates and returns `Path.home() / ".config/squadron/config.toml` under the per-test home and no longer patches `user_config_path`.
+- Delete from `tests/review/conftest.py`:
+  - `_isolated_user_config`
+  - `_isolated_model_registry`
+  - `_isolated_user_templates` (`USER_TEMPLATES_DIR` is no longer import-time)
+- Delete from `tests/conftest.py`: `isolate_review_debug_log`, since `_DEBUG_LOG_PATH` becomes call-time and lands in the per-test home.
+- Keep `_pinned_diff_base` (see Technical Scope) and the root `patch_config_paths`, which also redirects *project* config.
+- Metrology's `isolated_user_config` stays opt-in, as the plan requires, because some tests need the path returned. It now creates and returns `Path.home() / ".config/squadron/config.toml"` under the per-test home instead of patching `user_config_path`.
 
-### D8 — Part B: host probes are proven by running, not by reading
+### D8 — Part B: host probes proven by running the tests, not by reading them
 
-Static audit, measured: all five `shutil.which` caller files (`test_doctor.py`, `test_doctor_checks.py`, `test_setup.py`, `test_setup_install.py`, `test_resolver.py`) already patch it, and none call it bare. #47's fixes landed. The only bare call is `test_frontmatter_gate.py:415`, the deliberate real-`cf` test, which falls under D2. `pr_create_support.py` runs git only in a fixture repo.
+Measured: all five `shutil.which` caller files (`test_doctor.py`, `test_doctor_checks.py`, `test_setup.py`, `test_setup_install.py`, `test_resolver.py`) already patch it, and none call it bare. The only bare call is `test_frontmatter_gate.py:415`, the deliberate real-`cf` test, which falls under D2. `pr_create_support.py` runs git only in a fixture repo.
 
-Reading the code again would not add evidence. The hostile run (D9) shows it directly: its `PATH` leaves out `cf`, `codex`, `claude`, and `npm`, and its clone has no `refs/squadron/**`. Any test that still depends on a host binary or on checkout refs fails there. Fix each one where it surfaces, by stubbing presence or absence or by moving it onto a fixture repo, or give it the `host_cf` marker if it meets D2.
+Rereading the code adds no evidence. The hostile run (D9) proves it directly:
+- Its `PATH` leaves out `cf`, `codex`, `claude` and `npm`.
+- Its clone has no `refs/squadron/**`.
+
+Anything still depending on either fails there. Fix each failure where it surfaces:
+- stub presence or absence of the binary
+- move the test onto a fixture repo
+- if the test meets D2, mark it `host_cf`
 
 ### D9 — Hostile-environment script
 
-`scripts/test-hostile-env [ref]` (bash, default `HEAD`):
+`scripts/test-hostile-env [ref]` is a bash script; `ref` defaults to `HEAD`.
 
-1. `git clone --no-local` of the current repo into a temp dir, then `checkout --detach <ref>`. This gives full history (the history-dependent tests still work) and no `refs/squadron/**`, because clone copies only branches and tags.
+1. Run `git clone --no-local` into a temp dir, then `checkout --detach <ref>`. This gives full history, so the history-dependent tests still work, and no `refs/squadron/**`, because clone copies only branches and tags.
 2. Build a hostile `HOME`:
-   - `.config/squadron/config.toml` with **flat quoted top-level keys**, for example `"review.max_file_size_bytes" = 1`. A nested `[review]` table is rejected with a warning and would test nothing.
-   - `models.toml` defining aliases that collide with names the tests use as unknown, for example `llama-3-70b`.
-   - a user template override that sets `profile:`.
-   - `.gitconfig` with `init.defaultBranch = trunk`, `commit.gpgsign = true`, and `gpg.program = /nonexistent`, so any commit that escapes D3 fails loudly.
-3. Write a hostile `.env` into the clone root. Export sentinel credential values, `CLAUDECODE=1`, `FORCE_COLOR=1`, `COLUMNS=20`, and `TZ=Pacific/Chatham` (UTC+12:45).
-4. Set `PATH` to the venv's `bin`, then `/usr/bin` and `/bin` only. **Precondition:** `command -v cf` must fail; if `cf` is still visible, stop with an error.
-5. **Precondition:** read `review.max_file_size_bytes` back with `sq config get` under the hostile `HOME`. It must return the hostile value; otherwise stop with an error. This check exists so a mis-written probe cannot pass silently.
-6. `UV_CACHE_DIR` is resolved from the real home *before* the swap, so `uv sync --frozen` in the clone does not download everything again.
-7. Run `pytest -m "not host_cf"`. Print passed, skipped, and failed counts plus the count of deselected `host_cf` tests. Exit non-zero on any failure.
+   - `.config/squadron/config.toml` with **flat quoted top-level keys**, e.g. `"review.max_file_size_bytes" = 1`. A nested `[review]` table is rejected with a warning and would test nothing.
+   - `models.toml` defining aliases that collide with names the tests treat as unknown, e.g. `llama-3-70b`.
+   - A user template override that sets `profile:`.
+   - `.gitconfig` with `init.defaultBranch = trunk`, `commit.gpgsign = true` and `gpg.program = /nonexistent`, so any commit that escapes D3 fails loudly.
+3. Write a hostile `.env` into the clone root. Export sentinel credential values, `CLAUDECODE=1`, `FORCE_COLOR=1`, `COLUMNS=20` and `TZ=Pacific/Chatham` (UTC+12:45).
+4. Set `PATH` to the venv `bin`, then `/usr/bin` and `/bin` only. **Precondition:** `command -v cf` must fail. If `cf` is still visible, stop with an error.
+5. **Precondition:** run `sq config get review.max_file_size_bytes` under the hostile `HOME`. It must return the hostile value; if not, stop with an error. A mis-written probe cannot pass silently.
+6. Resolve `UV_CACHE_DIR` from the real home *before* swapping `HOME`, so `uv sync --frozen` in the clone reuses the cache.
+7. Run `pytest -m "not host_cf"`. Print passed, skipped and failed counts plus the deselected `host_cf` count. Exit non-zero on any failure.
 
-The hostile values are deliberately different from the D3 to D5 pins. The run passes only if the pins override the hostile host every time.
+The hostile values deliberately differ from the D3 to D5 pins. The run passes only if the pins win every time.
 
-**Negative control.** Run the script once against the parent of this slice's first commit and record the failures in DEVLOG. This is the measurement #47 never finished, and it shows the hostile environment actually bites. No feature flag is needed: the `ref` argument selects the unisolated tree.
+**Negative control.** Run the script once against the parent of this slice's first commit and record the failures in DEVLOG. This is the measurement #47 never finished, and it proves the hostile environment actually bites. The `ref` argument selects the unisolated tree, so no feature flag is needed.
 
 ### D10 — CI job, not a documented pre-release step
 
-Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Python version. It runs alongside the existing test job, so wall-clock time stays the same. All eight instances were found only by CI, and a manual pre-release step is exactly the step that gets skipped.
-
-`host_cf` tests are still covered by the main job, which runs `cf init --lite` against the real checkout.
+Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Python version. It runs alongside the existing test job, so wall-clock time stays the same. All eight instances were found only by CI, and a manual pre-release step is exactly the step that gets skipped. `host_cf` tests stay covered by the main job, which runs `cf init --lite` against the real checkout.
 
 ## Implementation Details
 
 ### Migration Plan
 
-- **Moved:** user-config and model-registry isolation leave `tests/review/conftest.py`. The root per-test `HOME` replaces them (D7).
-- **Reimplemented:** metrology `isolated_user_config`. Its consumers (`repo_with_remote`, `repo_no_remote`, `non_repo_dir`, `second_audited_repo`, and direct users) keep the same fixture name and return type (`Path`).
-- **Behavior preserved:** passed and skipped counts must equal the pre-slice baseline recorded in Part A step 1. There are two allowed differences. Tests that were passing by accident and get fixed may change, but the passed count must not fall. `host_cf` tests run in the main job exactly as before.
+- **Moved (`src/`):**
+  - 19 import-time path constants become call-time functions, with their in-module and cross-module callers updated (D1).
+  - `load_dotenv` moves from module import into the root CLI callback (D6).
+  - Production paths and CLI behavior are unchanged.
+- **Moved (tests):**
+  - Isolation leaves `tests/review/conftest.py` and the root `isolate_review_debug_log`; the per-test home replaces them (D7).
+  - About 44 patch references to the old constants, across 13 test files, switch to the function or are deleted.
+- **Reimplemented:** metrology `isolated_user_config`. Its consumers (`repo_with_remote`, `repo_no_remote`, `non_repo_dir`, `second_audited_repo`, and direct users) keep the same fixture name and `Path` return type.
+- **Behavior preserved:**
+  - Passed and skipped counts must equal the baseline recorded before the first change. The only allowed difference is accidental passes that get fixed, and the passed count must not fall.
+  - `sq` still loads `.env` from the current directory when run: verified manually with a temp `.env` and `sq config list` or a provider auth check.
 
 ## Integration Points
 
 ### Provides to Other Slices
 
-- **914:** a stable root conftest and `tests/_hermetic.py` to type. 914's fixture-typing work starts after this slice merges.
-- **Every future test:** isolation by default. A new test needs no opt-in; only `host_cf` is opt-*out*.
+- **914** gets a stable root conftest and `tests/_hermetic.py` to type. 914's fixture-typing work starts after this merges.
+- **Every future test** gets isolation by default. Only `host_cf` is opt-*out*.
+- **Library and MCP-server consumers of squadron:** importing a module no longer reads `HOME` or `.env`.
 
 ### Consumes from Other Slices
 
-- None. The provider profile registry and `sq config get` already exist.
+- None.
 
 ## Success Criteria
 
 ### Functional Requirements
 
-1. With a hostile `~/.config/squadron/config.toml`, `models.toml`, and user templates in the developer's *real* home, the full suite results are unchanged.
-2. The session-start guard fails the run if an import-time `Path.home()` constant resolves outside `SESSION_HOME`. To verify, temporarily move the `_hermetic` import below a `squadron` import and see the guard fire.
-3. Inside every test, `git config init.defaultBranch` returns `hermetic-default`, `TZ` is `Asia/Kolkata`, `COLUMNS` is `80`, and no credential, `ORCH_*`, `SQUADRON_*`, `CLAUDECODE`, or `GH_CONFIG_DIR` variable is set unless the test set it itself.
-4. `scripts/test-hostile-env` passes on the slice's final commit and prints zero failures.
-5. The same script, run against the pre-slice parent commit, fails, and the failures are recorded in DEVLOG (the negative control).
-6. The `hermetic` CI job is green on the slice branch's push.
+1. With a hostile `~/.config/squadron/config.toml`, `models.toml` and user templates in the developer's *real* home, the full suite's results are unchanged.
+2. No module-level code in `src/` calls `Path.home()` or `load_dotenv`. `tests/test_import_purity.py` enforces this and fails when either is reintroduced.
+3. In every test that is not marked `host_cf`, all of the following hold unless the test set them itself:
+   - `Path.home()` is under `tmp_path`.
+   - `git config init.defaultBranch` returns `hermetic-default`.
+   - `TZ` is `Asia/Kolkata` and `COLUMNS` is `80`.
+   - No credential, `ORCH_*`, `SQUADRON_*`, `CLAUDECODE` or `GH_CONFIG_DIR` variable is set.
+4. `sq` still loads `.env` from the current directory at runtime.
+5. `scripts/test-hostile-env` passes on the slice's final commit with zero failures.
+6. The same script against the pre-slice parent commit fails, and the failures are recorded in DEVLOG (negative control).
+7. The `hermetic` CI job is green on the slice branch push.
 
 ### Technical Requirements
 
 1. Each pinned value (`TZ`, `COLUMNS`, default branch name, git identity) is defined once, in `tests/_hermetic.py`.
-2. `host_cf` is registered in `pyproject.toml`. Every marked test has a one-line comment naming what it needs from the host.
-3. Full suite passed/skipped counts are at or above the Part A baseline. `ruff format`, `ruff check`, and `pyright` report zero errors.
-4. `tests/conftest.py` stays under ~300 lines. Env setup lives in `_hermetic`.
+2. `host_cf` is registered in `pyproject.toml`, and every marked test carries a one-line comment naming what it needs from the host.
+3. Suite passed and skipped counts are at or above the baseline. `ruff format`, `ruff check` and `pyright` report zero errors.
 
 ### Integration Requirements
 
-1. 914's fixture typing can start: after this slice merges, 914 does not need to move or rename any conftest fixture.
+1. After merge, 914 does not need to move or rename any conftest fixture.
 
 ### Verification Walkthrough
 
-These are draft commands; they are refined after Phase 6. `scripts/test-hostile-env` does not exist yet.
+Draft; to be refined after Phase 6. `scripts/test-hostile-env`, `tests/test_hermetic.py` and `tests/test_import_purity.py` do not exist yet.
 
 1. **Baseline, before any change:**
    ```bash
    uv run pytest -q 2>&1 | tail -1          # record passed/skipped
    ```
-2. **Negative control.** Run the hostile script against the pre-slice tree:
+2. **Negative control.** Hostile script against the pre-slice tree:
    ```bash
    scripts/test-hostile-env <pre-slice-sha>
    # expect: preconditions pass (cf hidden, hostile config readable),
    #         then a non-zero failure count — the leaks, measured
    ```
-3. **After Part A and Part B, run the hostile script on the slice tip:**
+3. **Import purity:**
+   ```bash
+   uv run pytest tests/test_import_purity.py -v     # passes
+   uv run python -c "import squadron.cli.app, os; print('OPENROUTER_API_KEY' in os.environ)"
+   # False when the shell doesn't export it — import no longer loads .env
+   ```
+4. **Runtime `.env` still works:**
+   ```bash
+   cd "$(mktemp -d)" && printf 'OPENROUTER_API_KEY=probe\n' > .env && sq auth status
+   # openrouter shows as configured from the probe key
+   ```
+5. **Environment inside a test.** Sentinels are set in the outer env; the self-test asserts Functional criterion 3 plus `host_cf` restoring the real home:
+   ```bash
+   OPENAI_API_KEY=sentinel CLAUDECODE=1 FORCE_COLOR=1 uv run pytest tests/test_hermetic.py -v
+   ```
+6. **Hostile script on the slice tip:**
    ```bash
    scripts/test-hostile-env
    # expect: N passed, M skipped, 0 failed; K deselected (host_cf)
    ```
-4. **Real-home hostility.** This proves the developer's own machine cannot leak in:
+7. **Real-home hostility:**
    ```bash
    cp ~/.config/squadron/config.toml /tmp/cfg.bak
    printf '"review.max_file_size_bytes" = 1\n' >> ~/.config/squadron/config.toml
-   uv run pytest -q 2>&1 | tail -1          # same counts as step 3's normal run
+   uv run pytest -q 2>&1 | tail -1          # same counts as a normal run
    cp /tmp/cfg.bak ~/.config/squadron/config.toml
    ```
-5. **Environment inside a test.** `tests/test_hermetic.py` (new) asserts Functional criterion 3 directly. It covers the pins, the scrubbed variables (after setting sentinels in the outer env), a bare `git init` landing on `hermetic-default`, and `host_cf` restoring the real home:
-   ```bash
-   OPENAI_API_KEY=sentinel CLAUDECODE=1 uv run pytest tests/test_hermetic.py -v
-   ```
-6. **Guard fires.** Temporarily reorder the imports in `tests/conftest.py` and run: session start fails with the guard's message. Revert.
-7. **CI:** push the slice branch and confirm that the `hermetic` and main test jobs are both green.
+8. **CI:** push the slice branch; the `hermetic` job and the main test job are both green.
 
 ## Risk Assessment
 
 ### Technical Risks
 
-- **Pins expose many failures at once.** The non-`main` default branch and non-UTC `TZ` are *meant* to fail hidden assumptions, and the count is unknown until Part A lands. This is the expected Low-Medium risk the plan names.
-- **`host_cf` turns into a dumping ground.** It is the only escape hatch, so the easy fix for a hard failure is to mark the test.
+- **The pins expose many failures at once.** The non-`main` default branch and non-UTC `TZ` are *meant* to break hidden assumptions, and the count is unknown until Part A lands.
+- **`host_cf` becomes a dumping ground.** It is the only escape hatch, so it is the easy way out of a hard failure.
 
 ### Mitigation Strategies
 
-- Land the pins before fixing anything, record the failure list, and then fix each failure at its cause (usually by passing `-b main` or deriving the time from its source string).
-- D2's membership rule, the one-line justification required on each marked test, and the marked count the script prints.
+- Land the pins before fixing anything, record the failure list, then fix each at its cause. Usually that means `-b main`, or deriving a time from its source string.
+- For `host_cf`: D2's membership rule, the required one-line justification on each marked test, and the marked count the script prints.
 
 ## Implementation Notes
 
 ### Development Approach
 
-1. Record the baseline (walkthrough step 1). Write `scripts/test-hostile-env` first and run the negative control (step 2). This gives the evidence #47 lacks before any fix goes in.
-2. Part A: add `tests/_hermetic.py`, the root per-test fixture, and the guard. Run the suite and record what the pins expose.
-3. Part B: fix each exposed failure at its cause. Classify real-`cf` dependents under D2 and add the marker.
-4. D7 consolidation: delete the redundant review fixtures and reimplement the metrology fixture. Run the suite again.
-5. Run the hostile script until it shows zero failures, then add the CI job.
+1. Record the baseline (walkthrough step 1). Write `scripts/test-hostile-env` and run the negative control (step 2), so the #47 evidence exists before any fix.
+2. **`src/` fixes:** D1 (19 sites plus `test_import_purity.py`) and D6's `_load_env_file`. Update the test patch references in the same commit so the suite stays green.
+3. **Part A:** add `tests/_hermetic.py`, the per-test fixture, the session git-config fixture and `tests/test_hermetic.py`. Run the suite and record what the pins expose.
+4. **Part B:** fix each exposed failure at its cause, and classify real-`cf` dependents under D2.
+5. **D7 consolidation:** delete the redundant fixtures and rerun.
+6. Get the hostile script to zero failures, then add the CI job.
 
 ### Special Considerations
 
-- `tempfile.mkdtemp` at import is the one piece of setup that runs outside pytest's fixture system. It has to, because D1's session layer must exist before collection imports `squadron`. Remove it in `pytest_unconfigure`.
 - The hostile `.env` and sentinel keys are fake values written into a temp clone. The script never reads or copies the real `.env`.
+- D1 touches 19 production modules, but each change is a local rename to a function call, with the resolved path unchanged. Step 2 is the part of this slice to review with the most care.
