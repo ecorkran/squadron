@@ -24,7 +24,7 @@ This slice records both facts in the artifact, the findings header, and `--outpu
 
 ## Value
 
-- **Gates can trust a PASS on a code review.** context-forge gates and Amoeba read the artifact, not squadron's logs. After this slice a PASS means the model either saw the whole diff or read files with its tools. A truncated, unread diff comes back CONCERNS with a finding that says why.
+- **Gates can trust a PASS on a code review.** context-forge gates and Amoeba read the artifact, not squadron's logs. After this slice a PASS on a truncated diff means the model made at least one successful tool call, and the artifact says so (`diffTruncated: true` plus a Run Digest line). A truncated diff with no tool use comes back CONCERNS with a finding that says why.
 - **The artifact names the model that did the work.** A silent fallback (a configured fallback model, an OpenRouter route remapping an id) shows up as `requestedModel:` next to `aiModel:` with a WARNING, instead of an artifact naming a model that never ran.
 - **Metrology calibrates the right judge.** `metrology/identity.py` keys judge identity on `aiModel`. Recording the answering model means a substituted judge's scores are no longer pooled under the model that was requested.
 
@@ -64,7 +64,7 @@ This slice records both facts in the artifact, the findings header, and `--outpu
 
 | Component | Change |
 |---|---|
-| `review/models.py` | New frozen `DiffInjection` dataclass. New `ReviewResult` fields `diff_injection`, `requested_model`, `answering_models`. New `model_substituted` property. `VerdictSource.IMPOSED`. `to_dict()` keys. |
+| `review/models.py` | New frozen `DiffInjection` dataclass. New `ReviewResult` fields `diff_injection`, `requested_model`, `answering_models`. New `model_substituted` property. `VerdictSource.IMPOSED`, with the class docstring rewritten: it no longer answers only "did the model say this?" but "where did this verdict come from?" (stated, derived, imposed), still a closed vocabulary. `to_dict()` keys. |
 | `review/review_client.py` | `_inject_file_contents` returns the prompt plus the `DiffInjection`. `run_review_with_profile` stamps the diff and model facts on the result and calls the coverage cap. `_truncate` keeps its signature, because `builders/code.py` imports it for PR metadata. |
 | `review/coverage.py` (new) | `impose_diff_coverage(result)`: the Part B rule, pure and unit-testable. |
 | `models/snapshot.py` (new) | `answers_as_requested(requested, answered) -> bool`: the D9 equivalence rule. It lives next to `models/aliases.py` because it is about model ids, not reviews. |
@@ -116,7 +116,7 @@ A gate needs one fact to decide: did the model see all of it. So frontmatter get
 
 ### D2 — `diffTruncated` is present exactly when the review had a diff
 
-`diff_injection` is `None` when `inputs` has no `diff` key (slice, arch, and tasks reviews), and the key is absent. When a diff was part of the review, the key is always written, `true` or `false`. That gives a gate three distinguishable states: absent (no diff, or pre-927 artifact), `false` (saw it all), and `true`. It is the same tri-state the codebase already uses for `location_verified`. Writing it only when `true` would make a clean code review indistinguishable from an artifact written before this slice.
+`diff_injection` is `None` when `inputs` has no `diff` key (slice, arch, and tasks reviews), and the key is absent. When a diff was part of the review, the key is always written, `true` or `false`. An empty diff (wrong ref, nothing changed, so `_inject_file_contents` injects nothing) records `DiffInjection(0, 0)` and writes `diffTruncated: false`: the model saw all zero characters. That gives a gate three distinguishable states: absent (no diff, or pre-927 artifact), `false` (saw it all), and `true`. It is the same tri-state the codebase already uses for `location_verified`. Writing it only when `true` would make a clean code review indistinguishable from an artifact written before this slice.
 
 Cost: every code-review artifact gains one line. The `clean_pass_artifact.md` snapshot uses a hand-built result with no diff, so it stays byte-identical.
 
@@ -131,6 +131,8 @@ Rule, in `impose_diff_coverage`:
 - **Applies when:** `diff_injection.truncated` **and** no successful tool call, where successful = `(tool_calls_made or 0) - (failed_tool_calls or 0)`, **and** `verdict is PASS`.
 - **Effect:** `verdict = CONCERNS`, `verdict_source = IMPOSED`, and one synthetic finding is prepended (below).
 - **Otherwise:** nothing. A CONCERNS, FAIL, or UNKNOWN verdict is already not a clean pass, and `diffTruncated: true` records the rest. A run where the model made a successful tool call keeps its verdict, as the slice plan requires.
+
+**The exemption is wider than "read the missing files", on purpose.** Any successful call counts, including a `Glob` or a `Read` of `CLAUDE.md`. No tool can rebuild the diff itself (`review_client.py`, issue #81), and telemetry records counts, not per-call tool names, so narrowing the rule to reads of `diff_files` would need new telemetry this slice doesn't add. Instead the exemption is made visible: when a truncated diff keeps a PASS because of tool calls, the Run Digest adds `- Diff coverage: truncated; PASS kept because the model made N successful tool call(s)`. A gate that wants stricter behavior already has `diffTruncated: true` to key on.
 
 `tool_calls_made is None` (no tools offered) counts as zero. A tool-less model with a truncated diff could not have read the rest, which is the same problem with fewer options. Failed calls don't count, because a model whose every read failed read nothing.
 
@@ -285,9 +287,9 @@ Findings header (lines added only when they apply):
 
 1. A code review whose diff exceeds `review.max_file_size_bytes` writes `diffTruncated: true`, the `**Diff:**` header line, and `diff_chars`/`diff_chars_injected`/`diff_truncated` in JSON, with the correct counts. Same on the pipeline `review` action.
 2. A diff skipped by `review.max_total_injection_bytes` records `diff_chars_injected: 0` and `diffTruncated: true`.
-3. A code review with an untruncated diff writes `diffTruncated: false` and no `**Diff:**` line. A slice/arch/tasks review writes no `diffTruncated` key.
+3. A code review with an untruncated diff writes `diffTruncated: false` and no `**Diff:**` line. So does a code review whose diff came back empty (D2). A slice/arch/tasks review writes no `diffTruncated` key.
 4. Truncated diff + PASS + zero successful tool calls → `verdict: CONCERNS`, `verdictSource: imposed`, the synthetic `review-coverage` finding first, and exit code / checkpoint behavior of CONCERNS. Holds for `tool_calls_made` None, 0, and `== failed_tool_calls`.
-5. Truncated diff + at least one successful tool call → verdict unchanged, no synthetic finding, `diffTruncated: true`.
+5. Truncated diff + at least one successful tool call → verdict unchanged, no synthetic finding, `diffTruncated: true`. On a kept PASS, the Run Digest carries the `Diff coverage:` exemption line (D4).
 6. Truncated diff + CONCERNS/FAIL/UNKNOWN → verdict and findings unchanged.
 7. A PASS with `fallback_used=True` that gets capped still renders the "Findings Not Parsed" notice, in the artifact and on the terminal.
 8. The SDK provider stamps `answering_models` from top-level `AssistantMessage.model`, excluding `<synthetic>` and subagent messages. The OpenAI provider stamps it from `chunk.model` across all loop turns.
@@ -345,9 +347,9 @@ Run in this repo on the slice branch. The diff for slice 927 itself is the test 
    ```
    Expect `diffTruncated: false` and no `**Diff:**` line.
 
-6. **Answering model (Part C), one per configured profile.** For each profile with credentials (sdk, openai, openrouter, local), run a small review at `-v` and check the artifact:
+6. **Answering model (Part C), one per configured profile.** For each profile with credentials (sdk, openai, openrouter, local), run a small review on that profile's default model (no `--model`), since those defaults are the ids D9 has to handle, and check the artifact:
    ```bash
-   sq review slice 927 --model sonnet -v
+   sq review slice 927 --profile <profile> -v
    grep -E '^(aiModel|requestedModel):' project-documents/user/reviews/927-review.slice.*.md
    ```
    Expect `aiModel:` matching what the provider reported and no `requestedModel:` line. Record each profile's actual `answering_models` from `--output json` in the DEVLOG. These are D9's captured ids. A real substitution cannot be forced against live providers. Its proof is SC9's stubbed-provider test.
@@ -372,7 +374,7 @@ Run in this repo on the slice branch. The diff for slice 927 itself is the test 
 4. **Part C.** OpenAI `TurnResult.model` and stamping, SDK collection and stamping, `TurnCapture` folding, and the `run_review_with_profile` assignment and warnings. Then persistence, terminal, and pipeline metadata.
 5. Walkthrough, capture D9 ids, DEVLOG, CHANGELOG.
 
-Parts A and C are independent after step 1. B depends on A.
+Parts A and C are independent after step 1. B depends on A. Commit each part separately, so A+B and C can each be reverted on its own.
 
 ### Special Considerations
 
