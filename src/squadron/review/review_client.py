@@ -14,6 +14,7 @@ import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NamedTuple
 
 from squadron.config.manager import get_config
 from squadron.core.models import (
@@ -25,8 +26,9 @@ from squadron.providers.base import ProviderType
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
 from squadron.providers.registry import get_provider
+from squadron.review.coverage import impose_diff_coverage
 from squadron.review.git_utils import EmptyDiffError
-from squadron.review.models import ReviewResult
+from squadron.review.models import DiffInjection, ReviewResult
 from squadron.review.parsers import parse_review_output
 from squadron.review.template_inputs import FILE_INPUT_KEYS
 from squadron.review.templates import ReviewTemplate
@@ -151,7 +153,7 @@ async def run_review_with_profile(
     # Always called: the diff must reach the model even on the tools path, because no
     # read-only tool can produce one (issue #81, and slice 265's stated intent — "omits
     # injected file bodies but retains the diff"). Only the *bodies* are conditional.
-    prompt = _inject_file_contents(
+    prompt, diff_injection = _inject_file_contents(
         prompt,
         inputs,
         template.diff_exclude_patterns,
@@ -276,6 +278,11 @@ async def run_review_with_profile(
     result.stop_reason = capture.stop_reason
     result.reasoning_chars = capture.reasoning_chars
     result.failed_tool_calls = capture.failed_tool_calls
+    result.diff_injection = diff_injection
+
+    # Part B (slice 927 D4): a truncated diff with no successful tool call turns a
+    # stated PASS into CONCERNS. Must run after tool_calls_made/failed_tool_calls above.
+    impose_diff_coverage(result)
 
     # A review that was handed tools and called none produces a verdict from a model
     # that read nothing beyond the prompt — indistinguishable from a healthy review in
@@ -333,6 +340,13 @@ def _truncate(content: str, label: str, max_file_size: int) -> str:
     )
 
 
+class InjectedPrompt(NamedTuple):
+    """Result of :func:`_inject_file_contents`: the prompt plus diff coverage (slice 927)."""
+
+    prompt: str
+    diff: DiffInjection | None
+
+
 def _inject_file_contents(
     prompt: str,
     inputs: dict[str, str],
@@ -340,7 +354,7 @@ def _inject_file_contents(
     *,
     include_bodies: bool = True,
     convention_root: str | None = None,
-) -> str:
+) -> InjectedPrompt:
     """Inject file contents into the prompt for providers that can't read files.
 
     Iterates input values, checks if each is a real file path via
@@ -418,10 +432,22 @@ def _inject_file_contents(
 
     # Handle diff input — run git diff locally
     diff_ref = inputs.get("diff")
+    diff_injection: DiffInjection | None = None
     if diff_ref is not None:
         diff_content = _run_git_diff(diff_ref, inputs.get("cwd", "."), exclude_patterns)
-        if diff_content:
-            _add_injection("Git Diff", diff_content)
+        if not diff_content:
+            # D2: the review had a diff input but nothing changed. The model saw all
+            # zero characters, which is not a truncation.
+            diff_injection = DiffInjection(total_chars=0, injected_chars=0)
+        elif _add_injection("Git Diff", diff_content):
+            diff_injection = DiffInjection(
+                total_chars=len(diff_content),
+                injected_chars=min(len(diff_content), max_file_size),
+            )
+        else:
+            # D3: dropped entirely by the total-injection limit. The model saw none of
+            # it, the worst case of the same fact _add_injection already detected.
+            diff_injection = DiffInjection(total_chars=len(diff_content), injected_chars=0)
 
     # Handle files glob input — resolve and inject matching files
     files_glob = inputs.get("files") if include_bodies else None
@@ -445,10 +471,10 @@ def _inject_file_contents(
             break
 
     if not injections:
-        return prompt
+        return InjectedPrompt(prompt, diff_injection)
 
     file_section = "\n\n## File Contents\n\n" + "\n\n".join(injections)
-    return prompt + file_section
+    return InjectedPrompt(prompt + file_section, diff_injection)
 
 
 def _run_git_diff_filenames(

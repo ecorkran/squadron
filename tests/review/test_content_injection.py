@@ -29,7 +29,7 @@ def test_file_contents_appear_in_prompt(tmp_path: Path) -> None:
     prompt = "Review the following document: {input}"
     inputs = {"input": str(file_a), "cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert "## File Contents" in result
     assert "# Slice Design" in result
     assert "Some content here." in result
@@ -44,7 +44,7 @@ def test_cwd_key_is_skipped(tmp_path: Path) -> None:
     prompt = "Review this"
     inputs = {"cwd": str(cwd_file)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert result == prompt  # no injection
     assert "should not appear" not in result
 
@@ -62,7 +62,7 @@ def test_pr_key_is_skipped(tmp_path: Path) -> None:
     prompt = "Review this"
     inputs = {"pr": str(pr_file), "cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert result == prompt  # no injection
     assert "should not appear" not in result
 
@@ -72,7 +72,7 @@ def test_nonexistent_file_is_skipped(tmp_path: Path) -> None:
     prompt = "Review this"
     inputs = {"input": "/nonexistent/path/to/file.md", "cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert result == prompt
 
 
@@ -111,7 +111,7 @@ def test_non_file_values_are_skipped(tmp_path: Path) -> None:
         "some_key": "not-a-file",
     }
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert result == prompt
 
 
@@ -129,7 +129,7 @@ def test_large_file_is_truncated(tmp_path: Path) -> None:
     prompt = "Review this"
     inputs = {"input": str(large_file), "cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert "truncated" in result.lower()
     assert "file too large" in result.lower()
     # Truncated content should not exceed limit + truncation message
@@ -147,7 +147,7 @@ def test_total_injection_capped(tmp_path: Path) -> None:
         files[f"input{i}"] = str(f)
 
     prompt = "Review this"
-    result = _inject_file_contents(prompt, files)
+    result = _inject_file_contents(prompt, files).prompt
 
     # Should have some files but not all (total limit reached)
     injected_count = result.count("### input")
@@ -174,7 +174,7 @@ def test_multiple_files_injected(tmp_path: Path) -> None:
         "cwd": str(tmp_path),
     }
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert "Task content." in result
     assert "Design content." in result
     assert result.count("### ") == 2  # two file sections
@@ -208,7 +208,7 @@ def test_diff_output_in_prompt() -> None:
     with patch("squadron.review.review_client.subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "diff --git a/foo.py\n+added line"
-        result = _inject_file_contents(prompt, inputs)
+        result = _inject_file_contents(prompt, inputs).prompt
 
     assert "Git Diff" in result
     assert "+added line" in result
@@ -222,7 +222,7 @@ def test_large_diff_is_truncated(tmp_path: Path) -> None:
     with patch("squadron.review.review_client.subprocess.run") as mock_run:
         mock_run.return_value.returncode = 0
         mock_run.return_value.stdout = "x" * (_MAX_FILE_SIZE + 5000)
-        result = _inject_file_contents(prompt, inputs)
+        result = _inject_file_contents(prompt, inputs).prompt
 
     assert "truncated" in result.lower()
 
@@ -240,7 +240,7 @@ def test_max_file_size_config_override(patch_config_paths, tmp_path: Path) -> No
     prompt = "Review this"
     inputs = {"input": str(large_file), "cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert "truncated" not in result.lower()
     assert content in result
 
@@ -254,9 +254,100 @@ def test_diff_failure_is_skipped(tmp_path: Path) -> None:
         mock_run.return_value.returncode = 128
         mock_run.return_value.stderr = "fatal: bad ref"
         mock_run.return_value.stdout = ""
-        result = _inject_file_contents(prompt, inputs)
+        result = _inject_file_contents(prompt, inputs).prompt
 
     assert result == prompt
+
+
+# ---------------------------------------------------------------------------
+# DiffInjection accounting (slice 927 D1-D3)
+# ---------------------------------------------------------------------------
+
+
+def test_diff_under_limit_not_truncated() -> None:
+    """A diff under the file-size limit is injected whole and not truncated."""
+    prompt = "Review code"
+    inputs = {"diff": "main", "cwd": "."}
+    diff_text = "diff --git a/foo.py\n+small change"
+
+    with patch("squadron.review.review_client.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = diff_text
+        result = _inject_file_contents(prompt, inputs)
+
+    assert result.diff is not None
+    assert result.diff.truncated is False
+    assert result.diff.total_chars == len(diff_text)
+    assert result.diff.injected_chars == len(diff_text)
+
+
+def test_diff_over_file_limit_is_truncated(patch_config_paths) -> None:
+    """A diff over review.max_file_size_bytes is truncated at the limit (D1)."""
+    from squadron.config.manager import set_config
+
+    set_config("review.max_file_size_bytes", "100")
+
+    prompt = "Review code"
+    inputs = {"diff": "main", "cwd": "."}
+    diff_text = "x" * 500
+
+    with patch("squadron.review.review_client.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = diff_text
+        result = _inject_file_contents(prompt, inputs)
+
+    assert result.diff is not None
+    assert result.diff.truncated is True
+    assert result.diff.total_chars == 500
+    assert result.diff.injected_chars == 100
+
+
+def test_diff_over_total_limit_is_skipped_entirely(patch_config_paths) -> None:
+    """A diff dropped by review.max_total_injection_bytes counts as truncated to zero (D3)."""
+    from squadron.config.manager import set_config
+
+    set_config("review.max_file_size_bytes", "1000")
+    set_config("review.max_total_injection_bytes", "10")
+
+    prompt = "Review code"
+    inputs = {"diff": "main", "cwd": "."}
+    diff_text = "x" * 500
+
+    with patch("squadron.review.review_client.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = diff_text
+        result = _inject_file_contents(prompt, inputs)
+
+    assert result.diff is not None
+    assert result.diff.truncated is True
+    assert result.diff.total_chars == 500
+    assert result.diff.injected_chars == 0
+
+
+def test_empty_diff_is_not_truncated() -> None:
+    """An empty diff (nothing changed) records (0, 0), not truncated (D2)."""
+    prompt = "Review code"
+    inputs = {"diff": "main", "cwd": "."}
+
+    with patch("squadron.review.review_client.subprocess.run") as mock_run:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = ""
+        result = _inject_file_contents(prompt, inputs)
+
+    assert result.diff is not None
+    assert result.diff.truncated is False
+    assert result.diff.total_chars == 0
+    assert result.diff.injected_chars == 0
+
+
+def test_no_diff_key_yields_none_diff_injection(tmp_path: Path) -> None:
+    """A review with no diff input at all reports diff=None (D2)."""
+    prompt = "Review this"
+    inputs = {"cwd": str(tmp_path)}
+
+    result = _inject_file_contents(prompt, inputs)
+
+    assert result.diff is None
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +403,7 @@ def test_claude_md_injected_when_present(tmp_path: Path) -> None:
     prompt = "Review code"
     inputs = {"cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert "CLAUDE.md (project conventions)" in result
     assert "No magic defaults." in result
 
@@ -322,7 +413,7 @@ def test_claude_md_headings_are_demoted(tmp_path: Path) -> None:
     claude_md = tmp_path / "CLAUDE.md"
     claude_md.write_text("# Core Principles\n## Code Style\n### Detail")
 
-    result = _inject_file_contents("Review", {"cwd": str(tmp_path)})
+    result = _inject_file_contents("Review", {"cwd": str(tmp_path)}).prompt
     assert "### Core Principles" in result
     assert "#### Code Style" in result
     assert "##### Detail" in result
@@ -335,7 +426,7 @@ def test_claude_md_absent_is_silently_skipped(tmp_path: Path) -> None:
     prompt = "Review code"
     inputs = {"cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert result == prompt
 
 
@@ -353,7 +444,7 @@ def test_files_glob_resolves_and_injects(tmp_path: Path) -> None:
     prompt = "Review code"
     inputs = {"files": "*.py", "cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs)
+    result = _inject_file_contents(prompt, inputs).prompt
     assert "print('a')" in result
     assert "print('b')" in result
     assert "not matching" not in result

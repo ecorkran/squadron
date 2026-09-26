@@ -36,7 +36,7 @@ def test_convention_root_overrides_claude_md_source(tmp_path: Path) -> None:
     (convention_dir / "CLAUDE.md").write_text("# Checkout conventions\nTrusted content.")
 
     inputs = {"cwd": str(cwd_dir)}
-    result = _inject_file_contents("Review", inputs, convention_root=str(convention_dir))
+    result = _inject_file_contents("Review", inputs, convention_root=str(convention_dir)).prompt
 
     assert "Trusted content." in result
     assert "Untrusted content." not in result
@@ -55,8 +55,8 @@ def test_convention_root_omitted_reads_from_cwd_byte_identical(tmp_path: Path) -
     prompt = "Review code"
     inputs = {"cwd": str(tmp_path)}
 
-    with_default = _inject_file_contents(prompt, inputs)
-    without_param = _inject_file_contents(prompt, inputs, convention_root=None)
+    with_default = _inject_file_contents(prompt, inputs).prompt
+    without_param = _inject_file_contents(prompt, inputs, convention_root=None).prompt
 
     assert with_default == without_param
     assert "CLAUDE.md (project conventions)" in with_default

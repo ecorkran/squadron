@@ -285,6 +285,57 @@ class TestFailedSaveExitsOne:
         )
 
 
+class TestImposedConcernsExitCode:
+    """Slice 927 D4: an imposed CONCERNS exits the same as any other CONCERNS.
+
+    _exit_on only escalates on FAIL or a failed save; CONCERNS is not special-
+    cased, imposed or not. Read from _exit_on rather than hardcoding a guess
+    (design SC4).
+    """
+
+    def test_imposed_concerns_exits_the_code_exit_on_assigns_to_concerns(
+        self,
+        cli_runner: CliRunner,
+        docs: tuple[str, str],
+    ) -> None:
+        import click
+
+        from squadron.cli.commands.review import SaveOutcome, _exit_on
+        from squadron.review.coverage import COVERAGE_CATEGORY, COVERAGE_TITLE
+        from squadron.review.models import ReviewFinding, Severity, VerdictSource
+
+        imposed_result = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            verdict_source=VerdictSource.IMPOSED,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title=COVERAGE_TITLE,
+                    description="The diff was truncated and unread; verdict was PASS.",
+                    category=COVERAGE_CATEGORY,
+                )
+            ],
+            raw_output="## Summary\nPASS\n",
+            template_name="code",
+            input_files={"cwd": "."},
+        )
+
+        try:
+            _exit_on(Verdict.CONCERNS, SaveOutcome.SAVED)
+            expected_exit_code = 0
+        except click.exceptions.Exit as exc:
+            expected_exit_code = exc.exit_code
+
+        with patch(
+            "squadron.cli.commands.review.run_review_with_profile",
+            new_callable=AsyncMock,
+            return_value=imposed_result,
+        ):
+            result = cli_runner.invoke(app, ["review", "code", "--files", "**/*", "--no-save"])
+
+        assert result.exit_code == expected_exit_code, result.output
+
+
 class TestArchReviewsPersistAsArchReviews:
     """383 review, F001 — the only CLI-level assertion on a saved targetKind.
 
