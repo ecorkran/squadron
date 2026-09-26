@@ -186,6 +186,41 @@ def test_no_reviews_at_all_returns_none(git_repo: Path) -> None:
     assert result is None
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pr-83-review.code.md",
+        "pr-83-review.code.ecorkran-squadron.md",
+        "github.com-ecorkran-squadron-83-review.code.md",
+    ],
+)
+def test_discovery_glob_finds_every_pr_review_name_form(git_repo: Path, name: str) -> None:
+    """Both slice-926 forms and the older form are discovered (926, D5).
+
+    The slice plan assumed ``*-review.*.md`` missed ``pr-83-review.code.md``; it
+    does not. Driven through the real scan rather than a copied pattern, so a
+    future tightening of the glob in ``inputs.py`` fails here instead of silently
+    dropping PR review provenance from ``sq pr create``.
+    """
+    reviews_dir = git_repo / "project-documents" / "user" / "reviews"
+    reviews_dir.mkdir(parents=True)
+    subprocess.run(["git", "branch", "base-branch"], cwd=git_repo, capture_output=True, check=True)
+    reviewed_sha = commit(git_repo, "a.txt", "pr work")
+    (reviews_dir / name).write_text(f"---\nreviewedSha: {reviewed_sha}\nverdict: PASS\n---\n")
+
+    result = find_latest_in_range_review(
+        base="base-branch",
+        head="main",
+        cwd=str(git_repo),
+        host=HOST,
+        owner=OWNER,
+        repository=REPOSITORY,
+    )
+
+    assert result is not None
+    assert result.path.name == name
+
+
 def test_two_in_range_reviews_the_newer_sha_wins(git_repo: Path) -> None:
     reviews_dir = git_repo / "project-documents" / "user" / "reviews"
     reviews_dir.mkdir(parents=True)
