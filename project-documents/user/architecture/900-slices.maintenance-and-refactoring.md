@@ -435,6 +435,8 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 
 **Slice design:** `user/slices/926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md` — qualification follows the reviews-directory rule rather than an origin-remote comparison (D1). Corrects Part B: the `pr/inputs.py` glob already matches `pr-83-review.code.md`; it gets a pinning test, not a change (D5).
 
+**Slice tasks:** `user/tasks/926-tasks.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md` — 7 parts (A–G), not started.
+
 ---
 
 ## Future Slices

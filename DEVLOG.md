@@ -12,6 +12,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260925
 
+### Slice 926 tasks — PR review artifact naming (Phase 5 complete)
+
+`user/tasks/926-tasks.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md`, 7 parts
+(A–G) sequenced per the design's Development Approach: `ReviewsDirRule.repository_scoped` +
+exhaustiveness test, `PrTarget(qualify=...)` + stem tests, reorder `review_pr` to resolve the
+directory before building the target, preserve the three D6 fixture files untouched (widen one
+docstring only), `path_key` docstring + metrology message, D5 glob-pinning regression test,
+docs (COMMANDS.md here, conventions upstream in `ai-project-guide`), full verification walkthrough.
+Not started; ready for Phase 7 implementation.
+
 ### Slice 926 design — PR review artifact naming (Phase 4 complete)
 
 `user/slices/926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md`. The
