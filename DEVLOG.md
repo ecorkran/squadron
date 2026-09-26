@@ -12,6 +12,35 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 923 design — Test Suite Machine-State Isolation (Phase 4 complete)
+
+Written first because 914 now depends on it for sequencing. While measuring for the design,
+three live leaks turned up that #47 did not list:
+
+- 25 `src/` constants call `Path.home()` at import time, so a per-test `HOME` monkeypatch
+  cannot reach them. The design uses two layers: a session fake home set before any
+  `squadron` import (guarded by a session-start assertion), plus a per-test home for
+  lookups made at call time.
+- `cli/app.py` runs `load_dotenv(cwd/.env)` at import, which puts the real provider keys
+  into every test process.
+- `CLAUDECODE=1` is set in agent-run suites.
+
+What the design settles:
+
+- Git config is pinned with `GIT_CONFIG_GLOBAL` and `NOSYSTEM`. The pinned default branch
+  is deliberately not `main`.
+- `TZ=Asia/Kolkata` and `COLUMNS=80` are pinned. With `43416df7` there are now two
+  terminal-width instances, which is enough to justify a global pin.
+- The credential scrub list is built from the provider profiles.
+- A `host_cf` marker is the only way back to the real home, and only for tests that need
+  cf's registry in `~/.config/context-forge`.
+
+Part B shrank. All `shutil.which` callers are already stubbed, so the hostile run's reduced
+`PATH` proves this by running the tests instead of re-auditing them. Part C adds
+`scripts/test-hostile-env` and a `hermetic` CI job. Its negative control runs against the
+pre-slice commit, which finishes the measurement #47 never completed. Next step: Phase 5
+task breakdown for 923.
+
 ### Release 0.14.0
 
 Minor bump because `sq review pr` artifact names changed (slice 926, #124). Also ships the
