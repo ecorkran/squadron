@@ -12,10 +12,8 @@ def impose_diff_coverage(result: ReviewResult) -> None:
     """Cap a stated PASS to CONCERNS when the diff was truncated and unread.
 
     Applies only when the diff was truncated, the verdict is PASS, and no
-    tool call succeeded — ``(tool_calls_made or 0) - (failed_tool_calls or
-    0) <= 0``. The ``or 0`` is deliberate (D4): no tools offered counts as
-    zero successful calls, the same as every call failing. Do not change
-    this to ``is None`` checks.
+    tool call succeeded (``result.successful_tool_calls <= 0``, D4: no tools
+    offered counts as zero successful calls, the same as every call failing).
 
     Mutates ``result`` in place: sets verdict to CONCERNS, verdict_source to
     IMPOSED, and prepends a synthetic CONCERN finding. Otherwise a no-op.
@@ -25,8 +23,7 @@ def impose_diff_coverage(result: ReviewResult) -> None:
     if result.verdict is not Verdict.PASS:
         return
 
-    successful_calls = (result.tool_calls_made or 0) - (result.failed_tool_calls or 0)
-    if successful_calls > 0:
+    if result.successful_tool_calls > 0:
         return
 
     total = result.diff_injection.total_chars

@@ -600,3 +600,20 @@ def test_to_dict_model_fields_default_false_and_none() -> None:
     assert payload["requested_model"] is None
     assert payload["answering_models"] is None
     assert payload["model_substituted"] is False
+
+
+@pytest.mark.parametrize(
+    ("tool_calls_made", "failed_tool_calls", "expected"),
+    [
+        (None, None, 0),
+        (0, None, 0),
+        (3, 3, 0),
+        (2, 0, 2),
+        (5, 2, 3),
+    ],
+)
+def test_successful_tool_calls(
+    tool_calls_made: int | None, failed_tool_calls: int | None, expected: int
+) -> None:
+    result = _bare_result(tool_calls_made=tool_calls_made, failed_tool_calls=failed_tool_calls)
+    assert result.successful_tool_calls == expected

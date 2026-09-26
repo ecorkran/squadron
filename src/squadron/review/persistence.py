@@ -264,10 +264,9 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         and result.diff_injection.truncated
         and result.verdict is Verdict.PASS
     ):
-        successful_calls = (result.tool_calls_made or 0) - (result.failed_tool_calls or 0)
         lines.append(
             f"- Diff coverage: truncated; PASS kept because the model made "
-            f"{successful_calls} successful tool call(s)"
+            f"{result.successful_tool_calls} successful tool call(s)"
         )
     # Slice 927 D11, D12: answering_models is None on a hand-built result (not
     # produced by review_client) — keyed on == [] / len(), not falsiness, so those

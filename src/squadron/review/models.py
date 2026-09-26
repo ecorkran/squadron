@@ -234,6 +234,17 @@ class ReviewResult:
             return False
         return not answers_as_requested(self.requested_model, self.answering_models[-1])
 
+    @property
+    def successful_tool_calls(self) -> int:
+        """Tool calls that succeeded (slice 927 D4).
+
+        ``or 0`` deliberately, not ``is None``: no tools offered counts as zero
+        successes, the same as every call failing — a tool-less model could not
+        have read anything either way. Shared by impose_diff_coverage and the
+        Run Digest's exemption line so the formula lives in one place.
+        """
+        return (self.tool_calls_made or 0) - (self.failed_tool_calls or 0)
+
     def to_dict(self, verdict_override: str | None = None) -> dict[str, object]:
         """Serialize for JSON output.
 
