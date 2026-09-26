@@ -52,6 +52,10 @@ class TurnCapture:
     stop_reason: str | None = None
     reasoning_chars: int | None = None
     failed_tool_calls: int | None = None
+    # Distinct model ids reported across every turn, in first-seen order (slice 927
+    # D8, D12). Accumulates across the #92 recovery turn, unlike the counts above,
+    # which sum — a model id is identity, not a quantity to add.
+    answering_models: list[str] = field(default_factory=list[str])
 
     @property
     def raw_output(self) -> str:
@@ -109,6 +113,9 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
             turn_reasoning = metadata["reasoning_chars"]
         if metadata.get("failed_tool_calls") is not None:
             turn_failures = metadata["failed_tool_calls"]
+        for model in metadata.get("answering_models") or ():
+            if model not in capture.answering_models:
+                capture.answering_models.append(model)
         if metadata.get("sdk_type") in _NON_PROSE_SDK_TYPES:
             continue
         capture.text_parts.append(response.content)

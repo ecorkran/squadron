@@ -106,6 +106,10 @@ class TurnResult:
     # SDK's typed delta does not declare; it is never surfaced, only measured, so an
     # empty turn can be told apart from a silent one.
     reasoning_chars: int = 0
+    # The model id the backend actually reported for this turn (slice 927 D8), read
+    # from ``chunk.model`` on every chunk including choice-less ones (the usage chunk
+    # carries it too). None only when no chunk in the stream ever set it.
+    model: str | None = None
 
     def is_empty(self) -> bool:
         """True when the turn carries nothing a caller can act on."""
@@ -175,6 +179,10 @@ class OpenAICompatibleAgent:
         # Empty when no tools were configured. The telemetry stamp distinguishes "offered
         # but unused" from "never offered" (design D5), so the two cases must not collapse.
         self._tools_given: list[str] = []
+        # Distinct model ids reported across this handle_message call's turns, in
+        # first-seen order (slice 927 D8, D12). Reset at the top of handle_message,
+        # like the tool counters, so a second call never inherits the first's models.
+        self._answering_models: list[str] = []
         # Set only when the capability gate emptied a non-empty declared set (slice 266).
         # This is the third state slice 265 never needed: without it, a suppressed run and
         # a run that declared no tools persist identically.
@@ -219,10 +227,12 @@ class OpenAICompatibleAgent:
     async def handle_message(self, message: Message) -> AsyncIterator[Message]:
         """Append message to history, stream from API, yield response Messages."""
         self._state = AgentState.processing
+        self._answering_models = []
         self._append_history({"role": "user", "content": message.content})
         try:
             if not self._tool_executors:
                 turn = await self._stream_turn(self._history, tool_schemas=None)
+                self._record_answering_model(turn.model)
                 self._append_history(
                     translation.build_assistant_history_entry(turn.text, turn.tool_calls)
                 )
@@ -269,6 +279,7 @@ class OpenAICompatibleAgent:
         tool_calls_dict: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
         reasoning_chars = 0
+        turn_model: str | None = None
 
         app_name = os.environ.get("SQUADRON_APP_NAME")
         extra_body = {"user": app_name} if app_name else None
@@ -284,6 +295,10 @@ class OpenAICompatibleAgent:
             tools=cast(list[ChatCompletionToolUnionParam], tool_schemas) if tool_schemas else omit,
         )
         async for chunk in stream:
+            # Read from every chunk, including choice-less ones — the usage chunk
+            # carries model too (slice 927 D8) — and keep the last non-empty value.
+            if chunk.model:
+                turn_model = chunk.model
             if not chunk.choices:
                 continue
             choice = chunk.choices[0]
@@ -318,6 +333,7 @@ class OpenAICompatibleAgent:
             tool_calls=tool_calls_list,
             finish_reason=finish_reason,
             reasoning_chars=reasoning_chars,
+            model=turn_model,
         )
 
     async def _execute_tool_call(self, tool_call: dict[str, Any]) -> tuple[str, bool]:
@@ -444,6 +460,7 @@ class OpenAICompatibleAgent:
                 )
 
             turn = await self._stream_turn(self._history, tool_schemas=turn_tool_schemas)
+            self._record_answering_model(turn.model)
             self._append_history(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
 
             if not turn.tool_calls:
@@ -528,6 +545,11 @@ class OpenAICompatibleAgent:
             "without the model producing a final response."
         )
 
+    def _record_answering_model(self, model: str | None) -> None:
+        """Append a turn's reported model to the distinct, first-seen-order list."""
+        if model is not None and model not in self._answering_models:
+            self._answering_models.append(model)
+
     def _stamp_tool_telemetry(
         self,
         messages: list[Message],
@@ -560,6 +582,10 @@ class OpenAICompatibleAgent:
         messages[-1].metadata["stop_reason"] = turn.finish_reason
         messages[-1].metadata["reasoning_chars"] = turn.reasoning_chars
         messages[-1].metadata["failed_tool_calls"] = failed_tool_calls
+        # Slice 927 D8: distinct, first-seen-order models reported across this
+        # handle_message call's turns. A new key, not a repurposing of the existing
+        # metadata["model"] set elsewhere, which holds the requested id.
+        messages[-1].metadata["answering_models"] = list(self._answering_models)
         if self._tools_suppressed_reason is not None:
             messages[-1].metadata["tools_suppressed_reason"] = self._tools_suppressed_reason
         if not self._tools_given:

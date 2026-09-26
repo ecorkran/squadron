@@ -14,7 +14,7 @@ from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.providers.base import ProviderCapabilities
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import ReviewResult
-from squadron.review.review_client import _write_prompt_log, run_review_with_profile
+from squadron.review.review_client import InjectedPrompt, _write_prompt_log, run_review_with_profile
 from squadron.review.templates import ReviewTemplate
 
 _P = "squadron.review.review_client"
@@ -221,7 +221,10 @@ class TestFileInjection:
             patch(f"{_P}.get_profile") as mock_get_profile,
             patch(f"{_P}.get_provider", return_value=mock_provider),
             patch(f"{_P}.ensure_provider_loaded"),
-            patch(f"{_P}._inject_file_contents", side_effect=lambda p, *a, **k: p) as mock_inject,
+            patch(
+                f"{_P}._inject_file_contents",
+                side_effect=lambda p, *a, **k: InjectedPrompt(p, None),
+            ) as mock_inject,
         ):
             from squadron.providers.base import AuthType, ProviderType
             from squadron.providers.profiles import ProviderProfile
@@ -767,6 +770,169 @@ class TestStopReasonEvidenceReadBack:
         assert result.failed_tool_calls == 0
         assert result.reasoning_chars == 0
         assert result.stop_reason == "stop"
+
+
+class TestDiffCoverageCap:
+    """Slice 927 D4: a truncated diff with no successful tool call caps PASS to CONCERNS."""
+
+    @staticmethod
+    def _profile() -> object:
+        from squadron.providers.profiles import ProviderProfile
+
+        return ProviderProfile(name="openai", provider="openai", api_key_env="OPENAI_API_KEY")
+
+    @pytest.mark.asyncio
+    async def test_truncated_diff_zero_tool_calls_pass_becomes_concerns(
+        self, patch_config_paths
+    ) -> None:
+        from squadron.config.manager import set_config
+        from squadron.review.models import Verdict, VerdictSource
+
+        set_config("review.max_file_size_bytes", "100")
+        mock_provider = _make_mock_provider()
+
+        with (
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+            patch(f"{_P}._run_git_diff_filenames", return_value={"src/foo.py"}),
+            patch(f"{_P}._run_git_diff", return_value="x" * 500),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"diff": "abc123...HEAD", "input": "file.md"},
+                profile="openai",
+            )
+
+        assert result.verdict is Verdict.CONCERNS
+        assert result.verdict_source is VerdictSource.IMPOSED
+        assert result.diff_injection is not None
+        assert result.diff_injection.truncated is True
+        assert result.findings[0].category == "review-coverage"
+
+
+class TestAnsweringModelAssignment:
+    """Slice 927 C.6/C.7, D9-D12: result.model follows the answering model."""
+
+    @staticmethod
+    def _profile() -> object:
+        from squadron.providers.profiles import ProviderProfile
+
+        return ProviderProfile(name="openai", provider="openai", api_key_env="OPENAI_API_KEY")
+
+    @staticmethod
+    def _mock_agent_stamping(answering_models: list[str]) -> MagicMock:
+        agent = MagicMock()
+        agent.state = AgentState.idle
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            yield Message(
+                sender="mock-agent",
+                recipients=[],
+                content=_SAMPLE_REVIEW_OUTPUT,
+                message_type=MessageType.chat,
+                metadata={"answering_models": answering_models},
+            )
+
+        agent.handle_message = _handle
+        return agent
+
+    @pytest.mark.asyncio
+    async def test_substitution_sets_model_and_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        agent = self._mock_agent_stamping(["gpt-4.1"])
+        mock_provider = _make_mock_provider(agent=agent)
+
+        with (
+            caplog.at_level("WARNING", logger="squadron.review.review_client"),
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"input": "file.md"},
+                profile="openai",
+                model="gpt-5",
+            )
+
+        assert result.model == "gpt-4.1"
+        assert result.requested_model == "gpt-5"
+        assert result.model_substituted is True
+        assert any("requested model gpt-5 but gpt-4.1 answered" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_snapshot_answer_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        agent = self._mock_agent_stamping(["gpt-5-2025-08-07"])
+        mock_provider = _make_mock_provider(agent=agent)
+
+        with (
+            caplog.at_level("WARNING", logger="squadron.review.review_client"),
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"input": "file.md"},
+                profile="openai",
+                model="gpt-5",
+            )
+
+        assert result.model == "gpt-5-2025-08-07"
+        assert result.model_substituted is False
+        assert not any("but" in r.message and "answered" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_no_stamp_keeps_requested_id_no_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        agent = self._mock_agent_stamping([])
+        mock_provider = _make_mock_provider(agent=agent)
+
+        with (
+            caplog.at_level("WARNING", logger="squadron.review.review_client"),
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"input": "file.md"},
+                profile="openai",
+                model="gpt-5.3-codex",
+            )
+
+        assert result.model == "gpt-5.3-codex"
+        assert result.answering_models == []
+        assert not any("answered" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_two_models_last_wins_and_warns_naming_both(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        agent = self._mock_agent_stamping(["gpt-4.1", "gpt-5"])
+        mock_provider = _make_mock_provider(agent=agent)
+
+        with (
+            caplog.at_level("WARNING", logger="squadron.review.review_client"),
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            result = await run_review_with_profile(
+                _make_template(),
+                {"input": "file.md"},
+                profile="openai",
+                model="gpt-5",
+            )
+
+        assert result.model == "gpt-5"
+        assert result.answering_models == ["gpt-4.1", "gpt-5"]
+        multi_model_warnings = [r for r in caplog.records if "more than one model" in r.message]
+        assert len(multi_model_warnings) == 1
+        assert "gpt-4.1" in multi_model_warnings[0].message
+        assert "gpt-5" in multi_model_warnings[0].message
 
 
 class TestEmptyDiffRefusesToRun:

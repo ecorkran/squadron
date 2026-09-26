@@ -417,7 +417,10 @@ class ReviewAction:
             criteria=result.criteria,
             provenance=provenance,
             metadata={
-                "model": model_id,
+                # Slice 927 D10: the model that answered, not the one requested — the
+                # same distinction the artifact's aiModel/requestedModel pair makes.
+                "model": result.model,
+                "requested_model": model_id,
                 "profile": profile_name,
                 "template": template_name,
                 # Absent when the review ran without tools, so a zero count always means

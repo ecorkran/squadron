@@ -47,6 +47,11 @@ from squadron.providers.sdk.rate_limit import (
 )
 from squadron.providers.sdk.translation import translate_sdk_message
 
+# The Claude Code CLI's placeholder assistant messages carry this model id
+# (slice 927 D8) — not a real answering model, so it is excluded from
+# answering_models wherever it appears.
+_SYNTHETIC_MODEL = "<synthetic>"
+
 
 class ClaudeSDKAgent:
     """An autonomous agent backed by claude-agent-sdk."""
@@ -79,6 +84,9 @@ class ClaudeSDKAgent:
         self._tool_calls_made = 0
         self._failed_tool_calls = 0
         self._reasoning_chars = 0
+        # Distinct top-level answering model ids, in first-seen order (slice 927 D8,
+        # D12). Reset per handle_message call, like the counters above.
+        self._answering_models: list[str] = []
 
     # -- Protocol properties ------------------------------------------------
 
@@ -107,6 +115,7 @@ class ClaudeSDKAgent:
         # message on the same agent (the #92 review recovery turn) sums the two counts.
         self._tool_calls_made = 0
         self._failed_tool_calls = 0
+        self._answering_models = []
         if self._mode == "client":
             async for msg in self._handle_client_mode(message):
                 yield msg
@@ -175,6 +184,16 @@ class ClaudeSDKAgent:
                     self._tool_calls_made += 1
                 elif isinstance(block, ThinkingBlock):
                     self._reasoning_chars += len(block.thinking)
+            # Top-level only (slice 927 D8): a subagent spawned through the Task tool
+            # can legitimately run another model and did not write the review.
+            # <synthetic> is the CLI's placeholder assistant-message model, not a
+            # real answer.
+            if (
+                sdk_msg.parent_tool_use_id is None
+                and sdk_msg.model != _SYNTHETIC_MODEL
+                and sdk_msg.model not in self._answering_models
+            ):
+                self._answering_models.append(sdk_msg.model)
         elif isinstance(sdk_msg, ToolResultBlock):
             if sdk_msg.is_error:
                 self._failed_tool_calls += 1
@@ -185,6 +204,7 @@ class ClaudeSDKAgent:
             final.metadata["stop_reason"] = sdk_msg.stop_reason
             final.metadata["reasoning_chars"] = self._reasoning_chars
             final.metadata["failed_tool_calls"] = self._failed_tool_calls
+            final.metadata["answering_models"] = list(self._answering_models)
             if self._tools_given:
                 final.metadata["tools_given"] = list(self._tools_given)
                 final.metadata["tool_calls_made"] = self._tool_calls_made

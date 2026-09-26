@@ -713,6 +713,150 @@ class TestVerdictSourceFrontmatterEmission:
         assert "verdictSource" not in frontmatter_block
 
 
+class TestDiffTruncationRendering:
+    """Slice 927 Part A: diffTruncated frontmatter, the **Diff:** header line, and JSON."""
+
+    def _result_with_diff(self, *, total: int, injected: int) -> ReviewResult:
+        from squadron.review.models import DiffInjection
+
+        result = _make_result(verdict=Verdict.PASS)
+        result.diff_injection = DiffInjection(total_chars=total, injected_chars=injected)
+        return result
+
+    def test_truncated_renders_frontmatter_and_header_line(self) -> None:
+        result = self._result_with_diff(total=275431, injected=256000)
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "diffTruncated: true" in frontmatter_block
+        assert "**Diff:** truncated: 256000 of 275431 characters reached the model" in markdown
+
+    def test_not_truncated_renders_false_and_no_header_line(self) -> None:
+        result = self._result_with_diff(total=1000, injected=1000)
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "diffTruncated: false" in frontmatter_block
+        assert "**Diff:**" not in markdown
+
+    def test_no_diff_injection_omits_the_key_entirely(self) -> None:
+        result = _make_result(verdict=Verdict.PASS)
+        assert result.diff_injection is None
+        markdown = format_review_markdown(result, "slice", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "diffTruncated" not in frontmatter_block
+        assert "**Diff:**" not in markdown
+
+    def test_diff_truncated_is_a_yaml_boolean_not_a_string(self, tmp_path: Path) -> None:
+        result = self._result_with_diff(total=1000, injected=500)
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        artifact = tmp_path / "review.md"
+        artifact.write_text(markdown)
+
+        frontmatter = read_frontmatter(artifact)
+        assert frontmatter is not None
+        assert frontmatter["diffTruncated"] is True
+
+    def test_json_agrees_with_frontmatter_on_truncated_diff(self, tmp_path: Path) -> None:
+        result = self._result_with_diff(total=275431, injected=256000)
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        artifact = tmp_path / "review.md"
+        artifact.write_text(markdown)
+        frontmatter = read_frontmatter(artifact)
+        assert frontmatter is not None
+        json_payload = result.to_dict()
+
+        assert frontmatter["diffTruncated"] is True
+        assert json_payload["diff_truncated"] is True
+        assert json_payload["diff_chars"] == 275431
+        assert json_payload["diff_chars_injected"] == 256000
+
+    def test_kept_pass_renders_the_diff_coverage_exemption_line(self) -> None:
+        result = self._result_with_diff(total=1000, injected=400)
+        result.tool_calls_made = 2
+        result.failed_tool_calls = 0
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+
+        assert (
+            "Diff coverage: truncated; PASS kept because the model made 2 successful tool call(s)"
+            in markdown
+        )
+
+    def test_untruncated_pass_does_not_render_the_exemption_line(self) -> None:
+        result = self._result_with_diff(total=1000, injected=1000)
+        result.tool_calls_made = 2
+        result.failed_tool_calls = 0
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "Diff coverage:" not in markdown
+
+
+class TestAnsweringModelRendering:
+    """Slice 927 Part C: requestedModel frontmatter, the (requested Y) header suffix,
+    and the answering-model Run Digest lines."""
+
+    def _substituted_result(self) -> ReviewResult:
+        result = _make_result(verdict=Verdict.PASS, model="gpt-4.1")
+        result.requested_model = "gpt-5"
+        result.answering_models = ["gpt-4.1"]
+        return result
+
+    def test_substitution_renders_frontmatter_key_and_header_suffix(self) -> None:
+        result = self._substituted_result()
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "requestedModel: gpt-5" in frontmatter_block
+        assert "**Model:** gpt-4.1 (requested gpt-5)" in markdown
+
+    def test_snapshot_answer_renders_dated_ai_model_no_requested_model(self) -> None:
+        result = _make_result(verdict=Verdict.PASS, model="gpt-5-2025-08-07")
+        result.requested_model = "gpt-5"
+        result.answering_models = ["gpt-5-2025-08-07"]
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        frontmatter_block = markdown.split("---", 2)[1]
+
+        assert "aiModel: gpt-5-2025-08-07" in frontmatter_block
+        assert "requestedModel" not in frontmatter_block
+        assert "(requested" not in markdown
+
+    def test_empty_answering_models_renders_not_reported_digest_line(self) -> None:
+        result = _make_result(verdict=Verdict.PASS, model="gpt-5.3-codex")
+        result.requested_model = "gpt-5.3-codex"
+        result.answering_models = []
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "Answering model: not reported by provider (aiModel is the requested id)" in markdown
+
+    def test_none_answering_models_renders_nothing_new(self) -> None:
+        result = _make_result(verdict=Verdict.PASS)
+        assert result.answering_models is None
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "Answering model" not in markdown
+        assert "requestedModel" not in markdown.split("---", 2)[1]
+
+    def test_two_answering_models_renders_digest_line_with_both(self) -> None:
+        result = _make_result(verdict=Verdict.PASS, model="gpt-5")
+        result.requested_model = "gpt-5"
+        result.answering_models = ["gpt-4.1", "gpt-5"]
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "Answering models: gpt-4.1, gpt-5" in markdown
+
+    def test_frontmatter_and_json_agree_on_model_substituted(self, tmp_path: Path) -> None:
+        result = self._substituted_result()
+        markdown = format_review_markdown(result, "code", _make_slice_info())
+        artifact = tmp_path / "review.md"
+        artifact.write_text(markdown)
+        frontmatter = read_frontmatter(artifact)
+        assert frontmatter is not None
+
+        assert "requestedModel" in frontmatter
+        assert result.to_dict()["model_substituted"] is True
+
+
 class TestArchiveIsNonDestructive:
     """A run of bad reviews must not walk a good one out of existence (#73)."""
 

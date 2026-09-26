@@ -168,6 +168,8 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
     if result.model is not None:
         header.append("  Model: ", style="dim")
         header.append(result.model)
+        if result.model_substituted:
+            header.append(f" (requested {result.requested_model})", style="dim")
 
     console.print(Panel(header, expand=False))
 

@@ -964,3 +964,72 @@ class TestToolTelemetry:
 
         assert messages[-1].metadata["tools_given"] == ["read_file"]
         assert messages[-1].metadata["tool_calls_made"] == 1
+
+
+class TestAnsweringModels:
+    """Slice 927 D8: metadata["answering_models"] from top-level AssistantMessage.model."""
+
+    @pytest.mark.asyncio
+    async def test_top_level_message_stamps_its_model(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="hi")], model="claude-sonnet-5")
+            yield _make_result(result="hi")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["answering_models"] == ["claude-sonnet-5"]
+
+    @pytest.mark.asyncio
+    async def test_subagent_message_is_excluded(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[TextBlock(text="subagent work")],
+                model="claude-haiku-4-5",
+                parent_tool_use_id="toolu_1",
+            )
+            yield AssistantMessage(content=[TextBlock(text="top-level")], model="claude-sonnet-5")
+            yield _make_result(result="top-level")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["answering_models"] == ["claude-sonnet-5"]
+
+    @pytest.mark.asyncio
+    async def test_synthetic_message_is_excluded(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="placeholder")], model="<synthetic>")
+            yield AssistantMessage(content=[TextBlock(text="real")], model="claude-sonnet-5")
+            yield _make_result(result="real")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["answering_models"] == ["claude-sonnet-5"]
+
+    @pytest.mark.asyncio
+    async def test_counters_reset_between_handle_message_calls(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen_first(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="first")], model="claude-sonnet-5")
+            yield _make_result(result="first")
+
+        async def gen_second(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(content=[TextBlock(text="second")], model="claude-haiku-4-5")
+            yield _make_result(result="second")
+
+        with patch(_QUERY, side_effect=gen_first):
+            first = await _collect(query_agent.handle_message(input_message))
+        with patch(_QUERY, side_effect=gen_second):
+            second = await _collect(query_agent.handle_message(input_message))
+
+        assert first[-1].metadata["answering_models"] == ["claude-sonnet-5"]
+        assert second[-1].metadata["answering_models"] == ["claude-haiku-4-5"]

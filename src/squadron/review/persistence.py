@@ -256,6 +256,27 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
     # follow-up did not produce a review either.
     if result.recovery_turn_used:
         lines.append("- Recovery turn used: yes (the follow-up reply is included below)")
+    # Slice 927 D4: a truncated diff kept a PASS only because the model made a
+    # successful tool call. Visible so a gate that wants stricter behavior can key on
+    # diffTruncated instead of trusting the exemption.
+    if (
+        result.diff_injection is not None
+        and result.diff_injection.truncated
+        and result.verdict is Verdict.PASS
+    ):
+        successful_calls = (result.tool_calls_made or 0) - (result.failed_tool_calls or 0)
+        lines.append(
+            f"- Diff coverage: truncated; PASS kept because the model made "
+            f"{successful_calls} successful tool call(s)"
+        )
+    # Slice 927 D11, D12: answering_models is None on a hand-built result (not
+    # produced by review_client) — keyed on == [] / len(), not falsiness, so those
+    # results and the snapshot fixture render unchanged.
+    if result.answering_models is not None:
+        if result.answering_models == []:
+            lines.append("- Answering model: not reported by provider (aiModel is the requested id)")
+        elif len(result.answering_models) > 1:
+            lines.append(f"- Answering models: {', '.join(result.answering_models)}")
     lines.append("")
     return lines
 
@@ -311,6 +332,8 @@ def _review_frontmatter_lines(
     tools_given: list[str] | None,
     tool_calls_made: int | None,
     tools_suppressed_reason: str | None,
+    diff_truncated: bool | None = None,
+    requested_model: str | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -351,6 +374,15 @@ def _review_frontmatter_lines(
         [
             f"sourceDocument: {source_doc}",
             f"aiModel: {model}",
+        ]
+    )
+    # Slice 927 D10: present iff the answering model differs from what was requested,
+    # directly after aiModel. Its presence alone tells a gate "not the model you asked
+    # for" with no need to reimplement the D9 equivalence rule.
+    if requested_model is not None:
+        lines.append(f"requestedModel: {requested_model}")
+    lines.extend(
+        [
             f"status: {DocumentStatus.COMPLETE}",
             f"dateCreated: {today}",
             f"dateUpdated: {today}",
@@ -367,6 +399,9 @@ def _review_frontmatter_lines(
         lines.append(f"toolCallsMade: {0 if tool_calls_made is None else tool_calls_made}")
     if tools_suppressed_reason is not None:
         lines.append(f"toolsSuppressedReason: {tools_suppressed_reason}")
+    # Slice 927 D2: present exactly when the review had a diff input, true or false.
+    if diff_truncated is not None:
+        lines.append(f"diffTruncated: {'true' if diff_truncated else 'false'}")
     return lines
 
 
@@ -475,6 +510,8 @@ def format_review_markdown(
         tools_given=result.tools_given,
         tool_calls_made=result.tool_calls_made,
         tools_suppressed_reason=result.tools_suppressed_reason,
+        diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
+        requested_model=result.requested_model if result.model_substituted else None,
     )
 
     if result.score is not None:
@@ -505,7 +542,15 @@ def format_review_markdown(
     )
     lines.append("")
     lines.append(f"**Verdict:** {resolved_verdict}")
-    lines.append(f"**Model:** {resolved_model}")
+    if result.model_substituted:
+        lines.append(f"**Model:** {resolved_model} (requested {result.requested_model})")
+    else:
+        lines.append(f"**Model:** {resolved_model}")
+    if result.diff_injection is not None and result.diff_injection.truncated:
+        lines.append(
+            f"**Diff:** truncated: {result.diff_injection.injected_chars} of "
+            f"{result.diff_injection.total_chars} characters reached the model"
+        )
     if result.recovery_turn_used:
         # #92. Only when used, so every other artifact is byte-for-byte unchanged.
         lines.append(

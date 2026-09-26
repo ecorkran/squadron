@@ -246,6 +246,42 @@ class TestTerminalDegradedOutput:
         assert "raw response" in capsys.readouterr().out.lower()
 
 
+class TestTerminalModelSubstitutionHeader:
+    """Slice 927 C.9: the terminal header shows a substituted model (design D10)."""
+
+    @staticmethod
+    def _result(
+        *, model: str, requested_model: str | None, answering_models: list[str]
+    ) -> ReviewResult:
+        result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="",
+            template_name="code",
+            input_files={},
+            timestamp=datetime(2026, 3, 30, 12, 0, 0),
+            model=model,
+        )
+        result.requested_model = requested_model
+        result.answering_models = answering_models
+        return result
+
+    def test_substituted_model_shows_requested_suffix(self, capsys: pytest.CaptureFixture[str]) -> None:
+        result = self._result(model="gpt-4.1", requested_model="gpt-5", answering_models=["gpt-4.1"])
+        _display_terminal(result)
+        out = capsys.readouterr().out
+        assert "gpt-4.1" in out
+        assert "(requested gpt-5)" in out
+
+    def test_unsubstituted_model_shows_no_suffix(self, capsys: pytest.CaptureFixture[str]) -> None:
+        result = self._result(
+            model="gpt-5-2025-08-07", requested_model="gpt-5", answering_models=["gpt-5-2025-08-07"]
+        )
+        _display_terminal(result)
+        out = capsys.readouterr().out
+        assert "requested" not in out.lower()
+
+
 class TestDefaultSystemPromptPresetLine:
     """#85: the -vv appendix says the recorded prompt is only the appended part."""
 

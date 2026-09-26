@@ -115,7 +115,7 @@ class TestStreamTurn:
         client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("hi")))
         agent = _make_agent(client=client)
         result = await agent._stream_turn([], tool_schemas=None)  # pyright: ignore[reportPrivateUsage]
-        assert result == TurnResult(text="hi", tool_calls=[])
+        assert result == TurnResult(text="hi", tool_calls=[], model="gpt-4o")
 
     @pytest.mark.asyncio
     async def test_tool_call_stream_returns_assembled_call(self) -> None:
@@ -868,3 +868,102 @@ class TestStopReasonEvidence:
         assert msgs[-1].metadata["failed_tool_calls"] == 0
         # Unchanged from slice 265: no tools were configured, so no tool telemetry.
         assert "tools_given" not in msgs[-1].metadata
+
+
+def _chunk_with_model(model: str, *, content: str, finish_reason: str | None = None) -> Any:
+    """A minimal chunk shaped like text_chunk(), but with an overridden model id."""
+    from openai.types.chat import ChatCompletionChunk
+
+    return ChatCompletionChunk.model_validate(
+        {
+            "id": "chunk-1",
+            "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": finish_reason}],
+            "created": 1700000000,
+            "model": model,
+            "object": "chat.completion.chunk",
+        }
+    )
+
+
+class TestAnsweringModels:
+    """Slice 927 D8, D12: metadata["answering_models"], the model(s) that actually answered."""
+
+    @pytest.mark.asyncio
+    async def test_no_tools_path_stamps_the_streamed_model(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("hi")))
+        agent = _make_agent(client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["answering_models"] == ["gpt-4o"]
+
+    @pytest.mark.asyncio
+    async def test_choiceless_final_chunk_carrying_model_still_counts(self) -> None:
+        """The usage chunk (no choices) still carries model and must be read (D8)."""
+        from openai.types.chat import ChatCompletionChunk
+
+        usage_chunk = ChatCompletionChunk.model_validate(
+            {
+                "id": "chunk-2",
+                "choices": [],
+                "created": 1700000000,
+                "model": "gpt-4o",
+                "object": "chat.completion.chunk",
+            }
+        )
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(text_chunk("hi"), usage_chunk)
+        )
+        agent = _make_agent(client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["answering_models"] == ["gpt-4o"]
+
+    @pytest.mark.asyncio
+    async def test_agentic_loop_two_turns_different_models_both_listed_in_order(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(tool_chunk(0, "c1", "read_file", json.dumps({"path": "a.txt"}))),
+                _async_stream(_chunk_with_model("gpt-4o-2024-11-20", content="done")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["answering_models"] == ["gpt-4o", "gpt-4o-2024-11-20"]
+
+    @pytest.mark.asyncio
+    async def test_same_model_twice_listed_once(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(tool_chunk(0, "c1", "read_file", json.dumps({"path": "a.txt"}))),
+                _async_stream(text_chunk("done")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["answering_models"] == ["gpt-4o"]
+
+    @pytest.mark.asyncio
+    async def test_second_handle_message_does_not_carry_first_calls_models(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(text_chunk("first")),
+                _async_stream(_chunk_with_model("gpt-4o-2024-11-20", content="second")),
+            ]
+        )
+        agent = _make_agent(client=client)
+        first_msgs = await _collect(agent, _USER_MSG)
+        second_msgs = await _collect(agent, _USER_MSG)
+
+        assert first_msgs[-1].metadata["answering_models"] == ["gpt-4o"]
+        assert second_msgs[-1].metadata["answering_models"] == ["gpt-4o-2024-11-20"]

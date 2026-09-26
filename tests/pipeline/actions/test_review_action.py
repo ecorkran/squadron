@@ -1033,6 +1033,28 @@ class TestReviewMetadata:
         assert result.metadata["template"] == "code"
         assert "profile" in result.metadata
 
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_substituted_model_metadata_carries_both_ids(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        """Slice 927 D10: metadata["model"] follows the answering model, and
+        metadata["requested_model"] is the id the pipeline resolved and asked for."""
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result(model="gpt-4.1")
+
+        result = await ReviewAction().execute(_make_context())
+
+        assert result.metadata["model"] == "gpt-4.1"
+        assert result.metadata["requested_model"] == "claude-sonnet-4-20250514"
+
 
 # ---------------------------------------------------------------------------
 # Rules wiring — parity with CLI (get_template_rules + language auto-detection)

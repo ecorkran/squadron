@@ -284,6 +284,28 @@ async def run_review_with_profile(
     # stated PASS into CONCERNS. Must run after tool_calls_made/failed_tool_calls above.
     impose_diff_coverage(result)
 
+    # Part C (slice 927 D8, D10-D12): the model that actually answered, not the one
+    # squadron asked for. result.model keeps the parser's requested id (D11) when no
+    # provider stamped anything (Codex never does).
+    result.requested_model = resolved_model
+    result.answering_models = list(capture.answering_models)
+    if result.answering_models:
+        result.model = result.answering_models[-1]
+    if result.model_substituted:
+        _logger.warning(
+            "%s review requested model %s but %s answered",
+            template.name,
+            result.requested_model,
+            result.model,
+        )
+    if len(result.answering_models) > 1:
+        _logger.warning(
+            "%s review (model=%s) received answers from more than one model: %s",
+            template.name,
+            resolved_model or "(default)",
+            ", ".join(result.answering_models),
+        )
+
     # A review that was handed tools and called none produces a verdict from a model
     # that read nothing beyond the prompt — indistinguishable from a healthy review in
     # every other signal, so it gets its own observable one.
