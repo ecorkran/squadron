@@ -7,6 +7,7 @@ import json
 import pytest
 
 from squadron.review.models import (
+    DiffInjection,
     ReviewFinding,
     ReviewResult,
     Severity,
@@ -525,3 +526,77 @@ def test_to_dict_serializes_zero_failed_calls_as_zero_not_null() -> None:
     assert payload["failed_tool_calls"] == 0
     assert payload["failed_tool_calls"] is not None
     assert json.loads(json.dumps(payload))["failed_tool_calls"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Diff injection and answering-model fields (slice 927)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("total_chars", "injected_chars", "expected_truncated"),
+    [
+        (100, 100, False),
+        (100, 40, True),
+        (100, 0, True),
+        (0, 0, False),
+    ],
+)
+def test_diff_injection_truncated(
+    total_chars: int, injected_chars: int, expected_truncated: bool
+) -> None:
+    injection = DiffInjection(total_chars=total_chars, injected_chars=injected_chars)
+    assert injection.truncated is expected_truncated
+
+
+def test_model_substituted_false_when_requested_model_none() -> None:
+    result = _bare_result(answering_models=["gpt-5"])
+    assert result.model_substituted is False
+
+
+@pytest.mark.parametrize("answering_models", [None, []])
+def test_model_substituted_false_when_answering_models_empty(
+    answering_models: list[str] | None,
+) -> None:
+    result = _bare_result(requested_model="gpt-5", answering_models=answering_models)
+    assert result.model_substituted is False
+
+
+def test_model_substituted_false_on_snapshot_answer() -> None:
+    result = _bare_result(requested_model="gpt-5", answering_models=["gpt-5-2025-08-07"])
+    assert result.model_substituted is False
+
+
+def test_model_substituted_true_on_real_substitution() -> None:
+    result = _bare_result(requested_model="gpt-5", answering_models=["gpt-4.1"])
+    assert result.model_substituted is True
+
+
+def test_model_substituted_checks_last_model_only() -> None:
+    """D12: the last model reported is the one checked."""
+    result = _bare_result(requested_model="gpt-5", answering_models=["gpt-4.1", "gpt-5"])
+    assert result.model_substituted is False
+
+
+def test_to_dict_diff_keys_none_when_no_diff_injection() -> None:
+    payload = _bare_result().to_dict()
+
+    assert payload["diff_chars"] is None
+    assert payload["diff_chars_injected"] is None
+    assert payload["diff_truncated"] is None
+
+
+def test_to_dict_diff_keys_populated_from_diff_injection() -> None:
+    payload = _bare_result(diff_injection=DiffInjection(total_chars=1000, injected_chars=400)).to_dict()
+
+    assert payload["diff_chars"] == 1000
+    assert payload["diff_chars_injected"] == 400
+    assert payload["diff_truncated"] is True
+
+
+def test_to_dict_model_fields_default_false_and_none() -> None:
+    payload = _bare_result().to_dict()
+
+    assert payload["requested_model"] is None
+    assert payload["answering_models"] is None
+    assert payload["model_substituted"] is False

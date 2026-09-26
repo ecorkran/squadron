@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
+from squadron.models.snapshot import answers_as_requested
+
 
 class Verdict(StrEnum):
     """Overall review verdict."""
@@ -26,20 +28,25 @@ class Severity(StrEnum):
 
 
 class VerdictSource(StrEnum):
-    """Whether a review's verdict was stated by the model or derived (#97).
+    """Where a review's verdict came from: stated, derived, or imposed.
 
-    A closed two-value vocabulary (D7), not a reason string: fallback_used
-    already does not distinguish *why* a parse failed, and a reason string
-    would need its own vocabulary every consumer switches on — string-dispatch
-    on a field whose values are not yet known. The *reason* stays in the run
-    digest, which is where a human triages; this field answers only "did the
-    model say this?", orthogonal to how much work squadron did to read it
-    (a normalized-but-then-stated parse, per slice 919 Part 1's D4, is still
-    STATED).
+    A closed vocabulary (D7 of slice 919's design), not a reason string:
+    fallback_used already does not distinguish *why* a parse failed, and a
+    reason string would need its own vocabulary every consumer switches on —
+    string-dispatch on a field whose values are not yet known. The *reason*
+    stays in the run digest, which is where a human triages; this field
+    answers only "where did this verdict come from?" (a normalized-but-then-
+    stated parse, per slice 919 Part 1's D4, is still STATED).
+
+    IMPOSED (slice 927 D5) means squadron overrode a stated verdict from a
+    measured fact about the run — not the model's opinion, and not derived
+    from parsed findings. The parser never produces it; only
+    review.coverage.impose_diff_coverage sets it.
     """
 
     STATED = "stated"
     DERIVED = "derived"
+    IMPOSED = "imposed"
 
 
 class TemplateValidationError(Exception):
@@ -80,6 +87,25 @@ class ReviewFinding:
     # non-code templates. Written, never read — nothing in this slice consumes
     # it, and it is absent from StructuredFinding, to_dict, and frontmatter.
     location_verified: bool | None = None
+
+
+@dataclass(frozen=True)
+class DiffInjection:
+    """How much of the diff produced by git reached the model (slice 927 D1).
+
+    Measured in characters, not bytes, despite the ``*_bytes`` config key
+    names: this counts what ``_truncate`` actually compares, ``len(content)``
+    on a ``str``. ``injected_chars`` never counts the ``[truncated at …]``
+    marker ``_truncate`` appends.
+    """
+
+    total_chars: int
+    injected_chars: int
+
+    @property
+    def truncated(self) -> bool:
+        """True when the model saw less than the full diff."""
+        return self.injected_chars < self.total_chars
 
 
 @dataclass(frozen=True)
@@ -180,6 +206,33 @@ class ReviewResult:
     # (#85). Without this a reader of the -vv appendix would take the recorded text for
     # the whole system prompt; the CLI's preset text is not squadron's to capture.
     default_system_prompt_preset_used: bool = False
+    # How much of the diff reached the model (slice 927 D2). None means the review had
+    # no diff input at all (slice/arch/tasks reviews) — the key is absent from frontmatter
+    # and JSON. A diff input always sets this, even when empty (DiffInjection(0, 0), not
+    # truncated): that gives a gate three distinguishable states instead of collapsing
+    # "no diff" and "saw it all" together.
+    diff_injection: DiffInjection | None = None
+    # The model id squadron asked for (slice 927 D10). None on a hand-built result or a
+    # run with no explicit request (the SDK default model — nothing was requested, so
+    # nothing can be a substitution, D9).
+    requested_model: str | None = None
+    # Distinct model ids the provider actually reported, in first-seen order (slice 927
+    # D8). None means not produced by review_client (a hand-built result, the finding_scan
+    # convention). [] means the provider reported nothing at all (Codex, D11) — a real,
+    # observed fact, not "not computed".
+    answering_models: list[str] | None = None
+
+    @property
+    def model_substituted(self) -> bool:
+        """True iff the last answering model differs from what was requested (D10, D12).
+
+        False whenever requested_model or answering_models is None/empty, so a
+        hand-built result and a provider that reported nothing never claim a
+        substitution.
+        """
+        if self.requested_model is None or not self.answering_models:
+            return False
+        return not answers_as_requested(self.requested_model, self.answering_models[-1])
 
     def to_dict(self, verdict_override: str | None = None) -> dict[str, object]:
         """Serialize for JSON output.
@@ -239,6 +292,16 @@ class ReviewResult:
             # stop_reason's convention above. Must agree with frontmatter's
             # verdictSource line for the same ReviewResult (design SC6).
             "verdictSource": self.verdict_source.value if self.verdict_source else None,
+            # Slice 927: always present, null when diff_injection is None (no diff input
+            # at all — D2). Mirrors frontmatter's diffTruncated (design SC6).
+            "diff_chars": self.diff_injection.total_chars if self.diff_injection else None,
+            "diff_chars_injected": (
+                self.diff_injection.injected_chars if self.diff_injection else None
+            ),
+            "diff_truncated": self.diff_injection.truncated if self.diff_injection else None,
+            "requested_model": self.requested_model,
+            "answering_models": self.answering_models,
+            "model_substituted": self.model_substituted,
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.
