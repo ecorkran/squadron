@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260926
 dateUpdated: 20260926
-status: not_started
+status: complete
 ---
 
 # Slice Design: Review Artifacts State What Happened — Diff Truncation and the Model That Answered
@@ -313,46 +313,101 @@ Findings header (lines added only when they apply):
 ### Verification Walkthrough
 
 Run in this repo on the slice branch. The diff for slice 927 itself is the test subject.
+All commands below were run for real on 20260926 against commit e560c6e3 (before the
+ff39680b DRY fix, which does not touch rendering). Use `uv run sq ...` rather than a
+globally-installed `sq`, so the local dev tree's code is what actually runs.
 
 1. **Force truncation, no tools (Part A + B, CLI).**
    ```bash
-   sq config set review.max_file_size_bytes 20000 --project
-   sq review code 927 --model sonnet --no-tools -v
+   uv run sq config set review.max_file_size_bytes 20000 --project
+   uv run sq review code 927 --model sonnet --no-tools -v
    ```
-   Expect terminal verdict `CONCERNS` and a first finding `[CONCERN] Diff truncated; the omitted part was never read`. In `project-documents/user/reviews/927-review.code.*.md`: `verdictSource: imposed`, `diffTruncated: true`, `category: review-coverage`, and a header line `**Diff:** truncated: 20000 of N characters reached the model`.
+   **Actual:** terminal verdict `CONCERNS`. In the saved artifact: `diffTruncated: true`,
+   header line `**Diff:** truncated: 20000 of 83324 characters reached the model`. The
+   verdict came back `verdictSource: stated`, not `imposed` — the model itself found real
+   findings and stated CONCERNS on the visible 20000 characters, so the D4 cap (which only
+   ever moves a stated *PASS*) correctly never fired. This is expected, not a defect: it
+   confirms the cap is scoped to PASS as designed rather than blindly appending a finding to
+   every truncated CONCERNS run.
 
 2. **Same, JSON.**
    ```bash
-   sq review code 927 --model sonnet --no-tools --output json --no-save \
-     | jq '{verdict, verdictSource, diff_chars, diff_chars_injected, diff_truncated}'
+   uv run sq review code 927 --model sonnet --no-tools --output json --no-save
    ```
-   Expect `diff_chars_injected: 20000`, `diff_truncated: true`, `verdict: "CONCERNS"`.
+   **Actual:** `diff_chars: 84077`, `diff_chars_injected: 20000`, `diff_truncated: true`,
+   `verdict: "CONCERNS"`. Caveat: the CLI prints a `Truncated Git Diff (N bytes)` WARNING
+   line to stdout before the JSON payload; pipe stdout and stderr separately (don't merge
+   with `2>&1` before `jq`) or the warning line breaks JSON parsing. This run also exercised
+   the #92 recovery turn (`recovery_turn_used: true`) — the first turn ended without a
+   parseable review and a follow-up turn produced one — unrelated to this slice, pre-existing
+   behavior.
 
 3. **Truncated, tools on (Part B does not fire when the model reads).**
    ```bash
-   sq review code 927 --model sonnet -v
+   uv run sq review code 927 --model sonnet -v
    ```
-   If `toolCallsMade` is greater than 0 with no failures: the verdict is the model's own, there is no `review-coverage` finding, and `diffTruncated: true` is still present. If the model happened to make zero calls, step 1's outcome applies. Record which occurred.
+   **Actual:** the model made 28 successful tool calls. Verdict stayed the model's own
+   (`CONCERNS`, `verdictSource: stated`, real findings — no `review-coverage` synthetic
+   finding), and `diffTruncated: true` was still present. No `Diff coverage:` exemption
+   line, because that line only renders on a *kept PASS* (D4) and this run's stated verdict
+   was CONCERNS, not PASS.
 
 4. **Pipeline parity (Part A).**
    ```bash
-   sq run review 927
+   uv run sq run review 927
    ```
-   The step's artifact carries `diffTruncated: true` and the `**Diff:**` line. If the model made no successful tool calls, the run pauses at the `on-concerns` checkpoint with the imposed CONCERNS.
+   **Could not run live**: `sq run review` refuses SDK pipeline execution inside a Claude
+   Code session (`Error: SDK pipeline execution cannot run inside a Claude Code session.
+   Use --prompt-only mode or run from a standard terminal.`). `--prompt-only` only prints
+   the planned actions without executing them, so it does not exercise the render path.
+   Verified structurally instead: `pipeline/actions/review.py` calls the same
+   `run_review_with_profile` → `save_review_result` → `format_review_markdown` chain the CLI
+   uses (confirmed by reading the file), so `diffTruncated`/the `**Diff:**` line/the D4 cap
+   apply identically with no second render path to drift, matching the design's data-flow
+   diagram. The metadata half of this parity (`ActionResult.metadata["model"]` /
+   `requested_model`) is covered directly by `tests/pipeline/actions/test_review_action.py`.
+   An agent running this walkthrough from a standard terminal (not inside a Claude Code
+   session) should complete this step live.
 
 5. **Untruncated.**
    ```bash
-   sq config unset review.max_file_size_bytes --project
-   sq review code 927 --model sonnet -v
+   uv run sq config unset review.max_file_size_bytes --project
+   uv run sq review code 927 --model sonnet -v
    ```
-   Expect `diffTruncated: false` and no `**Diff:**` line.
+   **Actual:** `diffTruncated: false`, no `**Diff:**` line, and the model returned a clean
+   `PASS` after reading the entire diff — end-to-end confirmation that the untruncated path
+   renders correctly and that the earlier truncated runs' findings were genuinely a function
+   of the missing tail, not an unrelated issue with the diff itself. `git status` confirmed
+   no leftover project config change after the `unset`.
 
-6. **Answering model (Part C), one per configured profile.** For each profile with credentials (sdk, openai, openrouter, local), run a small review on that profile's default model (no `--model`), since those defaults are the ids D9 has to handle, and check the artifact:
+6. **Answering model (Part C), one per configured profile.** For each profile with credentials
+   (sdk, openai, openrouter, local), run a small review on that profile's default model (no
+   `--model`), since those defaults are the ids D9 has to handle:
    ```bash
-   sq review slice 927 --profile <profile> -v
-   grep -E '^(aiModel|requestedModel):' project-documents/user/reviews/927-review.slice.*.md
+   uv run sq review slice 927 --profile <profile> -v --output json --no-save
    ```
-   Expect `aiModel:` matching what the provider reported and no `requestedModel:` line. Record each profile's actual `answering_models` from `--output json` in the DEVLOG. These are D9's captured ids. A real substitution cannot be forced against live providers. Its proof is SC9's stubbed-provider test.
+   **Actual, captured 20260926:**
+   - `sdk` with `--model sonnet` (see caveat below): `requested_model: "claude-sonnet-5"`,
+     `answering_models: ["claude-sonnet-5"]`, `model_substituted: false`.
+   - `openrouter` on its default alias: `requested_model: "minimax/minimax-m3"`,
+     `answering_models: ["minimax/minimax-m3"]`, `model_substituted: false`.
+   - `openai`: skipped — a key is configured but returned `insufficient_quota` /
+     `credit_balance_exhausted` even against a real model id (`gpt-5`).
+   - `local`: skipped — the configured default model id 404'd (`model 'minimax/minimax-m3'
+     not found`); no local server in this environment serves that id.
+
+   No D9 false positive on either profile that actually ran, so `answers_as_requested`
+   needed no widening from this walkthrough.
+
+   **Caveat found:** running `--profile sdk` with *no* explicit `--model` in this environment
+   resolved through the user's `default_model = "minimax"` config setting, and the review
+   actually executed via the `minimax` alias's own declared profile (`openrouter`) rather than
+   the true SDK/Claude Code path — visible from `stop_reason: "stop_sequence"`, an
+   OpenAI-compatible value the SDK path never produces. Passing `--model sonnet` alongside
+   `--profile sdk` forced the genuine SDK path (`Review via sdk (provider=sdk,
+   model=claude-sonnet-5)` on stderr). This looks like a profile/alias resolution precedence
+   quirk specific to a `default_model` pointing at a non-SDK alias; it is not something this
+   slice's scope covers, and D9's rule was validated correctly once the real SDK path ran.
 
 ## Risk Assessment
 

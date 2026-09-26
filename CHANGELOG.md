@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- A code review's saved artifact now says whether the diff was truncated before it reached the model (`diffTruncated`, plus a `**Diff:** truncated: X of Y characters` line and matching JSON fields). A truncated diff that got a clean PASS with no tool use is now flagged CONCERNS instead, with a finding explaining what was never read (#135)
+- `aiModel` in a saved review now names the model that actually answered, not just the one that was requested. If a different model answered — a fallback, a remapped route — `requestedModel` appears alongside it with a warning, instead of the artifact silently naming a model that never ran (#134)
+
 ## [0.14.0] - 20260926
 
 ### Changed

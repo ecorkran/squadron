@@ -12,6 +12,46 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 927 implementation — review artifacts state what happened (Phase 6 complete)
+
+Closes #135 and #134. Four commits on
+`927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered`:
+73adc7c5 (Part M — `DiffInjection`, `VerdictSource.IMPOSED`, `models/snapshot.py`,
+`ReviewResult.requested_model`/`answering_models`/`model_substituted`), b33b736b (Parts A+B —
+diff-truncation accounting in `_inject_file_contents`, `impose_diff_coverage`, the
+`review-coverage` synthetic finding), e560c6e3 (Part C — OpenAI `chunk.model` and SDK
+top-level `AssistantMessage.model` capture, `TurnCapture.answering_models`, rendering, terminal,
+pipeline metadata), and ff39680b (a DRY fix the slice's own `sq review code` walkthrough run
+caught: `(tool_calls_made or 0) - (failed_tool_calls or 0)` was duplicated in `coverage.py` and
+`persistence.py`; extracted to `ReviewResult.successful_tool_calls`). Baseline suite: 4461
+passed, 4 skipped. Final suite: 4558 passed, 4 skipped, ruff and pyright clean throughout.
+
+Walkthrough steps 1, 2, 3, and 5 ran live against this repo's own diff and matched the design
+exactly: a 20000-byte cap on an 83KB diff produced `diffTruncated: true` and the `**Diff:**`
+header line in both markdown and JSON; with `--no-tools` the model's own CONCERNS verdict (real
+findings, not the imposed cap — the cap only ever moves a stated PASS) rendered correctly; with
+tools on, 28 successful tool calls kept the model's own verdict with no synthetic finding;
+unsetting the config produced `diffTruncated: false` with no header line and a clean PASS on the
+untruncated diff. Step 4 (pipeline parity) could not run live — `sq run review` refuses SDK
+execution inside a Claude Code session — but the pipeline action calls the same
+`run_review_with_profile` → `save_review_result` → `format_review_markdown` chain the CLI does
+(verified by reading `pipeline/actions/review.py`), so there is no second render path to drift,
+and `test_review_action.py`'s Part C tests already cover the metadata half end to end.
+
+Step 6 (D9 profile capture) ran two of the four configured profiles for real: `sdk` with
+`--model sonnet` answered as `claude-sonnet-5` (requested `claude-sonnet-5`, no substitution);
+`openrouter` on its default alias answered as `minimax/minimax-m3` (requested
+`minimax/minimax-m3`, no substitution). `openai` was skipped — the configured key exists but
+returned `insufficient_quota`. `local` was skipped — the configured model id 404'd against
+whatever the local endpoint is actually serving. No D9 false positive on either working profile,
+so `answers_as_requested` needed no widening; `snapshot.py` is unchanged from Phase 6's Part M
+commit. Note: running `--profile sdk` with no explicit `--model` resolved through this
+environment's `default_model = "minimax"` config and actually executed via the openrouter
+alias's declared profile rather than the true SDK/Claude Code path (visible from
+`stop_reason: "stop_sequence"`, an OpenAI-compatible value, not an SDK one) — a config-resolution
+quirk in this environment, not a squadron defect, and not something this slice's scope covers;
+worth a look if it recurs.
+
 ### Slice 927 tasks (Phase 5 complete)
 
 `user/tasks/927-tasks.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`
