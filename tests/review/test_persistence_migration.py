@@ -47,6 +47,8 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 #: Pinned so the artifact is a function of the inputs alone. The live value is
 #: resolved from git at save time and would differ on every commit.
 _PINNED_SHA = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c"
+# Pinned so a version bump does not break byte identity (slice 195 D12).
+_PINNED_VERSION = "0.0.0-test"
 
 
 def _migration_result() -> ReviewResult:
@@ -119,6 +121,7 @@ class TestPreMigrationByteIdentity:
             project_name="squadron",
             heading_label="slice 146",
             reviewed_sha=_PINNED_SHA,
+            squadron_version=_PINNED_VERSION,
         )
 
         fixture = _FIXTURES / "383-postkeys-slice.md"
@@ -138,6 +141,7 @@ class TestPreMigrationByteIdentity:
             project_name="squadron",
             heading_label="slice 380",
             reviewed_sha=_PINNED_SHA,
+            squadron_version=_PINNED_VERSION,
         )
 
         fixture = _FIXTURES / "383-postkeys-arch.md"
@@ -153,6 +157,7 @@ class TestPreMigrationByteIdentity:
             heading_label="slice 0",
             source_document="project-documents/user/slices/383-slice.md",
             reviewed_sha=_PINNED_SHA,
+            squadron_version=_PINNED_VERSION,
         )
 
         fixture = _FIXTURES / "383-postkeys-step.md"

@@ -13,6 +13,7 @@ status: complete
 dateCreated: 20260401
 dateUpdated: 20260401
 reviewedSha: 0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c
+squadronVersion: 0.0.0-test
 findings:
   - id: F001
     severity: concern

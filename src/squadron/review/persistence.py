@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 
+from squadron import __version__
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
@@ -345,6 +346,7 @@ def _review_frontmatter_lines(
     diff_truncated: bool | None = None,
     requested_model: str | None = None,
     run_id: str | None = None,
+    squadron_version: str,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -417,6 +419,8 @@ def _review_frontmatter_lines(
     # CLI review, which belongs to no run.
     if run_id is not None:
         lines.append(f"runId: {run_id}")
+    # Slice 195 D12 (#139): the squadron that wrote it, on every artifact.
+    lines.append(f"squadronVersion: {squadron_version}")
     return lines
 
 
@@ -433,6 +437,7 @@ def format_review_markdown(
     target: SaveTargetProtocol | None = None,
     project_name: str | None = None,
     heading_label: str | None = None,
+    squadron_version: str = __version__,
 ) -> str:
     """Format a ReviewResult as markdown with YAML frontmatter.
 
@@ -528,6 +533,7 @@ def format_review_markdown(
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
         requested_model=result.requested_model if result.model_substituted else None,
         run_id=result.run_id,
+        squadron_version=squadron_version,
     )
 
     if result.score is not None:
@@ -871,6 +877,7 @@ def format_provider_failure_markdown(
     tools_given: list[str] | None = None,
     reviewed_sha: str | None = None,
     run_id: str | None = None,
+    squadron_version: str = __version__,
 ) -> str:
     """Render an artifact recording that the provider failed to deliver a review.
 
@@ -910,6 +917,7 @@ def format_provider_failure_markdown(
         tool_calls_made=exc.tool_calls_made,
         tools_suppressed_reason=None,
         run_id=run_id,
+        squadron_version=squadron_version,
     )
     lines.append("---")
     lines.append("")

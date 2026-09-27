@@ -1037,7 +1037,7 @@ class TestDegradedRawResponse:
             model="claude-opus-4-5",
         )
 
-        md = format_review_markdown(result, "code", _make_slice_info())
+        md = format_review_markdown(result, "code", _make_slice_info(), squadron_version="0.0.0-test")
 
         snapshot = Path(__file__).parent / "fixtures" / "clean_pass_artifact.md"
         assert md == snapshot.read_text()
@@ -1551,3 +1551,27 @@ class TestReviewTraceability:
         )
 
         assert "runId: 3f9c2a1b7d10" in markdown
+
+    def test_every_artifact_has_squadron_version_after_run_id(self) -> None:
+        from squadron import __version__
+
+        result = _make_result(verdict=Verdict.PASS)
+        result.run_id = "3f9c2a1b7d10"
+
+        keys = _frontmatter_keys(format_review_markdown(result, "slice", _make_slice_info()))
+        cli_md = format_review_markdown(_make_result(), "slice", _make_slice_info())
+
+        assert keys.index("runId") + 1 == keys.index("squadronVersion")
+        assert f"squadronVersion: {__version__}" in cli_md
+
+    def test_provider_failure_has_squadron_version(self) -> None:
+        markdown = format_provider_failure_markdown(
+            ProviderError(_FAILURE_MESSAGE), "slice", _failure_slice_info(), squadron_version="9.9.9"
+        )
+
+        assert "squadronVersion: 9.9.9" in markdown
+
+    def test_to_dict_has_squadron_version(self) -> None:
+        from squadron import __version__
+
+        assert _make_result().to_dict()["squadron_version"] == __version__

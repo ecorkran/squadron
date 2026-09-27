@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
+from squadron import __version__
 from squadron.models.snapshot import answers_as_requested
 
 
@@ -318,6 +319,7 @@ class ReviewResult:
             "model_substituted": self.model_substituted,
             # Slice 195 D12: always present, null on the CLI.
             "run_id": self.run_id,
+            "squadron_version": __version__,
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.
