@@ -170,6 +170,11 @@ class StateManager:
         self._runs_dir = runs_dir if runs_dir is not None else _DEFAULT_RUNS_DIR
         self._runs_dir.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def runs_dir(self) -> Path:
+        """Where run state files live; per-run artifacts sit beside them."""
+        return self._runs_dir
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
